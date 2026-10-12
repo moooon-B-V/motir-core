@@ -420,3 +420,7 @@ The vibe-layout board in this area takes the warm pass described in `design/onbo
 ### Revision 5 (2026-10-12) — warm on the button only
 
 The warm pass narrows to the primary button and small marks (the step dot, spinners, progress fills); every surface returns to the cool shipped look. See `design/onboarding-migrate/design-notes.md` § _Revision 5_ for the two new roles (`--el-cta-warm`, `--el-cta-warm-text`) and their measured contrast.
+
+### Revision 6 (2026-10-12) — the importer runs inside the migrate wizard
+
+The migrate wizard no longer links to `/onboarding/import`. Its Import step renders this board's step rail and steps (Panels 3–10) inside the wizard page, with Skip import in the Cancel slot and Continue in place of View imported backlog; the vendor OAuth callbacks return to the wizard's Import step. See `design/onboarding-migrate/design-notes.md` § _Revision 6_ (Panels 4a–4f). The standalone route drawn here stays for the person who reaches it directly; Panel 0 now says so and no longer draws the wizard's Open the importer link, which retires.

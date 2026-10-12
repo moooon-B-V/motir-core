@@ -6059,3 +6059,7 @@ The vibe-layout board in this area takes the warm pass described in `design/onbo
 ### Revision 5 (2026-10-12) — warm on the button only
 
 The warm pass narrows to the primary button and small marks (the step dot, spinners, progress fills); every surface returns to the cool shipped look. See `design/onboarding-migrate/design-notes.md` § _Revision 5_ for the two new roles (`--el-cta-warm`, `--el-cta-warm-text`) and their measured contrast.
+
+### Revision 6 (2026-10-12) — how this canvas is reached
+
+This board is the discovery canvas for a person who starts from an idea. It is not the migrate wizard's "A few questions", which is now a step of the wizard page (`design/onboarding-migrate/design-notes.md` § _Revision 6_, Panels 6a–6d). The new Panel 0 draws the door: the migrate wizard's bar link **Start from an idea instead** → `/onboarding/discovery`, with its focus ring; the entrance's Start reaches it too. Panel 1's note no longer lists the wizard's Decision and Resume, which now advance in place.

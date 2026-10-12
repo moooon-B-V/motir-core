@@ -532,17 +532,11 @@
         .w-\[390px\] {
           width: 390px;
         }
-        .w-\[620px\] {
-          width: 620px;
-        }
         .w-\[1280px\] {
           width: 1280px;
         }
         .w-auto {
           width: auto;
-        }
-        .w-fit {
-          width: fit-content;
         }
         .w-full {
           width: 100%;
@@ -957,9 +951,6 @@
           font-size: var(--text-xs);
           line-height: var(--tw-leading, var(--text-xs--line-height));
         }
-        .text-\[11px\] {
-          font-size: 11px;
-        }
         .text-\[13px\] {
           font-size: 13px;
         }
@@ -1029,10 +1020,6 @@
         .tracking-\[-0\.035em\] {
           --tw-tracking: -0.035em;
           letter-spacing: -0.035em;
-        }
-        .tracking-\[0\.1em\] {
-          --tw-tracking: 0.1em;
-          letter-spacing: 0.1em;
         }
         .tracking-wide {
           --tw-tracking: var(--tracking-wide);
@@ -1121,9 +1108,6 @@
             var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
             var(--tw-ring-shadow), var(--tw-shadow);
         }
-        .ring-\(--focus-ring-color\) {
-          --tw-ring-color: var(--focus-ring-color);
-        }
         .ring-\[color-mix\(in_srgb\,var\(--el-accent\)_18\%\,transparent\)\] {
           --tw-ring-color: var(--el-accent);
           @supports (color: color-mix(in lab, red, red)) {
@@ -1135,14 +1119,6 @@
           @supports (color: color-mix(in lab, red, red)) {
             --tw-ring-color: color-mix(in srgb, var(--el-cta-warm) 22%, transparent);
           }
-        }
-        .ring-offset-2 {
-          --tw-ring-offset-width: 2px;
-          --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width)
-            var(--tw-ring-offset-color);
-        }
-        .ring-offset-\(--el-card\) {
-          --tw-ring-offset-color: var(--el-card);
         }
         .transition-\[transform\,background-color\,border-color\,color\] {
           transition-property: transform, background-color, border-color, color;
@@ -5032,10 +5008,11 @@
       </h1>
       <section
         class="flex flex-col gap-3"
-        aria-label="0 · Access paths — the wizard’s Open the importer, and the OAuth callbacks — light | dark"
+        aria-label="0 · Access paths — Revision 6: the migrate wizard HOSTS these steps; /onboarding/import keeps its own door"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          0 · Access paths — the wizard’s Open the importer, and the OAuth callbacks — light | dark
+          0 · Access paths — Revision 6: the migrate wizard HOSTS these steps; /onboarding/import
+          keeps its own door
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -5043,97 +5020,19 @@
           <div class="grid content-start gap-3">
             <div class="grid gap-1 font-sans text-[13px] leading-normal text-(--el-text-secondary)">
               <p class="m-0 max-w-[110ch]">
-                Two doors reach /onboarding/import and both are unchanged: the migrate wizard’s
-                Import step (Open the importer, drawn with its focus ring; the wizard delta is
-                design/onboarding-migrate/onboarding-migrate--vibe-layout.mock.html Panel 4), and
-                the per-vendor OAuth callbacks returning to IMPORT_PATH with ?jira= / ?import=
-                (Panels 4 and 5). Leaving: Save &amp; exit and Cancel both go to /onboarding, the
-                address Cancel uses today; View imported backlog → the project’s backlog.
+                Revision 6 (Mo, 2026-10-12: “don’t send the user to a different page/tab for the
+                importing work items … one page to finish the onboarding”). The migrate wizard no
+                longer links here: its Import step renders Panels 3–10’s step rail and steps INSIDE
+                the wizard page (design/onboarding-migrate/onboarding-migrate--vibe-layout.mock.html
+                Panels 4a–4f), with Skip import in place of Cancel and Continue in place of View
+                imported backlog, and the OAuth callbacks return to the wizard’s Import step.
               </p>
-            </div>
-            <div class="flex flex-wrap items-start gap-6">
-              <div
-                data-theme="light"
-                data-palette="motir"
-                data-style="warm-editorial"
-                data-type="motir"
-                data-appearance-scope=""
-                aria-label="Migrate wizard Import step — the door"
-                class="w-[620px] flex-none overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) text-(--el-text) font-sans shadow-(--shadow-card)"
-              >
-                <div class="grid gap-4 bg-(--el-page-bg) p-(--spacing-card-padding)">
-                  <p
-                    class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-(--el-text-secondary)"
-                  >
-                    Optional · Import &amp; plan
-                  </p>
-                  <div
-                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding)"
-                  >
-                    <a
-                      href="/onboarding/import"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) w-fit gap-2 no-underline ring-2 ring-(--focus-ring-color) ring-offset-2 ring-offset-(--el-card)"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="size-4"
-                        aria-hidden="true"
-                      >
-                        <path d="M15 3h6v6"></path>
-                        <path d="M10 14 21 3"></path>
-                        <path
-                          d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-                        ></path></svg
-                      ><span>Open the importer</span></a
-                    >
-                  </div>
-                </div>
-              </div>
-              <div
-                data-theme="dark"
-                data-palette="motir"
-                data-style="warm-editorial"
-                data-type="motir"
-                data-appearance-scope=""
-                aria-label="Migrate wizard Import step — the door"
-                class="w-[620px] flex-none overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) text-(--el-text) font-sans shadow-(--shadow-card)"
-              >
-                <div class="grid gap-4 bg-(--el-page-bg) p-(--spacing-card-padding)">
-                  <p
-                    class="m-0 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-(--el-text-secondary)"
-                  >
-                    Optional · Import &amp; plan
-                  </p>
-                  <div
-                    class="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding)"
-                  >
-                    <a
-                      href="/onboarding/import"
-                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none whitespace-nowrap rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) w-fit gap-2 no-underline ring-2 ring-(--focus-ring-color) ring-offset-2 ring-offset-(--el-card)"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="size-4"
-                        aria-hidden="true"
-                      >
-                        <path d="M15 3h6v6"></path>
-                        <path d="M10 14 21 3"></path>
-                        <path
-                          d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-                        ></path></svg
-                      ><span>Open the importer</span></a
-                    >
-                  </div>
-                </div>
-              </div>
+              <p class="m-0 max-w-[110ch]">
+                The standalone /onboarding/import drawn below stays for the person who reaches it
+                directly (its project picker, and the per-vendor OAuth callbacks started from here,
+                which still return to IMPORT_PATH). Leaving it: Save &amp; exit and Cancel go to
+                /onboarding; View imported backlog → the project’s backlog.
+              </p>
             </div>
           </div>
         </div>

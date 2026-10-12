@@ -1386,3 +1386,84 @@ or a variant), not a new component. Disabled keeps `Button`'s own disabled opaci
   "you are here" station stays as shipped.
 - **GIVES MOTIR-8256** the two new pairs for its contrast run across every palette.
 - MOTIR-8257 and MOTIR-8258 are unchanged from Revision 4.
+
+### Revision 6 (2026-10-12) — one page to finish onboarding
+
+**The reviewer's note, verbatim (on Revision 5):** _"1. I don't see the design for "A few questions" 2. is design/ai-chat/onboarding--vibe-lockup.mock.html for "A few questions"? I don't see how we get
+there. if it's not for "A few questions" the design doesn't show me how we get there 3. use some
+yellow color from the palette too 4. don't send the user to a different page/tab for the importing
+work items, the importer can be on the same page. one page to finish the onboarding"_
+
+**What changes.** The migrate wizard becomes the one page a person finishes onboarding on. The
+importer runs inside its Import step, and "A few questions" is a step of the same page, reached from
+Decision. Nothing before the plan is ready leaves `/onboarding/migrate`. Revision 5's colour rules
+stand; this revision adds the palette's yellow to small chips. Where earlier sections say otherwise
+(Panel 4's Open the importer, Panel 5's hand-off to `/onboarding/discovery`, Panel 6's Resume link),
+this section wins.
+
+| panel | what it shows                                                                                                                                                                                                                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4a    | Import, with the importer IN the panel: the importer's own step rail (Connect · Map · Preview · Import) and its Connect step inside one `Card`. **Skip import** (ghost) takes the importer's Cancel slot. No link to `/onboarding/import`, no new tab |
+| 4b    | a source connected: the vendor OAuth round trip returns to `/onboarding/migrate` on the Import step (`?jira=connected`), not to `/onboarding/import`                                                                                                  |
+| 4c–4e | the importer's Map, Preview and Import-running steps, unchanged, in the same card                                                                                                                                                                     |
+| 4f    | the importer's finished state, whose action is **Continue** (primary). It advances to Decision; the importer's View imported backlog is not offered here                                                                                              |
+| 5     | Decision. **Plan my project now** advances to "A few questions" on this page; it no longer leaves for `/onboarding/discovery`                                                                                                                         |
+| 6a    | **"A few questions"**, the screen the rail has always named: the rail's Your direction group marks it current. One conversation card: a yellow progress chip, the turns (the chat rail's bubbles and BrandMark avatar), the composer and Send         |
+| 6b    | answered: the card becomes a status, Drafting your first plan (warm spinner, warm fill on the yellow track). While the code is still being read it says drafting starts by itself when reading finishes                                               |
+| 6c    | the plan is ready: a mint check, the drafted count and **Review your plan** (primary), the one exit at the end of onboarding, to the plan's review page that `GenerationHandoff` opens today                                                          |
+| 6d    | Resume: **Continue planning** resumes 6a in place instead of linking to `/onboarding/discovery`                                                                                                                                                       |
+
+**The rail now reads in the order the person goes through it**: Set up your codebase, then Import
+your work (optional), then Your direction. Before, Your direction was drawn above Import.
+
+**Where the discovery canvas fits (point 2).** `design/ai-chat/onboarding--vibe-lockup.mock.html` is
+not "A few questions". It is the canvas for a person who starts from an idea, reached from the
+entrance's Start and from this bar's **Start from an idea instead**. Its new Panel 0 draws that path.
+A person migrating code never reaches it.
+
+**Yellow (point 3).** `--el-tint-yellow` with `--el-text-strong`, on small chips only; the tone stays
+cool:
+
+| element                             | before                              | now                                    | measured (WCAG)             |
+| ----------------------------------- | ----------------------------------- | -------------------------------------- | --------------------------- |
+| rail: Import's "optional" chip      | `--el-muted`, `--el-text-secondary` | `--el-tint-yellow`, `--el-text-strong` | 13.70:1 light, 10.14:1 dark |
+| 1b: the "Open now" chip             | `--el-tint-lavender`                | `--el-tint-yellow`                     | 13.70:1 light, 10.14:1 dark |
+| 6a: "Question 2 of about 5"         | (new)                               | `--el-tint-yellow`, `--el-text-strong` | 13.70:1 light, 10.14:1 dark |
+| progress tracks (index, import, 6b) | `--el-tint-yellow` (Revision 5)     | kept                                   | —                           |
+
+#### Slot → key (Revision 6, proposed — `messages/` is not edited here)
+
+| slot                     | key                                    | English                                                                                                                                                                                       |
+| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Import body (inline)     | `onboardingMigrate.import.bodyInline`  | Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Bring it in right here. You review a dry-run preview before anything is written. Skip this if you have no backlog to bring in. |
+| 4f action                | `onboardingMigrate.import.continue`    | Continue                                                                                                                                                                                      |
+| 6 eyebrow                | `onboardingMigrate.questions.eyebrow`  | Your direction                                                                                                                                                                                |
+| 6 heading                | `onboardingMigrate.questions.heading`  | A few questions                                                                                                                                                                               |
+| 6 body                   | `onboardingMigrate.questions.body`     | Motir has read your code. A few answers about where the project is going, and it drafts your first plan from both.                                                                            |
+| 6a chip                  | `onboardingMigrate.questions.progress` | Question {n} of about {total}                                                                                                                                                                 |
+| 6b title                 | `…questions.draftingTitle`             | Drafting your first plan                                                                                                                                                                      |
+| 6b line                  | `…questions.draftingBody`              | From your code, your backlog and your answers. You can leave this page; Motir tells you when it is ready.                                                                                     |
+| 6b line, code still read | `…questions.draftingWaits`             | Waiting for Motir to finish reading your code, then drafting starts by itself.                                                                                                                |
+| 6c title                 | `…questions.readyTitle`                | Your first plan is ready                                                                                                                                                                      |
+| 6c line                  | `…questions.readyBody`                 | {count, plural, one {# item is} other {# items are}} drafted for {project}. Nothing is final until you approve it.                                                                            |
+| 6c action                | `…questions.readyCta`                  | Review your plan                                                                                                                                                                              |
+
+The importer's steps, the composer placeholder and Send keep their existing `import.*` and
+`onboarding.chat.*` keys. `onboardingMigrate.import.cta` (Open the importer) and `import.next`
+(I've imported — continue) retire.
+
+#### GIVES / TAKES (Revision 6)
+
+- **GIVES MOTIR-8254** the inline importer: the importer's steps rendered inside the migrate wizard's
+  Import step, Skip import in its Cancel slot, Continue on its finished state, and the vendor OAuth
+  return to `/onboarding/migrate` (`lib/import/oauthReturn.ts` allows only `/onboarding/import` and
+  `/settings/…` today, so the allow-list grows by one path). It also **GIVES** the "A few questions"
+  step (6a–6d) inside the wizard, driven by the discovery turn API the canvas uses, with the hand-off
+  to the plan review when the draft is ready, and Decision and Resume advancing in place. It
+  **TAKES** the Open the importer link and the two hand-offs to `/onboarding/discovery`.
+- **GIVES MOTIR-8255** nothing new to build: the discovery canvas keeps the idea path only, and its
+  board gains a Panel 0 showing that door.
+- **GIVES MOTIR-8256** the yellow chip pair (`--el-text-strong` on `--el-tint-yellow`) for its
+  contrast run across every palette.
+- **GIVES MOTIR-8257** a changed path: the migrate E2E no longer leaves the wizard for the importer
+  or for discovery. **GIVES MOTIR-8258** the twelve keys above.
