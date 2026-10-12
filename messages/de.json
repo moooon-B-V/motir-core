@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# Element} other {# Elemente}} zum Plan hinzugefügt",
     "liveStarting": "Wird gestartet…",
     "liveStalled": "Stockt",
+    "liveResuming": "Wird fortgesetzt",
     "progress": {
       "settling": "Gespräch wird geordnet",
       "layingChildrenOf": "Wird angelegt: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Letzte Aktivität {time}",
       "detailsStalled": "Seit {duration} wurde nichts geschrieben oder gemeldet. Der Plan wurde möglicherweise angehalten.",
       "pointer": "In der Werkbank verfolgen",
-      "pointerSentence": "Sie können diese Seite verlassen – der Plan wird weiter geschrieben. Verfolgen Sie ihn unter Werkbank › In Planung."
+      "pointerSentence": "Sie können diese Seite verlassen – der Plan wird weiter geschrieben. Verfolgen Sie ihn unter Werkbank › In Planung.",
+      "resumingReason": "setzt dort fort, wo es stehen blieb",
+      "resumingSecond": "zweiter Versuch",
+      "detailsResumingHead": "Setzt dort fort, wo es stehen blieb",
+      "detailsResuming": "Die Maschine, die diesen Plan geschrieben hat, ist verloren gegangen. Motir hat den Plan selbst neu gestartet, und er wird dort fortgesetzt, wo er stehen blieb — bereits geschriebene Elemente bleiben erhalten und werden nicht neu geschrieben.",
+      "detailsResumedAt": "Automatisch fortgesetzt um {time}",
+      "detailsResumedAtSecond": "Automatisch fortgesetzt um {time} · zweiter Versuch"
     },
     "cue": {
       "drafting": "Wird entworfen",
@@ -7630,7 +7637,10 @@
         "layingLine": "{target} wird angelegt",
         "authoringLine": "{title} wird geschrieben",
         "matchingLine": "Es wird geprüft, ob ein Arbeitselement dies bereits abdeckt",
-        "writingLine": "Die Diagnose wird in {key} geschrieben"
+        "writingLine": "Die Diagnose wird in {key} geschrieben",
+        "resumed": "fortsetzen",
+        "resumedLine": "Maschine verloren — Motir hat neu gestartet und setzt dort fort, wo es stehen blieb",
+        "resumedLineSecond": "Maschine erneut verloren — zweiter automatischer Versuch, setzt dort fort, wo es stehen blieb"
       },
       "openerFollowUp": "Sie haben gerade {label} gewählt. Motir AI plant, was davon abhängt.",
       "composerPlaceholderGuide": "Sagen Sie Motir AI, wie der Schritt gelaufen ist…",

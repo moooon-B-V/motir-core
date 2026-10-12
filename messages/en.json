@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# item} other {# items}} added to the plan",
     "liveStarting": "Starting…",
     "liveStalled": "Stalled",
+    "liveResuming": "Resuming",
     "progress": {
       "settling": "Settling the conversation",
       "layingChildrenOf": "Laying: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Last activity {time}",
       "detailsStalled": "Nothing has been written or reported for {duration}. The plan may have stopped.",
       "pointer": "Follow from Workbench",
-      "pointerSentence": "You can leave — this plan keeps being written. Follow it from Workbench › Planning."
+      "pointerSentence": "You can leave — this plan keeps being written. Follow it from Workbench › Planning.",
+      "resumingReason": "picking up where it stopped",
+      "resumingSecond": "second attempt",
+      "detailsResumingHead": "Picking up where it stopped",
+      "detailsResuming": "The machine writing this plan was lost. Motir started the plan again by itself, and it continues from where it stopped — the items already written are kept and are not written again.",
+      "detailsResumedAt": "Resumed automatically at {time}",
+      "detailsResumedAtSecond": "Resumed automatically at {time} · second attempt"
     },
     "cue": {
       "drafting": "Drafting",
@@ -7624,7 +7631,10 @@
         "layingLine": "Laying out {target}",
         "authoringLine": "Writing {title}",
         "matchingLine": "Checking whether a work item already covers it",
-        "writingLine": "Writing the diagnosis onto {key}"
+        "writingLine": "Writing the diagnosis onto {key}",
+        "resumed": "resume",
+        "resumedLine": "Lost its machine — Motir started it again and it picks up where it stopped",
+        "resumedLineSecond": "Lost its machine again — second automatic attempt, picking up where it stopped"
       },
       "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",
       "composerPlaceholderGuide": "Tell Motir AI how the step went…",

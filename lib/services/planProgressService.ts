@@ -7,11 +7,12 @@
 //
 // Two doors, one builder:
 //   - `snapshotsForPlans` — a PAGE of plans (the reader's plans-being-written
-//     read). FOUR batched reads, never one per plan.
+//     read). FIVE batched reads, never one per plan.
 //   - `snapshotForReview` — the plan review read (`GET /api/plans/[id]`, polled
 //     every 2.5 s while generating), built from the rows that read already holds;
 //     it adds at most a titles read for committed step targets it does not name,
-//     and the project's explanations setting for a non-MCP plan.
+//     the project's explanations setting for a non-MCP plan, and the session's
+//     automatic-resume record for a plan that has a session (MOTIR-8309).
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanItemDto, PlanStepDto } from '@/lib/dto/plans';
@@ -20,6 +21,7 @@ import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { toPlanStepDto } from '@/lib/mappers/planMappers';
 import { isTempRef } from '@/lib/plans/refs';
 import {
@@ -39,6 +41,14 @@ export interface PlanProgressPlanInput {
   createdAt: string | Date;
   lastActivityAt: string | Date;
   authorSource: string | null;
+  /** The plan's planning session, whose automatic resumes decide `resuming`. */
+  sessionId: string | null;
+}
+
+type AutoResumeRow = { id: string; autoResumeCount: number; lastAutoResumedAt: Date | null };
+
+function autoResumeOf(row: AutoResumeRow | undefined): { at: Date; count: number } | null {
+  return row?.lastAutoResumedAt ? { at: row.lastAutoResumedAt, count: row.autoResumeCount } : null;
 }
 
 /** The committed (non-`planItem:`) targets the steps name. */
@@ -53,9 +63,10 @@ function committedTargetIds(steps: readonly { targetRef: string | null }[]): str
 export const planProgressService = {
   /**
    * One snapshot per `generating` plan in `plans` (none for any other status),
-   * keyed by plan id. Four batched reads in one bound transaction — the steps,
-   * the `add` flags, the committed step targets' titles, and the projects'
-   * `aiGenerateExplanations` — so the cost is the same for 1 plan and for 10.
+   * keyed by plan id. Five batched reads in one bound transaction — the steps,
+   * the `add` flags, the committed step targets' titles, the projects'
+   * `aiGenerateExplanations`, and the sessions' automatic resumes — so the cost is
+   * the same for 1 plan and for 10.
    */
   async snapshotsForPlans(
     plans: readonly PlanProgressPlanInput[],
@@ -66,10 +77,12 @@ export const planProgressService = {
     if (generating.length === 0) return out;
     const planIds = generating.map((p) => p.id);
     const projectIds = Array.from(new Set(generating.map((p) => p.projectId)));
+    const sessionIds = Array.from(
+      new Set(generating.map((p) => p.sessionId).filter((id): id is string => id !== null)),
+    );
 
-    const { steps, rows, titles, explanationsByProject } = await withWorkspaceServiceContext(
-      ctx.workspaceId,
-      async (tx) => {
+    const { steps, rows, titles, explanationsByProject, resumes } =
+      await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
         // Bound: `plan_step`'s policy joins to `plan`, so an unbound read is an
         // empty set that would read as "nobody is working on it".
         const steps = await planStepRepository.listByPlanIds(planIds, tx);
@@ -80,14 +93,15 @@ export const planProgressService = {
           tx,
         );
         const projects = await projectRepository.findManyByIds(projectIds, tx);
+        const resumes = await planChangeSessionRepository.findAutoResumesByIds(sessionIds, tx);
         return {
           steps,
           rows,
           titles,
           explanationsByProject: new Map(projects.map((p) => [p.id, p.aiGenerateExplanations])),
+          resumes: new Map(resumes.map((r) => [r.id, r])),
         };
-      },
-    );
+      });
     // The server instant the snapshots were built at — `serverNow`'s anchor.
     const observedAt = new Date();
     const committedTitles = new Map(titles.map((t) => [t.id, t.title]));
@@ -118,6 +132,7 @@ export const planProgressService = {
             projectAiGenerateExplanations: explanationsByProject.get(plan.projectId) ?? false,
           }),
           observedAt,
+          autoResume: plan.sessionId ? autoResumeOf(resumes.get(plan.sessionId)) : null,
         }),
       );
     }
@@ -140,9 +155,10 @@ export const planProgressService = {
     if (plan.status !== 'generating') return null;
     const missing = committedTargetIds(steps).filter((id) => !knownTitles.has(id));
     const needsSetting = plan.authorSource !== 'mcp';
-    const { extraTitles, aiGenerateExplanations } =
-      missing.length === 0 && !needsSetting
-        ? { extraTitles: [], aiGenerateExplanations: false }
+    const sessionId = plan.sessionId;
+    const { extraTitles, aiGenerateExplanations, autoResume } =
+      missing.length === 0 && !needsSetting && sessionId === null
+        ? { extraTitles: [], aiGenerateExplanations: false, autoResume: null }
         : await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
             const extraTitles = await workItemRepository.findTitlesByIds(
               missing,
@@ -152,9 +168,13 @@ export const planProgressService = {
             const settings = needsSetting
               ? await projectRepository.findAiSettings(plan.projectId, tx)
               : null;
+            const resumes = sessionId
+              ? await planChangeSessionRepository.findAutoResumesByIds([sessionId], tx)
+              : [];
             return {
               extraTitles,
               aiGenerateExplanations: settings?.aiGenerateExplanations ?? false,
+              autoResume: autoResumeOf(resumes[0]),
             };
           });
     const committedTitles = new Map(knownTitles);
@@ -178,6 +198,7 @@ export const planProgressService = {
         projectAiGenerateExplanations: aiGenerateExplanations,
       }),
       observedAt: new Date(),
+      autoResume,
     });
   },
 };

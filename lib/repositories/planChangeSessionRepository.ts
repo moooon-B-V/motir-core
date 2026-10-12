@@ -784,6 +784,19 @@ export const planChangeSessionRepository = {
   },
 
   /**
+   * The automatic-resume record of a PAGE of sessions in ONE read (MOTIR-8309) — what
+   * the progress read derives `resuming` from. Only sessions that were resumed
+   * automatically at least once come back; a session missing from the answer has none.
+   */
+  async findAutoResumesByIds(sessionIds: readonly string[], tx: Prisma.TransactionClient) {
+    if (sessionIds.length === 0) return [];
+    return tx.planChangeSession.findMany({
+      where: { id: { in: [...sessionIds] }, lastAutoResumedAt: { not: null } },
+      select: { id: true, autoResumeCount: true, lastAutoResumedAt: true },
+    });
+  },
+
+  /**
    * Record one automatic resume of an OPEN session (MOTIR-8305), bound included:
    * the count moves only while it is under `max`, in the same statement that
    * moves it, so two callers racing from `max - 1` cannot both pass. Answers the

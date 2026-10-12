@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# item adicionado} other {# itens adicionados}} ao plano",
     "liveStarting": "Iniciando…",
     "liveStalled": "Travado",
+    "liveResuming": "Retomando",
     "progress": {
       "settling": "Consolidando a conversa",
       "layingChildrenOf": "Organizando: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Última atividade {time}",
       "detailsStalled": "Nada foi escrito nem informado há {duration}. O plano pode ter parado.",
       "pointer": "Acompanhar pela bancada",
-      "pointerSentence": "Você pode sair — este plano continua sendo escrito. Acompanhe-o em Bancada › Em planejamento."
+      "pointerSentence": "Você pode sair — este plano continua sendo escrito. Acompanhe-o em Bancada › Em planejamento.",
+      "resumingReason": "continuando de onde parou",
+      "resumingSecond": "segunda tentativa",
+      "detailsResumingHead": "Continuando de onde parou",
+      "detailsResuming": "A máquina que escrevia este plano foi perdida. O Motir reiniciou o plano sozinho, e ele continua de onde parou — os itens já escritos são mantidos e não são escritos novamente.",
+      "detailsResumedAt": "Retomado automaticamente às {time}",
+      "detailsResumedAtSecond": "Retomado automaticamente às {time} · segunda tentativa"
     },
     "cue": {
       "drafting": "Redigindo",
@@ -7630,7 +7637,10 @@
         "layingLine": "Organizando {target}",
         "authoringLine": "Escrevendo {title}",
         "matchingLine": "Verificando se um item de trabalho já cobre isso",
-        "writingLine": "Escrevendo o diagnóstico em {key}"
+        "writingLine": "Escrevendo o diagnóstico em {key}",
+        "resumed": "retomar",
+        "resumedLine": "Perdeu sua máquina — o Motir o reiniciou e ele continua de onde parou",
+        "resumedLineSecond": "Perdeu sua máquina de novo — segunda tentativa automática, continuando de onde parou"
       },
       "openerFollowUp": "Você acabou de escolher {label}. O Motir AI está planejando o que isso condiciona.",
       "composerPlaceholderGuide": "Conte ao Motir AI como foi a etapa…",

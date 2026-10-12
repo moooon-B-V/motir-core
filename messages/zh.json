@@ -299,6 +299,7 @@
     "liveAnnounce": "计划新增了 {count, plural, other {#}} 个工作项",
     "liveStarting": "正在启动…",
     "liveStalled": "已停滞",
+    "liveResuming": "正在继续",
     "progress": {
       "settling": "正在梳理对话",
       "layingChildrenOf": "正在铺设：{title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "最近活动于 {time}",
       "detailsStalled": "已 {duration} 没有写入或报告。计划可能已停止。",
       "pointer": "在工作台跟进",
-      "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。"
+      "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。",
+      "resumingReason": "从中断处接着写",
+      "resumingSecond": "第二次尝试",
+      "detailsResumingHead": "从中断处接着写",
+      "detailsResuming": "编写此计划的机器丢失了。Motir 已自动重新开始此计划，它会从中断处继续 — 已写好的工作项会保留，不会重写。",
+      "detailsResumedAt": "已于 {time} 自动继续",
+      "detailsResumedAtSecond": "已于 {time} 自动继续 · 第二次尝试"
     },
     "cue": {
       "drafting": "起草中",
@@ -7620,7 +7627,10 @@
         "layingLine": "正在铺开 {target}",
         "authoringLine": "正在撰写 {title}",
         "matchingLine": "正在检查是否已有工作项覆盖它",
-        "writingLine": "正在把诊断写入 {key}"
+        "writingLine": "正在把诊断写入 {key}",
+        "resumed": "继续",
+        "resumedLine": "机器丢失 — Motir 已重新开始，从中断处继续",
+        "resumedLineSecond": "机器再次丢失 — 第二次自动尝试，从中断处继续"
       },
       "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
       "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…",

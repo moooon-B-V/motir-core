@@ -1041,6 +1041,7 @@ export function PlanChangeRail({
           streaming={state.phase === 'streaming'}
           sessionHeads={narrationGroups.some((group) => group.session !== null)}
           heads={narrationHeadLines(narrationGroups, tc)}
+          autoResume={state.liveReview?.progress?.autoResume ?? null}
         />
         {/* THE PLANNER'S OWN WORDS (Story MOTIR-8060 · MOTIR-8064;
             `plan-change-run-live--narration.mock.html`): one group per session

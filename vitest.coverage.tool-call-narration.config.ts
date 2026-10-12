@@ -59,6 +59,8 @@ export default defineConfig({
       // to the narration's session heads and announces those heads, which the
       // panel's own suite drives.
       'tests/components/plan-narration.test.tsx',
+      // MOTIR-8309 — the record's automatic-resume row.
+      'tests/components/planProgressLine.resuming.test.tsx',
     ],
     coverage: {
       provider: 'v8',

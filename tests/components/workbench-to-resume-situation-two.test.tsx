@@ -83,6 +83,7 @@ const formA = (over: Partial<ToResumePlanningSessionDto> = {}) =>
       observedAt: AGO,
       authored: 7,
       proposed: 12,
+      autoResume: null,
       steps: [],
     },
     ...over,
