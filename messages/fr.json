@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# élément ajouté} other {# éléments ajoutés}} au plan",
     "liveStarting": "Démarrage…",
     "liveStalled": "Au point mort",
+    "liveResuming": "Reprise",
     "progress": {
       "settling": "Synthèse de la conversation",
       "layingChildrenOf": "Organisation : {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Dernière activité {time}",
       "detailsStalled": "Rien n’a été écrit ni signalé depuis {duration}. Le plan s’est peut-être arrêté.",
       "pointer": "Suivre depuis l’atelier",
-      "pointerSentence": "Vous pouvez quitter cette page — la rédaction de ce plan continue. Suivez-le depuis Atelier › En planification."
+      "pointerSentence": "Vous pouvez quitter cette page — la rédaction de ce plan continue. Suivez-le depuis Atelier › En planification.",
+      "resumingReason": "reprend là où il s’était arrêté",
+      "resumingSecond": "deuxième tentative",
+      "detailsResumingHead": "Reprend là où il s’était arrêté",
+      "detailsResuming": "La machine qui rédigeait ce plan a été perdue. Motir a relancé le plan de lui-même, et il reprend là où il s’était arrêté — les éléments déjà rédigés sont conservés et ne sont pas rédigés à nouveau.",
+      "detailsResumedAt": "Repris automatiquement à {time}",
+      "detailsResumedAtSecond": "Repris automatiquement à {time} · deuxième tentative"
     },
     "cue": {
       "drafting": "Rédaction",
@@ -7747,7 +7754,10 @@
         "layingLine": "Organisation de {target}",
         "authoringLine": "Rédaction de {title}",
         "matchingLine": "Vérification qu'aucun élément de travail ne couvre déjà ce point",
-        "writingLine": "Consignation du diagnostic sur {key}"
+        "writingLine": "Consignation du diagnostic sur {key}",
+        "resumed": "reprise",
+        "resumedLine": "Machine perdue — Motir l’a relancé et il reprend là où il s’était arrêté",
+        "resumedLineSecond": "Machine de nouveau perdue — deuxième tentative automatique, reprise là où il s’était arrêté"
       },
       "openerFollowUp": "Vous venez de choisir {label}. Motir AI planifie ce que ce choix conditionne.",
       "composerPlaceholderGuide": "Dites à Motir AI comment s'est passée l'étape…",

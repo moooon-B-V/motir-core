@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, other {# 件の項目}}が計画に追加されました",
     "liveStarting": "開始中…",
     "liveStalled": "停滞中",
+    "liveResuming": "再開中",
     "progress": {
       "settling": "会話を整理しています",
       "layingChildrenOf": "配置中: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "最終アクティビティ {time}",
       "detailsStalled": "{duration}の間、何も書き込まれず、報告もされていません。計画が停止した可能性があります。",
       "pointer": "ワークベンチで追跡",
-      "pointerSentence": "このページを離れても、計画の作成は続きます。「ワークベンチ › 計画中」から追跡できます。"
+      "pointerSentence": "このページを離れても、計画の作成は続きます。「ワークベンチ › 計画中」から追跡できます。",
+      "resumingReason": "中断したところから続行",
+      "resumingSecond": "2回目の試行",
+      "detailsResumingHead": "中断したところから続行",
+      "detailsResuming": "このプランを作成していたマシンが失われました。Motir がプランを自動的に再開し、中断したところから続行します — 作成済みの項目は保持され、作成し直されることはありません。",
+      "detailsResumedAt": "{time} に自動的に再開",
+      "detailsResumedAtSecond": "{time} に自動的に再開 · 2回目の試行"
     },
     "cue": {
       "drafting": "下書き中",
@@ -7744,7 +7751,10 @@
         "layingLine": "{target} を配置しています",
         "authoringLine": "{title} を作成しています",
         "matchingLine": "すでに対応する作業項目があるか確認しています",
-        "writingLine": "診断内容を {key} に書き込んでいます"
+        "writingLine": "診断内容を {key} に書き込んでいます",
+        "resumed": "再開",
+        "resumedLine": "マシンが失われました — Motir が再開し、中断したところから続行します",
+        "resumedLineSecond": "再びマシンが失われました — 2回目の自動試行、中断したところから続行します"
       },
       "openerFollowUp": "{label} を選択しました。Motir AI がそれによって決まる作業を計画しています。",
       "composerPlaceholderGuide": "ステップがどうだったか Motir AI に伝えてください…",

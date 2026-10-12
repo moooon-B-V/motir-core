@@ -367,12 +367,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
     shape: '{ counted: number; indeterminate: number; scanned: number; skipped: number }',
   },
-  'reconcile-abandoned-plans-v2': {
+  'reconcile-abandoned-plans-v3': {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
-    // MOTIR-8132 renamed two reason members (`no_producer` → `silent`,
-    // `no_producer_recent` → `writing`), so the id was bumped.
+    // MOTIR-8304 added `lostMachine` and MOTIR-8307 `autoResume` to the
+    // `awaiting_resume` outcome, so the id was bumped.
     shape:
-      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ autoResume: null | { count: number; jobId: string; started: true } | { reason: "bound_spent" | "lost_race" | "no_proposal" | "not_failed" | "not_resumable" | "starter_cannot_plan" | "submit_refused"; started: false }; lostMachine: boolean; outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
   },
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
@@ -661,6 +661,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-abandoned-plans-v2': {
+    shape:
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
+    supersededBy: 'reconcile-abandoned-plans-v3',
+    reason:
+      'MOTIR-8304 and MOTIR-8307 added required `lostMachine` and `autoResume` members to the `awaiting_resume` outcome. A memo written under the old id lacks both; the step is an idempotent recompute from live state (an automatic resume it started has already cleared the failure, so a re-run finds nothing to resume), so re-executing it under the new id on a resumed run is safe.',
+  },
   '`recompute-parent-v4-${i}`': {
     shape:
       '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',

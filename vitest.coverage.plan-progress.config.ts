@@ -117,6 +117,10 @@ export default defineConfig({
       // MOTIR-7988 — a plan a revision holds is listed under Planning, its row read
       // as one being written.
       'tests/integration/workbench/revision-hold-listing.test.ts',
+      // MOTIR-8309 — the resuming state an automatic resume adds to the derivation, both
+      // doors and the line.
+      'tests/integration/plans/planProgressResuming.test.ts',
+      'tests/components/planProgressLine.resuming.test.tsx',
     ],
     coverage: {
       provider: 'v8',

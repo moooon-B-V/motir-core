@@ -2071,6 +2071,7 @@ export const planReviewService = {
         createdAt: plan.createdAt,
         lastActivityAt,
         authorSource: plan.authorSource,
+        sessionId: plan.sessionId,
       },
       plan.items,
       inFlightSteps,

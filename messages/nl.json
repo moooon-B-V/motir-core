@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# item} other {# items}} aan het plan toegevoegd",
     "liveStarting": "Bezig met starten…",
     "liveStalled": "Vastgelopen",
+    "liveResuming": "Wordt hervat",
     "progress": {
       "settling": "Gesprek wordt geordend",
       "layingChildrenOf": "Indelen: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Laatste activiteit {time}",
       "detailsStalled": "Er is al {duration} niets geschreven of gemeld. Het plan is mogelijk gestopt.",
       "pointer": "Volgen vanuit de werkbank",
-      "pointerSentence": "Je kunt weggaan — dit plan wordt verder geschreven. Volg het vanuit Werkbank › In planning."
+      "pointerSentence": "Je kunt weggaan — dit plan wordt verder geschreven. Volg het vanuit Werkbank › In planning.",
+      "resumingReason": "gaat verder waar het stopte",
+      "resumingSecond": "tweede poging",
+      "detailsResumingHead": "Gaat verder waar het stopte",
+      "detailsResuming": "De machine die dit plan schreef, is verloren gegaan. Motir heeft het plan zelf opnieuw gestart, en het gaat verder waar het stopte — items die al zijn geschreven blijven behouden en worden niet opnieuw geschreven.",
+      "detailsResumedAt": "Automatisch hervat om {time}",
+      "detailsResumedAtSecond": "Automatisch hervat om {time} · tweede poging"
     },
     "cue": {
       "drafting": "Wordt opgesteld",
@@ -7744,7 +7751,10 @@
         "layingLine": "{target} indelen",
         "authoringLine": "{title} schrijven",
         "matchingLine": "Controleren of een werkitem dit al dekt",
-        "writingLine": "De diagnose op {key} zetten"
+        "writingLine": "De diagnose op {key} zetten",
+        "resumed": "hervatten",
+        "resumedLine": "Machine verloren — Motir heeft het opnieuw gestart en het gaat verder waar het stopte",
+        "resumedLineSecond": "Machine opnieuw verloren — tweede automatische poging, gaat verder waar het stopte"
       },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",
       "composerPlaceholderGuide": "Vertel Motir AI hoe de stap ging…",

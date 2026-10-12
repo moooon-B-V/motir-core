@@ -241,6 +241,47 @@ describe('getJob', () => {
   });
 });
 
+describe('getJob — the lost-machine fact (MOTIR-8304)', () => {
+  const failedWith = (code: string, status = 500) =>
+    jsonResponse({
+      jobId: 'job_1',
+      status: 'failed',
+      result: null,
+      error: { type: 't', title: 'failed', status, code, detail: 'detail', jobId: 'job_1' },
+    });
+
+  it('a job motir-ai reaped as abandoned is a lost machine, and still MOTIR_AI_UNAVAILABLE', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failedWith('ai_job_abandoned')));
+    const view = await getJob('job_1', 'pj_1');
+    expect(view.lostMachine).toBe(true);
+    expect(view.error).toBeInstanceOf(MotirAiUnavailableError);
+    expect(view.error?.code).toBe('MOTIR_AI_UNAVAILABLE');
+  });
+
+  it.each([
+    ['ai_job_failed', 500],
+    ['rate_limited', 429],
+    ['internal_error', 500],
+  ])('a %s failure is not a lost machine, and its code is unchanged', async (code, status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failedWith(code, status)));
+    const view = await getJob('job_1', 'pj_1');
+    expect(view.lostMachine).toBe(false);
+    expect(view.error?.code).toBe('MOTIR_AI_UNAVAILABLE');
+  });
+
+  it('a running job is not a lost machine', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ jobId: 'job_1', status: 'running', result: null, error: null }),
+        ),
+    );
+    expect((await getJob('job_1', 'pj_1')).lostMachine).toBe(false);
+  });
+});
+
 describe('getPreplanState', () => {
   const query = { coreWorkspaceId: 'ws_1', coreProjectId: 'pj_1' };
 

@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# elemento aggiunto} other {# elementi aggiunti}} al piano",
     "liveStarting": "Avvio in corso…",
     "liveStalled": "In stallo",
+    "liveResuming": "Ripresa",
     "progress": {
       "settling": "Riordino della conversazione",
       "layingChildrenOf": "Disposizione: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Ultima attività {time}",
       "detailsStalled": "Da {duration} non è stato scritto né segnalato nulla. Il piano potrebbe essersi fermato.",
       "pointer": "Segui dal banco di lavoro",
-      "pointerSentence": "Puoi uscire: la stesura di questo piano continua. Seguilo da Banco di lavoro › In pianificazione."
+      "pointerSentence": "Puoi uscire: la stesura di questo piano continua. Seguilo da Banco di lavoro › In pianificazione.",
+      "resumingReason": "riprende da dove si era fermato",
+      "resumingSecond": "secondo tentativo",
+      "detailsResumingHead": "Riprende da dove si era fermato",
+      "detailsResuming": "La macchina che stava scrivendo questo piano è andata persa. Motir ha riavviato il piano da solo, e riprende da dove si era fermato — gli elementi già scritti vengono mantenuti e non vengono riscritti.",
+      "detailsResumedAt": "Ripreso automaticamente alle {time}",
+      "detailsResumedAtSecond": "Ripreso automaticamente alle {time} · secondo tentativo"
     },
     "cue": {
       "drafting": "Stesura in corso",
@@ -7747,7 +7754,10 @@
         "layingLine": "Disposizione di {target}",
         "authoringLine": "Scrittura di {title}",
         "matchingLine": "Verifica se un elemento di lavoro lo copre già",
-        "writingLine": "Scrittura della diagnosi su {key}"
+        "writingLine": "Scrittura della diagnosi su {key}",
+        "resumed": "ripresa",
+        "resumedLine": "Macchina persa — Motir l’ha riavviato e riprende da dove si era fermato",
+        "resumedLineSecond": "Macchina di nuovo persa — secondo tentativo automatico, riprende da dove si era fermato"
       },
       "openerFollowUp": "Hai appena scelto {label}. Motir AI sta pianificando ciò che questa scelta sblocca.",
       "composerPlaceholderGuide": "Racconta a Motir AI com’è andato il passaggio…",

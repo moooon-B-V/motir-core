@@ -6,6 +6,7 @@ import {
   endSessionForAbandonedPlan,
   recordFailureWithin,
   releaseLapsedRevision,
+  resumeAutomaticallySafely,
   settleFailedJob,
 } from '@/lib/services/planSessionEndService';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
@@ -22,6 +23,7 @@ import {
   type SessionWaitingState,
 } from '@/lib/planChange/sessionWaitingState';
 import type { PlanJobStateDto } from '@/lib/dto/plans';
+import type { AutoResumeOutcome } from '@/lib/services/planSessionResumeService';
 import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 
 // ABANDONED-PLAN reconciliation (MOTIR-3064) — the recovery half of the
@@ -187,7 +189,19 @@ export type AbandonedPlanOutcome =
   | { planId: string; projectId: string; outcome: 'declined'; reason: AbandonReason }
   /** A failure nobody watched, RECORDED on the open session — the plan stays
    *  `generating` and the session waits in To resume (MOTIR-7912). */
-  | { planId: string; projectId: string; outcome: 'awaiting_resume'; reason: AbandonReason }
+  | {
+      planId: string;
+      projectId: string;
+      outcome: 'awaiting_resume';
+      reason: AbandonReason;
+      /** `true` only when the plan has a job, that job was read, and motir-ai reports it
+       *  lost its machine (MOTIR-8304). Silence alone reads `false`: as motir-ai sees
+       *  it, that job is still running. */
+      lostMachine: boolean;
+      /** The automatic resume the recording started or skipped (MOTIR-8307) — attempted only
+       *  when the job read said lost machine; `null` otherwise. */
+      autoResume: AutoResumeOutcome | null;
+    }
   | { planId: string; projectId: string; outcome: 'left_as_is'; reason: KeepReason }
   /** A revision whose job died and whose failure no relay saw: its lease is given back and
    *  the failure recorded on the plan's session (MOTIR-7936). */
@@ -211,9 +225,13 @@ export interface AbandonedPlanDeps {
   /** The session end (MOTIR-7638), behind the same seam so a test can prove a
    *  failed end leaves the sweep running. Absent means the shipped one. */
   endSessionForAbandonedPlan?: typeof endSessionForAbandonedPlan;
-  /** Where the failed job's walk stopped (MOTIR-7912), behind the same seam as
-   *  {@link resolveJobState}. Absent means a `getJob` read that tolerates failure. */
-  getJobWalkStop?: (jobId: string, coreProjectId: string) => Promise<JobWalkStop | null>;
+  /** Where the failed job's walk stopped (MOTIR-7912) and whether it lost its machine
+   *  (MOTIR-8304), behind the same seam as {@link resolveJobState}. Absent means a
+   *  `getJob` read that tolerates failure. */
+  getFailedJobFacts?: (
+    jobId: string,
+    coreProjectId: string,
+  ) => Promise<{ walkStop: JobWalkStop | null; lostMachine: boolean }>;
 }
 
 const defaultDeps: AbandonedPlanDeps = {
@@ -353,11 +371,16 @@ function openRevisionJobId(
   return null;
 }
 
-async function readWalkStop(jobId: string, coreProjectId: string): Promise<JobWalkStop | null> {
+/** The one `getJob` read the sweep makes for a failed job; any throw reads as nothing known. */
+async function readFailedJobFacts(
+  jobId: string,
+  coreProjectId: string,
+): Promise<{ walkStop: JobWalkStop | null; lostMachine: boolean }> {
   try {
-    return (await getJob(jobId, coreProjectId)).walkStop ?? null;
+    const view = await getJob(jobId, coreProjectId);
+    return { walkStop: view.walkStop ?? null, lostMachine: view.lostMachine ?? false };
   } catch {
-    return null;
+    return { walkStop: null, lostMachine: false };
   }
 }
 
@@ -477,17 +500,21 @@ export const abandonedPlanService = {
         // plan with no job has none to read: it is recorded with `failedJobId: null`,
         // `internal` and no stop point (MOTIR-8130 §3), which To resume lists and
         // Resume does not offer — its producer resumes by writing again.
-        let walkStop: JobWalkStop | null = null;
+        let facts: { walkStop: JobWalkStop | null; lostMachine: boolean } = {
+          walkStop: null,
+          lostMachine: false,
+        };
         if (plan.sourceJobId) {
           try {
-            walkStop = await (deps.getJobWalkStop ?? readWalkStop)(
+            facts = await (deps.getFailedJobFacts ?? readFailedJobFacts)(
               plan.sourceJobId,
               plan.projectId,
             );
           } catch {
-            walkStop = null;
+            facts = { walkStop: null, lostMachine: false };
           }
         }
+        const { walkStop } = facts;
         const record = failureRecordFrom({
           failedJobId: plan.sourceJobId,
           now,
@@ -508,6 +535,20 @@ export const abandonedPlanService = {
             `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}) recorded as failed on session ${session.id} — ${decision.reason}; ${plan._count.items} proposal(s) retained`,
           );
         }
+        // A LOST MACHINE is resumed by core itself (MOTIR-8307); every other recording waits.
+        const autoResume =
+          recorded === 'recorded' && facts.lostMachine
+            ? await resumeAutomaticallySafely({
+                sessionId: session.id,
+                workspaceId: plan.workspaceId,
+                projectId: plan.projectId,
+              })
+            : null;
+        if (autoResume?.started) {
+          console.warn(
+            `[abandoned-plan-sweep] plan ${plan.id} resumed automatically on session ${session.id} — job ${autoResume.jobId} (${autoResume.count})`,
+          );
+        }
         outcomes.push(
           recorded === 'recorded'
             ? {
@@ -515,6 +556,8 @@ export const abandonedPlanService = {
                 projectId: plan.projectId,
                 outcome: 'awaiting_resume',
                 reason: decision.reason,
+                lostMachine: facts.lostMachine,
+                autoResume,
               }
             : {
                 planId: plan.id,
@@ -689,11 +732,11 @@ export const abandonedPlanService = {
           plan.sourceJobId,
           { userId: '', workspaceId: plan.workspaceId, projectId: plan.projectId },
           { status: decision.action === 'fail' ? 'failed' : 'canceled' },
-          deps.getJobWalkStop
+          deps.getFailedJobFacts
             ? {
                 readJob: async (jobId, projectId) => ({
                   error: job?.failure ?? null,
-                  walkStop: await deps.getJobWalkStop!(jobId, projectId),
+                  ...(await deps.getFailedJobFacts!(jobId, projectId)),
                 }),
               }
             : {},

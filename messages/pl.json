@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {Dodano # element} few {Dodano # elementy} many {Dodano # elementów} other {Dodano # elementu}} do planu",
     "liveStarting": "Uruchamianie…",
     "liveStalled": "Zastój",
+    "liveResuming": "Wznawianie",
     "progress": {
       "settling": "Porządkowanie rozmowy",
       "layingChildrenOf": "Rozkładanie: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Ostatnia aktywność {time}",
       "detailsStalled": "Od {duration} nic nie zostało zapisane ani zgłoszone. Plan mógł się zatrzymać.",
       "pointer": "Śledź w Warsztacie",
-      "pointerSentence": "Możesz wyjść — ten plan jest nadal pisany. Śledź go w widoku Warsztat › Planowanie."
+      "pointerSentence": "Możesz wyjść — ten plan jest nadal pisany. Śledź go w widoku Warsztat › Planowanie.",
+      "resumingReason": "kontynuuje od miejsca, w którym się zatrzymał",
+      "resumingSecond": "druga próba",
+      "detailsResumingHead": "Kontynuuje od miejsca, w którym się zatrzymał",
+      "detailsResuming": "Maszyna, która pisała ten plan, została utracona. Motir sam uruchomił plan ponownie i kontynuuje go od miejsca, w którym się zatrzymał — elementy już napisane zostają zachowane i nie są pisane ponownie.",
+      "detailsResumedAt": "Wznowiono automatycznie o {time}",
+      "detailsResumedAtSecond": "Wznowiono automatycznie o {time} · druga próba"
     },
     "cue": {
       "drafting": "Tworzenie szkicu",
@@ -7744,7 +7751,10 @@
         "layingLine": "Rozkładanie: {target}",
         "authoringLine": "Pisanie: {title}",
         "matchingLine": "Sprawdzanie, czy jakiś element roboczy już to obejmuje",
-        "writingLine": "Zapisywanie diagnozy w {key}"
+        "writingLine": "Zapisywanie diagnozy w {key}",
+        "resumed": "wznowienie",
+        "resumedLine": "Utracono maszynę — Motir uruchomił plan ponownie i kontynuuje od miejsca, w którym się zatrzymał",
+        "resumedLineSecond": "Ponownie utracono maszynę — druga automatyczna próba, kontynuacja od miejsca zatrzymania"
       },
       "openerFollowUp": "Wybrano właśnie {label}. Motir AI planuje to, co ten wybór blokuje.",
       "composerPlaceholderGuide": "Powiedz Motir AI, jak poszedł ten krok…",

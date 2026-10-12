@@ -117,6 +117,14 @@ export const NOT_WAITING_WHERE = {
 
 // ── The input types the writes take ──────────────────────────────────────────
 
+/**
+ * How many times Motir resumes ONE conversation by itself after its planning
+ * machine was lost (Story MOTIR-8301 · MOTIR-8305). A third lost machine leaves
+ * the failure for the person, as every other failure is. Enforced inside the
+ * statement that records a resume (`planChangeSessionRepository.recordAutoResume`).
+ */
+export const AUTO_RESUMES_PER_SESSION = 2;
+
 /** The caps on what a failure may carry — it must be storable whatever motir-ai says. */
 export const FAILURE_DETAIL_MAX = 300;
 export const FAILURE_STOP_REF_MAX = 200;

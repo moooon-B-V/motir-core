@@ -299,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {Se añadió # elemento} other {Se añadieron # elementos}} al plan",
     "liveStarting": "Iniciando…",
     "liveStalled": "Estancado",
+    "liveResuming": "Reanudando",
     "progress": {
       "settling": "Ordenando la conversación",
       "layingChildrenOf": "Organizando: {title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "Última actividad {time}",
       "detailsStalled": "No se ha escrito ni informado nada desde hace {duration}. Es posible que el plan se haya detenido.",
       "pointer": "Seguir desde el banco de trabajo",
-      "pointerSentence": "Puedes salir: este plan se sigue redactando. Síguelo desde Banco de trabajo › En planificación."
+      "pointerSentence": "Puedes salir: este plan se sigue redactando. Síguelo desde Banco de trabajo › En planificación.",
+      "resumingReason": "retomando donde se detuvo",
+      "resumingSecond": "segundo intento",
+      "detailsResumingHead": "Retomando donde se detuvo",
+      "detailsResuming": "Se perdió la máquina que redactaba este plan. Motir volvió a iniciar el plan por sí mismo y continúa donde se detuvo: los elementos ya redactados se conservan y no se vuelven a redactar.",
+      "detailsResumedAt": "Reanudado automáticamente a las {time}",
+      "detailsResumedAtSecond": "Reanudado automáticamente a las {time} · segundo intento"
     },
     "cue": {
       "drafting": "Redactando",
@@ -7747,7 +7754,10 @@
         "layingLine": "Organizando {target}",
         "authoringLine": "Escribiendo {title}",
         "matchingLine": "Comprobando si algún elemento de trabajo ya lo cubre",
-        "writingLine": "Escribiendo el diagnóstico en {key}"
+        "writingLine": "Escribiendo el diagnóstico en {key}",
+        "resumed": "reanudar",
+        "resumedLine": "Se perdió su máquina: Motir lo volvió a iniciar y retoma donde se detuvo",
+        "resumedLineSecond": "Se volvió a perder su máquina: segundo intento automático, retomando donde se detuvo"
       },
       "openerFollowUp": "Acabas de elegir {label}. Motir AI está planificando lo que condiciona.",
       "composerPlaceholderGuide": "Cuéntale a Motir AI cómo fue el paso…",
