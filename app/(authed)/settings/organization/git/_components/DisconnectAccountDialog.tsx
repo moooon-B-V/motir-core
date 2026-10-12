@@ -6,7 +6,7 @@ import { CircleAlert, FolderGit2, Layers } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
-import type { AccountDisconnectPreviewDto } from '@/lib/services/githubAccountDisconnectService';
+import type { AccountDisconnectPreviewDto } from '@/lib/dto/github';
 import type { GithubAccountRef } from './githubAccounts';
 
 // DISCONNECT ONE GITHUB ACCOUNT FROM THIS ORGANISATION (Story MOTIR-8216 ·

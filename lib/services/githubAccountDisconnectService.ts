@@ -12,6 +12,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { assertOrgAdmin } from '@/lib/services/organizationAccessService';
 import { organizationRepoService } from '@/lib/services/organizationRepoService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
+import type { AccountDisconnectPreviewDto, AccountDisconnectResultDto } from '@/lib/dto/github';
 import type { UsingProjectDto } from '@/lib/dto/organizationRepos';
 
 // DISCONNECT ONE ORGANISATION FROM A GITHUB ACCOUNT (Story MOTIR-8216 ·
@@ -31,30 +32,6 @@ import type { UsingProjectDto } from '@/lib/dto/organizationRepos';
 // the delete (MOTIR-2166), clear the project links one workspace at a time
 // (`project_repository` writes are workspace-keyed with no system arm), delete
 // under the system context, offboard the code graph after commit.
-
-export interface AccountDisconnectRepoDto {
-  /** The internal `GithubRepo.id`. */
-  githubRepoId: string;
-  /** `owner/name`. */
-  repoRef: string;
-}
-
-export interface AccountDisconnectPreviewDto {
-  accountLogin: string;
-  accountType: string;
-  repos: AccountDisconnectRepoDto[];
-  /** The LIVE projects the viewer may browse that use one of these repos. */
-  projects: UsingProjectDto[];
-  /** How long the code graph is kept after the disconnect, in days. */
-  retentionWindowDays: number;
-}
-
-export interface AccountDisconnectResultDto {
-  releasedRepos: string[];
-  clearedLinks: number;
-  /** True when this was the last organisation linked, so the row went too. */
-  installationRemoved: boolean;
-}
 
 /** The link, the installation and this organisation's repos under it, read
  *  inside one org-bound, admin-gated transaction. */
