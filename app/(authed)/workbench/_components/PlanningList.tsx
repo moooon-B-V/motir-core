@@ -27,7 +27,7 @@ import {
 // initializer runs once. So the island re-reads for itself.
 //
 // ⚠️ TEN SECONDS, WHILE THE DOCUMENT IS VISIBLE (§ 36.7). Ten is the compact
-// line's finest VISIBLE step — *last activity* moves in 10s steps (Part XXV §25.4)
+// line's finest VISIBLE step — *last activity* moves in 10s steps (Part XXVI §26.4)
 // — so a faster poll would buy nothing a reader can see; and the times tick once a
 // second off each snapshot's own `serverNow` inside the line, so the row keeps
 // moving between reads. A hidden tab polls not at all and reads once the moment it
@@ -37,7 +37,7 @@ import {
 // ⚠️ A LATE RESPONSE NEVER WINS. Each read carries a monotonic `seq` and an
 // `AbortController`; a response older than the newest applied one is dropped, and
 // a failed or aborted read leaves the last rows exactly where they were (§ 36.7,
-// Panel 7). After three consecutive failures the rows wear Part XXV's warning dot
+// Panel 7). After three consecutive failures the rows wear Part XXVI's warning dot
 // and keep their words — nothing is greyed, and no row leaves on a failed read.
 //
 // ⚠️ THE COUNT IS A SERVER SURFACE, so a changed `total` asks for ONE

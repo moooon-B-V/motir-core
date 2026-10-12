@@ -277,6 +277,13 @@ export interface SeededIndexWorkspace {
  * which is exactly what the onboarding wizard's per-repo rows read — must hang
  * off the same grant.
  */
+/** A stable numeric repo-id base for a slug, distinct across the slugs a file seeds. */
+function repoIdBaseForSlug(slug: string): number {
+  let hash = 0;
+  for (const ch of slug) hash = (hash * 31 + ch.charCodeAt(0)) % 1_000_000;
+  return 77 + hash * 100;
+}
+
 export async function seedIndexWorkspace(
   slug: string,
   projectCount: number,
@@ -306,11 +313,16 @@ export async function seedIndexWorkspace(
     projectIds.push(project.id);
   }
   const installationId = `inst-${slug}`;
+  // ⚠️ REPO IDS ARE PER SLUG (MOTIR-8218). Every seeded workspace gets its own
+  // organisation, and a provider repository belongs to ONE organisation
+  // (`trg_github_repo_one_organization`), so two workspaces seeded with the same
+  // numeric ids would be two orgs claiming one repository — refused as P2002.
+  const repoIdBase = repoIdBaseForSlug(slug);
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: { installationId, accountLogin: 'moooon', accountType: 'Organization' },
     repos: repos.map((repo, i) => ({
-      providerRepoId: `${77 + i}`,
+      providerRepoId: `${repoIdBase + i}`,
       owner: repo.owner,
       name: repo.name,
       defaultBranch: 'main',

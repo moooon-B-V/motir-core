@@ -6894,6 +6894,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "ロードマップに戻る",
+      "breadcrumb": "パンくずリスト",
+      "breadcrumbRoadmap": "ロードマップ",
+      "breadcrumbDirection": "方向性",
+      "kicker": "方向性 · {tier}",
+      "tierName": {
+        "discovery": "発見",
+        "vision": "ビジョン",
+        "feasibility": "実現可能性",
+        "validation": "検証"
+      },
+      "openFullPage": "全画面で開く",
+      "continue": "続行",
+      "close": "閉じる",
+      "loading": "方向性ドキュメントを読み込み中",
+      "errorTitle": "このドキュメントを読み込めませんでした",
+      "errorBodyRetry": "方向性の読み込み中に問題が発生しました。しばらくしてからもう一度お試しください。",
+      "errorBodyClose": "方向性の読み込み中に問題が発生しました。閉じてからもう一度お試しください。",
+      "emptyTitle": "{label}はまだ準備できていません",
+      "emptyTitleFallback": "方向性のこの部分はまだ準備できていません",
+      "emptyBody": "このプロジェクトではこの段階はまだ作成されていません。Motir がチャットでまとめると、ここに表示されます。"
+    },
     "heading": "ロードマップ",
     "subtitle": "{project} のロードマップ",
     "noProjectTitle": "プロジェクトが選択されていません",
@@ -7017,13 +7040,16 @@
       "state_error": "GitHub のサインインを確認できませんでした。もう一度接続してください。",
       "error": "GitHub への接続中に問題が発生しました。もう一度お試しください。",
       "not_configured": "このデプロイではまだ GitHub が設定されていません。",
-      "installed": "GitHub App をインストールしました。Motir は選択したリポジトリを読み取れるようになり、アプリがホスト型の実行のブランチをプッシュしてプルリクエストを作成します。",
+      "installed": "GitHub アカウントをこの組織にリンクしました。このアカウントがすでにここで接続したリポジトリはそのまま残ります。追加するには「リポジトリを追加または削除」を使ってください。",
       "repos_updated": "リポジトリへのアクセスを更新しました。Motir は GitHub で選択したリポジトリを読み取ります。ここで完了させる作業はほかにありません。",
       "install_unbound": "Motir GitHub App は GitHub にインストールされましたが、このワークスペースからではないため、まだ接続されていません。接続するには、ここからインストールを開始してください。",
       "install_expired": "GitHub での操作中にインストールリンクの有効期限が切れました。問題は発生していません。設定からもう一度始めてください。",
       "install_forbidden": "このインストールを開始したワークスペースのメンバーではないため、何も接続されていません。",
       "install_provider_error": "Motir は App の接続を完了するために GitHub に接続できませんでした。もう一度お試しください。",
-      "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。"
+      "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。",
+      "select_repos": "Motir GitHub App はインストール済みです。この組織が接続する、このアカウントのリポジトリを選択してください。",
+      "repo_unavailable": "そのリポジトリは既に別の組織に接続されているため、ここには追加されませんでした。ほかには何も変更されていません。",
+      "installation_not_accessible": "GitHub 上でその GitHub アカウントを表示できないため、この組織にリンクされませんでした。何も変更されていません。"
     },
     "connect": {
       "title": "GitHub を接続",
@@ -7035,14 +7061,14 @@
       },
       "step2": {
         "eyebrow": "ステップ 2 · リポジトリへのアクセス",
-        "title": "Motir GitHub App をインストール",
-        "body": "Motir が読み取れるリポジトリを選びます。GitHub のインストール画面で対象のリポジトリを正確に指定できます。それ以外は Motir から見えず、選択はいつでも変更できます。"
+        "title": "GitHub アカウントをリンク",
+        "body": "Motir GitHub App がインストールされているアカウントを選ぶか、新しいアカウントにインストールしてから、この組織が接続するリポジトリを選びます。1 つのリポジトリは一度に 1 つの組織にのみ属します。"
       },
       "installLink": "Motir GitHub App をインストール",
       "cta": "GitHub を接続",
       "foot": "GitHub に移動して認可し、その後リポジトリを選択します。",
       "noInstallHref": "このデプロイでは Motir GitHub App をインストールできません。",
-      "orgFoot": "GitHub に移動して、この組織が Motir に許可するリポジトリを選択します。"
+      "orgFoot": "Motir GitHub App が GitHub アカウントにすでにインストールされている場合は、Motir に一覧表示されるため、再度インストールする必要はありません。"
     },
     "identity": {
       "connectedAs": "GitHub の ID · {name} として接続済み",
@@ -7343,6 +7369,97 @@
       "adminOnly": "Git ホストを接続・切断できるのは {org} のオーナーと管理者のみです。",
       "subtitleGeneric": "組織を GitHub または GitLab に一度接続すれば、組織内のすべてのプロジェクトが接続済みのリポジトリで作業できます。リポジトリを選択しても再びインデックスが作成されることはありません。",
       "identityAtAccount": "ご自身のアカウントは「設定 → アカウント → Git アカウント」で接続してください"
+    },
+    "accounts": {
+      "title": "GitHub アカウント",
+      "subtitle": "{org}がリポジトリを接続しているアカウントです。各リポジトリは一度に 1 つの組織にのみ属します。",
+      "connect": "GitHub を接続",
+      "linked": "リンク済み",
+      "meta": "{type} · ここで接続済みのリポジトリ {count, plural, other {# 件}}",
+      "type": {
+        "organization": "組織",
+        "personal": "個人"
+      },
+      "addOrRemove": "リポジトリを追加または削除",
+      "manageOnGithub": "GitHub で管理",
+      "disconnect": "接続解除",
+      "toastTitle": "{account}から {count, plural, other {# 件のリポジトリ}}を接続しました",
+      "toastBody": "「リポジトリ」に一覧表示されています。{org}のどのプロジェクトからも追加できるようになりました。"
+    },
+    "picker": {
+      "title": "GitHub を接続",
+      "description": "{org}が接続するリポジトリを持つ GitHub アカウントを選んでください。Motir GitHub App がインストールされていて、あなたが閲覧できるアカウントです。",
+      "accountsLabel": "アカウント",
+      "accountMeta": "{type} · Motir から見えるリポジトリ {count, plural, other {# 件}}",
+      "notLinked": "未リンク",
+      "linkedHere": "この組織にリンク済み",
+      "installOther": "別のアカウントにインストール",
+      "installOtherMeta": "GitHub を開き、まだ Motir GitHub App がインストールされていないアカウントにインストールします。",
+      "loadingAccounts": "GitHub アカウントを読み込んでいます…",
+      "accountsError": {
+        "title": "GitHub に接続できませんでした",
+        "body": "Motir GitHub App がインストールされているアカウントを Motir が読み込めませんでした。変更は行われていません。"
+      },
+      "retry": "再試行",
+      "noAccounts": {
+        "title": "リンクできる GitHub アカウントがまだありません",
+        "body": "あなたが閲覧できる GitHub アカウントのいずれにも Motir GitHub App がインストールされていません。続行するには、いずれかのアカウントにインストールしてください。"
+      },
+      "identity": {
+        "title": "まず GitHub アカウントを接続してください",
+        "body": "Motir は、あなた自身の GitHub ID を通じて閲覧できる GitHub アカウントを一覧表示します。「設定 → アカウント → Git アカウント」で接続してから、ここに戻ってください。",
+        "action": "Git アカウントへ移動"
+      },
+      "cancel": "キャンセル",
+      "back": "すべてのアカウント",
+      "reposTitle": "{account}のリポジトリを選択",
+      "reposDescription": "各リポジトリは一度に 1 つの組織にのみ属します。別の組織がすでに接続しているリポジトリはここに追加できません。",
+      "search": "リポジトリを検索",
+      "selectAll": "選択可能なものをすべて選択（{count}）",
+      "selected": "{count} 件選択済み",
+      "rowState": {
+        "selected": "選択済み",
+        "notSelected": "未選択"
+      },
+      "connectedElsewhere": "別の組織に接続済み",
+      "connectedHere": "ここで接続済み",
+      "noMatches": "検索に一致するリポジトリはありません。",
+      "hint": "{org}からリポジトリの接続を解除するには、「リポジトリ」でその行の「接続解除」を使ってください。",
+      "submit": "{count, plural, =0 {リポジトリを接続} other {# 件のリポジトリを接続}}",
+      "loadingRepos": "リポジトリを読み込んでいます…",
+      "reposError": {
+        "title": "リポジトリを読み込めませんでした",
+        "body": "Motir は GitHub から{account}のリポジトリを読み込めませんでした。変更は行われていません。"
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo}はたった今別の組織に接続されたため、追加できません。",
+        "repo_selection_required": "接続するリポジトリを 1 つ以上選んでください。",
+        "repository_not_visible": "これらのリポジトリのうち 1 つが、GitHub 上の Motir GitHub App から見えなくなりました。一覧を更新して、もう一度お試しください。",
+        "installation_not_accessible": "GitHub で{account}を閲覧できなくなったため、リンクできません。別のアカウントを選んでください。",
+        "generic": "これらのリポジトリの接続中に問題が発生しました。変更は行われていません。もう一度お試しください。"
+      },
+      "noneLeft": {
+        "title": "{account}から接続できるリポジトリは残っていません",
+        "body": "Motir GitHub App が{account}で閲覧できるリポジトリはすべて接続済みです。1 つのリポジトリは一度に 1 つの組織にのみ属します。",
+        "connectedHere": "この組織に接続済み",
+        "connectedElsewhere": "他の組織に接続済み",
+        "hint": "さらに追加するには、GitHub で Motir GitHub App に他のリポジトリへのアクセスを許可するか、別のアカウントを選んでください。",
+        "chooseAnother": "別のアカウントを選択",
+        "manageOnGithub": "GitHub でリポジトリを管理"
+      }
+    },
+    "accountDisconnect": {
+      "title": "{org}から{account}の接続を解除しますか？",
+      "repos": "この操作で削除されるのは、{org}と{account}のリンク、およびそのアカウントがここで接続した {count, plural, other {# 件のリポジトリ}}のみです：",
+      "projects": "これらのリポジトリを使えなくなるプロジェクト（{count, plural, other {# 件}}）：",
+      "noProjects": "{org}でこれらのリポジトリを使っているプロジェクトはまだありません。",
+      "retention": "Motir がこれらから作成したコードインデックスは {days} 日間保持されます。その前にアカウントを再度リンクしてこれらを選択すると、削除は取り消されます。期間が過ぎた後に再追加すると、完全なインデックス作成が必要になります。",
+      "others": "{account}にリンクしている他の組織には影響せず、Motir GitHub App は GitHub にインストールされたままです。すべての場所からアンインストールするには、GitHub で行ってください。",
+      "loading": "この接続解除による影響を読み込んでいます…",
+      "loadFailed": "Motir は{account}の接続解除による影響を読み込めませんでした。変更は行われていません。もう一度お試しください。",
+      "failed": "Motir は{account}の接続を解除できませんでした。変更は行われていません。もう一度お試しください。",
+      "cancel": "キャンセル",
+      "confirm": "接続解除"
     }
   },
   "aiPlanning": {

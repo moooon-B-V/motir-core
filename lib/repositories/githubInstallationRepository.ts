@@ -119,6 +119,20 @@ export const githubInstallationRepository = {
     await tx.githubInstallation.update({ where: { id }, data: { organizationId } });
   },
 
+  /** Re-stamp the legacy tenancy columns onto another LINKED organisation — the
+   *  per-organisation disconnect (MOTIR-8222) when the organisation leaving is
+   *  the one the row was stamped with and another stays linked, so the leaving
+   *  organisation stops seeing the installation through `findByWorkspaceId` /
+   *  `listByOrganizationId`. */
+  async restampTenancy(
+    id: string,
+    workspaceId: string,
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.githubInstallation.update({ where: { id }, data: { workspaceId, organizationId } });
+  },
+
   /** The workspace's connection for a specific provider (`github` | `gitlab`), or
    *  null. The provider-aware read a GitLab caller uses. */
   async findByWorkspaceAndProvider(
@@ -173,6 +187,27 @@ export const githubInstallationRepository = {
       where: { installationId },
       create: { installationId, ...rest },
       update: rest,
+    });
+  },
+
+  /**
+   * Create-or-refresh an installation WITHOUT touching its tenancy (Story
+   * MOTIR-8216 · MOTIR-8219). One GitHub account's installation can now serve
+   * several organisations, each through its own `github_installation_org_link`
+   * row, so a second organisation linking it must not re-stamp the first's
+   * `workspace_id` / `organization_id`. Those are written on CREATE only; an
+   * update refreshes the account's login and type and nothing else. `upsert`
+   * above is unchanged, for the shared provisioning installation.
+   */
+  async upsertPreservingTenancy(
+    input: UpsertGithubInstallationInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation> {
+    const { installationId, accountLogin, accountType } = input;
+    return tx.githubInstallation.upsert({
+      where: { installationId },
+      create: input,
+      update: { accountLogin, accountType },
     });
   },
 

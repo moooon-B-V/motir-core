@@ -2,6 +2,7 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workflowsService } from './workflowsService';
 import { readPlanHoldWithin } from './planTargetLockService';
@@ -165,6 +166,14 @@ export type RollupOutcome =
    *  a run log that cannot say "a derivation stood down in favour of a person's
    *  write" cannot answer why a parent is not where the ladder says it is. */
   | { outcome: 'stale_backward'; parentId: string; toStatus: string }
+  /** A BACKWARD set was declined because the parent DELIVERS ITS OWN open pull
+   *  request and stands on a review rung (Bug MOTIR-8327): its In Review /
+   *  Approved is its own CI verdict and merge gate, not its children's, and the
+   *  child set it would pull back to is still built. The backward twin of
+   *  `approval_pending`, and its own variant for the same reason `stale_backward`
+   *  is one: a run log must be able to say why a parent is not where the ladder
+   *  says it is. */
+  | { outcome: 'delivery_owned'; parentId: string; toStatus: string }
   | { outcome: 'no_matching_status'; parentId: string }
   | { outcome: 'illegal_transition'; parentId: string; toStatus: string }
   | { outcome: 'approval_pending'; parentId: string; toStatus: string }
@@ -472,6 +481,40 @@ export const parentStatusRollupService = {
         if (statusChangedAt && statusChangedAt > childSetChangedAt) {
           return {
             outcome: { outcome: 'stale_backward', parentId, toStatus: wanted.key },
+            emit: null,
+          };
+        }
+
+        // ⚠️ A STORY RUN'S REVIEW RUNGS ARE ITS PULL REQUEST'S (Bug MOTIR-8327).
+        // A container that delivers its own OPEN pull request reaches In Review
+        // through its own green CI (`ciPromotion.promoteDeliveredCardsOnGreen`) and
+        // Approved through its own merge gate — not through its children. The same
+        // green pass promotes a child the pull request also delivers, and that
+        // child's transition lands here a hop later, with the rest of the children
+        // still at Implemented: the ladder says Implemented, and this set used to
+        // take the story there, which withdrew its approve-to-merge question
+        // `pulled_back` seconds after CI raised it (three times on MOTIR-8216).
+        // The forward arm already stands down for such a container
+        // (`approval_pending`, MOTIR-5526); this is the backward half.
+        //
+        // Only while the children are still BUILT — a target at or above the
+        // Implemented rung. A child reopened below it is unbuilt work under the
+        // story, which its own CI verdict cannot answer for, so that move applies
+        // and the merge question goes with it. And only on an OPEN delivery: once
+        // the pull request has merged or closed, the review rung is the children's
+        // to answer again.
+        const builtRung = resolved.get('implemented');
+        const onReviewRung =
+          (reviewKey !== null && parent.status === reviewKey) ||
+          (approvedKey !== null && parent.status === approvedKey);
+        if (
+          onReviewRung &&
+          builtRung &&
+          wanted.rank >= builtRung.rank &&
+          (await workItemDeliveryRepository.countOpenByWorkItem(parentId, tx)) > 0
+        ) {
+          return {
+            outcome: { outcome: 'delivery_owned', parentId, toStatus: wanted.key },
             emit: null,
           };
         }

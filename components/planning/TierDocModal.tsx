@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { ArrowRight, ArrowUpRight, FileQuestion, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
@@ -81,6 +82,7 @@ export function TierDocModal({
   onContinue,
   onOpenInPage,
 }: TierDocModalProps) {
+  const t = useTranslations('roadmap.directionDoc');
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   // Discard an out-of-order resolve (the tier changed mid-fetch) by sequence.
   const reqSeq = useRef(0);
@@ -140,7 +142,7 @@ export function TierDocModal({
           Mirrors `detail-surfaces.mock.html` panel 4's `m-head`. */}
       <div className="flex shrink-0 items-center gap-2 border-b border-(--el-border) px-(--spacing-card-padding) py-(--spacing-control-y)">
         <span className="text-xs font-medium tracking-wide text-(--el-text-muted) uppercase">
-          Direction{tier ? ` · ${tier.charAt(0).toUpperCase()}${tier.slice(1)}` : ''}
+          {tier ? t('kicker', { tier: t(`tierName.${tier}`) }) : t('breadcrumbDirection')}
         </span>
         <span className="flex-1" />
         {tier &&
@@ -154,7 +156,7 @@ export function TierDocModal({
               className="inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <ArrowUpRight className="size-4" aria-hidden="true" />
-              Open full page
+              {t('openFullPage')}
             </button>
           ) : origin === 'onboarding' ? (
             // A produced/past tier in onboarding: open the SHELL-LESS full page in a
@@ -168,7 +170,7 @@ export function TierDocModal({
               className="inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <ArrowUpRight className="size-4" aria-hidden="true" />
-              Open full page
+              {t('openFullPage')}
             </a>
           ) : (
             <Link
@@ -177,7 +179,7 @@ export function TierDocModal({
               className="inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <ArrowUpRight className="size-4" aria-hidden="true" />
-              Open full page
+              {t('openFullPage')}
             </Link>
           ))}
         {isCurrentStep && onContinue && (
@@ -188,13 +190,13 @@ export function TierDocModal({
             onClick={onContinue}
             className="inline-flex items-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
           >
-            Continue
+            {t('continue')}
             <ArrowRight className="size-4" aria-hidden="true" />
           </button>
         )}
         <button
           type="button"
-          aria-label="Close"
+          aria-label={t('close')}
           onClick={onClose}
           className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
@@ -205,16 +207,14 @@ export function TierDocModal({
       <Modal.Body className="px-(--spacing-card-padding) py-(--spacing-card-padding)">
         {state.status === 'loading' && (
           <div aria-busy="true" className="flex min-h-[16rem] flex-1 items-center justify-center">
-            <Spinner aria-label="Loading the direction doc" />
+            <Spinner aria-label={t('loading')} />
           </div>
         )}
 
         {state.status === 'error' && (
           <div className="flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
-            <p className="text-sm font-semibold text-(--el-text)">Couldn&apos;t load this doc</p>
-            <p className="text-sm text-(--el-text-muted)">
-              Something went wrong reading your direction. Close and try again.
-            </p>
+            <p className="text-sm font-semibold text-(--el-text)">{t('errorTitle')}</p>
+            <p className="text-sm text-(--el-text-muted)">{t('errorBodyClose')}</p>
           </div>
         )}
 
@@ -222,12 +222,9 @@ export function TierDocModal({
           <div className="flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
             <FileQuestion className="size-6 text-(--el-text-faint)" aria-hidden="true" />
             <p className="text-sm font-semibold text-(--el-text)">
-              {label ?? 'This part of your direction'} isn&apos;t ready yet
+              {label ? t('emptyTitle', { label }) : t('emptyTitleFallback')}
             </p>
-            <p className="max-w-[22rem] text-sm text-(--el-text-muted)">
-              This tier hasn&apos;t been drafted for this project. It&apos;ll appear here once Motir
-              writes it up in the chat.
-            </p>
+            <p className="max-w-[22rem] text-sm text-(--el-text-muted)">{t('emptyBody')}</p>
           </div>
         )}
 

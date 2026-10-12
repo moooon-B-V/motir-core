@@ -4,10 +4,12 @@ import { getGitProvider } from '@/lib/git';
 import type {
   GitProviderId,
   NormalizedChangeRequest,
+  NormalizedRepo,
   NormalizedStatusEvent,
   RepositoryPermission as GithubRepositoryPermission,
 } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { githubInstallationOrgLinkRepository } from '@/lib/repositories/githubInstallationOrgLinkRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { evaluateLinkCheck } from './pullRequestLinkCheckService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
@@ -1069,46 +1071,103 @@ async function resolveGithubCiContext(
  *  installation yet", `shared` is "this is Motir's own provisioning installation
  *  and reconcile does not apply to it". A shared installation's authoritative
  *  repo set spans EVERY tenant, so reconciling it would delete the repos this
- *  delivery did not fetch and leak the ones it did. */
+ *  delivery did not fetch and leak the ones it did.
+ *
+ *  PER ORGANISATION (Story MOTIR-8216 · MOTIR-8221). One installation can be
+ *  linked to several organisations, each owning a disjoint subset of the
+ *  account's repositories, so the delivery is applied once per LINK — acting as
+ *  the workspace the link records — never to one organisation on behalf of all:
+ *
+ *    * GitHub's repo list is fetched ONCE, before any transaction.
+ *    * Each organisation keeps what it owns and GitHub still shows, and releases
+ *      what GitHub no longer shows; a repository another organisation owns is
+ *      never claimed, released or deleted by this organisation's reconcile.
+ *    * A FREE repository (newly added on the account) is claimed only when
+ *      exactly ONE organisation is linked — the single-organisation behaviour.
+ *      With two or more it is left free, so it shows as available in the
+ *      picker instead of being attached to everyone.
+ *    * Each organisation reconciles in its OWN transaction; one failing is
+ *      logged and does not stop the others or fail the delivery. Only when
+ *      every organisation failed does the error propagate (GitHub retries).
+ *
+ *  An installation with a tenant but no link row (written before the link
+ *  table, and missed by its backfill) is reconciled as that one workspace. */
 async function reconcileInstallation(
   installationId: string,
   body: Record<string, unknown>,
 ): Promise<'synced' | 'skipped_unbound' | 'skipped_shared_installation'> {
-  const existing = await withSystemContext((tx) =>
-    githubInstallationRepository.findByInstallationId(installationId, tx),
-  );
-  if (!existing) return 'skipped_unbound';
-  // The NULL is the guard, not a flag: `persistInstallation` requires a
-  // `workspaceId: string`, so the call below simply cannot be formed for a shared
-  // installation — this branch names that fact rather than enforcing it.
-  const workspaceId = existing.workspaceId;
-  if (workspaceId === null) return 'skipped_shared_installation';
+  const found = await withSystemContext(async (tx) => {
+    const installation = await githubInstallationRepository.findByInstallationId(
+      installationId,
+      tx,
+    );
+    if (!installation) return null;
+    const links = await githubInstallationOrgLinkRepository.listByInstallationId(
+      installation.id,
+      tx,
+    );
+    return { installation, links };
+  });
+  if (!found) return 'skipped_unbound';
+  const { installation: existing, links } = found;
+  const workspaceIds =
+    links.length > 0
+      ? links.map((link) => link.workspaceId)
+      : existing.workspaceId !== null
+        ? [existing.workspaceId]
+        : [];
+  // The shared provisioning installation: NULL tenancy and no link — nothing
+  // to reconcile it AS, which is the guard rather than a flag.
+  if (workspaceIds.length === 0) return 'skipped_shared_installation';
 
   const account = asRecord(asRecord(body['installation'])?.['account']);
   const repos = await getGitProvider(existing.provider as GitProviderId).fetchInstallationRepos(
     installationId,
   );
-  await githubInstallationService.persistInstallation({
-    workspaceId,
-    installation: {
-      installationId,
-      accountLogin:
-        typeof account?.['login'] === 'string' ? account['login'] : existing.accountLogin,
-      accountType: typeof account?.['type'] === 'string' ? account['type'] : existing.accountType,
-    },
-    repos,
-  });
-
-  // POST-COMMIT, best-effort: kick off a code-graph index for each repo that has
-  // no graph yet (MOTIR-1500; re-gated on indexedness by MOTIR-1961 — an
-  // UNCHANGED repo that was never indexed now recovers here, which is what makes
-  // "a dropped enqueue self-heals on the next repo-selection change" true).
-  // Never blocks or fails the grant mirror.
-  await codeGraphIndexService.enqueueFirstIndexForRepos({
+  const installation = {
     installationId,
-    workspaceId,
-    repos,
-  });
+    accountLogin: typeof account?.['login'] === 'string' ? account['login'] : existing.accountLogin,
+    accountType: typeof account?.['type'] === 'string' ? account['type'] : existing.accountType,
+  };
+  const claimFree = workspaceIds.length === 1;
+
+  let synced = 0;
+  let firstError: unknown = null;
+  for (const workspaceId of workspaceIds) {
+    let owned: NormalizedRepo[];
+    try {
+      const dto = await githubInstallationService.persistInstallation({
+        workspaceId,
+        installation,
+        repos,
+        claimFree,
+      });
+      const ownedIds = new Set(dto.repos.map((repo) => repo.repoId));
+      owned = repos.filter((repo) => ownedIds.has(repo.providerRepoId));
+      synced += 1;
+    } catch (err) {
+      console.error(
+        '[githubWebhookService] reconcile failed for one organisation of an installation; continuing:',
+        installationId,
+        workspaceId,
+        err,
+      );
+      firstError ??= err;
+      continue;
+    }
+    // POST-COMMIT, best-effort: kick off a code-graph index for each repo that has
+    // no graph yet (MOTIR-1500; re-gated on indexedness by MOTIR-1961 — an
+    // UNCHANGED repo that was never indexed now recovers here, which is what makes
+    // "a dropped enqueue self-heals on the next repo-selection change" true).
+    // Never blocks or fails the grant mirror. Only THIS organisation's repos,
+    // under its own workspace.
+    await codeGraphIndexService.enqueueFirstIndexForRepos({
+      installationId,
+      workspaceId,
+      repos: owned,
+    });
+  }
+  if (synced === 0 && firstError !== null) throw firstError;
   return 'synced';
 }
 

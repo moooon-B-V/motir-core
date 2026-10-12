@@ -96,7 +96,7 @@ export async function WorkbenchTabs({
       // PLANNING (§ 36.2) — SECOND, and never a landing rung: tab 1 is what is
       // waiting on you, tab 2 is what will arrive on tab 1 once it is written, so
       // the two sit together and the work tabs follow. The glyph is `PenLine`, the
-      // same one Part XXV's *Drafting* cue wears on the canvas, so "being written"
+      // same one Part XXVI's *Drafting* cue wears on the canvas, so "being written"
       // is one picture on the strip and on the plan. Not `Sparkles`: on a strip a
       // sparkle reads as an AI badge, and many of these plans are written by an MCP
       // agent rather than by Motir AI — § 29 keeps `Sparkles` on the ROW.

@@ -20,6 +20,8 @@ import type {
   ChangedFilesResult,
   ChangeRequestMergeability,
   ChangeRequestMergeabilityInput,
+  ReleaseContainment,
+  ReleaseContainsMergeInput,
   MergeChangeRequestInput,
   MergeChangeRequestResult,
   NormalizedDeploymentStatus,
@@ -378,6 +380,21 @@ export interface GitProvider {
   readChangeRequestMergeability?(
     input: ChangeRequestMergeabilityInput,
   ): Promise<ChangeRequestMergeability>;
+
+  /**
+   * Does the deployed RELEASE `input.release` (a commit) carry what change request
+   * `input.number` MERGED? (Bug MOTIR-8330.) The monitor asks it before re-filing a
+   * completed bug: an error from a build that predates the fix is the old build still
+   * serving, not a recurrence.
+   *
+   * ⚠️ OPTIONAL. A host that does not implement it answers nothing, which the caller
+   * reads exactly as `unknown` — the re-file goes ahead as it always did.
+   *
+   * ⚠️ IT NEVER THROWS. Every non-answer — an unmerged change request, a release the
+   * host does not know, a failed token mint, a timeout — is `unknown`, because the
+   * caller runs inside a poll that must not fail an issue over a courtesy read.
+   */
+  readReleaseContainsMerge?(input: ReleaseContainsMergeInput): Promise<ReleaseContainment>;
 
   /**
    * Fetch an installation's account (login + type) from the host, given only the

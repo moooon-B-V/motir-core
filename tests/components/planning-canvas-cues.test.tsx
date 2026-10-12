@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // `PlanningCanvas`'s DRAFTING / LAYING cue layer (Story MOTIR-7820 · MOTIR-7830;
-// `design/ai-planning/design-notes.md` Part XXV §25.6–25.8). The cue is a class
+// `design/ai-planning/design-notes.md` Part XXVI §26.6–26.8). The cue is a class
 // and two children on the NODE BOX, never on the card `renderNode` returns, it is
 // independent of `motion`, it composes with the motion marks, and an absent map
 // leaves the DOM byte for byte as it was.

@@ -47,7 +47,12 @@ export class FleetInventoryUnavailableError extends Error {
     readonly app: string,
     readonly detail: string,
   ) {
-    super(`Could not list machines in ${app}: ${detail}. Nothing was destroyed there.`);
+    // The provider's own sentence already ends in a full stop ("…(HTTP 502).");
+    // drop it so the alert does not read "(HTTP 502).. Nothing was destroyed".
+    super(
+      `Could not list machines in ${app}: ${detail.replace(/\.+$/, '')}. ` +
+        'Nothing was destroyed there.',
+    );
     this.name = 'FleetInventoryUnavailableError';
   }
 }

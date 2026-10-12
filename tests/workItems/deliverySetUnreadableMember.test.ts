@@ -24,11 +24,12 @@ import { randomToken } from '../helpers/random';
 // relation it joins comes back NULL — a `null` the generated type says cannot
 // happen.
 //
-// The way that state arises here is the shipped one, not a hand-written row:
-// `persistInstallation` upserts the installation and every repository by the
-// HOST's ids and RE-STAMPS the tenancy, so a second organisation connecting the
-// same GitHub installation moves the repository — and with it every pull request
-// on it — out of the first organisation's sight.
+// The state used to arise from a shipped path: `persistInstallation` re-stamped
+// a repository's tenancy when a second organisation connected the same
+// installation. That path is gone — a repository belongs to ONE organisation and
+// is never re-stamped (MOTIR-8218 / MOTIR-8219) — so the state is now written by
+// hand: the pull request is re-homed onto another organisation's repository. The
+// read stays defensive, because a NULL join is still what the reader would get.
 
 afterAll(async () => {
   await db.$disconnect();
@@ -49,6 +50,22 @@ function repo(providerRepoId: string, name: string) {
     defaultBranch: 'main',
     archived: false,
   };
+}
+
+/** Move pull request `number` on `providerRepoId` onto `to`'s copy of a repository. */
+async function rehomePullRequest(
+  number: number,
+  providerRepoId: string,
+  to: WorkItemFixture,
+  toProviderRepoId: string,
+): Promise<void> {
+  const target = await adminDb.githubRepo.findFirstOrThrow({
+    where: { repoId: toProviderRepoId, workspaceId: to.workspaceId },
+  });
+  await adminDb.githubPullRequest.updateMany({
+    where: { number, repo: { repoId: providerRepoId } },
+    data: { repoId: target.id },
+  });
 }
 
 async function connect(
@@ -72,8 +89,7 @@ describe('a delivery whose pull request the reader cannot see', () => {
     const installationId = `inst-${randomToken(6)}`;
     const shared = repo(`r-${randomToken(6)}`, 'motir-core');
     const kept = repo(`r-${randomToken(6)}`, 'motir-ai');
-    // Two installations so the second repository can stay ours while the first
-    // moves: the move is per installation, the read is per repository.
+    // Two installations, as before: the read is per repository.
     const ownInstallationId = `inst-${randomToken(6)}`;
     await connect(ours, installationId, [shared]);
     await connect(ours, ownInstallationId, [kept]);
@@ -97,8 +113,10 @@ describe('a delivery whose pull request the reader cannot see', () => {
     }
     expect(await workItemsService.listDeliverySet(card.id, ours.ctx)).toHaveLength(2);
 
-    // Another organisation connects the SAME installation — the shipped re-stamp.
-    await connect(theirs, installationId, [shared]);
+    // The pull request now lives on another organisation's repository.
+    const elsewhere = repo(`r-${randomToken(6)}`, 'motir-core');
+    await connect(theirs, `inst-${randomToken(6)}`, [elsewhere]);
+    await rehomePullRequest(41, shared.providerRepoId, theirs, elsewhere.providerRepoId);
 
     const set = await workItemsService.listDeliverySet(card.id, ours.ctx);
     expect(set.map((d) => d.pullRequest.number)).toEqual([42]);
@@ -127,7 +145,9 @@ describe('a delivery whose pull request the reader cannot see', () => {
       },
       ours.ctx,
     );
-    await connect(theirs, installationId, [shared]);
+    const elsewhere = repo(`r-${randomToken(6)}`, 'motir-core');
+    await connect(theirs, `inst-${randomToken(6)}`, [elsewhere]);
+    await rehomePullRequest(7, shared.providerRepoId, theirs, elsewhere.providerRepoId);
 
     const view = await workItemsService.getDeliveryView(card.id, [], ours.ctx);
     expect(view.deliveries).toEqual([]);

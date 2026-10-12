@@ -153,7 +153,7 @@ export interface PlanReviewCanvasProps {
   offerPlanElsewhere?: boolean;
   /**
    * The steps the planner is on RIGHT NOW (Story MOTIR-7820 · MOTIR-7830; design
-   * Part XXV §25.6–25.7) — `usePlanProgressReading`'s `liveSteps`, the ONE clock's
+   * Part XXVI §26.6–26.7) — `usePlanProgressReading`'s `liveSteps`, the ONE clock's
    * verdict (withdrawn targets, quiet sessions and every step of a stalled plan
    * already gone). Mapped, never filtered: an `author` step → the DRAFTING cue on
    * its node, a `lay` step → the LAYING cue on its parent (or, when the reader
@@ -555,7 +555,7 @@ export function PlanReviewCanvas({
     [live, items, proposedWord],
   );
 
-  // ── THE CUES (MOTIR-7830; Part XXV §25.6–25.7) ───────────────────────────
+  // ── THE CUES (MOTIR-7830; Part XXVI §26.6–26.7) ───────────────────────────
   // The live steps → a cue per node, and where each one is for the arrivals slot.
   // `liveSteps` is the derivation's: nothing here decides which steps are live.
   const tCue = useTranslations('planReview.cue');
@@ -582,7 +582,7 @@ export function PlanReviewCanvas({
   // in is not one of them — so the plan's change to it is drawn in the bar
   // instead, asked of whichever level is in view (arrived, drilled or followed).
   //
-  // …and so is the LAYING cue on the level the reader stands INSIDE (§25.7 row 2):
+  // …and so is the LAYING cue on the level the reader stands INSIDE (§26.7 row 2):
   // its parent is not a card on this level, so the bar carries *Laying this level*.
   // Beside the change band when both apply; `null` when neither does, so the bar
   // stays the one that shipped.

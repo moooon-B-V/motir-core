@@ -11,7 +11,7 @@ import {
 } from '@/lib/plans/planProgress';
 
 // THE ONE CLOCK behind a generating plan's progress (Story MOTIR-7820 · Subtask
-// MOTIR-7829; design `design/ai-planning/design-notes.md` Part XXV §25.4, §25.10).
+// MOTIR-7829; design `design/ai-planning/design-notes.md` Part XXVI §26.4, §26.10).
 //
 // The progress line AND the canvas cues read their live steps from this hook, so
 // a step that goes quiet between two polls stops being named by the words and by
@@ -24,12 +24,12 @@ import {
 // ── The clock ───────────────────────────────────────────────────────────────
 // A snapshot is RECEIVED when its identity changes (each applied poll is a new
 // object; the SSR-seeded first one counts as received at mount). From then on
-// the reading advances once a second (§25.4's tick) by how long the client has
+// the reading advances once a second (§26.4's tick) by how long the client has
 // HELD that snapshot — `serverNow(observedAt, receivedAtMs, clientNowMs)`, both
 // instants on the client's own clock, so its skew cancels. The effect below is
 // the only place `Date.now()` is read.
 //
-// ── The dropped read (§25.10) ───────────────────────────────────────────────
+// ── The dropped read (§26.10) ───────────────────────────────────────────────
 // While `failing`, the reading's `state` and `liveSteps` HOLD at what the last
 // successful snapshot said when the read started failing; elapsed time and time
 // since activity keep ticking (they are facts about that snapshot). A reader
@@ -44,7 +44,7 @@ export interface PlanProgressClockReading extends PlanProgressReading {
   serverNowMs: number;
 }
 
-/** The progress line's tick cadence (design §25.4: once a second). */
+/** The progress line's tick cadence (design §26.4: once a second). */
 export const PLAN_PROGRESS_TICK_MS = 1000;
 
 interface Clock {

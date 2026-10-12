@@ -83,7 +83,9 @@ function renderInventory(over: Partial<Parameters<typeof RepositoryInventory>[0]
       rows={ROWS}
       organizationName="moooon"
       canDisconnect
-      manageOnGithubHref="https://github.com/organizations/moooon/settings/installations/42"
+      manageOnGithubHrefs={{
+        r1: 'https://github.com/organizations/moooon/settings/installations/42',
+      }}
       onDisconnect={onDisconnect}
       retentionDays={CODE_GRAPH_RETENTION_WINDOW_DAYS}
       {...over}
@@ -389,11 +391,14 @@ describe('the page`s own contracts', () => {
     // `design/github/design-notes.md` draws, and every organisation on the
     // deployment today — the output is the single row it replaces; for N > 1 the
     // page states every connection. No new element is drawn.
-    expect(PAGE).toContain('installations.map(');
-    // The one affordance that cannot be repeated is supplied only when there IS
-    // exactly one connection to manage, and is otherwise the null the GitLab arm
-    // already renders.
-    expect(PAGE).toContain('installations.length === 1');
+    expect(PAGE).toContain('installations');
+    expect(PAGE).toContain('.map((installation) =>');
+    // ⚠️ AND THE MANAGE LINK IS NO LONGER WITHHELD FOR N > 1 (MOTIR-8223). It was
+    // supplied only for `soleInstallation`, so with two accounts linked the
+    // inventory's `Continue on GitHub` went nowhere; each account and each of its
+    // repositories now carries that account's OWN installation settings.
+    expect(PAGE).not.toContain('soleInstallation ?');
+    expect(PAGE).toContain('manageOnGithubHrefs[repo.id] = href');
   });
 
   it('⚠️ adds no route-level loading.tsx — the boundary is IN the page', () => {
