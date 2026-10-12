@@ -38,6 +38,35 @@ export interface GithubInstallationDTO {
   createdAt: string;
 }
 
+/** One GitHub account the Motir App is installed on, as an organisation admin
+ *  can connect it (Story MOTIR-8216 · MOTIR-8220). Built from what GitHub says
+ *  the ACTOR can access, never from stored rows. */
+export interface GithubAccountForOrganizationDTO {
+  installationId: string;
+  accountLogin: string;
+  accountType: string;
+  avatarUrl: string | null;
+  /** How many repositories the App can see on the account; null when GitHub
+   *  could not say. */
+  visibleRepoCount: number | null;
+  linkState: 'not_linked' | 'linked_here';
+}
+
+export type GithubAccountsForOrganizationDTO =
+  | { state: 'ok'; accounts: GithubAccountForOrganizationDTO[] }
+  | { state: 'identity_required' };
+
+/** One account's repositories as this organisation may claim them. A repository
+ *  `connected_elsewhere` carries no identifier of who owns it. */
+export interface GithubAccountRepositoriesDTO {
+  repos: {
+    repoId: string;
+    fullName: string;
+    availability: 'available' | 'connected_here' | 'connected_elsewhere';
+  }[];
+  counts: { available: number; connectedHere: number; connectedElsewhere: number };
+}
+
 /**
  * One linked pull request on a work item's "Development" surface (Story 7.10
  * · MOTIR-1579, design/github Panels 3 + 4a + 5a) — rendered on BOTH the

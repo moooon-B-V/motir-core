@@ -863,6 +863,28 @@ export const githubRepoRepository = {
     return result.count;
   },
 
+  /** The per-organisation reconcile's prune (MOTIR-8219): delete this
+   *  organisation's repositories on the installation whose host id is NOT in
+   *  `keepRepoIds`, and return the deleted rows' `owner/name` refs (the key the
+   *  code-graph offboarding queue needs, unreadable once the row is gone). Unlike
+   *  {@link deleteExcept} it can never select another organisation's row on a
+   *  shared installation. One statement (`DELETE … RETURNING`); an empty keep set
+   *  deletes all of this organisation's rows on the installation. */
+  async deleteExceptForOrg(
+    installationId: string,
+    organizationId: string,
+    keepRepoIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<{ owner: string; name: string }[]>`
+      DELETE FROM "github_repo"
+       WHERE "installation_id" = ${installationId}
+         AND "organization_id" = ${organizationId}
+         AND NOT ("repo_id" = ANY(${keepRepoIds}::text[]))
+      RETURNING "owner", "name"`;
+    return rows.map((row) => `${row.owner}/${row.name}`);
+  },
+
   /** Every row for one host repository under `provider`, oldest first — the
    *  "who already owns this repository?" read a per-organisation claim checks
    *  before writing (Story MOTIR-8216 · MOTIR-8218). More than one row is

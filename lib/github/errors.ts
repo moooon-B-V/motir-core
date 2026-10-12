@@ -113,3 +113,78 @@ export class GithubRepoNotFoundError extends Error {
     this.name = 'GithubRepoNotFoundError';
   }
 }
+
+/** One repository a claim was refused for — the host id and `owner/name` the
+ *  claimant can already see on GitHub. Never anything about the owner. */
+export interface ConflictingRepository {
+  repoId: string;
+  fullName: string;
+}
+
+/**
+ * A claim named a repository another Motir organisation already owns (Story
+ * MOTIR-8216 · MOTIR-8219). A repository belongs to ONE organisation, so the
+ * whole claim is refused and nothing is written. Carries the conflicting
+ * repositories only: neither the payload nor the message names the other
+ * organisation, its workspaces or its projects.
+ */
+export class RepositoryOwnedByOtherOrganizationError extends Error {
+  readonly code = 'GITHUB_REPO_OWNED_BY_OTHER_ORGANIZATION' as const;
+  constructor(readonly repositories: ConflictingRepository[]) {
+    super(
+      `Already connected to another Motir organisation: ${repositories
+        .map((repo) => repo.fullName)
+        .join(', ')}. A repository can belong to only one organisation.`,
+    );
+    this.name = 'RepositoryOwnedByOtherOrganizationError';
+  }
+}
+
+/**
+ * A NEW link to an installation another organisation is already linked to,
+ * with no repositories chosen (MOTIR-8219). Taking every visible repository
+ * would grab the other organisation's choices, so the caller must choose.
+ */
+export class RepoSelectionRequiredError extends Error {
+  readonly code = 'GITHUB_REPO_SELECTION_REQUIRED' as const;
+  constructor() {
+    super('Choose which repositories this organisation should use from this GitHub account.');
+    this.name = 'RepoSelectionRequiredError';
+  }
+}
+
+/** A chosen repository the GitHub App cannot see on this installation
+ *  (MOTIR-8219) — not selected on GitHub, or no longer there. */
+export class RepositoryNotVisibleError extends Error {
+  readonly code = 'GITHUB_REPO_NOT_VISIBLE' as const;
+  constructor(readonly repoIds: string[]) {
+    super(
+      `The Motir GitHub App cannot see ${repoIds.length === 1 ? 'this repository' : 'these repositories'} on this account: ${repoIds.join(', ')}.`,
+    );
+    this.name = 'RepositoryNotVisibleError';
+  }
+}
+
+/** The installation is Motir's own shared provisioning installation
+ *  (MOTIR-1931), which belongs to no tenant and is never linked to one
+ *  (MOTIR-8219). */
+export class InstallationNotLinkableError extends Error {
+  readonly code = 'GITHUB_INSTALLATION_NOT_LINKABLE' as const;
+  constructor() {
+    super('This GitHub installation cannot be connected to an organisation.');
+    this.name = 'InstallationNotLinkableError';
+  }
+}
+
+/** The actor cannot see this installation on GitHub (Story MOTIR-8216 ·
+ *  MOTIR-8220) — it is not among the installations their linked GitHub identity
+ *  can access, they have no linked identity to ask with, or it is Motir's own
+ *  shared provisioning installation. Trusting an `installation_id` from a URL or
+ *  a body is exactly what this refuses, signed state or not. */
+export class InstallationNotAccessibleError extends Error {
+  readonly code = 'GITHUB_INSTALLATION_NOT_ACCESSIBLE' as const;
+  constructor() {
+    super('You cannot access this GitHub account on GitHub, so it cannot be linked.');
+    this.name = 'InstallationNotAccessibleError';
+  }
+}

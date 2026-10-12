@@ -176,6 +176,27 @@ export const githubInstallationRepository = {
     });
   },
 
+  /**
+   * Create-or-refresh an installation WITHOUT touching its tenancy (Story
+   * MOTIR-8216 · MOTIR-8219). One GitHub account's installation can now serve
+   * several organisations, each through its own `github_installation_org_link`
+   * row, so a second organisation linking it must not re-stamp the first's
+   * `workspace_id` / `organization_id`. Those are written on CREATE only; an
+   * update refreshes the account's login and type and nothing else. `upsert`
+   * above is unchanged, for the shared provisioning installation.
+   */
+  async upsertPreservingTenancy(
+    input: UpsertGithubInstallationInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation> {
+    const { installationId, accountLogin, accountType } = input;
+    return tx.githubInstallation.upsert({
+      where: { installationId },
+      create: input,
+      update: { accountLogin, accountType },
+    });
+  },
+
   /** Remove an installation by its GitHub `installation_id` (the `installation
    *  deleted` webhook — an uninstall). `deleteMany` (not `delete`) so a redelivery
    *  of the uninstall event after the row is gone is an idempotent no-op (count 0)

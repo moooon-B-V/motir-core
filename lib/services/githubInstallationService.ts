@@ -5,11 +5,38 @@ import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { assertOrgMember } from '@/lib/services/organizationAccessService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { githubInstallationOrgLinkRepository } from '@/lib/repositories/githubInstallationOrgLinkRepository';
+import {
+  InstallationNotAccessibleError,
+  InstallationNotLinkableError,
+  RepoSelectionRequiredError,
+  RepositoryNotVisibleError,
+  RepositoryOwnedByOtherOrganizationError,
+  type ConflictingRepository,
+} from '@/lib/github/errors';
+import { PRISMA_UNIQUE_VIOLATION } from '@/lib/prisma/uniqueViolation';
+import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
+import { assertOrgCapability } from '@/lib/services/organizationAccessService';
+import { withOrgContext } from '@/lib/organizations/context';
+import { OrgForbiddenError } from '@/lib/organizations/errors';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { githubIdentityService } from '@/lib/services/githubIdentityService';
+import {
+  userInstallationsClient,
+  type GithubUserInstallation,
+} from '@/lib/github/userInstallations';
+import { encodeInstallState } from '@/lib/github/installState';
+import { githubAppInstallUrl } from '@/lib/github/appLinks';
+import type {
+  GithubAccountForOrganizationDTO,
+  GithubAccountRepositoriesDTO,
+  GithubAccountsForOrganizationDTO,
+} from '@/lib/dto/github';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { getGitProvider } from '@/lib/git';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
-import type { GithubRepo } from '@/generated/prisma/client';
+import type { GithubRepo, Prisma } from '@/generated/prisma/client';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import type { GitProviderId, InstallationToken, NormalizedRepo } from '@/lib/git/types';
 
@@ -53,7 +80,13 @@ export const githubInstallationService = {
       // total for any workspace that exists — a missing workspace is a caller
       // error and throws rather than writing a null tenancy.
       const organizationId = await resolveOrganizationId(input.workspaceId, tx);
-      const installation = await githubInstallationRepository.upsert(
+      // ⚠️ PER ORGANISATION since MOTIR-8219. One GitHub account's installation
+      // can serve several organisations, so this reconcile must neither re-stamp
+      // the installation's tenancy nor prune another organisation's rows: the
+      // tenancy-preserving upsert, the per-organisation prune, and repositories
+      // another organisation owns left exactly where they are. It has no chosen
+      // set to refuse (it is the webhook's reconcile), so it skips them instead.
+      const installation = await githubInstallationRepository.upsertPreservingTenancy(
         {
           installationId: input.installation.installationId,
           workspaceId: input.workspaceId,
@@ -63,49 +96,38 @@ export const githubInstallationService = {
         },
         tx,
       );
-
-      // WHICH repos this reconcile is about to DROP (MOTIR-2166 ·
-      // `docs/decisions/code-graph-index-fleet.md` §14.3). Read BEFORE
-      // `deleteExcept` runs, because a pruned row's `owner/name` — the `repoRef`
-      // the offboarding queue is keyed by — is gone the moment it is deleted.
-      // Same ordering trap as the workspace-delete arm, one scale down.
-      const selectedIds = new Set(input.repos.map((repo) => repo.providerRepoId));
-      const beforePrune = await githubRepoRepository.listByInstallation(installation.id, tx);
-      const prunedRefs = beforePrune
-        .filter((repo) => !selectedIds.has(repo.repoId))
-        .map((repo) => `${repo.owner}/${repo.name}`);
-
-      for (const repo of input.repos) {
-        await githubRepoRepository.upsert(
-          {
-            installationId: installation.id,
-            // The repo's OWN tenancy (MOTIR-1931) — the same workspace this
-            // installation is bound to, since this path only ever runs for a
-            // workspace's own grant.
-            workspaceId: input.workspaceId,
-            // …and the tier that OWNS it (MOTIR-4649). Stamped on every write, so
-            // a row written between the migration and the backfill is not left
-            // null either — which is what makes the nullable column safe.
-            organizationId,
-            repoId: repo.providerRepoId,
-            owner: repo.owner,
-            name: repo.name,
-            defaultBranch: repo.defaultBranch,
-            // The host's own liveness, re-stamped on every reconcile (MOTIR-1959)
-            // — this delivery is the cheapest refresh Motir gets, and a repo the
-            // user archived between two reconciles has to stop reading as live.
-            archived: repo.archived,
-          },
-          tx,
-        );
-      }
-      await githubRepoRepository.deleteExcept(
-        installation.id,
-        input.repos.map((repo) => repo.providerRepoId),
+      await githubInstallationRepository.lockByInstallationId(installation.installationId, tx);
+      await githubInstallationOrgLinkRepository.upsert(
+        { installationId: installation.id, organizationId, workspaceId: input.workspaceId },
         tx,
       );
 
-      const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
+      const conflicts = await conflictingRepositories(
+        installation.provider,
+        organizationId,
+        input.repos,
+        tx,
+      );
+      const ownedElsewhere = new Set(conflicts.map((repo) => repo.repoId));
+      const claimable = input.repos.filter((repo) => !ownedElsewhere.has(repo.providerRepoId));
+
+      await upsertRepos(installation.id, input.workspaceId, organizationId, claimable, tx);
+      // WHICH repos this reconcile DROPS (MOTIR-2166 ·
+      // `docs/decisions/code-graph-index-fleet.md` §14.3) come back from the
+      // delete itself, because a pruned row's `owner/name` — the `repoRef` the
+      // offboarding queue is keyed by — is gone the moment it is deleted.
+      const prunedRefs = await githubRepoRepository.deleteExceptForOrg(
+        installation.id,
+        organizationId,
+        claimable.map((repo) => repo.providerRepoId),
+        tx,
+      );
+
+      const repos = await githubRepoRepository.listByInstallationAndOrg(
+        installation.id,
+        organizationId,
+        tx,
+      );
       return {
         dto: toGithubInstallationDTO(installation, repos),
         prunedRefs,
@@ -132,6 +154,344 @@ export const githubInstallationService = {
     await codeGraphOffboardingService.cancelForRepos(input.workspaceId, selectedRefs);
 
     return dto;
+  },
+
+  /**
+   * LINK an installation to the workspace's organisation and CLAIM a chosen set
+   * of its repositories (Story MOTIR-8216 · MOTIR-8219) — the one operation the
+   * connect flow, the webhook routing and the disconnect are written against.
+   *
+   * One GitHub account has ONE installation of the App, and several Motir
+   * organisations can now each be linked to it, each owning a disjoint subset
+   * of its repositories. So this never re-stamps another organisation's
+   * tenancy, never prunes another organisation's repositories, and refuses a
+   * claim that names a repository another organisation owns — WHOLE, writing
+   * nothing, with {@link RepositoryOwnedByOtherOrganizationError}.
+   *
+   * WHICH repositories, when `repoIds` is omitted: every visible one when no
+   * other organisation is linked (the single-organisation behaviour the setup
+   * flow has always had); the organisation's current subset when it is already
+   * linked beside another (a refresh keeps its choice); and otherwise
+   * {@link RepoSelectionRequiredError} — a new link beside another organisation
+   * never silently takes everything.
+   *
+   * The GitHub reads happen BEFORE the transaction. Inside it the installation
+   * row is locked, so two organisations claiming from one installation
+   * serialise; the database's one-organisation-per-repository guard
+   * (`trg_github_repo_one_organization`) is the backstop for a race through a
+   * different installation, and its violation surfaces as the same typed error.
+   * The CALLER authorises the acting user for `workspaceId`.
+   */
+  async linkInstallationToOrganization(ctx: {
+    workspaceId: string;
+    installationId: string;
+    repoIds?: string[];
+    provider?: GitProviderId;
+  }): Promise<{ installation: GithubInstallationDTO; claimed: string[]; released: string[] }> {
+    const gitProvider = getGitProvider(ctx.provider ?? 'github');
+    const [account, visible] = await Promise.all([
+      gitProvider.fetchInstallation(ctx.installationId),
+      gitProvider.fetchInstallationRepos(ctx.installationId),
+    ]);
+
+    let result: {
+      dto: GithubInstallationDTO;
+      claimedRepos: NormalizedRepo[];
+      keptRefs: string[];
+      releasedRefs: string[];
+    };
+    try {
+      result = await withSystemContext(async (tx) => {
+        await assertWorkspaceOrgNotClosing(ctx.workspaceId, tx);
+        const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+
+        const installation = await githubInstallationRepository.upsertPreservingTenancy(
+          {
+            installationId: ctx.installationId,
+            workspaceId: ctx.workspaceId,
+            organizationId,
+            accountLogin: account.accountLogin,
+            accountType: account.accountType,
+          },
+          tx,
+        );
+        // Motir's shared provisioning installation (MOTIR-1931) belongs to no
+        // tenant; its visible set spans every tenant's repositories.
+        if (installation.workspaceId === null && installation.organizationId === null) {
+          throw new InstallationNotLinkableError();
+        }
+        await githubInstallationRepository.lockByInstallationId(ctx.installationId, tx);
+
+        const links = await githubInstallationOrgLinkRepository.listByInstallationId(
+          installation.id,
+          tx,
+        );
+        const alreadyLinked = links.some((link) => link.organizationId === organizationId);
+        const othersLinked = links.some((link) => link.organizationId !== organizationId);
+        await githubInstallationOrgLinkRepository.upsert(
+          { installationId: installation.id, organizationId, workspaceId: ctx.workspaceId },
+          tx,
+        );
+
+        const current = await githubRepoRepository.listByInstallationAndOrg(
+          installation.id,
+          organizationId,
+          tx,
+        );
+        const visibleById = new Map(visible.map((repo) => [repo.providerRepoId, repo]));
+        let chosenIds: string[];
+        if (ctx.repoIds) {
+          chosenIds = [...new Set(ctx.repoIds)];
+        } else if (!othersLinked) {
+          chosenIds = visible.map((repo) => repo.providerRepoId);
+        } else if (alreadyLinked) {
+          chosenIds = current.map((repo) => repo.repoId).filter((id) => visibleById.has(id));
+        } else {
+          throw new RepoSelectionRequiredError();
+        }
+
+        const notVisible = chosenIds.filter((id) => !visibleById.has(id));
+        if (notVisible.length > 0) throw new RepositoryNotVisibleError(notVisible);
+        const chosen = chosenIds.map((id) => visibleById.get(id)!);
+
+        const conflicts = await conflictingRepositories(
+          installation.provider,
+          organizationId,
+          chosen,
+          tx,
+        );
+        if (conflicts.length > 0) throw new RepositoryOwnedByOtherOrganizationError(conflicts);
+
+        const heldIds = new Set(current.map((repo) => repo.repoId));
+        await upsertRepos(installation.id, ctx.workspaceId, organizationId, chosen, tx);
+        const releasedRefs = await githubRepoRepository.deleteExceptForOrg(
+          installation.id,
+          organizationId,
+          chosenIds,
+          tx,
+        );
+        const repos = await githubRepoRepository.listByInstallationAndOrg(
+          installation.id,
+          organizationId,
+          tx,
+        );
+        return {
+          dto: toGithubInstallationDTO(installation, repos),
+          claimedRepos: chosen.filter((repo) => !heldIds.has(repo.providerRepoId)),
+          keptRefs: repos.map((repo) => `${repo.owner}/${repo.name}`),
+          releasedRefs,
+        };
+      });
+    } catch (err) {
+      // A claim raced through ANOTHER installation lost at the database guard.
+      // The transaction is gone, so re-read who owns what and refuse the same
+      // way a conflict found up front is refused.
+      if ((err as { code?: unknown }).code !== PRISMA_UNIQUE_VIOLATION) throw err;
+      const conflicts = await withSystemContext(async (tx) => {
+        const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+        const wanted = ctx.repoIds
+          ? visible.filter((repo) => ctx.repoIds!.includes(repo.providerRepoId))
+          : visible;
+        return conflictingRepositories(ctx.provider ?? 'github', organizationId, wanted, tx);
+      });
+      if (conflicts.length === 0) throw err;
+      throw new RepositoryOwnedByOtherOrganizationError(conflicts);
+    }
+
+    // POST-COMMIT, BEST-EFFORT, as `persistInstallation` does: released
+    // repositories start their code-graph offboarding window, kept ones have a
+    // pending removal called off, and the chosen set is offered for a first
+    // index (gated on indexedness, so a repository already indexed is skipped).
+    // Never fails the link.
+    await codeGraphOffboardingService.enqueueForRepos(
+      ctx.workspaceId,
+      result.releasedRefs,
+      'repo_disconnected',
+    );
+    await codeGraphOffboardingService.cancelForRepos(ctx.workspaceId, result.keptRefs);
+    const chosenIds = new Set(result.dto.repos.map((repo) => repo.repoId));
+    await codeGraphIndexService.enqueueFirstIndexForRepos({
+      installationId: ctx.installationId,
+      workspaceId: ctx.workspaceId,
+      repos: visible.filter((repo) => chosenIds.has(repo.providerRepoId)),
+    });
+
+    return {
+      installation: result.dto,
+      claimed: result.claimedRepos.map((repo) => `${repo.owner}/${repo.name}`),
+      released: result.releasedRefs,
+    };
+  },
+
+  /**
+   * THE ACCOUNTS AN ORGANISATION ADMIN CAN CONNECT (Story MOTIR-8216 ·
+   * MOTIR-8220): every GitHub account the Motir App is installed on that the
+   * ACTOR can see on GitHub, each marked `linked_here` or `not_linked` for this
+   * organisation.
+   *
+   * ⚠️ THE LIST COMES FROM GITHUB (`GET /user/installations` with the actor's
+   * own linked identity), never from `github_installation` rows. A row is
+   * deleted when an account's last organisation disconnects, and an account
+   * the actor can see is a fact about GitHub. Stored rows only decide the link
+   * state and EXCLUDE Motir's shared provisioning installation. With no linked
+   * identity the answer is `identity_required`, a state rather than an error.
+   */
+  async listAccountsForOrganization(ctx: {
+    organizationId: string;
+    actorUserId: string;
+  }): Promise<GithubAccountsForOrganizationDTO> {
+    await authoriseOrgAdmin(ctx.actorUserId, ctx.organizationId);
+    const accounts = await accessibleInstallations(ctx.actorUserId);
+    if (accounts === null) return { state: 'identity_required' };
+
+    const linkable = await withSystemContext(async (tx) => {
+      const out: { account: GithubUserInstallation; linkedHere: boolean }[] = [];
+      for (const account of accounts) {
+        const row = await githubInstallationRepository.findByInstallationId(
+          account.installationId,
+          tx,
+        );
+        if (row && isSharedProvisioningInstallation(row)) continue;
+        const link = row
+          ? await githubInstallationOrgLinkRepository.findByInstallationAndOrg(
+              row.id,
+              ctx.organizationId,
+              tx,
+            )
+          : null;
+        out.push({ account, linkedHere: link !== null });
+      }
+      return out;
+    });
+
+    const gitProvider = getGitProvider('github');
+    const rows: GithubAccountForOrganizationDTO[] = await Promise.all(
+      linkable.map(async ({ account, linkedHere }) => ({
+        installationId: account.installationId,
+        accountLogin: account.accountLogin,
+        accountType: account.accountType,
+        avatarUrl: account.avatarUrl,
+        // A count GitHub could not give is unknown, not zero.
+        visibleRepoCount: await gitProvider
+          .fetchInstallationRepos(account.installationId)
+          .then((repos) => repos.length)
+          .catch(() => null),
+        linkState: linkedHere ? ('linked_here' as const) : ('not_linked' as const),
+      })),
+    );
+    return { state: 'ok', accounts: rows };
+  },
+
+  /**
+   * One account's repositories as THIS organisation may claim them (MOTIR-8220):
+   * `available`, `connected_here`, or `connected_elsewhere`. The last carries no
+   * identifier of the organisation, workspace or project that owns it.
+   */
+  async listRepositoriesForAccount(ctx: {
+    organizationId: string;
+    actorUserId: string;
+    installationId: string;
+  }): Promise<GithubAccountRepositoriesDTO> {
+    await authoriseOrgAdmin(ctx.actorUserId, ctx.organizationId);
+    await assertInstallationAccessible(ctx.actorUserId, ctx.installationId, 'picker');
+    const visible = await getGitProvider('github').fetchInstallationRepos(ctx.installationId);
+    const repos = await withSystemContext(async (tx) => {
+      const out: GithubAccountRepositoriesDTO['repos'] = [];
+      for (const repo of visible) {
+        const owners = await githubRepoRepository.findByHostRepoId(
+          'github',
+          repo.providerRepoId,
+          tx,
+        );
+        const availability =
+          owners.length === 0
+            ? ('available' as const)
+            : owners.some((row) => row.organizationId !== ctx.organizationId)
+              ? ('connected_elsewhere' as const)
+              : ('connected_here' as const);
+        out.push({
+          repoId: repo.providerRepoId,
+          fullName: `${repo.owner}/${repo.name}`,
+          availability,
+        });
+      }
+      return out;
+    });
+    return {
+      repos,
+      counts: {
+        available: repos.filter((r) => r.availability === 'available').length,
+        connectedHere: repos.filter((r) => r.availability === 'connected_here').length,
+        connectedElsewhere: repos.filter((r) => r.availability === 'connected_elsewhere').length,
+      },
+    };
+  },
+
+  /**
+   * THE ONE ENTRANCE that links an already-installed account to an organisation
+   * (MOTIR-8220), used by BOTH the picker's POST and the install round trip, so
+   * the two cannot diverge. Authorises the actor as an admin of the organisation
+   * (and the organisation as not closing), checks the actor can see the
+   * installation on GitHub, resolves which of the organisation's workspaces the
+   * link is made from, and calls {@link linkInstallationToOrganization}.
+   *
+   * ⚠️ `via: 'install_return'` is the one relaxation, and it is bounded: an
+   * actor with NO linked GitHub identity has just installed the App from
+   * Motir's own signed link, and cannot be asked. That path omits `repoIds`, so
+   * it can never take a repository from another organisation —
+   * `linkInstallationToOrganization` refuses an omitted set beside another
+   * linked organisation. The picker (`via: 'picker'`) has no such case: no
+   * identity, no access.
+   */
+  async linkExistingInstallation(ctx: {
+    organizationId: string;
+    actorUserId: string;
+    installationId: string;
+    repoIds?: string[];
+    via: 'picker' | 'install_return';
+    /** The workspace the request came from — used when it belongs to the
+     *  organisation; for the install round trip, the signed state's. */
+    workspaceIdHint?: string;
+    requireHintInOrganization?: boolean;
+  }): Promise<{ installation: GithubInstallationDTO; claimed: string[]; released: string[] }> {
+    await authoriseOrgAdmin(ctx.actorUserId, ctx.organizationId);
+    await assertInstallationAccessible(ctx.actorUserId, ctx.installationId, ctx.via);
+    const workspaceId = await workspaceForOrganization(
+      ctx.organizationId,
+      ctx.workspaceIdHint,
+      ctx.requireHintInOrganization === true,
+    );
+    return this.linkInstallationToOrganization({
+      workspaceId,
+      installationId: ctx.installationId,
+      ...(ctx.repoIds ? { repoIds: ctx.repoIds } : {}),
+    });
+  },
+
+  /**
+   * The signed install URL for "Install on another account" (MOTIR-8220): the
+   * state names this organisation and returns to the Git room. Null when the
+   * App is not configured on this deployment.
+   */
+  async installUrlForOrganization(ctx: {
+    organizationId: string;
+    actorUserId: string;
+    workspaceIdHint?: string;
+  }): Promise<string | null> {
+    await authoriseOrgAdmin(ctx.actorUserId, ctx.organizationId);
+    const workspaceId = await workspaceForOrganization(
+      ctx.organizationId,
+      ctx.workspaceIdHint,
+      false,
+    );
+    return githubAppInstallUrl(
+      encodeInstallState({
+        workspaceId,
+        userId: ctx.actorUserId,
+        organizationId: ctx.organizationId,
+        origin: 'organizationGit',
+      }),
+    );
   },
 
   /**
@@ -250,30 +610,15 @@ export const githubInstallationService = {
     // No new connection in an org scheduled for deletion (MOTIR-6396). System
     // context: this door carries no user, and both rows have a system read arm.
     await withSystemContext((tx) => assertWorkspaceOrgNotClosing(ctx.workspaceId, tx));
-    const gitProvider = getGitProvider(ctx.provider ?? 'github');
-    const [account, repos] = await Promise.all([
-      gitProvider.fetchInstallation(ctx.installationId),
-      gitProvider.fetchInstallationRepos(ctx.installationId),
-    ]);
-    const dto = await this.persistInstallation({
+    // Since MOTIR-8219 this is the per-organisation link: with no other
+    // organisation linked it claims every visible repository exactly as it
+    // always did, and it can no longer overwrite or prune another one's.
+    const { installation } = await this.linkInstallationToOrganization({
       workspaceId: ctx.workspaceId,
-      installation: {
-        installationId: ctx.installationId,
-        accountLogin: account.accountLogin,
-        accountType: account.accountType,
-      },
-      repos,
-    });
-
-    // POST-COMMIT, best-effort code-graph index for each repo that has no graph
-    // yet (MOTIR-1500; re-gated on indexedness by MOTIR-1961, so a repo persisted
-    // before the feature existed is finally reachable). Never fails the bind.
-    await codeGraphIndexService.enqueueFirstIndexForRepos({
       installationId: ctx.installationId,
-      workspaceId: ctx.workspaceId,
-      repos,
+      ...(ctx.provider ? { provider: ctx.provider } : {}),
     });
-    return dto;
+    return installation;
   },
 
   /**
@@ -386,3 +731,120 @@ export const githubInstallationService = {
     return provider.mintInstallationToken(installation.installationId);
   },
 };
+
+/** The repositories in `repos` that a DIFFERENT organisation already owns —
+ *  read under the system context, since the owner is another tenant. Names the
+ *  repositories only, never their owner. */
+async function conflictingRepositories(
+  provider: string,
+  organizationId: string,
+  repos: NormalizedRepo[],
+  tx: Prisma.TransactionClient,
+): Promise<ConflictingRepository[]> {
+  const conflicts: ConflictingRepository[] = [];
+  for (const repo of repos) {
+    const rows = await githubRepoRepository.findByHostRepoId(provider, repo.providerRepoId, tx);
+    if (rows.some((row) => row.organizationId !== organizationId)) {
+      conflicts.push({ repoId: repo.providerRepoId, fullName: `${repo.owner}/${repo.name}` });
+    }
+  }
+  return conflicts;
+}
+
+/** Mirror each repository under the organisation that owns it. */
+async function upsertRepos(
+  installationId: string,
+  workspaceId: string,
+  organizationId: string,
+  repos: NormalizedRepo[],
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  for (const repo of repos) {
+    await githubRepoRepository.upsert(
+      {
+        installationId,
+        // The repo's OWN tenancy (MOTIR-1931) and the tier that OWNS it
+        // (MOTIR-4649), stamped on every write.
+        workspaceId,
+        organizationId,
+        repoId: repo.providerRepoId,
+        owner: repo.owner,
+        name: repo.name,
+        defaultBranch: repo.defaultBranch,
+        // The host's own liveness, re-stamped on every reconcile (MOTIR-1959).
+        archived: repo.archived,
+      },
+      tx,
+    );
+  }
+}
+
+/** The org-admin gate every connect door shares: an admin (`manageOrgSettings`,
+ *  the capability the Git room's writes hold) of an organisation that is not
+ *  closing. A non-member is a 404, a plain member a 403, a closing org a 409. */
+async function authoriseOrgAdmin(actorUserId: string, organizationId: string): Promise<void> {
+  await withOrgContext({ userId: actorUserId, organizationId }, async (tx) => {
+    await assertOrgCapability(actorUserId, organizationId, 'manageOrgSettings', tx);
+    await assertOrgNotClosing(organizationId, tx);
+  });
+}
+
+/** The installations the actor's linked GitHub identity can access, or null
+ *  when the actor has no linked identity. */
+async function accessibleInstallations(
+  actorUserId: string,
+): Promise<GithubUserInstallation[] | null> {
+  const live = await githubIdentityService.getLiveToken(actorUserId);
+  if (!live) return null;
+  return userInstallationsClient.listForToken(live.accessToken);
+}
+
+/** Refuse an installation the actor cannot see on GitHub. See
+ *  `linkExistingInstallation` for the one bounded `install_return` relaxation. */
+async function assertInstallationAccessible(
+  actorUserId: string,
+  installationId: string,
+  via: 'picker' | 'install_return',
+): Promise<void> {
+  const accounts = await accessibleInstallations(actorUserId);
+  if (accounts === null) {
+    if (via === 'install_return') return;
+    throw new InstallationNotAccessibleError();
+  }
+  if (!accounts.some((account) => account.installationId === installationId)) {
+    throw new InstallationNotAccessibleError();
+  }
+  const row = await withSystemContext((tx) =>
+    githubInstallationRepository.findByInstallationId(installationId, tx),
+  );
+  if (row && isSharedProvisioningInstallation(row)) throw new InstallationNotAccessibleError();
+}
+
+/** Motir's shared provisioning installation (MOTIR-1931): no tenancy at all. */
+function isSharedProvisioningInstallation(row: {
+  workspaceId: string | null;
+  organizationId: string | null;
+}): boolean {
+  return row.workspaceId === null && row.organizationId === null;
+}
+
+/** Which of the organisation's workspaces a link is made FROM: the hint when it
+ *  belongs to the organisation, otherwise the organisation's oldest workspace.
+ *  With `strict`, a hint outside the organisation is a refusal rather than
+ *  ignored — the install round trip's signed state must agree with itself. */
+async function workspaceForOrganization(
+  organizationId: string,
+  hint: string | undefined,
+  strict: boolean,
+): Promise<string> {
+  return withSystemContext(async (tx) => {
+    if (hint) {
+      const workspace = await workspaceRepository.findByIdInTx(hint, tx);
+      if (workspace?.organizationId === organizationId) return workspace.id;
+      if (strict) throw new OrgForbiddenError(hint, organizationId);
+    }
+    const [first] = await workspaceRepository.listByOrganization(organizationId, tx);
+    if (!first) throw new OrgForbiddenError('', organizationId);
+    return first.id;
+  });
+}
