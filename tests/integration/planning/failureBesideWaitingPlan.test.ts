@@ -114,7 +114,13 @@ describe('a failed revision', () => {
       { readJob },
     );
 
-    expect(out).toEqual({ settled: 'recorded', sessionId, arm: 'revision', lostMachine: false });
+    expect(out).toEqual({
+      settled: 'recorded',
+      sessionId,
+      arm: 'revision',
+      lostMachine: false,
+      autoResume: null,
+    });
     expect(await trail(plan.id, 'revision_ended')).toBe(1);
     const s = await sessionRow(sessionId);
     expect(s.endedAt).toBeNull();
@@ -137,7 +143,13 @@ describe('a failed revision', () => {
       { readJob },
     );
 
-    expect(out).toEqual({ settled: 'released', sessionId, arm: 'revision', lostMachine: false });
+    expect(out).toEqual({
+      settled: 'released',
+      sessionId,
+      arm: 'revision',
+      lostMachine: false,
+      autoResume: null,
+    });
     expect(await trail(plan.id, 'revision_ended')).toBe(1);
     expect((await sessionRow(sessionId)).failedAt).toBeNull();
   });

@@ -139,7 +139,13 @@ describe('the relay — a failed attempt is RECORDED, not ended', () => {
       { readJob: readJobWith(WALK_STOP) },
     );
 
-    expect(out).toEqual({ settled: 'recorded', sessionId, arm: 'session', lostMachine: false });
+    expect(out).toEqual({
+      settled: 'recorded',
+      sessionId,
+      arm: 'session',
+      lostMachine: false,
+      autoResume: null,
+    });
     const s = await sessionRow(sessionId);
     expect(s.endedAt).toBeNull();
     expect(s.failedAt).not.toBeNull();
@@ -337,6 +343,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
         outcome: 'awaiting_resume',
         reason: 'job_terminal',
         lostMachine: false,
+        autoResume: null,
       },
     ]);
     const s = await sessionRow(sessionId);
@@ -465,6 +472,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
         outcome: 'awaiting_resume',
         reason: 'silent',
         lostMachine: false,
+        autoResume: null,
       },
     ]);
     const s = await sessionRow(sessionId);

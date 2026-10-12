@@ -620,6 +620,7 @@ export const planChangeSessionRepository = {
         id: true,
         endedAt: true,
         endReason: true,
+        lastJobId: true,
         failedAt: true,
         failedJobId: true,
         failureReason: true,

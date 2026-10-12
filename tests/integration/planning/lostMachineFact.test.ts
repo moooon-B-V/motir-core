@@ -95,7 +95,15 @@ describe('settleFailedJob hands the lost-machine fact back (the relay path)', ()
       { readJob: async () => ({ error: REAPED_ERROR, walkStop: null, lostMachine: true }) },
     );
 
-    expect(out).toEqual({ settled: 'recorded', sessionId, arm: 'session', lostMachine: true });
+    expect(out).toEqual({
+      settled: 'recorded',
+      sessionId,
+      arm: 'session',
+      lostMachine: true,
+      // The automatic resume is attempted (MOTIR-8307); with no motir-ai behind this test its
+      // submit is refused, so the recorded failure below stands.
+      autoResume: { started: false, reason: 'submit_refused' },
+    });
     // What a person reads is unchanged: the outage reason.
     const s = await sessionRow(sessionId);
     expect(s.failureReason).toBe('model_unavailable');
@@ -113,7 +121,13 @@ describe('settleFailedJob hands the lost-machine fact back (the relay path)', ()
       { readJob: async () => ({ error: REAPED_ERROR, walkStop: null }) },
     );
 
-    expect(out).toEqual({ settled: 'recorded', sessionId, arm: 'session', lostMachine: false });
+    expect(out).toEqual({
+      settled: 'recorded',
+      sessionId,
+      arm: 'session',
+      lostMachine: false,
+      autoResume: null,
+    });
   });
 
   it('a canceled job reports false and is never read', T, async () => {
@@ -127,7 +141,13 @@ describe('settleFailedJob hands the lost-machine fact back (the relay path)', ()
       { readJob },
     );
 
-    expect(out).toEqual({ settled: 'ended', sessionId, arm: 'session', lostMachine: false });
+    expect(out).toEqual({
+      settled: 'ended',
+      sessionId,
+      arm: 'session',
+      lostMachine: false,
+      autoResume: null,
+    });
     expect(readJob).not.toHaveBeenCalled();
   });
 
@@ -145,7 +165,13 @@ describe('settleFailedJob hands the lost-machine fact back (the relay path)', ()
       },
     );
 
-    expect(out).toEqual({ settled: 'recorded', sessionId, arm: 'session', lostMachine: false });
+    expect(out).toEqual({
+      settled: 'recorded',
+      sessionId,
+      arm: 'session',
+      lostMachine: false,
+      autoResume: null,
+    });
   });
 });
 
@@ -174,6 +200,7 @@ describe('reconcileAbandoned hands the lost-machine fact back (the sweep path)',
           outcome: 'awaiting_resume',
           reason: 'job_terminal',
           lostMachine: true,
+          autoResume: { started: false, reason: 'submit_refused' },
         },
       ]);
       expect((await sessionRow(sessionId)).failureReason).toBe('model_unavailable');
@@ -208,6 +235,7 @@ describe('reconcileAbandoned hands the lost-machine fact back (the sweep path)',
         outcome: 'awaiting_resume',
         reason: 'silent',
         lostMachine: false,
+        autoResume: null,
       },
     ]);
   });

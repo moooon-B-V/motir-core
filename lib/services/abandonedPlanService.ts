@@ -6,6 +6,7 @@ import {
   endSessionForAbandonedPlan,
   recordFailureWithin,
   releaseLapsedRevision,
+  resumeAutomaticallySafely,
   settleFailedJob,
 } from '@/lib/services/planSessionEndService';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
@@ -22,6 +23,7 @@ import {
   type SessionWaitingState,
 } from '@/lib/planChange/sessionWaitingState';
 import type { PlanJobStateDto } from '@/lib/dto/plans';
+import type { AutoResumeOutcome } from '@/lib/services/planSessionResumeService';
 import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 
 // ABANDONED-PLAN reconciliation (MOTIR-3064) — the recovery half of the
@@ -196,6 +198,9 @@ export type AbandonedPlanOutcome =
        *  lost its machine (MOTIR-8304). Silence alone reads `false`: as motir-ai sees
        *  it, that job is still running. */
       lostMachine: boolean;
+      /** The automatic resume the recording started or skipped (MOTIR-8307) — attempted only
+       *  when the job read said lost machine; `null` otherwise. */
+      autoResume: AutoResumeOutcome | null;
     }
   | { planId: string; projectId: string; outcome: 'left_as_is'; reason: KeepReason }
   /** A revision whose job died and whose failure no relay saw: its lease is given back and
@@ -530,6 +535,20 @@ export const abandonedPlanService = {
             `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}) recorded as failed on session ${session.id} — ${decision.reason}; ${plan._count.items} proposal(s) retained`,
           );
         }
+        // A LOST MACHINE is resumed by core itself (MOTIR-8307); every other recording waits.
+        const autoResume =
+          recorded === 'recorded' && facts.lostMachine
+            ? await resumeAutomaticallySafely({
+                sessionId: session.id,
+                workspaceId: plan.workspaceId,
+                projectId: plan.projectId,
+              })
+            : null;
+        if (autoResume?.started) {
+          console.warn(
+            `[abandoned-plan-sweep] plan ${plan.id} resumed automatically on session ${session.id} — job ${autoResume.jobId} (${autoResume.count})`,
+          );
+        }
         outcomes.push(
           recorded === 'recorded'
             ? {
@@ -538,6 +557,7 @@ export const abandonedPlanService = {
                 outcome: 'awaiting_resume',
                 reason: decision.reason,
                 lostMachine: facts.lostMachine,
+                autoResume,
               }
             : {
                 planId: plan.id,

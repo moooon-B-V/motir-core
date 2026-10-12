@@ -276,6 +276,7 @@ describe('1 · a failure keeps everything', () => {
         sessionId: f.sessionId,
         arm: 'session',
         lostMachine: false,
+        autoResume: null,
       });
       const s = await sessionRow(f.sessionId);
       expect(s.endedAt).toBeNull();

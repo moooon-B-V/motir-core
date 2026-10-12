@@ -125,6 +125,7 @@ describe('a silent plan is RECORDED, not declined', () => {
           outcome: 'awaiting_resume',
           reason: 'silent',
           lostMachine: false,
+          autoResume: null,
         },
       ]);
       expect(summary.declined).toBe(0);

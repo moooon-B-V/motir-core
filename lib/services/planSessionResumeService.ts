@@ -1,4 +1,6 @@
+import type { Prisma } from '@/generated/prisma/client';
 import type { ProjectContext } from '@/lib/projects';
+import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import type { PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
 import {
   NotSessionOwnerError,
@@ -9,9 +11,14 @@ import {
   SessionNotFailedError,
   GuideSessionNotPlannableError,
 } from '@/lib/planChange/errors';
-import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
+import {
+  AUTO_RESUMES_PER_SESSION,
+  sessionWaitingState,
+} from '@/lib/planChange/sessionWaitingState';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
@@ -117,47 +124,198 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
 
 /**
  * BIND the new job: re-point the plan, record the attempt on the session, clear the failure and
- * heartbeat the targets — in ONE transaction, plan lock then session lock.
+ * heartbeat the targets — inside the caller's transaction, plan lock then session lock. Shared by
+ * the manual Resume and the automatic one (MOTIR-8307), so the two binds cannot drift.
  */
+async function bindWithin(
+  tx: Prisma.TransactionClient,
+  target: ResumeTarget,
+  jobId: string,
+  now: Date,
+  workspaceId: string,
+): Promise<void> {
+  if (!(await planRepository.lockById(target.planId, tx))) {
+    throw new PlanNotResumableError(target.sessionId);
+  }
+  if (!(await planChangeSessionRepository.lockById(target.sessionId, tx))) {
+    throw new PlanSessionNotFoundError(target.sessionId);
+  }
+  const fresh = await planChangeSessionRepository.findById(target.sessionId, workspaceId, tx);
+  if (!fresh) throw new PlanSessionNotFoundError(target.sessionId);
+  if (fresh.endedAt) throw new PlanSessionEndedError(fresh.id);
+  if (sessionWaitingState(fresh) !== 'failed') {
+    // The failure is already cleared: a concurrent Resume won. Name ITS job.
+    throw new ResumeAlreadyStartedError(fresh.id, fresh.lastJobId);
+  }
+  if (fresh.failedJobId !== target.failedJobId) throw new PlanNotResumableError(fresh.id);
+  const plan = await planRepository.findById(target.planId, workspaceId, tx);
+  if (!plan || plan.status !== 'generating' || plan.sourceJobId !== target.failedJobId) {
+    throw new PlanNotResumableError(fresh.id);
+  }
+  if (!(await planRepository.repointSourceJob(target.planId, jobId, tx))) {
+    throw new PlanNotResumableError(fresh.id);
+  }
+  if (!(await planChangeSessionRepository.recordResumedAttempt(fresh.id, { jobId, at: now }, tx))) {
+    throw new PlanSessionEndedError(fresh.id);
+  }
+  await planChangeSessionRepository.clearFailure(fresh.id, tx);
+  await planTargetLockService.refreshForSessionWithin(fresh.id, now, tx);
+}
+
 async function bind(pctx: ProjectContext, target: ResumeTarget, jobId: string): Promise<void> {
   await withWorkspaceContext(
     { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-    async (tx) => {
-      if (!(await planRepository.lockById(target.planId, tx))) {
-        throw new PlanNotResumableError(target.sessionId);
-      }
-      if (!(await planChangeSessionRepository.lockById(target.sessionId, tx))) {
-        throw new PlanSessionNotFoundError(target.sessionId);
-      }
-      const fresh = await planChangeSessionRepository.findById(
-        target.sessionId,
-        pctx.workspaceId,
-        tx,
-      );
-      if (!fresh) throw new PlanSessionNotFoundError(target.sessionId);
-      if (fresh.endedAt) throw new PlanSessionEndedError(fresh.id);
-      if (sessionWaitingState(fresh) !== 'failed') {
-        // The failure is already cleared: a concurrent Resume won. Name ITS job.
-        throw new ResumeAlreadyStartedError(fresh.id, fresh.lastJobId);
-      }
-      if (fresh.failedJobId !== target.failedJobId) throw new PlanNotResumableError(fresh.id);
-      const plan = await planRepository.findById(target.planId, pctx.workspaceId, tx);
-      if (!plan || plan.status !== 'generating' || plan.sourceJobId !== target.failedJobId) {
-        throw new PlanNotResumableError(fresh.id);
-      }
-      const now = new Date();
-      if (!(await planRepository.repointSourceJob(target.planId, jobId, tx))) {
-        throw new PlanNotResumableError(fresh.id);
-      }
-      if (
-        !(await planChangeSessionRepository.recordResumedAttempt(fresh.id, { jobId, at: now }, tx))
-      ) {
-        throw new PlanSessionEndedError(fresh.id);
-      }
-      await planChangeSessionRepository.clearFailure(fresh.id, tx);
-      await planTargetLockService.refreshForSessionWithin(fresh.id, now, tx);
-    },
+    (tx) => bindWithin(tx, target, jobId, new Date(), pctx.workspaceId),
   );
+}
+
+// THE AUTOMATIC RESUME (Story MOTIR-8301 · MOTIR-8307). A hosted walk whose machine was LOST —
+// motir-ai reaped its job — and whose plan already holds a proposal is resumed by core itself:
+// the same plan, the same session, signed as the session's STARTER (who is metered, and whose
+// access is checked), at most `AUTO_RESUMES_PER_SESSION` times per session. Every other failure
+// waits in To resume as before. The two callers are the places a failure is RECORDED — the
+// relays' `settleFailedJob` and the sweep's session arm — and nothing else calls it.
+//
+// SAME ORDER AND SAME TRADE AS THE MANUAL RESUME: submit (a metered side effect, outside any
+// transaction), then bind. Everything knowable beforehand — the bound, the proposal, the state,
+// the starter's permission — is refused before the submit, so an orphan job is left only by a
+// genuinely simultaneous race. The bind ALSO spends one of the session's resumes, and
+// `recordAutoResume` enforces the bound in its own statement, so a bind that would exceed it
+// rolls back whole; and it stamps the plan's activity at the bind instant, so the silence sweep
+// measures from the resume rather than racing the waiting job back into To resume.
+
+/** Why an automatic resume was not started — a value, never a throw. */
+export type AutoResumeSkip =
+  | 'not_failed'
+  | 'no_proposal'
+  | 'bound_spent'
+  | 'not_resumable'
+  | 'starter_cannot_plan'
+  | 'submit_refused'
+  | 'lost_race';
+
+export type AutoResumeOutcome =
+  | { started: true; jobId: string; count: number }
+  | { started: false; reason: AutoResumeSkip };
+
+/** Thrown INSIDE the bind when the bound is spent, so the whole bind rolls back. Never escapes. */
+class AutoResumeBoundSpent extends Error {}
+
+const LOST_RACE_ERRORS = [
+  ResumeAlreadyStartedError,
+  PlanSessionEndedError,
+  PlanNotResumableError,
+  PlanSessionNotFoundError,
+  AutoResumeBoundSpent,
+];
+
+type AutoResumePrecheck =
+  | { ok: true; target: ResumeTarget; starterCtx: ProjectContext }
+  | { ok: false; reason: AutoResumeSkip };
+
+async function precheckAutomatic(input: {
+  sessionId: string;
+  workspaceId: string;
+  projectId: string;
+}): Promise<AutoResumePrecheck> {
+  return withWorkspaceServiceContext(input.workspaceId, async (tx) => {
+    const session = await planChangeSessionRepository.findByIdInProject(
+      input.sessionId,
+      input.projectId,
+      input.workspaceId,
+      tx,
+    );
+    if (!session || session.endedAt || session.origin !== 'conversation') {
+      return { ok: false, reason: 'not_resumable' };
+    }
+    if (sessionWaitingState(session) !== 'failed' || !session.failedJobId) {
+      return { ok: false, reason: 'not_failed' };
+    }
+    if (session.autoResumeCount >= AUTO_RESUMES_PER_SESSION) {
+      return { ok: false, reason: 'bound_spent' };
+    }
+    const plan = await planRepository.findLatestForResume(session.id, tx);
+    if (!plan || plan.status !== 'generating' || plan.sourceJobId !== session.failedJobId) {
+      return { ok: false, reason: 'not_resumable' };
+    }
+    if ((await planItemRepository.countByPlan(plan.id, tx)) < 1) {
+      return { ok: false, reason: 'no_proposal' };
+    }
+    // Nobody to sign as (the starter's account is gone): nobody is charged, a person decides.
+    if (!session.createdById) return { ok: false, reason: 'starter_cannot_plan' };
+    const project = await projectRepository.findById(input.projectId, tx);
+    if (!project) return { ok: false, reason: 'not_resumable' };
+    return {
+      ok: true,
+      target: { sessionId: session.id, planId: plan.id, failedJobId: session.failedJobId },
+      starterCtx: {
+        userId: session.createdById,
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        project: toProjectDTO(project),
+      },
+    };
+  });
+}
+
+async function attemptAutomatic(
+  input: { sessionId: string; workspaceId: string; projectId: string },
+  onPlan: (planId: string) => void,
+): Promise<AutoResumeOutcome> {
+  const pre = await precheckAutomatic(input);
+  if (!pre.ok) return { started: false, reason: pre.reason };
+  const { target, starterCtx } = pre;
+  onPlan(target.planId);
+  try {
+    await projectAccessService.assertPermission(
+      starterCtx.projectId,
+      { userId: starterCtx.userId, workspaceId: starterCtx.workspaceId },
+      'ai:plan',
+    );
+  } catch {
+    return { started: false, reason: 'starter_cannot_plan' };
+  }
+  let jobId: string;
+  try {
+    ({ jobId } = await aiPlanEditsService.submitResume(
+      target.planId,
+      target.failedJobId,
+      starterCtx,
+    ));
+  } catch (err) {
+    const code = (err as { code?: unknown } | null)?.code;
+    // eslint-disable-next-line no-console -- the one-line auto-resume trace the card asks for
+    console.info(
+      `[auto-resume] session ${target.sessionId} submit refused: ${typeof code === 'string' ? code : 'unknown'}`,
+    );
+    return { started: false, reason: 'submit_refused' };
+  }
+  try {
+    const count = await withWorkspaceContext(
+      {
+        userId: starterCtx.userId,
+        workspaceId: starterCtx.workspaceId,
+        projectId: starterCtx.projectId,
+      },
+      async (tx) => {
+        const now = new Date();
+        await bindWithin(tx, target, jobId, now, starterCtx.workspaceId);
+        const n = await planChangeSessionRepository.recordAutoResume(
+          target.sessionId,
+          { at: now, max: AUTO_RESUMES_PER_SESSION },
+          tx,
+        );
+        if (n === null) throw new AutoResumeBoundSpent();
+        await planRepository.touchActivity(target.planId, now, tx);
+        return n;
+      },
+    );
+    return { started: true, jobId, count };
+  } catch (err) {
+    if (LOST_RACE_ERRORS.some((E) => err instanceof E))
+      return { started: false, reason: 'lost_race' };
+    throw err;
+  }
 }
 
 export const planSessionResumeService = {
@@ -184,5 +342,27 @@ export const planSessionResumeService = {
     await bind(pctx, target, jobId);
     const session = await planChangeSessionsService.getById(pctx, target.sessionId);
     return { jobId, planId: target.planId, session };
+  },
+
+  /**
+   * RESUME A LOST MACHINE'S PLAN AUTOMATICALLY (MOTIR-8307) — see the header above. Called only
+   * by the two places a failure is recorded, after it is recorded. Every skip is a value, and
+   * every outcome is logged on one line.
+   */
+  async resumeAutomatically(input: {
+    sessionId: string;
+    workspaceId: string;
+    projectId: string;
+  }): Promise<AutoResumeOutcome> {
+    let planId = 'none';
+    const outcome = await attemptAutomatic(input, (id) => {
+      planId = id;
+    });
+    const result = outcome.started
+      ? `started job ${outcome.jobId} (${outcome.count}/${AUTO_RESUMES_PER_SESSION})`
+      : `skipped: ${outcome.reason}`;
+    // eslint-disable-next-line no-console -- the one-line auto-resume trace the card asks for
+    console.info(`[auto-resume] session ${input.sessionId} plan ${planId} → ${result}`);
+    return outcome;
   },
 };
