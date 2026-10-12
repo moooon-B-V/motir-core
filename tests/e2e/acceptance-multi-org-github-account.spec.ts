@@ -54,7 +54,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { pinContextCookies } from './_helpers/billing';
 import { signUpToOnboarding } from './_helpers/shell-session';
 import { E2E_GITHUB_TOKEN_ENCRYPTION_KEY } from './_helpers/github-const';
-import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { projectsService } from '@/lib/services/projectsService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { withUserContext } from '@/lib/workspaces/context';
@@ -90,11 +90,11 @@ async function seedAdmin(
   githubUserId: string,
 ): Promise<Admin> {
   await signUpToOnboarding(page, email);
-  const user = await db.user.findFirstOrThrow({ where: { email } });
-  const workspace = await db.workspace.findFirstOrThrow({
+  const user = await adminDb.user.findFirstOrThrow({ where: { email } });
+  const workspace = await adminDb.workspace.findFirstOrThrow({
     where: { name: `${email.split('@')[0]!}'s Workspace` },
   });
-  const membership = await db.organizationMembership.findFirstOrThrow({
+  const membership = await adminDb.organizationMembership.findFirstOrThrow({
     where: { userId: user.id, role: ORGANIZATION_ROLE.owner },
     include: { organization: true },
   });
@@ -104,7 +104,7 @@ async function seedAdmin(
     name: project.name,
     identifier: project.identifier,
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: user.id, workspaceId: workspace.id } },
     data: { activeProjectId: created.id },
   });
@@ -254,7 +254,7 @@ test('one GitHub account serves two organisations, each with only its own reposi
     // The picker will not let anyone select A, so the journey sends the request
     // the UI sends with A added — the race in which another organisation took
     // a repository between the picker's read and the press.
-    const aId = await db.githubRepo
+    const aId = await adminDb.githubRepo
       .findFirstOrThrow({ where: { name: A, organizationId: x.organizationId } })
       .then((repo) => repo.repoId);
     await page.route('**/github/installations', async (route) => {
