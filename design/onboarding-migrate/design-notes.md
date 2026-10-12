@@ -772,3 +772,163 @@ The hand-off that SENDS a user here — and shows them the kept set before they 
 `design/ai-chat/reading-and-handoff.mock.html` Panel 4, published under the same card. The two
 assets share the `satisfied` vocabulary on purpose: the chip strip in the hand-off and the collapsed
 row in the rail are the same fact, said once before the journey and once during it.
+
+## 2026-10-12 — the vibe layout on the migrate wizard: the lockup in the bar, a hero and a work band (MOTIR-8251)
+
+**Amends:** MOTIR-930's wizard (§ _Panels_, the `BrandBar` and every step panel, and § _Per-element
+`--el-*` colour role_) and the MOTIR-4759 amendment above (the resume panel and the collapsed rail).
+**Delta mock:**
+[`onboarding-migrate--vibe-layout.mock.html`](./onboarding-migrate--vibe-layout.mock.html).
+`onboarding-migrate.mock.html` is a record and is **not edited**. Story MOTIR-8238; sibling sections:
+[`design/import/design-notes.md` § 2026-10-12](../import/design-notes.md) (the importer) and
+[`design/ai-chat/design-notes.md` § 2026-10-12](../ai-chat/design-notes.md) (the discovery top bar,
+the chat rail and the direction-doc page).
+
+**Composes, never re-draws:** MOTIR-8250's Pattern panel —
+`design/onboarding-entrance/onboarding-entrance--vibe-layout.mock.html` **Panel 6** (A the lockup ·
+B the hero · C one section band) and
+[`design/onboarding-entrance/design-notes.md` § 2026-10-11](../onboarding-entrance/design-notes.md).
+`OnboardingHero`, `HeroWaves` and `OnboardingSection` are that card's product-local parts, built by
+MOTIR-8252. This section adds one **variant** (the compact hero) and one composition (the work band),
+and nothing else.
+
+**Design system — files read:** root `package.json` (`"@motir/design-system": "workspace:*"`),
+`app/globals.css` (line 13 `@import '@motir/design-system/theme.css'`, line 25
+`@import '@motir/brand/brand.css'`), `packages/design-system/package.json` (**`0.13.0`**, exports
+`./mock`), `app/layout.tsx`. No `DESIGN.md`. **Verdict: ON MOTIR DESIGN — branch (a).** The mock is
+built with `renderMock` from the package's real `Button`, `Card`, `Pill`, `Spinner` and
+`buttonVariants`; `BrandMark` (`lockup`, `glyph`) and `WAVE_BAND_PATH` come from `@motir/brand`
+with `brand.css`'s lockup rules inlined. Axes are the `:root` defaults —
+`data-style="warm-editorial"` · `data-palette="motir"` · `data-type="motir"` — and every frame is a
+`[data-appearance-scope]` carrying `data-theme` and the axes. `--focus-ring-color` is re-pointed to
+`--el-accent-on-surface` per frame, as MOTIR-8250 finding F4 did. Nothing is proposed for the package.
+
+**Shipped reality read** at the branch head: `app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx` (the
+`BrandBar`, `Rail`, `StepHead`, `PanelFoot` and the six panels), `messages/en.json` as MOTIR-8248 left
+it. Every string drawn is read by key; none is typed. **motir.co, read and never imported** —
+`motir-marketing` at `origin/main` **`06c0411`** (only ideas files changed since MOTIR-8250 read
+`0c2e37b`): `motir-marketing/app/_components/SiteHeader.tsx` (no fill, no rule, `BrandTile` 28) and
+`motir-marketing/app/_components/LanguageSwitcher.tsx` (the globe is the bar's LAST control).
+
+### Panels (light AND dark)
+
+| #   | Panel                                                                                                            | frame   |
+| --- | ---------------------------------------------------------------------------------------------------------------- | ------- |
+| 0   | Access path — the entrance's import section door ("We can vibe it too") → `/onboarding/migrate`                  | 640 × 2 |
+| 1   | Start — no run yet: the bar, the **full** hero, the work band with the rail and the Start panel                  | 1280    |
+| 2   | Connect — compact hero, Connect panel                                                                            | 1280    |
+| 3   | Index — in progress (aggregate + per-repo rows, callout, Next)                                                   | 1280    |
+| 4   | Import — optional, with Skip                                                                                     | 1280    |
+| 5   | Decision — Plan now / Finish later                                                                               | 1280    |
+| 6   | Resume — a run in progress (MOTIR-4759)                                                                          | 1280    |
+| 7   | Error — the typed error alert inside the panel                                                                   | 1280    |
+| 8   | Collapsed rail — the planner-decided set (discovery + import kept, MOTIR-4766)                                   | 1280    |
+| 9   | Close-ups — 9a planAi / Save & exit rest·hover·focus · 9b language pending·failed·open · 9c planNow rest·pending | 640 × 2 |
+| 10  | Narrow — Start and Index                                                                                         | 390 × 2 |
+
+### What changes, and what does not
+
+- **The bar.** The lavender tile with the AI glyph and the word "Motir" are TAKEN; the `BrandMark`
+  **lockup** (22 px) takes their place as a non-link span — this bar has its own exits, and a third
+  one on the logo would compete with Save & exit. Then `· {flowName}`, then, trailing: the planAi link
+  (`secondary` sm, **its AI glyph TAKEN**, a trailing `ArrowRight`), Save & exit (`ghost` sm), the
+  **language control** (MOTIR-8286, the same `AuthLanguageControl` as
+  `design/auth/auth-frame--language-control.mock.html`), and the decorative user initial, which keeps
+  the far edge. The bar has no fill and no rule, as motir.co's header.
+- **The hero.** The **full** hero (H1 96 px, `pt-[56px] pb-[88px]`, waves) shows only on the ARRIVAL screen —
+  Start with no run. Every later step gets the **compact** hero (H1 56 px, `pt-6 pb-12`, lede 17 px,
+  the same waves) so the panel stays above the fold. Measured from the frame top at 1280: Start
+  band 382 / heading 456 / last control 638; compact steps band 257 / heading 330; last control
+  Connect 629, Index 918 (the repo list is tall), Import 624, Decision 495, Resume 463. The heading and
+  the card start above a 768 px fold on every step.
+- **The work band.** `OnboardingSection`'s band (`border-t --el-border`, `--el-page-bg`,
+  `px-[38px] py-[48px]`) holds the existing rail + panel grid unchanged. There is no outer centred
+  card any more; the panel card is the one card.
+- **`StepHead`.** The heading moves to the section scale's floor, serif 34 (28 narrow). The eyebrow
+  keeps its function and drops its accent look: mono 11, uppercase, 0.1 em, `--el-text-secondary`.
+- **The Decision panel's planNow button loses its AI glyph** too (the card named only the bar).
+- **Behaviour is unchanged on every step**: the same routes, the same `PanelFoot` (still no Back —
+  the shipped wizard never passes `onBack`, and the mock does not invent one), the same rail logic,
+  the same error alert in `--el-tint-rose`.
+
+### Per-element `--el-*` and shape role
+
+| element                 | colour                                                                  | shape / size                               |
+| ----------------------- | ----------------------------------------------------------------------- | ------------------------------------------ |
+| bar                     | none (transparent on the hero's `--el-surface`)                         | `px-(--spacing-card-padding) py-4`         |
+| lockup                  | `brand.css` (glyph + word in `--el-text`)                               | 22 px                                      |
+| `· flowName`            | `--el-text-secondary`                                                   | 14 px                                      |
+| planAi                  | `Button secondary sm`; **hover** `--el-page-bg` + `--el-border-strong`  | `--radius-btn`, `--height-btn-sm`          |
+| Save & exit             | `Button ghost sm`; **hover** `--el-page-bg`                             | `--radius-btn`, `--height-btn-sm`          |
+| language control        | package `Combobox` trigger, `--el-text-secondary` glyph                 | `--radius-input`, `--height-control`       |
+| user initial            | `--el-tint-sky` fill, `--el-text-strong` letter, aria-hidden            | `rounded-full` 28 px                       |
+| hero ground · H1 · lede | `--el-surface` · `--el-text` · `--el-accent-on-surface` (as MOTIR-8250) | serif 96 / 56 compact; lede `max-w-[62ch]` |
+| waves                   | `--el-showcase-wave-1..3`, aria-hidden                                  | 1 px strokes                               |
+| work band               | `--el-page-bg`, `border-t --el-border`                                  | `px-[38px] py-[48px]`                      |
+| eyebrow                 | `--el-text-secondary`                                                   | mono 11 uppercase                          |
+| step heading · body     | `--el-text` · `--el-text-secondary`                                     | serif 34 · 15                              |
+| panel card              | `Card` (`--el-card-bg`, `--el-border`)                                  | `--radius-card`, `--spacing-card-padding`  |
+| error alert             | `--el-tint-rose`, `--el-danger-on-surface` title                        | `--radius-card`                            |
+| focus ring              | `--el-accent-on-surface`                                                | `ring-2`                                   |
+
+### Slot → key
+
+| slot                                        | key                                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| hero H1 · lede                              | `onboardingMigrate.hero.headline` · `onboardingMigrate.hero.lede`                   |
+| flow name                                   | `onboardingMigrate.brandBar.flowName`                                               |
+| planAi                                      | `onboardingMigrate.brandBar.planAi`                                                 |
+| Save & exit                                 | `onboardingMigrate.common.saveExit`                                                 |
+| language trigger · pending · failed · retry | `auth.language.{label,switching,failed,retry}` + the `localeLabel` endonyms         |
+| step eyebrow · heading · body · cta         | `onboardingMigrate.{start,connect,index,import,decision,resume}.*` (unchanged keys) |
+| rail                                        | `onboardingMigrate.rail.*` (unchanged keys)                                         |
+| error                                       | `onboardingMigrate.common.error`                                                    |
+| access-path door (Panel 0)                  | `onboarding.entrance.{importTitle,importDesc,importCta}`                            |
+
+Fixtures (the project name, repository names, counts) are illustrative data, not product copy.
+
+### Findings
+
+- **F1 — the shipped wizard paints its captions in `--el-text-muted`** (14 sites in
+  `MigrateWizard.tsx`, among them the bar's `·` separator at line 229 and the panel notes at 510,
+  543, 677, 679, 719). On today's white page and card that is 4.54:1 and passes with 0.04 to spare;
+  the bar now sits on the hero's `--el-surface`, where muted is 4.17:1 and fails. The mock draws the
+  separator, the flow name and every caption in `--el-text-secondary` (6.24:1 on `--el-surface`), and
+  MOTIR-8254 should do the same rather than move muted ink onto the new ground.
+- **F2 — the package `Button`'s `secondary` and `ghost` hover fill is `--el-surface`**, which is the
+  hero's own ground, so the hover is invisible in this bar. The mock overrides hover to
+  `--el-page-bg` (planAi also raises its border to `--el-border-strong`), drawn in Panel 9a. It is a
+  local override; whether the package should grow an on-surface hover is a question for the design
+  system, not this card.
+- **F3 — the Decision panel's planNow glyph** is also taken; the card's criteria named only the bar.
+- **F4 — MOTIR-8286's premise** says the wizard renders `OnboardingTopBar`; it does not, it has its
+  own `BrandBar`. This design gives the wizard's bar its own trailing language control, at the same
+  place in the order as MOTIR-8250's.
+
+### Chinese-length risks (for MOTIR-8249 / MOTIR-8258)
+
+The 96 px H1 (wraps to three lines at 1280 if the string is long — the compact 56 px step hero is
+safer); the flow name in the bar (truncates with an ellipsis on narrow, row 2); the planAi label
+(`secondary sm` has no max width — on narrow it takes its own row 3, so it may wrap there).
+
+### Narrow (390)
+
+The bar becomes three rows: lockup … language · initial; then the flow name; then planAi … Save &
+exit. The full hero's H1 is 48 px, the compact one 34 px. The rail collapses above the panel as it
+does today.
+
+### GIVES / TAKES
+
+- **TAKES** the lavender AI-glyph tile and the word "Motir" from `BrandBar`, the AI glyph from the
+  planAi link and from the Decision panel's planNow button.
+- **GIVES MOTIR-8254** the build of this frame: the bar, the full/compact hero, the work band, the
+  `StepHead` restyle, the caption ink (F1), the hover override (F2).
+- **GIVES MOTIR-8252** nothing beyond the primitives it already owns — the compact hero is a variant
+  prop of `OnboardingHero`, and the work band is `OnboardingSection`'s band with no head.
+- **GIVES MOTIR-8241** (GitHub connect) and **MOTIR-8246** (non-blocking index) the restyled frame
+  their panels sit in; their content is theirs.
+- **GIVES MOTIR-8286** the language control in this bar (rest, open, pending, failed — Panel 9b).
+- **GIVES MOTIR-8256** the pairs to gate: secondary on `--el-surface`, the hover override, the
+  focus ring on `--el-surface`; **MOTIR-8249 / MOTIR-8258** the CJK risks above; **MOTIR-8257** the
+  E2E context — the route, the step order and the keys are unchanged.
+- **Premises taken from** MOTIR-930, MOTIR-4759, MOTIR-4766, MOTIR-8248 and MOTIR-8250.
