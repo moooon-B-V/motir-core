@@ -1079,6 +1079,9 @@ names on the board (`acme/web`, `acme/api`, `acme/infra`) are fixtures.
 
 ### Revision 2 (2026-10-12) — the code index never holds onboarding
 
+Published as evidence `cmv53f83v00yqhyshnxkzzqq9` (commit `478dc22`) and republished from the commit
+that adds this line; it supersedes Revision 1's `cmv527yiv00qlhxoi3hiys1q2`.
+
 **The reviewer's note, verbatim (on Revision 1):** _"The user should not be blocked on the index
 step. the index can take a long time, the user should be go forward. the index only blocks
 planning, not onboarding"_
