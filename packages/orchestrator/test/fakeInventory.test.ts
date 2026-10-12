@@ -149,6 +149,18 @@ describe('the fake fleet inventory', () => {
     expect(inventory.strayMachineIds()).toEqual([]);
   });
 
+  it('arms a listing failure with the provider status and for several calls', async () => {
+    inventory.failNextMachineList('a', 'bad gateway', { status: 502, times: 2 });
+    for (let call = 0; call < 2; call += 1) {
+      await expect(inventory.listMachines('a')).rejects.toMatchObject({ status: 502 });
+    }
+    expect(await inventory.listMachines('a')).toEqual([]);
+
+    inventory.failNextAppList('no answer', { status: null });
+    await expect(inventory.listApps()).rejects.toMatchObject({ status: null });
+    expect(await inventory.listApps()).toEqual([FAKE_FLEET_APP]);
+  });
+
   it('the ephemeral fake destroys outside a teardown idempotently', async () => {
     fakeOrchestrator.destroyOutsideTeardown('never-booted');
     const ephemeral = await bootEphemeral();
