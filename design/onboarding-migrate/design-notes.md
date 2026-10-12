@@ -816,7 +816,7 @@ it. Every string drawn is read by key; none is typed. **motir.co, read and never
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 0   | Access path — the entrance's import section door ("We can vibe it too") → `/onboarding/migrate`                                                         | 640 × 2 |
 | 1a  | Arrival with only the default project — Start skipped, the wizard opens on **Connect** with the **full** hero — Revision 3                              | 1280    |
-| 1b  | Start — only when the workspace has two or more projects: the bar, the **full** hero, the rail and the Start panel                                      | 1280    |
+| 1b  | Start — only when the workspace has two or more projects: the bar, the **full** hero, the rail and the project choice (Revision 4)                      | 1280    |
 | 2a  | Connect — compact hero, **Checking** (on arrival) — Revision 1                                                                                          | 1280    |
 | 2b  | Connect — **Not connected yet** (Connect GitHub ↗ in a new tab, no Next) — Revision 1                                                                   | 1280    |
 | 2c  | Connect — **Waiting for GitHub** (re-checks on focus and every ~5 s) — Revision 1                                                                       | 1280    |
@@ -1249,3 +1249,92 @@ Copy: nothing new; Start's keys stay for 1b.
 - **GIVES MOTIR-8257** the E2E change: a fresh sign-up on `/onboarding/migrate` sees Connect, not
   Start; a two-project workspace still sees Start.
 - **MOTIR-8246 and Revision 2 are unaffected.**
+
+### Revision 4 (2026-10-12) — Start is a project choice, and the wizard turns warm
+
+**The reviewer's notes, verbatim (on Revision 3):** _"screen 1b is still showing the single
+project, what did you do?"_ and _"make the UI more colorful, use the warm color, the orange and the
+yellow we added to the color palette"_
+
+**What was wrong with 1b.** Revision 3 kept Start for a workspace with two or more projects but
+drew it exactly as before: one card naming the open project and a Start button. With nothing else
+on the screen it read as the single-project Start that Revision 3 removed, and it gave a person who
+does have several projects no way to say which one they mean. Start now exists only when there is
+something to choose, so it is drawn as the choice.
+
+**1b, per element.**
+
+| element                                            | primitive / markup                       | colour                                                                                                | shape                                             |
+| -------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| legend "Which project are you migrating?"          | `fieldset` + `legend`                    | `--el-text`                                                                                           | —                                                 |
+| one row per project in the workspace (fixtures: 3) | `label` wrapping a native `radio`        | border `--el-border`, fill `--el-page-bg`; hover border `--el-border-strong`                          | `--radius-card`, `--spacing-card-padding` × 12 px |
+| the picked row (the open project, pre-selected)    | same, `checked`                          | fill `--el-tint-yellow`, border + 1 px ring `--el-highlight` (3.34:1 on the tint, light; 4.34:1 dark) | same                                              |
+| radio                                              | native                                   | —                                                                                                     | 16 px                                             |
+| project key tile                                   | `span`, mono key                         | `--el-text-strong` on the next tint in peach → yellow → rose                                          | `--radius-control`, 36 px                         |
+| name · meta                                        | text                                     | `--el-text` · `--el-text-secondary` (5.93:1 on yellow, 5.36:1 on peach)                               | —                                                 |
+| "Open now" chip on the open project                | chip                                     | `--el-tint-peach`, `--el-text-strong`                                                                 | `--radius-badge`, `--spacing-chip-x/y`            |
+| CTA "Start with {project}"                         | `Button` primary md, trailing ArrowRight | the ink CTA, unchanged                                                                                | `--radius-btn`                                    |
+
+**Behaviour (for MOTIR-8254).** The page passes the workspace's projects with the active one
+marked. Picking the open project and pressing Start is today's `startRun`. Picking another project
+first switches the active project with the existing `setActiveProjectAction` (the sidebar's
+ProjectSwitcher path), then starts the run for it; the CTA's name follows the pick. Revision 3's
+point 4 ("two or more projects → exactly today's Start") is replaced by this; its points 1 to 3 stand,
+and a failed start shows the error alert above this panel.
+
+**Proposed copy** (in the board's `NEW` map; `messages/` is not edited here):
+
+| key                                   | English                               |
+| ------------------------------------- | ------------------------------------- |
+| `onboardingMigrate.start.chooseLabel` | Which project are you migrating?      |
+| `onboardingMigrate.start.current`     | Open now                              |
+| `onboardingMigrate.start.currentMeta` | The project you have open             |
+| `onboardingMigrate.start.otherMeta`   | Switches to this project, then starts |
+| `onboardingMigrate.start.ctaFor`      | Start with {project}                  |
+
+`start.projectLine` and `start.cta` retire with the single-project card.
+
+**The warm pass — the motir palette's warm touches (design-system §8, MOTIR-7583).** The orange is
+`--el-highlight` / `--el-progress-fill` (`#d66000` light, `#fa5500` dark) and the yellow is
+`--el-tint-yellow` (with `--el-tint-peach` beside it); the citrine gold is `--el-type-design`. All
+are DECORATIVE roles, so the orange is used only for fills, rings, borders and glyphs, never for
+text; every label stays on the ink tokens. It applies to all three boards (this one, the importer
+and discovery), since they share the bar and hero.
+
+| element                                      | before                                    | now                                                                                                                            |
+| -------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| hero background                              | `--el-surface`                            | `--el-hero-glow`: a peach glow top-left and a yellow glow bottom-right over `--el-surface-soft` (light), the dark tints (dark) |
+| hero waves                                   | the three `--el-showcase-wave-*` hues     | `--el-hero-wave-1/2/3` → orange, citrine, orange, at a slightly higher alpha                                                   |
+| hero lede                                    | `--el-accent-on-surface` (blue)           | `--el-text-strong` (AA on every glow stop)                                                                                     |
+| step eyebrow                                 | text only                                 | an 8 px `--el-highlight` dot before it (`aria-hidden`)                                                                         |
+| rail: current step                           | `--el-surface` row, blue ring, ink marker | `--el-tint-yellow` row, `--el-highlight` ring, `--el-highlight` marker with a 22 % halo                                        |
+| rail: background Index marker, spinners      | `--el-accent-on-surface`                  | `--el-highlight`                                                                                                               |
+| Connect card                                 | plain card                                | `Card` tint by state: checking yellow, not connected peach, connected mint                                                     |
+| progress bars                                | ink fill on `--el-muted`                  | `--el-progress-fill` on `--el-tint-yellow`                                                                                     |
+| info callout, answered-steps marker          | `--el-tint-sky`                           | `--el-tint-yellow`, `--el-tint-peach`                                                                                          |
+| avatar initial                               | `--el-tint-sky`                           | `--el-tint-peach`                                                                                                              |
+| importer: current step marker                | ink fill, white number                    | `--el-tint-yellow` fill, `--el-text-strong` number, `--el-highlight` ring                                                      |
+| importer: picked source card                 | ink border + ring                         | `--el-highlight` border + 22 % ring                                                                                            |
+| discovery canvas: the "you are here" station | blue border + ring                        | `--el-highlight` border + ring                                                                                                 |
+
+Measured pairs (WCAG): `--el-highlight` is 3.80:1 on the page, 3.34:1 on `--el-tint-yellow` and
+3.01:1 on `--el-tint-peach` in light, and 4.34 / 4.53:1 on the dark tints, so every orange ring,
+border and glyph clears the 3:1 non-text bar. Error, danger and success keep their own tokens.
+
+**Four new Tier-3 roles**, declared in each board's own token block and proposed for
+`packages/design-system/theme.css` (every input is a palette token, so a `data-palette` swap
+re-tints them): `--el-hero-wave-1: var(--el-highlight)`, `--el-hero-wave-2: var(--el-type-design)`,
+`--el-hero-wave-3: var(--el-highlight)`, and `--el-hero-glow` (the two radial gradients over
+`--el-tint-peach` / `--el-tint-yellow` / `--el-surface-soft`).
+
+#### GIVES / TAKES (Revision 4)
+
+- **GIVES MOTIR-8254** the 1b project choice (the projects list, the switch-then-start path, the
+  five keys), the warm pass on the migrate wizard and the importer, and the four hero roles in the
+  design-system theme. The hero is the shared primitive MOTIR-8252 built, so the entrance and
+  how-it-works (MOTIR-8250) warm with it; their layout and copy do not change.
+- **GIVES MOTIR-8255** the warm pass on the discovery canvas's "you are here" station.
+- **GIVES MOTIR-8256** the new orange and yellow pairs for its contrast run across every palette.
+- **GIVES MOTIR-8257** the E2E change: a two-project workspace sees the project choice with the
+  open project picked.
+- **GIVES MOTIR-8258** the five new keys to translate.

@@ -412,3 +412,7 @@ The wizard's narrow bar, one row shorter (no planAi): lockup … language · ini
   keys are unchanged; the bar adds a second link to `/onboarding` named "Save & exit", so a spec that
   finds a link to `/onboarding` by href alone now matches two.
 - **Premises taken from** MOTIR-937, MOTIR-8248 and MOTIR-8250.
+
+### Revision 4 (2026-10-12) — the warm pass
+
+The vibe-layout board in this area takes the warm pass described in `design/onboarding-migrate/design-notes.md` § _Revision 4_: the hero glow and warm waves, the orange step dot, and orange (`--el-highlight`) for the current step, the picked row and the "you are here" marker, with `--el-tint-yellow` behind progress. Every label stays on the ink tokens; the orange is used for fills, rings, borders and glyphs only.

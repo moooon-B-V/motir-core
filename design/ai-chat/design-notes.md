@@ -6051,3 +6051,7 @@ never shrink).
 - **GIVES MOTIR-8256** the pairs to gate (the lockup on `--el-page-bg`, the doc row on `--el-surface`);
   **MOTIR-8249 / MOTIR-8258** the CJK risk; **MOTIR-8257** the E2E context and F2.
 - **Premises taken from** MOTIR-1488, MOTIR-8248 and MOTIR-8250.
+
+### Revision 4 (2026-10-12) — the warm pass
+
+The vibe-layout board in this area takes the warm pass described in `design/onboarding-migrate/design-notes.md` § _Revision 4_: the hero glow and warm waves, the orange step dot, and orange (`--el-highlight`) for the current step, the picked row and the "you are here" marker, with `--el-tint-yellow` behind progress. Every label stays on the ink tokens; the orange is used for fills, rings, borders and glyphs only.

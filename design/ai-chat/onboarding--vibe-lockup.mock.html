@@ -48,6 +48,17 @@
       [data-appearance-scope] {
         --focus-ring-color: var(--el-accent-on-surface);
       }
+      /* Revision 4 (MOTIR-8251) PROPOSED Tier-3 roles — the onboarding hero's warm
+   layer. Every input is a palette token, so a data-palette swap re-tints it. */
+      [data-appearance-scope] {
+        --el-hero-wave-1: var(--el-highlight);
+        --el-hero-wave-2: var(--el-type-design);
+        --el-hero-wave-3: var(--el-highlight);
+        --el-hero-glow:
+          radial-gradient(75% 110% at 10% 0%, var(--el-tint-peach), transparent 75%),
+          radial-gradient(70% 110% at 92% 100%, var(--el-tint-yellow), transparent 78%),
+          linear-gradient(var(--el-surface-soft), var(--el-surface-soft));
+      }
       [data-hero-waves] use {
         fill: none;
       }
@@ -701,9 +712,6 @@
           --tw-border-style: dashed;
           border-style: dashed;
         }
-        .border-\(--el-accent-on-surface\) {
-          border-color: var(--el-accent-on-surface);
-        }
         .border-\(--el-border\) {
           border-color: var(--el-border);
         }
@@ -712,6 +720,9 @@
         }
         .border-\(--el-chip-border\) {
           border-color: var(--el-chip-border);
+        }
+        .border-\(--el-highlight\) {
+          border-color: var(--el-highlight);
         }
         .border-current {
           border-color: currentcolor;
@@ -987,8 +998,8 @@
             var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
             var(--tw-ring-shadow), var(--tw-shadow);
         }
-        .ring-\(--el-accent-on-surface\) {
-          --tw-ring-color: var(--el-accent-on-surface);
+        .ring-\(--el-highlight\) {
+          --tw-ring-color: var(--el-highlight);
         }
         .ring-\(--focus-ring-color\) {
           --tw-ring-color: var(--focus-ring-color);
@@ -4984,7 +4995,7 @@
                           >
                         </div>
                         <div
-                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-accent-on-surface) ring-1 ring-(--el-accent-on-surface)"
+                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-highlight) ring-1 ring-(--el-highlight)"
                         >
                           <span
                             aria-hidden="true"
@@ -5352,7 +5363,7 @@
                           >
                         </div>
                         <div
-                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-accent-on-surface) ring-1 ring-(--el-accent-on-surface)"
+                          class="grid w-[13.5rem] gap-1.5 rounded-(--radius-card) border bg-(--el-card) p-3 shadow-(--shadow-subtle) border-(--el-highlight) ring-1 ring-(--el-highlight)"
                         >
                           <span
                             aria-hidden="true"
