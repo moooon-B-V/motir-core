@@ -10,6 +10,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { WORKBENCH_TAB_KEYS, type WorkbenchTabKey } from '@/lib/dto/workbench';
 import { encodeWatermarkCursor } from '@/lib/workbench/watermarkCursor';
@@ -545,6 +547,11 @@ describe('COST — this read runs once a second per open Workbench', () => {
       // window); the trail itself is read ONLY when that finds a candidate, which
       // in the steady state — no revision in flight — it does not.
       'plan.findMany',
+      // The planning sessions that still wait on their person (MOTIR-7913), which the
+      // approvals aggregate needs too — a gate's subject is an opaque id the aggregate
+      // cannot join, so the live set rides in as `IN (…)`. Read BESIDE the held plans
+      // and BEFORE the fan-out, never awaited inside it (Bug MOTIR-8284).
+      'planChangeSession.findMany',
       // The seven tabs. Five work tabs, one aggregate each — To fix (MOTIR-6604)
       // and To resume (MOTIR-7707) are each one more slice of the same membership
       // read and so one more aggregate rather than a second round trip…
@@ -553,10 +560,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
       'workItem.aggregate',
       'workItem.aggregate',
       'workItem.aggregate',
-      // …the approvals queue on the gate's own predicate, which now first reads the
-      // planning sessions that still wait on their person (MOTIR-7913) — a gate's subject
-      // is an opaque id the aggregate cannot join, so the live set rides in as `IN (…)`…
-      'planChangeSession.findMany',
+      // …the approvals queue on the gate's own predicate…
       'approvalGate.aggregate',
       // …Watching, the one tab that costs two…
       'watcher.count',
@@ -636,5 +640,100 @@ describe('the cursor a caller presents is the one this service mints', () => {
 
     expect(rebuilt).toBe(reading.cursor);
     expect((await workbenchWatermarkService.read(ctx(), rebuilt)).moved).toEqual([]);
+  });
+});
+
+// ⚠️ THE READ'S ARMS SETTLE BEFORE ITS TRANSACTION ENDS (Bug MOTIR-8284).
+//
+// Production threw `TypeError: Cannot read properties of undefined (reading
+// '_count')` out of `watermarkByAssigneeOrReporterInWorkspace`, reported as an
+// UNHANDLED rejection. No input makes `aggregate` answer `undefined` — an empty
+// match answers `{ _count: { _all: 0 } }`, pinned below. What does is the
+// TRANSACTION: Prisma resolves a query still queued on an interactive
+// transaction that has already rolled back to `undefined`. The fan-out awaited
+// a read INSIDE its own argument list, after the five work-tab aggregates had
+// started and before `Promise.all` was called, so when that read failed the
+// transaction rolled back under five aggregates nobody was awaiting. Each one
+// then dereferenced the `undefined` it was handed and rejected into the void.
+describe('a failing arm cannot strand its siblings on a closed transaction (MOTIR-8284)', () => {
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => {
+    rejections.push(reason);
+  };
+
+  beforeEach(() => {
+    rejections.length = 0;
+    process.on('unhandledRejection', onRejection);
+  });
+  afterEach(() => {
+    process.off('unhandledRejection', onRejection);
+  });
+
+  /** What every work-tab aggregate that did NOT come back with a reading threw. */
+  function strandedReads(spy: { mock: { settledResults: { type: string; value: unknown }[] } }) {
+    return spy.mock.settledResults
+      .filter((r) => r.type !== 'fulfilled')
+      .map((r) => String(r.value));
+  }
+
+  /** Let any rejection nobody handled reach `unhandledRejection`. */
+  async function drain(): Promise<void> {
+    for (let i = 0; i < 5; i += 1) await new Promise((r) => setTimeout(r, 20));
+  }
+
+  it('a reader with NO matching card reads zeros — an empty match is not the trigger', async () => {
+    await card("Somebody else's");
+    const other = await stranger('nobody-matches@example.com');
+    await adminDb.workItem.updateMany({
+      where: { projectId: fx.projectId },
+      data: { assigneeId: other, reporterId: other },
+    });
+
+    const reading = await workbenchWatermarkService.read(ctx());
+
+    for (const tab of ['toDo', 'inProgress', 'toFix', 'recentlyFinished'] as const) {
+      expect(reading.tabs[tab]).toEqual({ count: 0, latest: null });
+    }
+  });
+
+  it('the awaiting-sessions read failing rejects the read with ITS error, and nothing is left unhandled', async () => {
+    await card('Something to count');
+    const failure = new Error('awaiting-sessions read failed');
+    vi.spyOn(planChangeSessionRepository, 'listAwaitingPersonIdsInProjects').mockImplementation(
+      async () => {
+        // Fail AFTER a turn, so the work-tab aggregates are genuinely in flight.
+        await new Promise((r) => setTimeout(r, 5));
+        throw failure;
+      },
+    );
+    const watermark = vi.spyOn(workItemRepository, 'watermarkByAssigneeOrReporterInWorkspace');
+
+    await expect(workbenchWatermarkService.read(ctx())).rejects.toBe(failure);
+    await drain();
+
+    expect(rejections.map(String)).toEqual([]);
+    // Every work-tab aggregate that started also FINISHED, on an open transaction.
+    // (The spy observes each promise, so it is THIS assertion that sees the
+    // stranded aggregates; `unhandledRejection` is what production saw.)
+    expect(strandedReads(watermark)).toEqual([]);
+    expect(watermark.mock.settledResults).toHaveLength(watermark.mock.calls.length);
+  });
+
+  it('an arm of the fan-out failing waits for every sibling before the transaction ends', async () => {
+    await card('Something to count');
+    const failure = new Error('watching read failed');
+    vi.spyOn(watcherRepository, 'watermarkByUser').mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      throw failure;
+    });
+    const watermark = vi.spyOn(workItemRepository, 'watermarkByAssigneeOrReporterInWorkspace');
+
+    await expect(workbenchWatermarkService.read(ctx())).rejects.toBe(failure);
+    await drain();
+
+    expect(rejections.map(String)).toEqual([]);
+    expect(watermark).toHaveBeenCalledTimes(5);
+    expect(strandedReads(watermark)).toEqual([]);
+    expect(watermark.mock.settledResults).toHaveLength(5);
   });
 });
