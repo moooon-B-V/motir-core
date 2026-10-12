@@ -117,8 +117,10 @@ async function appendAsAi(page: Page, job: SubmittedJob, proposals: unknown[]): 
   if (res.status() !== 200) throw new Error(`plan-proposals ${res.status()}: ${await res.text()}`);
 }
 
-const authoredAdd = (title: string) => ({
+// Under the story the overlay is anchored on, so the canvas — scoped to that level — draws it.
+const authoredAdd = (title: string, parentRef: string) => ({
   op: 'add',
+  parentRef,
   proposedFields: {
     title,
     kind: 'task',
@@ -345,7 +347,7 @@ test('a plan whose machine is lost resumes by itself, reads resuming, keeps its 
       sessionId = (await latestSession()).id;
 
       const authored = planPolled(page, planId, (b) => b.progress?.authored === 1);
-      await appendAsAi(page, submitOf(jobId(0))!, [authoredAdd(FIRST)]);
+      await appendAsAi(page, submitOf(jobId(0))!, [authoredAdd(FIRST, seed.storyId)]);
       await authored;
       await expect(liveState(page)).toHaveText(planReview.liveWriting);
       await expect(paneProgress(page)).toContainText(
@@ -416,7 +418,7 @@ test('a plan whose machine is lost resumes by itself, reads resuming, keeps its 
       'Lost again and again — it waits in To resume, and Resume continues it',
       async () => {
         // The second loss: resumed by itself once more, the second attempt said in words.
-        await appendAsAi(page, submitOf(jobId(1))!, [authoredAdd(SECOND)]);
+        await appendAsAi(page, submitOf(jobId(1))!, [authoredAdd(SECOND, seed.storyId)]);
         const second = planPolled(
           page,
           planId,
@@ -433,7 +435,7 @@ test('a plan whose machine is lost resumes by itself, reads resuming, keeps its 
         await beat();
 
         // The third loss spends the bound: the failure is recorded and nothing is resubmitted.
-        await appendAsAi(page, submitOf(jobId(2))!, [authoredAdd(THIRD)]);
+        await appendAsAi(page, submitOf(jobId(2))!, [authoredAdd(THIRD, seed.storyId)]);
         setPlanOutcome(2, LOST);
         await expect
           .poll(
