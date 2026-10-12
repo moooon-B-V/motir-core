@@ -12,7 +12,7 @@
 //   - `POST /app/installations/{id}/access_tokens` — a token NAMED for this
 //     installation, so the repository read below can tell it apart from every
 //     other installation the lane mints for;
-//   - `GET /installation/repositories` with that token — the account's six
+//   - `GET /installation/repositories` with that token — the account's five
 //     repositories;
 //   - `GET /app/installations/{id}` (the App JWT) — the account the App is on.
 //
@@ -33,14 +33,13 @@ const GITHUB_ORIGIN = 'https://api.github.com';
 export const E2E_MULTI_ORG_INSTALLATION_ID = '99000077';
 export const E2E_MULTI_ORG_ACCOUNT = { login: 'moooon-shared', type: 'Organization' } as const;
 
-/** The account's repositories, A to F, in the order the story names them. */
+/** The account's repositories, A to E, in the order the story names them. */
 export const E2E_MULTI_ORG_REPOS = [
   { id: 88000101, name: 'alpha' },
   { id: 88000102, name: 'bravo' },
   { id: 88000103, name: 'charlie' },
   { id: 88000104, name: 'delta' },
   { id: 88000105, name: 'echo' },
-  { id: 88000106, name: 'foxtrot' },
 ] as const;
 
 const INSTALLATION_TOKEN = `ghs_e2e_accounts_${E2E_MULTI_ORG_INSTALLATION_ID}`;
