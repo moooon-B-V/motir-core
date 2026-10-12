@@ -738,3 +738,66 @@ describe('a TURN refused by a session that waits (MOTIR-7941)', () => {
     expect(result.current.state.errorCode).toBe('SESSION_AWAITING_RESUME');
   });
 });
+
+// ── A LOST MACHINE RESUMED BY ITSELF (Story MOTIR-8301 · bug found while running MOTIR-8311) ──
+//
+// The relay that reads a reaped job's terminal frame starts the automatic resume before the
+// stream closes, so the re-read after the failure finds the session OPEN, carrying no failure,
+// and pointing at a NEW job. The rail must follow that job — its stream is what relays the next
+// loss — rather than leave the generic failure on a plan that is being written again.
+
+describe('after a failed stream whose session Motir resumed by itself', () => {
+  const RESUMED = {
+    jobId: 'job-9',
+    planId: 'plan-3',
+    session: session(['Add recurring invoices.']),
+  };
+  const autoResumed = () => ({ ...session(['Add recurring invoices.']), lastJobId: 'job-auto' });
+
+  it('attaches to the automatic resume’s job on the same plan, and clears the failure', async () => {
+    open.mockResolvedValue(failedSession());
+    resumeSession.mockResolvedValue(RESUMED);
+    let held!: () => void;
+    stream.mockImplementation(
+      async (job: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        if (job === 'job-9') {
+          onError('MOTIR_AI_UNAVAILABLE');
+          return;
+        }
+        await new Promise<void>((r) => (held = r));
+      },
+    );
+    readSession.mockResolvedValue(autoResumed());
+    const { result } = await mounted();
+
+    await act(async () => {
+      void result.current.resume();
+    });
+    await waitFor(() => expect(stream).toHaveBeenCalledTimes(2));
+    expect(stream.mock.calls.map((c) => c[0])).toEqual(['job-9', 'job-auto']);
+    expect(result.current.state.planId).toBe('plan-3');
+    expect(result.current.state.phase).toBe('streaming');
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.jobId).toBe('job-auto');
+    await act(async () => held());
+  });
+
+  it('a re-read still pointing at the failed job adopts nothing and keeps the error', async () => {
+    open.mockResolvedValue(failedSession());
+    resumeSession.mockResolvedValue(RESUMED);
+    stream.mockImplementation(
+      async (_job: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        onError('MOTIR_AI_UNAVAILABLE');
+      },
+    );
+    readSession.mockResolvedValue({ ...session(['Add recurring invoices.']), lastJobId: 'job-9' });
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.resume();
+    });
+    // Every end re-read ran (three), and none of them adopted a job.
+    await waitFor(() => expect(readSession.mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.current.state.errorCode).toBe('MOTIR_AI_UNAVAILABLE');
+  });
+});
