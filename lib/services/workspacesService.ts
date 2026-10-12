@@ -26,6 +26,7 @@ import {
   type TransactionBudget,
 } from '@/lib/workspaces/context';
 import { composeOwnerReach, readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
+import { retryOnceOnTransactionStartTimeout } from '@/lib/workspaces/transactionStartRetry';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
@@ -774,54 +775,63 @@ export const workspacesService = {
         return false;
       }
     };
-    const existing = await withUserContext(
-      userId,
-      async (tx) => {
-        if (cookieWorkspaceId) {
-          const pinned = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
-            userId,
-            cookieWorkspaceId,
-            tx,
-          );
-          // Not `passesGate`: a suspension of the PINNED workspace's org throws.
-          if (
-            pinned &&
-            (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
-          ) {
-            return pinned.workspaceId;
-          }
-          cookieWithoutMembership = !pinned;
+    const readExisting = async (tx: Prisma.TransactionClient): Promise<string | null> => {
+      // Reset per attempt, so a retried attempt never inherits the first's state.
+      cookieWithoutMembership = false;
+      suspended = null;
+      if (cookieWorkspaceId) {
+        const pinned = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+          userId,
+          cookieWorkspaceId,
+          tx,
+        );
+        // Not `passesGate`: a suspension of the PINNED workspace's org throws.
+        if (
+          pinned &&
+          (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
+        ) {
+          return pinned.workspaceId;
         }
-        // No valid cookie pin. Before the first-by-createdAt default, try the
-        // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
-        // the workspace of the project they last worked in (cross-device,
-        // account-keyed — the Linear "last visited context" standard). The
-        // resolver re-checks the access gate, so a since-revoked membership or an
-        // archived/deleted project falls through cleanly to the default below.
-        try {
-          const lastActive = await this.resolveLastActiveContext(userId, tx);
-          if (lastActive) return lastActive.workspaceId;
-        } catch (err) {
-          if (!(err instanceof OrganizationSuspendedError)) throw err;
-          suspended ??= err;
-        }
+        cookieWithoutMembership = !pinned;
+      }
+      // No valid cookie pin. Before the first-by-createdAt default, try the
+      // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
+      // the workspace of the project they last worked in (cross-device,
+      // account-keyed — the Linear "last visited context" standard). The
+      // resolver re-checks the access gate, so a since-revoked membership or an
+      // archived/deleted project falls through cleanly to the default below.
+      try {
+        const lastActive = await this.resolveLastActiveContext(userId, tx);
+        if (lastActive) return lastActive.workspaceId;
+      } catch (err) {
+        if (!(err instanceof OrganizationSuspendedError)) throw err;
+        suspended ??= err;
+      }
 
-        const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
-        if (first && (await passesGate(first.workspaceId, tx))) {
-          return first.workspaceId;
+      const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
+      if (first && (await passesGate(first.workspaceId, tx))) {
+        return first.workspaceId;
+      }
+      // Only reached past a SUSPENDED first default: walk the rest of the
+      // user's memberships for one whose org is not suspended (the rare path —
+      // the common one returned above without this read).
+      if (suspended) {
+        const all = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
+        for (const w of all) {
+          if (w.id !== first?.workspaceId && (await passesGate(w.id, tx))) return w.id;
         }
-        // Only reached past a SUSPENDED first default: walk the rest of the
-        // user's memberships for one whose org is not suspended (the rare path —
-        // the common one returned above without this read).
-        if (suspended) {
-          const all = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
-          for (const w of all) {
-            if (w.id !== first?.workspaceId && (await passesGate(w.id, tx))) return w.id;
-          }
-        }
-        return null;
-      },
-      ACTIVE_WORKSPACE_RESOLVE_TX,
+      }
+      return null;
+    };
+    // ONE bounded retry when this read-only transaction could not START — the
+    // `maxWait` half of P2028 (MOTIR-8288). A process-level stall (the event loop
+    // blocked ~12.9 s under CPU steal, the pool idle) expires the 2 s `maxWait`
+    // before the transaction begins, so nothing ran and a fresh attempt has
+    // nothing to duplicate. It writes nothing and takes no lock; the self-heal
+    // (`ensureDefaultWorkspace`) below stays OUTSIDE the retry, and a second
+    // failure propagates, so a genuinely starved pool still reaches the monitor.
+    const existing = await retryOnceOnTransactionStartTimeout(() =>
+      withUserContext(userId, readExisting, ACTIVE_WORKSPACE_RESOLVE_TX),
     );
 
     // THE ORG OWNER — OR AN ORG ADMIN, SINCE MOTIR-6168 — OPENS A WORKSPACE THEY
