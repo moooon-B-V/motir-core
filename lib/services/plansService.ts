@@ -4392,6 +4392,7 @@ async function editAddProposal(
 async function releasePlanTargetLocks(
   plan: { id: string; projectId: string; sessionId: string | null },
   ctx: ServiceContext,
+  opts: { approved?: boolean } = {},
 ): Promise<void> {
   // ⚠️ THE PLAN'S OWN LOCKS FIRST, AND UNCONDITIONALLY (MOTIR-5646). This
   // function used to open with `if (!plan.sourceJobId) return;` — and
@@ -4420,8 +4421,12 @@ async function releasePlanTargetLocks(
     );
   }
 
-  // The SESSION half, unchanged: a plan produced by a planning conversation also
-  // hands that conversation's own leases back when it is decided.
+  // The SESSION half: a plan produced by a planning conversation also hands that
+  // conversation's own leases back when it is decided. On an APPROVE
+  // (`opts.approved`) a target the session held while it was hand-parked at
+  // `planning` is RESTED at `todo` / `blocked`, because the conversation's plan
+  // parked nothing itself, so `restPlanTargets` found no plan-held lock to rest
+  // and this lock is the card's only record (bug MOTIR-8356).
   if (!plan.sessionId) return;
   const sessionId = plan.sessionId;
   try {
@@ -4429,11 +4434,15 @@ async function releasePlanTargetLocks(
       planRepository.findLatestIdBySession(sessionId, tx),
     );
     if (latest !== plan.id) return;
-    await planTargetLockService.releaseForSession(sessionId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-      projectId: plan.projectId,
-    });
+    await planTargetLockService.releaseForSession(
+      sessionId,
+      {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        projectId: plan.projectId,
+      },
+      opts,
+    );
   } catch (err) {
     console.warn(
       `[plansService] releasing planning-target locks for plan ${plan.id} failed; the lease will expire and the sweep will clear it`,
@@ -5518,7 +5527,13 @@ export const plansService = {
   async markPlanned(
     planId: string,
     ctx: ServiceContext,
-    opts: { productName?: string | null; summary?: string | null; revision?: boolean } = {},
+    opts: {
+      productName?: string | null;
+      summary?: string | null;
+      revision?: boolean;
+      /** The job's resolved planning model (Bug MOTIR-8420); see the write below. */
+      authorModel?: string | null;
+    } = {},
   ): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -5546,6 +5561,15 @@ export const plansService = {
     // `brief_edited` row, and this is the planner's own first write, recorded by
     // the close.
     const summary = normalizeSelfReported(opts.summary);
+
+    // THE PLANNING MODEL (Bug MOTIR-8420). motir-ai resolves it per job AFTER
+    // core created this plan, so the close is the first write that can carry
+    // it. Recorded only on a NATIVE plan whose column is still empty, decided
+    // under the plan lock below: an `mcp` plan's self-reported model is never
+    // overwritten from this seam, and the first model to close a plan wins.
+    // Recorded is not exposed — `redactNativeActor` nulls it on every tenant
+    // read (`work-item-provenance.md` Decision 6).
+    const authorModel = normalizeSelfReported(opts.authorModel);
 
     // The project's TERMINAL statuses, for the close-time gate below. Resolved
     // OUT HERE because `getTerminalStatusKeys` opens its OWN workspace context
@@ -5607,6 +5631,11 @@ export const plansService = {
         const proposals = await planItemRepository.findByPlan(planId, tx);
         assertProposalSetSelfConsistent(proposals.map(toProposalNode));
 
+        const modelWrite =
+          authorModel != null && fresh.authorSource === 'native' && fresh.authorModel == null
+            ? { authorModel }
+            : {};
+
         // ⚠️ A CLOSE OVER *NOTHING* IS A DECISION, NOT A REVIEW REQUEST
         // (MOTIR-4124). `planned` is the status that puts a plan in front of a
         // person and hands them a button (MOTIR-3560), and a plan proposing
@@ -5645,6 +5674,7 @@ export const plansService = {
               decisionReason: 'discarded',
               ...(productName != null ? { productName } : {}),
               ...(summary != null ? { summary } : {}),
+              ...modelWrite,
             },
             tx,
           );
@@ -5671,6 +5701,7 @@ export const plansService = {
             plannedAt: new Date(),
             ...(productName != null ? { productName } : {}),
             ...(summary != null ? { summary } : {}),
+            ...modelWrite,
           },
           tx,
         );
@@ -7941,6 +7972,8 @@ export const plansService = {
     actor: PlanRevisionAgentActor,
     opts: {
       summary?: string | null;
+      /** The job's resolved planning model (Bug MOTIR-8420), for `markPlanned`. */
+      authorModel?: string | null;
       /** Extra keys for the `revision_ended` row on the plan's trail. */
       trailDiff?: Record<string, unknown>;
     } = {},
@@ -7960,6 +7993,7 @@ export const plansService = {
       try {
         const closed = await plansService.markPlanned(planId, ctx, {
           summary: opts.summary ?? null,
+          authorModel: opts.authorModel ?? null,
           revision: true,
         });
         status = closed.status;
@@ -8615,7 +8649,7 @@ async function afterApproveCommit(
 
   // Give the conversation its targets back — the epic's stories now exist, so
   // the level the lock was held at is finished (MOTIR-2787).
-  await releasePlanTargetLocks(plan, ctx);
+  await releasePlanTargetLocks(plan, ctx, { approved: true });
 
   // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
   // approved plan is what the set's cardinality is derived from, so this is the
