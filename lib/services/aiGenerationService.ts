@@ -333,10 +333,13 @@ export const aiGenerationService = {
         // note there is nothing in `input` this could be read from, and nothing
         // should be added.
         //
-        // `authorModel` is deliberately NOT passed: core does not know the
-        // planning LLM (`PlanningRun.model` lives in motir-ai), and
-        // `work-item-provenance.md` Decision 6 strips a native model from the
-        // read boundary anyway, so a value here would be unspendable.
+        // `authorModel` is not passed HERE because core does not know it yet:
+        // motir-ai resolves the planning model per job (`PlanningRun.model`)
+        // after this plan exists. It arrives on the job's `final: true` append
+        // and `markPlanned` records it then (Bug MOTIR-8420). Recorded is not
+        // exposed: `work-item-provenance.md` Decision 6 strips a native model
+        // at the read boundary (`redactNativeActor`), so the value is for
+        // internal analysis only.
         authorSource: 'native',
         authorHarness: 'Motir',
       },
@@ -489,6 +492,11 @@ export const aiGenerationService = {
       title?: string | null;
       revision?: boolean;
       actor?: PlanRevisionAgentActor;
+      /**
+       * The job's resolved planning model (Bug MOTIR-8420) — recorded on the
+       * plan by the close of a final append, a generation's or a revision's.
+       */
+      authorModel?: string | null;
     } = {},
   ): Promise<{ planId: string; planItemIds: string[]; planned: boolean; released?: boolean }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -545,6 +553,7 @@ export const aiGenerationService = {
       }
       const closed = await plansService.closeRevision(plan.id, ctx, opts.actor ?? EMPTY_ACTOR, {
         summary: opts.summary ?? null,
+        authorModel: opts.authorModel ?? null,
         trailDiff: { proposalCount: createdIds.length },
       });
       return {
@@ -571,6 +580,7 @@ export const aiGenerationService = {
       const closed = await plansService.markPlanned(plan.id, ctx, {
         productName: opts.productName ?? null,
         summary: opts.summary ?? null,
+        authorModel: opts.authorModel ?? null,
       });
       planned = closed.status === 'planned';
     }

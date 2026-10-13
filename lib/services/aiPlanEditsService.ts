@@ -254,9 +254,10 @@ async function submitPlanEditJob(
       //
       // SERVER-SET here, exactly as `create_plan` fixes `mcp`
       // (`agent-authored-plans.md` Q3: the source is never a caller field).
-      // `authorModel` stays null — the planning LLM is motir-ai's
-      // (`PlanningRun.model`) and Decision 6 strips a native model at the read
-      // boundary regardless.
+      // `authorModel` is not known yet — motir-ai resolves the planning model
+      // per job (`PlanningRun.model`) after this plan exists, and sends it on
+      // the job's `final: true` append, where `markPlanned` records it (Bug
+      // MOTIR-8420). Decision 6 keeps it off every tenant read.
       authorSource: 'native',
       authorHarness: 'Motir',
     },
