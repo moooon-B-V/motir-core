@@ -10,6 +10,7 @@ import type {
   SharpenAssumption,
   SharpenJobContext,
   SharpenQuestion,
+  SharpenRunContext,
 } from '@/lib/ai/types';
 import type { SharpenDoorResult, SharpenSessionDto, SharpenSettleResult } from '@/lib/dto/sharpen';
 import { inFlightTurn, isFailedRecord, toSharpenSessionDto } from '@/lib/mappers/sharpenMappers';
@@ -17,6 +18,7 @@ import { PlanNotFoundError } from '@/lib/plans/errors';
 import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import type { ProjectContext } from '@/lib/projects';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import {
   sharpenSessionRepository,
@@ -36,6 +38,7 @@ import {
   SharpenTurnInFlightError,
   SharpenTurnNotFoundError,
 } from '@/lib/sharpening/errors';
+import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -213,12 +216,51 @@ function loadDto(sessionId: string, ctx: ProjectContext): Promise<SharpenSession
   return withWorkspaceContext(bindCtx(ctx), (tx) => readDto(sessionId, ctx, tx));
 }
 
+/**
+ * The RUN a plan session stands inside (Subtask MOTIR-8450) — the plan, the
+ * person's own requests of the conversation writing it, its anchor card and the
+ * requirement already settled on it. Read from stored state only. `undefined`
+ * (so the key is ABSENT on the wire) for a work-item session, for a plan with no
+ * conversation behind it, and for a conversation with no person turn yet.
+ */
+async function runContextFor(
+  target: Target,
+  ctx: ProjectContext,
+): Promise<SharpenRunContext | undefined> {
+  if (target.kind !== 'plan') return undefined;
+  return withWorkspaceContext(bindCtx(ctx), async (tx) => {
+    const subject = await planRepository.findHoldSubject(target.planId, tx);
+    if (!subject?.sessionId) return undefined;
+    const turns = await planChangeTurnRepository.listBySessionId(
+      subject.sessionId,
+      ctx.workspaceId,
+      tx,
+    );
+    const requests = turns.filter((t) => t.role === 'user').map((t) => t.body);
+    if (requests.length === 0) return undefined;
+
+    const anchorKey = subject.session?.targetKeys[0] ?? null;
+    const anchor = anchorKey
+      ? await workItemRepository.findByIdentifier(ctx.projectId, anchorKey, tx)
+      : null;
+    const plan = await planRepository.findById(target.planId, ctx.workspaceId, tx);
+    const requirement = narrowSharpenedRequirement(plan?.sharpenedRequirement);
+    return {
+      planId: target.planId,
+      requests,
+      card: anchor ? { key: anchor.identifier, title: anchor.title } : null,
+      ...(requirement ? { requirement } : {}),
+    };
+  });
+}
+
 /** The `context.sharpen` a job reads — built from STORED state only. */
 function jobContext(
   target: Target,
   row: SharpenSession,
   before: readonly SharpenTurn[],
   turn: SharpenTurn,
+  run: SharpenRunContext | undefined,
 ): SharpenJobContext {
   const action = turn.action ?? 'start';
   return {
@@ -233,6 +275,7 @@ function jobContext(
     action,
     ...(action === 'answer' && turn.readingId ? { readingId: turn.readingId } : {}),
     ...(action === 'own_words' ? { text: turn.body } : {}),
+    ...(run ? { run } : {}),
   };
 }
 
@@ -486,7 +529,11 @@ export const aiSharpenService = {
       return { outcome: 'resumed', jobId: null, turnId: null, session };
     }
     const { row, turn } = written;
-    const jobId = await submitAndBind(jobContext(target, row, [], turn), turn.id, ctx);
+    const jobId = await submitAndBind(
+      jobContext(target, row, [], turn, await runContextFor(target, ctx)),
+      turn.id,
+      ctx,
+    );
     return { outcome: 'sharpening', jobId, turnId: turn.id, session: await loadDto(row.id, ctx) };
   },
 
@@ -504,7 +551,11 @@ export const aiSharpenService = {
     const target = await targetOfSession(stored, ctx);
     await assertSharpenable(target, ctx, action === 'stop');
     const { row, before, turn } = await actWrite(sessionId, action, opts, ctx);
-    const jobId = await submitAndBind(jobContext(target, row, before, turn), turn.id, ctx);
+    const jobId = await submitAndBind(
+      jobContext(target, row, before, turn, await runContextFor(target, ctx)),
+      turn.id,
+      ctx,
+    );
     return { outcome: 'sharpening', jobId, turnId: turn.id, session: await loadDto(row.id, ctx) };
   },
 
@@ -531,7 +582,11 @@ export const aiSharpenService = {
     const target = await targetOfSession(row, ctx);
     await assertSharpenable(target, ctx, turn.action === 'stop');
     const before = turns.filter((t) => t.seq < turn.seq);
-    const jobId = await submitAndBind(jobContext(target, row, before, turn), turn.id, ctx);
+    const jobId = await submitAndBind(
+      jobContext(target, row, before, turn, await runContextFor(target, ctx)),
+      turn.id,
+      ctx,
+    );
     const session = await loadDto(row.id, ctx);
     return { outcome: 'sharpening', jobId, turnId, session } as SharpenDoorResult;
   },

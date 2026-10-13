@@ -495,3 +495,100 @@ describe('reads', () => {
     );
   });
 });
+
+// Subtask MOTIR-8450 — the `run` hole: what the run is planning and which card.
+describe('the run hole', () => {
+  async function runPlan(targetKeys: string[], turns: Array<['user' | 'assistant', string]>) {
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Being planned', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    const session = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        scopeKey: targetKeys.join(','),
+        targetKeys,
+      },
+    });
+    let seq = 0;
+    for (const [role, body] of turns) {
+      seq += 1;
+      await adminDb.planChangeTurn.create({
+        data: { workspaceId: fx.workspaceId, sessionId: session.id, seq, role, body },
+      });
+    }
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sessionId: session.id } });
+    return plan.id;
+  }
+
+  const sharpenOf = (i = 0) => jobs.submitted[i]!.context.sharpen as Record<string, unknown>;
+
+  it('carries the plan, the person’s requests, the anchor card and the settled requirement', async () => {
+    const card = await createTestWorkItem(fx, { kind: 'story', title: 'Shared export presets' });
+    const other = await createTestWorkItem(fx, { kind: 'task', title: 'Other' });
+    const keys = [card.identifier, other.identifier].sort();
+    const anchor = keys[0] === card.identifier ? card : other;
+    const planId = await runPlan(keys, [
+      ['user', 'Plan shared export presets'],
+      ['assistant', 'Which team?'],
+      ['user', 'The finance team, and keep CSV order.'],
+    ]);
+    await adminDb.plan.update({
+      where: { id: planId },
+      data: {
+        sharpenedRequirement: {
+          behaviour: '- Who? — Finance.',
+          plannerAssumptions: [{ question: 'Q', recommendation: 'R' }],
+          settledAt: '2026-10-13T00:00:00.000Z',
+        },
+      },
+    });
+
+    await aiSharpenService.open({ planId }, pctx);
+    expect(sharpenOf().run).toEqual({
+      planId,
+      requests: ['Plan shared export presets', 'The finance team, and keep CSV order.'],
+      card: { key: anchor.identifier, title: anchor.title },
+      requirement: { behaviour: '- Who? — Finance.' },
+    });
+  });
+
+  it('sends card: null on a project-wide run, and no requirement key when none is settled', async () => {
+    const planId = await runPlan([], [['user', 'Plan the quarter']]);
+    await aiSharpenService.open({ planId }, pctx);
+    const run = sharpenOf().run as Record<string, unknown>;
+    expect(run).toEqual({ planId, requests: ['Plan the quarter'], card: null });
+    expect('requirement' in run).toBe(false);
+  });
+
+  it('is ABSENT for a plan with no conversation, a conversation with no request, and a card', async () => {
+    const plain = await plannedPlan();
+    await aiSharpenService.open({ planId: plain }, pctx);
+    expect('run' in sharpenOf(0)).toBe(false);
+
+    const silent = await runPlan([], []);
+    await aiSharpenService.open({ planId: silent }, pctx);
+    expect('run' in sharpenOf(1)).toBe(false);
+
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Export' });
+    await aiSharpenService.open({ itemKey: item.identifier }, pctx);
+    expect('run' in sharpenOf(2)).toBe(false);
+  });
+
+  it('rides every turn from stored state; extra body keys cannot reach it', async () => {
+    const planId = await runPlan([], [['user', 'Plan the quarter']]);
+    const opened = await aiSharpenService.open({ planId }, pctx);
+    succeed(opened.jobId!, questionTurn());
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+
+    await aiSharpenService.act(
+      opened.session.id,
+      'answer',
+      { readingId: 'a', run: { planId: 'injected' } } as unknown as { readingId: string },
+      pctx,
+    );
+    expect(sharpenOf(1).run).toEqual(sharpenOf(0).run);
+  });
+});

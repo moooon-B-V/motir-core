@@ -293,6 +293,27 @@ export interface SharpenJobContext {
   readingId?: string;
   /** `own_words` only. */
   text?: string;
+  /** The planning RUN this session stands inside (MOTIR-8450 producer ↔
+   *  MOTIR-8451 consumer). ABSENT — never `null`, never `{}` — when there is no
+   *  run: a plan with no conversation behind it, or a card outside any run. */
+  run?: SharpenRunContext | null;
+}
+
+/** `context.sharpen.run` — what the run is planning and which card it is
+ *  planning, read from stored state. The shared wire contract: motir-ai declares
+ *  the identical shape and refuses a `run` that does not match it. */
+export interface SharpenRunContext {
+  /** The plan the run is writing. */
+  planId: string;
+  /** The person's own turn bodies of the run's conversation, in order,
+   *  verbatim. Never empty — a run with no person turn sends no `run`. */
+  requests: string[];
+  /** The run's ANCHOR card (its conversation's `targetKeys[0]`); `null` on a
+   *  project-wide run. The key is always present. */
+  card: { key: string; title: string } | null;
+  /** The plan's stored sharpened requirement, narrowed to its six fields;
+   *  absent when the plan carries none. */
+  requirement?: SubmittedRequirement;
 }
 
 export interface JobContextBag {
