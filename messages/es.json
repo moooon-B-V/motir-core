@@ -8144,6 +8144,30 @@
       "onlyStarterAnon": "Solo la persona que lo inició o un responsable del proyecto puede reanudarlo.",
       "failureLine": "No se pudo hacer tu último cambio en este plan · {when}",
       "failureLineAgain": "Tu último cambio no se pudo hacer de nuevo · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Interrógame",
+        "helpName": "¿Qué es Interrógame?",
+        "popover": {
+          "title": "Interrógame",
+          "body1": "Antes de planificar, Motir AI te pregunta qué quieres, una pregunta cada vez: cómo debería funcionar, otras formas de hacer lo mismo y qué pasa cuando algo sale mal.",
+          "body2": "Cada pregunta tiene varias respuestas para elegir, una recomendada. Omite las que quieras, deja que decida el planificador o detente cuando quieras.",
+          "body3": "Lo que decidas se escribe en el requisito del plan, y la planificación parte de ahí."
+        },
+        "hint": "Tu próximo mensaje inicia las preguntas."
+      },
+      "question": {
+        "label": "preguntando · pregunta {n}",
+        "recommended": "Recomendada",
+        "recommendedName": "{label} (recomendada)",
+        "somethingElse": "Otra cosa…",
+        "skip": "Omitir",
+        "youDecide": "Decide tú",
+        "stop": "Dejar de preguntar",
+        "ownWordsPlaceholder": "Responde con tus propias palabras…",
+        "composerPlaceholder": "O escribe tu propia respuesta…"
+      }
     }
   },
   "codeHealth": {

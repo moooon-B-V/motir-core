@@ -8138,6 +8138,30 @@
       "onlyStarterAnon": "Only the person who started this or a project manager can resume it.",
       "failureLine": "Your last change to this plan could not be made · {when}",
       "failureLineAgain": "Your last change could not be made again · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Grill me",
+        "helpName": "What is Grill me?",
+        "popover": {
+          "title": "Grill me",
+          "body1": "Before it plans, Motir AI asks you about what you want, one question at a time: how it should work, the other ways of doing the same thing, and what happens when things go wrong.",
+          "body2": "Each question has a few answers to pick from, one recommended. Skip any, let the planner decide, or stop whenever you like.",
+          "body3": "What you settle is written into the plan's requirement, and planning starts from it."
+        },
+        "hint": "Your next message starts the grilling."
+      },
+      "question": {
+        "label": "asking · question {n}",
+        "recommended": "Recommended",
+        "recommendedName": "{label} (recommended)",
+        "somethingElse": "Something else…",
+        "skip": "Skip",
+        "youDecide": "You decide",
+        "stop": "Stop grilling",
+        "ownWordsPlaceholder": "Answer in your own words…",
+        "composerPlaceholder": "Or type your own answer…"
+      }
     }
   },
   "codeHealth": {

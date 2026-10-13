@@ -8144,6 +8144,30 @@
       "onlyStarterAnon": "Seule la personne qui l’a démarrée ou un responsable de projet peut la reprendre.",
       "failureLine": "Votre dernière modification de ce plan n’a pas pu être effectuée · {when}",
       "failureLineAgain": "Votre dernière modification n’a de nouveau pas pu être effectuée · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Cuisine-moi",
+        "helpName": "Qu’est-ce que « Cuisine-moi » ?",
+        "popover": {
+          "title": "Cuisine-moi",
+          "body1": "Avant de planifier, Motir AI vous interroge sur ce que vous voulez, une question à la fois : comment cela doit fonctionner, les autres façons de faire la même chose et ce qui se passe quand les choses tournent mal.",
+          "body2": "Chaque question propose quelques réponses, dont une recommandée. Passez celles que vous voulez, laissez le planificateur décider ou arrêtez quand vous le souhaitez.",
+          "body3": "Ce que vous arrêtez est écrit dans l’exigence du plan, et la planification part de là."
+        },
+        "hint": "Votre prochain message lance les questions."
+      },
+      "question": {
+        "label": "question · question {n}",
+        "recommended": "Recommandée",
+        "recommendedName": "{label} (recommandée)",
+        "somethingElse": "Autre chose…",
+        "skip": "Passer",
+        "youDecide": "À vous de décider",
+        "stop": "Arrêter les questions",
+        "ownWordsPlaceholder": "Répondez avec vos propres mots…",
+        "composerPlaceholder": "Ou saisissez votre propre réponse…"
+      }
     }
   },
   "codeHealth": {

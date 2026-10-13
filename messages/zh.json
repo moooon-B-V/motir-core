@@ -8131,6 +8131,30 @@
       "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
       "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
       "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "追问我",
+        "helpName": "什么是追问我？",
+        "popover": {
+          "title": "追问我",
+          "body1": "开始规划前，Motir AI 会一次只问一件事，问清楚你想要的东西：它应该怎样运作、做同一件事的其他方式，以及出错时会发生什么。",
+          "body2": "每一问都有几个可选答案，其中一个是推荐答案。可以跳过任意一问、让规划者决定，或随时停止。",
+          "body3": "你确定下来的内容会写入计划的需求，规划从这里开始。"
+        },
+        "hint": "你的下一条消息会开始追问。"
+      },
+      "question": {
+        "label": "提问 · 第 {n} 问",
+        "recommended": "推荐",
+        "recommendedName": "{label}（推荐）",
+        "somethingElse": "其他答案…",
+        "skip": "跳过",
+        "youDecide": "你来决定",
+        "stop": "停止追问",
+        "ownWordsPlaceholder": "用自己的话回答…",
+        "composerPlaceholder": "或者输入你自己的答案…"
+      }
     }
   },
   "codeHealth": {

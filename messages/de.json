@@ -8144,6 +8144,30 @@
       "onlyStarterAnon": "Nur die Person, die dies gestartet hat, oder ein Projektmanager kann es fortsetzen.",
       "failureLine": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden · {when}",
       "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Löchere mich",
+        "helpName": "Was ist „Löchere mich“?",
+        "popover": {
+          "title": "Löchere mich",
+          "body1": "Bevor geplant wird, fragt Motir AI Sie nach dem, was Sie möchten, eine Frage nach der anderen: wie es funktionieren soll, welche anderen Wege es zum selben Ziel gibt und was passiert, wenn etwas schiefgeht.",
+          "body2": "Jede Frage bietet einige Antworten zur Auswahl, eine davon empfohlen. Überspringen Sie beliebige Fragen, lassen Sie den Planer entscheiden oder hören Sie jederzeit auf.",
+          "body3": "Was Sie festlegen, wird in die Anforderung des Plans geschrieben, und die Planung beginnt damit."
+        },
+        "hint": "Ihre nächste Nachricht startet die Befragung."
+      },
+      "question": {
+        "label": "Frage · Frage {n}",
+        "recommended": "Empfohlen",
+        "recommendedName": "{label} (empfohlen)",
+        "somethingElse": "Etwas anderes…",
+        "skip": "Überspringen",
+        "youDecide": "Sie entscheiden",
+        "stop": "Befragung beenden",
+        "ownWordsPlaceholder": "In eigenen Worten antworten…",
+        "composerPlaceholder": "Oder eigene Antwort eingeben…"
+      }
     }
   },
   "codeHealth": {

@@ -8141,6 +8141,30 @@
       "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić.",
       "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona · {when}",
       "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Przepytaj mnie",
+        "helpName": "Czym jest Przepytaj mnie?",
+        "popover": {
+          "title": "Przepytaj mnie",
+          "body1": "Zanim zacznie planować, Motir AI pyta, czego chcesz, po jednym pytaniu: jak to ma działać, jakie są inne sposoby zrobienia tego samego i co się dzieje, gdy coś pójdzie nie tak.",
+          "body2": "Każde pytanie ma kilka odpowiedzi do wyboru, jedną zalecaną. Pomiń dowolne, pozwól zdecydować planiście albo przerwij w dowolnej chwili.",
+          "body3": "To, co ustalisz, trafia do wymagania planu i od tego zaczyna się planowanie."
+        },
+        "hint": "Twoja następna wiadomość rozpocznie przepytywanie."
+      },
+      "question": {
+        "label": "pytanie · pytanie {n}",
+        "recommended": "Zalecana",
+        "recommendedName": "{label} (zalecana)",
+        "somethingElse": "Coś innego…",
+        "skip": "Pomiń",
+        "youDecide": "Ty zdecyduj",
+        "stop": "Zakończ przepytywanie",
+        "ownWordsPlaceholder": "Odpowiedz własnymi słowami…",
+        "composerPlaceholder": "Albo wpisz własną odpowiedź…"
+      }
     }
   },
   "codeHealth": {

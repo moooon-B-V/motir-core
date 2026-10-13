@@ -8135,6 +8135,30 @@
       "onlyStarterAnon": "시작한 사람 또는 프로젝트 관리자만 재개할 수 있습니다.",
       "failureLine": "이 계획에 대한 마지막 변경을 반영하지 못했습니다 · {when}",
       "failureLineAgain": "마지막 변경을 다시 반영하지 못했습니다 · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "질문 공세",
+        "helpName": "질문 공세란?",
+        "popover": {
+          "title": "질문 공세",
+          "body1": "계획하기 전에 Motir AI가 원하는 것을 한 번에 하나씩 묻습니다. 어떻게 동작해야 하는지, 같은 일을 하는 다른 방법, 그리고 일이 잘못되면 어떻게 되는지입니다.",
+          "body2": "각 질문에는 고를 수 있는 답이 몇 개 있고, 그중 하나가 추천입니다. 아무 질문이나 건너뛰거나, 플래너에게 맡기거나, 언제든 멈출 수 있습니다.",
+          "body3": "확정한 내용은 계획의 요구사항에 기록되고, 계획은 거기서 시작합니다."
+        },
+        "hint": "다음 메시지부터 질문이 시작됩니다."
+      },
+      "question": {
+        "label": "질문 중 · 질문 {n}",
+        "recommended": "추천",
+        "recommendedName": "{label} (추천)",
+        "somethingElse": "다른 답…",
+        "skip": "건너뛰기",
+        "youDecide": "알아서 결정",
+        "stop": "질문 그만하기",
+        "ownWordsPlaceholder": "직접 답하기…",
+        "composerPlaceholder": "또는 직접 답을 입력하세요…"
+      }
     }
   },
   "codeHealth": {

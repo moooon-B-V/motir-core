@@ -31,6 +31,10 @@ import { PlanBriefing } from '@/components/planning/PlanBriefing';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
+import { GrillMeControl } from '@/components/planning/GrillMeControl';
+import { GrillQuestionTurn } from '@/components/planning/GrillQuestionTurn';
+import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
+import { useGrillSession } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
 import { PlanNarration, narrationHeadLines } from '@/components/planning/PlanNarration';
@@ -557,6 +561,33 @@ export function PlanChangeRail({
   // draws the same thing. `resumable === false` is situation 2 (a plan waits), MOTIR-7941's.
   const failure = !ended ? (state.session?.failure ?? null) : null;
   const awaitsResume = failure !== null && failure.resumable !== false;
+  // THE "GRILL ME" MODE (Task MOTIR-1101 · Subtask MOTIR-8447; design § Grill me,
+  // G1/G2). Its gate is the run's PHASE, read from `planRunPhase` above and never
+  // re-derived: the control is drawn in the conversation phase (or before any run
+  // has started — the person turns it on, then sends the message that starts
+  // one), and it is NOT rendered once the run hands off to planning, nor over a
+  // plan that is no longer being written. Recomputed every render, because the
+  // phase can flip BACK (the planner stepping out of the walk to ask what a change
+  // meant) and the control returns with the session's own value.
+  const beforeAnyRun =
+    runPhase === null &&
+    state.planId === null &&
+    !state.review &&
+    !state.liveReview &&
+    (state.phase === 'idle' || state.phase === 'streaming');
+  const grillVisible = !state.readOnly && !ended && (conversing || beforeAnyRun);
+  const grillOptIn = useGrillOptIn(state.session?.id ?? null);
+  const grill = useGrillSession({
+    on: grillOptIn.on,
+    planId: conversing ? (state.planId ?? state.liveReview?.id ?? null) : null,
+    active: conversing,
+    personTurns: userTurns.length,
+  });
+  const [grillOwnWords, setGrillOwnWords] = useState(false);
+  // The session's question, on the rail's question surface — only in the
+  // conversation phase. The hand-off hides it; what was settled stays stored.
+  const grillQuestion =
+    conversing && grill.session?.status === 'open' ? (grill.session.pendingQuestion ?? null) : null;
   // The first failure this viewer saw on this session: a newer one is *failed again*.
   const [firstFailure, setFirstFailure] = useState<{ sessionId: string; at: string } | null>(null);
   const failureSessionId = state.session?.id ?? null;
@@ -650,15 +681,18 @@ export function PlanChangeRail({
         </div>
       </div>
     ) : null;
+  const tGrill = useTranslations('planningWorkspace.grill.question');
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
-    : question || isOpenUnclear(runPause)
-      ? tc('composerPlaceholderAnswer')
-      : askingForReason
-        ? tc('composerPlaceholderReplan')
-        : targets.length > 0
-          ? tc('composerPlaceholderTargets')
-          : tc('composerPlaceholder');
+    : grillQuestion
+      ? tGrill(grillOwnWords ? 'ownWordsPlaceholder' : 'composerPlaceholder')
+      : question || isOpenUnclear(runPause)
+        ? tc('composerPlaceholderAnswer')
+        : askingForReason
+          ? tc('composerPlaceholderReplan')
+          : targets.length > 0
+            ? tc('composerPlaceholderTargets')
+            : tc('composerPlaceholder');
 
   // What the THREAD is anchored at, per the server (`PlanChangeSessionDto`) —
   // not the local tray. A sent turn is scoped by the session it landed in, so
@@ -1016,6 +1050,28 @@ export function PlanChangeRail({
             planning, the planner says only what is true — it is working out the
             ask and may still have a question. Keyed, like the hand-off it gives way
             to at `target_settled`; a question ends the run before either is due. */}
+        {/* THE GRILLING QUESTION (MOTIR-8447): drawn where the conversation phase
+            draws a planner question, carrying the pending-question anchor when the
+            run itself is not waiting on one. Gone at the hand-off. */}
+        {grillQuestion ? (
+          <GrillQuestionTurn
+            question={grillQuestion}
+            number={
+              (grill.session?.settled.length ?? 0) + (grill.session?.assumptions.length ?? 0) + 1
+            }
+            pending={grill.pending}
+            {...(question ? {} : { anchorId: PENDING_QUESTION_ID })}
+            onAct={(action, opts) => {
+              setGrillOwnWords(false);
+              grill.act(action, opts);
+            }}
+            onStop={grill.stop}
+            onSomethingElse={() => {
+              setGrillOwnWords(true);
+              railRef.current?.querySelector('textarea')?.focus();
+            }}
+          />
+        ) : null}
         {conversing ? (
           <Bubble role="assistant" testId="plan-conversation-phase">
             {tp('handoff.conversing')}
@@ -1384,6 +1440,13 @@ export function PlanChangeRail({
           onAddTarget={onAddTarget}
           onRemoveTarget={onRemoveTarget}
           onSubmit={(text) => {
+            // A typed message while a grilling question waits IS an own-words
+            // answer to it (design G3) — one act to the session, not a turn.
+            if (grillQuestion) {
+              setGrillOwnWords(false);
+              grill.act('own_words', { text });
+              return;
+            }
             if (initialDraft && userTurns.length === 0) setSeededSend(text);
             setLastSent(text);
             onSend(text);
@@ -1414,6 +1477,15 @@ export function PlanChangeRail({
           // measured at the rail's real 22rem the header row is already full, and
           // the bar belongs beside the control whose behaviour actually changed.
           awaitingQuestion={question?.question ?? null}
+          beforeField={
+            grillVisible ? (
+              <GrillMeControl
+                on={grillOptIn.on}
+                onChange={grillOptIn.setOn}
+                hint={grill.session?.status !== 'open' && !grill.pending}
+              />
+            ) : null
+          }
           // THE RUNNING BAR — present exactly while a run is in flight, and gone
           // the moment it is not. `onStop` is what makes it offerable: a caller
           // that does not supply one gets the shipped composer unchanged.

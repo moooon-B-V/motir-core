@@ -8141,6 +8141,30 @@
       "onlyStarterAnon": "再開できるのは開始した本人またはプロジェクトマネージャーのみです。",
       "failureLine": "この計画への直前の変更を反映できませんでした · {when}",
       "failureLineAgain": "直前の変更を再び反映できませんでした · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "質問攻め",
+        "helpName": "質問攻めとは？",
+        "popover": {
+          "title": "質問攻め",
+          "body1": "計画する前に、Motir AI が何を求めているかを一度に一つずつ質問します。どう動くべきか、同じことを行う別の方法、そしてうまくいかないときに何が起きるかです。",
+          "body2": "各質問にはいくつかの回答候補があり、一つが推奨です。どれでもスキップでき、プランナーに任せることも、いつでも止めることもできます。",
+          "body3": "決まった内容は計画の要件に書き込まれ、計画はそこから始まります。"
+        },
+        "hint": "次のメッセージで質問が始まります。"
+      },
+      "question": {
+        "label": "質問中 · 質問 {n}",
+        "recommended": "推奨",
+        "recommendedName": "{label}（推奨）",
+        "somethingElse": "別の回答…",
+        "skip": "スキップ",
+        "youDecide": "おまかせ",
+        "stop": "質問をやめる",
+        "ownWordsPlaceholder": "自分の言葉で回答…",
+        "composerPlaceholder": "または自分の回答を入力…"
+      }
     }
   },
   "codeHealth": {
