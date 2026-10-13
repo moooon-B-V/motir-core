@@ -1,0 +1,105 @@
+{
+  // ── The PLATFORM TESTS project (MOTIR-8353) ──────────────────────────────────
+  //
+  // The suites for the agent / CI / planning platform — GitHub and GitLab, the
+  // CI fleet and metering, jobs, AI and planning, MCP, dispatch and runs —
+  // carved out of `tsconfig.tests.json` BY AREA. That program had reached 88.9%
+  // of the heap budget on `main` (`scripts/ci/assert-typecheck-headroom.mjs`
+  // fails at 90%), and every story adds to it, so a one-off trim is eaten again
+  // within weeks: 7013 files at MOTIR-4422, 8192 at MOTIR-8353.
+  //
+  // ⚠️ WHY BY AREA, NOT BY FILE KIND. `tsconfig.base.json` records that a
+  // boundary buys only what it removes from the PROGRAM, declarations included.
+  // `tests/components/**` (MOTIR-5433) bought 5.5 points because the render
+  // suites import the same `lib/` surface as everything else. These areas import
+  // a DIFFERENT slice of `lib/` (the GitHub client, the fleet, the AI and job
+  // layers) from what the rest of the tests import, so each side sheds the
+  // other's declaration closure. The before/after readings are in MOTIR-8353's
+  // pull request.
+  //
+  // WHEN EITHER SIDE NEARS THE LINE AGAIN, MOVE DIRECTORIES, DO NOT RE-DESIGN.
+  // A directory moves by adding it to `include` here and to `exclude` in
+  // `tsconfig.tests.json` (or the reverse); `tests/typecheck-program.test.ts`
+  // holds the two lists to each other, so a directory can be in neither or both
+  // only by failing it. A directory whose helper modules are imported from the
+  // other side stays where its importers are (`agentInstances/_harness` and
+  // `ideas/_helpers` are why those two are not here) — the arrow runs one way,
+  // from this project into the tests project, never back.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/tests-platform",
+    "tsBuildInfoFile": ".tsout/tests-platform/tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "tests/agentChat/**/*.ts",
+    "tests/agentChat/**/*.tsx",
+    "tests/agentReview/**/*.ts",
+    "tests/agentReview/**/*.tsx",
+    "tests/agentTerminal/**/*.ts",
+    "tests/agentTerminal/**/*.tsx",
+    "tests/ai/**/*.ts",
+    "tests/ai/**/*.tsx",
+    "tests/async/**/*.ts",
+    "tests/async/**/*.tsx",
+    "tests/automation/**/*.ts",
+    "tests/automation/**/*.tsx",
+    "tests/ciFleet/**/*.ts",
+    "tests/ciFleet/**/*.tsx",
+    "tests/ciMetering/**/*.ts",
+    "tests/ciMetering/**/*.tsx",
+    "tests/codeGraph/**/*.ts",
+    "tests/codeGraph/**/*.tsx",
+    "tests/codeHealth/**/*.ts",
+    "tests/codeHealth/**/*.tsx",
+    "tests/dispatch/**/*.ts",
+    "tests/dispatch/**/*.tsx",
+    "tests/dispatchRuns/**/*.ts",
+    "tests/dispatchRuns/**/*.tsx",
+    "tests/embeddings/**/*.ts",
+    "tests/embeddings/**/*.tsx",
+    "tests/gateway/**/*.ts",
+    "tests/gateway/**/*.tsx",
+    "tests/git/**/*.ts",
+    "tests/git/**/*.tsx",
+    "tests/github/**/*.ts",
+    "tests/github/**/*.tsx",
+    "tests/gitlab/**/*.ts",
+    "tests/gitlab/**/*.tsx",
+    "tests/hosted/**/*.ts",
+    "tests/hosted/**/*.tsx",
+    "tests/hostedRuns/**/*.ts",
+    "tests/hostedRuns/**/*.tsx",
+    "tests/hosting/**/*.ts",
+    "tests/hosting/**/*.tsx",
+    "tests/ideaDraft/**/*.ts",
+    "tests/ideaDraft/**/*.tsx",
+    "tests/jobs/**/*.ts",
+    "tests/jobs/**/*.tsx",
+    "tests/lessons/**/*.ts",
+    "tests/lessons/**/*.tsx",
+    "tests/mcp/**/*.ts",
+    "tests/mcp/**/*.tsx",
+    "tests/planChange/**/*.ts",
+    "tests/planChange/**/*.tsx",
+    "tests/planning/**/*.ts",
+    "tests/planning/**/*.tsx",
+    "tests/plans/**/*.ts",
+    "tests/plans/**/*.tsx",
+    "tests/projectRepos/**/*.ts",
+    "tests/projectRepos/**/*.tsx",
+    "tests/runs/**/*.ts",
+    "tests/runs/**/*.tsx"
+  ],
+  "exclude": ["node_modules", "packages", ".tsout"],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.scripts.json" },
+    { "path": "./tsconfig.tests.json" }
+  ]
+}
