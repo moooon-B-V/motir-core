@@ -141,7 +141,9 @@ export interface PlanTargetHandOff {
  *  `plan_awaiting_review` is MOTIR-5647's: the lease is a dead-author detector,
  *  and a plan that reached `planned` is waiting for a PERSON rather than for a
  *  crashed author — so its lock is left standing however old the lease is
- *  (AMENDMENT 16 D9). Reported rather than silently skipped, so the sweep's own
+ *  (AMENDMENT 16 D9). A SESSION-held lock is spared the same way while any of
+ *  the session's plans is `planned` / `stale` (MOTIR-8467): a conversation's
+ *  plan parks nothing of its own. Reported rather than silently skipped, so the sweep's own
  *  output says why it walked past a row its read had selected.
  *
  *  `session_waiting` is MOTIR-7912's: the lease's holder session (or the session of
@@ -1222,6 +1224,23 @@ export const planTargetLockService = {
         // window: the failure the park exists to prevent, by the one status D9
         // forgot to name.
         if (planStatus === 'planned' || planStatus === 'stale') {
+          entries.push({ workItemId: lock.workItemId, outcome: 'plan_awaiting_review' });
+          continue;
+        }
+      }
+      // ⚠️ AND A SESSION WHOSE PLAN WAITS FOR A PERSON KEEPS ITS LOCK (MOTIR-8467).
+      // A conversation's plan parks nothing of its own — the SESSION holds the
+      // target, so the row's `planId` is null and the arm above never looks the
+      // plan up. A session lease is refreshed only by a turn, and neither a hosted
+      // walk nor the person's review makes one, so without this the card went back
+      // to the ready set half an hour after the last submit while its plan was
+      // still in review. Any `planned` / `stale` plan of the session spares it; a
+      // session with only a `generating` plan is the dead-author case and expires.
+      if (lock.sessionId) {
+        const awaiting = await withWorkspaceServiceContext(lock.workspaceId, (tx) =>
+          planRepository.countAwaitingDecisionBySession(lock.sessionId!, null, tx),
+        );
+        if (awaiting > 0) {
           entries.push({ workItemId: lock.workItemId, outcome: 'plan_awaiting_review' });
           continue;
         }
