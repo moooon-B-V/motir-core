@@ -181,6 +181,13 @@ export interface BillingSessionDTO {
 }
 
 /**
+ * What starting a checkout answers (MOTIR-8394): a hosted session URL, or — when the
+ * org already holds a live AI plan — that plan's lookup key, because an org holds
+ * ONE AI plan and a change of plan goes through the upgrade path. Both are 200s.
+ */
+export type BillingCheckoutDTO = { url: string } | { existingPlan: { livePriceLookupKey: string } };
+
+/**
  * The members-page SEAT summary (Story 8.1.14, design/org-admin
  * members-billing) — the in-context seat/billing layer the org Members admin
  * renders for a SCALED org. `null` (the service returns it, not this shape)

@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Current plan",
       "ctaTrialUsed": "Trial used",
       "footer": "Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is applied automatically at checkout. Credits are an internal usage allotment; the price shown is the AI plan fee, billed by Stripe to the {org} organization. Your Motir seats are billed separately — manage them on the Motir plan screen.",
-      "seatIncluded": "+ 1 Motir seat · work items uncapped",
+      "seatIncluded": "+ {count, plural, one {# Motir seat} other {# Motir seats}} · work items uncapped",
       "seatNone": "No Motir seat · 250-item cap",
       "seatCustom": "Motir seats included (custom)",
       "customPool": "Custom credit pool",
@@ -6418,6 +6418,14 @@
           "useCase": "Detailed planning, plus heavy agent work.",
           "prev": "Pro",
           "features": ["Headroom for sustained agent work", "Throughput for a busy team"]
+        },
+        "max_x2": {
+          "useCase": "Detailed planning, plus agent work at twice the Max volume.",
+          "prev": "Max",
+          "features": [
+            "Twice the Max monthly credit pool",
+            "Room for several agents running at once"
+          ]
         },
         "enterprise": {
           "useCase": "Custom volume, plus org controls.",

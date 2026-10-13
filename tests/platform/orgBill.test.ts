@@ -20,13 +20,13 @@ function status(
       aiIncludedSeat: false,
     },
     motirAi: {
-      tier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 8000 },
+      tier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 15000 },
       balance: 1200,
       subscription: {
         status: 'active',
         currentPeriodEnd: '2026-10-15T00:00:00.000Z',
         priceId: 'pro_pool_monthly',
-        planTier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 8000 },
+        planTier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 15000 },
       },
     },
     ci: { chargedCredits: 68 } as never,
@@ -46,7 +46,7 @@ describe('buildOrgBill', () => {
         basis: { seats: 48, unitCents: 500, cadence: 'monthly' },
         amountCents: 24_000,
       },
-      { key: 'aiPlan', basis: { credits: 8000, cadence: 'monthly' }, amountCents: 7_500 },
+      { key: 'aiPlan', basis: { credits: 15000, cadence: 'monthly' }, amountCents: 7_500 },
     ]);
     expect(bill.totalCents).toBe(31_500);
     expect(Number.isInteger(bill.totalCents)).toBe(true);
@@ -83,7 +83,7 @@ describe('buildOrgBill', () => {
           aiIncludedSeat: true,
         },
         motirAi: {
-          tier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 8000 },
+          tier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 15000 },
           balance: 0,
           subscription: {
             status: 'active',
@@ -101,7 +101,7 @@ describe('buildOrgBill', () => {
         basis: { seats: 9, unitCents: 4_000, cadence: 'annual' },
         amountCents: 36_000,
       },
-      { key: 'aiPlan', basis: { credits: 8000, cadence: 'annual' }, amountCents: 60_000 },
+      { key: 'aiPlan', basis: { credits: 15000, cadence: 'annual' }, amountCents: 60_000 },
     ]);
   });
 
