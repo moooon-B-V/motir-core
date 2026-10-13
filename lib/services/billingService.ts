@@ -20,6 +20,7 @@ import { isPaidAiSubscriptionStatus } from '@/lib/services/aiPlanGateService';
 import {
   BILLING_CATALOG,
   DEFAULT_CHECKOUT_QUANTITY,
+  INCLUDED_TRACKER_SEATS_PER_AI_PLAN,
   isAllowedCheckoutQuantity,
   isKnownCheckoutPrice,
   type BillingCadence,
@@ -410,7 +411,9 @@ export const billingService = {
     // 8.1.22): net it out of the billed scaled-tracker quantity so the org pays
     // for members BEYOND the included one. Floors at 0 (a 1-member org never bills
     // a seat). An org WITHOUT the AI seat bills every member, as before.
-    const billableSeats = aiIncludedSeat ? Math.max(0, memberCount - 1) : memberCount;
+    const billableSeats = aiIncludedSeat
+      ? Math.max(0, memberCount - INCLUDED_TRACKER_SEATS_PER_AI_PLAN)
+      : memberCount;
 
     return setSeatQuantity({ coreOrganizationId: organizationId, quantity: billableSeats });
   },

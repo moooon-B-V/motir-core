@@ -694,6 +694,52 @@ describe('billingService.syncScaledTrackerSeatQuantity (Subtask 8.1.12)', () => 
     });
   });
 
+  // MOTIR-8403: the included seat is the catalog's count, and the target never
+  // goes below zero however few members the org has.
+  it.each([
+    { label: 'one member with the AI seat bills 0', members: 1, included: true, quantity: 0 },
+    {
+      label: 'no members with the AI seat bills 0, never −1',
+      members: 0,
+      included: true,
+      quantity: 0,
+    },
+    { label: 'three members without the AI seat bill 3', members: 3, included: false, quantity: 3 },
+  ])('$label', async ({ members, included, quantity }) => {
+    const owner = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Solo',
+      ownerUserId: owner.id,
+    });
+    const organizationId = (
+      await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } })
+    ).organizationId;
+    for (let i = 1; i < members; i++) {
+      const u = await createTestUser();
+      await organizationsService.addMember({
+        organizationId,
+        userId: u.id,
+        role: 'member',
+        actorUserId: owner.id,
+      });
+    }
+    if (members === 0) {
+      await adminDb.organizationMembership.deleteMany({ where: { organizationId } });
+    }
+    await billingPropagationService.setScaledTrackerState({
+      organizationId,
+      scaledTrackerSubscription: SCALED,
+    });
+    await billingPropagationService.setAiIncludedSeat({ organizationId, included });
+
+    await billingService.syncScaledTrackerSeatQuantity(organizationId);
+
+    expect(setSeatQuantityMock).toHaveBeenLastCalledWith({
+      coreOrganizationId: organizationId,
+      quantity,
+    });
+  });
+
   it('re-derives the count from truth — rapid adds do not double-count (absolute set)', async () => {
     const { organizationId, owner } = await makeOrgWithRoles(); // 3 members
     await billingPropagationService.setScaledTrackerState({
