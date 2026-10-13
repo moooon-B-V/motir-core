@@ -53,8 +53,9 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //  2. `ai:plan`;
 //  3. plan: `ai:view_plan` + `work_item:edit`; item: `work_item:edit` — the
 //     answers are written back onto the target, so a viewer cannot sharpen;
-//  4. the target is open — a `planned` or `stale` plan; an item neither archived
-//     nor in a `done`-category status — else {@link SharpenTargetClosedError};
+//  4. the target is open — a `generating`, `planned` or `stale` plan (never an
+//     `approved` or `declined` one); an item neither archived nor in a
+//     `done`-category status — else {@link SharpenTargetClosedError};
 //  5. Motir AI is configured.
 //
 // ── STATE IS THE SERVER'S ─────────────────────────────────────────────────────
@@ -79,7 +80,13 @@ type Target =
   | { kind: 'plan'; planId: string; ref: string; state: string }
   | { kind: 'work_item'; workItemId: string; ref: string; state: string };
 
-const OPEN_PLAN_STATUSES = new Set(['planned', 'stale']);
+// A plan is open while an answer may still be written to it. A planning run in
+// its conversation phase is writing its own plan, so that plan is `generating` —
+// and "Grill me" sharpens exactly that plan (MOTIR-8445). This set is the
+// write-back's legal-write set (`EDITABLE_PLAN_STATUSES` in
+// `planSharpeningService.ts`) and must agree with it; the run's PHASE is the
+// control's to judge, not the door's, which cannot see it.
+const OPEN_PLAN_STATUSES = new Set(['generating', 'planned', 'stale']);
 const ENDING_KINDS = new Set(['nothing_to_ask', 'finished', 'stopped']);
 const UNIQUE_VIOLATION = '23505';
 

@@ -195,7 +195,7 @@ describe('open', () => {
     });
   });
 
-  it.each(['generating', 'approved', 'declined'] as const)(
+  it.each(['approved', 'declined'] as const)(
     'refuses a %s plan, writing nothing and submitting nothing',
     async (status) => {
       const planId = await plannedPlan();
@@ -207,6 +207,57 @@ describe('open', () => {
       expect(jobs.submitted).toHaveLength(0);
     },
   );
+
+  // Task MOTIR-1101 · Subtask MOTIR-8445 — the conversation phase's own run plan
+  // is `generating` with no `add` proposals yet, and "Grill me" sharpens it.
+  it('opens on a generating plan with no proposals — the conversation phase’s own plan', async () => {
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Being planned', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: plan.id } })).status).toBe(
+      'generating',
+    );
+    const opened = await aiSharpenService.open({ planId: plan.id }, pctx);
+
+    expect(opened.outcome).toBe('sharpening');
+    expect(await sessionCount()).toBe(1);
+    expect(opened.session.turns).toHaveLength(1);
+    expect(opened.session.turns[0]).toMatchObject({ role: 'person', action: 'start' });
+    expect(jobs.submitted).toHaveLength(1);
+    expect(jobs.submitted[0]!.kind).toBe('sharpen_turn');
+    expect(jobs.submitted[0]!.context.sharpen).toMatchObject({
+      scope: { kind: 'plan', ref: plan.id },
+    });
+  });
+
+  it('keeps a generating plan’s session open mid-conversation: resume, answer and stop', async () => {
+    const { planId, sessionId } = await openWithQuestion();
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'generating' } });
+
+    expect((await aiSharpenService.getOpenFor({ planId }, pctx))?.id).toBe(sessionId);
+    const acted = await aiSharpenService.act(sessionId, 'answer', { readingId: 'a' }, pctx);
+    expect(acted.jobId).toBeTruthy();
+    expect(jobs.submitted).toHaveLength(2);
+
+    succeed(acted.jobId!, questionTurn({ ...QUESTION, id: 'q2' }, SETTLED));
+    await aiSharpenService.settle(sessionId, acted.jobId!, pctx);
+    await expect(aiSharpenService.act(sessionId, 'stop', {}, pctx)).resolves.toBeTruthy();
+  });
+
+  it('admits a status, not a person — a viewer is still refused on a generating plan', async () => {
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Being planned', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    await expect(
+      aiSharpenService.open({ planId: plan.id }, await colleague('viewer')),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(await sessionCount()).toBe(0);
+    expect(jobs.submitted).toHaveLength(0);
+  });
 
   it('accepts a stale plan', async () => {
     const planId = await plannedPlan();
