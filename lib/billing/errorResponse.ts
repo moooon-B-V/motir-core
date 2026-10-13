@@ -3,6 +3,7 @@ import { OrganizationClosingError, OrganizationNotFoundError } from '@/lib/organ
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import {
   BillingForbiddenError,
+  BillingPlanChangeRefusedError,
   BillingNotAvailableError,
   EnterpriseRequestOpenError,
   EnterpriseRequestValidationError,
@@ -36,6 +37,15 @@ export function mapBillingError(err: unknown): NextResponse | null {
   }
   if (err instanceof InvalidBillingQuantityError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  if (err instanceof BillingPlanChangeRefusedError) {
+    // A refused change of AI plan (MOTIR-8399): the dialog keeps its figures and
+    // switches on `reason`. A declined card is 402; a closing org is 409.
+    const status = err.reason === 'payment_failed' ? 402 : err.reason === 'org_closing' ? 409 : 400;
+    return NextResponse.json(
+      { code: err.code, reason: err.reason, error: err.message },
+      { status },
+    );
   }
   if (err instanceof EntitlementExceededError) {
     // §4 cap hit (8.1.11) → 402 Payment Required + the upgrade-prompt payload

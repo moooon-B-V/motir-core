@@ -18,6 +18,9 @@
 //   - POST /v1/stripe/checkout-session → a synthetic hosted Checkout URL
 //   - POST /v1/stripe/portal-session   → a synthetic hosted Portal URL
 //   - POST /v1/stripe/seat-quantity    → an applied seat-sync result
+//   - GET  /v1/stripe/pending-plan-change, POST /v1/stripe/{upgrade,downgrade}[/preview]
+//     → the plan change (Story MOTIR-8387 · MOTIR-8401): the figures are the
+//     fixture's `planChange` literals; the direction refusals follow the catalog
 //   - POST /v1/credits/ci-overage      → a CI overage debit that LOWERS the org's
 //     fixture balance (Story MOTIR-6906 · MOTIR-6913 — so a live CI tick can
 //     drive an org to zero the way the real ledger does)
@@ -44,7 +47,13 @@
 
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
-import type { RawBillingHistoryResponse } from '@/lib/ai/types';
+import type {
+  RawBillingHistoryResponse,
+  RawDowngradePreview,
+  RawPendingDowngrade,
+  RawUpgradePreview,
+} from '@/lib/ai/types';
+import { BILLING_CATALOG } from '@/lib/billing/catalog';
 
 /** The synthetic hosted-session URLs the boundary returns (the spec's `page.route`
  *  fulfils the browser navigation to them — nothing leaves localhost). */
@@ -161,6 +170,22 @@ export interface BillingFixtureEntry {
    * a charge the app server makes is the figure the billing page reads next.
    */
   agents?: { machine: number; storage: number; keys?: string[] };
+  /**
+   * A plan change (Story MOTIR-8387 · MOTIR-8401). The boundary computes NO
+   * figure: each preview is the literal the spec wrote, keyed by the target plan,
+   * so a spec asserts exactly what it supplied. `pendingDowngrade` is what the
+   * pending read and both previews report, and `refuse` makes the NEXT confirm of
+   * that kind answer the given motir-ai code (`payment_failed`, `second_plan`,
+   * `preview_expired`, …) — a spec clears it to let the following confirm through.
+   * Neither confirm writes the fixture: the spec rewrites it as the paid invoice
+   * or the created schedule would, exactly as the checkout journeys do.
+   */
+  planChange?: {
+    pendingDowngrade?: RawPendingDowngrade | null;
+    upgradePreview?: Record<string, RawUpgradePreview>;
+    downgradePreview?: Record<string, RawDowngradePreview>;
+    refuse?: { upgrade?: string; downgrade?: string };
+  };
 }
 
 /** The fixture file shape: `coreOrganizationId` → its motir-ai billing state. */
@@ -491,5 +516,165 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
   pool
     .intercept({ path: orgRoute('purge-retained'), method: 'POST' })
     .reply(200, { purged: true }, json)
+    .persist();
+
+  installPlanChangeMock(pool);
+}
+
+/** The catalog's monthly pool for a plan key — the ladder the direction checks read. */
+function poolOf(planKey: string | null | undefined): number | null {
+  const plan = BILLING_CATALOG.aiPlans.find((p) => p.key === planKey);
+  return plan?.allotment?.credits ?? null;
+}
+
+function planRefusal(code: string, detail: string) {
+  const conflict = code === 'org_closing';
+  return {
+    statusCode: conflict ? 409 : 400,
+    data: {
+      type: 'about:blank',
+      code: conflict ? 'conflict' : 'validation_error',
+      title: conflict ? 'Conflict' : 'Validation error',
+      status: conflict ? 409 : 400,
+      detail: `${code}: ${detail} (E2E fixture)`,
+    },
+    responseOptions: problemJson,
+  };
+}
+
+/**
+ * Why motir-ai would refuse this change before pricing it, or null: no live plan,
+ * the same plan, or the wrong direction for the route — read off the catalog's
+ * pools, as motir-ai reads its own ladder.
+ */
+function directionRefusal(
+  e: BillingFixtureEntry,
+  toPlanKey: string,
+  kind: 'upgrade' | 'downgrade',
+): ReturnType<typeof planRefusal> | null {
+  if (!e.subscription.status || !e.tier) return planRefusal('no_live_plan', 'no live plan');
+  if (e.tier.key === toPlanKey) return planRefusal('same_plan', `already on ${toPlanKey}`);
+  const from = poolOf(e.tier.key) ?? 0;
+  const to = poolOf(toPlanKey) ?? 0;
+  if (kind === 'upgrade' && to <= from) return planRefusal('not_an_upgrade', toPlanKey);
+  if (kind === 'downgrade' && to >= from) return planRefusal('not_a_downgrade', toPlanKey);
+  return null;
+}
+
+function readPlanChangeBody(req: { body?: unknown }) {
+  const body = JSON.parse(String(req.body ?? '{}')) as {
+    coreOrganizationId?: string;
+    toPlanKey?: string;
+  };
+  return { orgId: body.coreOrganizationId ?? null, toPlanKey: body.toPlanKey ?? '' };
+}
+
+/** A preview the fixture does not supply is a failure, never an invented figure. */
+const NO_PREVIEW = {
+  statusCode: 500,
+  data: {
+    type: 'about:blank',
+    code: 'internal_error',
+    title: 'Internal error',
+    status: 500,
+    detail: 'no preview in the billing fixture for this plan (E2E fixture)',
+  },
+  responseOptions: problemJson,
+};
+
+function installPlanChangeMock(pool: ReturnType<MockAgent['get']>): void {
+  pool
+    .intercept({ path: (p) => p.startsWith('/v1/stripe/pending-plan-change'), method: 'GET' })
+    .reply((req) => ({
+      statusCode: 200,
+      data: {
+        pendingDowngrade: entryFor(queryOrgId(req.path)).planChange?.pendingDowngrade ?? null,
+      },
+      responseOptions: json,
+    }))
+    .persist();
+
+  pool
+    .intercept({ path: '/v1/stripe/upgrade/preview', method: 'POST' })
+    .reply<object>((req) => {
+      const { orgId, toPlanKey } = readPlanChangeBody(req);
+      const e = entryFor(orgId);
+      const refused = directionRefusal(e, toPlanKey, 'upgrade');
+      if (refused) return refused;
+      const preview = e.planChange?.upgradePreview?.[toPlanKey];
+      return preview ? { statusCode: 200, data: preview, responseOptions: json } : NO_PREVIEW;
+    })
+    .persist();
+
+  pool
+    .intercept({ path: '/v1/stripe/upgrade', method: 'POST' })
+    .reply<object>((req) => {
+      const { orgId, toPlanKey } = readPlanChangeBody(req);
+      const e = entryFor(orgId);
+      const refused = directionRefusal(e, toPlanKey, 'upgrade');
+      if (refused) return refused;
+      const code = e.planChange?.refuse?.upgrade;
+      if (code) return planRefusal(code, 'refused by the billing fixture');
+      const preview = e.planChange?.upgradePreview?.[toPlanKey];
+      if (!preview) return NO_PREVIEW;
+      return {
+        statusCode: 200,
+        data: {
+          status: 'upgraded',
+          fromPlan: preview.fromPlan,
+          toPlan: preview.toPlan,
+          invoiceId: 'in_e2e_upgrade',
+          amountDueCents: preview.amountDueCents,
+          currency: preview.currency,
+          extraCredits: preview.extraCredits,
+          extraIndexAllowance: preview.extraIndexAllowance,
+          clearedPending: e.planChange?.pendingDowngrade ?? null,
+        },
+        responseOptions: json,
+      };
+    })
+    .persist();
+
+  pool
+    .intercept({ path: '/v1/stripe/downgrade/preview', method: 'POST' })
+    .reply<object>((req) => {
+      const { orgId, toPlanKey } = readPlanChangeBody(req);
+      const e = entryFor(orgId);
+      const refused = directionRefusal(e, toPlanKey, 'downgrade');
+      if (refused) return refused;
+      const preview = e.planChange?.downgradePreview?.[toPlanKey];
+      if (!preview) return NO_PREVIEW;
+      return {
+        statusCode: 200,
+        data: { ...preview, pendingDowngrade: e.planChange?.pendingDowngrade ?? null },
+        responseOptions: json,
+      };
+    })
+    .persist();
+
+  pool
+    .intercept({ path: '/v1/stripe/downgrade', method: 'POST' })
+    .reply<object>((req) => {
+      const { orgId, toPlanKey } = readPlanChangeBody(req);
+      const e = entryFor(orgId);
+      const refused = directionRefusal(e, toPlanKey, 'downgrade');
+      if (refused) return refused;
+      const code = e.planChange?.refuse?.downgrade;
+      if (code) return planRefusal(code, 'refused by the billing fixture');
+      const preview = e.planChange?.downgradePreview?.[toPlanKey];
+      if (!preview) return NO_PREVIEW;
+      const pending = e.planChange?.pendingDowngrade ?? null;
+      return {
+        statusCode: 200,
+        data: {
+          status: 'scheduled',
+          fromPlan: preview.fromPlan,
+          toPlan: preview.toPlan,
+          effectiveDate: preview.effectiveDate,
+          replacedPending: pending && pending.planKey !== toPlanKey ? pending : null,
+        },
+        responseOptions: json,
+      };
+    })
     .persist();
 }
