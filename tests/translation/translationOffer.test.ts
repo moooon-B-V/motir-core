@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import type { Locale } from '@/lib/i18n/locales';
+import { hashFieldText } from '@/lib/translation/fieldRevision';
 import {
   workItemTranslationReadService,
   type TranslationOfferDeps,
@@ -74,7 +75,7 @@ describe('getTranslationOffer', () => {
     const result = await offer(item('zh'), 'de', d, [todo('t1', '做这一步', 'zh')]);
     expect(result.targetLanguage).toBe('de');
     expect(result.anyNeedsTranslation).toBe(true);
-    expect(result.fields).toEqual({
+    expect(result.fields).toMatchObject({
       title: { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
       description: { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
       explanation: { needsTranslation: false, kept: false, sourceLanguage: null },
@@ -116,7 +117,7 @@ describe('getTranslationOffer', () => {
     );
     expect(result.anyNeedsTranslation).toBe(true);
     expect(result.fields.title!.needsTranslation).toBe(false);
-    expect(result.fields.description).toEqual({
+    expect(result.fields.description).toMatchObject({
       needsTranslation: true,
       kept: false,
       sourceLanguage: 'de',
@@ -134,12 +135,12 @@ describe('getTranslationOffer', () => {
       deps(),
     );
     expect(detect.calls).toContain('Xq zz');
-    expect(result.fields.title).toEqual({
+    expect(result.fields.title).toMatchObject({
       needsTranslation: true,
       kept: false,
       sourceLanguage: null,
     });
-    expect(result.fields.description).toEqual({
+    expect(result.fields.description).toMatchObject({
       needsTranslation: true,
       kept: false,
       sourceLanguage: 'de',
@@ -198,5 +199,26 @@ describe('getReaderTranslation', () => {
       canManageBilling: async () => false,
     });
     expect(result.canAddCredits).toBe(false);
+  });
+});
+
+// MOTIR-8123: each field carries its CURRENT revision — the store's own hash of
+// its text, never the text — and an edit moves it for that field alone.
+describe('getTranslationOffer — revision', () => {
+  it('is hashFieldText of each field’s current text, and moves only for the edited field', async () => {
+    const a = await offer(item('zh'), 'en', deps(), [todo('t1', '做这一步', 'zh')]);
+    expect(a.fields.title!.revision).toBe(hashFieldText('构建导出功能'));
+    expect(a.fields.description!.revision).toBe(hashFieldText('这是描述'));
+    expect(a.fields.explanation!.revision).toBe(hashFieldText(''));
+    expect(a.fields['todo:t1:text']!.revision).toBe(hashFieldText('做这一步'));
+    expect(JSON.stringify(a)).not.toContain('这是描述');
+
+    const b = await offer(item('zh', { descriptionMd: '这是描述!' }), 'en', deps(), [
+      todo('t1', '做这一步', 'zh'),
+    ]);
+    for (const ref of Object.keys(a.fields)) {
+      if (ref === 'description') expect(b.fields[ref]!.revision).not.toBe(a.fields[ref]!.revision);
+      else expect(b.fields[ref]!.revision, ref).toBe(a.fields[ref]!.revision);
+    }
   });
 });

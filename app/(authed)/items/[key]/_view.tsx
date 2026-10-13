@@ -945,7 +945,7 @@ export default async function ItemView({
   // with no provider and no control. The tree above is bound to `page` so the
   // wrap does not re-indent four hundred lines.
   return readerTranslation ? (
-    <TranslationProvider itemId={item.id} translation={readerTranslation}>
+    <TranslationProvider itemId={item.id} translation={readerTranslation} liveRefresh>
       {page}
     </TranslationProvider>
   ) : (

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -12,15 +13,18 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import type { Locale } from '@/lib/i18n/locales';
 import type { ReaderTranslationDTO, TranslationOfferDTO } from '@/lib/dto/workItemTranslation';
 import {
   barPhase,
   initialTranslationState,
+  revisionsToSend,
   translationReducer,
   type BarPhase,
   type FieldTranslationState,
   type RawFieldResult,
+  type SentRevisions,
   type TranslationState,
   type TranslationView,
 } from './translationReducer';
@@ -38,6 +42,14 @@ import {
 //
 // The view mode lives here and nowhere else — no cookie, no database — so a
 // reload opens on the original and the Translate control (design D2).
+//
+// AN EDIT (MOTIR-8123). A new `translation` prop — the server's recomputed
+// offer — is folded in with `applyOffer`; a field whose revision changed is
+// re-requested ONCE, quietly (the bar stays as it is, design panel 10), and
+// announced only when its new translation lands (D5). The item page reaches a
+// new offer through `router.refresh()`: on any of the page's own refreshes, and,
+// while the translated view is open, when the tab is shown again and once a
+// minute (`liveRefresh`). Nothing pushes from the server.
 
 interface TranslationContextValue {
   offer: TranslationOfferDTO;
@@ -100,24 +112,46 @@ function settledLine(
   return phase.kind === 'translated' ? t('liveTranslated', { language }) : '';
 }
 
-/** The press / retry / toggle actions, each announcing once in the live region. */
+type Dispatch = (a: Parameters<typeof translationReducer>[1]) => void;
+
+/** The fields a quiet answer translates again: sent, still current, edited, now ready. */
+function editedNowReady(
+  state: TranslationState,
+  sent: SentRevisions,
+  results: readonly RawFieldResult[],
+): string[] {
+  return results
+    .filter((r) => typeof r.fieldRef === 'string' && r.status === 'ready')
+    .map((r) => r.fieldRef as string)
+    .filter((ref) => ref in sent && state.fields[ref]?.revision === sent[ref])
+    .filter((ref) => state.fields[ref]!.edited);
+}
+
+/**
+ * The press / retry / toggle actions, each announcing once in the live region.
+ * Every request carries the revisions it was sent for, and its answer is
+ * applied only to fields still at them — so overlapping requests need no
+ * sequence guard, and an answer for older text is discarded field by field.
+ */
 function useTranslationActions(
   itemId: string,
-  dispatch: (a: Parameters<typeof translationReducer>[1]) => void,
+  stateRef: { readonly current: TranslationState },
+  dispatch: Dispatch,
   announce: (line: string) => void,
-  lines: { translating: string; showingOriginal: string; translated: string },
+  lines: TranslationLines,
 ) {
-  const seq = useRef(0);
   const run = useCallback(
-    async (only?: readonly string[]) => {
-      const mine = ++seq.current;
-      dispatch({ type: 'start', only });
-      announce(lines.translating);
+    async (only?: readonly string[], quiet?: boolean) => {
+      const sent = revisionsToSend(stateRef.current, only);
+      dispatch({ type: 'start', sent, quiet });
+      if (!quiet) announce(lines.translating);
       const results = await postTranslate(itemId);
-      if (mine !== seq.current) return;
-      dispatch(results ? { type: 'apply', results } : { type: 'requestFailed' });
+      if (!results) return dispatch({ type: 'requestFailed', sent, quiet });
+      const edited = quiet ? editedNowReady(stateRef.current, sent, results) : [];
+      dispatch({ type: 'apply', results, sent, quiet });
+      if (edited.length > 0) announce(edited.map(lines.edited).join(' '));
     },
-    [itemId, dispatch, announce, lines.translating],
+    [itemId, stateRef, dispatch, announce, lines],
   );
   const setView = useCallback(
     (view: TranslationView) => {
@@ -129,31 +163,134 @@ function useTranslationActions(
   return { run, setView };
 }
 
+/** The live region's lines, in the reader's interface language. */
+function useLiveLines(t: ReturnType<typeof useTranslations>, languageName: string) {
+  return useMemo<TranslationLines>(
+    () => ({
+      translating: t('liveTranslating', { language: languageName }),
+      showingOriginal: t('liveShowingOriginal'),
+      translated: t('liveTranslated', { language: languageName }),
+      edited: (ref) => t('liveEdited', { field: t(FIELD_NAME_KEY[fieldKindOf(ref)]) }),
+    }),
+    [t, languageName],
+  );
+}
+
+interface TranslationLines {
+  translating: string;
+  showingOriginal: string;
+  translated: string;
+  edited: (fieldRef: string) => string;
+}
+
+/** Which of the five field kinds a fieldRef names — for the edited announcement. */
+export function fieldKindOf(
+  fieldRef: string,
+): 'title' | 'description' | 'explanation' | 'todo' | 'instructions' {
+  if (fieldRef.startsWith('todo:')) return fieldRef.endsWith(':notes') ? 'instructions' : 'todo';
+  if (fieldRef === 'title' || fieldRef === 'description') return fieldRef;
+  return 'explanation';
+}
+
+const FIELD_NAME_KEY = {
+  title: 'fieldTitle',
+  description: 'fieldDescription',
+  explanation: 'fieldExplanation',
+  todo: 'fieldTodo',
+  instructions: 'fieldInstructions',
+} as const;
+
+/**
+ * Fold each new offer in, and re-request every field an edit queued — ONCE per
+ * (field, revision), even when the same offer arrives twice or an effect runs
+ * twice.
+ */
+function useStaleFields(
+  offer: TranslationOfferDTO,
+  state: TranslationState,
+  dispatch: Dispatch,
+  run: (only?: readonly string[], quiet?: boolean) => Promise<void>,
+) {
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    dispatch({ type: 'offer', offer });
+  }, [offer, dispatch]);
+  const requested = useRef(new Set<string>());
+  useEffect(() => {
+    if (state.queue.length === 0) return;
+    const refs = state.queue.filter((ref) => {
+      const key = `${ref}@${state.fields[ref]!.revision}`;
+      if (requested.current.has(key)) return false;
+      requested.current.add(key);
+      return true;
+    });
+    dispatch({ type: 'dequeue', refs: state.queue });
+    if (refs.length > 0) void run(refs, true);
+  }, [state.queue, state.fields, dispatch, run]);
+}
+
+/** How often the open translated view asks the page for a fresh offer. */
+export const TRANSLATION_REFRESH_MS = 60_000;
+
+/**
+ * The item page's way to SEE an edit (MOTIR-8123): while the translated view is
+ * open, re-read the page when the tab is shown again and once a minute. The page
+ * has no live channel, and this adds none — `router.refresh()` re-runs the page
+ * read, whose new offer reaches the provider as a prop.
+ */
+function LiveOfferRefresh() {
+  const router = useRouter();
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') router.refresh();
+    };
+    document.addEventListener('visibilitychange', refresh);
+    const timer = setInterval(refresh, TRANSLATION_REFRESH_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      clearInterval(timer);
+    };
+  }, [router]);
+  return null;
+}
+
 export function TranslationProvider({
   itemId,
   translation,
   fields,
+  liveRefresh = false,
   children,
 }: {
   itemId: string;
   translation: ReaderTranslationDTO;
   /** The fields this host draws (the quick view: title and description). Default: all. */
   fields?: readonly string[];
+  /** Re-read the page for a fresh offer while the translated view is open (the item page). */
+  liveRefresh?: boolean;
   children: ReactNode;
 }) {
   const { offer, canAddCredits } = translation;
   const t = useTranslations('itemTranslation');
   const uiLocale = useLocale();
   const [state, dispatch] = useReducer(translationReducer, offer, initialTranslationState);
+  const stateRef = useLatest(state);
   const [announcement, setAnnouncement] = useState('');
   const scope = useMemo(() => scopeOf(offer, fields), [offer, fields]);
   const phase = barPhase(state, scope);
   const languageName = languageDisplayName(offer.targetLanguage, uiLocale);
-  const { run, setView } = useTranslationActions(itemId, dispatch, setAnnouncement, {
-    translating: t('liveTranslating', { language: languageName }),
-    showingOriginal: t('liveShowingOriginal'),
-    translated: t('liveTranslated', { language: languageName }),
-  });
+  const lines = useLiveLines(t, languageName);
+  const { run, setView } = useTranslationActions(
+    itemId,
+    stateRef,
+    dispatch,
+    setAnnouncement,
+    lines,
+  );
+  useStaleFields(offer, state, dispatch, run);
   useSettledAnnouncement(state.busy, phase, setAnnouncement, t, languageName);
 
   const value = useMemo<TranslationContextValue>(
@@ -164,10 +301,7 @@ export function TranslationProvider({
       state,
       phase,
       languageName,
-      sourceName: (ref) => {
-        const code = offer.fields[ref]?.sourceLanguage as Locale | null | undefined;
-        return code ? languageDisplayName(code, uiLocale) : null;
-      },
+      sourceName: (ref) => sourceNameOf(offer, ref, uiLocale),
       translate: () => void run(),
       retryField: (ref) => void run([ref]),
       setView,
@@ -177,11 +311,27 @@ export function TranslationProvider({
   return (
     <TranslationContext.Provider value={value}>
       {children}
+      {liveRefresh && state.pressed && state.view === 'translated' ? <LiveOfferRefresh /> : null}
       <span role="status" aria-live="polite" className="sr-only" data-translation-live>
         {announcement}
       </span>
     </TranslationContext.Provider>
   );
+}
+
+/** The latest state for the actions, which read it when they send and answer. */
+function useLatest<T>(value: T): { readonly current: T } {
+  const ref = useRef(value);
+  useLayoutEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref;
+}
+
+/** A field's source language's name in the UI locale, or `null` when unknown. */
+function sourceNameOf(offer: TranslationOfferDTO, ref: string, uiLocale: string): string | null {
+  const code = offer.fields[ref]?.sourceLanguage as Locale | null | undefined;
+  return code ? languageDisplayName(code, uiLocale) : null;
 }
 
 /** Announce the outcome ONCE when a request settles — per press, never per field. */
@@ -204,7 +354,7 @@ export function useTranslationContext(): TranslationContextValue | null {
   return useContext(TranslationContext);
 }
 
-export type FieldMarkKind = 'translating' | 'translated' | 'failed' | null;
+export type FieldMarkKind = 'translating' | 'edited' | 'translated' | 'failed' | null;
 
 export interface FieldTranslation {
   /** The text to render instead of the stored one, or `null` for the stored one. */
@@ -228,8 +378,10 @@ export function useFieldTranslation(fieldRef: string | null): FieldTranslation {
   if (!ctx || !fieldRef || !ctx.scope.includes(fieldRef)) return NONE;
   const entry = ctx.state.fields[fieldRef];
   if (!entry) return NONE;
-  if (entry.state === 'pending')
-    return { text: null, state: 'pending', translated: false, mark: 'translating' };
+  if (entry.state === 'pending') {
+    const mark = entry.edited ? 'edited' : 'translating';
+    return { text: null, state: 'pending', translated: false, mark };
+  }
   const showing = ctx.state.view === 'translated';
   if (entry.state === 'ready' && showing) {
     return { text: entry.text, state: 'ready', translated: true, mark: 'translated' };

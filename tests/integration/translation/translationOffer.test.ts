@@ -11,6 +11,7 @@ import { workItemTranslationReadService } from '@/lib/services/workItemTranslati
 import { assembleFields } from '@/lib/services/workItemTranslationService';
 import { workItemTranslationStoreService } from '@/lib/services/workItemTranslationStoreService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { hashFieldText } from '@/lib/translation/fieldRevision';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -90,7 +91,12 @@ describe('the offer reads the current text', () => {
 
     await keepEverything(item.id, caller.ctx);
     const kept = await offerFor(item.id, caller.ctx);
-    expect(kept.fields.title).toEqual({ needsTranslation: true, kept: true, sourceLanguage: 'de' });
+    expect(kept.fields.title).toEqual({
+      needsTranslation: true,
+      kept: true,
+      sourceLanguage: 'de',
+      revision: hashFieldText(TITLE),
+    });
     expect(kept.fields.description!.kept).toBe(true);
 
     await adminDb.workItem.update({ where: { id: item.id }, data: { title: `${TITLE}!` } });
@@ -99,8 +105,14 @@ describe('the offer reads the current text', () => {
       needsTranslation: true,
       kept: false,
       sourceLanguage: 'de',
+      revision: hashFieldText(`${TITLE}!`),
     });
     expect(edited.fields.description!.kept).toBe(true);
+    // The revision (MOTIR-8123) moved for the edited field ONLY.
+    for (const [ref, f] of Object.entries(edited.fields)) {
+      if (ref === 'title') expect(f.revision).not.toBe(kept.fields.title!.revision);
+      else expect(f.revision, ref).toBe(kept.fields[ref]!.revision);
+    }
   });
 });
 

@@ -655,9 +655,19 @@ describe('IssueQuickViewPanel — translation', () => {
         targetLanguage: 'en',
         anyNeedsTranslation: true,
         fields: {
-          title: { needsTranslation: true, kept: false, sourceLanguage: 'de' },
-          description: { needsTranslation: true, kept: false, sourceLanguage: 'de' },
-          explanation: { needsTranslation: true, kept: false, sourceLanguage: 'de' },
+          title: { needsTranslation: true, kept: false, sourceLanguage: 'de', revision: 'r0' },
+          description: {
+            needsTranslation: true,
+            kept: false,
+            sourceLanguage: 'de',
+            revision: 'r0',
+          },
+          explanation: {
+            needsTranslation: true,
+            kept: false,
+            sourceLanguage: 'de',
+            revision: 'r0',
+          },
         },
       },
     },

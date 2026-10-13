@@ -211,7 +211,7 @@ vi.mock('@/lib/services/workItemTodosService', () => ({
 const TRANSLATION_OFFER = {
   targetLanguage: 'en',
   anyNeedsTranslation: true,
-  fields: { title: { needsTranslation: true, kept: false, sourceLanguage: 'de' } },
+  fields: { title: { needsTranslation: true, kept: false, sourceLanguage: 'de', revision: 'r0' } },
 };
 const READER_TRANSLATION = { offer: TRANSLATION_OFFER, canAddCredits: false };
 const getReaderTranslation = vi.fn(async (_input: unknown) => {

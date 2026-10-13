@@ -21,6 +21,12 @@ export interface TranslationOfferFieldDTO {
    * the mark's "Translated from {language}" names.
    */
   sourceLanguage: Locale | null;
+  /**
+   * The field's CURRENT revision — `hashFieldText` over its stored text, a hash
+   * only, never the text (MOTIR-8123). An open translated view compares it with
+   * the revision it translated, so an edit re-translates that one field.
+   */
+  revision: string;
 }
 
 /** What the item page knows before any press: whether to offer Translate, and per field. */

@@ -23,9 +23,9 @@ const OFFER: TranslationOfferDTO = {
   targetLanguage: 'en',
   anyNeedsTranslation: true,
   fields: {
-    title: { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
-    description: { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
-    explanation: { needsTranslation: false, kept: false, sourceLanguage: 'en' },
+    title: { needsTranslation: true, kept: false, sourceLanguage: 'zh', revision: 'r0' },
+    description: { needsTranslation: true, kept: false, sourceLanguage: 'zh', revision: 'r0' },
+    explanation: { needsTranslation: false, kept: false, sourceLanguage: 'en', revision: 'r0' },
   },
 };
 
@@ -287,7 +287,9 @@ describe('what is offered', () => {
     const none: TranslationOfferDTO = {
       targetLanguage: 'en',
       anyNeedsTranslation: false,
-      fields: { title: { needsTranslation: false, kept: false, sourceLanguage: 'en' } },
+      fields: {
+        title: { needsTranslation: false, kept: false, sourceLanguage: 'en', revision: 'r0' },
+      },
     };
     render(<Harness translation={{ offer: none, canAddCredits: false }} />);
     expect(screen.queryByRole('group', { name: 'Translation' })).toBeNull();
@@ -311,7 +313,7 @@ describe('what is offered', () => {
       ...OFFER,
       fields: {
         ...OFFER.fields,
-        explanation: { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
+        explanation: { needsTranslation: true, kept: false, sourceLanguage: 'zh', revision: 'r0' },
       },
     };
     fetchMock.mockResolvedValue(

@@ -83,12 +83,14 @@ export function FieldTranslationMark({
   const prefix = (
     <span className="sr-only">{t('markPrefix', { field: t(FIELD_LABEL[field]) })}</span>
   );
-  if (mark === 'translating') {
+  if (mark === 'translating' || mark === 'edited') {
+    // An edit that reached the open translated view reads "Edited · translating…"
+    // (design panel 10, MOTIR-8123); a press reads "Translating…".
     return (
-      <Pill tone="neutral" data-translation-mark="loading">
+      <Pill tone="neutral" data-translation-mark={mark === 'edited' ? 'edited' : 'loading'}>
         <Spinner size="sm" aria-hidden className="h-3 w-3 border-[1.5px]" />
         {prefix}
-        {t('markTranslating')}
+        {mark === 'edited' ? t('markEdited') : t('markTranslating')}
       </Pill>
     );
   }

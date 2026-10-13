@@ -49,9 +49,9 @@ const OFFER: TranslationOfferDTO = {
   targetLanguage: 'en',
   anyNeedsTranslation: true,
   fields: {
-    'todo:t1:text': { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
-    'todo:t1:notes': { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
-    'todo:t2:text': { needsTranslation: false, kept: false, sourceLanguage: 'en' },
+    'todo:t1:text': { needsTranslation: true, kept: false, sourceLanguage: 'zh', revision: 'r0' },
+    'todo:t1:notes': { needsTranslation: true, kept: false, sourceLanguage: 'zh', revision: 'r0' },
+    'todo:t2:text': { needsTranslation: false, kept: false, sourceLanguage: 'en', revision: 'r0' },
   },
 };
 

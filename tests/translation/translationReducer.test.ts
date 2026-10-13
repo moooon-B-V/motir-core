@@ -3,6 +3,7 @@ import type { TranslationOfferDTO } from '@/lib/dto/workItemTranslation';
 import {
   barPhase,
   initialTranslationState,
+  revisionsToSend,
   translationReducer,
   type TranslationState,
 } from '@/app/(authed)/items/[key]/_components/translation/translationReducer';
@@ -14,18 +15,24 @@ const offer: TranslationOfferDTO = {
   targetLanguage: 'en',
   anyNeedsTranslation: true,
   fields: {
-    title: { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
-    description: { needsTranslation: true, kept: true, sourceLanguage: 'zh' },
-    explanation: { needsTranslation: false, kept: false, sourceLanguage: null },
-    'todo:t1:text': { needsTranslation: true, kept: false, sourceLanguage: 'zh' },
+    title: { needsTranslation: true, kept: false, sourceLanguage: 'zh', revision: 'r0' },
+    description: { needsTranslation: true, kept: true, sourceLanguage: 'zh', revision: 'r0' },
+    explanation: { needsTranslation: false, kept: false, sourceLanguage: null, revision: 'r0' },
+    'todo:t1:text': { needsTranslation: true, kept: false, sourceLanguage: 'zh', revision: 'r0' },
   },
 };
 const ALL = ['title', 'description', 'explanation', 'todo:t1:text'];
 
 const press = (s: TranslationState, only?: string[]) =>
-  translationReducer(s, { type: 'start', only });
+  translationReducer(s, { type: 'start', sent: revisionsToSend(s, only) });
+/** The revisions of the fields a request in flight was sent for: the pending ones. */
+const inFlight = (s: TranslationState) =>
+  revisionsToSend(
+    s,
+    Object.keys(s.fields).filter((ref) => s.fields[ref]!.state === 'pending'),
+  );
 const answer = (s: TranslationState, results: unknown[]) =>
-  translationReducer(s, { type: 'apply', results: results as never });
+  translationReducer(s, { type: 'apply', results: results as never, sent: inFlight(s) });
 
 describe('initialTranslationState', () => {
   it('holds an idle entry for each differing field only', () => {
@@ -50,8 +57,8 @@ describe('a press and its answer', () => {
       { fieldRef: 'description', status: 'timeout' },
       { fieldRef: 'todo:t1:text', status: 'failed' },
     ]);
-    expect(s.fields.title).toEqual({ state: 'ready', text: 'Title EN' });
-    expect(s.fields.description).toEqual({ state: 'timeout', text: null });
+    expect(s.fields.title).toMatchObject({ state: 'ready', text: 'Title EN' });
+    expect(s.fields.description).toMatchObject({ state: 'timeout', text: null });
     expect(s.fields['todo:t1:text']!.state).toBe('failed');
     expect(barPhase(s, ALL)).toEqual({ kind: 'translated', failedCount: 2 });
   });
@@ -86,7 +93,10 @@ describe('a press and its answer', () => {
   });
 
   it('a failed request fails every pending field', () => {
-    const s = translationReducer(press(initialTranslationState(offer)), { type: 'requestFailed' });
+    const s = translationReducer(press(initialTranslationState(offer)), {
+      type: 'requestFailed',
+      sent: inFlight(press(initialTranslationState(offer))),
+    });
     expect(Object.values(s.fields).map((f) => f.state)).toEqual(['failed', 'failed', 'failed']);
     expect(s.busy).toBe(false);
     expect(barPhase(s, ALL)).toEqual({ kind: 'failed' });
@@ -104,15 +114,15 @@ describe('retry and the toggle', () => {
   it('a field retry re-marks only that field; the translated ones keep their text', () => {
     const s = press(partly(), ['description']);
     expect(s.fields.description!.state).toBe('pending');
-    expect(s.fields.title).toEqual({ state: 'ready', text: 'Title EN' });
+    expect(s.fields.title).toMatchObject({ state: 'ready', text: 'Title EN' });
     const done = answer(s, [
       { fieldRef: 'title', status: 'failed' },
       { fieldRef: 'description', status: 'ready', text: 'Desc EN' },
       { fieldRef: 'todo:t1:text', status: 'ready', text: 'Step EN' },
     ]);
     // A later failure for a field that already succeeded does not take it away.
-    expect(done.fields.title).toEqual({ state: 'ready', text: 'Title EN' });
-    expect(done.fields.description).toEqual({ state: 'ready', text: 'Desc EN' });
+    expect(done.fields.title).toMatchObject({ state: 'ready', text: 'Title EN' });
+    expect(done.fields.description).toMatchObject({ state: 'ready', text: 'Desc EN' });
     expect(barPhase(done, ALL)).toEqual({ kind: 'translated', failedCount: 0 });
   });
 

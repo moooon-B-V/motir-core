@@ -7,6 +7,7 @@ import type {
 } from '@/lib/dto/workItemTranslation';
 import { isLocale, type Locale } from '@/lib/i18n/locales';
 import { detectLocale } from '@/lib/translation/detectLanguage';
+import { hashFieldText } from '@/lib/translation/fieldRevision';
 import { classifyFields, type FieldClassification } from '@/lib/translation/needsTranslation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { assembleFields, type DoorField } from '@/lib/translation/itemFields';
@@ -56,13 +57,17 @@ function toOfferFields(
   const out: Record<string, TranslationOfferFieldDTO> = {};
   fields.forEach((field, i) => {
     const verdict = verdicts[i]!;
+    // The revision is the SAME hash the store keys a kept translation on, over
+    // the same text classified here (MOTIR-8123): the view's only edit signal.
+    const revision = hashFieldText(field.text);
     out[field.fieldRef] = verdict.needsTranslation
       ? {
           needsTranslation: true,
           kept: kept[field.fieldRef] !== undefined,
           sourceLanguage: sourceLanguageOf(field, verdict),
+          revision,
         }
-      : { needsTranslation: false, kept: false, sourceLanguage: null };
+      : { needsTranslation: false, kept: false, sourceLanguage: null, revision };
   });
   return out;
 }
