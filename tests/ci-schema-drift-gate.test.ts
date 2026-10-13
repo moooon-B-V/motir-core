@@ -124,6 +124,14 @@ describe('CI gates schema-vs-migrations drift (MOTIR-1960)', () => {
 
     // And no branch-prefix `if:` — a `docs/`/`design/`/`seed/` PR can still edit
     // prisma/**, and this is the one gate that would notice.
-    expect(driftJobCode).not.toMatch(/^\s{4}if:/m);
+    // (The draft skip is the one condition every job carries.)
+    const conditions = [...driftJobCode.matchAll(/^\s{4}if:(.*)$/gm)].map((m) => m[1]!.trim());
+    expect(
+      conditions.filter(
+        (c) =>
+          c !==
+          "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+      ),
+    ).toEqual([]);
   });
 });

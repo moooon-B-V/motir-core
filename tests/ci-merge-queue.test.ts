@@ -158,6 +158,9 @@ type Event = 'pull_request' | 'merge_group' | 'push';
  */
 const contextFor = (event: Event): Record<string, string> => ({
   'github.event_name': event,
+  // A READY pull request: this file asks what an ordinary pull request and queue
+  // entry reach, and a draft is the one state in which a pull request skips it.
+  'github.event.pull_request.draft': 'false',
   'github.ref': event === 'push' ? 'refs/heads/main' : 'refs/pull/1/merge',
   'needs.changes.outputs.app': 'true',
   'needs.changes.outputs.images': 'true',
@@ -195,6 +198,7 @@ function evaluate(expression: string, github: Record<string, string>): boolean {
   /** A literal, or a context path this evaluator knows. Unknown paths throw. */
   const value = (token: string): string => {
     if (token.startsWith("'")) return token.slice(1, -1);
+    if (token === 'false' || token === 'true') return token;
     if (token in github) return github[token]!;
     // `github.event.pull_request.labels.*.name` is the only unfabricated path,
     // and it is handled by `contains` below — anything else reaching here is a
