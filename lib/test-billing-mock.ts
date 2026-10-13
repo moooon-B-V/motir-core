@@ -45,6 +45,7 @@
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 import type { RawBillingHistoryResponse } from '@/lib/ai/types';
+import { succeededTranslateJobCount } from '@/lib/test-ai-jobs-mock';
 
 /** The synthetic hosted-session URLs the boundary returns (the spec's `page.route`
  *  fulfils the browser navigation to them — nothing leaves localhost). */
@@ -161,6 +162,37 @@ export interface BillingFixtureEntry {
    * a charge the app server makes is the figure the billing page reads next.
    */
   agents?: { machine: number; storage: number; keys?: string[] };
+  /**
+   * The org's TRANSLATION spend (Story MOTIR-7735 · MOTIR-8459), as `/v1/usage`
+   * reports it in `translation`. Three arms, each reachable on purpose:
+   *   - an object ⇒ reported VERBATIM (how a spec scripts a second org);
+   *   - `null` ⇒ the key is OMITTED, the rolling-deploy shape the Translation
+   *     line renders as UNAVAILABLE (the `search` rule: absent stays absent);
+   *   - absent ⇒ DERIVED from the jobs mock: {@link TRANSLATION_CREDITS_PER_JOB}
+   *     × its succeeded `translate` jobs. That count carries no organisation, so
+   *     the derived figure is LANE-GLOBAL — every org with no entry reads it.
+   */
+  translation?: BillingFixtureTranslation | null;
+}
+
+/** Translation spend, as `/v1/usage` reports it (mirrors `RawUsageTranslationSpend`). */
+export interface BillingFixtureTranslation {
+  totalSpend: number;
+  monthSpend: number;
+}
+
+/**
+ * The credits ONE succeeded `translate` job adds to a derived translation block.
+ * A stand-in figure for a browser chapter to see move — not a rate, not a price
+ * (the 1.5x arithmetic is motir-ai's).
+ */
+export const TRANSLATION_CREDITS_PER_JOB = 3;
+
+/** The `translation` block an entry reports, or null when it must be omitted. */
+function translationBlockFor(e: BillingFixtureEntry): BillingFixtureTranslation | null {
+  if ('translation' in e) return e.translation ?? null;
+  const spend = succeededTranslateJobCount() * TRANSLATION_CREDITS_PER_JOB;
+  return { totalSpend: spend, monthSpend: spend };
 }
 
 /** The fixture file shape: `coreOrganizationId` → its motir-ai billing state. */
@@ -188,6 +220,11 @@ function readFixture(): BillingFixture {
 function entryFor(coreOrganizationId: string | null): BillingFixtureEntry {
   if (!coreOrganizationId) return FREE_DEFAULT;
   return readFixture()[coreOrganizationId] ?? FREE_DEFAULT;
+}
+
+function withTranslation(e: BillingFixtureEntry): { translation?: BillingFixtureTranslation } {
+  const block = translationBlockFor(e);
+  return block ? { translation: block } : {};
 }
 
 function queryOf(reqPath: string): URLSearchParams {
@@ -311,6 +348,8 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
           // UNAVAILABLE, and defaulting it to zeroes here would make the one
           // state this whole story distinguishes unreachable in the lane.
           ...(e.search ? { search: e.search } : {}),
+          // Translation (MOTIR-8459): an explicit `null` omits the key too.
+          ...withTranslation(e),
           // The same rule for the Agents line (MOTIR-6924): absent stays absent.
           ...(e.agents
             ? {

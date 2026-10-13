@@ -451,6 +451,19 @@ function translateOutcomeAt(n: number): TranslateJobOutcome {
   return queue[Math.min(n, queue.length - 1)]!;
 }
 
+/**
+ * How many `translate` jobs motir-ai would have BILLED (MOTIR-8459): accepted
+ * submits whose outcome at their own ordinal settles `succeeded`. A refused,
+ * `failed` or still-`running` submit counts zero. Exported so the billing mock's
+ * derived translation block follows this queue's rule rather than a copy of it.
+ */
+export function succeededTranslateJobCount(): number {
+  const translateSubmits = (readFixture().submitted ?? []).filter((s) => s.kind === 'translate');
+  return translateSubmits.filter(
+    (s, i) => !s.refused && (translateOutcomeAt(i).status ?? 'succeeded') === 'succeeded',
+  ).length;
+}
+
 /** The `context.translate` a submit body carried, or null. */
 function translateContextOf(rawBody: string): SubmittedJob['translate'] | null {
   try {
