@@ -217,14 +217,22 @@ export function BillingClient({
           toast({ variant: 'error', title: t('states.errorTitle') });
           return;
         }
-        const { url } = (await res.json()) as { url: string };
-        window.location.href = url;
+        const answer = (await res.json()) as { url?: string };
+        if (answer.url) {
+          window.location.href = answer.url;
+          return;
+        }
+        // The org already holds a live AI plan (MOTIR-8394): nothing was opened.
+        // Re-read the status so the cards show that plan as current and offer no
+        // checkout — a change of plan goes through the upgrade path.
+        setRedirecting(false);
+        await load();
       } catch {
         setRedirecting(false);
         toast({ variant: 'error', title: t('states.errorTitle') });
       }
     },
-    [orgId, t, toast],
+    [orgId, t, toast, load],
   );
 
   // `quantity` is the credit top-up's bundle multiplier and is omitted for every
@@ -1516,6 +1524,14 @@ function PlansView({
     !!tier &&
     tier.key !== 'free' &&
     (subscription.status === 'active' || subscription.status === 'past_due');
+  // An org holds ONE AI plan (MOTIR-8394): while a paid plan is live no card offers
+  // a checkout; a change of plan is the upgrade path's, whose controls own the slot.
+  const holdsPlan =
+    !!tier &&
+    tier.key !== 'free' &&
+    (subscription.status === 'active' ||
+      subscription.status === 'trialing' ||
+      subscription.status === 'past_due');
 
   return (
     <>
@@ -1608,6 +1624,7 @@ function PlansView({
             cadence={cadence}
             currentKey={tier?.key ?? null}
             status={subscription.status}
+            holdsPlan={holdsPlan}
             canManage={canManage}
             redirecting={redirecting}
             checkout={checkout}
@@ -1648,6 +1665,7 @@ function PlanCard({
   cadence,
   currentKey,
   status,
+  holdsPlan,
   canManage,
   redirecting,
   checkout,
@@ -1658,6 +1676,8 @@ function PlanCard({
   cadence: BillingCadence;
   currentKey: string | null;
   status: AiStatus;
+  /** The org holds a live paid AI plan — no card then offers a checkout. */
+  holdsPlan: boolean;
   canManage: boolean;
   redirecting: boolean;
   checkout: (priceLookupKey: string) => void;
@@ -1743,6 +1763,9 @@ function PlanCard({
     );
   } else if (!plan.prices) {
     cta = contactSales;
+  } else if (holdsPlan) {
+    // The action slot is the upgrade path's (Upgrade now / Downgrade at period end).
+    cta = null;
   } else {
     const priceKey = plan.prices[cadence].priceLookupKey;
     cta = (
@@ -1770,15 +1793,16 @@ function PlanCard({
       ? ((t.raw('plans.tiers.free.featuresOff') as string[] | undefined) ?? [])
       : [];
   const hasPrev = plan.key === 'pro' || plan.key === 'max' || plan.key === 'max_x2';
-  // The bundled Motir seat (8.1.22): every PAID plan includes 1 seat (caps lifted);
-  // Free states the absence; Enterprise is custom.
-  const seatText =
-    plan.key === 'free'
+  // The bundled Motir seat (8.1.22): every PAID plan includes its catalog count of
+  // tracker seats at no charge (MOTIR-8394 reads it, never a typed 1); Free states
+  // the absence.
+  const seatIncluded = plan.includedTrackerSeats > 0;
+  const seatText = seatIncluded
+    ? t('plans.seatIncluded', { count: plan.includedTrackerSeats })
+    : !plan.prices
       ? t('plans.seatNone')
-      : !plan.prices
-        ? t('plans.seatCustom')
-        : t('plans.seatIncluded');
-  const seatOff = plan.key === 'free';
+      : t('plans.seatCustom');
+  const seatOff = !seatIncluded;
 
   return (
     <div
@@ -1820,6 +1844,7 @@ function PlanCard({
       </p>
       {/* bundled Motir seat (8.1.22) */}
       <p
+        data-testid={seatIncluded ? 'plan-included-seat' : undefined}
         className={`flex items-center gap-1.5 font-sans text-xs ${
           seatOff ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)'
         }`}
@@ -1851,7 +1876,7 @@ function PlanCard({
           </li>
         ))}
       </ul>
-      <div className="mt-auto pt-1">{cta}</div>
+      {cta ? <div className="mt-auto pt-1">{cta}</div> : null}
     </div>
   );
 }

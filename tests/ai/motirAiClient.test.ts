@@ -364,14 +364,31 @@ describe('createCheckoutSession', () => {
     cancelUrl: 'https://app.test/settings/organization/billing?checkout=cancel',
   };
 
+  it('passes through the existing_plan pointer for an org on a live plan (MOTIR-8394)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          outcome: 'existing_plan',
+          livePriceLookupKey: 'max_pool_annual',
+          upgradePath: true,
+        }),
+      ),
+    );
+    expect(await createCheckoutSession(input)).toEqual({
+      outcome: 'existing_plan',
+      livePriceLookupKey: 'max_pool_annual',
+    });
+  });
+
   it('POSTs the input to /v1/stripe/checkout-session and returns the hosted url', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse({ url: 'https://checkout.stripe.com/c/pay/cs_test_1' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { url } = await createCheckoutSession(input);
-    expect(url).toBe('https://checkout.stripe.com/c/pay/cs_test_1');
+    const res = await createCheckoutSession(input);
+    expect(res).toEqual({ outcome: 'session', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
 
     const [reqUrl, init] = fetchMock.mock.calls[0]!;
     expect(reqUrl).toBe('https://ai.example.test/v1/stripe/checkout-session');

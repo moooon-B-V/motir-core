@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { RawSubscriptionResponse, RawUsageResponse } from '@/lib/ai/types';
+import type { CheckoutSessionOutcome } from '@/lib/ai/motirAiClient';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 import { adminDb } from './helpers/adminDb';
 
@@ -14,7 +15,7 @@ import { adminDb } from './helpers/adminDb';
 // has neither) — plus the DTO shape and the Checkout/Portal forwarding.
 const getOrgUsageMock = vi.fn<(q: unknown) => Promise<RawUsageResponse>>();
 const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResponse>>();
-const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
+const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<CheckoutSessionOutcome>>();
 const createPortalSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
 const setSeatQuantityMock =
   vi.fn<(i: { coreOrganizationId: string; quantity: number }) => Promise<unknown>>();
@@ -132,7 +133,10 @@ beforeEach(async () => {
   setSeatQuantityMock.mockReset();
   getOrgUsageMock.mockResolvedValue(rawUsage());
   getOrgSubscriptionMock.mockResolvedValue(rawSubscription());
-  createCheckoutSessionMock.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/cs_1' });
+  createCheckoutSessionMock.mockResolvedValue({
+    outcome: 'session',
+    url: 'https://checkout.stripe.com/c/pay/cs_1',
+  });
   createPortalSessionMock.mockResolvedValue({ url: 'https://billing.stripe.com/p/session/1' });
   setSeatQuantityMock.mockResolvedValue({ applied: true, outcome: 'updated' });
   process.env['MOTIR_CLOUD'] = 'true';
@@ -412,11 +416,11 @@ describe('billingService.startCheckout', () => {
 
   it('lets an ADMIN start checkout (ADR §7 as amended by MOTIR-6305)', async () => {
     const { organizationId, admin } = await makeOrgWithRoles();
-    const { url } = await billingService.startCheckout({
+    const { url } = (await billingService.startCheckout({
       organizationId,
       actorUserId: admin.id,
       priceLookupKey: 'pro_pool_annual',
-    });
+    })) as { url: string };
     expect(url).toBe('https://checkout.stripe.com/c/pay/cs_1');
     expect(createCheckoutSessionMock).toHaveBeenCalledTimes(1);
   });
@@ -459,11 +463,11 @@ describe('billingService.startCheckout', () => {
 
   it('forwards a valid price to the boundary with success/cancel URLs and returns the url', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
-    const { url } = await billingService.startCheckout({
+    const { url } = (await billingService.startCheckout({
       organizationId,
       actorUserId: owner.id,
       priceLookupKey: 'pro_pool_annual',
-    });
+    })) as { url: string };
     expect(url).toBe('https://checkout.stripe.com/c/pay/cs_1');
     expect(createCheckoutSessionMock).toHaveBeenCalledWith({
       coreOrganizationId: organizationId,
@@ -475,6 +479,31 @@ describe('billingService.startCheckout', () => {
       cancelUrl: `${APP_ORIGIN}/settings/organization/billing?checkout=cancel`,
     });
   });
+
+  it('points an org that already holds a live AI plan at its plan, with no url (MOTIR-8394)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    createCheckoutSessionMock.mockResolvedValueOnce({
+      outcome: 'existing_plan',
+      livePriceLookupKey: 'pro_pool_monthly',
+    });
+    const res = await billingService.startCheckout({
+      organizationId,
+      actorUserId: owner.id,
+      priceLookupKey: 'max_x2_pool_annual',
+    });
+    expect(res).toEqual({ existingPlan: { livePriceLookupKey: 'pro_pool_monthly' } });
+  });
+
+  it.each(['max_x2_pool_annual', 'max_x2_pool_monthly'])(
+    'forwards the Max ×2 price %s at quantity 1 (MOTIR-8394)',
+    async (priceLookupKey) => {
+      const { organizationId, owner } = await makeOrgWithRoles();
+      await billingService.startCheckout({ organizationId, actorUserId: owner.id, priceLookupKey });
+      expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ priceId: priceLookupKey, quantity: 1 }),
+      );
+    },
+  );
 
   // ── The top-up bundle QUANTITY (MOTIR-2949) ──────────────────────────────
   // The credit top-up is the only multi-unit line, and only at the catalog's

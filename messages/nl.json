@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Huidig abonnement",
       "ctaTrialUsed": "Proefperiode gebruikt",
       "footer": "Jaarlijkse facturering (de standaard van Stripe) wordt getoond — schakel hierboven over naar Maandelijks om te vergelijken. Btw wordt automatisch toegepast bij het afrekenen. Credits zijn een interne gebruikstoewijzing; de getoonde prijs is de kosten van het AI-abonnement, door Stripe gefactureerd aan de organisatie {org}. Je Motir-plekken worden apart gefactureerd — beheer ze op het scherm van het Motir-abonnement.",
-      "seatIncluded": "+ 1 Motir-plek · werkitems onbeperkt",
+      "seatIncluded": "+ {count, plural, one {# Motir-plek} other {# Motir-plekken}} · werkitems onbeperkt",
       "seatNone": "Geen Motir-plek · limiet van 250 items",
       "seatCustom": "Motir-plekken inbegrepen (op maat)",
       "customPool": "Tegoedpool op maat",
@@ -6421,6 +6421,14 @@
           "useCase": "Gedetailleerde planning, plus zwaar agentwerk.",
           "prev": "Pro",
           "features": ["Ruimte voor aanhoudend agentwerk", "Doorvoer voor een druk team"]
+        },
+        "max_x2": {
+          "useCase": "Gedetailleerde planning, plus agentwerk op twee keer het volume van Max.",
+          "prev": "Max",
+          "features": [
+            "Twee keer de maandelijkse creditpool van Max",
+            "Ruimte voor meerdere agents tegelijk"
+          ]
         },
         "enterprise": {
           "useCase": "Volume op maat, plus beheer op organisatieniveau.",

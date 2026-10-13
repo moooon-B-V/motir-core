@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Bieżący plan",
       "ctaTrialUsed": "Okres próbny wykorzystany",
       "footer": "Pokazane są ceny przy rozliczeniu rocznym (domyślnym w Stripe) — przełącz powyżej na Miesięcznie, aby porównać. Podatek jest naliczany automatycznie przy płatności. Kredyty to wewnętrzny przydział użycia; podana cena to opłata za plan AI, którą Stripe nalicza organizacji {org}. Stanowiska Motir są rozliczane osobno — zarządzaj nimi na ekranie planu Motir.",
-      "seatIncluded": "+ 1 stanowisko Motir · bez limitu elementów roboczych",
+      "seatIncluded": "+ {count, plural, one {# stanowisko Motir} few {# stanowiska Motir} many {# stanowisk Motir} other {# stanowiska Motir}} · bez limitu elementów roboczych",
       "seatNone": "Bez stanowiska Motir · limit 250 elementów",
       "seatCustom": "Stanowiska Motir w cenie (indywidualnie)",
       "customPool": "Indywidualna pula kredytów",
@@ -6421,6 +6421,14 @@
           "useCase": "Szczegółowe planowanie i intensywna praca agenta.",
           "prev": "Pro",
           "features": ["Zapas na ciągłą pracę agentów", "Przepustowość dla zapracowanego zespołu"]
+        },
+        "max_x2": {
+          "useCase": "Szczegółowe planowanie i praca agentów w podwójnej skali Max.",
+          "prev": "Max",
+          "features": [
+            "Dwukrotność miesięcznej puli kredytów Max",
+            "Miejsce na kilku agentów działających jednocześnie"
+          ]
         },
         "enterprise": {
           "useCase": "Indywidualny wolumen i kontrola na poziomie organizacji.",

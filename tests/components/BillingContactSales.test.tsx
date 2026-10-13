@@ -3,17 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
-import { BILLING_CATALOG } from '@/lib/billing/catalog';
-import type { BillingStatusDTO, EnterpriseRequestDTO } from '@/lib/dto/billing';
+import type { EnterpriseRequestDTO } from '@/lib/dto/billing';
+import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import {
-  BillingClient,
-  EnterpriseContactControl,
-} from '@/app/(authed)/settings/organization/billing/_components/BillingClient';
+import { EnterpriseContactControl } from '@/app/(authed)/settings/organization/billing/_components/BillingClient';
 
 // The Enterprise card's Contact sales (Story MOTIR-7602 · Subtask MOTIR-7607;
 // design `billing--contact-sales.mock.html` panels 2–8). Drives the real
-// BillingClient island against a stubbed boundary — the billing GET, and the
+// control under BillingClient's state against a stubbed boundary — the
 // enterprise-request GET / POST (MOTIR-7605's routes, whose own behaviour is
 // pinned against real Postgres in `tests/api-billing-enterprise-request-route`
 // and `tests/billing/enterprise-request-service`). One case per drawn state:
@@ -22,46 +19,6 @@ import {
 // a parallel tab causes, the 403, and the network error that keeps the form.
 
 const ENTERPRISE_URL = '/api/organizations/org1/billing/enterprise-request';
-
-function billing(canManage = true): BillingStatusDTO {
-  return {
-    organizationId: 'org1',
-    access: canManage
-      ? { role: 'owner', canManageBilling: true }
-      : { role: 'admin', canManageBilling: false },
-    isMeta: false,
-    internalBilling: false,
-    search: { totalSpend: 0, monthSpend: 0 },
-    agents: { spend: { machineMonthSpend: 0, storageMonthSpend: 0 }, hasPaidAiPlan: true },
-    motir: { scaledTrackerSubscription: null, aiIncludedSeat: false },
-    motirAi: {
-      tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
-      balance: 1420,
-      subscription: {
-        status: 'active',
-        currentPeriodEnd: '2026-07-01T00:00:00.000Z',
-        priceId: 'standard_pool_annual',
-        planTier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
-      },
-    },
-    ci: {
-      applicable: true,
-      organizationId: 'org1',
-      periodStart: '2026-07-01T00:00:00.000Z',
-      periodEnd: '2026-08-01T00:00:00.000Z',
-      memberCount: 6,
-      poolMinutes: 1800,
-      floorApplied: false,
-      consumedMinutes: 1240,
-      remainingMinutes: 560,
-      overageMinutes: 0,
-      chargedCredits: 0,
-      balance: 4420,
-      state: 'within_allowance',
-    },
-    catalog: BILLING_CATALOG,
-  };
-}
 
 function openRequest(over: Partial<EnterpriseRequestDTO> = {}): EnterpriseRequestDTO {
   return {
@@ -88,13 +45,11 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
  * last one repeats); `post` answers the send.
  */
 function stubBoundary(opts: {
-  canManage?: boolean;
   gets?: Array<EnterpriseRequestDTO | null | 'forbidden'>;
   post?: () => Promise<Response>;
 }) {
   const gets = [...(opts.gets ?? [null])];
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    if (url === '/api/organizations/org1/billing') return json(billing(opts.canManage ?? true));
     if (url === ENTERPRISE_URL && (init?.method ?? 'GET') === 'GET') {
       const next = gets.length > 1 ? gets.shift()! : gets[0]!;
       return next === 'forbidden' ? json({ code: 'BILLING_FORBIDDEN' }, 403) : json(next);
@@ -113,32 +68,58 @@ function stubBoundary(opts: {
   return { fetchMock, calls };
 }
 
-function renderClient(withContext = true) {
+/**
+ * The Enterprise card's control under the state BillingClient gives it: the open
+ * request is read once on mount and re-read by `refresh`. The plans screen no
+ * longer renders an Enterprise card (MOTIR-8390 took Enterprise out of the plan
+ * catalog), so the flow is driven on the control itself.
+ */
+function StatefulHarness(props: { canManage: boolean; initial: EnterpriseRequestDTO | null }) {
+  const t = useTranslations('billing');
+  const [request, setRequest] = useState<EnterpriseRequestDTO | null>(props.initial);
+  const refresh = useCallback(async () => {
+    const next = await readOpenRequest();
+    if (next !== undefined) setRequest(next);
+    return next;
+  }, []);
+  return (
+    <EnterpriseContactControl
+      enterprise={{
+        orgId: 'org1',
+        context: {
+          requesterName: 'Sam Rivera',
+          requesterEmail: 'sam@moooon.example',
+          repositoryCount: 4,
+        },
+        request,
+        refresh,
+      }}
+      canManage={props.canManage}
+      orgName="Acme"
+      planName="Standard"
+      t={t}
+    />
+  );
+}
+
+async function readOpenRequest(): Promise<EnterpriseRequestDTO | null | undefined> {
+  const res = await fetch(ENTERPRISE_URL);
+  return res.ok ? ((await res.json()) as EnterpriseRequestDTO | null) : undefined;
+}
+
+/** The page's load: read the open request, then mount the control with it. */
+async function renderClient() {
+  const initial = (await readOpenRequest()) ?? null;
   return render(
     <ToastProvider>
-      <BillingClient
-        orgId="org1"
-        orgName="Acme"
-        memberCount={6}
-        contactSales={
-          withContext
-            ? {
-                requesterName: 'Sam Rivera',
-                requesterEmail: 'sam@moooon.example',
-                repositoryCount: 4,
-              }
-            : null
-        }
-      />
+      <StatefulHarness canManage initial={initial} />
     </ToastProvider>,
   );
 }
 
-/** Land on the AI plans screen, where the Enterprise card lives. */
+/** Wait for the control's first read of the open request. */
 async function goToPlans() {
-  await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
-  fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
-  await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+  await screen.findByRole('button', { name: /^(Contact sales|Request sent · .+)$/ });
 }
 
 async function openForm() {
@@ -195,7 +176,7 @@ afterEach(() => {
 describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
   it('is a button that opens the request form for a manager — no mailto: anywhere', async () => {
     stubBoundary({});
-    renderClient();
+    await renderClient();
     await goToPlans();
 
     const control = screen.getByRole('button', { name: 'Contact sales' });
@@ -224,7 +205,7 @@ describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
 
   it('asks only what the person alone knows; the org, requester, plan and repositories are read-only', async () => {
     stubBoundary({});
-    renderClient();
+    await renderClient();
     const dialog = await openForm();
 
     // Read-only — text in the summary box, never an input.
@@ -267,7 +248,7 @@ describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
 
   it('validates before sending: the note is required, a count must be a whole number ≥ 1', async () => {
     const { calls } = stubBoundary({ post: async () => json(openRequest(), 201) });
-    renderClient();
+    await renderClient();
     const dialog = await openForm();
 
     const cards = within(dialog).getByRole('spinbutton', { name: 'Work items a day, roughly' });
@@ -292,7 +273,7 @@ describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
       gets: [null, openRequest()],
       post: () => new Promise<Response>((resolve) => (answer = resolve)),
     });
-    renderClient();
+    await renderClient();
     const dialog = await openForm();
 
     fireEvent.click(within(dialog).getByRole('radio', { name: /Our own agents/ }));
@@ -355,7 +336,7 @@ describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
           409,
         ),
     });
-    renderClient();
+    await renderClient();
     const dialog = await openForm();
     fireEvent.change(noteField(dialog), { target: { value: 'Again.' } });
     await act(async () => {
@@ -388,7 +369,7 @@ describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
         throw new TypeError('Failed to fetch');
       },
     });
-    renderClient();
+    await renderClient();
     const dialog = await openForm();
     fireEvent.change(within(dialog).getByRole('spinbutton', { name: 'Agents in parallel' }), {
       target: { value: '8' },
@@ -417,7 +398,7 @@ describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
     stubBoundary({
       post: async () => json({ code: 'BILLING_FORBIDDEN', error: 'nope' }, 403),
     });
-    renderClient();
+    await renderClient();
     const dialog = await openForm();
     fireEvent.change(noteField(dialog), { target: { value: 'Hello.' } });
     await act(async () => {
@@ -433,7 +414,7 @@ describe('Enterprise card — Contact sales (MOTIR-7607)', () => {
 
   it('with an open request on load, the card says Request sent and opens it read-only', async () => {
     stubBoundary({ gets: [openRequest({ status: 'in_conversation', note: 'Line one.' })] });
-    renderClient();
+    await renderClient();
     await goToPlans();
 
     const control = screen.getByRole('button', { name: /^Request sent · Oct 5, 2026$/ });

@@ -6390,7 +6390,7 @@
       "ctaCurrent": "현재 요금제",
       "ctaTrialUsed": "체험 사용함",
       "footer": "연간 결제(Stripe 기본값) 기준으로 표시됩니다. 비교하려면 위에서 월간으로 전환하세요. 세금은 결제 시 자동으로 적용됩니다. 크레딧은 내부 사용 할당량이며, 표시된 가격은 Stripe가 {org} 조직에 청구하는 AI 요금제 요금입니다. Motir 좌석은 별도로 청구되며 Motir 요금제 화면에서 관리합니다.",
-      "seatIncluded": "+ Motir 좌석 1개 · 작업 항목 무제한",
+      "seatIncluded": "+ Motir 좌석 {count, plural, other {#개}} · 작업 항목 무제한",
       "seatNone": "Motir 좌석 없음 · 항목 250개 한도",
       "seatCustom": "Motir 좌석 포함(맞춤)",
       "customPool": "맞춤 크레딧 풀",
@@ -6418,6 +6418,11 @@
           "useCase": "상세한 계획과 대량의 에이전트 작업.",
           "prev": "Pro",
           "features": ["지속적인 에이전트 작업을 위한 여유", "바쁜 팀을 위한 처리량"]
+        },
+        "max_x2": {
+          "useCase": "상세한 계획과 Max의 두 배 규모 에이전트 작업.",
+          "prev": "Max",
+          "features": ["Max의 두 배인 월간 크레딧 풀", "여러 에이전트를 동시에 실행할 여유"]
         },
         "enterprise": {
           "useCase": "맞춤 사용량과 조직 관리 기능.",
