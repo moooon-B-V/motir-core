@@ -162,3 +162,18 @@ export class IdeaListCapExceededError extends Error {
     this.name = 'IdeaListCapExceededError';
   }
 }
+
+/**
+ * A public read could not reach the database: the connection dropped on the
+ * first attempt AND on the one retry (MOTIR-8350). The routes answer it with a
+ * handled 503 — a transient outage, not a defect in the request — instead of
+ * letting the raw `pg` error escape as an unhandled 500.
+ */
+export class IdeasUnavailableError extends Error {
+  readonly code = 'IDEAS_UNAVAILABLE';
+
+  constructor(cause: unknown) {
+    super('The idea store could not be read: the database connection was lost.', { cause });
+    this.name = 'IdeasUnavailableError';
+  }
+}
