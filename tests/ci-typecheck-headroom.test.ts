@@ -14,6 +14,8 @@ import {
   childHeapLimitBytes,
   DECLARED_HEAP_BUDGET_BYTES,
   inDependencyOrder,
+  nearTheLine,
+  nearTheLineWarning,
   overTheLine,
   parseDiagnostics,
   projectsOf,
@@ -169,6 +171,28 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
     // …and nothing is over the line at the lane's DECLARED budget — 4345298944
     // bytes, the 4.05 GB heap these captures were taken under (MOTIR-5696).
     expect(overTheLine(readings, DECLARED_HEAP_BUDGET_BYTES, 0.9)).toEqual([]);
+  });
+
+  it('WARNS on a project between 80% and the line, and stays silent either side of it (MOTIR-8353)', () => {
+    // The early warning exists because the line was only ever seen from the far
+    // side: an unrelated pull request thrown out of the merge queue. A reading
+    // over the line is the gate's business, not the warning's, so the two bands
+    // never overlap.
+    const gbKb = (fraction: number) => Math.round((fraction * LIMIT_BYTES) / 1024);
+    const readings = [
+      { project: 'quiet', memoryKb: gbKb(0.79) },
+      { project: 'nearing', memoryKb: gbKb(0.85) },
+      { project: 'over', memoryKb: gbKb(0.95) },
+    ];
+    const near = nearTheLine(readings, LIMIT_BYTES, 0.8, 0.9);
+    expect(near.map((r) => r.project)).toEqual(['nearing']);
+    expect(overTheLine(readings, LIMIT_BYTES, 0.9).map((r) => r.project)).toEqual(['over']);
+
+    // One workflow command per line, or the runner does not read it as one.
+    const line = nearTheLineWarning(near[0]!, 0.9);
+    expect(line).toMatch(/^::warning title=TypeScript heap headroom::nearing is at 85\.0%/);
+    expect(line).toContain('fails above 90%');
+    expect(line).not.toContain('\n');
   });
 
   it('reads the solution’s projects and orders them dependencies-first', () => {
