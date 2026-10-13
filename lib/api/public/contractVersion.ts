@@ -99,8 +99,14 @@
  *   `getPublicIdea` (`/api/public/ideas/{slug}`), what motir.co's ideas page is
  *   built against. Additive under §D — three new anonymous operations and their
  *   schemas; no existing operation, path or response moved.
+ * - `1.8.0` — MOTIR-8350 declares a `503 IDEAS_UNAVAILABLE` on the three idea
+ *   reads (`listPublicIdeas`, `listPublicIdeaTags`, `getPublicIdea`): a read
+ *   whose database connection drops twice now answers a handled 503 with
+ *   `Retry-After` where it used to escape as an undeclared 500. Additive under
+ *   §D — one new declared error status per operation; no success shape, path
+ *   or parameter moved, and no condition that answered 2xx, 400 or 404 moved.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.7.0';
+export const PUBLIC_CONTRACT_VERSION = '1.8.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;
