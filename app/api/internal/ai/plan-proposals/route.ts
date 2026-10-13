@@ -165,6 +165,15 @@ export async function POST(req: Request): Promise<Response> {
   // PLAN_TITLE_MAX characters; anything else, or a blank string, is "no title"
   // and the plan keeps the title it has. The service ignores it on a revision
   // append and on a plan that has left `generating`.
+  // The job's resolved PLANNING MODEL (Bug MOTIR-8420) — motir-ai's
+  // `PlanningRun.model`, never anything the LLM says about itself. Like the
+  // briefing it rides only the FINAL append, a generation's or a revision's:
+  // the close records it on a NATIVE plan whose `authorModel` is still empty,
+  // and ignores it otherwise. A string is the model; anything else is "none".
+  // This seam is job-token-authed and so native by construction, which is why
+  // it may carry the model when no caller-facing door does.
+  const rawAuthorModel = (body as { authorModel?: unknown })?.authorModel;
+  const authorModel = typeof rawAuthorModel === 'string' ? rawAuthorModel : null;
   const rawTitle = (body as { title?: unknown })?.title;
   const trimmedTitle = typeof rawTitle === 'string' ? rawTitle.trim() : '';
   const title = trimmedTitle.length > 0 ? trimmedTitle.slice(0, PLAN_TITLE_MAX).trim() : null;
@@ -207,6 +216,7 @@ export async function POST(req: Request): Promise<Response> {
         revision,
         ...(title !== null ? { title } : {}),
         ...(final && summary !== null ? { summary } : {}),
+        ...(final && authorModel !== null ? { authorModel } : {}),
         ...(actor ? { actor } : {}),
       },
     );
