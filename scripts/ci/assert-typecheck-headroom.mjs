@@ -131,6 +131,23 @@ import ts from 'typescript';
 const THRESHOLD = 0.9;
 
 /**
+ * THE EARLY WARNING (MOTIR-8353) — the fraction above which a project is
+ * reported as NEARING the line, without failing.
+ *
+ * ⚠️ WHY IT EXISTS: THE LINE WAS ONLY EVER SEEN FROM THE WRONG SIDE. The tests
+ * program crossed 89% three times (MOTIR-5433 at 89.3%, MOTIR-5687 at 89.1–90.8%,
+ * MOTIR-8353 at 88.9%), and each time the first anybody heard of it was an
+ * unrelated pull request thrown out of the merge queue for a one-point swing it
+ * did not cause. Every story adds ~0.5–1 point, so 80% is roughly ten stories
+ * before the gate: the distance at which moving a directory between the tests
+ * projects is a planned card rather than somebody's blocked merge.
+ *
+ * It prints a GitHub `::warning` annotation, which lands on the run's summary and
+ * on every pull request's checks — main's own push runs included — and exits 0.
+ */
+const WARN_THRESHOLD = 0.8;
+
+/**
  * THE DENOMINATOR — the heap budget every `Memory used` reading is a fraction of
  * (MOTIR-5696). Bytes.
  *
@@ -345,6 +362,38 @@ export function overTheLine(readings, limitBytes, threshold) {
     .filter((r) => r.fraction > threshold);
 }
 
+/**
+ * Which readings are past the early warning but not over the failing line —
+ * the projects that have about ten stories left (MOTIR-8353).
+ *
+ * @param {{ project: string, memoryKb: number }[]} readings
+ * @param {number} limitBytes
+ * @param {number} warnAt
+ * @param {number} failAt
+ * @returns {{ project: string, memoryKb: number, fraction: number }[]}
+ */
+export function nearTheLine(readings, limitBytes, warnAt, failAt) {
+  return readings
+    .map((r) => ({ ...r, fraction: (r.memoryKb * 1024) / limitBytes }))
+    .filter((r) => r.fraction > warnAt && r.fraction <= failAt);
+}
+
+/**
+ * The GitHub annotation for one project nearing the line. One line, because the
+ * runner reads a workflow command per line.
+ *
+ * @param {{ project: string, fraction: number }} reading
+ * @param {number} failAt
+ */
+export function nearTheLineWarning(reading, failAt) {
+  return (
+    `::warning title=TypeScript heap headroom::${reading.project} is at ` +
+    `${(reading.fraction * 100).toFixed(1)}% of the heap budget; this check fails above ` +
+    `${Math.round(failAt * 100)}%. Act before it blocks a pull request: check its type ` +
+    `instantiations first, then move or split an area out of it (the failure message lists both levers).`
+  );
+}
+
 /** A solution reference may name a DIRECTORY (`packages/orchestrator`), which
  *  `tsc` resolves to its `tsconfig.json`. Reading the file needs the full path. */
 const configPathOf = (project) =>
@@ -496,6 +545,9 @@ function main() {
   const breached = overTheLine(readings, limitBytes, THRESHOLD);
   if (breached.length === 0) {
     console.log(`\n✓ every project is under ${Math.round(THRESHOLD * 100)}% of the heap budget`);
+    for (const near of nearTheLine(readings, limitBytes, WARN_THRESHOLD, THRESHOLD)) {
+      console.log(nearTheLineWarning(near, THRESHOLD));
+    }
     return;
   }
   const worst = breached[0];

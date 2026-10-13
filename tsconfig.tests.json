@@ -53,7 +53,39 @@
     "tests/e2e/**/*.spec.ts",
     "tests/components/**",
     "tests/integration/**/*.test.ts",
-    "tests/integration/**/*.test.tsx"
+    "tests/integration/**/*.test.tsx",
+    // `tsconfig.tests-platform.json` (MOTIR-8353) — keep this list and its
+    // `include` the same set of directories; `tests/typecheck-program.test.ts`
+    // fails when they drift.
+    "tests/agentChat/**",
+    "tests/agentReview/**",
+    "tests/agentTerminal/**",
+    "tests/ai/**",
+    "tests/async/**",
+    "tests/automation/**",
+    "tests/ciFleet/**",
+    "tests/ciMetering/**",
+    "tests/codeGraph/**",
+    "tests/codeHealth/**",
+    "tests/dispatch/**",
+    "tests/dispatchRuns/**",
+    "tests/embeddings/**",
+    "tests/gateway/**",
+    "tests/git/**",
+    "tests/github/**",
+    "tests/gitlab/**",
+    "tests/hosted/**",
+    "tests/hostedRuns/**",
+    "tests/hosting/**",
+    "tests/ideaDraft/**",
+    "tests/jobs/**",
+    "tests/lessons/**",
+    "tests/mcp/**",
+    "tests/planChange/**",
+    "tests/planning/**",
+    "tests/plans/**",
+    "tests/projectRepos/**",
+    "tests/runs/**"
   ],
   // BOTH, because a test importing `@/scripts/plan-seed/…` (the seed fixtures) or
   // `../../scripts/deployFreshness.mjs` must redirect into the scripts project
