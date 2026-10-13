@@ -26,7 +26,8 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
-import { resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
+import type { JobCodeContext } from '@/lib/ai/codeContext';
+import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { aiChatService } from '@/lib/services/aiChatService';
@@ -57,7 +58,8 @@ import {
 // signal each owning story produces), plus the resumable API (its routes).
 //
 // EACH STEP CALLS THE OWNING STORY'S SHIPPED SURFACE — re-implementing none:
-//   connect  → the GitHub grant (7.10) — a connected repo set (resolveWorkspaceConnectedRepos)
+//   connect  → the GitHub grant (7.10) — the ORGANISATION's connected repo set
+//              (githubInstallationService.resolveOrganizationConnectedRepos, MOTIR-8480)
 //   index    → the code-graph index job (7.5) — its terminal state in the job_run
 //              ledger (jobRunRepository); the wizard WAITS, it does not index
 //              (the grant flow enqueues the index — `enqueueCodeGraphIndex`)
@@ -167,17 +169,93 @@ async function resolveProjectContext(
   };
 }
 
-/** connect → index. Exit: a connected repository exists for the workspace (the
- *  GitHub grant mirror). No kick — the user connects the repo in GitHub settings;
- *  the wizard only observes it. */
+/**
+ * THE RUN'S CONNECTED REPOSITORIES — the ONE resolution the connect→index hop
+ * answers from (MOTIR-8480): the connect gate, its kick, the index step's status
+ * read and the connect step's own read all call this, so the gate's verdict, the
+ * index step's Next and the step's "connected" can not disagree.
+ *
+ * ORGANISATION tier, because that is where a connection is owned: a migrate run
+ * whose workspace has no grant of its own, while a sibling workspace of the same
+ * organisation connected a repository, has that repository. The organisation is
+ * derived from the run's workspace row, never taken from a request.
+ */
+async function resolveRunConnectedRepos(ctx: {
+  userId: string;
+  workspaceId: string;
+}): Promise<JobCodeContext | undefined> {
+  const organizationId = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => resolveOrganizationId(ctx.workspaceId, tx),
+  );
+  return githubInstallationService.resolveOrganizationConnectedRepos({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    organizationId,
+  });
+}
+
+/** connect → index. Exit: the run's ORGANISATION has a connected repository
+ *  (MOTIR-8480 — whichever of its workspaces connected it). The user connects the
+ *  repo on GitHub; the wizard observes it.
+ *
+ *  THE KICK gives THIS workspace its own index of the repository the gate is about
+ *  to record. The ledger `INDEX.checkExit` and `getIndexStatus` read is
+ *  workspace-keyed, so an organisation repository indexed only in a sibling
+ *  workspace would let the run through `connect` and park it at `index` — a
+ *  quieter version of the 409 this replaces. It runs on every advance attempt, so
+ *  it is guarded by the ledger itself: an index in flight in this workspace, or a
+ *  succeeded one for the ref, and it enqueues nothing. */
 const CONNECT: StepWiring = {
   from: 'connect',
   to: 'index',
-  async checkExit({ run, ctx }) {
-    const code = await resolveWorkspaceConnectedRepos({
+  async ensureKicked({ run, ctx }) {
+    const code = await resolveRunConnectedRepos(ctx);
+    const firstRepo = code?.repos[0];
+    if (!firstRepo) return;
+    const repoRef = run.connectedRepoRef ?? firstRepo.repoRef;
+    const covered = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const running = await jobRunRepository.findRunningCodeGraphIndexForWorkspace(
+          ctx.workspaceId,
+          tx,
+        );
+        if (running) return true;
+        const succeeded = await jobRunRepository.findSucceededCodeGraphIndex(
+          ctx.workspaceId,
+          repoRef,
+          tx,
+        );
+        return succeeded !== null;
+      },
+    );
+    if (covered) return;
+    const organizationId = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => resolveOrganizationId(ctx.workspaceId, tx),
+    );
+    const target = await githubInstallationService.resolveOrganizationIndexTarget({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
+      organizationId,
+      repoRef,
     });
+    // A recorded ref the organisation no longer has: nothing to index, and the
+    // gate below decides on its own read.
+    if (!target) return;
+    // Best-effort and post-read, like every index enqueue: a dropped event is
+    // re-sent on the next advance attempt, because the ledger still has no row.
+    await enqueueCodeGraphIndex({
+      installationId: target.installationRef,
+      workspaceId: ctx.workspaceId,
+      repoOwner: target.repoOwner,
+      repoName: target.repoName,
+      defaultBranch: target.defaultBranch,
+    });
+  },
+  async checkExit({ run, ctx }) {
+    const code = await resolveRunConnectedRepos(ctx);
     const firstRepo = code?.repos[0];
     if (!firstRepo) return { ready: false };
     // Record WHICH repo backs the run (the connect-time ref, else the first
@@ -1001,8 +1079,8 @@ export const migrateOnboardingService = {
   /**
    * The Index step's live per-repo progress (Story 7.15 · MOTIR-934) — what the
    * wizard polls at `GET /api/onboarding/migrate/[id]/index-status`. Resolves the
-   * workspace's connected repo set (`resolveWorkspaceConnectedRepos`, the same set the CONNECT
-   * step observed) and maps each repo to `indexed` (a succeeded
+   * run's ORGANISATION connected repo set (`resolveRunConnectedRepos`, the same
+   * resolution the CONNECT gate answers from — MOTIR-8480) and maps each repo to `indexed` (a succeeded
    * `system.code-graph-index` run matches its `output.repoRef`) or `pending`, plus
    * the aggregate `hasRunning` flag (a running index row exists — the ledger cannot
    * tie a running row to a specific repo, so the in-flight state is aggregate).
@@ -1019,14 +1097,13 @@ export const migrateOnboardingService = {
     if (!run) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanBrowse(run.projectId, ctx);
 
-    const code = await resolveWorkspaceConnectedRepos({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
+    // The SAME resolution the CONNECT gate answers from (MOTIR-8480), so a run the
+    // gate let through has a list whose `allIndexed` can become true.
+    const code = await resolveRunConnectedRepos(ctx);
     const repos = code?.repos ?? [];
 
     // One workspace-scoped transaction for all the job_run reads (the job_run RLS
-    // policy scopes them; `resolveWorkspaceConnectedRepos` opens its own).
+    // policy scopes them; the resolution opens its own).
     const { statuses, hasRunning } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
@@ -1103,10 +1180,12 @@ export const migrateOnboardingService = {
       },
     );
 
-    // The gate's own read. Its empty set is `undefined`, never `[]` — normalise.
-    const code = await resolveWorkspaceConnectedRepos({
+    // The gate's own resolution (MOTIR-8480 — organisation tier). Its empty set is
+    // `undefined`, never `[]` — normalise.
+    const code = await githubInstallationService.resolveOrganizationConnectedRepos({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
+      organizationId,
     });
     const repositories = (code?.repos ?? []).map((repo) => ({
       provider: repo.provider,
