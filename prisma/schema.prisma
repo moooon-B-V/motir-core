@@ -4523,20 +4523,27 @@ model JobQueueRun {
   /// column the query both ranges over and orders by, which lets Postgres seek
   /// to the first due row and walk forward in order with no sort.
   ///
-  /// ⚠️ It is deliberately a PLAIN `@@index`, not a hand-written PARTIAL index
-  /// on `run_at WHERE state = 'pending'`. A partial index would be marginally
-  /// tighter and would step straight into the trap `CLAUDE.md` § Migrations
-  /// records: Prisma's differ pairs indexes BY COLUMN LIST and cannot express a
-  /// `WHERE` clause, so a partial index sharing its columns with an `@@index`
-  /// on the same model is reported as a permanent spurious RENAME that the next
-  /// `migrate dev` writes into a migration. Avoiding the hand-written index
-  /// avoids the class outright, and the queue is small enough (rows are deleted
-  /// or terminal within their retention) that the difference does not pay for a
-  /// standing drift hazard.
+  /// ⚠️ UNDER THE RUNTIME ROLE THE CLAIM DOES NOT USE THIS INDEX — it uses the
+  /// hand-written PARTIAL `job_queue_pending_run_at_idx` on `(run_at) WHERE
+  /// state = 'pending'` (bug MOTIR-8519, migration
+  /// `20261013230000_job_queue_rls_usable_partial_indexes`). `job_queue` is FORCE
+  /// RLS and `motir_app` does not bypass it, so the policy is a security barrier,
+  /// and Postgres will not drive an index scan with `state = 'pending'` behind it:
+  /// the enum equality operator is not LEAKPROOF. Every claim was a full scan of
+  /// a table no retention empties (~268k terminal rows in production). A partial
+  /// index's `WHERE` is PROVEN from the query rather than evaluated per row, so the
+  /// planner can use it. This composite stays for non-RLS readers (the owner).
+  ///
+  /// The partial indexes cannot be declared here (Prisma has no `WHERE` on an
+  /// index) and the differ pairs indexes BY COLUMN LIST (`CLAUDE.md` § Migrations),
+  /// so their column lists, `(run_at)` and `(lease_expires_at)`, must never be
+  /// given to an `@@index` on this model: that would turn them into a permanent
+  /// spurious RENAME.
   @@index([state, runAt])
   /// The LEASE-RECLAIM sweep: `WHERE state = 'running' AND lease_expires_at < now()`.
   /// A distinct column list from the claim index, so the differ pairs each with
-  /// its own datamodel entry.
+  /// its own datamodel entry. Under the runtime role the sweep uses the partial
+  /// `job_queue_running_lease_expires_at_idx` instead, for the reason above.
   @@index([state, leaseExpiresAt])
   /// Operator surfaces and the ledger correlation, per tenant.
   @@index([workspaceId, createdAt(sort: Desc)])
