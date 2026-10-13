@@ -6134,6 +6134,11 @@
       "searchUnattributed": "Kredyty nieprzypisane do uruchomienia: {n}",
       "searchUnavailable": "Dane o wyszukiwaniu są teraz niedostępne. Wyszukiwania nadal są naliczane — dotyczy to wyświetlania, nie rozliczeń.",
       "searchUnavailableValue": "Niedostępne",
+      "translationThisMonth": "Wydatki na tłumaczenia w tym miesiącu",
+      "translationAllTime": "Kredyty łącznie: {n}",
+      "translationNone": "Nic jeszcze nie wydano na tłumaczenia",
+      "translationUnavailable": "Dane o tłumaczeniach są teraz niedostępne. Dotyczy to wyświetlania, nie rozliczeń.",
+      "translationUnavailableValue": "Niedostępne",
       "scopeFollows": "Zgodnie z tym zakresem",
       "scopeOrg": "Cała organizacja",
       "internalBilling": "Rozliczenia wewnętrzne"

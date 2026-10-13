@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} クレジットは実行に紐付いていません",
       "searchUnavailable": "現在、検索の数値を表示できません。検索の課金は引き続き行われています。これは表示の問題であり、請求の問題ではありません。",
       "searchUnavailableValue": "利用不可",
+      "translationThisMonth": "今月の翻訳使用量",
+      "translationAllTime": "累計 {n} クレジット",
+      "translationNone": "翻訳の使用量はまだありません",
+      "translationUnavailable": "現在、翻訳の数値を表示できません。これは表示の問題であり、請求の問題ではありません。",
+      "translationUnavailableValue": "利用不可",
       "scopeFollows": "この対象範囲に連動",
       "scopeOrg": "組織全体",
       "internalBilling": "内部請求"

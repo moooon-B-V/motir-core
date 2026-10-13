@@ -761,6 +761,20 @@ export interface RawUsageResponse {
    */
   agentMachine?: RawUsageAgentSpend;
   agentStorage?: RawUsageAgentSpend;
+  /**
+   * Translation spend (Story MOTIR-7735 · motir-ai MOTIR-8126) — org-level like
+   * `search`, this month and all time, and EXCLUDED by motir-ai from every AI
+   * figure above (`totalSpend`, `monthSpend`, `monthlyHistory`, the per-model
+   * breakdown and the run log's credits). Optional for the same ROLLING-DEPLOY
+   * reason as `search`: `undefined` means UNAVAILABLE, never zero.
+   */
+  translation?: RawUsageTranslationSpend;
+}
+
+/** `GET /v1/usage` — the organisation's translation spend (MOTIR-8126). */
+export interface RawUsageTranslationSpend {
+  totalSpend: number;
+  monthSpend: number;
 }
 
 /** `GET /v1/usage` — one agent charge kind's org-level spend (MOTIR-6915). */

@@ -91,6 +91,7 @@ function emptyDto(args: {
     // with no accessible project). Zero is the true answer, so say zero — a
     // spurious "unavailable" would send the reader looking for an outage.
     search: { totalSpend: 0, monthSpend: 0 },
+    translation: { totalSpend: 0, monthSpend: 0 },
     searchRuns: {
       runs: [],
       page: args.page,
@@ -282,6 +283,8 @@ export const aiUsageService = {
       // fetch failure becomes an authoritative-looking "you spent nothing".
       search: raw.search ?? null,
       searchRuns: raw.searchRuns ?? null,
+      // The same `?? null` rule, for translation spend (MOTIR-8117).
+      translation: raw.translation ?? null,
       hasUsage: raw.totalSpend > 0 || raw.recentRuns.total > 0,
     };
   },

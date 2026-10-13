@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} tegoed niet toegewezen aan een Run",
       "searchUnavailable": "Zoekcijfers zijn momenteel niet beschikbaar. Je zoekopdrachten worden nog steeds in rekening gebracht — dit betreft de weergave, niet de facturering.",
       "searchUnavailableValue": "Niet beschikbaar",
+      "translationThisMonth": "Besteding aan vertalen, deze maand",
+      "translationAllTime": "{n} tegoed in totaal",
+      "translationNone": "Nog niets aan vertalen besteed",
+      "translationUnavailable": "Vertaalcijfers zijn momenteel niet beschikbaar. Dit betreft de weergave, niet de facturering.",
+      "translationUnavailableValue": "Niet beschikbaar",
       "scopeFollows": "Volgt dit bereik",
       "scopeOrg": "Hele organisatie",
       "internalBilling": "Interne facturering"

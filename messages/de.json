@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} Credits keinem Lauf zugeordnet",
       "searchUnavailable": "Suchzahlen sind derzeit nicht verfügbar. Ihre Suchen werden weiterhin berechnet – betroffen ist die Anzeige, nicht die Abrechnung.",
       "searchUnavailableValue": "Nicht verfügbar",
+      "translationThisMonth": "Übersetzungsverbrauch diesen Monat",
+      "translationAllTime": "{n} Credits insgesamt",
+      "translationNone": "Noch nichts für Übersetzungen ausgegeben",
+      "translationUnavailable": "Übersetzungszahlen sind derzeit nicht verfügbar. Betroffen ist die Anzeige, nicht die Abrechnung.",
+      "translationUnavailableValue": "Nicht verfügbar",
       "scopeFollows": "Folgt diesem Umfang",
       "scopeOrg": "Gesamte Organisation",
       "internalBilling": "Interne Abrechnung"

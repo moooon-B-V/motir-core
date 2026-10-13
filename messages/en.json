@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} credits not attributed to a run",
       "searchUnavailable": "Search figures aren’t available right now. Your searches are still being charged — this is the display, not the billing.",
       "searchUnavailableValue": "Unavailable",
+      "translationThisMonth": "Translation spend, this month",
+      "translationAllTime": "{n} credits all time",
+      "translationNone": "Nothing spent on translation yet",
+      "translationUnavailable": "Translation figures aren’t available right now. This is the display, not the billing.",
+      "translationUnavailableValue": "Unavailable",
       "scopeFollows": "Follows this scope",
       "scopeOrg": "Whole organization",
       "internalBilling": "Internal billing"

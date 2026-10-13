@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} crediti non attribuiti a un’esecuzione",
       "searchUnavailable": "I dati sulle ricerche non sono disponibili al momento. Le tue ricerche vengono comunque addebitate: a mancare è la visualizzazione, non la fatturazione.",
       "searchUnavailableValue": "Non disponibile",
+      "translationThisMonth": "Spesa per le traduzioni, questo mese",
+      "translationAllTime": "{n} crediti in totale",
+      "translationNone": "Ancora nessuna spesa per le traduzioni",
+      "translationUnavailable": "I dati sulle traduzioni non sono disponibili al momento. A mancare è la visualizzazione, non la fatturazione.",
+      "translationUnavailableValue": "Non disponibile",
       "scopeFollows": "Segue questo ambito",
       "scopeOrg": "Intera organizzazione",
       "internalBilling": "Fatturazione interna"

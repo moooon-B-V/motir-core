@@ -6134,6 +6134,11 @@
       "searchUnattributed": "실행에 귀속되지 않은 {n}크레딧",
       "searchUnavailable": "지금은 검색 수치를 사용할 수 없습니다. 검색 요금은 계속 청구되고 있으며, 표시에만 문제가 있고 결제에는 문제가 없습니다.",
       "searchUnavailableValue": "사용할 수 없음",
+      "translationThisMonth": "이번 달 번역 사용량",
+      "translationAllTime": "전체 {n}크레딧",
+      "translationNone": "아직 번역에 사용한 금액이 없습니다",
+      "translationUnavailable": "지금은 번역 수치를 사용할 수 없습니다. 표시에만 문제가 있고 결제에는 문제가 없습니다.",
+      "translationUnavailableValue": "사용할 수 없음",
       "scopeFollows": "이 범위를 따름",
       "scopeOrg": "조직 전체",
       "internalBilling": "내부 결제"

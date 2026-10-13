@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} créditos no atribuidos a una ejecución",
       "searchUnavailable": "Las cifras de búsqueda no están disponibles ahora mismo. Tus búsquedas se siguen cobrando: esto es la visualización, no la facturación.",
       "searchUnavailableValue": "No disponible",
+      "translationThisMonth": "Gasto en traducción, este mes",
+      "translationAllTime": "{n} créditos en total",
+      "translationNone": "Todavía no se ha gastado nada en traducción",
+      "translationUnavailable": "Las cifras de traducción no están disponibles ahora mismo. Esto es la visualización, no la facturación.",
+      "translationUnavailableValue": "No disponible",
       "scopeFollows": "Sigue este ámbito",
       "scopeOrg": "Toda la organización",
       "internalBilling": "Facturación interna"
