@@ -22,3 +22,16 @@ export class EmptyTranslationTextError extends Error {
     this.name = 'EmptyTranslationTextError';
   }
 }
+
+/**
+ * A translation press waited longer than the single-flight bound for another
+ * press's field locks (Subtask MOTIR-8120). Nothing was sent: the door answers
+ * `timeout` for those fields rather than paying for a second job.
+ */
+export class FieldLockTimeoutError extends Error {
+  readonly code = 'FIELD_LOCK_TIMEOUT' as const;
+  constructor(readonly keyCount: number) {
+    super(`Timed out waiting for ${keyCount} translation field lock(s).`);
+    this.name = 'FieldLockTimeoutError';
+  }
+}

@@ -85,6 +85,27 @@ export const workItemTranslationRepository = {
    * `keepHash` — the rows a fresh translation of the same field supersedes.
    * Other fields and other languages are untouched.
    */
+  /**
+   * Bound how long the NEXT lock wait in this transaction may block, in ms
+   * (`SET LOCAL lock_timeout`). A wait past it raises `55P03` and aborts the
+   * transaction, which `translationSingleFlight` reads as a timed-out wait.
+   * Transaction-local: it ends with the transaction that set it.
+   */
+  async setLockTimeout(ms: number, tx: Prisma.TransactionClient): Promise<void> {
+    const value = `${Math.max(1, Math.ceil(ms))}ms`;
+    await tx.$executeRaw`SELECT set_config('lock_timeout', ${value}, true)`;
+  },
+
+  /**
+   * Take the TRANSACTION-scoped advisory lock for one single-flight key (Subtask
+   * MOTIR-8120) — blocking while another transaction holds it, released when this
+   * one commits or rolls back. The key is already a digest of the field, its
+   * revision and the target language (`translationSingleFlight.fieldLockKey`).
+   */
+  async lockField(key: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`work-item-translation:${key}`}, 0))`;
+  },
+
   async deleteSuperseded(
     workItemId: string,
     fieldRef: string,
