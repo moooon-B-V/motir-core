@@ -1769,7 +1769,7 @@ function PlanCard({
     plan.key === 'free'
       ? ((t.raw('plans.tiers.free.featuresOff') as string[] | undefined) ?? [])
       : [];
-  const hasPrev = plan.key === 'pro' || plan.key === 'max' || plan.key === 'enterprise';
+  const hasPrev = plan.key === 'pro' || plan.key === 'max' || plan.key === 'max_x2';
   // The bundled Motir seat (8.1.22): every PAID plan includes 1 seat (caps lifted);
   // Free states the absence; Enterprise is custom.
   const seatText =
