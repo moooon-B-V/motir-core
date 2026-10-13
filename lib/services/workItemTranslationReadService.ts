@@ -1,11 +1,16 @@
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
-import type { TranslationOfferDTO, TranslationOfferFieldDTO } from '@/lib/dto/workItemTranslation';
+import type {
+  ReaderTranslationDTO,
+  TranslationOfferDTO,
+  TranslationOfferFieldDTO,
+} from '@/lib/dto/workItemTranslation';
 import { isLocale, type Locale } from '@/lib/i18n/locales';
 import { detectLocale } from '@/lib/translation/detectLanguage';
 import { classifyFields, type FieldClassification } from '@/lib/translation/needsTranslation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { assembleFields, type DoorField } from './workItemTranslationService';
+import { assembleFields, type DoorField } from '@/lib/translation/itemFields';
+import { orgCanForWorkspace } from './organizationAccessService';
 import { workItemTranslationStoreService } from './workItemTranslationStoreService';
 
 // The page-read half of on-demand translation (Story MOTIR-7735 · Subtask
@@ -25,10 +30,12 @@ export interface TranslationOfferInput {
 /** The seam a test replaces: the store's lookup. */
 export interface TranslationOfferDeps {
   getKept: (typeof workItemTranslationStoreService)['getKept'];
+  canManageBilling?: (ctx: ServiceContext) => Promise<boolean>;
 }
 
 const defaultDeps: TranslationOfferDeps = {
   getKept: (...args) => workItemTranslationStoreService.getKept(...args),
+  canManageBilling: (ctx) => orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageBilling'),
 };
 
 /** The language a differing field is in: recorded, else detected, else unknown. */
@@ -83,5 +90,21 @@ export const workItemTranslationReadService = {
       anyNeedsTranslation: needing.length > 0,
       fields: toOfferFields(fields, verdicts, kept),
     };
+  },
+  /**
+   * The offer plus whether the no-credit message may link to adding credit
+   * (MOTIR-8122). The billing question is asked only when there is something to
+   * translate, so an item already in the reader's language costs no extra read.
+   */
+  async getReaderTranslation(
+    input: TranslationOfferInput,
+    deps: TranslationOfferDeps = defaultDeps,
+  ): Promise<ReaderTranslationDTO> {
+    const offer = await this.getTranslationOffer(input, deps);
+    const canAddCredits =
+      offer.anyNeedsTranslation && deps.canManageBilling
+        ? await deps.canManageBilling(input.ctx)
+        : false;
+    return { offer, canAddCredits };
   },
 };

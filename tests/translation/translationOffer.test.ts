@@ -165,3 +165,38 @@ describe('getTranslationOffer', () => {
     expect(raw).not.toContain('构建导出功能');
   });
 });
+
+// MOTIR-8122: the reader's half both hosts carry — the offer plus whether the
+// no-credit message may link to adding credit (owner or admin of the org).
+describe('getReaderTranslation', () => {
+  const read = (workItem: WorkItemDto, readerLocale: Locale, d: TranslationOfferDeps) =>
+    workItemTranslationReadService.getReaderTranslation(
+      { workItem, todos: [], readerLocale, ctx },
+      d,
+    );
+
+  it('asks the billing capability, with the reader’s context, only when something differs', async () => {
+    const canManageBilling = vi.fn(async () => true);
+    const result = await read(item('zh'), 'en', { ...deps(), canManageBilling });
+    expect(result.offer.anyNeedsTranslation).toBe(true);
+    expect(result.canAddCredits).toBe(true);
+    expect(canManageBilling).toHaveBeenCalledWith(ctx);
+
+    canManageBilling.mockClear();
+    const none = await read(item('en', { title: 'Build the export' }), 'en', {
+      ...deps(),
+      canManageBilling,
+    });
+    expect(none.offer.anyNeedsTranslation).toBe(false);
+    expect(none.canAddCredits).toBe(false);
+    expect(canManageBilling).not.toHaveBeenCalled();
+  });
+
+  it('a member who cannot manage billing gets no link', async () => {
+    const result = await read(item('zh'), 'en', {
+      ...deps(),
+      canManageBilling: async () => false,
+    });
+    expect(result.canAddCredits).toBe(false);
+  });
+});

@@ -1,5 +1,5 @@
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
-import type { TranslatedField } from '@/lib/ai/translate';
+import { batchTranslateFields, type TranslatedField } from '@/lib/ai/translate';
 import { requestTranslation, type TranslateTenant } from '@/lib/ai/translateClient';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
@@ -7,7 +7,8 @@ import type { TranslateResponseDTO } from '@/lib/dto/workItemTranslation';
 import type { Locale } from '@/lib/i18n/locales';
 import { toTranslateResponseDTO } from '@/lib/mappers/workItemTranslationMappers';
 import { FieldLockTimeoutError } from '@/lib/translation/errors';
-import { fieldRef, hashFieldText, type TranslatableField } from '@/lib/translation/fieldRevision';
+import { hashFieldText, type TranslatableField } from '@/lib/translation/fieldRevision';
+import { assembleFields, type DoorField } from '@/lib/translation/itemFields';
 import { classifyFields } from '@/lib/translation/needsTranslation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -16,6 +17,10 @@ import { fieldLockKey, withFieldLocks } from './translationSingleFlight';
 import { workItemTodosService } from './workItemTodosService';
 import { workItemTranslationStoreService } from './workItemTranslationStoreService';
 import { workItemsService } from './workItemsService';
+
+// The field assembly is pure and lives in `lib/translation/itemFields.ts`, so the
+// page-read offer can use it without importing this door (MOTIR-8122).
+export { assembleFields, type DoorField };
 
 // THE TRANSLATION DOOR (Story MOTIR-7735 · Subtask MOTIR-8120) — the story's one
 // server-side entry point, and the one the auto-translate story calls too.
@@ -37,11 +42,6 @@ import { workItemsService } from './workItemsService';
 export type FieldTranslationResult =
   | { fieldRef: string; status: 'ready'; text: string }
   | { fieldRef: string; status: 'failed' | 'no_credit' | 'timeout'; reason?: string };
-
-/** A translatable field with the language its text was recorded in. */
-export interface DoorField extends TranslatableField {
-  language: string | null;
-}
 
 export interface TranslateWorkItemInput {
   workItemId: string;
@@ -95,36 +95,6 @@ export const defaultTranslationDoorDeps: TranslationDoorDeps = {
   resolveTenant,
 };
 
-/** Every translatable field of the item, in reading order, with its recorded language. */
-export function assembleFields(item: WorkItemDto, todos: readonly WorkItemTodoDto[]): DoorField[] {
-  const fields: DoorField[] = [
-    { fieldRef: fieldRef.title(), text: item.title, language: item.languages.title },
-    {
-      fieldRef: fieldRef.description(),
-      text: item.descriptionMd ?? '',
-      language: item.languages.description,
-    },
-    {
-      fieldRef: fieldRef.explanation(),
-      text: item.explanationMd ?? '',
-      language: item.languages.explanation,
-    },
-  ];
-  for (const todo of todos) {
-    fields.push({
-      fieldRef: fieldRef.todoText(todo.id),
-      text: todo.text,
-      language: todo.textLanguage,
-    });
-    fields.push({
-      fieldRef: fieldRef.todoNotes(todo.id),
-      text: todo.notesMd ?? '',
-      language: todo.notesLanguage,
-    });
-  }
-  return fields;
-}
-
 /** The fields the classifier says need translating for `targetLanguage`. */
 export function fieldsNeedingTranslation(
   fields: readonly DoorField[],
@@ -175,7 +145,28 @@ async function keepAll(
   return out;
 }
 
-/** Inside the locks: re-read the store, send only what is still missing, keep only on `ok`. */
+/** One job's worth of fields: send it, keep only on `ok`. */
+async function sendBatch(
+  scope: PressScope,
+  batch: readonly DoorField[],
+): Promise<FieldTranslationResult[]> {
+  const result = await scope.deps.requestTranslation({
+    tenant: scope.tenant,
+    actor: { userId: scope.ctx.userId },
+    targetLanguage: scope.targetLanguage,
+    fields: batch.map(({ fieldRef: ref, text }) => ({ fieldRef: ref, text })),
+  });
+  if (result.status === 'ok') return keepAll(scope, batch, result.translations);
+  if (result.status === 'failed') return failAll(batch, 'failed', result.reason);
+  return failAll(batch, result.status);
+}
+
+/**
+ * Inside the locks: re-read the store, send only what is still missing, keep
+ * only on `ok`. What is missing goes out in as few jobs as motir-ai's input
+ * limits allow (`batchTranslateFields`), sent together so the press waits one
+ * deadline, not one per job; a field too long for any job is `failed` unsent.
+ */
 async function sendUnderLock(
   scope: PressScope,
   missing: readonly DoorField[],
@@ -189,16 +180,22 @@ async function sendUnderLock(
   }));
   const toSend = missing.filter((f) => kept[f.fieldRef] === undefined);
   if (toSend.length === 0) return ready;
-  const result = await deps.requestTranslation({
-    tenant: scope.tenant,
-    actor: { userId: ctx.userId },
-    targetLanguage,
-    fields: toSend.map(({ fieldRef: ref, text }) => ({ fieldRef: ref, text })),
-  });
-  if (result.status === 'ok')
-    return [...ready, ...(await keepAll(scope, toSend, result.translations))];
-  if (result.status === 'failed') return [...ready, ...failAll(toSend, 'failed', result.reason)];
-  return [...ready, ...failAll(toSend, result.status)];
+  const byRef = new Map(toSend.map((f) => [f.fieldRef, f]));
+  const { batches, oversized } = batchTranslateFields(toSend);
+  const sent = await Promise.all(
+    batches.map((b) =>
+      sendBatch(
+        scope,
+        b.map((f) => byRef.get(f.fieldRef)!),
+      ),
+    ),
+  );
+  const tooLong = failAll(
+    oversized.map((ref) => byRef.get(ref)!),
+    'failed',
+    'rejected',
+  );
+  return [...ready, ...sent.flat(), ...tooLong];
 }
 
 /** The fresh half of a press: take the locks, then {@link sendUnderLock}. */

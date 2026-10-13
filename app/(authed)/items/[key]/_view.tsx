@@ -20,8 +20,6 @@ import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
-import { MarkdownView } from '@/components/ui/MarkdownView';
-import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { parsePageTokenIds } from '@/lib/mentions/pageRefs';
 import { Pill } from '@/components/ui/Pill';
@@ -60,7 +58,14 @@ import {
   OptimisticObsolescenceHeaderLink,
 } from './_components/OptimisticMarkProvider';
 import { PlacementProvider } from './_components/PlacementProvider';
-import { ItemTranslationOfferProvider } from './_components/ItemTranslationOfferProvider';
+import { TranslationProvider } from './_components/translation/TranslationProvider';
+import { TranslateControl } from './_components/translation/TranslateControl';
+import { FieldTranslationMark } from './_components/translation/FieldTranslationMark';
+import {
+  TranslatableMarkdown,
+  TranslatableTitle,
+} from './_components/translation/TranslatableFields';
+import { fieldRef } from '@/lib/translation/fieldRefs';
 import {
   workItemTranslationReadService,
   type TranslationOfferInput,
@@ -104,7 +109,7 @@ function translationReadFor(
 ) {
   return Promise.all([localeRead, todoListRead])
     .then(([readerLocale, todos]) =>
-      workItemTranslationReadService.getTranslationOffer({
+      workItemTranslationReadService.getReaderTranslation({
         workItem,
         todos: todos.items,
         readerLocale,
@@ -288,13 +293,14 @@ export default async function ItemView({
   // group below renders them, and the translation offer is built from both.
   const localeRead = getLocale() as Promise<Locale>;
   const todoListRead = workItemTodosService.listTodos(item.id, svc);
-  // THE TRANSLATION OFFER (Story MOTIR-7735 · MOTIR-8121): for a signed-in
-  // reader, which fields differ from their interface language and which already
-  // have a kept translation — computed from the item's CURRENT text, no AI call,
-  // no write. A Visitor (the public project host) gets none: customers' text is
+  // THE TRANSLATION OFFER (Story MOTIR-7735 · MOTIR-8121 / MOTIR-8122): for a
+  // signed-in reader, which fields differ from their interface language and which
+  // already have a kept translation — computed from the item's CURRENT text, no
+  // AI call, no write — and whether the no-credit message may link to adding
+  // credit. A Visitor (the public project host) gets none: customers' text is
   // shown as written. A failed read degrades to no offer rather than rejecting
   // the group; the page then renders exactly as it did before the feature.
-  const translationOfferRead = isVisitor
+  const translationRead = isVisitor
     ? null
     : translationReadFor(item, localeRead, todoListRead, svc);
   const [
@@ -314,7 +320,7 @@ export default async function ItemView({
     pendingDecisions,
     planHold,
     repairRun,
-    translationOffer,
+    readerTranslation,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -431,7 +437,7 @@ export default async function ItemView({
           .findOpenRepairRuns([item.id], svc)
           .then((runs) => runs.get(item.id) ?? null)
       : null,
-    translationOfferRead,
+    translationRead,
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -644,13 +650,20 @@ export default async function ItemView({
                       />
                     </div>
                   </div>
-                  <h1 className="text-(--el-text) font-serif text-2xl font-semibold">
-                    <WorkItemTitle
-                      title={item.title}
-                      projectIdentifier={ctx.project.identifier}
-                      workItemRefs={workItemRefs}
-                    />
-                  </h1>
+                  {/* The title row and the TRANSLATION BAR (MOTIR-8122; design MOTIR-8112
+                  § Entry and access path): the mark sits beside the h1, outside it, so
+                  the heading's name stays the title; the bar sits directly under it. */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h1 className="text-(--el-text) font-serif text-2xl font-semibold">
+                      <TranslatableTitle
+                        title={item.title}
+                        projectIdentifier={ctx.project.identifier}
+                        workItemRefs={workItemRefs}
+                      />
+                    </h1>
+                    <FieldTranslationMark fieldRef={fieldRef.title()} field="title" />
+                  </div>
+                  <TranslateControl />
                 </header>
 
                 {/* Body — two columns; later subtasks fill the regions. The `1fr` track is
@@ -707,6 +720,12 @@ export default async function ItemView({
                     <ContentSectionCard
                       title={t('description')}
                       subtitle={t('descriptionGloss')}
+                      headerExtra={
+                        <FieldTranslationMark
+                          fieldRef={fieldRef.description()}
+                          field="description"
+                        />
+                      }
                       editHref={
                         canEdit
                           ? (routes.path(`/items/${item.identifier}/edit`) ?? undefined)
@@ -714,7 +733,8 @@ export default async function ItemView({
                       }
                     >
                       {item.descriptionMd ? (
-                        <MarkdownView
+                        <TranslatableMarkdown
+                          fieldRef={fieldRef.description()}
                           value={item.descriptionMd}
                           aria-label={t('issueDescriptionAria')}
                           workItemRefs={workItemRefs}
@@ -920,10 +940,15 @@ export default async function ItemView({
       </MonitorErrorsDoorProvider>
     </EstimationConfigProvider>
   );
-  // The offer reaches every client island of the view through one provider; it
-  // draws nothing itself (MOTIR-8121). The tree above is bound to `page` so
-  // wrapping it does not re-indent four hundred lines.
-  return (
-    <ItemTranslationOfferProvider offer={translationOffer}>{page}</ItemTranslationOfferProvider>
+  // THE TRANSLATION PROVIDER (MOTIR-8122) wraps the view only when there is an
+  // offer: the public page (and a failed offer read) renders exactly as before,
+  // with no provider and no control. The tree above is bound to `page` so the
+  // wrap does not re-indent four hundred lines.
+  return readerTranslation ? (
+    <TranslationProvider itemId={item.id} translation={readerTranslation}>
+      {page}
+    </TranslationProvider>
+  ) : (
+    page
   );
 }

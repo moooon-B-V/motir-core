@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidTranslationsError, parseTranslations } from '@/lib/ai/translate';
+import {
+  InvalidTranslationsError,
+  TRANSLATE_MAX_CHARS_PER_JOB,
+  TRANSLATE_MAX_FIELDS_PER_JOB,
+  batchTranslateFields,
+  parseTranslations,
+} from '@/lib/ai/translate';
 
 // `parseTranslations` (Story MOTIR-7735 · MOTIR-8119): the reply is VALIDATED
 // against the fields sent, never cast — one non-empty text per fieldRef, none
@@ -76,5 +82,38 @@ describe('parseTranslations', () => {
 
   it('accepts an empty reply for an empty batch', () => {
     expect(parseTranslations([], [])).toEqual([]);
+  });
+});
+
+describe('batchTranslateFields — motir-ai input limits', () => {
+  const f = (i: number, len = 5) => ({ fieldRef: `f${i}`, text: 'x'.repeat(len) });
+
+  it('keeps a small set in one batch', () => {
+    expect(batchTranslateFields([f(1), f(2)])).toEqual({ batches: [[f(1), f(2)]], oversized: [] });
+  });
+
+  it('splits at 32 fields, in order', () => {
+    const fields = Array.from({ length: 70 }, (_, i) => f(i));
+    const { batches } = batchTranslateFields(fields);
+    expect(batches.map((b) => b.length)).toEqual([32, 32, 6]);
+    expect(batches.flat()).toEqual(fields);
+  });
+
+  it('splits before the texts together pass 40,000 characters', () => {
+    const { batches } = batchTranslateFields([f(1, 25_000), f(2, 15_000), f(3, 1)]);
+    expect(batches.map((b) => b.map((x) => x.fieldRef))).toEqual([['f1', 'f2'], ['f3']]);
+    for (const b of batches) {
+      expect(b.reduce((n, x) => n + x.text.length, 0)).toBeLessThanOrEqual(
+        TRANSLATE_MAX_CHARS_PER_JOB,
+      );
+      expect(b.length).toBeLessThanOrEqual(TRANSLATE_MAX_FIELDS_PER_JOB);
+    }
+  });
+
+  it('a single field too long for any job is set aside, never sent', () => {
+    expect(batchTranslateFields([f(1), f(2, 40_001), f(3)])).toEqual({
+      batches: [[f(1), f(3)]],
+      oversized: ['f2'],
+    });
   });
 });

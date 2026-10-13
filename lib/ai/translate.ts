@@ -100,3 +100,48 @@ export function parseTranslations(
     return field;
   });
 }
+
+// ── What one job may carry (motir-ai's `translate` input limits, MOTIR-8116) ──
+//
+// motir-ai refuses a job with more than 32 fields, or whose texts together pass
+// 40,000 characters, with a `validation_error` BEFORE any model call. Core never
+// sends such a job: it splits the fields into batches that fit, and a single
+// field too long to fit on its own is not sent at all.
+
+/** The most fields one `translate` job may carry. */
+export const TRANSLATE_MAX_FIELDS_PER_JOB = 32;
+/** The most characters (all texts together) one `translate` job may carry. */
+export const TRANSLATE_MAX_CHARS_PER_JOB = 40_000;
+
+export interface TranslateBatches {
+  /** Jobs to send, each within both limits, in the order the fields came. */
+  batches: TranslateField[][];
+  /** fieldRefs of fields too long for any job — answered `failed` without a call. */
+  oversized: string[];
+}
+
+/** Split `fields` into the fewest in-order batches that each fit one job. */
+export function batchTranslateFields(fields: readonly TranslateField[]): TranslateBatches {
+  const batches: TranslateField[][] = [];
+  const oversized: string[] = [];
+  let current: TranslateField[] = [];
+  let chars = 0;
+  for (const field of fields) {
+    const size = field.text.length;
+    if (size > TRANSLATE_MAX_CHARS_PER_JOB) {
+      oversized.push(field.fieldRef);
+      continue;
+    }
+    const full =
+      current.length === TRANSLATE_MAX_FIELDS_PER_JOB || chars + size > TRANSLATE_MAX_CHARS_PER_JOB;
+    if (full) {
+      batches.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(field);
+    chars += size;
+  }
+  if (current.length > 0) batches.push(current);
+  return { batches, oversized };
+}

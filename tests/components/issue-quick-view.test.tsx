@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { QuickViewData } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 
@@ -639,5 +639,56 @@ describe('IssueQuickViewPanel — which Plan / Re-plan face the peek wears', () 
       />,
     );
     expect(mode()).toBe('replan');
+  });
+});
+
+// THE QUICK VIEW'S TRANSLATION (Story MOTIR-7735 · MOTIR-8122; design MOTIR-8112
+// D3). The offer rides the peek read (`QuickViewData.translation`); the overlay
+// draws the same control under its title and marks only the title and the
+// description, and its press posts once for the whole item.
+describe('IssueQuickViewPanel — translation', () => {
+  const translated: QuickViewData = {
+    ...DATA,
+    translation: {
+      canAddCredits: false,
+      offer: {
+        targetLanguage: 'en',
+        anyNeedsTranslation: true,
+        fields: {
+          title: { needsTranslation: true, kept: false, sourceLanguage: 'de' },
+          description: { needsTranslation: true, kept: false, sourceLanguage: 'de' },
+          explanation: { needsTranslation: true, kept: false, sourceLanguage: 'de' },
+        },
+      },
+    },
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('offers Translate, swaps the title and description, and marks only those', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        targetLanguage: 'en',
+        fields: [
+          { fieldRef: 'title', status: 'ready', text: 'Translated title' },
+          { fieldRef: 'description', status: 'ready', text: 'Translated description.' },
+          { fieldRef: 'explanation', status: 'failed' },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = render(<IssueQuickViewPanel state="ready" data={translated} />);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Translate' })));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`/api/work-items/${translated.id}/translate`);
+    expect(screen.getByText('Translated title')).toBeTruthy();
+    expect(screen.getByText('Translated description.')).toBeTruthy();
+    expect(container.querySelectorAll('[data-translation-mark="translated"]')).toHaveLength(2);
+    expect(container.querySelector('[data-translation-mark="failed"]')).toBeNull();
+  });
+
+  it('no offer on the peek read → no control', () => {
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    expect(screen.queryByRole('group', { name: 'Translation' })).toBeNull();
   });
 });

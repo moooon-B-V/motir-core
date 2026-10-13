@@ -128,7 +128,7 @@ describe('ItemView', () => {
     });
 
     expect(isValidElement(tree)).toBe(true);
-    const titles = named(tree, 'WorkItemTitle');
+    const titles = named(tree, 'TranslatableTitle');
     expect(titles.length, 'the item title renders').toBeGreaterThan(0);
     expect(JSON.stringify(titles[0]!.props)).toContain('Rendered by a context');
 

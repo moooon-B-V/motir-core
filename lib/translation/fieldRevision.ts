@@ -15,19 +15,7 @@ import { createHash } from 'node:crypto';
 // step. The `fieldRef` space is OPEN (one `todo:<id>:…` pair per to-do), so no
 // map keyed on a closed union may stand in for it.
 
-/** One field to translate or look up: its address and its CURRENT stored text. */
-export interface TranslatableField {
-  fieldRef: string;
-  text: string;
-}
-
-export const fieldRef = {
-  title: (): string => 'title',
-  description: (): string => 'description',
-  explanation: (): string => 'explanation',
-  todoText: (todoId: string): string => `todo:${todoId}:text`,
-  todoNotes: (todoId: string): string => `todo:${todoId}:notes`,
-} as const;
+export { fieldRef, type TranslatableField } from './fieldRefs';
 
 /** The revision of a field's text: sha256, as 64 lowercase hex characters. */
 export function hashFieldText(text: string): string {

@@ -225,4 +225,48 @@ describe('translateWorkItem — mapping', () => {
       fieldLockKey({ ...base, sourceHash: 'b' }),
     );
   });
+
+  it('more fields than one job carries go out as several jobs, each within motir-ai limits', async () => {
+    const todos = Array.from({ length: 20 }, (_, i) => todo(`t${i}`, `Schritt ${i}`, `Notiz ${i}`));
+    const { d, calls } = deps(echo, {}, { loadSubject: async () => ({ item: item(), todos }) });
+    const results = await press(d);
+    // 2 item fields + 40 to-do fields = 42 → 32 + 10.
+    expect(calls.map((c) => c.fields.length)).toEqual([32, 10]);
+    expect(results).toHaveLength(42);
+    expect(results.every((r) => r.status === 'ready')).toBe(true);
+    expect(results.map((r) => r.fieldRef)).toEqual(
+      assembleFields(item(), todos)
+        .filter((f) => f.text)
+        .map((f) => f.fieldRef),
+    );
+  });
+
+  it('a field too long for any job is failed unsent; the rest still translate', async () => {
+    const { d, calls } = deps(
+      echo,
+      {},
+      {
+        loadSubject: async () => ({ item: item({ descriptionMd: 'Ä'.repeat(40_001) }), todos: [] }),
+      },
+    );
+    expect(await press(d)).toEqual([
+      { fieldRef: 'title', status: 'ready', text: 'EN Den Export bauen' },
+      { fieldRef: 'description', status: 'failed', reason: 'rejected' },
+    ]);
+    expect(calls.map((c) => c.fields.map((f) => f.fieldRef))).toEqual([['title']]);
+  });
+
+  it('one batch failing leaves the other batch translated', async () => {
+    const todos = Array.from({ length: 20 }, (_, i) => todo(`t${i}`, `Schritt ${i}`, `Notiz ${i}`));
+    let n = 0;
+    const { d, keepCalls } = deps(
+      (i) => (n++ === 0 ? echo(i) : { status: 'failed', reason: 'job_failed' }),
+      {},
+      { loadSubject: async () => ({ item: item(), todos }) },
+    );
+    const results = await press(d);
+    expect(results.filter((r) => r.status === 'ready')).toHaveLength(32);
+    expect(results.filter((r) => r.status === 'failed')).toHaveLength(10);
+    expect(keepCalls).toHaveLength(32);
+  });
 });

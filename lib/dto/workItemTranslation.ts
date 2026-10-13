@@ -41,3 +41,14 @@ export interface TranslateResponseDTO {
   targetLanguage: Locale;
   fields: FieldTranslationDTO[];
 }
+
+/**
+ * The translation half of a page read for a signed-in reader (MOTIR-8122): the
+ * offer, and whether the no-credit message may link to adding credit — the
+ * viewer can manage the organisation's billing (owner or admin). Both hosts
+ * carry it: the item page from `_view.tsx`, the quick view on the peek read.
+ */
+export interface ReaderTranslationDTO {
+  offer: TranslationOfferDTO;
+  canAddCredits: boolean;
+}

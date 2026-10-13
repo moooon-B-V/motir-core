@@ -430,7 +430,7 @@ describe('each Visitor page renders its shared body for a consented Visitor', ()
       });
     };
     const tree = await render(t.visible.identifier);
-    expect(JSON.stringify(named(tree, 'WorkItemTitle')[0]!.props)).toContain('Visible task');
+    expect(JSON.stringify(named(tree, 'TranslatableTitle')[0]!.props)).toContain('Visible task');
     expect(named(tree, 'EpicNotPublicBlock')).toHaveLength(0);
     expect(named(tree, 'ChildPanel')).toHaveLength(1);
     const late = named(tree, 'LateUpperSections')[0]!.props as { reads: Promise<unknown> };
@@ -466,14 +466,13 @@ describe('each Visitor page renders its shared body for a consented Visitor', ()
       params: Promise.resolve({ identifier: t.identifier, key: story.identifier }),
       searchParams: Promise.resolve({}),
     });
-    expect(JSON.stringify(named(tree, 'WorkItemTitle')[0]!.props)).toContain('Visible story');
+    expect(JSON.stringify(named(tree, 'TranslatableTitle')[0]!.props)).toContain('Visible story');
     expect(named(tree, 'WatchControl')).toHaveLength(0);
     expect(named(tree, 'PlanHistorySection')).toHaveLength(0);
-    // No translation offer on the public host (MOTIR-8121): a Visitor reads
-    // customers' text as written, so the provider is mounted with nothing in it.
-    const offers = named(tree, 'ItemTranslationOfferProvider');
-    expect(offers).toHaveLength(1);
-    expect((offers[0]!.props as { offer: unknown }).offer).toBeNull();
+    // No translation on the public host (MOTIR-8121 · MOTIR-8122): a Visitor
+    // reads customers' text as written. With no provider the bar and the marks
+    // render nothing, and every field renders its stored text.
+    expect(named(tree, 'TranslationProvider')).toHaveLength(0);
     const late = named(tree, 'LateUpperSections')[0]!.props as {
       reads: Promise<{ acceptanceEligibility: unknown }>;
     };
