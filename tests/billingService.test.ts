@@ -17,11 +17,16 @@ const getOrgUsageMock = vi.fn<(q: unknown) => Promise<RawUsageResponse>>();
 const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResponse>>();
 const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<CheckoutSessionOutcome>>();
 const createPortalSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
+const getPendingPlanChangeMock =
+  vi.fn<
+    (q: unknown) => Promise<{ pendingDowngrade: { planKey: string; effectiveDate: string } | null }>
+  >();
 const setSeatQuantityMock =
   vi.fn<(i: { coreOrganizationId: string; quantity: number }) => Promise<unknown>>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgUsage: (q: unknown) => getOrgUsageMock(q),
   getOrgSubscription: (q: unknown) => getOrgSubscriptionMock(q),
+  getPendingPlanChange: (q: unknown) => getPendingPlanChangeMock(q),
   createCheckoutSession: (i: unknown) => createCheckoutSessionMock(i),
   createPortalSession: (i: unknown) => createPortalSessionMock(i),
   setSeatQuantity: (i: { coreOrganizationId: string; quantity: number }) => setSeatQuantityMock(i),
@@ -131,6 +136,8 @@ beforeEach(async () => {
   createCheckoutSessionMock.mockReset();
   createPortalSessionMock.mockReset();
   setSeatQuantityMock.mockReset();
+  getPendingPlanChangeMock.mockReset();
+  getPendingPlanChangeMock.mockResolvedValue({ pendingDowngrade: null });
   getOrgUsageMock.mockResolvedValue(rawUsage());
   getOrgSubscriptionMock.mockResolvedValue(rawSubscription());
   createCheckoutSessionMock.mockResolvedValue({
@@ -185,6 +192,7 @@ describe('billingService.getBillingStatus', () => {
     expect(dto.motirAi).toEqual({
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
       balance: 1420,
+      pendingDowngrade: null,
       subscription: {
         status: 'active',
         currentPeriodEnd: '2026-07-22T00:00:00.000Z',
@@ -253,6 +261,41 @@ describe('billingService.getBillingStatus', () => {
     const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
 
     expect(dto.motirAi.subscription).toEqual(EMPTY_SUBSCRIPTION);
+  });
+
+  it('carries the downgrade a live plan has scheduled (MOTIR-8399)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    const pending = { planKey: 'pro', effectiveDate: '2026-11-01T00:00:00.000Z' };
+    getPendingPlanChangeMock.mockResolvedValueOnce({ pendingDowngrade: pending });
+    getOrgSubscriptionMock.mockResolvedValueOnce(rawSubscription({ status: 'active' }));
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    expect(getPendingPlanChangeMock).toHaveBeenCalledWith({ coreOrganizationId: organizationId });
+    expect(dto.motirAi.pendingDowngrade).toEqual(pending);
+  });
+
+  it('asks nothing about a pending downgrade for an org with no live paid plan', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    for (const sub of [EMPTY_SUBSCRIPTION, rawSubscription({ status: 'canceled' })]) {
+      getOrgSubscriptionMock.mockResolvedValueOnce(sub);
+      const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+      expect(dto.motirAi.pendingDowngrade).toBeNull();
+    }
+    expect(getPendingPlanChangeMock).not.toHaveBeenCalled();
+  });
+
+  it('degrades a failed pending-downgrade read to none, never failing the page', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    getOrgSubscriptionMock.mockResolvedValueOnce(rawSubscription({ status: 'active' }));
+    getPendingPlanChangeMock.mockRejectedValueOnce(new MotirAiUnavailableError('stripe'));
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    expect(dto.motirAi.pendingDowngrade).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('propagates a motir-ai outage from the subscription read too', async () => {

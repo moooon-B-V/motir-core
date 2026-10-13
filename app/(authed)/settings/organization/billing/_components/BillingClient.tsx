@@ -10,6 +10,7 @@ import {
   Bot,
   Check,
   ChevronRight,
+  Clock,
   Coins,
   CreditCard,
   Crown,
@@ -38,6 +39,8 @@ import type { AiPlanCatalogEntry, BillingCadence } from '@/lib/billing/catalog';
 import { ciLineFigures, type CiLineVariant } from './ciFigures';
 import { searchLineFigures } from './searchFigures';
 import { agentLineFigures } from './agentFigures';
+import { fmt, fmtDate } from './billingFormat';
+import { DowngradeDialog, UpgradeDialog, type PlanNames } from './PlanChangeDialog';
 
 // The §4 free-tier scale caps the Motir (free) line draws — mirrors
 // `lib/billing/entitlements.ts` PM_ENTITLEMENTS.free (the locked ADR §4 numbers).
@@ -356,7 +359,13 @@ export function BillingClient({
         <HomeView {...shared} goPlans={() => setView('plans')} goSeats={() => setView('seats')} />
       ) : null}
       {view === 'plans' ? (
-        <PlansView {...shared} enterprise={enterprise} back={() => setView('home')} />
+        <PlansView
+          {...shared}
+          orgId={orgId}
+          reload={load}
+          enterprise={enterprise}
+          back={() => setView('home')}
+        />
       ) : null}
       {view === 'seats' ? <SeatsView {...shared} back={() => setView('home')} /> : null}
     </div>
@@ -387,21 +396,7 @@ export interface EnterpriseContactProps {
   refresh: () => Promise<EnterpriseRequestDTO | null | undefined>;
 }
 
-export function fmt(n: number, locale: string): string {
-  return n.toLocaleString(locale);
-}
-
-function fmtDate(value: string | number | null, locale: string): string | null {
-  if (value == null) return null;
-  const d = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
+export { fmt };
 
 function cadenceFromPriceId(priceId: string | null): BillingCadence {
   return priceId?.endsWith('_monthly') ? 'monthly' : 'annual';
@@ -1512,10 +1507,24 @@ function PlansView({
   redirecting,
   enterprise,
   back,
-}: SharedViewProps & { enterprise: EnterpriseContactProps; back: () => void }) {
+  orgId,
+  reload,
+}: SharedViewProps & {
+  enterprise: EnterpriseContactProps;
+  back: () => void;
+  orgId: string;
+  /** Re-read the billing status — after a change of plan (MOTIR-8399). */
+  reload: () => Promise<void>;
+}) {
   const locale = useLocale();
   const [cadence, setCadence] = useState<BillingCadence>('annual');
-  const { tier, balance, subscription } = data.motirAi;
+  // The plan-change dialog open, if any (MOTIR-8399). Mounted only while open, so
+  // each opening prices the change afresh.
+  const [change, setChange] = useState<{ kind: 'upgrade' | 'downgrade'; planKey: string } | null>(
+    null,
+  );
+  const reasonId = useId();
+  const { tier, balance, subscription, pendingDowngrade } = data.motirAi;
   const allotment = tier?.monthlyCreditAllotment ?? 0;
   const renews = fmtDate(subscription.currentPeriodEnd, locale);
   const aiPlans = data.catalog.aiPlans;
@@ -1532,6 +1541,11 @@ function PlansView({
     (subscription.status === 'active' ||
       subscription.status === 'trialing' ||
       subscription.status === 'past_due');
+  const planNames: PlanNames = Object.fromEntries(aiPlans.map((p) => [p.key, p.name]));
+  // "Above / below" is the catalog order by monthly pool (MOTIR-8399), the rule
+  // motir-ai's direction guards use.
+  const currentPool = aiPlans.find((p) => p.key === tier?.key)?.allotment?.credits ?? null;
+  const planChangeLocked = holdsPlan && !canManage;
 
   return (
     <>
@@ -1613,6 +1627,16 @@ function PlansView({
         ) : null}
       </div>
 
+      {planChangeLocked ? (
+        <p
+          id={reasonId}
+          className="flex items-center gap-1.5 font-sans text-xs text-(--el-text-secondary)"
+        >
+          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {t('plans.upgrade.disabledReason')}
+        </p>
+      ) : null}
+
       {/* Tall, equal-height cards in ONE row (the SaaS storefront pattern); below
           the row's natural width the container scrolls horizontally (scroll-snap)
           rather than wrapping — the tiers stay one comparable ladder (design 8.1.21). */}
@@ -1628,6 +1652,11 @@ function PlansView({
             canManage={canManage}
             redirecting={redirecting}
             checkout={checkout}
+            currentPool={currentPool}
+            pendingDowngrade={pendingDowngrade}
+            planNames={planNames}
+            describedBy={planChangeLocked ? reasonId : undefined}
+            openChange={(kind) => setChange({ kind, planKey: plan.key })}
             t={t}
             contactSales={
               plan.prices ? null : (
@@ -1643,6 +1672,26 @@ function PlansView({
           />
         ))}
       </div>
+
+      {change?.kind === 'upgrade' ? (
+        <UpgradeDialog
+          orgId={orgId}
+          toPlanKey={change.planKey}
+          planNames={planNames}
+          onClose={() => setChange(null)}
+          onChanged={() => void reload()}
+          portal={portal}
+        />
+      ) : null}
+      {change?.kind === 'downgrade' ? (
+        <DowngradeDialog
+          orgId={orgId}
+          toPlanKey={change.planKey}
+          planNames={planNames}
+          onClose={() => setChange(null)}
+          onChanged={() => void reload()}
+        />
+      ) : null}
 
       <TopupCard
         data={data}
@@ -1669,6 +1718,11 @@ function PlanCard({
   canManage,
   redirecting,
   checkout,
+  currentPool,
+  pendingDowngrade,
+  planNames,
+  describedBy,
+  openChange,
   t,
   contactSales,
 }: {
@@ -1681,6 +1735,14 @@ function PlanCard({
   canManage: boolean;
   redirecting: boolean;
   checkout: (priceLookupKey: string) => void;
+  /** The current plan's monthly pool — which cards are above and below it. */
+  currentPool: number | null;
+  /** The downgrade the live plan has scheduled, or null (MOTIR-8399). */
+  pendingDowngrade: BillingStatusDTO['motirAi']['pendingDowngrade'];
+  planNames: PlanNames;
+  /** The visible reason the plan-change controls are disabled (a non-manager). */
+  describedBy: string | undefined;
+  openChange: (kind: 'upgrade' | 'downgrade') => void;
   t: T;
   /** The Enterprise card's control (MOTIR-7607) — rendered for the price-less plan. */
   contactSales: React.ReactNode;
@@ -1764,8 +1826,45 @@ function PlanCard({
   } else if (!plan.prices) {
     cta = contactSales;
   } else if (holdsPlan) {
-    // The action slot is the upgrade path's (Upgrade now / Downgrade at period end).
-    cta = null;
+    // The action slot is the upgrade path's (MOTIR-8399): a higher plan upgrades
+    // now, a lower one is scheduled for the period end, and the plan a downgrade
+    // is already scheduled to shows when — with no cancel or undo.
+    const pool = plan.allotment?.credits ?? 0;
+    const scheduled = pendingDowngrade?.planKey === plan.key ? pendingDowngrade : null;
+    if (scheduled) {
+      cta = (
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled
+          className="h-auto min-h-(--height-btn-sm) w-full whitespace-normal"
+          leftIcon={<Clock className="h-4 w-4" />}
+        >
+          {t('plans.downgrade.scheduledButton', {
+            date: fmtDate(scheduled.effectiveDate, locale) ?? '—',
+          })}
+        </Button>
+      );
+    } else if (currentPool !== null && pool !== currentPool) {
+      const up = pool > currentPool;
+      cta = (
+        <Button
+          variant={up && isRecommended ? 'primary' : 'secondary'}
+          size="sm"
+          className="w-full"
+          disabled={!canManage}
+          aria-describedby={describedBy}
+          aria-haspopup="dialog"
+          onClick={() => openChange(up ? 'upgrade' : 'downgrade')}
+        >
+          {up
+            ? t('plans.upgrade.cta', { plan: plan.name })
+            : t('plans.downgrade.cta', { plan: plan.name })}
+        </Button>
+      );
+    } else {
+      cta = null;
+    }
   } else {
     const priceKey = plan.prices[cadence].priceLookupKey;
     cta = (
@@ -1827,6 +1926,19 @@ function PlanCard({
           </Pill>
         ) : null}
       </div>
+      {isCurrent && pendingDowngrade ? (
+        // NEUTRAL on purpose: every tint on this surface already means a status.
+        <Pill
+          data-testid="plan-pending-downgrade"
+          className="w-fit gap-1 border-(--el-border-strong) bg-(--el-surface) text-(--el-text-strong)"
+        >
+          <Clock className="h-3 w-3" aria-hidden />
+          {t('plans.downgrade.pendingPill', {
+            plan: planNames[pendingDowngrade.planKey] ?? pendingDowngrade.planKey,
+            date: fmtDate(pendingDowngrade.effectiveDate, locale) ?? '—',
+          })}
+        </Pill>
+      ) : null}
       {/* per-tier use-case — min-height keeps the price rows aligned across cards */}
       <p className="min-h-[2.75rem] font-sans text-xs text-(--el-text-secondary)">
         {t(`${tierBase}.useCase`)}

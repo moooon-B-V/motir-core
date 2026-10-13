@@ -20,6 +20,7 @@ const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResp
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgUsage: (q: unknown) => getOrgUsageMock(q),
   getOrgSubscription: (q: unknown) => getOrgSubscriptionMock(q),
+  getPendingPlanChange: async () => ({ pendingDowngrade: null }),
 }));
 vi.mock('@/lib/billing/seatSync', () => ({ enqueueScaledTrackerSeatSync: vi.fn() }));
 

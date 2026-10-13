@@ -272,6 +272,48 @@ export const AI_JOB_ABANDONED_PROBLEM_CODE = 'ai_job_abandoned';
 // Map a problem+json (from a non-2xx response or a failed job's error) onto the
 // right typed error, keyed by the contract §5 `code` (falling back to HTTP
 // status class for an unrecognized code).
+/**
+ * Why motir-ai refused a change of AI plan (MOTIR-8396 / MOTIR-8398). Each is the
+ * `<code>:` prefix of a `validation_error` detail, except `org_closing`, which is
+ * a `conflict`'s.
+ */
+export const PLAN_CHANGE_REFUSAL_REASONS = [
+  'no_live_plan',
+  'same_plan',
+  'unknown_plan',
+  'not_an_upgrade',
+  'not_a_downgrade',
+  'second_plan',
+  'preview_expired',
+  'payment_failed',
+  'org_closing',
+] as const;
+export type PlanChangeRefusalReason = (typeof PLAN_CHANGE_REFUSAL_REASONS)[number];
+
+// A change of plan motir-ai refused with a reason the dialog draws (MOTIR-8399).
+// Not retryable as sent: the remedy depends on the reason.
+export class MotirAiPlanChangeRefusedError extends MotirAiError {
+  readonly code = 'MOTIR_AI_PLAN_CHANGE_REFUSED' as const;
+  constructor(
+    readonly reason: PlanChangeRefusalReason,
+    detail: string,
+  ) {
+    super(`motir-ai refused the plan change: ${detail}`);
+    this.name = 'MotirAiPlanChangeRefusedError';
+  }
+}
+
+/**
+ * The plan-change refusal a problem carries, or `null` when it carries none: a
+ * `validation_error` or `conflict` whose detail opens with a known `<reason>:`.
+ */
+export function planChangeRefusalOf(p: Problem): MotirAiPlanChangeRefusedError | null {
+  if (p.code !== 'validation_error' && p.code !== 'conflict') return null;
+  const prefix = /^([a-z_]+):/.exec(p.detail ?? '')?.[1];
+  const reason = PLAN_CHANGE_REFUSAL_REASONS.find((r) => r === prefix);
+  return reason ? new MotirAiPlanChangeRefusedError(reason, p.detail ?? p.title) : null;
+}
+
 export function errorFromProblem(p: Problem): MotirAiError {
   switch (p.code) {
     case 'service_unauthorized':

@@ -43,6 +43,7 @@ const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResp
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgUsage: (q: unknown) => getOrgUsageMock(q),
   getOrgSubscription: (q: unknown) => getOrgSubscriptionMock(q),
+  getPendingPlanChange: async () => ({ pendingDowngrade: null }),
   // billingService also imports these from the client module; stub them so the
   // module shape is intact (they are not exercised by this seam guard).
   createCheckoutSession: vi.fn(),

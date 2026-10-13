@@ -844,6 +844,84 @@ export interface RawSubscriptionResponse {
   planTier: { key: string; name: string; monthlyCreditAllotment: number } | null;
 }
 
+// The plan-change surface (motir-ai MOTIR-8396 / MOTIR-8398 / MOTIR-8399): the two
+// previews, the upgrade, the downgrade schedule and the pending-downgrade read.
+// Mirrors motir-ai's `UpgradePreviewDto` / `DowngradePreviewDto` /
+// `UpgradeResultDto` / `DowngradeScheduledDto` / `DowngradeClearedDto`. Every
+// amount is integer cents of `currency`; every date is ISO-8601 except
+// `prorationDate`, which is unix seconds and is sent back unchanged.
+export interface RawPendingDowngrade {
+  planKey: string;
+  effectiveDate: string;
+}
+
+export interface RawUpgradePreview {
+  prorationDate: number;
+  fromPlan: string;
+  toPlan: string;
+  cadence: 'monthly' | 'annual';
+  cadenceChange: { from: 'monthly' | 'annual'; to: 'monthly' | 'annual' } | null;
+  amountDueCents: number;
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  billingDaysLeft: number;
+  daysLeft: number;
+  creditWindowEnd: string;
+  extraCredits: number;
+  extraIndexAllowance: number | null;
+  fromPool: number;
+  fullPool: number;
+  fullAllowance: number | null;
+  toPriceCents: number;
+  pendingDowngrade: RawPendingDowngrade | null;
+}
+
+export interface RawDowngradePreview {
+  fromPlan: string;
+  toPlan: string;
+  cadence: 'monthly' | 'annual';
+  cadenceChange: { from: 'monthly' | 'annual'; to: 'monthly' | 'annual' } | null;
+  effectiveDate: string;
+  amountDueCents: number;
+  refundCents: number;
+  creditsChange: number;
+  allowanceChange: number;
+  fromPool: number;
+  fullPool: number;
+  fullAllowance: number | null;
+  toPriceCents: number;
+  currency: string;
+  pendingDowngrade: RawPendingDowngrade | null;
+}
+
+export interface RawUpgradeResult {
+  status: 'upgraded';
+  fromPlan: string;
+  toPlan: string;
+  invoiceId: string | null;
+  amountDueCents: number;
+  currency: string;
+  extraCredits: number;
+  extraIndexAllowance: number | null;
+  clearedPending: RawPendingDowngrade | null;
+}
+
+export type RawDowngradeResult =
+  | {
+      status: 'scheduled';
+      fromPlan: string;
+      toPlan: string;
+      effectiveDate: string;
+      replacedPending: RawPendingDowngrade | null;
+    }
+  | {
+      status: 'cleared';
+      fromPlan: string;
+      toPlan: string;
+      clearedPending: RawPendingDowngrade;
+    };
+
 // GET /v1/stripe/billing-history (MOTIR-7303) — an org's default payment method
 // and its most recent invoices (at most 12, newest first), read live from Stripe
 // by motir-ai. Mirrors motir-ai's BillingHistoryDto. An org with no Stripe

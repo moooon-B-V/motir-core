@@ -258,3 +258,18 @@ export function isAllowedCheckoutQuantity(key: string, quantity: number): boolea
   const topup = BILLING_CATALOG.creditTopup;
   return key === topup.priceLookupKey && topup.bundleUnits.includes(quantity);
 }
+
+/**
+ * The AI plans a change of plan may move between (MOTIR-8399): every paid,
+ * recurring plan — never Free, which is a one-time trial and never a downgrade
+ * target. motir-ai holds the same list (`CHANGEABLE_PLAN_KEYS`); this one lets the
+ * service refuse a stale or tampered key before the boundary.
+ */
+export const PLAN_CHANGE_KEYS: readonly string[] = BILLING_CATALOG.aiPlans.flatMap((p) =>
+  p.prices && p.allotment?.cadence === 'monthly' ? [p.key] : [],
+);
+
+/** True when `key` names a plan a change of plan may target. */
+export function isPlanChangeKey(key: string): boolean {
+  return PLAN_CHANGE_KEYS.includes(key);
+}

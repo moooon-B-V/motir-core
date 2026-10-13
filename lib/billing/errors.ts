@@ -4,6 +4,7 @@
 // is an existing entity, not a billing-owned one.)
 
 import type { EntitlementKind } from '@/lib/billing/entitlements';
+import type { PlanChangeRefusalReason } from '@/lib/ai/errors';
 
 /**
  * The inbound billing-state body failed validation — a missing/empty
@@ -186,5 +187,24 @@ export class EnterpriseRequestValidationError extends Error {
   ) {
     super(detail);
     this.name = 'EnterpriseRequestValidationError';
+  }
+}
+
+/**
+ * A change of AI plan was refused (Story MOTIR-8387 · MOTIR-8399) — by motir-ai
+ * (the org has no live plan, the target is not above / below it, the preview
+ * expired, the card was declined, …) or by the service's own catalog check
+ * (`unknown_plan`). `reason` is the stable code the dialog switches on. Maps to
+ * 400, except `payment_failed` (402 — the plan is unchanged and the card needs
+ * updating) and `org_closing` (409, like every billing mutation on a closing org).
+ */
+export class BillingPlanChangeRefusedError extends Error {
+  readonly code = 'BILLING_PLAN_CHANGE_REFUSED' as const;
+  constructor(
+    readonly reason: PlanChangeRefusalReason,
+    detail?: string,
+  ) {
+    super(detail ?? `The plan change was refused: ${reason}.`);
+    this.name = 'BillingPlanChangeRefusedError';
   }
 }
