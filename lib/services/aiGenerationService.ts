@@ -428,6 +428,47 @@ export const aiGenerationService = {
   },
 
   /**
+   * RENEW THE JOB'S REVISION LEASE (Bug MOTIR-8523) — the hosted revision's heartbeat.
+   *
+   * Core takes the lease when it submits a revision job (`acquireRevisionLease` with
+   * the job's id), and the lease lapses `PLAN_REVISION_LEASE_MS` (ten minutes) after the
+   * trail's latest row. A hosted revision's conversation and its author sessions can
+   * run longer than that without writing the trail, so motir-ai's worker calls this on
+   * a timer for as long as the job runs, and stops when the job ends. A job that dies
+   * stops calling, and the lease lapses as before.
+   *
+   * Resolved like every seam in this family: the plan is the JOB's (`sourceJobId`),
+   * and `planId` is a cross-check only. The renew itself is
+   * {@link plansService.renewRevisionLease} scoped to this job, so it never re-takes a
+   * lapsed lease and never renews a hold somebody else took: both answer
+   * `renewed: false` and write nothing.
+   */
+  async renewRevisionLeaseForJob(
+    input: { jobId: string; planId?: string | null; model?: string | null },
+    auth: { ctx: ServiceContext; projectId: string },
+  ): Promise<{ planId: string; renewed: boolean; expiresAt: string | null }> {
+    const { ctx, projectId } = auth;
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(input.jobId, ctx.workspaceId, tx),
+    );
+    if (!plan || plan.projectId !== projectId) throw new NoPlanForJobError(input.jobId);
+    if (input.planId && input.planId !== plan.id) throw new NoPlanForJobError(input.jobId);
+
+    const model = input.model?.trim() ?? '';
+    const renewed = await plansService.renewRevisionLease(
+      plan.id,
+      ctx,
+      { source: 'native', harness: NATIVE_PLANNER_HARNESS, model: model === '' ? null : model },
+      { jobId: input.jobId },
+    );
+    return {
+      planId: plan.id,
+      renewed: renewed.renewed,
+      expiresAt: renewed.expiresAt ? renewed.expiresAt.toISOString() : null,
+    };
+  },
+
+  /**
    * The hosted planner's in-flight STEP (Story MOTIR-7820 · Subtask MOTIR-7824):
    * resolve the JOB's plan — never a caller-supplied one — and make the one step
    * write `report_plan_step` makes. `planId` is a cross-check only, and a

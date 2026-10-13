@@ -51,11 +51,17 @@ export const REVISION_ENDED_KIND = 'revision_ended';
 /**
  * The lease's HEARTBEAT (Bug MOTIR-7988) — a row the holder writes for no reason
  * but to say it is still working, so a revision whose next real write is more
- * than {@link PLAN_REVISION_LEASE_MS} away keeps the plan. A hosted revision is
- * one motir-ai job and never needs it; an MCP-driven one (`prompts/plan.py
- * --revise`) runs agent sessions that can think for longer than the window
- * between two writes, and without it the plan would fall back into Waiting on
- * you with a live Approve mid-rewrite — the exact race the lease exists to stop.
+ * than {@link PLAN_REVISION_LEASE_MS} away keeps the plan. BOTH kinds of
+ * revision need it. An MCP-driven one (`prompts/plan.py --revise`) runs agent
+ * sessions that can think for longer than the window between two writes; so does
+ * a hosted one, whose job runs a whole conversation and uncapped author sessions
+ * before its first proposal write (Bug MOTIR-8523 — this comment used to say a
+ * hosted revision never needs it, and a hosted revision lapsed ten minutes in
+ * while its job was still running). The MCP holder renews through
+ * `hold_plan_revision`; motir-ai's worker renews a hosted revision's lease on a
+ * timer for as long as its job runs (`POST /api/internal/ai/plan-revision-lease`).
+ * Without it the plan falls back into Waiting on you with a live Approve
+ * mid-rewrite — the exact race the lease exists to stop.
  *
  * It is not an EVENT: the timeline drops it (`TRAIL_ONLY_KINDS` in
  * `lib/plans/timeline.ts`), and it brackets nothing — {@link revisionLeaseOf}
