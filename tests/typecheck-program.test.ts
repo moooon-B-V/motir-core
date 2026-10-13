@@ -421,3 +421,86 @@ describe('every composite PACKAGE project is on the solution file (MOTIR-5759)',
     expect(missingFromSolution(without, PACKAGE_PROJECTS)).toEqual(['packages/pages']);
   });
 });
+
+// ── The CATALOGUE SIDECARS (MOTIR-8405) ─────────────────────────────────────
+//
+// The ten translated catalogues and their ten source records are ~17 MB of JSON.
+// Checked as JSON, they were ~0.5 GB of the app project's heap (`tsconfig.base.json`
+// carries the readings), and nothing reads their literal types: every consumer
+// takes them as a `Messages` record or a `Record<string, string>`. So each one
+// is typed by a `<locale>.d.json.ts` sidecar the checker prefers to the JSON,
+// and only `en.json` is parsed.
+//
+// The saving is silent in both directions, which is why it is asserted here: a
+// locale added without a sidecar, or an `include` glob that names the JSON again,
+// puts the catalogue back in the program with every check still green.
+
+/** The sidecar a catalogue JSON needs, or `null` for one the checker reads as JSON. */
+export const sidecarFor = (rel: string): string | null => {
+  const m = /^messages\/(sources\/)?([a-z]{2,3}(?:-[A-Za-z0-9]+)?)\.json$/.exec(rel);
+  if (!m) return null;
+  if (!m[1] && m[2] === 'en') return null;
+  return rel.replace(/\.json$/, '.d.json.ts');
+};
+
+/** Catalogue JSON files that have no sidecar beside them. */
+export const missingSidecars = (files: string[]): string[] =>
+  files.filter((f) => {
+    const sidecar = sidecarFor(f);
+    return sidecar !== null && !files.includes(sidecar);
+  });
+
+/** `include` globs that would load a translated catalogue as JSON. */
+export const catalogueJsonGlobs = (include: unknown): string[] =>
+  asStrings(include).filter(
+    (glob) => glob.startsWith('messages/') && glob.endsWith('.json') && glob !== 'messages/en.json',
+  );
+
+const messageFiles = (): string[] =>
+  ['messages', 'messages/sources'].flatMap((dir) =>
+    readdirSync(join(ROOT, dir)).map((name) => `${dir}/${name}`),
+  );
+
+describe('the translated catalogues are typed by their sidecars, never as JSON (MOTIR-8405)', () => {
+  it('gives every translated catalogue and source record a `.d.json.ts` sidecar', () => {
+    const files = messageFiles();
+    const catalogues = files.filter((f) => sidecarFor(f) !== null);
+    // Non-vacuity: the ten locales and their ten source records.
+    expect(catalogues.length).toBeGreaterThanOrEqual(20);
+    expect(
+      missingSidecars(files),
+      'add a `<locale>.d.json.ts` beside each — copy a sibling; tsconfig.base.json says why',
+    ).toEqual([]);
+  });
+
+  it('BITES on a catalogue that has lost its sidecar', () => {
+    expect(
+      missingSidecars([
+        'messages/en.json',
+        'messages/zh.json',
+        'messages/zh.d.json.ts',
+        'messages/xx.json',
+        'messages/sources/xx.json',
+        'messages/glossary',
+      ]),
+    ).toEqual(['messages/xx.json', 'messages/sources/xx.json']);
+  });
+
+  it('names only `en.json` as JSON in the product program, with the sidecars beside it', () => {
+    const include = configs.get('tsconfig.json')!.include;
+    expect(catalogueJsonGlobs(include)).toEqual([]);
+    expect(asStrings(include)).toContain('messages/en.json');
+    expect(asStrings(include)).toContain('messages/*.d.json.ts');
+    expect(asStrings(include)).toContain('messages/sources/*.d.json.ts');
+    // Without it the checker refuses the sidecar (TS6263) rather than using it.
+    const base = configs.get('tsconfig.base.json')!.compilerOptions as Record<string, unknown>;
+    expect(base.allowArbitraryExtensions).toBe(true);
+  });
+
+  it('BITES on an include set that loads the catalogues as JSON again', () => {
+    expect(catalogueJsonGlobs(['messages/*.json', 'messages/en.json', 'lib/**/*.json'])).toEqual([
+      'messages/*.json',
+    ]);
+    expect(catalogueJsonGlobs(['messages/sources/*.json'])).toEqual(['messages/sources/*.json']);
+  });
+});

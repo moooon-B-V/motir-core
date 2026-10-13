@@ -46,8 +46,13 @@
     "lib/**/*.tsx",
     "lib/**/*.json",
     "generated/**/*.ts",
-    "messages/*.json",
-    "messages/sources/*.json",
+    // Only ENGLISH is checked as JSON. Every other catalogue and source record
+    // is typed by its `<locale>.d.json.ts` sidecar, which the checker prefers to
+    // the JSON beside it (`tsconfig.base.json`, MOTIR-8405) — naming the JSON
+    // here would load it as a root file and undo that.
+    "messages/en.json",
+    "messages/*.d.json.ts",
+    "messages/sources/*.d.json.ts",
     "instrumentation.ts",
     "instrumentation-client.ts",
     "proxy.ts",
