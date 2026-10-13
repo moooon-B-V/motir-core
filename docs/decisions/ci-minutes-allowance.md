@@ -302,9 +302,21 @@ motir-core holds directly.
 small orgs this describes anyway, and a free-tracker org can hold a paid AI plan
 (`billing-tiering.md` §1: _"a free-tracker org can buy AI"_), so a subscription-gated pool
 would refuse dispatches to a paying AI customer. **The free-AI-tier org is bounded by the
-credit gate, not by the pool**: 300 one-time credits buys 1–2 planning passes, so it
-cannot generate enough dispatches to approach 1,000 minutes, and at balance ≤ 0 §6 refuses
-the next dispatch regardless.
+credit gate, not by the pool**: at ~39 minutes a dispatch (Context, above) the 1,000-minute
+floor takes about 26 merged dispatches, and the 300 one-time credits must pay for every one
+of them, so the pool is reachable only if a dispatch costs under about 11 credits. Planning
+a single card alone costs several times that, so the free org cannot generate enough
+dispatches to approach 1,000 minutes, and at balance ≤ 0 §6 refuses the next dispatch
+regardless.
+
+_Re-checked 2026-10-13 (MOTIR-8349) against the Motir AI planning lane's multiplier from
+MOTIR-7579 (0.261, effective 2026-10-12): the conclusion still holds._ Cheaper planning
+raises how many cards 300 credits plan, but the argument above does not count planning
+passes: it rests on the credits one dispatch costs against the minutes one dispatch burns,
+and the measured planning cost per card (`motir-meta` `margin-analysis.md` §13.0) is still
+several times the ~11-credit line. This section states no credits-to-passes conversion on
+purpose: it moves with every rate change and every planner model. Re-check it when the
+free allotment changes, or when the credits a dispatch costs fall to about 11.
 
 **4.4 · The META org (`Organization.isMeta`) is bypassed entirely** — no pool accounting,
 no overage, no refusal. It mirrors the shipped credit-gate bypass (`AiOrganization.isMeta`
