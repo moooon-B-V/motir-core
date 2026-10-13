@@ -207,23 +207,27 @@ test('four projects, four destinations', async ({ page, chapter, beat, acceptanc
     await expect(handOff(page)).toContainText('A few questions');
     await beat();
 
-    await page.getByRole('button', { name: 'Fill in the gaps' }).click();
-    await page.waitForURL(/\/onboarding\/migrate\?/);
-    await beat();
-
     // ⚠️ THE SET REACHES THE RUN ON *START*, not on arrival, and the rail is the
     // full one until it does. That is the product's own shape rather than a
     // detail of this spec: the kept set describes the verdict that OPENED the
     // run, so it is persisted where the run is created and never re-read from
     // whatever address the user happens to be on afterwards.
     //
-    // The authoritative signal is that POST's own 201, armed before the click.
+    // With one project the wizard now starts that run ON ARRIVAL (MOTIR-8254,
+    // the one-page migrate wizard), forwarding the same kept set the old Start
+    // button did — so the POST is armed before the hand-off rather than before a
+    // click. Edited in place with the owner's agreement (MOTIR-8238), the one
+    // change to this receipt's spec.
+    //
+    // The authoritative signal is that POST's own 201.
     const started = page.waitForResponse(
       (r) =>
         new URL(r.url()).pathname === '/api/onboarding/migrate' && r.request().method() === 'POST',
     );
-    await page.getByRole('button', { name: 'Start' }).click();
+    await page.getByRole('button', { name: 'Fill in the gaps' }).click();
+    await page.waitForURL(/\/onboarding\/migrate\?/);
     expect((await started).ok()).toBe(true);
+    await beat();
 
     // THE RAIL IS SHORTER THAN THE FULL ONE, and what is not in it is drawn as
     // SATISFIED rather than absent — collapsed into one row that NAMES it.

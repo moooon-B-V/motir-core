@@ -79,7 +79,8 @@ const REFUSED_ONLY_BY_THE_AGENT: readonly ApprovalGateKind[] = ['agent_review'];
 /** The MANUAL-WORK gate (Story MOTIR-7460, ADR `manual-work-gate.md` §4): manual work is
  *  done or not done, so it offers no refusal at all — the door refuses `request_changes`
  *  by name (`request_changes_on_manual_work`) before this rule could read a note. */
-const OFFERS_NO_REFUSAL: readonly ApprovalGateKind[] = ['manual_work'];
+// …and a planning session's gate, which has no verb at all (MOTIR-7913).
+const OFFERS_NO_REFUSAL: readonly ApprovalGateKind[] = ['manual_work', 'planning_session'];
 
 /** A bare `awaiting` gate, and the stamp its reader would have been shown. */
 async function awaitingGate(kind: ApprovalGateKind) {

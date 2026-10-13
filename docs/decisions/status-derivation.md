@@ -132,6 +132,26 @@
   unaffected — its third key resolves to null and every rank is what it was.
   **Amendment consumed by:** MOTIR-5142 (the story's vitest gate), MOTIR-5143 (E2E).
 
+- **Amended:** 2026-10-12 (Bug MOTIR-8327, found running MOTIR-8216) — **a BACKWARD
+  derivation stands down for a container that delivers its OWN open pull request while
+  it stands on a review rung** (`in_review` / `approved`) **and the child set still reads
+  built** (a target at or above the `implemented` rung). It reports `delivery_owned`.
+  Such a container is In Review because its own CI went green
+  (`ciPromotion.promoteDeliveredCardsOnGreen`) and Approved because a person decided its
+  merge gate — not because of its children — and the two automata fought: the same green
+  pass promotes a CHILD the pull request also delivers, that child's
+  `work-item/transitioned` recompute arrives one hop later reading the rest of the
+  children at `implemented`, and the system set took the story back there, which
+  withdrew its `pull_request_approval` gate `pulled_back` 2–4 s after it was raised —
+  three times on MOTIR-8216 / motir-core#3538, and the one time it held was the one time
+  no child transitioned after the story. The forward arm already stood down for such a
+  container (`approval_pending`, MOTIR-5526); this is its backward half. **Not exempt:**
+  a child reopened BELOW `implemented` (unbuilt work under the story, which its own CI
+  verdict cannot answer for) still pulls the story back, merge question and all; and a
+  container whose pull request has merged or closed is its children's again. **No new
+  toggle, no new `workflow_transition` row, no change to the ladder.** §3's BACKWARD
+  bullet gains the clause.
+
 ## Context
 
 A work item's status and its children's statuses are, today, **completely
@@ -372,6 +392,15 @@ Notes that are decisions, not detail:
     the two instants it compares. The FORWARD arm needs no counterpart: it is legality-gated,
     so it can only ever take moves the person could have taken by hand, and the `same_rung`
     tie already protects a deliberate `blocked` marker.
+  - **AND A STORY RUN'S REVIEW RUNGS ARE ITS PULL REQUEST'S** _(added 2026-10-12,
+    MOTIR-8327)_. A parent that delivers its own OPEN pull request and stands on
+    `in_review` or `approved` got there through its own CI verdict and merge gate, not
+    through its children. While the recompute's target is still at or above the
+    `implemented` rung — the children are built, they just have not all been promoted —
+    the arm declines and reports `delivery_owned`, the backward twin of the forward arm's
+    `approval_pending`. A target BELOW `implemented` still applies: unbuilt work under the
+    story is a claim about the children that the story's CI cannot answer for. And once
+    the delivery is no longer open, the rung is the children's to answer again.
   - **This is a SECOND asymmetry, on a different axis from §4's.** §4's asymmetry is by
     direction of travel **in the tree** (up is legality-gated, down is a system set).
     This one is by direction of travel **along the ladder**, within the upward direction

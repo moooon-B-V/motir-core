@@ -214,6 +214,7 @@
     "outcomeDeclined": "odrzucono",
     "field_title": "Tytuł",
     "field_priority": "Priorytet",
+    "field_kind": "Rodzaj",
     "field_type": "Typ",
     "field_executor": "Wykonawca",
     "field_storyPoints": "Punkty historii",
@@ -298,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {Dodano # element} few {Dodano # elementy} many {Dodano # elementów} other {Dodano # elementu}} do planu",
     "liveStarting": "Uruchamianie…",
     "liveStalled": "Zastój",
+    "liveResuming": "Wznawianie",
     "progress": {
       "settling": "Porządkowanie rozmowy",
       "layingChildrenOf": "Rozkładanie: {title}",
@@ -320,7 +322,13 @@
       "detailsLastActivity": "Ostatnia aktywność {time}",
       "detailsStalled": "Od {duration} nic nie zostało zapisane ani zgłoszone. Plan mógł się zatrzymać.",
       "pointer": "Śledź w Warsztacie",
-      "pointerSentence": "Możesz wyjść — ten plan jest nadal pisany. Śledź go w widoku Warsztat › Planowanie."
+      "pointerSentence": "Możesz wyjść — ten plan jest nadal pisany. Śledź go w widoku Warsztat › Planowanie.",
+      "resumingReason": "kontynuuje od miejsca, w którym się zatrzymał",
+      "resumingSecond": "druga próba",
+      "detailsResumingHead": "Kontynuuje od miejsca, w którym się zatrzymał",
+      "detailsResuming": "Maszyna, która pisała ten plan, została utracona. Motir sam uruchomił plan ponownie i kontynuuje go od miejsca, w którym się zatrzymał — elementy już napisane zostają zachowane i nie są pisane ponownie.",
+      "detailsResumedAt": "Wznowiono automatycznie o {time}",
+      "detailsResumedAtSecond": "Wznowiono automatycznie o {time} · druga próba"
     },
     "cue": {
       "drafting": "Tworzenie szkicu",
@@ -3423,6 +3431,11 @@
       "displayLanguage": {
         "label": "Język wyświetlania",
         "desc": "Menu, etykiety i daty są wyświetlane w tym języku."
+      },
+      "contentLanguage": {
+        "label": "Język treści · {org}",
+        "desc": "Język, w którym planista i agenci Motir piszą nową pracę dla {org}. Ustawiają go właściciele i administratorzy organizacji; nie zmienia on języka wyświetlania.",
+        "changeLink": "Zmień w ustawieniach organizacji"
       }
     },
     "profile": {
@@ -5406,6 +5419,15 @@
       "save": "Zapisz zmiany",
       "saved": "Organizacja zaktualizowana",
       "saveError": "Nie udało się zapisać zmian",
+      "contentLanguageLabel": "Język treści",
+      "contentLanguageHelp": "Język, w którym planista i agenci Motir piszą nową pracę dla tej organizacji. Nie zmienia języka menu Motir — to jest język wyświetlania każdej osoby.",
+      "contentLanguageChangedBy": "Zmieniono z {from}: {person}, {date}",
+      "contentLanguageFormerMember": "były członek",
+      "contentLanguageConfirmTitle": "Zmienić język treści?",
+      "contentLanguageConfirmBody": "Od teraz planista i agenci Motir będą pisać nową pracę dla {org} w języku <b>{to}</b> zamiast <b>{from}</b>.",
+      "contentLanguageConfirmKeeps": "Istniejąca praca zachowuje swój tekst i język. Nic nie jest tłumaczone ani przepisywane — zmienia się tylko nowo pisana treść.",
+      "contentLanguageConfirmRecorded": "Zmiana zostanie zapisana z Twoim imieniem i dzisiejszą datą.",
+      "contentLanguageConfirmCta": "Zmień na {to}",
       "workspacesSummary": "{count, plural, one {# obszar roboczy} few {# obszary robocze} many {# obszarów roboczych} other {# obszaru roboczego}}",
       "membersSummary": "{count, plural, one {# członek} few {# członków} many {# członków} other {# członka}}",
       "billing": "Rozliczenia i użycie",
@@ -6368,7 +6390,7 @@
       "ctaCurrent": "Bieżący plan",
       "ctaTrialUsed": "Okres próbny wykorzystany",
       "footer": "Pokazane są ceny przy rozliczeniu rocznym (domyślnym w Stripe) — przełącz powyżej na Miesięcznie, aby porównać. Podatek jest naliczany automatycznie przy płatności. Kredyty to wewnętrzny przydział użycia; podana cena to opłata za plan AI, którą Stripe nalicza organizacji {org}. Stanowiska Motir są rozliczane osobno — zarządzaj nimi na ekranie planu Motir.",
-      "seatIncluded": "+ 1 stanowisko Motir · bez limitu elementów roboczych",
+      "seatIncluded": "+ {count, plural, one {# stanowisko Motir} few {# stanowiska Motir} many {# stanowisk Motir} other {# stanowiska Motir}} · bez limitu elementów roboczych",
       "seatNone": "Bez stanowiska Motir · limit 250 elementów",
       "seatCustom": "Stanowiska Motir w cenie (indywidualnie)",
       "customPool": "Indywidualna pula kredytów",
@@ -6399,6 +6421,14 @@
           "useCase": "Szczegółowe planowanie i intensywna praca agenta.",
           "prev": "Pro",
           "features": ["Zapas na ciągłą pracę agentów", "Przepustowość dla zapracowanego zespołu"]
+        },
+        "max_x2": {
+          "useCase": "Szczegółowe planowanie i praca agentów w podwójnej skali Max.",
+          "prev": "Max",
+          "features": [
+            "Dwukrotność miesięcznej puli kredytów Max",
+            "Miejsce na kilku agentów działających jednocześnie"
+          ]
         },
         "enterprise": {
           "useCase": "Indywidualny wolumen i kontrola na poziomie organizacji.",
@@ -6622,6 +6652,31 @@
       "logIn": "Zaloguj się",
       "signUp": "Zarejestruj się"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Poznajemy Twój projekt",
+          "kicker": "Co budujesz i dla kogo"
+        },
+        "vision": {
+          "label": "Co zbudujemy",
+          "kicker": "Kształt wersji v1"
+        },
+        "feasibility": {
+          "label": "Czy warto to budować?",
+          "kicker": "Zderzenie z rzeczywistością"
+        },
+        "validation": {
+          "label": "Czy ludzie będą tego chcieli?",
+          "kicker": "Rynek"
+        }
+      },
+      "optional": "opcjonalne",
+      "readHint": "<b>Tylko do odczytu.</b> Coś się nie zgadza? Po prostu powiedz o tym Motir na czacie – przepisze dokument za Ciebie. Nic nie jest jeszcze przesądzone.",
+      "openQuestions": "Otwarte pytania",
+      "crossLinksLabel": "Inne części Twojego kierunku",
+      "related": "Powiązane"
+    },
     "landing": {
       "badge": "Projekt na luzie",
       "headline": "Co chcesz zbudować?",
@@ -6654,36 +6709,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "Buduj z AI",
-      "headingDefault": "Jak chcesz zacząć?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "Gotowe, kiedy tylko zechcesz",
-      "subheadDefault": "Opisz, co chcesz zbudować. Motir zaplanuje to razem z Tobą, a potem agenci to zbudują.",
+      "subheadDefault": "Masz pomysł. Motir dostarcza cały projekt: plan, design, wykonanie, dokumenty i pełną historię tego, jak powstał.",
       "subheadCarried": "Zachowaliśmy Twój początkowy pomysł. Dodaj więcej, jeśli chcesz, i kontynuuj.",
       "howItWorks": "Zobacz, jak działa Motir",
-      "ideaLabel": "Twój pomysł",
+      "howItWorksNewTab": "(otwiera się w nowym oknie)",
+      "ideaLabel": "Co budujesz?",
       "carriedLabel": "Przeniesione z Twojego pomysłu",
       "placeholder": "Opisz, co chcesz zbudować — dla kogo, najważniejsze rzeczy, które ludzie mają móc zrobić, i wszelkie wymagania obowiązkowe. Nie przejmuj się, jeśli nie będzie idealnie — za chwilę zadamy pytania uzupełniające.",
-      "startCta": "Zacznij planować",
+      "startCta": "Zacznij",
       "continueCta": "Kontynuuj z tym pomysłem",
-      "hintDefault": "Możesz zacząć od ogólnego pomysłu — czat odkrywczy zada pytania uzupełniające.",
+      "hintDefault": "Wystarczy kilka zdań. O resztę Motir zapyta.",
       "hintCarried": "Dodaj lub dopracuj cokolwiek przed kontynuacją — dalej przejmie to czat odkrywczy.",
-      "or": "LUB",
-      "importTitle": "Mam istniejący projekt — przenieś go",
-      "importDesc": "Połącz repozytorium, a Motir przeczyta kod i zaplanuje pracę na podstawie tego, co już istnieje. Możesz też przenieść istniejące elementy robocze z Jira, Linear lub Plane.",
-      "importCta": "Przenieś"
+      "importTitle": "Masz już projekt?",
+      "importDesc": "Motir czyta Twój kod, zadania i historię, zanim cokolwiek zmieni, a potem planuje kolejne kroki. To Ty decydujesz, co trafia do wydania.",
+      "importCta": "Jego też zvibe’ujemy"
     },
     "import": {
       "title": "Importuj istniejący projekt",
-      "body": "Łączenie repozytorium i import pracy z Jira, Linear lub Plane pojawi się wkrótce. Na razie możesz rozpocząć nowy projekt z AI.",
+      "body": "Łączenie repozytorium i import pracy z Jira, Linear lub Plane pojawi się wkrótce. Na razie możesz rozpocząć nowy projekt od swojego pomysłu.",
       "back": "Wróć do początku"
     },
     "howItWorks": {
-      "title": "Jak działa Motir",
-      "body": "Pełny przewodnik — pomysł → plan → agenci budują — jest w drodze. Na razie zacznij od swojego pomysłu, a Motir będzie po drodze zadawać pytania uzupełniające.",
-      "back": "Wróć do początku"
+      "title": "AI wykonuje pracę. Decyzje należą do Ciebie.",
+      "body": "Masz pomysł. Motir dopytuje, aż zrozumie, a potem krok po kroku, na widoku, tworzy plan, projekt, produkt i dokumenty — i zatrzymuje się wszędzie tam, gdzie wybór należy do Ciebie.",
+      "back": "Wróć do początku",
+      "sections": {
+        "say": {
+          "title": "Powiedz, czego chcesz",
+          "body": "Kilka zdań albo chaotyczny strumień myśli. Motir dopytuje, aż zrozumie."
+        },
+        "watch": {
+          "title": "Patrz, jak nabiera kształtu",
+          "body": "Plan, projekty graficzne, produkt i dokumenty powstają krok po kroku, na widoku."
+        },
+        "decide": {
+          "title": "Decyduj",
+          "body": "Każdy element wraca do Ciebie, by go obejrzeć, wypróbować i zatwierdzić. Decyzja o tym, co trafia do wydania, zawsze należy do Ciebie."
+        }
+      },
+      "developers": {
+        "title": "Jak działa Motir — dla programistów",
+        "body": "Każdy projekt Motir przechodzi przez ten sam instrument: moduły to Motir i jego agenci, a przełączniki należą do Ciebie. Na motir.co znajdziesz opis moduł po module.",
+        "cta": "Przeczytaj na motir.co",
+        "newTab": "(otwiera się w nowym oknie)"
+      }
     },
     "connectGate": {
-      "title": "Planowanie z AI nie jest skonfigurowane",
+      "title": "Planowanie nie jest jeszcze połączone",
       "body": "Planowanie działa w Motir Cloud; ten samodzielnie hostowany obszar roboczy nie ma jeszcze połączenia.",
       "cta": "Połącz Motir AI"
     },
@@ -6854,6 +6928,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Wróć do roadmapy",
+      "breadcrumb": "Ścieżka nawigacji",
+      "breadcrumbRoadmap": "Roadmapa",
+      "breadcrumbDirection": "Kierunek",
+      "kicker": "Kierunek · {tier}",
+      "tierName": {
+        "discovery": "Odkrywanie",
+        "vision": "Wizja",
+        "feasibility": "Wykonalność",
+        "validation": "Walidacja"
+      },
+      "openFullPage": "Otwórz pełną stronę",
+      "continue": "Kontynuuj",
+      "close": "Zamknij",
+      "loading": "Wczytywanie dokumentu kierunku",
+      "errorTitle": "Nie udało się wczytać tego dokumentu",
+      "errorBodyRetry": "Coś poszło nie tak podczas wczytywania Twojego kierunku. Spróbuj ponownie za chwilę.",
+      "errorBodyClose": "Coś poszło nie tak podczas wczytywania Twojego kierunku. Zamknij i spróbuj ponownie.",
+      "emptyTitle": "{label}: jeszcze niegotowe",
+      "emptyTitleFallback": "Ta część Twojego kierunku nie jest jeszcze gotowa",
+      "emptyBody": "Ten poziom nie został jeszcze opracowany dla tego projektu. Pojawi się tutaj, gdy Motir opisze go na czacie."
+    },
     "heading": "Roadmapa",
     "subtitle": "Roadmapa projektu {project}",
     "noProjectTitle": "Nie wybrano projektu",
@@ -6977,13 +7074,16 @@
       "state_error": "Nie udało się zweryfikować logowania do GitHuba. Spróbuj połączyć ponownie.",
       "error": "Coś poszło nie tak podczas łączenia z GitHubem. Spróbuj ponownie.",
       "not_configured": "GitHub nie jest jeszcze skonfigurowany w tym wdrożeniu.",
-      "installed": "Aplikacja GitHub App zainstalowana — Motir może teraz czytać wybrane repozytoria, a jego aplikacja wypycha gałęzie hostowanych uruchomień i otwiera ich pull requesty.",
+      "installed": "Konto GitHub połączone z tą organizacją. Repozytoria, które już tu połączyło, zostają zachowane — dodaj więcej za pomocą opcji Dodaj lub usuń repozytoria.",
       "repos_updated": "Dostęp do repozytoriów zaktualizowany. Motir czyta repozytoria wybrane na GitHubie — nie ma tu nic więcej do dokończenia.",
       "install_unbound": "Aplikacja Motir GitHub App została zainstalowana na GitHubie, ale nie z tego obszaru roboczego, więc nie jest z nim jeszcze połączona. Rozpocznij instalację stąd, aby ją połączyć.",
       "install_expired": "Link instalacyjny wygasł podczas wizyty na GitHubie. Nic się nie zepsuło — zacznij ponownie z Ustawień.",
       "install_forbidden": "Nie należysz do obszaru roboczego, z którego rozpoczęto tę instalację, więc nic nie zostało połączone.",
       "install_provider_error": "Motir nie mógł połączyć się z GitHubem, aby dokończyć łączenie aplikacji. Spróbuj ponownie.",
-      "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie."
+      "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie.",
+      "select_repos": "Motir GitHub App jest zainstalowana. Wybierz, które repozytoria tego konta łączy ta organizacja.",
+      "repo_unavailable": "To repozytorium jest już połączone z inną organizacją, więc nie zostało tu dodane. Nic innego się nie zmieniło.",
+      "installation_not_accessible": "Nie widzisz tego konta GitHub w serwisie GitHub, więc nie zostało ono połączone z tą organizacją. Nic nie zostało zmienione."
     },
     "connect": {
       "title": "Połącz GitHuba",
@@ -6995,14 +7095,14 @@
       },
       "step2": {
         "eyebrow": "Krok 2 · Dostęp do repozytoriów",
-        "title": "Zainstaluj aplikację Motir GitHub App",
-        "body": "Wybierz, które repozytoria Motir może czytać — dokładne repozytoria wskazujesz na ekranie instalacji GitHuba. Motir nigdy nie widzi pozostałych, a wybór możesz zmienić w dowolnej chwili."
+        "title": "Połącz konto GitHub",
+        "body": "Wybierz konto, na którym jest zainstalowana aplikacja Motir GitHub App — albo zainstaluj ją na nowym — a potem wybierz, które z jego repozytoriów ta organizacja połączy. Repozytorium należy jednocześnie tylko do jednej organizacji."
       },
       "installLink": "Zainstaluj aplikację Motir GitHub App",
       "cta": "Połącz GitHuba",
       "foot": "Przekierujemy Cię na GitHuba, aby autoryzować dostęp, a następnie wybrać repozytoria.",
       "noInstallHref": "Instalacja aplikacji Motir GitHub App nie jest dostępna w tym wdrożeniu.",
-      "orgFoot": "Przekierujemy Cię na GitHuba, aby wybrać repozytoria, do których ta organizacja daje Motir dostęp."
+      "orgFoot": "Jeśli aplikacja Motir GitHub App jest już zainstalowana na Twoim koncie GitHub, Motir wyświetli to konto — nie trzeba instalować jej ponownie."
     },
     "identity": {
       "connectedAs": "Tożsamość GitHub · połączono jako {name}",
@@ -7303,6 +7403,97 @@
       "adminOnly": "Tylko właściciele i administratorzy {org} mogą połączyć lub odłączyć host git.",
       "subtitleGeneric": "Połącz organizację z GitHubem lub GitLabem jeden raz. Każdy projekt w organizacji może wtedy pracować na połączonym repozytorium — jego wybór nigdy nie indeksuje go ponownie.",
       "identityAtAccount": "Połącz własne konto w Ustawienia → Konto → Konta git"
+    },
+    "accounts": {
+      "title": "Konta GitHub",
+      "subtitle": "Konta, z których {org} łączy repozytoria. Każde repozytorium należy jednocześnie tylko do jednej organizacji.",
+      "connect": "Połącz GitHub",
+      "linked": "Połączone",
+      "meta": "{type} · {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}} połączonych tutaj",
+      "type": {
+        "organization": "Organizacja",
+        "personal": "Osobiste"
+      },
+      "addOrRemove": "Dodaj lub usuń repozytoria",
+      "manageOnGithub": "Zarządzaj w GitHubie",
+      "disconnect": "Odłącz",
+      "toastTitle": "Połączono {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}} z konta {account}",
+      "toastBody": "Znajdziesz je w sekcji Repozytoria — każdy projekt w {org} może je teraz dodać."
+    },
+    "picker": {
+      "title": "Połącz GitHub",
+      "description": "Wybierz konto GitHub, którego repozytoria ma połączyć {org}. To konta z zainstalowaną aplikacją Motir GitHub App, które widzisz.",
+      "accountsLabel": "Konta",
+      "accountMeta": "{type} · {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}} widocznych dla Motir",
+      "notLinked": "Niepołączone",
+      "linkedHere": "Połączone z tą organizacją",
+      "installOther": "Zainstaluj na innym koncie",
+      "installOtherMeta": "Otwiera GitHuba, aby zainstalować aplikację Motir GitHub App na koncie, które jeszcze jej nie ma.",
+      "loadingAccounts": "Wczytywanie kont GitHub…",
+      "accountsError": {
+        "title": "Nie udało się połączyć z GitHubem",
+        "body": "Motir nie mógł wczytać kont, na których jest zainstalowana aplikacja Motir GitHub App. Nic nie zostało zmienione."
+      },
+      "retry": "Spróbuj ponownie",
+      "noAccounts": {
+        "title": "Brak konta GitHub do połączenia",
+        "body": "Aplikacja Motir GitHub App nie jest zainstalowana na żadnym koncie GitHub, które widzisz. Zainstaluj ją na jednym z nich, aby kontynuować."
+      },
+      "identity": {
+        "title": "Najpierw połącz swoje konto GitHub",
+        "body": "Motir wyświetla konta GitHub, które widzisz dzięki własnej tożsamości GitHub. Połącz ją w Ustawienia → Konto → Konta Git, a potem wróć tutaj.",
+        "action": "Przejdź do kont Git"
+      },
+      "cancel": "Anuluj",
+      "back": "Wszystkie konta",
+      "reposTitle": "Wybierz repozytoria z konta {account}",
+      "reposDescription": "Każde repozytorium należy jednocześnie tylko do jednej organizacji. Repozytoriów połączonych już przez inną organizację nie można tu dodać.",
+      "search": "Szukaj repozytoriów",
+      "selectAll": "Zaznacz wszystkie dostępne ({count})",
+      "selected": "Zaznaczono: {count}",
+      "rowState": {
+        "selected": "zaznaczone",
+        "notSelected": "niezaznaczone"
+      },
+      "connectedElsewhere": "Połączone z inną organizacją",
+      "connectedHere": "Połączone tutaj",
+      "noMatches": "Żadne repozytorium nie pasuje do wyszukiwania.",
+      "hint": "Aby odłączyć repozytorium od {org}, użyj opcji Odłącz w jego wierszu w sekcji Repozytoria.",
+      "submit": "{count, plural, =0 {Połącz repozytoria} one {Połącz # repozytorium} few {Połącz # repozytoria} many {Połącz # repozytoriów} other {Połącz # repozytorium}}",
+      "loadingRepos": "Wczytywanie repozytoriów…",
+      "reposError": {
+        "title": "Nie udało się wczytać repozytoriów",
+        "body": "Motir nie mógł wczytać repozytoriów konta {account} z GitHuba. Nic nie zostało zmienione."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "Repozytorium {repo} zostało właśnie połączone z inną organizacją i nie można go dodać.",
+        "repo_selection_required": "Wybierz co najmniej jedno repozytorium do połączenia.",
+        "repository_not_visible": "Jedno z tych repozytoriów nie jest już widoczne dla aplikacji Motir GitHub App w GitHubie. Odśwież listę i spróbuj ponownie.",
+        "installation_not_accessible": "Konto {account} nie jest już dla Ciebie widoczne w GitHubie, więc nie można go połączyć. Wybierz inne konto.",
+        "generic": "Coś poszło nie tak podczas łączenia tych repozytoriów. Nic nie zostało zmienione — spróbuj ponownie."
+      },
+      "noneLeft": {
+        "title": "Nie ma już nic do połączenia z konta {account}",
+        "body": "Każde repozytorium, które aplikacja Motir GitHub App widzi na koncie {account}, jest już połączone. Repozytorium należy jednocześnie tylko do jednej organizacji.",
+        "connectedHere": "Połączone z tą organizacją",
+        "connectedElsewhere": "Połączone z innymi organizacjami",
+        "hint": "Aby udostępnić więcej, nadaj aplikacji Motir GitHub App dostęp do innych repozytoriów w GitHubie albo wybierz inne konto.",
+        "chooseAnother": "Wybierz inne konto",
+        "manageOnGithub": "Zarządzaj repozytoriami w GitHubie"
+      }
+    },
+    "accountDisconnect": {
+      "title": "Odłączyć konto {account} od {org}?",
+      "repos": "Spowoduje to usunięcie tylko połączenia {org} z kontem {account} oraz {count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}}, które to konto tu połączyło:",
+      "projects": "{count, plural, one {# projekt traci} few {# projekty tracą} many {# projektów traci} other {# projektu traci}} te repozytoria:",
+      "noProjects": "Żaden projekt w {org} nie używa jeszcze tych repozytoriów.",
+      "retention": "Indeks kodu zbudowany z nich przez Motir jest przechowywany przez {days} dni. Ponowne połączenie konta i wybranie ich przed upływem tego czasu anuluje usunięcie; później ponowne dodanie repozytorium oznacza pełne indeksowanie.",
+      "others": "Nie ma to wpływu na inne organizacje połączone z kontem {account}, a aplikacja Motir GitHub App pozostaje zainstalowana w GitHubie. Aby odinstalować ją wszędzie, zrób to w GitHubie.",
+      "loading": "Wczytywanie zakresu skutków odłączenia…",
+      "loadFailed": "Motir nie mógł wczytać skutków odłączenia konta {account}. Nic nie zostało zmienione — spróbuj ponownie.",
+      "failed": "Motir nie mógł odłączyć konta {account}. Nic nie zostało zmienione — spróbuj ponownie.",
+      "cancel": "Anuluj",
+      "confirm": "Odłącz"
     }
   },
   "aiPlanning": {
@@ -7369,7 +7560,8 @@
         "stale": "Nieaktualny",
         "approved": "Zatwierdzony",
         "declined": "Odrzucony",
-        "closed": "Zamknięta"
+        "closed": "Zamknięta",
+        "waiting": "Do wznowienia"
       },
       "origin": {
         "mcp": "Plan agenta",
@@ -7426,7 +7618,9 @@
         "approved": "Zatwierdzony · {time}"
       },
       "continuedFrom": "Kontynuacja rozmowy z {when}",
-      "continuedFromAria": "Otwórz rozmowę, którą kontynuuje ta rozmowa, zamkniętą {when}"
+      "continuedFromAria": "Otwórz rozmowę, którą kontynuuje ta rozmowa, zamkniętą {when}",
+      "stop": "Zatrzymano na: {where} · przyczyna: {why} · {time}",
+      "stopChange": "Twoja ostatnia zmiana nie mogła zostać wprowadzona · {time}"
     }
   },
   "planningWorkspace": {
@@ -7526,7 +7720,9 @@
         "notDecidable": "Nie można jeszcze zdecydować o tym planie — nikt nie został poproszony o jego zatwierdzenie. Nic nie zostało zmienione.",
         "discard": "Odrzucenie się nie powiodło. Propozycja nadal czeka na kanwie — spróbuj ponownie albo ją zatwierdź.",
         "askSilent": "Nic nie wróciło. Spróbuj zapytać inaczej.",
-        "failedClosed": "Ta próba się nie powiodła, więc sesja została zamknięta. Elementy robocze, które w niej były, wróciły na swoje miejsce."
+        "failedClosed": "Ta próba się nie powiodła, więc sesja została zamknięta. Elementy robocze, które w niej były, wróciły na swoje miejsce.",
+        "revisionInFlight": "Motir AI już poprawia ten plan. Twoja wiadomość została zachowana — wyślij ją ponownie, gdy pojawi się nowa wersja.",
+        "awaitingResume": "Ta sesja czeka na wznowienie i nie może jeszcze przyjąć wiadomości. Najpierw ją wznów — Twoja wiadomość została zachowana."
       },
       "answeredFrom": "{count, plural, =0 {Odpowiedź bez powoływania się na źródła} one {Odpowiedź na podstawie # elementu roboczego} few {Odpowiedź na podstawie # elementów roboczych} many {Odpowiedź na podstawie # elementów roboczych} other {Odpowiedź na podstawie # elementu roboczego}}",
       "correctToAsk": "Zamiast tego odpowiedz na to",
@@ -7607,7 +7803,10 @@
         "layingLine": "Rozkładanie: {target}",
         "authoringLine": "Pisanie: {title}",
         "matchingLine": "Sprawdzanie, czy jakiś element roboczy już to obejmuje",
-        "writingLine": "Zapisywanie diagnozy w {key}"
+        "writingLine": "Zapisywanie diagnozy w {key}",
+        "resumed": "wznowienie",
+        "resumedLine": "Utracono maszynę — Motir uruchomił plan ponownie i kontynuuje od miejsca, w którym się zatrzymał",
+        "resumedLineSecond": "Ponownie utracono maszynę — druga automatyczna próba, kontynuacja od miejsca zatrzymania"
       },
       "openerFollowUp": "Wybrano właśnie {label}. Motir AI planuje to, co ten wybór blokuje.",
       "composerPlaceholderGuide": "Powiedz Motir AI, jak poszedł ten krok…",
@@ -7623,6 +7822,11 @@
         "groupLive": "{step} — w toku",
         "groupFinished": "{step} — zakończone"
       }
+    },
+    "codeUnreadable": {
+      "planBody": "Teraz nie mogę odczytać Twojego kodu, więc nie zmieniłem planu. Motir się tym zajmuje.",
+      "planMarker": "Nic nie zostało zapisane — Twój plan pozostaje bez zmian.",
+      "askNotice": "Nie udało mi się odczytać Twojego kodu na potrzeby tej odpowiedzi. Wszystko, co tu napisano o kodzie, traktuj jako niepotwierdzone."
     },
     "targets": {
       "sectionLabel": "Elementy robocze",
@@ -7794,6 +7998,16 @@
         "writing": "Na podstawie tej rozmowy powstaje nowy plan.",
         "restored": "Praca, którą zmienia ten plan, jest znowu otwarta, więc ten plan znowu jest aktualny. Nic nowego nie rozpoczęto.",
         "restoredOne": "{workItem} jest znowu otwarty, więc ten plan znowu jest aktualny. Nic nowego nie rozpoczęto."
+      },
+      "refusal": {
+        "waitingOn": "Czeka na: {name}",
+        "waitingOnSomeone": "Czeka na kogoś",
+        "why": {
+          "question": "Planista zadał pytanie i czeka na odpowiedź.",
+          "reply": "Rozmowa czeka na odpowiedź.",
+          "failed": "Próba nie powiodła się i czeka na wznowienie."
+        },
+        "openSession": "Otwórz ich sesję"
       }
     },
     "arrival": {
@@ -7918,6 +8132,15 @@
       "earlierOpen": "Otwórz ją",
       "disabledStreaming": "Dostępne po zakończeniu tego uruchomienia",
       "swapped": "Twoja wcześniejsza sesja jest zamknięta. Otwarto nową sesję."
+    },
+    "waiting": {
+      "failedHead": "Ta próba została zatrzymana",
+      "kept": "Dotychczasowy plan został zachowany, a powiązane elementy robocze pozostają w stanie „Planowanie”.",
+      "holdReason": "Najpierw wznów nieudaną próbę. Wysyłanie jest wstrzymane, dopóki czeka.",
+      "onlyStarter": "Tylko {name} lub kierownik projektu może to wznowić.",
+      "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić.",
+      "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona · {when}",
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}"
     }
   },
   "codeHealth": {
@@ -8051,6 +8274,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "Przenieś swój projekt",
+      "lede": "Połącz Jira, Linear lub Plane, a Motir przeniesie Twoje elementy robocze, żeby zaplanować kolejne kroki od miejsca, w którym jesteś."
+    },
     "chrome": {
       "title": "Importuj elementy robocze",
       "titleInto": "Importuj elementy robocze · do projektu {project}",
@@ -8293,7 +8520,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "Przenieś istniejący projekt",
-      "planAi": "Planuj z AI"
+      "planAi": "Zacznij raczej od pomysłu"
+    },
+    "hero": {
+      "headline": "Masz już projekt?",
+      "lede": "Motir czyta Twój kod, zadania i historię, zanim cokolwiek zmieni, a potem planuje kolejne kroki. Prowadzi projekt. To Ty decydujesz, co trafia do wydania."
     },
     "rail": {
       "title": "Twoja migracja",
@@ -8319,16 +8550,30 @@
       "eyebrow": "Istniejąca baza kodu",
       "heading": "Przenieś istniejącą bazę kodu",
       "body": "Połącz repozytoria, pozwól Motir przeczytać kod i wyprowadzić konwencje, a następnie opcjonalnie zaimportuj Backlog i zaplanuj.",
-      "projectLine": "Kreator migracji działa dla tego projektu.",
-      "cta": "Rozpocznij"
+      "chooseLabel": "Który projekt przenosisz?",
+      "current": "Otwarty teraz",
+      "currentMeta": "Projekt, który masz otwarty",
+      "otherMeta": "Przełącza na ten projekt, a potem zaczyna",
+      "ctaFor": "Zacznij od {project}"
     },
     "connect": {
       "eyebrow": "Krok 1 z 2 · Konfiguracja",
       "heading": "Połącz repozytoria w tym projekcie",
-      "body": "Połącz repozytoria GitHub w ustawieniach obszaru roboczego. Motir czyta je przez warstwę GitProvider, aby zbudować jeden graf kodu dla całego projektu.",
-      "cta": "Otwórz ustawienia GitHub",
+      "body": "Motir czyta repozytoria połączone w GitHubie i tworzy jedną mapę kodu dla całego projektu.",
       "gitlabNote": "Łączenie z GitLabem pojawi się wkrótce.",
-      "next": "Repozytoria są połączone"
+      "checking": "Sprawdzanie połączonych repozytoriów…",
+      "missingTitle": "Brak połączonych repozytoriów",
+      "missingHint": "Połącz GitHuba w nowej karcie. Motir sam zauważy połączenie, więc nie musisz tu niczego potwierdzać.",
+      "connectCta": "Połącz GitHuba",
+      "newTab": "(otwiera się w nowym oknie)",
+      "waitingTitle": "Czekanie na GitHuba",
+      "waitingHint": "Dokończ łączenie w drugiej karcie. Motir sprawdzi ponownie, gdy wrócisz, a do tego czasu co kilka sekund.",
+      "reopenCta": "Otwórz ponownie ustawienia GitHuba",
+      "detected": "{count, plural, one {Połączono # repozytorium} few {Połączono # repozytoria} many {Połączono # repozytoriów} other {Połączono # repozytorium}}",
+      "detectedHint": "To repozytoria, które Motir może czytać. Indeksowanie zacznie się, gdy przejdziesz dalej.",
+      "listLabel": "Połączone repozytoria",
+      "continue": "Dalej",
+      "manage": "Zarządzaj repozytoriami w GitHubie"
     },
     "index": {
       "eyebrow": "Krok 2 z 2 · Konfiguracja",
@@ -8351,15 +8596,15 @@
       "eyebrow": "Opcjonalne · Import i planowanie",
       "heading": "Przenieś istniejący Backlog",
       "body": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Zaimportuj ją do tego projektu — przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
-      "cta": "Otwórz importer",
       "reconcile": "Gdy potem wygenerujesz plan, Motir uzgodni oba źródła, aby nic się nie zduplikowało.",
       "skip": "Pomiń import",
-      "next": "Zaimportowano — kontynuuj"
+      "bodyInline": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Przenieś ją od razu tutaj. Przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
+      "continue": "Dalej"
     },
     "decision": {
       "eyebrow": "Konfiguracja zakończona",
       "heading": "Twoja baza kodu jest w Motir",
-      "body": "Zaplanuj projekt teraz z AI albo zakończ i zaplanuj później z poziomu projektu.",
+      "body": "Motir może teraz zaplanować kolejne kroki albo możesz zakończyć i zaplanować później z poziomu projektu. To Ty decydujesz, co trafia do wydania.",
       "planNow": "Zaplanuj projekt teraz",
       "finishLater": "Zakończ — zaplanuję później"
     },
@@ -8368,6 +8613,18 @@
       "heading": "Kontynuuj planowanie",
       "body": "Rozpoczęto planowanie tego projektu. Kontynuuj w przestrzeni planowania.",
       "cta": "Kontynuuj planowanie"
+    },
+    "questions": {
+      "eyebrow": "Twój kierunek",
+      "heading": "Kilka pytań",
+      "body": "Motir przeczytał Twój kod. Kilka odpowiedzi o tym, dokąd zmierza projekt, a na podstawie jednego i drugiego przygotuje pierwszy plan.",
+      "progress": "Pytanie {n} z około {total}",
+      "draftingTitle": "Przygotowywanie pierwszego planu",
+      "draftingBody": "Na podstawie Twojego kodu, Backlogu i odpowiedzi. Możesz opuścić tę stronę; Motir da znać, gdy plan będzie gotowy.",
+      "draftingWaits": "Czekanie, aż Motir skończy czytać Twój kod; potem przygotowywanie zacznie się samo.",
+      "readyTitle": "Twój pierwszy plan jest gotowy",
+      "readyBody": "{count, plural, one {# element przygotowano} few {# elementy przygotowano} many {# elementów przygotowano} other {# elementu przygotowano}} dla {project}. Nic nie jest ostateczne, dopóki tego nie zatwierdzisz.",
+      "readyCta": "Przejrzyj plan"
     }
   },
   "repositorySet": {
@@ -8744,7 +9001,8 @@
         "decision_confirmation": "Potwierdzenie decyzji",
         "plan_approval": "Zatwierdzenie planu",
         "agent_review": "Przegląd agenta",
-        "manual_work": "Praca ręczna"
+        "manual_work": "Praca ręczna",
+        "planning_session": "Sesja planowania"
       },
       "reviewRow": "Przejrzyj {key} — {sentence}",
       "pullRequest": {
@@ -8940,6 +9198,70 @@
         "unknownLine": "Nie jest już pisany."
       },
       "ceiling": "Wyświetlane są Twoje najnowsze pisane plany ({shown}). Pozostałe ({rest}) są na <link>stronie Plany</link>."
+    },
+    "planningSession": {
+      "kind": "Sesja planowania",
+      "waitingToResume": "Do wznowienia",
+      "resume": "Wznów",
+      "resuming": "Wznawianie…",
+      "open": "Otwórz",
+      "failedAt": "niepowodzenie {when}",
+      "written": "{n} z {m} napisanych",
+      "second": "Druga próba",
+      "stoppedAt": "Zatrzymano na",
+      "because": "przyczyna: {reason}",
+      "resumingNote": "Praca zostanie podjęta od miejsca, w którym się zatrzymała. Ten wiersz zniknie, gdy się rozpocznie.",
+      "reopened": "Ponownie otwarto z „Do wznowienia” · rozpoczęta przez Ciebie · ostatnia aktywność {when}",
+      "openAria": "Otwórz nieudaną sesję planowania — {sentence}",
+      "couldNot": "Nie udało się rozpocząć wznowienia.",
+      "stop": {
+        "lay": "Układanie: {title}",
+        "layTop": "Układanie najwyższego poziomu projektu",
+        "author": "Pisanie: {title}",
+        "draft": "Szkicowanie nowego elementu"
+      },
+      "reason": {
+        "rate_limited": "model osiągnął limit zapytań",
+        "out_of_credits": "w organizacji skończyły się kredyty",
+        "model_unavailable": "dostawca AI był niedostępny",
+        "token_expired": "połączenie z dostawcą AI wygasło",
+        "prompt_too_large": "kontekst planu był zbyt duży dla modelu",
+        "internal": "po naszej stronie wystąpił problem"
+      },
+      "refusal": {
+        "credits": "W Twojej organizacji skończyły się kredyty Motir AI. Dodaj kredyty, a potem wznów.",
+        "notOwner": "Tę sesję może wznowić tylko osoba, która ją rozpoczęła, lub kierownik projektu.",
+        "ended": "Ta sesja w międzyczasie się zakończyła. Otwórz ją, aby zobaczyć, jak.",
+        "notFailed": "Ta sesja nie czeka już na wznowienie. Otwórz ją, aby zobaczyć, na jakim jest etapie.",
+        "notResumable": "Plan, który zawierała ta sesja, nie może być kontynuowany. Otwórz ją, aby zobaczyć, na jakim jest etapie.",
+        "unavailable": "Nie udało się połączyć z Motir AI. Spróbuj ponownie za chwilę."
+      },
+      "left": {
+        "title": "Przeniesiono do „Do wznowienia”",
+        "line": "Próba się nie powiodła, a dotychczasowy plan został zachowany. Wznów go z „Do wznowienia”.",
+        "link": "Przejdź do „Do wznowienia”",
+        "turn": "Poprawiono w tej samej rozmowie — ten wpis zniknie.",
+        "carry": "Przeniesiono do nowej rozmowy — ten wpis zniknie.",
+        "decided": "Rozstrzygnięto — ten wpis zniknie.",
+        "again": "Planowanie od nowa tutaj — ten wpis zniknie."
+      },
+      "form": {
+        "b": {
+          "badChange": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona",
+          "stateWaiting": "Czeka na Twoje zatwierdzenie",
+          "stateStale": "Nieaktualny",
+          "nextReply": "Plan nadal czeka. Odpowiedz, aby kontynuować.",
+          "nextAgain": "Praca, którą zmienia, została zakończona. Zaplanuj go ponownie, aby kontynuować."
+        },
+        "c": {
+          "ended": "Rozmowa zakończyła się {when}",
+          "gloss": "Twoja następna wiadomość przeniesie plan do nowej rozmowy.",
+          "chip": "Rozmowa zakończona"
+        },
+        "walk": {
+          "alsoWaiting": "Czeka też na Twoje zatwierdzenie:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12245,6 +12567,10 @@
         "title": "Inna decyzja w tej sprawie już czeka.",
         "next": "Odśwież stronę, aby ją zobaczyć."
       },
+      "deliveryUnreadable": {
+        "title": "Jeden z pull requestów tego elementu roboczego nie jest już widoczny dla tej organizacji.",
+        "next": "Nic nie zostało zdecydowane. Jego repozytorium należy teraz do innej organizacji: połącz je tu ponownie albo odłącz ten pull request od elementu roboczego."
+      },
       "decidedImmutable": {
         "title": "Ta decyzja została już zapisana i nie można jej zmienić.",
         "next": "Odśwież stronę. Jeśli to się powtarza, jest to defekt, który warto zgłosić."
@@ -12870,6 +13196,7 @@
         "proceed": "Tak, odrzuć"
       },
       "handoff": {
+        "conversing": "Ustalam, o co prosisz i gdzie to pasuje w projekcie. Zanim zacznę planować, mogę zadać ci pytanie.",
         "writing": "Mam wszystko, czego potrzebuję — piszę teraz plan. Nie trzeba tu czekać: zamknij to okno w dowolnej chwili, a plan będzie czekać w sekcji <link>Czeka na Ciebie</link>.",
         "rewriting": "Piszę nową wersję tego planu. Możesz to zamknąć — w trakcie pracy plan jest w sekcji „Planowanie”, a gdy skończę, wróci do sekcji <link>Czeka na Ciebie</link>, gdzie podejmiesz decyzję."
       }
@@ -12990,6 +13317,15 @@
       },
       "consequence": "Oznaczenie jako gotowe przeniesie {key} do statusu Gotowe.",
       "consequenceMerges": "Oznaczenie jako gotowe zostanie tu zapisane. {key} przejdzie do statusu Gotowe, gdy jego pull request zostanie scalony."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Sesja planowania",
+        "asked": "Motir AI zapytał:",
+        "waitReply": "Motir AI czeka na Twoją odpowiedź.",
+        "since": "od {when}",
+        "open": "Otwórz sesję planowania — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

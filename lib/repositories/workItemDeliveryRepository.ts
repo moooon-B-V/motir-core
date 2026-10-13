@@ -1,4 +1,5 @@
 import type { Prisma, WorkItemDelivery } from '@/generated/prisma/client';
+import { ApprovalGateDeliveryUnreadableError } from '@/lib/approvalGates/errors';
 import type { LinkedChangeRequestCompletionFact } from '@/lib/repositories/githubPullRequestRepository';
 
 // Single Prisma operations on the `work_item_delivery` table — the ONE association
@@ -45,6 +46,18 @@ const WITH_CHECKS = {
   pullRequest: { include: { checkRuns: true } },
   repo: true,
 } as const;
+
+/** A merged delivery's host address — see
+ *  {@link workItemDeliveryRepository.listMergedHostAddressesByWorkItem}. */
+export interface MergedDeliveryHostAddress {
+  /** The repository's provider discriminator (`github`, `gitlab`). */
+  provider: string;
+  /** The HOST's installation id (not the internal cuid) — what a token mint takes. */
+  hostInstallationId: string;
+  owner: string;
+  name: string;
+  number: number;
+}
 
 export const workItemDeliveryRepository = {
   /**
@@ -121,12 +134,73 @@ export const workItemDeliveryRepository = {
     });
   },
 
+  /**
+   * ⚠️ AND IT ANSWERS THE WHOLE SET OR REFUSES (Bug MOTIR-8236). This is the read the
+   * approval gates and approve-and-merge decide over. A delivery row is admitted on
+   * the CARD's workspace, but its pull request and repository are admitted through
+   * `github_repo`'s policies, so a repository that has left the card's organisation
+   * comes back as a visible row with NULL joins — which the generated type says cannot
+   * happen, and every caller dereferenced. A member silently dropped here would let a
+   * decision be taken over part of the set, so a set with an unreadable member raises
+   * {@link ApprovalGateDeliveryUnreadableError}, naming those deliveries, rather than
+   * returning it. The display reads take the other answer and drop the member
+   * (MOTIR-8215).
+   */
   async listByWorkItemWithChecks(
     workItemId: string,
     tx: Prisma.TransactionClient,
   ): Promise<WorkItemDeliveryWithChecks[]> {
-    return tx.workItemDelivery.findMany({
+    const rows = await tx.workItemDelivery.findMany({
       where: { workItemId },
+      include: WITH_CHECKS,
+      orderBy: { createdAt: 'asc' },
+    });
+    // The type says these joins are never null; under RLS they can be.
+    const unreadable = rows.filter(
+      (row) =>
+        (row.pullRequest as WorkItemDeliveryWithChecks['pullRequest'] | null) === null ||
+        (row.repo as WorkItemDeliveryWithChecks['repo'] | null) === null,
+    );
+    if (unreadable.length > 0) {
+      throw new ApprovalGateDeliveryUnreadableError(
+        workItemId,
+        unreadable.map((row) => row.id),
+      );
+    }
+    return rows;
+  },
+
+  /**
+   * {@link listByWorkItemWithChecks}, restricted to the members whose pull
+   * request AND repository the bound reader can see (Bug MOTIR-8215) — the read a
+   * DISPLAY surface asks.
+   *
+   * ⚠️ THE TWO JOINS ARE GATED BY DIFFERENT POLICIES THAN THE ROW. A delivery row
+   * is admitted on its own `workspace_id`, the card's. The pull request and the
+   * repository are admitted through `github_repo` — its workspace, or the
+   * reader's ORGANISATION (`20260905214500_github_org_read_arms`). When the
+   * repository stops belonging to that organisation (another organisation
+   * connecting the same GitHub installation re-stamps it), the delivery row is
+   * still visible and the relation it includes comes back NULL, which the
+   * generated type says cannot happen. Every display mapper then threw reading
+   * `pullRequest.checkRuns`, taking the peek, the item page and the approval
+   * overlay down with it.
+   *
+   * The two relation filters below put the same policies in the WHERE, so a
+   * member the reader cannot see is absent from the answer rather than present
+   * with a hole in it — RLS's own semantics, and the shape the generated type
+   * already promises. Still one query.
+   *
+   * Kept apart from {@link listByWorkItemWithChecks} on purpose: the gates and the
+   * merge read the WHOLE set, and a member silently dropped there would let a
+   * decision be taken over part of it.
+   */
+  async listReadableByWorkItemWithChecks(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemDeliveryWithChecks[]> {
+    return tx.workItemDelivery.findMany({
+      where: { workItemId, pullRequest: { is: {} }, repo: { is: {} } },
       include: WITH_CHECKS,
       orderBy: { createdAt: 'asc' },
     });
@@ -239,6 +313,43 @@ export const workItemDeliveryRepository = {
       repoDefaultBranch: r.repo.defaultBranch,
       merged: r.pullRequest.merged,
       baseRef: r.pullRequest.baseRef,
+    }));
+  },
+
+  /**
+   * Where each MERGED pull request delivering one card lives on its host — the
+   * provider, the host's installation id, the repository and the number (Bug
+   * MOTIR-8330). It is the address the monitor hands the host to ask whether a
+   * deployed release carries the merge that completed the bug.
+   *
+   * Merged rows only: an open or closed-unmerged pull request landed nothing a
+   * release could carry. Oldest link first, like every read on this table.
+   */
+  async listMergedHostAddressesByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MergedDeliveryHostAddress[]> {
+    const rows = await tx.workItemDelivery.findMany({
+      where: { workItemId, pullRequest: { merged: true } },
+      select: {
+        repo: {
+          select: {
+            provider: true,
+            owner: true,
+            name: true,
+            installation: { select: { installationId: true } },
+          },
+        },
+        pullRequest: { select: { number: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => ({
+      provider: r.repo.provider,
+      hostInstallationId: r.repo.installation.installationId,
+      owner: r.repo.owner,
+      name: r.repo.name,
+      number: r.pullRequest.number,
     }));
   },
 

@@ -395,6 +395,16 @@ export interface PlanItemProposedFields {
 }
 
 /**
+ * The kinds a `modify` may RE-KIND its target to (bug MOTIR-8192 · AMENDMENT 25)
+ * — exactly the set `change_kind` offers, and for its reason: an `epic` is
+ * structural plan scaffolding the planner lays with an `add`, never a card an
+ * existing work item is turned into.
+ */
+export const MODIFY_KIND_TARGETS = ['story', 'task', 'bug', 'subtask'] as const;
+
+export type ModifyKindTarget = (typeof MODIFY_KIND_TARGETS)[number];
+
+/**
  * The sparse patch of a `modify` PlanItem — only the CHANGED fields (the OLD
  * side of each diff is read live from the target at materialize). The edge
  * changes carry refs (a real work-item id or an intra-plan temp-ref).
@@ -429,6 +439,23 @@ export interface PlanItemPatch {
   explanationMd?: string | null;
   priority?: string | null;
   type?: string | null;
+  /**
+   * RE-KIND the target (bug MOTIR-8192; `agent-authored-plans.md` AMENDMENT 25) —
+   * the plan door's `change_kind`, so a re-plan that finds a committed `task` is
+   * really a `story` can say so on the plan a person approves.
+   *
+   * One of `story` · `task` · `bug` · `subtask`, never `epic` — the set
+   * `change_kind` offers, refused by name at the append and the correction. The
+   * new kind is judged against the PROJECTED tree, at the append and again at
+   * approve: its parent must admit it, it must admit every child it keeps, and
+   * a container kind may not keep a `type` or a `difficulty` — the patch clears
+   * them (`type: null`, `difficulty: null`) or the proposal is refused by name
+   * (`type_on_container` / `difficulty_on_container`). The EXECUTOR has no patch
+   * key (AMENDMENT 4 D3a); a re-kind to a container DERIVES it to `null` at
+   * approve, and the review shows that change row. Applied by `applyModify` with
+   * a `kind` revision diff cell, the one `workItemsService` records.
+   */
+  kind?: ModifyKindTarget;
   /**
    * Leaf sizing re-scope (MOTIR-1532) — the agile point + time estimate a
    * `modify` may change on the target, mirroring the `add` path's
@@ -624,6 +651,7 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'explanationMd',
   'priority',
   'type',
+  'kind',
   'storyPoints',
   'estimateMinutes',
   'difficulty',

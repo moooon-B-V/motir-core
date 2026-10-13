@@ -331,7 +331,12 @@ describe('every row is the ONE approvals row, and its door is the overlay', () =
     )
       .split('\n')
       .filter((f) => f && readFileSync(join(ROOT, f), 'utf8').includes('approval-row-'));
-    expect(hits).toEqual(['components/approvals/ApprovalRow.tsx']);
+    // `PlanningSessionRow` is ApprovalRow's own variant for the card-less `planning_session` kind
+    // (MOTIR-7913): ApprovalRow dispatches to it, so it is not a second list's row.
+    expect(hits).toEqual([
+      'components/approvals/ApprovalRow.tsx',
+      'components/approvals/PlanningSessionRow.tsx',
+    ]);
   });
 });
 

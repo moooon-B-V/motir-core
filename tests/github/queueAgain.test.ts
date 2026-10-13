@@ -28,6 +28,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { releaseProviderRepo } from '../helpers/releaseProviderRepo';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
@@ -99,6 +100,9 @@ async function makeScenario(email: string, mode: 'manual' | 'auto') {
     identifier: 'ACME',
   });
   await adminDb.project.update({ where: { id: project.id }, data: { prMergeMode: mode } });
+  // Every scenario connects the SAME installation and repository, so the
+  // previous scenario's organisation lets it go first (MOTIR-8218).
+  await releaseProviderRepo(REPO_PROVIDER_ID);
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: {

@@ -367,10 +367,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
     shape: '{ counted: number; indeterminate: number; scanned: number; skipped: number }',
   },
-  'reconcile-abandoned-plans': {
+  'reconcile-abandoned-plans-v3': {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
+    // MOTIR-8304 added `lostMachine` and MOTIR-8307 `autoResume` to the
+    // `awaiting_resume` outcome, so the id was bumped.
     shape:
-      '{ declined: number; outcomes: Array<{ outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "row_moved" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ autoResume: null | { count: number; jobId: string; started: true } | { reason: "bound_spent" | "lost_race" | "no_proposal" | "not_failed" | "not_resumable" | "starter_cannot_plan" | "submit_refused"; started: false }; lostMachine: boolean; outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
   },
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
@@ -420,11 +422,23 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/impersonationExpirySweep.ts',
     shape: '{ closed: number; scanned: number }',
   },
+  'raise-awaiting-reply-planning-sessions': {
+    file: 'lib/jobs/definitions/planTargetLockSweep.ts',
+    // Added by MOTIR-7913: the lock sweep marks and gates a conversation the person left
+    // waiting on the planner's reply, ahead of the idle close.
+    shape: '{ raised: number; sessionIds: Array<string> }',
+  },
   'close-idle-planning-sessions': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
     // Added by MOTIR-7638 (AMENDMENT 23 §2): the lock sweep closes an idle
     // session before it releases expired leases.
     shape: '{ closed: number; sessionIds: Array<string> }',
+  },
+  'release-lapsed-plan-revisions': {
+    file: 'lib/jobs/definitions/planTargetLockSweep.ts',
+    // Added by MOTIR-8208: a revision re-opens its plan to `generating`, so the lock
+    // sweep gives a plan whose revision lease lapsed back to `planned`.
+    shape: '{ planIds: Array<string>; restored: number }',
   },
   'release-expired-planning-locks': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
@@ -432,6 +446,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // reached `planned` is waiting for a PERSON, not for a crashed author, so the
     // lease never expires it (AMENDMENT 16 D9). The sweep reports the skip rather
     // than walking past a selected row silently.
+    //
+    // `session_waiting` added by MOTIR-7912 (and `awaiting_resume` / `session_waiting`
+    // on `reconcile-abandoned-plans`): a lease held by a failed-waiting or
+    // awaiting-person session is spared. The ids are KEPT for the reason below — the
+    // change only ADDS members, so every memo written under the old shape is still a
+    // valid value of the new one.
     //
     // `rested` added by MOTIR-6066: a target the plan ADOPTED from a hand-park
     // has no prior status to restore, so the sweep rests it at `todo` /
@@ -442,7 +462,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // only ADDS a member, so every memo written under the old shape is a valid
     // value of the new one, and the handler returns it without reading it.
     shape:
-      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "rested" | "restored" | "unattributable"; workItemId: string }>; released: number }',
+      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "rested" | "restored" | "session_waiting" | "unattributable"; workItemId: string }>; released: number }',
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',
@@ -609,20 +629,20 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/watcherNotify.ts',
     shape: '{ notifiedUserIds: Array<string> }',
   },
-  '`recompute-parent-v4-${i}`': {
+  '`recompute-parent-v5-${i}`': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "delivery_owned"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
-  'recompute-parent-v4': {
+  'recompute-parent-v5': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "delivery_owned"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
-  'roll-up-parent-v4': {
+  'roll-up-parent-v5': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "delivery_owned"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
 };
 
@@ -641,6 +661,41 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-abandoned-plans-v2': {
+    shape:
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
+    supersededBy: 'reconcile-abandoned-plans-v3',
+    reason:
+      'MOTIR-8304 and MOTIR-8307 added required `lostMachine` and `autoResume` members to the `awaiting_resume` outcome. A memo written under the old id lacks both; the step is an idempotent recompute from live state (an automatic resume it started has already cleared the failure, so a re-run finds nothing to resume), so re-executing it under the new id on a resumed run is safe.',
+  },
+  '`recompute-parent-v4-${i}`': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: '`recompute-parent-v5-${i}`',
+    reason:
+      'MOTIR-8327 added `delivery_owned` to the parent rollup’s outcome union (a container that delivers its own OPEN pull request keeps the review rung its CI and merge gate gave it: the backward derivation to a still-built child set stands down, recorded rather than moving the parent). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
+  'recompute-parent-v4': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: 'recompute-parent-v5',
+    reason:
+      'MOTIR-8327 added `delivery_owned` to the parent rollup’s outcome union (a container that delivers its own OPEN pull request keeps the review rung its CI and merge gate gave it: the backward derivation to a still-built child set stands down, recorded rather than moving the parent). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
+  'roll-up-parent-v4': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: 'roll-up-parent-v5',
+    reason:
+      'MOTIR-8327 added `delivery_owned` to the parent rollup’s outcome union (a container that delivers its own OPEN pull request keeps the review rung its CI and merge gate gave it: the backward derivation to a still-built child set stands down, recorded rather than moving the parent). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
+  'reconcile-abandoned-plans': {
+    shape:
+      '{ declined: number; outcomes: Array<{ outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "no_producer_recent" | "revision_held" | "row_moved" | "session_waiting" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "no_producer" }>; scanned: number }',
+    supersededBy: 'reconcile-abandoned-plans-v2',
+    reason:
+      'MOTIR-8132 changed the sweep’s reason members (`no_producer` → `silent`, `no_producer_recent` → `writing`) when it began judging a plan by its silence. A memo written under the old id carries members the new reader does not know; the step is an idempotent recompute from live state, so re-executing it under the new id on a resumed run is safe.',
+  },
   'reap-orphaned-containers': {
     shape:
       '{ reaped: number; staleClaims: number; usages: Array<{ billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }> }',

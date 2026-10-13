@@ -1,3 +1,4 @@
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import {
@@ -9,6 +10,7 @@ import {
   HOME_SLICE_TODO,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import {
   finishedWindowStart,
@@ -24,6 +26,7 @@ import {
 import {
   decodeWatermarkCursor,
   encodeWatermarkCursor,
+  latestDate,
   movedTabs,
 } from '@/lib/workbench/watermarkCursor';
 
@@ -78,66 +81,108 @@ async function readTabs(
     const projectIds = projectScopes.map((scope) => scope.projectId);
     // The approvals tab's own exclusion (MOTIR-7988): a plan a revision holds is
     // off the list, so it is off the reading too — and its return moves the count.
-    const heldPlanIds = await planRevisionHoldService.heldPlanIds(
-      { workspaceId: ctx.workspaceId, projectIds },
-      tx,
-    );
-    const [toDo, inProgress, toFix, toResume, recentlyFinished, approvals, watching] =
-      await Promise.all([
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TODO },
-          tx,
-        ),
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_IN_PROGRESS },
-          tx,
-        ),
-        // TO FIX (MOTIR-6604) — the other half of In progress's category. A card whose
-        // `fixReason` is recomputed moves between the two, and both readings see it.
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TO_FIX },
-          tx,
-        ),
-        // TO RESUME (MOTIR-7707) — the third slice of the category, read the same way.
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_TO_RESUME },
-          tx,
-        ),
-        // The finished window is part of the PREDICATE here, exactly as it is in
-        // the list and the count — a reading taken without it would be a
-        // freshness for a different set, and the tab would nudge on work that
-        // finished in June.
-        workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
-          ctx.userId,
-          ctx.workspaceId,
-          projectScopes,
-          { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
-          tx,
-        ),
-        // ⚠️ THE GATE'S OWN PREDICATE, and deliberately NOT the membership `OR`
-        // above it. A decision queue routes to exactly one recipient
-        // (`assigneeId ?? reporterId`, `docs/decisions/approval-gates.md` §2), and
-        // the scope is built here the same way `homeService.tabCounts` builds it
-        // for the badge — the browsable project ids, which are `[]` for a reader
-        // who may not browse their active project, and the reader.
-        approvalGateRepository.watermarkAwaitingRoutedTo(
-          { projectIds, userId: ctx.userId, heldPlanIds },
-          tx,
-        ),
-        watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
-      ]);
+    // And the planning-session liveness set (MOTIR-7913), as the approvals list
+    // reads it. Both are INPUTS to the fan-out below, so both are read before it
+    // starts — never awaited inside its argument list (see the note there).
+    const [heldPlanIds, awaitingSessionIds] = await allSettledOrThrow([
+      planRevisionHoldService.heldPlanIds({ workspaceId: ctx.workspaceId, projectIds }, tx),
+      planChangeSessionRepository.listAwaitingPersonIdsInProjects(projectIds, tx),
+    ]);
+    // ⚠️ `allSettledOrThrow`, NOT `Promise.all`, AND NO `await` INSIDE THE ARRAY
+    // (Bug MOTIR-8284). Every arm runs on the ONE interactive transaction above,
+    // and that transaction ends the moment this callback returns or throws. An arm
+    // still queued on it then is not cancelled: Prisma resolves it to `undefined`,
+    // and the repository dereferencing that `undefined` rejects with nobody
+    // listening. Production met exactly that — `Cannot read properties of
+    // undefined (reading '_count')`, as an UNHANDLED rejection — because the
+    // awaiting-sessions read used to be awaited INSIDE the array below, after the
+    // work-tab aggregates had started and before anything was awaiting them; when
+    // it failed, the transaction rolled back under all of them. Settling every
+    // arm first means no read outlives the transaction it runs on, and a failure
+    // surfaces once, as the read's own error.
+    const [
+      toDo,
+      inProgress,
+      toFix,
+      toResume,
+      recentlyFinished,
+      approvals,
+      watching,
+      failedSessions,
+      endedSessions,
+    ] = await allSettledOrThrow([
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_TODO },
+        tx,
+      ),
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_IN_PROGRESS },
+        tx,
+      ),
+      // TO FIX (MOTIR-6604) — the other half of In progress's category. A card whose
+      // `fixReason` is recomputed moves between the two, and both readings see it.
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_TO_FIX },
+        tx,
+      ),
+      // TO RESUME (MOTIR-7707) — the third slice of the category, read the same way.
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_TO_RESUME },
+        tx,
+      ),
+      // The finished window is part of the PREDICATE here, exactly as it is in
+      // the list and the count — a reading taken without it would be a
+      // freshness for a different set, and the tab would nudge on work that
+      // finished in June.
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_DONE, sortField: 'completedAt', since: finishedWindowStart() },
+        tx,
+      ),
+      // ⚠️ THE GATE'S OWN PREDICATE, and deliberately NOT the membership `OR`
+      // above it. A decision queue routes to exactly one recipient
+      // (`assigneeId ?? reporterId`, `docs/decisions/approval-gates.md` §2), and
+      // the scope is built here the same way `homeService.tabCounts` builds it
+      // for the badge — the browsable project ids, which are `[]` for a reader
+      // who may not browse their active project, and the reader.
+      approvalGateRepository.watermarkAwaitingRoutedTo(
+        {
+          projectIds,
+          userId: ctx.userId,
+          awaitingSessionIds,
+          heldPlanIds,
+        },
+        tx,
+      ),
+      watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
+      // …and the reader's FAILED PLANNING SESSIONS, which To resume now lists and counts
+      // (MOTIR-7914): one aggregate over the list's own predicate, merged into the tab's pair
+      // below so a new failure moves the tab's change detector as it moves the badge.
+      planChangeSessionRepository.watermarkFailedOpenForOwner(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectIds },
+        tx,
+      ),
+      // …and the sessions that ended `failed` before MOTIR-7905 and still hold a waiting plan
+      // (MOTIR-7939), the third form the same tab lists and counts.
+      planChangeSessionRepository.watermarkEndedWithWaitingPlanForOwner(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectIds },
+        tx,
+      ),
+    ]);
     const pair = (reading: { count: number; latest: Date | null }): WorkbenchTabWatermarkDto => ({
       count: reading.count,
       latest: reading.latest?.toISOString() ?? null,
@@ -146,7 +191,13 @@ async function readTabs(
       toDo: pair(toDo),
       inProgress: pair(inProgress),
       toFix: pair(toFix),
-      toResume: pair(toResume),
+      toResume: pair({
+        count: toResume.count + failedSessions.count + endedSessions.count,
+        latest: latestDate(
+          latestDate(toResume.latest, failedSessions.latest),
+          endedSessions.latest,
+        ),
+      }),
       recentlyFinished: pair(recentlyFinished),
       approvals: pair(approvals),
       watching: pair(watching),

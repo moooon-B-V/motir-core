@@ -150,9 +150,9 @@ export const it: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      'Crea un Epic, una Storia, un’Attività, un Bug o una Sottoattività sotto un genitore o in una Cartella; punti, Stima, type, executor, difficulty, repo e contrassegno di obsolescenza in una sola chiamata.',
+      'Crea un Epic, una Storia, un’Attività, un Bug o una Sottoattività sotto un genitore o in una Cartella; punti, Stima, type, executor, difficulty, repo, contrassegno di obsolescenza e lingua dei contenuti in una sola chiamata.',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

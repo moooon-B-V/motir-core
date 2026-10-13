@@ -188,6 +188,9 @@ const MANUAL_WORK_KIND = 'manual_work';
  *  {@link approvalGatesService.decideAgentReview}, or APPROVED by the routed person with a
  *  reason (*Continue without the review*); a person has no refusal verb on it. */
 const AGENT_REVIEW_KIND = 'agent_review';
+/** The kind with NO verbs at all — the person answers a planning session by sending a turn
+ *  (MOTIR-7913; ADR §1's MOTIR-7906 amendment). */
+const PLANNING_SESSION_KIND = 'planning_session';
 
 export interface DecideGateInput {
   gateId: string;
@@ -634,9 +637,18 @@ async function routingScope(
   tx: Prisma.TransactionClient,
 ): Promise<AwaitingRoutingScope> {
   const projectIds = await browsableProjectIds(ctx.projectId, ctx, tx);
+  // The planning sessions that STILL wait on their person, resolved in this transaction:
+  // a `planning_session` gate's subject is an opaque id the gate query cannot join, so
+  // the live set rides in the scope and the query admits a row only if its session is in
+  // it (MOTIR-7913) — never a post-filter, so a page is never shortened after the read.
+  const awaitingSessionIds = await planChangeSessionRepository.listAwaitingPersonIdsInProjects(
+    projectIds,
+    tx,
+  );
   return {
     projectIds,
     userId: ctx.userId,
+    awaitingSessionIds,
     // A plan a revision holds is being planned again, not waiting on anybody
     // (MOTIR-7988): its gate leaves the queue and the count until the lease ends.
     heldPlanIds: await planRevisionHoldService.heldPlanIds(
@@ -819,7 +831,10 @@ async function canDecideGate(
 
 /** The kinds whose gate belongs to NO work item — the CHECK
  *  `approval_gate_work_item_iff_not_plan`'s one member (ADR §11.1). */
-const CARDLESS_GATE_KINDS: ReadonlySet<ApprovalGateKindDTO> = new Set(['plan_approval']);
+const CARDLESS_GATE_KINDS: ReadonlySet<ApprovalGateKindDTO> = new Set([
+  'plan_approval',
+  'planning_session',
+]);
 
 /**
  * WHO a queue / record row is routed to, read off the ROW (MOTIR-5191): §2's
@@ -1792,7 +1807,8 @@ export const approvalGatesService = {
       : (reader as HomeActorContext);
     const read = await withWorkspaceContext(ctx, async (tx) => {
       const routing = visitor
-        ? { projectIds: [visitor.project.id], userId: ctx.userId }
+        ? // A Visitor sees no planning-session row: it is its owner's (MOTIR-7913).
+          { projectIds: [visitor.project.id], userId: ctx.userId, awaitingSessionIds: [] }
         : await routingScope(ctx, tx);
       const browsable = routing.projectIds.length > 0;
       const held = visitor
@@ -2454,6 +2470,12 @@ export const approvalGatesService = {
         if (input.decision === 'approve' && !input.noteMd?.trim()) {
           throw new ApprovalGateVerbNotOfferedError(input.gateId, 'override_needs_a_note');
         }
+      }
+      // A PLANNING SESSION'S GATE OFFERS NO VERB (MOTIR-7913): the person answers by sending
+      // a turn, which withdraws it. Every decision is refused here, before anything is
+      // written, and the gate stays `awaiting`.
+      if (locked.kind === PLANNING_SESSION_KIND) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'no_verbs_on_planning_session');
       }
       const isChoice = locked.kind === CHOICE_KIND;
       if (input.decision === 'choose' && !isChoice) {

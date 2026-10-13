@@ -5,6 +5,7 @@ import {
   SystemPrincipalNotProvisionedError,
 } from '@/lib/ai/serviceAuth';
 import { aiWorkItemsService } from '@/lib/services/aiWorkItemsService';
+import { isLocale } from '@/lib/i18n/locales';
 import { enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
 import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import {
@@ -71,7 +72,7 @@ export async function POST(req: Request): Promise<Response> {
     return fail('WORK_ITEMS_INVALID', 'request body must be valid JSON', 400);
   }
   const b = (body ?? {}) as Record<string, unknown>;
-  const { projectKey, kind, title, descriptionMd, parentKey } = b;
+  const { projectKey, kind, title, descriptionMd, parentKey, language } = b;
 
   if (typeof projectKey !== 'string' || projectKey.trim() === '') {
     return fail('WORK_ITEMS_INVALID', '`projectKey` is required.', 400);
@@ -90,6 +91,11 @@ export async function POST(req: Request): Promise<Response> {
   if (parentKey != null && typeof parentKey !== 'string') {
     return fail('WORK_ITEMS_INVALID', '`parentKey` must be a string.', 400);
   }
+  // The language the text is written in (MOTIR-8097) — optional; omitted, the
+  // organisation's content language is recorded.
+  if (language !== undefined && (typeof language !== 'string' || !isLocale(language))) {
+    return fail('WORK_ITEMS_INVALID', '`language` must be one of the supported locales.', 400);
+  }
 
   // ── ONE service call ──
   try {
@@ -99,6 +105,7 @@ export async function POST(req: Request): Promise<Response> {
         title,
         descriptionMd: descriptionMd ?? null,
         parentKey: parentKey ?? null,
+        ...(language !== undefined ? { language } : {}),
       },
       auth.ctx,
     );

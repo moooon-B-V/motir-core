@@ -5,3 +5,11 @@
  * horizon as motir.co's hourly page revalidate. Errors are never cached.
  */
 export const PUBLIC_IDEAS_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=3300';
+
+/**
+ * `Retry-After` on the 503 a public ideas route answers when the database
+ * connection dropped twice (MOTIR-8350). A dropped pooled connection is
+ * replaced within moments, so a reader is told to come back soon; like every
+ * error, the 503 carries no `Cache-Control` and is never cached.
+ */
+export const PUBLIC_IDEAS_RETRY_AFTER_SECONDS = 5;

@@ -3,6 +3,7 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { getWorkspaceContext } from '@/lib/workspaces';
+import type { CurrentOrganizationDTO } from '@/lib/dto/organizations';
 import {
   isWorkspaceTierRevealed,
   preferredOrganizationId,
@@ -30,6 +31,22 @@ export async function resolveWorkspaceTierDisclosure(userId: string): Promise<{
   workspaceCount: number;
   revealed: boolean;
 }> {
+  const { currentOrg, workspaces } = await resolveActiveOrganizationAsShell(userId);
+  const activeOrgId = currentOrg?.organization.id ?? null;
+  const workspaceCount = scopeWorkspacesToActiveOrg(workspaces, activeOrgId).length;
+  return { activeOrgId, workspaceCount, revealed: isWorkspaceTierRevealed(workspaceCount) };
+}
+
+/**
+ * The ACTIVE organisation, resolved exactly as the shell resolves it — the
+ * active workspace's org wins, the org cookie is the fallback — for a page that
+ * shows something about it without holding the shell's data (the account
+ * Language pane's Content language row, MOTIR-8095).
+ */
+export async function resolveActiveOrganizationAsShell(userId: string): Promise<{
+  currentOrg: CurrentOrganizationDTO | null;
+  workspaces: Awaited<ReturnType<typeof workspacesService.listUserWorkspaces>>;
+}> {
   const [ctx, workspaces, cookieStore] = await Promise.all([
     getWorkspaceContext(),
     workspacesService.listUserWorkspaces(userId),
@@ -41,7 +58,5 @@ export async function resolveWorkspaceTierDisclosure(userId: string): Promise<{
     userId,
     preferredOrganizationId(activeWorkspace, orgCookie),
   );
-  const activeOrgId = currentOrg?.organization.id ?? null;
-  const workspaceCount = scopeWorkspacesToActiveOrg(workspaces, activeOrgId).length;
-  return { activeOrgId, workspaceCount, revealed: isWorkspaceTierRevealed(workspaceCount) };
+  return { currentOrg, workspaces };
 }

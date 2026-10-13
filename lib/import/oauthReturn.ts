@@ -27,7 +27,9 @@ export const IMPORT_OAUTH_RETURN_COOKIE = 'import_oauth_return';
  *   - is NOT protocol-relative (`//host`) or a backslash trick (`/\`, `\`);
  *   - carries no control characters;
  *   - and its PATH (query/hash stripped) is one of the wizard's known doors —
- *     `/onboarding/import` or any `/settings/…` page (the future Settings home).
+ *     `/onboarding/import`, `/onboarding/migrate` (the migrate wizard's Import
+ *     step runs the importer inline — MOTIR-8254, design/onboarding-migrate
+ *     § Revision 6) or any `/settings/…` page (the future Settings home).
  * Everything else returns the default. The query string (e.g. `?projectId=…`) is
  * preserved so a resume URL survives the round-trip.
  */
@@ -59,7 +61,10 @@ export function safeImportReturnPath(candidate: string | null | undefined): stri
     return IMPORT_RETURN_DEFAULT;
 
   const path = value.split(/[?#]/, 1)[0] ?? value;
-  const allowed = path === '/onboarding/import' || path.startsWith('/settings/');
+  const allowed =
+    path === '/onboarding/import' ||
+    path === '/onboarding/migrate' ||
+    path.startsWith('/settings/');
   return allowed ? value : IMPORT_RETURN_DEFAULT;
 }
 

@@ -11,6 +11,18 @@ import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { buildScope } from '@/lib/planChange/scope';
+import { workItemsService } from '@/lib/services/workItemsService';
+
+// motir-ai stubbed at `submitJob` only, for the automatic resume's row: every other door here
+// never reaches motir-ai, so the rest of the client stays the real module.
+vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
+  submitJob: vi.fn(async () => ({ jobId: 'job-resumed' })),
+}));
+
+const { planSessionResumeService } = await import('@/lib/services/planSessionResumeService');
+const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 
 // Bug MOTIR-8127 — the generating-plan poll's conditional read, and THE AUDIT that makes it safe.
 //
@@ -258,11 +270,60 @@ const DOORS: Door[] = [
     },
   },
   {
+    // A lost machine's plan resumed by core itself (MOTIR-8307): the bind re-points the SAME
+    // generating plan at a new job, so a poll must learn the plan is being written again.
+    name: 'planSessionResumeService.resumeAutomatically',
+    before: async ({ fx, planId }) => {
+      const card = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title: 'Resumed card' },
+        fx.ctx,
+      );
+      await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'in_progress' } });
+      const session = await planChangeSessionsService.startWithFirstTurn(
+        {
+          userId: fx.ctx.userId,
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          project: fx.project,
+        },
+        buildScope([card.identifier]),
+        'Split it',
+      );
+      await adminDb.planChangeSession.update({
+        where: { id: session.id },
+        data: {
+          lastJobId: 'job-lost',
+          failedAt: new Date(),
+          failedJobId: 'job-lost',
+          failureReason: 'model_unavailable',
+        },
+      });
+      await adminDb.plan.update({
+        where: { id: planId },
+        data: { sessionId: session.id, sourceJobId: 'job-lost' },
+      });
+    },
+    run: async ({ fx, planId }) => {
+      const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+      const out = await planSessionResumeService.resumeAutomatically({
+        sessionId: plan.sessionId!,
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+      });
+      expect(out.started, 'the row must exercise a resume that actually binds').toBe(true);
+      return out;
+    },
+  },
+  {
     name: 'abandonedPlanService.reconcileAbandoned',
     run: async ({ planId }) => {
       await adminDb.plan.update({
         where: { id: planId },
-        data: { createdAt: new Date(Date.now() - 72 * HOUR) },
+        // Silent as well as old: the sweep judges `lastActivityAt` (MOTIR-8132).
+        data: {
+          createdAt: new Date(Date.now() - 72 * HOUR),
+          lastActivityAt: new Date(Date.now() - 72 * HOUR),
+        },
       });
       const out = await abandonedPlanService.reconcileAbandoned();
       return out;

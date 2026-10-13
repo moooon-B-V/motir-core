@@ -3963,3 +3963,67 @@ Planning tab's row is the one it already draws for a plan being written.
 - **`approvalGate.planApproval.row.rewriting` (_Being rewritten_) is kept, and is no longer reached from
   the queue.** The queue does not list a held plan, so no row there carries `held`; `ApprovalRow` keeps
   the pill for any row whose DTO still does, rather than this change removing a state from the row.
+
+## 37 · THE PLANNING SESSION THAT NEEDS YOU — a row in Waiting on you, an entry in To resume, and Planning's leave frame — MOTIR-7907 (Story MOTIR-7905)
+
+Mock: `workbench--planning-session-needs-you.mock.html` (a DELTA — it edits no existing mock; it composes §§ 21, 26, 29, 35, 36 and renders the real `@motir/design-system` parts). Decision: MOTIR-7906 (a failed hosted attempt keeps its session and waits in To resume; a planner's question or a conversation left waiting is a gate in Waiting on you). Two sibling designs: `design/ai-chat/design-notes.md` (the overlay and the refusal) and `design/ai-planning/design-notes.md` (the Plans page). Behaviour is specified by MOTIR-7913 (the gate), MOTIR-7914 / MOTIR-7939 (the To resume read), MOTIR-7916 (Resume).
+
+### 37.1 The Waiting on you row (panels 1–4, 13–15)
+
+- **One gate kind, two causes, one anatomy.** Line 1 is § 29's plan leading line, composed from `approvalGate.planApproval.row.*` and never re-worded (_Plan for {title}_ + key · _Plan — {title}_ · _Plan for {project}_), the `Planning session` kind chip and _since {when}_. Line 2 is the cause's lead: **the planner asked** — `Motir AI asked:` + the question, one truncated line (two at md for a long one, the full text on open); **waiting on your reply** — `Motir AI is waiting for your reply.` + the planner's last turn in a line, no question mark.
+- **No decide buttons.** The decision IS the next turn, so the row has no Approve / Decline (the handler offers no verb: `no_verbs_on_planning_session`).
+- **The approval overlay (MOTIR-5222) is SKIPPED for this kind.** It exists to carry a decision; a session row has nothing to decide, and a second overlay in front of the planning overlay would be one step more between a person and their answer. The row's door IS the planning overlay.
+- **The door:** MOTIR-7884's one plan-overlay door, `planVia=approvals` (the existing entrance), so the reopened line reads _Reopened from Waiting on you_; **Back returns to Waiting on you**. A plain click is `shallowPush`; a modified click keeps the full URL.
+- **It never shares a plan with a `plan_approval` row.** A planning-session gate exists only while the SESSION waits on its person; a plan that is `planned` already has its own question on `plan_approval` (§ 29), and the planning-session gate "never replaces or doubles a plan's own question" (`approval-gates.md` § _Deliberately NOT decided here_). Panel 4 draws the two beside each other for DIFFERENT plans.
+- **Count:** the tab count includes the row (`tabCounts().approvals`); an awaiting-person session that no longer waits leaves the list and the count (the liveness set in `approvalGateRepository`).
+
+### 37.2 The To resume entry (panels 5–11, 13–15)
+
+It composes the per-run entry's frame (§ 35: line 1 + line 2, held row, state pill) and does not borrow its columns — a session is not a run, so there is no `motir continue` and no gate list. Line 1: plan lead + state pill + _failed {when}_. Line 2: **where the walk stopped** in the compact progress line's step words (_Laying {title}_ · _Writing {title}_ · _Laying the project's top level_ · _Drafting a new item_) · **why** in words (the stable code translated; never the raw code) · _N of M written_. Actions: **Resume** (primary) and **Open** (the overlay through MOTIR-7884, `planVia=resume` — a new entrance value, so the reopened line reads _Reopened from To resume_).
+
+- **States:** waiting to resume · **resuming** (the held row of § 26 as § 35 adopted it: Resume disabled, a note, the row clears when the attempt starts) · **failed again** (the new reason replaces the old; a quiet _Second attempt_ note; **earlier reasons are not listed** — one failure is the thing to act on) · **could not start a resume** (words for out of credits, neither the starter nor a project manager, session ended meanwhile; the last has no Resume).
+- **Order and count:** sessions first (newest failure first), gated runs after, under ONE `total`; the strip's To resume count counts both (`homeService.listToResume` / `tabCounts`).
+- **Tone:** calm, as § 35 — the `Waiting to resume` pill is the gate's Awaiting tint (`--el-tint-yellow`), no danger ink; the failure is a fact in the second line, not an alarm.
+- **Empty state unchanged** (panel 11).
+
+### 37.2a Who may resume — CHANGED after review (Mo, 2026-10-10: _"A manager should be able to resume any plan in the project, not only the user who started the plan"_)
+
+Resume is offered to **the session's starter OR a project manager** (the holder of `ai:configure`; every member holds `ai:decide_plan`, so that key would let everyone in). Consequences drawn in panels 9 and 16 and in the overlay mock (3b, 3c) and Plans mock (2b):
+
+- **To resume stays the READER'S OWN list**, with its count and watermark: a manager's tab does not fill with every member's failures, so the badge still means _mine_. **A manager reaches another member's failed session from the Plans page** (the _Waiting to resume_ tab and its rows, which already show the starter's name), and the overlay offers **Resume** there, with _started by {name} · you can resume it as a project manager_.
+- **A plain member who did not start it** opens the overlay read-only: the failure block says _Only {name} or a project manager can resume this_; no Resume, no _Plan something new_, no composer.
+- The refusal sentence for a caller who may not resume reads _Only the person who started this session or a project manager can resume it_ (`NOT_SESSION_OWNER`, wording only).
+- The manager's resume spends the **manager's** credits context and takes no hold: the card hold stays with the starter. Whether a manager should instead see every member's failures in a tab of their own is left open on purpose, for the reviewer.
+
+### 37.3 The Planning tab's leave frame (panel 12)
+
+A plan whose session failed leaves Planning (MOTIR-7914). Its held row's chip reads _Moved to To resume_ with the line _Its attempt failed, and the plan so far is kept. Resume it from To resume._ and a link to the tab. This is the ONLY change to Planning (a delta on MOTIR-7823's leave frame).
+
+### 37.4 Absent, on purpose
+
+An MCP-authored plan and a `guide` session appear in neither tab. A person-ended session reads Closed / Declined exactly as MOTIR-7633 / MOTIR-7634 drew it.
+
+### 37.5 Token map
+
+Text `--el-text` / `--el-text-secondary` (never `--el-text-muted` or `--el-text-faint` on a surface row); borders `--el-border`; glyph `--el-icon-muted`; accent mark `--el-accent-on-surface`; the state pill `--el-tint-yellow` + `--el-text-strong`; shapes `--radius-badge`, `--radius-card`, `--spacing-chip-*`. No hex, no raw hue.
+
+### 37.6 Strings (en / zh — the code cards add them as keys)
+
+`workbench.planningSession.kind` Planning session / 规划会话 · `.asked` Motir AI asked / Motir AI 提了一个问题 · `.waitReply` Motir AI is waiting for your reply / Motir AI 在等你回复 · `.since` since {when} / 自 {when} · `.open` Open / 打开 · `.resume` Resume / 继续 · `.resuming` Resuming… / 正在继续… · `.failedAt` failed {when} / {when}失败 · `.written` {n} of {m} written / 已写 {n}/{m} · `.second` Second attempt / 第二次尝试 · `.stoppedAt` Stopped at / 停在 · `.because` because / 原因： · `.waitingToResume` Waiting to resume / 待继续 · `.refusal.credits|notOwner|ended` the three sentences in panel 9 · `.reason.<code>` the reason words in panel 6 · `.left.title|line|link` Moved to To resume … · `approvalGate.planningSession.row.*` for the gate's row and lead lines. No zh string calls the first tab _待审批_ (it is _等你处理_).
+
+### 37.7 GIVES / TAKES
+
+GIVES: MOTIR-7917 (the whole Workbench surface above; sized 70 min — now also owns the leave frame and nine states, still fits as the entry composes shipped frames, re-check at claim); MOTIR-7913 and MOTIR-7914 (the row fields read: cause, question text, last-turn line; failure record, form, waiting plan) ; MOTIR-7916 (the three refusal sentences' conditions). TAKES: nothing from MOTIR-7702 or MOTIR-7823 beyond the leave frame's wording (a delta); MOTIR-5222's overlay is not reached by this kind. Touches without changing: MOTIR-7884 (door), MOTIR-6033 (§ 29 naming), MOTIR-7476 (tab name).
+
+## 38 · TO RESUME, SITUATION 2 — a failure beside a waiting plan, and a conversation that ended `failed` before — MOTIR-7935 (Story MOTIR-7905)
+
+Mock: `workbench--to-resume--situation-2.mock.html` (a DELTA; edits no existing mock, MOTIR-7907's included). It composes § 35's tab and § 37's entry frame. Decision: MOTIR-7906, consequences 6–8.
+
+- **Form (B) — a failed revision of a waiting plan (panels 1, 2).** The entry names the WAITING plan (§ 29 forms) and its state in words (_Waiting for your approval_, or _Out of date_ for `stale`), then the failure as **your last change to this plan could not be made** (the failed-revision wording), _failed {when}_, and the next step on its own line: _The plan is still waiting. Reply to carry on._ — or, for a stale plan, _The work it changes has finished. Plan it again to carry on._ **Open only: no Resume, and no _N of M written_** (the waiting plan is complete). A newer failed run is form (A+) below, so there is no separate "newer run" wording to settle.
+- **Form (B) with a newer failed walk (panel 3).** ONE entry per session, **led by the failed walk** (stop, why, _N of M written_, **Resume**), with a second line naming the plan that is still waiting. Why one entry and not two: the session is what waits on the person and what Resume continues; two entries for one session would double-count it and offer two doors into one overlay. **The tab count counts sessions, not plans** (`countFailedOpenForOwner` + `countEndedWithWaitingPlanForOwner`).
+- **Form (C) — ended `failed` before this story (panel 4).** The waiting plan's name and state, _The conversation ended {when}_, **Open** (no Resume) and one gloss line: _Your next message carries the plan into a new conversation._ **Tone: calm** — a neutral _Conversation ended_ chip, never Closed's warning peach, because the plan is waiting, not lost. It opens onto the carry design's state 2.
+- **The mixed list (panel 5).** (A) a failed walk, (B), (C) and a gated run: open failed sessions first (newest failure first), then ended-with-waiting-plan sessions (newest end first), then gated runs; one total (`listToResume`).
+- **An entry leaves (panel 6),** held per § 26 / § 35: after the next turn in (B) _Revised in the same conversation_; after the carry in (C); after the plan is decided from the overlay; after _Plan it again_ on a stale (B). Each held row dims its lead and says why it is going.
+- **Absent:** an `idle`- or `restarted`-ended session never takes form (C) (`restarted` is the carry story's situation 1, in Waiting on you); a decided plan, an MCP-authored plan and a `guide` session take no form.
+- **Strings (en / zh):** `workbench.planningSession.form.b.badChange|stateWaiting|stateStale|nextReply|nextAgain`, `.form.c.ended|gloss|chip`, `.form.walk.alsoWaiting`, `.left.turn|carry|decided|again` — as drawn in panels 1–9. The stale and carry strings are the carry design's and are cited, not re-worded.
+- **GIVES / TAKES:** GIVES MOTIR-7940 (the (B) and (C) entries and strings; 45 min still fits — it composes § 37's frame), MOTIR-7939 (fields: form, waiting plan, failure, ended-when). TAKES nothing from MOTIR-7907: forms (A) and (A+) reuse its panel 5 unchanged.

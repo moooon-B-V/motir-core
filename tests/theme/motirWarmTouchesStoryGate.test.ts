@@ -17,7 +17,8 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // illustration fields) at its resolved values — merged in additively when those
 // tokens were born, so this gate keeps measuring the warm-touch change alone.
 // Likewise the `--el-live-*` family (motir.co's live header link), merged in
-// additively at its resolved values.
+// additively at its resolved values. And the `--el-cta-warm` pair (the onboarding
+// screens' warm primary button, MOTIR-8254), the same way.
 
 const REPO = process.cwd();
 const THEMES = ['light', 'dark'] as const;

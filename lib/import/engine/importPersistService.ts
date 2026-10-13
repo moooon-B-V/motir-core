@@ -278,6 +278,9 @@ async function persistOnePass1(
           descriptionMd: payload.descriptionMd,
           priority: payload.priority,
           assigneeId: payload.assigneeId,
+          // Motir cannot vouch for the language an imported issue was written
+          // in, so its text records none (Story MOTIR-7731 · MOTIR-8097).
+          languageRecording: 'unrecorded',
           // reporterId is NOT settable on create (forced to the importing user);
           // the source reporter is preserved via an attribution note below (the
           // ADR §Consequences #2 degraded fallback).
@@ -300,6 +303,8 @@ async function persistOnePass1(
           descriptionMd: payload.descriptionMd,
           priority: payload.priority,
           assigneeId: payload.assigneeId,
+          // A re-synced body is still imported text: it records no language.
+          languageRecording: 'unrecorded',
         },
         svcCtx,
       );

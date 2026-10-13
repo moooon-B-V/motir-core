@@ -17,6 +17,7 @@ import {
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { connectAndLinkRepo } from '../fixtures/codeContextFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import {
@@ -59,7 +60,10 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 let fixturePath: string;
 let agent: MockAgent;
 /** Every `POST /v1/jobs` body the seam received, in order. */
-const wire: { jobKind: string; context: { guideContext?: GuideContext } }[] = [];
+const wire: {
+  jobKind: string;
+  context: { guideContext?: GuideContext; code?: { repos?: { repoRef: string }[] } };
+}[] = [];
 
 beforeAll(async () => {
   fixturePath = join(mkdtempSync(join(tmpdir(), 'motir-guide-gate-')), 'jobs.json');
@@ -341,6 +345,22 @@ describe('a walk on a card with NO rows', () => {
     const b = await open(card.identifier);
     expect(b.session.id).not.toBe(a.session.id);
     expect(guideJobs()).toHaveLength(2);
+  });
+});
+
+describe('the project’s code rides every guide job (MOTIR-8234)', () => {
+  it('a project with a connected repository sends it as `context.code`', async () => {
+    const { repoRef } = await connectAndLinkRepo(fx);
+    const card = await manualCard();
+    await open(card.identifier);
+    const sent = guideWire().at(-1)!.context;
+    expect(sent.code?.repos?.map((r) => r.repoRef)).toEqual([repoRef]);
+  });
+
+  it('a project with none sends no `code` key at all', async () => {
+    const card = await manualCard();
+    await open(card.identifier);
+    expect('code' in guideWire().at(-1)!.context).toBe(false);
   });
 });
 

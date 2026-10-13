@@ -1,3 +1,5 @@
+import type { Locale } from '@/lib/i18n/locales';
+
 // DTOs for the organization endpoints + org-admin surfaces (Story 6.10). These
 // define EXACTLY what crosses the HTTP / Server-Action boundary — no Prisma
 // model leaks. The org-admin UI (6.10.5) consumes these.
@@ -6,6 +8,31 @@ export interface OrganizationDTO {
   id: string;
   name: string;
   slug: string;
+  /**
+   * The language new work in this organisation is written in (Story MOTIR-7731).
+   * Every member reads it; only an owner or admin changes it.
+   */
+  contentLanguage: Locale;
+}
+
+/** One change of an organisation's content language, newest first (MOTIR-8094). */
+export interface ContentLanguageChangeDTO {
+  changedByUserId: string | null;
+  fromLanguage: string;
+  toLanguage: string;
+  changedAt: string;
+}
+
+/**
+ * The latest change of an organisation's content language, as the General
+ * card's attribution line shows it (MOTIR-8095). `changedByLabel` is the
+ * person's display name, else their email; null when that user no longer exists.
+ */
+export interface ContentLanguageLatestChangeDTO {
+  fromLanguage: string;
+  toLanguage: string;
+  changedAt: string;
+  changedByLabel: string | null;
 }
 
 /**

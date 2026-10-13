@@ -86,6 +86,18 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE` and `E2E_TEST_GITHUB_REPOS`, and the order
+    // is load-bearing: the REPOS seam answers every `POST /app/installations/*`
+    // with one shared token, and this one claims only its own installation, so
+    // its repository read can tell that installation apart (MOTIR-8225).
+    flag: 'E2E_TEST_GITHUB_ACCOUNTS',
+    message: 'GitHub account + repository pickers mocked.',
+    install: async (agent) => {
+      const { installGithubAccountsMock } = await import('@/lib/test-github-accounts-mock');
+      installGithubAccountsMock(agent);
+    },
+  },
+  {
     // ⚠️ BEFORE `E2E_TEST_GITHUB_REPOS`, and the order is load-bearing: both seams
     // answer `GET /repos/{owner}/{name}`, undici tries intercepts in registration
     // order, and this one claims only the repositories its control file names.

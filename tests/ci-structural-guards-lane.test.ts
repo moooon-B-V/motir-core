@@ -348,7 +348,16 @@ describe('the structural-guard lane (MOTIR-3144)', () => {
     expect(job).not.toContain('--coverage');
     // No branch-prefix condition: a structural guard is exactly as relevant on a
     // `docs/` or `design/` branch, and cheap enough to always run.
-    expect([...job.matchAll(/^ {4}if:(.*)$/gm)]).toEqual([]);
+    // (The draft skip is the one condition every job carries; it reads no diff.)
+    expect(
+      [...job.matchAll(/^ {4}if:(.*)$/gm)]
+        .map((m) => m[1]!.trim())
+        .filter(
+          (c) =>
+            c !==
+            "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+        ),
+    ).toEqual([]);
   });
 
   it('is gated through `CI complete`, like every other job', () => {

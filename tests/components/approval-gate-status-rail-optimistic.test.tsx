@@ -122,6 +122,7 @@ function makeItem(status: string): WorkItemDto {
     descriptionMd: null,
     explanationMd: null,
     explanationSource: 'user_authored',
+    languages: { title: null, description: null, explanation: null },
     status,
     priority: 'medium',
     assigneeId: null,

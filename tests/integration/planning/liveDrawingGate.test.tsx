@@ -519,7 +519,7 @@ describe('MOTIR-6301 · the poll → pane seam, against rows the planners wrote'
 
     // The pane is LIVE from the plan's first read, on the level the reader stood.
     // Nothing is proposed yet, so the marker's word is the progress line's
-    // `starting` state (design/ai-planning Part XXV §25.1 · MOTIR-7829), not yet
+    // `starting` state (design/ai-planning Part XXVI §26.1 · MOTIR-7829), not yet
     // *Being written*.
     await until(() => expect(screen.getByTestId('plan-live-state').textContent).toBe('Starting…'));
     await until(() => expect(node(tree.C1)).not.toBeNull());

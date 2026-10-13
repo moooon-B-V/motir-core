@@ -36,6 +36,8 @@ import {
   submitContextualPlan,
   attachMidRunTurn,
   peekMailbox,
+  resumeAlreadyStartedJobId,
+  resumePlanSession,
   stopPlanChangeRun,
   submitPlanChange,
   type AskDebugResponse,
@@ -54,6 +56,7 @@ import {
   type StalePlanFinishedCard,
 } from '@/lib/planning/planSessionClientErrors';
 import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
+import { reopenedPlanJobId } from '@/lib/planning/planRunPhase';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -260,6 +263,15 @@ export interface PlanChangeConversationState {
    * a stubbed one carries only `jobId`.
    */
   planId: string | null;
+  /**
+   * The plan job whose `target_settled` frame has arrived (MOTIR-8203) — the end
+   * of the conversation phase (PART 1) and the start of the planning phase. Keyed
+   * by JOB rather than a boolean so a new run is unsettled without every start
+   * reducer having to reset it, and a question that ends a job in PART 1 never
+   * settles it. Read through `planRunPhase` (`lib/planning/planRunPhase.ts`), never directly. Optional so a
+   * state built by hand (every rail test) is an unsettled one.
+   */
+  settledJobId?: string | null;
   /** The last approve's result, so the rail can say what landed. */
   approved: PlanApproveSummary | null;
   /** A recoverable failure: `FAILED` / `EMPTY` / `immutable` / a typed code. */
@@ -430,6 +442,18 @@ export interface PlanChangeConversationState {
    *  control hold still until it lands. Optional for the same reason. */
   restarting?: boolean;
   /**
+   * RESUME is IN FLIGHT for a failed-waiting session (Story MOTIR-7905 · MOTIR-7918) — Resume
+   * reads *Resuming…* and is disabled until the new attempt's stream is attached (or the
+   * refusal is back). Optional for the same reason as the fields above.
+   */
+  resuming?: boolean;
+  /**
+   * WHY the last Resume did not start — the refusal's stable code (`NOT_SESSION_OWNER`,
+   * `SESSION_NOT_FAILED`, `PLAN_NOT_RESUMABLE`, `PLAN_SESSION_ENDED`, out-of-credits, …), or
+   * `null`. The failure line stays; this adds the *could not start* words beside it.
+   */
+  resumeError?: string | null;
+  /**
    * THE CARRY IS IN FLIGHT (Story MOTIR-7928 · MOTIR-7932; design state 3): the
    * owner wrote in an ENDED session whose plan still waits, and the turn that starts
    * the new session has not come back yet. The text is drawn pending under the end
@@ -516,6 +540,7 @@ const INITIAL: PlanChangeConversationState = {
   decided: null,
   jobId: null,
   planId: null,
+  settledJobId: null,
   approved: null,
   errorCode: null,
   outOfCredits: false,
@@ -782,6 +807,14 @@ interface RunAnchor {
   targetKeys: string[];
 }
 
+/** `run`'s own signature, so a helper defined before it can reach it through a ref. */
+type RunFn = (
+  anchor: RunAnchor | null,
+  submitter?: (
+    signal: AbortSignal,
+  ) => Promise<{ jobId: string; planId?: string; session: PlanChangeSessionDto }>,
+) => Promise<void>;
+
 /**
  * Which conversation a turn belongs to. The picker's SET wins when the caller
  * has one (an empty set is a real answer — the project thread); a caller that
@@ -828,12 +861,51 @@ export function targetHeldFrom(err: unknown): PlanTargetHeldByDto | null {
     holder: str(body.holder),
     freesBy: str(body.freesBy),
     holderSessionId: str(body.holderSessionId),
+    // Absent ⇒ false, so an older server still words a free-by time (MOTIR-7918).
+    sessionWaiting: body.sessionWaiting === true,
+    waitingCause:
+      body.waitingCause === 'question' ||
+      body.waitingCause === 'reply' ||
+      body.waitingCause === 'failed'
+        ? body.waitingCause
+        : null,
   };
+}
+
+/**
+ * The two refusals of a TURN on a session that waits (Story MOTIR-7905 · MOTIR-7941) that the
+ * rail words in place instead of as the generic failure: a revision already runs on the plan
+ * (`PLAN_REVISION_IN_FLIGHT`), or the session holds a failed walk that only Resume continues
+ * (`SESSION_AWAITING_RESUME`). Neither is retryable by pressing Try again, and the draft is kept.
+ */
+export function refusalCodeOf(
+  err: unknown,
+): 'PLAN_REVISION_IN_FLIGHT' | 'SESSION_AWAITING_RESUME' | null {
+  if (!(err instanceof PlanEditsClientError)) return null;
+  return err.code === 'PLAN_REVISION_IN_FLIGHT' || err.code === 'SESSION_AWAITING_RESUME'
+    ? err.code
+    : null;
 }
 
 /** Whether a thread has ENDED (AMENDMENT 23 §1) — read from the server's row. */
 export function sessionEnded(session: PlanChangeSessionDto | null | undefined): boolean {
   return Boolean(session?.endedAt);
+}
+
+/**
+ * Whether an OPEN thread is waiting on a failed attempt (Story MOTIR-7905 · MOTIR-7918) — read
+ * from the server's row, never inferred from a stream error, so a reload shows the same thing.
+ * An ended session is never failed-waiting: its end marker is the state.
+ */
+export function sessionFailed(session: PlanChangeSessionDto | null | undefined): boolean {
+  return Boolean(session?.failure) && !sessionEnded(session);
+}
+
+/** A failed-waiting thread whose way on is **Resume** — it holds a half-written walk. A failed
+ *  session whose plan waits for the person (situation 2) is continued by the next turn, so it
+ *  is NOT this: `failure.resumable` is absent ⇒ true. */
+export function sessionAwaitsResume(session: PlanChangeSessionDto | null | undefined): boolean {
+  return sessionFailed(session) && session?.failure?.resumable !== false;
 }
 
 /** How long the overlay waits between re-reads of a session a failed attempt may
@@ -1073,6 +1145,35 @@ export function usePlanChangeConversation({
   useEffect(() => {
     if (polledReview) setState((s) => ({ ...s, ...narrationFrom(s, polledReview) }));
   }, [polledReview]);
+
+  // A REOPENED RUN SETTLES FROM ITS STORED FRAMES (MOTIR-8203). A viewer who
+  // comes back to a plan Motir is still writing did not see `target_settled`
+  // arrive, so the run is subscribed once more — the relay replays a job from its
+  // first frame — and read only for that frame. It closes the moment it has it,
+  // and the whole time it is open nothing else is narrated from it: the live pane
+  // and the stored narration already draw the run. Best-effort: a stream that
+  // cannot be opened leaves the run in its conversation phase.
+  const unsettledReopenedJob = (() => {
+    const job = reopenedPlanJobId(state);
+    return job !== undefined && job !== (state.settledJobId ?? null) ? job : null;
+  })();
+  useEffect(() => {
+    if (!unsettledReopenedJob) return;
+    const controller = new AbortController();
+    void streamAugmentJob(
+      unsettledReopenedJob,
+      controller.signal,
+      () => {},
+      () => {},
+      (event) => {
+        if (event !== 'target_settled' || controller.signal.aborted) return;
+        controller.abort();
+        if (!mountedRef.current) return;
+        setState((s) => ({ ...s, settledJobId: unsettledReopenedJob }));
+      },
+    );
+    return () => controller.abort();
+  }, [unsettledReopenedJob]);
   const heldReview = state.review;
   useEffect(() => {
     if (heldReview) setState((s) => ({ ...s, ...narrationFrom(s, heldReview) }));
@@ -1275,24 +1376,36 @@ export function usePlanChangeConversation({
    * is, and its error stays recoverable in place. State from the SERVER, never
    * inferred from the stream error, so a reload shows exactly the same end.
    */
-  const settleEnd = useCallback(async (signal: AbortSignal) => {
-    const id = stateRef.current.session?.id;
-    if (!id) return;
-    for (let attempt = 0; attempt < SESSION_END_REREADS; attempt += 1) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, SESSION_END_REREAD_MS));
-      let read: PlanChangeSessionDto;
-      try {
-        read = await getPlanChangeSession(id, signal);
-      } catch {
-        return;
+  const settleEnd = useCallback(
+    async (signal: AbortSignal, failedJobId?: string): Promise<PlanChangeSessionDto | null> => {
+      const id = stateRef.current.session?.id;
+      if (!id) return null;
+      for (let attempt = 0; attempt < SESSION_END_REREADS; attempt += 1) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, SESSION_END_REREAD_MS));
+        let read: PlanChangeSessionDto;
+        try {
+          read = await getPlanChangeSession(id, signal);
+        } catch {
+          return null;
+        }
+        if (!mountedRef.current) return null;
+        // …or left it WAITING on a failure (Story MOTIR-7905 · MOTIR-7918): the relay records the
+        // failure on the still-open session, so the row is adopted exactly as an end is, and the
+        // rail draws the failure line with Resume in place of the generic retryable error.
+        if (sessionEnded(read) || sessionFailed(read)) {
+          setState((s) => (s.session?.id === id ? { ...s, session: read } : s));
+          return null;
+        }
+        // …or RESUMED it by itself (Story MOTIR-8301 · bug MOTIR-8336): a lost machine's relay
+        // starts the automatic resume before the stream closes, so the session is open, carries
+        // no failure, and names a NEW job. The caller attaches to it — its stream is what relays
+        // the next loss, and its plan reads *resuming* until that job writes.
+        if (failedJobId && read.lastJobId && read.lastJobId !== failedJobId) return read;
       }
-      if (!mountedRef.current) return;
-      if (sessionEnded(read)) {
-        setState((s) => (s.session?.id === id ? { ...s, session: read } : s));
-        return;
-      }
-    }
-  }, []);
+      return null;
+    },
+    [],
+  );
 
   /**
    * RAISE the stop on `jobId` (MOTIR-4068) — the one place the stop door is
@@ -1461,7 +1574,7 @@ export function usePlanChangeConversation({
         progress: null,
         // A refused correction must not leave its `reading` line behind (MOTIR-7924).
         acts: withoutReading(s.acts),
-        errorCode: gated || held ? null : 'FAILED',
+        errorCode: gated || held ? null : (refusalCodeOf(err) ?? 'FAILED'),
         outOfCredits: gated,
         ...(held ? { targetHeld: held } : {}),
       }));
@@ -1592,6 +1705,12 @@ export function usePlanChangeConversation({
               }
             }
             if (!mountedRef.current) return;
+            // THE CONVERSATION PHASE IS OVER (MOTIR-8203): the planner has settled
+            // what it is planning, so the hand-off becomes true. Quiet on the act
+            // rail; it moves only the phase.
+            if (event === 'target_settled') {
+              setState((s) => (s.settledJobId === jobId ? s : { ...s, settledJobId: jobId }));
+            }
             // APPEND, REPLACE the live line, or MARK an earlier call — one update,
             // decided by `applyPlanFrame` (MOTIR-7976). A quiet frame changes
             // nothing, which is the decision the disposition map recorded rather
@@ -1646,8 +1765,9 @@ export function usePlanChangeConversation({
         // a Try again pressed while the re-read waits would find a run still in
         // flight and do nothing.
         if (abortRef.current === controller) abortRef.current = null;
-        if (mountedRef.current) await settleEnd(controller.signal);
-        return;
+        if (!mountedRef.current) return null;
+        const resumed = await settleEnd(controller.signal, jobId);
+        return resumed && !controller.signal.aborted && mountedRef.current ? resumed : null;
       }
       if (!mountedRef.current) return;
       const canceled = jobStatus === 'canceled';
@@ -1731,6 +1851,28 @@ export function usePlanChangeConversation({
    *  resubmit, or — anchored — the ONE call that appends the new turn AND submits
    *  it (the MOTIR-909 contract fuses those two). Everything downstream (stream,
    *  settle, review) is identical for both threads; only the URL differs. */
+  /**
+   * FOLLOW AN AUTOMATIC RESUME (Story MOTIR-8301 · bug MOTIR-8336). The failed run's re-read
+   * found its session resumed by itself — a lost machine's relay starts the new attempt before
+   * the stream closes. The new job goes through `run` exactly as a pressed Resume's does: it
+   * clears the failure the stream reported, re-arms the live poll on the SAME plan (which reads
+   * *resuming* until the job writes), and subscribes to the new stream, whose relay is what
+   * records the next loss. Through a ref, because `run` is what calls it.
+   */
+  const runRef = useRef<RunFn | null>(null);
+  const followAutoResume = useCallback(
+    async (anchor: RunAnchor | null, session: PlanChangeSessionDto, planId: string | null) => {
+      const jobId = session.lastJobId;
+      if (!jobId || !mountedRef.current) return;
+      await runRef.current?.(anchor, async () => ({
+        jobId,
+        ...(planId ? { planId } : {}),
+        session,
+      }));
+    },
+    [],
+  );
+
   const run = useCallback(
     async (
       anchor: RunAnchor | null,
@@ -1745,6 +1887,8 @@ export function usePlanChangeConversation({
       // no job to stop, and a Stop pressed now waits for it (MOTIR-7924).
       setState((s) => ({ ...s, jobId: null }));
       let livePlan: string | null = null;
+      // A lost machine's session Motir resumed by itself (bug MOTIR-8336), followed below.
+      let resumedBy: PlanChangeSessionDto | null = null;
       // Remembered before the hop, so a retry after a failure re-sends to the
       // thread this turn actually landed in.
       lastAnchorRef.current = anchor;
@@ -1809,7 +1953,7 @@ export function usePlanChangeConversation({
         stoppingRef.current = carried;
         if (carried) void raiseStop(session.id, jobId);
 
-        await finishPlanRun(jobId, planId, anchor, controller);
+        resumedBy = (await finishPlanRun(jobId, planId, anchor, controller)) ?? null;
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
@@ -1818,10 +1962,13 @@ export function usePlanChangeConversation({
         if (abortRef.current === controller) abortRef.current = null;
         endLive(livePlan);
         releasePendingStop();
+        // AFTER `endLive`: the follow re-arms the live poll this run just released.
+        if (resumedBy) await followAutoResume(anchor, resumedBy, livePlan);
       }
     },
     [
       finishPlanRun,
+      followAutoResume,
       resetLiveRun,
       endLive,
       refuseRun,
@@ -1830,6 +1977,7 @@ export function usePlanChangeConversation({
       releasePendingStop,
     ],
   );
+  runRef.current = run;
 
   /**
    * Run ONE turn through the ask door — the project thread's only entrance since
@@ -1870,6 +2018,8 @@ export function usePlanChangeConversation({
       // Stop has nothing to post, so it waits for the job instead.
       setState((s) => ({ ...s, jobId: null }));
       let livePlan: string | null = null;
+      // A plan run this ask handed over to, resumed by itself after a lost machine (MOTIR-8336).
+      let resumedBy: PlanChangeSessionDto | null = null;
       // An ask is project-wide by construction, so a retry after one must not
       // re-aim at an anchor an earlier plan-change run happened to use.
       lastAnchorRef.current = null;
@@ -2022,7 +2172,8 @@ export function usePlanChangeConversation({
           }));
           stoppingRef.current = carried;
           if (carried) void raiseStop(submitted.session.id, submitted.jobId);
-          await finishPlanRun(submitted.jobId, submitted.planId, null, controller);
+          resumedBy =
+            (await finishPlanRun(submitted.jobId, submitted.planId, null, controller)) ?? null;
           return;
         }
 
@@ -2143,7 +2294,8 @@ export function usePlanChangeConversation({
             acts: [...s.acts, { kind: 'redirected' }],
           }));
           if (carried) void raiseStop(redirect.session.id, redirect.jobId);
-          await finishPlanRun(redirect.jobId, redirect.planId, null, controller);
+          resumedBy =
+            (await finishPlanRun(redirect.jobId, redirect.planId, null, controller)) ?? null;
           return;
         }
 
@@ -2156,10 +2308,12 @@ export function usePlanChangeConversation({
         if (abortRef.current === controller) abortRef.current = null;
         endLive(livePlan);
         releasePendingStop();
+        if (resumedBy) await followAutoResume(null, resumedBy, livePlan);
       }
     },
     [
       finishPlanRun,
+      followAutoResume,
       resetLiveRun,
       endLive,
       refuseRun,
@@ -2653,6 +2807,57 @@ export function usePlanChangeConversation({
     [run, runAsk, carrySend, answerRunPause],
   );
 
+  /** A Resume is in flight — set before the await, as `stoppingRef` is, so a double-click
+   *  finds it set and sends once (MOTIR-7918). */
+  const resumingRef = useRef(false);
+
+  /**
+   * RESUME a failed-waiting session (Story MOTIR-7905 · MOTIR-7918): continue the SAME plan in
+   * the SAME session. The returned job is an ordinary job on the plan the canvas already
+   * holds, so it goes through `run` — the stream, the act rail, the live poll and the proposed
+   * review hand-off all work unchanged, and `planId` is the returned one (the same plan).
+   *
+   * `RESUME_ALREADY_STARTED` is no error: a concurrent Resume (another tab, a double click)
+   * won, so the stream attaches to the job it carries. Any other refusal keeps the failure
+   * line and says why beside it.
+   */
+  const resume = useCallback(async () => {
+    const session = stateRef.current.session;
+    if (!session || resumingRef.current || abortRef.current) return;
+    if (!sessionAwaitsResume(session)) return;
+    resumingRef.current = true;
+    setState((s) => ({ ...s, resuming: true, resumeError: null }));
+    const anchor =
+      lastAnchorRef.current ??
+      (anchorRef.current ? { anchorId: anchorRef.current, targetKeys: [] } : null);
+    try {
+      await run(anchor, async (signal) => {
+        try {
+          return await resumePlanSession(session.id, signal);
+        } catch (err) {
+          const winner = resumeAlreadyStartedJobId(err);
+          if (winner === null) {
+            // Said beside the failure line, which stays (MOTIR-7918); `run`'s own refusal
+            // handling still sets the credit paywall / generic state around it.
+            if (err instanceof PlanEditsClientError) {
+              const code = err.isOutOfCredits ? 'MOTIR_AI_OUT_OF_CREDITS' : (err.code ?? 'FAILED');
+              if (mountedRef.current) setState((s) => ({ ...s, resumeError: code }));
+            }
+            throw err;
+          }
+          return {
+            jobId: winner,
+            ...(stateRef.current.planId ? { planId: stateRef.current.planId } : {}),
+            session: stateRef.current.session ?? session,
+          };
+        }
+      });
+    } finally {
+      resumingRef.current = false;
+      if (mountedRef.current) setState((s) => ({ ...s, resuming: false }));
+    }
+  }, [run]);
+
   /** Re-send the accumulated intent after a failure — no new turn, so the
    *  conversation CONTINUES rather than restarting (design panel 6, error).
    *
@@ -2664,6 +2869,10 @@ export function usePlanChangeConversation({
     // NO RETRY INSIDE AN ENDED SESSION (MOTIR-7633): a retry would append to a
     // session that accepts no turn. The only way on is a NEW session.
     if (sessionEnded(stateRef.current.session)) return;
+    // …AND NONE INSIDE A SESSION WAITING TO RESUME (MOTIR-7918): a retry would submit the turn
+    // again and open a SECOND plan beside the `generating` one the session still holds. Resume
+    // is the only way on, and the server refuses the submit anyway (MOTIR-7916).
+    if (sessionAwaitsResume(stateRef.current.session)) return;
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
     const anchor =
       lastAnchorRef.current ??
@@ -3185,6 +3394,7 @@ export function usePlanChangeConversation({
     requestRestart,
     answerRestartConfirm,
     planAgain,
+    resume,
     answerRunPause,
     showEarlierNarration,
   };

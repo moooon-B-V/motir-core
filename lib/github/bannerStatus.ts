@@ -23,6 +23,13 @@ export const GITHUB_BANNER_STATUSES = [
   'install_forbidden',
   'install_provider_error',
   'install_error',
+  // One GitHub account, many organisations (MOTIR-8220) — the setup round trip's
+  // org branch: another organisation already uses the account, so this one must
+  // choose its repositories; a repository it asked for belongs elsewhere; the
+  // actor cannot see the installation on GitHub.
+  'select_repos',
+  'repo_unavailable',
+  'installation_not_accessible',
 ] as const;
 
 export type GithubBannerStatus = (typeof GITHUB_BANNER_STATUSES)[number];
@@ -51,6 +58,9 @@ export const GITHUB_BANNER_TONE: Record<GithubBannerStatus, GithubBannerTone> = 
   install_expired: 'info',
   install_unbound: 'info',
   not_configured: 'info',
+  select_repos: 'info',
+  repo_unavailable: 'danger',
+  installation_not_accessible: 'danger',
 };
 
 /** The outcomes in which the operation SUCCEEDED or simply needs restarting —
@@ -62,4 +72,5 @@ export const GITHUB_BENIGN_BANNER_STATUSES = [
   'install_expired',
   'install_unbound',
   'not_configured',
+  'select_repos',
 ] as const satisfies readonly GithubBannerStatus[];

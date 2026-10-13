@@ -307,6 +307,17 @@ const { privateKey: E2E_STUDIO_APP_PRIVATE_KEY } = generateKeyPairSync('rsa', {
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 });
 
+/** The user-facing GitHub App's credentials, for the Git room's account and
+ *  repository pickers (Story MOTIR-8216 · MOTIR-8225): the repository read and
+ *  the link mint an installation token with them, and `/user/installations` is
+ *  filtered to this App id. Generated per run, like the Studio App's key above. */
+const E2E_USER_APP_ID = '515151';
+const { privateKey: E2E_USER_APP_PRIVATE_KEY } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
+
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/acceptance*.spec.ts'],
@@ -535,6 +546,11 @@ export default defineConfig({
         GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
         GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
         GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,
+        // The Git room's account + repository pickers (Story MOTIR-8216 ·
+        // MOTIR-8225) — `lib/test-github-accounts-mock.ts`.
+        E2E_TEST_GITHUB_ACCOUNTS: '1',
+        GITHUB_APP_ID: E2E_USER_APP_ID,
+        GITHUB_APP_PRIVATE_KEY: E2E_USER_APP_PRIVATE_KEY,
         // The identity/installation the seed binds are read back on this surface;
         // the App slug is what the settings pane the step hands off to renders.
         GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,

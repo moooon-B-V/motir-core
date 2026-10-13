@@ -491,6 +491,7 @@ const workItemDto = {
   descriptionMd: 'body',
   explanationMd: null,
   explanationSource: 'user_authored' as const,
+  languages: { title: null, description: null, explanation: null },
   status: 'in_progress',
   priority: 'high' as const,
   assigneeId: null,

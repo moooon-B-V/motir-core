@@ -271,6 +271,7 @@ describe('the plan-state filter', () => {
     expect(counts).toEqual({
       none: 3,
       generating: 0,
+      waiting: 0,
       planned: 2,
       stale: 0,
       approved: 1,
@@ -282,6 +283,113 @@ describe('the plan-state filter', () => {
       expect({ planState, n: page.sessions.length }).toEqual({ planState, n: counts[planState] });
       for (const s of page.sessions) expect(s.latestPlan?.status ?? 'none').toBe(planState);
     }
+  });
+});
+
+describe('a session whose attempt FAILED (Story MOTIR-7905 · MOTIR-7921 / MOTIR-7944)', () => {
+  const FAILED = {
+    failedAt: new Date('2026-09-23T00:00:00.000Z'),
+    failedJobId: 'job-1',
+    failureReason: 'rate_limited' as const,
+    failureStopPhase: 'author' as const,
+    failureStopRef: 'planItem:abc',
+    failureStopTitle: 'Export',
+  };
+  let tick = 0;
+  const mkPlan = (sessionId: string, status: 'generating' | 'planned' | 'stale' | 'declined') =>
+    adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        sessionId,
+        status,
+        createdById: fx.ownerId,
+        createdAt: new Date(Date.UTC(2026, 8, 1, 0, 0, ++tick)),
+      },
+    });
+  const rowOf = async (id: string) =>
+    (await planSessionsService.listSessions(fx.projectId, fx.ctx, {})).sessions.find(
+      (s) => s.id === id,
+    )!;
+
+  it('an open failed walk reads WAITING (not Writing), with its stop record on the row', async () => {
+    const id = await freshSession('x');
+    await adminDb.planChangeSession.update({ where: { id }, data: FAILED });
+    await mkPlan(id, 'generating');
+    const row = await rowOf(id);
+    expect(row.state).toBe('waiting');
+    expect(row.failure).toMatchObject({
+      reason: 'rate_limited',
+      stopPhase: 'author',
+      stopTitle: 'Export',
+    });
+    const counts = await planSessionsService.countSessionsByPlanState(fx.projectId, fx.ctx);
+    expect(counts.waiting).toBe(1);
+    expect(counts.generating).toBe(0);
+    const filtered = await planSessionsService.listSessions(fx.projectId, fx.ctx, {
+      planState: 'waiting',
+    });
+    expect(filtered.sessions.map((s) => s.id)).toEqual([id]);
+  });
+
+  it('an open failed session with NO plan yet is waiting too', async () => {
+    const id = await freshSession('x');
+    await adminDb.planChangeSession.update({ where: { id }, data: FAILED });
+    expect((await rowOf(id)).state).toBe('waiting');
+  });
+
+  it('a failure BESIDE a waiting plan reads the PLAN’s state — never Closed, not waiting — with the failure on the row', async () => {
+    const id = await freshSession('x');
+    await adminDb.planChangeSession.update({ where: { id }, data: FAILED });
+    const waiting = await mkPlan(id, 'planned');
+    const row = await rowOf(id);
+    expect(row.state).toBe('planned');
+    expect(row.latestPlan?.id).toBe(waiting.id);
+    expect(row.failure?.reason).toBe('rate_limited');
+    // …and a stale plan reads out of date.
+    await adminDb.plan.update({ where: { id: waiting.id }, data: { status: 'stale' } });
+    expect((await rowOf(id)).state).toBe('stale');
+  });
+
+  it('a session a failure ENDED before this story still holding a waiting plan reads that plan, and is known by it', async () => {
+    const id = await freshSession('x');
+    const waiting = await mkPlan(id, 'planned');
+    await mkPlan(id, 'declined'); // the later, failed attempt — the LATEST plan
+    await adminDb.planChangeSession.update({
+      where: { id },
+      data: { endedAt: new Date(), endReason: 'failed' },
+    });
+    const row = await rowOf(id);
+    expect(row.state).toBe('planned');
+    expect(row.latestPlan?.id).toBe(waiting.id);
+    expect(row.failure ?? null).toBeNull();
+  });
+
+  it('a `restarted` end holding a waiting plan reads waiting for approval; an `idle` one stays Closed', async () => {
+    const restarted = await freshSession('r');
+    await mkPlan(restarted, 'planned');
+    await adminDb.planChangeSession.update({
+      where: { id: restarted },
+      data: { endedAt: new Date(), endReason: 'restarted' },
+    });
+    const idle = await freshSession('i');
+    await mkPlan(idle, 'planned');
+    await adminDb.planChangeSession.update({
+      where: { id: idle },
+      data: { endedAt: new Date(), endReason: 'idle' },
+    });
+    expect((await rowOf(restarted)).state).toBe('planned');
+    expect((await rowOf(idle)).state).toBe('closed');
+  });
+
+  it('an ended failure with NO waiting plan stays Closed', async () => {
+    const id = await freshSession('x');
+    await mkPlan(id, 'declined');
+    await adminDb.planChangeSession.update({
+      where: { id },
+      data: { endedAt: new Date(), endReason: 'failed' },
+    });
+    expect((await rowOf(id)).state).toBe('closed');
   });
 });
 

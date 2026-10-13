@@ -20,6 +20,7 @@ import { isPaidAiSubscriptionStatus } from '@/lib/services/aiPlanGateService';
 import {
   BILLING_CATALOG,
   DEFAULT_CHECKOUT_QUANTITY,
+  INCLUDED_TRACKER_SEATS_PER_AI_PLAN,
   isAllowedCheckoutQuantity,
   isKnownCheckoutPrice,
   type BillingCadence,
@@ -33,7 +34,12 @@ import {
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { Organization } from '@/generated/prisma/client';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
-import type { BillingSessionDTO, BillingStatusDTO, SeatSummaryDTO } from '@/lib/dto/billing';
+import type {
+  BillingCheckoutDTO,
+  BillingSessionDTO,
+  BillingStatusDTO,
+  SeatSummaryDTO,
+} from '@/lib/dto/billing';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 
 // A paid Motir AI plan = a live Stripe subscription that grants the monthly
@@ -274,7 +280,7 @@ export const billingService = {
    */
   async startCheckout(
     input: OrgActorInput & { priceLookupKey: string; quantity?: number },
-  ): Promise<BillingSessionDTO> {
+  ): Promise<BillingCheckoutDTO> {
     await this.assertBillingManagerForMutation(input);
 
     if (!isKnownCheckoutPrice(input.priceLookupKey)) {
@@ -288,13 +294,18 @@ export const billingService = {
 
     // NOTE the catalog seam (lib/billing/catalog.ts): the boundary's `priceId` is
     // the Stripe price lookup key; motir-ai resolves it to the concrete Price.
-    return createCheckoutSession({
+    const result = await createCheckoutSession({
       coreOrganizationId: input.organizationId,
       priceId: input.priceLookupKey,
       quantity,
       successUrl: billingPageUrl('?checkout=success'),
       cancelUrl: billingPageUrl('?checkout=cancel'),
     });
+    // An org already on a live AI plan is pointed at the upgrade path, never sold a
+    // second plan subscription (MOTIR-8394; motir-ai answers it, MOTIR-8386).
+    return result.outcome === 'existing_plan'
+      ? { existingPlan: { livePriceLookupKey: result.livePriceLookupKey } }
+      : { url: result.url };
   },
 
   /**
@@ -400,7 +411,9 @@ export const billingService = {
     // 8.1.22): net it out of the billed scaled-tracker quantity so the org pays
     // for members BEYOND the included one. Floors at 0 (a 1-member org never bills
     // a seat). An org WITHOUT the AI seat bills every member, as before.
-    const billableSeats = aiIncludedSeat ? Math.max(0, memberCount - 1) : memberCount;
+    const billableSeats = aiIncludedSeat
+      ? Math.max(0, memberCount - INCLUDED_TRACKER_SEATS_PER_AI_PLAN)
+      : memberCount;
 
     return setSeatQuantity({ coreOrganizationId: organizationId, quantity: billableSeats });
   },

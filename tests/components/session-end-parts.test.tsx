@@ -11,6 +11,7 @@ const { shallowPush } = vi.hoisted(() => ({ shallowPush: vi.fn() }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import zh from '@/messages/zh.json';
 import {
   CopiedDivider,
   EndedComposerSlot,
@@ -159,6 +160,59 @@ describe('the take-back and the refusal', () => {
       />,
     );
     expect(screen.getByTestId('planning-target-refused').textContent).toContain('Mara');
+  });
+});
+
+describe('TargetRefusal — a session that WAITS (Story MOTIR-7905 · MOTIR-7918)', () => {
+  const waiting = {
+    target: 'ACME-40',
+    holder: 'Ana',
+    freesBy: '2026-07-27T12:30:00.000Z',
+    holderSessionId: 's9',
+    sessionWaiting: true,
+  };
+
+  it('reads *Waiting on Ana* with NO free-by time, and keeps the link to their session', () => {
+    renderWithIntl(<TargetRefusal held={{ ...waiting, waitingCause: 'failed' }} />);
+    const block = screen.getByTestId('planning-target-refused');
+    expect(screen.getByTestId('planning-waiting-on').textContent).toBe('Waiting on Ana');
+    expect(block.textContent).not.toMatch(/free by|12:30|1:30/);
+    expect(block.textContent).toContain('Their attempt failed');
+    expect(screen.getByRole('link').textContent).toBe('Open their session');
+  });
+
+  it.each([
+    ['question', 'asked a question'],
+    ['reply', 'waiting for their reply'],
+    ['failed', 'attempt failed'],
+  ] as const)('the %s cause has its own sentence', (cause, fragment) => {
+    renderWithIntl(<TargetRefusal held={{ ...waiting, waitingCause: cause }} />);
+    expect(screen.getByTestId('planning-target-refused').textContent).toContain(fragment);
+  });
+
+  it('an unnamed holder reads *Waiting on someone*, with no link', () => {
+    renderWithIntl(
+      <TargetRefusal
+        held={{ ...waiting, holder: null, holderSessionId: null, waitingCause: null }}
+      />,
+    );
+    expect(screen.getByTestId('planning-waiting-on').textContent).toBe('Waiting on someone');
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('with sessionWaiting false or absent it reads exactly as today (a free-by time)', () => {
+    renderWithIntl(<TargetRefusal held={{ ...waiting, sessionWaiting: false }} />);
+    expect(screen.queryByTestId('planning-waiting-on')).toBeNull();
+    expect(screen.getByTestId('planning-target-refused').textContent).toContain('free by about');
+  });
+
+  it('renders under zh with no English', () => {
+    renderWithIntl(<TargetRefusal held={{ ...waiting, waitingCause: 'reply' }} />, {
+      locale: 'zh',
+      messages: zh,
+    });
+    expect(screen.getByTestId('planning-waiting-on').textContent).toBe('正在等待 Ana');
+    expect(screen.getByRole('link').textContent).toBe('打开他们的会话');
   });
 });
 

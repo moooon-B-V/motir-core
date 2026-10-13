@@ -314,6 +314,7 @@ export type DiscoveryAction =
       revisions?: RevisionsByKind;
       catalog?: FeatureCatalogView | null;
     }
+  | { type: 'streamStart' }
   | { type: 'streamEnd' }
   | { type: 'streamError'; code: string; message?: string }
   | { type: 'openReview'; kind: DirectionDocKind }
@@ -425,6 +426,11 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
         staleKinds: state.staleKinds.filter((k) => !loaded.has(k)),
       };
     }
+
+    // A server-submitted turn is being read (MOTIR-8254): the composer waits,
+    // as it does for a user turn, but no user bubble is added.
+    case 'streamStart':
+      return { ...state, isStreaming: true, error: null };
 
     case 'streamEnd':
       return { ...state, isStreaming: false, working: null };

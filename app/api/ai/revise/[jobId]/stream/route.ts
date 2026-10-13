@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
-import { failureReasonFrame } from '@/lib/ai/jobStream';
+import { failureReasonFrame, terminalStatusOf, walkPositionOf } from '@/lib/ai/jobStream';
+import type { JobWalkPosition } from '@/lib/planChange/failureRecord';
+import { planSessionEndService } from '@/lib/services/planSessionEndService';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -86,7 +88,24 @@ export async function GET(
       try {
         let result = first;
         let reasonEmitted = false;
+        let lastPosition: JobWalkPosition | null = null;
         while (!result.done) {
+          lastPosition = walkPositionOf(result.value) ?? lastPosition;
+          // A failed or canceled REVISION is settled here (MOTIR-7936): its lease is given
+          // back at once and, for a failure, the session keeps its plan and waits. Best-effort:
+          // the abandoned-plan sweep settles the same job as the backstop.
+          const terminal = terminalStatusOf(result.value);
+          if (terminal) {
+            await planSessionEndService
+              .settleFailedJob(jobId, ctx, { status: terminal, lastPosition })
+              .catch((err) =>
+                console.warn(`[stream] settling the revision job ${jobId} failed`, err),
+              );
+          }
+          // ⚠️ SETTLED BEFORE the frame goes out (bug MOTIR-8336): the browser re-reads the
+          // session the moment the terminal frame and its reason arrive, so a settle still in
+          // flight shows it a recorded failure that a lost machine's automatic resume is about
+          // to clear — and it never learns of the new attempt.
           controller.enqueue(encoder.encode(formatFrame(result.value)));
           if (!reasonEmitted) {
             const reason = await failureReasonFrame(jobId, result.value, ctx.projectId);

@@ -209,11 +209,18 @@ export function TargetRefusal({ held }: { held: PlanTargetHeldByDto }) {
     : held.holder
       ? ts('refused.sessionTitle', { name: held.holder, key })
       : ts('refused.someoneTitle', { key });
-  const body = byPlan
-    ? ts('refused.planBody')
-    : ts('refused.sessionBody', {
-        time: format.dateTime(new Date(held.freesBy!), { hour: '2-digit', minute: '2-digit' }),
-      });
+  // A session that WAITS (on its person, or to be resumed) holds the card until its owner comes
+  // back, so a free-by time would promise something untrue: the body names who it waits on
+  // instead (Story MOTIR-7905 · MOTIR-7918; design panel 7). The title is unchanged.
+  const waiting = held.sessionWaiting === true && !byPlan;
+  const tr = useTranslations('planningWorkspace.session.refusal');
+  const body = waiting
+    ? null
+    : byPlan
+      ? ts('refused.planBody')
+      : ts('refused.sessionBody', {
+          time: format.dateTime(new Date(held.freesBy!), { hour: '2-digit', minute: '2-digit' }),
+        });
   return (
     <div
       role="status"
@@ -223,9 +230,27 @@ export function TargetRefusal({ held }: { held: PlanTargetHeldByDto }) {
       <Users className="mt-0.5 size-4 flex-none text-(--el-text-secondary)" aria-hidden />
       <div className="flex min-w-0 flex-col gap-1">
         <p className="text-sm font-semibold text-(--el-text-strong)">{title}</p>
-        <p className="text-xs leading-relaxed text-(--el-text-secondary)">{body}</p>
+        {waiting ? (
+          <>
+            <p className="text-xs font-medium text-(--el-text)" data-testid="planning-waiting-on">
+              {held.holder ? tr('waitingOn', { name: held.holder }) : tr('waitingOnSomeone')}
+            </p>
+            {held.waitingCause ? (
+              <p className="text-xs leading-relaxed text-(--el-text-secondary)">
+                {tr(`why.${held.waitingCause}`)}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-xs leading-relaxed text-(--el-text-secondary)">{body}</p>
+        )}
         {held.holderSessionId && held.holder ? (
-          <RefusalLink sessionId={held.holderSessionId} name={held.holder} anchorKey={key} />
+          <RefusalLink
+            sessionId={held.holderSessionId}
+            name={held.holder}
+            anchorKey={key}
+            waiting={waiting}
+          />
         ) : null}
       </div>
     </div>
@@ -236,12 +261,15 @@ function RefusalLink({
   sessionId,
   name,
   anchorKey,
+  waiting,
 }: {
   sessionId: string;
   name: string;
   anchorKey: string;
+  waiting: boolean;
 }) {
   const ts = useTranslations('planningWorkspace.session');
+  const tr = useTranslations('planningWorkspace.session.refusal');
   const { href, open } = useOpenPlanningWorkspace({
     kind: 'work-item',
     itemKey: anchorKey,
@@ -253,7 +281,7 @@ function RefusalLink({
       onClick={open}
       className="self-start rounded-(--radius-control) text-xs font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
-      {ts('refused.link', { name })}
+      {waiting ? tr('openSession') : ts('refused.link', { name })}
     </a>
   );
 }

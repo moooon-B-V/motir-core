@@ -110,7 +110,7 @@
 // outside the Playwright run — `register()` returns immediately when neither
 // flag is set.
 
-import * as Sentry from '@sentry/nextjs';
+import { onRequestError as reportRequestError } from '@/lib/monitoring/requestError';
 
 export async function register() {
   // ── Error monitoring (Subtask 8.5.6 / MOTIR-1162) ────────────────────────
@@ -133,6 +133,13 @@ export async function register() {
 
   if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
 
+  // Per-response `close` listener ceiling (MOTIR-8171): the framework stack puts
+  // 8–9 on an ordinary response, so a couple more tip it over Node's 10. See the
+  // module for the measurement and why this is not a leak.
+  const { installResponseCloseListenerLimit } =
+    await import('@/lib/http/responseCloseListenerLimit');
+  installResponseCloseListenerLimit();
+
   // Every E2E seam, from the ONE table the job worker installs from too
   // (`lib/test-mock-seams.ts`, MOTIR-5837). Dynamic, like every import below the
   // runtime gate, so the Edge bundle never analyses the mocks.
@@ -145,7 +152,9 @@ export async function register() {
  * Next hands every unhandled server-side request error to this hook — an App
  * Router page, a route handler, a Server Action — and `captureRequestError`
  * turns it into a Sentry event with the request's route and method attached
- * (Subtask 8.5.6 / MOTIR-1162).
+ * (Subtask 8.5.6 / MOTIR-1162). The wrapper adds the error's `digest` as a tag,
+ * the value the browser's error-boundary event carries too, so a redacted client
+ * report joins its server exception by tag (Bug MOTIR-8214).
  *
  * Exported UNCONDITIONALLY, even on a build with no DSN: the SDK's capture is a
  * no-op when `Sentry.init` was never called, and Next reads this module's
@@ -153,9 +162,9 @@ export async function register() {
  * export on an env var would make a self-hosted build differ from a monitored
  * one in shape, not just in behaviour.
  *
- * The static import is safe for the Edge bundle: `@sentry/nextjs` resolves
- * through its `edge-light` export condition there, so no Node built-in reaches
- * the Edge compilation. That is why THIS import may be static while every mock
- * import above must be dynamic.
+ * The static import is safe for the Edge bundle: the wrapper imports only
+ * `@sentry/nextjs`, which resolves through its `edge-light` export condition
+ * there, so no Node built-in reaches the Edge compilation. That is why THIS
+ * import may be static while every mock import above must be dynamic.
  */
-export const onRequestError = Sentry.captureRequestError;
+export const onRequestError = reportRequestError;

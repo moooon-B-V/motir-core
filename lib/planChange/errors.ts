@@ -218,27 +218,47 @@ export class PlanTargetLockedError extends Error {
   readonly freesBy: Date | null;
   /** The holding session, for a session hold — what the refusal links to. */
   readonly holderSessionId: string | null;
+  /** Whether the holder's session is WAITING — on its person, or to resume — rather
+   *  than merely holding (MOTIR-7912). A waiting hold has no free-by time: it frees
+   *  when a person ends the session. */
+  readonly sessionWaiting: boolean;
+  /** WHY it waits: a planner's `question`, a conversation awaiting a `reply`, or a
+   *  `failed` attempt waiting to resume; `null` when it is not waiting. */
+  readonly waitingCause: PlanTargetWaitingCause | null;
   constructor(
     readonly targetIdentifier: string,
     readonly holderName: string | null,
     readonly expiresAt: Date,
-    holder: { sessionId?: string | null; planId?: string | null } = {},
+    holder: {
+      sessionId?: string | null;
+      planId?: string | null;
+      waitingCause?: PlanTargetWaitingCause | null;
+    } = {},
   ) {
     const heldByPlan = !!holder.planId;
-    const freesBy = heldByPlan
-      ? null
-      : new Date(expiresAt.getTime() + PLAN_TARGET_SWEEP_INTERVAL_MS);
+    const waitingCause = holder.waitingCause ?? null;
+    const freesBy =
+      heldByPlan || waitingCause
+        ? null
+        : new Date(expiresAt.getTime() + PLAN_TARGET_SWEEP_INTERVAL_MS);
     super(
-      `${targetIdentifier} is being planned by ${holderName ?? 'another session'} right now. ` +
-        (freesBy
-          ? `The hold releases when that session ends, or by ${freesBy.toISOString()} at the latest.`
-          : 'The hold releases when that plan is approved or declined.'),
+      waitingCause
+        ? `${targetIdentifier} is held by ${holderName ?? 'another member'}'s planning session, which is waiting on ${holderName ?? 'them'}.`
+        : `${targetIdentifier} is being planned by ${holderName ?? 'another session'} right now. ` +
+            (freesBy
+              ? `The hold releases when that session ends, or by ${freesBy.toISOString()} at the latest.`
+              : 'The hold releases when that plan is approved or declined.'),
     );
     this.name = 'PlanTargetLockedError';
     this.freesBy = freesBy;
-    this.holderSessionId = heldByPlan ? null : (holder.sessionId ?? null);
+    this.sessionWaiting = waitingCause !== null;
+    this.waitingCause = waitingCause;
+    this.holderSessionId = heldByPlan && !waitingCause ? null : (holder.sessionId ?? null);
   }
 }
+
+/** Why a holder's planning session waits (MOTIR-7912). */
+export type PlanTargetWaitingCause = 'question' | 'reply' | 'failed';
 
 /** One lock-sweep interval (`planTargetLockSweep`, every 5 minutes) — the slack
  *  between a session lease running out and the idle close ending the session. */
@@ -418,6 +438,71 @@ export class PlanningSeedNotFoundError extends Error {
   constructor() {
     super('No planning seed is available for this gate.');
     this.name = 'PlanningSeedNotFoundError';
+  }
+}
+
+/**
+ * Resume asked by someone who is NOT the session's owner (Story MOTIR-7905 · MOTIR-7916).
+ * The decision routes everything about a waiting session to its owner, so only the owner
+ * resumes it; a member who can see it gets this rather than a 404, because the design draws
+ * a "no longer the owner" refusal. → 403.
+ */
+export class NotSessionOwnerError extends Error {
+  readonly code = 'NOT_SESSION_OWNER' as const;
+  constructor(readonly sessionId: string) {
+    super(
+      `Only the person who started planning session ${sessionId}, or a project manager, can resume it.`,
+    );
+    this.name = 'NotSessionOwnerError';
+  }
+}
+
+/** Resume asked of an open session that is NOT failed-waiting (MOTIR-7916). → 409. */
+export class SessionNotFailedError extends Error {
+  readonly code = 'SESSION_NOT_FAILED' as const;
+  constructor(readonly sessionId: string) {
+    super(`Planning session ${sessionId} has no failed attempt to resume.`);
+    this.name = 'SessionNotFailedError';
+  }
+}
+
+/**
+ * A concurrent Resume already started the new attempt (MOTIR-7916). Carries the WINNING
+ * job's id, so a double-click streams the one attempt that is running. → 409.
+ */
+export class ResumeAlreadyStartedError extends Error {
+  readonly code = 'RESUME_ALREADY_STARTED' as const;
+  constructor(
+    readonly sessionId: string,
+    readonly jobId: string | null,
+  ) {
+    super(`Planning session ${sessionId} was already resumed.`);
+    this.name = 'ResumeAlreadyStartedError';
+  }
+}
+
+/**
+ * The session's latest plan is not the one the failure belongs to, or is no longer
+ * `generating` (MOTIR-7916): there is nothing for a resume to continue. → 409.
+ */
+export class PlanNotResumableError extends Error {
+  readonly code = 'PLAN_NOT_RESUMABLE' as const;
+  constructor(readonly sessionId: string) {
+    super(`Planning session ${sessionId} has no plan that can be resumed.`);
+    this.name = 'PlanNotResumableError';
+  }
+}
+
+/**
+ * An ordinary planning submit on a failed-waiting session (MOTIR-7916): it would open a
+ * second plan beside the one the session holds, so the only ways on are Resume or ending the
+ * session. → 409 `SESSION_AWAITING_RESUME`.
+ */
+export class PlanSessionAwaitingResumeError extends Error {
+  readonly code = 'SESSION_AWAITING_RESUME' as const;
+  constructor(readonly sessionId: string) {
+    super(`Planning session ${sessionId} is waiting to resume; resume it or start a new one.`);
+    this.name = 'PlanSessionAwaitingResumeError';
   }
 }
 

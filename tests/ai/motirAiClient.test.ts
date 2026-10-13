@@ -155,6 +155,32 @@ describe('submitJob', () => {
   });
 });
 
+describe('submitJob — resume (MOTIR-7916)', () => {
+  it('puts `resume` on the envelope when given, and leaves the body byte-identical when not', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => jsonResponse({ jobId: 'j', status: 'queued' }, 202));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await submitJob('plan', tenant, { prompt: 'x' }, actor);
+    await submitJob('plan', tenant, { prompt: 'x' }, actor, {
+      resume: { planId: 'plan-1', fromJobId: 'job-1' },
+    });
+
+    const plain = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    const resumed = JSON.parse(fetchMock.mock.calls[1]![1].body as string);
+    expect(plain).not.toHaveProperty('resume');
+    expect(Object.keys(plain)).toEqual([
+      'envelopeVersion',
+      'jobKind',
+      'tenant',
+      'context',
+      'readBackToken',
+    ]);
+    expect(resumed.resume).toEqual({ planId: 'plan-1', fromJobId: 'job-1' });
+  });
+});
+
 describe('getJob', () => {
   it('returns a succeeded view with the result and no error', async () => {
     // The WIRE body motir-ai actually sends — `planDelta` included. Core dropped
@@ -212,6 +238,47 @@ describe('getJob', () => {
         ),
     );
     await expect(getJob('job_x', 'pj_1')).rejects.toBeInstanceOf(MotirAiJobNotFoundError);
+  });
+});
+
+describe('getJob — the lost-machine fact (MOTIR-8304)', () => {
+  const failedWith = (code: string, status = 500) =>
+    jsonResponse({
+      jobId: 'job_1',
+      status: 'failed',
+      result: null,
+      error: { type: 't', title: 'failed', status, code, detail: 'detail', jobId: 'job_1' },
+    });
+
+  it('a job motir-ai reaped as abandoned is a lost machine, and still MOTIR_AI_UNAVAILABLE', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failedWith('ai_job_abandoned')));
+    const view = await getJob('job_1', 'pj_1');
+    expect(view.lostMachine).toBe(true);
+    expect(view.error).toBeInstanceOf(MotirAiUnavailableError);
+    expect(view.error?.code).toBe('MOTIR_AI_UNAVAILABLE');
+  });
+
+  it.each([
+    ['ai_job_failed', 500],
+    ['rate_limited', 429],
+    ['internal_error', 500],
+  ])('a %s failure is not a lost machine, and its code is unchanged', async (code, status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failedWith(code, status)));
+    const view = await getJob('job_1', 'pj_1');
+    expect(view.lostMachine).toBe(false);
+    expect(view.error?.code).toBe('MOTIR_AI_UNAVAILABLE');
+  });
+
+  it('a running job is not a lost machine', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ jobId: 'job_1', status: 'running', result: null, error: null }),
+        ),
+    );
+    expect((await getJob('job_1', 'pj_1')).lostMachine).toBe(false);
   });
 });
 
@@ -297,14 +364,31 @@ describe('createCheckoutSession', () => {
     cancelUrl: 'https://app.test/settings/organization/billing?checkout=cancel',
   };
 
+  it('passes through the existing_plan pointer for an org on a live plan (MOTIR-8394)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          outcome: 'existing_plan',
+          livePriceLookupKey: 'max_pool_annual',
+          upgradePath: true,
+        }),
+      ),
+    );
+    expect(await createCheckoutSession(input)).toEqual({
+      outcome: 'existing_plan',
+      livePriceLookupKey: 'max_pool_annual',
+    });
+  });
+
   it('POSTs the input to /v1/stripe/checkout-session and returns the hosted url', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse({ url: 'https://checkout.stripe.com/c/pay/cs_test_1' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { url } = await createCheckoutSession(input);
-    expect(url).toBe('https://checkout.stripe.com/c/pay/cs_test_1');
+    const res = await createCheckoutSession(input);
+    expect(res).toEqual({ outcome: 'session', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
 
     const [reqUrl, init] = fetchMock.mock.calls[0]!;
     expect(reqUrl).toBe('https://ai.example.test/v1/stripe/checkout-session');

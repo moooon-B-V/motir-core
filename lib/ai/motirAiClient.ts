@@ -35,6 +35,7 @@ import {
   PlannerModelNotOfferedError,
   PlannerModelNotQualifiedError,
   PlannerModelUnreachableError,
+  AI_JOB_ABANDONED_PROBLEM_CODE,
   errorFromProblem,
   type JobView,
 } from './errors';
@@ -71,6 +72,7 @@ import type {
   Tenant,
   UsageQuery,
 } from './types';
+import { parseJobWalkStop } from '@/lib/planChange/failureRecord';
 import { PLANNER_MODEL_LIST_REASONS, type PlannerModelListReason } from './types';
 import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
 
@@ -293,6 +295,7 @@ export async function submitJob(
   tenant: Tenant,
   context: JobContextBag,
   actor: RequestActor,
+  opts: { resume?: { planId: string; fromJobId: string } } = {},
 ): Promise<{ jobId: string }> {
   const { url, serviceToken } = config();
   // THE PER-ORG KILL-SWITCHES (MOTIR-750), read here because every new planning
@@ -316,6 +319,8 @@ export async function submitJob(
     tenant: sentTenant,
     context,
     readBackToken,
+    // Only when resuming a failed walk (MOTIR-7916): absent ⇒ the body is byte-identical to today.
+    ...(opts.resume ? { resume: opts.resume } : {}),
   };
 
   const res = await aiFetch(`${url}/v1/jobs`, {
@@ -378,6 +383,10 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
     status: body.status,
     result: body.result ?? null,
     error: body.error ? errorFromProblem(body.error) : null,
+    walkStop: parseJobWalkStop(body.error?.walkStop),
+    // Read from the RAW problem: once mapped, an abandoned job's error is the same
+    // `MotirAiUnavailableError` an outage produces (MOTIR-8304).
+    lostMachine: body.status === 'failed' && body.error?.code === AI_JOB_ABANDONED_PROBLEM_CODE,
   };
 }
 
@@ -798,7 +807,7 @@ export async function createCheckoutSession(input: {
    */
   quantity?: number;
   idempotencyKey?: string;
-}): Promise<{ url: string }> {
+}): Promise<CheckoutSessionOutcome> {
   const { url, serviceToken } = config();
   const res = await aiFetch(`${url}/v1/stripe/checkout-session`, {
     method: 'POST',
@@ -806,8 +815,24 @@ export async function createCheckoutSession(input: {
     body: JSON.stringify(input),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
-  return readSessionUrl(res);
+  const body: unknown = await res.clone().json();
+  const outcome = (body as { outcome?: unknown; livePriceLookupKey?: unknown }) ?? {};
+  // An org already on a live AI plan gets a pointer to the upgrade path, a normal
+  // 200 and never a second subscription (motir-ai MOTIR-8386).
+  if (outcome.outcome === 'existing_plan' && typeof outcome.livePriceLookupKey === 'string') {
+    return { outcome: 'existing_plan', livePriceLookupKey: outcome.livePriceLookupKey };
+  }
+  return { outcome: 'session', ...(await readSessionUrl(res)) };
 }
+
+/**
+ * What a checkout answers (motir-ai MOTIR-8386): a session to redirect to, or — for
+ * an org that already holds a live AI plan — the plan it holds, so the caller sends
+ * the person to the upgrade path instead of a second subscription.
+ */
+export type CheckoutSessionOutcome =
+  | { outcome: 'session'; url: string }
+  | { outcome: 'existing_plan'; livePriceLookupKey: string };
 
 // POST /v1/stripe/portal-session — open a short-lived Billing Portal session for
 // an org that already has a Stripe Customer, returning its URL (the client

@@ -1,4 +1,6 @@
 import { readSession } from '@/lib/auth';
+import { contentLanguageFromAcceptLanguage } from '@/lib/i18n/contentLanguage';
+import type { Locale } from '@/lib/i18n/locales';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { WorkspaceContext } from './context';
 
@@ -32,8 +34,14 @@ async function resolveActiveWorkspaceId(
   userId: string,
   cookieWorkspaceId: string | null,
   userName?: string,
+  contentLanguage?: Locale,
 ): Promise<string | null> {
-  return workspacesService.resolveActiveWorkspace(userId, cookieWorkspaceId, userName);
+  return workspacesService.resolveActiveWorkspace(
+    userId,
+    cookieWorkspaceId,
+    userName,
+    contentLanguage,
+  );
 }
 
 function parseCookieHeader(header: string | null, name: string): string | null {
@@ -73,7 +81,14 @@ export async function resolveWorkspaceContext(request: Request): Promise<Workspa
     session.impersonation?.session.workspaceId ??
     parseCookieHeader(request.headers.get('cookie'), WORKSPACE_COOKIE_NAME);
 
-  const workspaceId = await resolveActiveWorkspaceId(userId, cookieWorkspaceId, session.user.name);
+  // Only the self-heal path reads it: a default org minted here takes the
+  // browser's content language (Story MOTIR-7731 · MOTIR-8093).
+  const workspaceId = await resolveActiveWorkspaceId(
+    userId,
+    cookieWorkspaceId,
+    session.user.name,
+    contentLanguageFromAcceptLanguage(request.headers.get('accept-language')),
+  );
   if (!workspaceId) return null;
   return { userId, workspaceId };
 }

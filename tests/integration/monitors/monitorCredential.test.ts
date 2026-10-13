@@ -12,8 +12,9 @@ import { sentryMonitorProvider } from '@/lib/monitors/providers/sentry';
 import { registerMonitorProvider } from '@/lib/monitors/registry';
 import { decryptToken, encryptToken } from '@/lib/monitors/tokenCrypto';
 import { MONITOR_REFRESH_TIMEOUT_MS } from '@/lib/monitors/provider';
+import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import {
-  MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS,
+  MONITOR_REFRESH_LEASE_MS,
   monitorCredentialService,
 } from '@/lib/services/monitorCredentialService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
@@ -295,12 +296,339 @@ describe('a SLOW refresh still commits the rotated pair (MOTIR-5988)', () => {
     expect(row.health).toBe('connected');
   }, 30_000);
 
-  it('gives the refresh transaction a budget that outlives the provider call AND a lock wait', () => {
-    // A loser blocked on the row lock waits out the winner's whole provider call
-    // before it can make its own (the forced-refresh path), so the transaction
-    // must cover two of them. Pinned as arithmetic, so neither constant can be
-    // edited alone into a gap.
-    expect(MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS).toBeGreaterThan(2 * MONITOR_REFRESH_TIMEOUT_MS);
+  it('gives the refresh LEASE a life that outlives the provider call it guards', () => {
+    // MOTIR-8184 replaced the long transaction with a lease. A lease that expired
+    // while its holder was still waiting on the provider would let a second
+    // caller spend the same rotating refresh token. Pinned as arithmetic, so
+    // neither constant can be edited alone into a gap.
+    expect(MONITOR_REFRESH_LEASE_MS).toBeGreaterThan(MONITOR_REFRESH_TIMEOUT_MS);
+  });
+});
+
+/**
+ * A provider that behaves like Sentry where MOTIR-8184 bit: it ROTATES the
+ * refresh token on every accepted refresh and REFUSES any refresh token but the
+ * current one, with Sentry's own words. The repo's plain fake mints a new pair
+ * whatever it is handed, so it cannot show a lost rotation at all.
+ */
+function rotatingProvider(opts: { delayMs?: number } = {}) {
+  const state = { valid: 'stored-refresh', calls: 0, accepted: 0, seen: [] as string[] };
+  const spy = vi
+    .spyOn(fakeMonitorProvider, 'refreshCredential')
+    .mockImplementation(async ({ refreshToken }) => {
+      state.calls += 1;
+      state.seen.push(refreshToken);
+      if (refreshToken !== state.valid) {
+        throw new MonitorProviderCallError(
+          'refreshCredential',
+          400,
+          'Given refresh token does not exist',
+        );
+      }
+      state.accepted += 1;
+      state.valid = `rot-refresh-${state.accepted}`;
+      if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs));
+      return {
+        accessToken: `rot-access-${state.accepted}`,
+        refreshToken: state.valid,
+        expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000),
+      };
+    });
+  return { state, spy };
+}
+
+async function expireStoredToken(id: string): Promise<void> {
+  await adminDb.monitorInstallation.update({
+    where: { id },
+    data: { tokenExpiresAt: new Date(Date.now() - 60_000) },
+  });
+}
+
+describe('the ROTATED PAIR is committed first and alone (MOTIR-8184)', () => {
+  it('stores a pair the provider answered slowly, and the NEXT refresh spends it', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Rotate', identifier: 'ROTA' });
+    const grant = await seedGrant(fx, -60_000);
+    const { state } = rotatingProvider({ delayMs: 1_500 });
+
+    const first = await monitorCredentialService.getAccessToken(grant.id);
+    expect(first.token).toBe('rot-access-1');
+
+    // The proof is the SECOND refresh: it presents the rotated token, which the
+    // provider accepts. A pair that was lost would be refused here with
+    // "Given refresh token does not exist" — the production symptom.
+    await expireStoredToken(grant.id);
+    const second = await monitorCredentialService.getAccessToken(grant.id);
+    expect(second.token).toBe('rot-access-2');
+    expect(state.seen).toEqual(['stored-refresh', 'rot-refresh-1']);
+    const row = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(decryptToken(row.refreshTokenEncrypted)).toBe('rot-refresh-2');
+    expect(row.refreshLeaseUntil).toBeNull();
+  });
+
+  it('has the new pair COMMITTED before the health write — a process stopped there loses nothing', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Stopped', identifier: 'STPD' });
+    const grant = await seedGrant(fx, -60_000);
+    const { state } = rotatingProvider();
+    // The machine "stops" at the first thing after the pair: the health write.
+    vi.spyOn(monitorInstallationRepository, 'updateHealth').mockRejectedValueOnce(
+      new Error('the machine stopped'),
+    );
+
+    await expect(monitorCredentialService.getAccessToken(grant.id)).rejects.toThrow(
+      'the machine stopped',
+    );
+
+    const row = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(decryptToken(row.accessTokenEncrypted)).toBe('rot-access-1');
+    expect(decryptToken(row.refreshTokenEncrypted)).toBe('rot-refresh-1');
+    expect(row.refreshLeaseUntil).toBeNull();
+
+    // And the connection is alive: the next refresh spends the stored pair.
+    await expireStoredToken(grant.id);
+    const next = await monitorCredentialService.getAccessToken(grant.id);
+    expect(next.token).toBe('rot-access-2');
+    expect(state.accepted).toBe(2);
+  });
+
+  it('holds NO row lock while the provider is answering', async () => {
+    const fx = await makeWorkItemFixture({ name: 'NoLock', identifier: 'NOLK' });
+    const grant = await seedGrant(fx, -60_000);
+    let writeDuringCall: unknown = 'not attempted';
+    vi.spyOn(fakeMonitorProvider, 'refreshCredential').mockImplementation(async () => {
+      // Another connection writes the same row WHILE the call is in flight. Under
+      // the old design the refresh held `FOR UPDATE` here, so this write waited
+      // for the refresh, which was waiting for this write: a lock timeout.
+      try {
+        await adminDb.$transaction([
+          adminDb.$executeRawUnsafe(`SET LOCAL lock_timeout = '2s'`),
+          adminDb.monitorInstallation.update({
+            where: { id: grant.id },
+            data: { healthCheckedAt: new Date() },
+          }),
+        ]);
+        writeDuringCall = 'committed';
+      } catch (err) {
+        writeDuringCall = err;
+      }
+      return {
+        accessToken: 'mid-access',
+        refreshToken: 'mid-refresh',
+        expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000),
+      };
+    });
+
+    await monitorCredentialService.getAccessToken(grant.id);
+
+    expect(writeDuringCall).toBe('committed');
+  });
+
+  it('records a refresh that got NO ANSWER as uncertain, and leaves the stored pair alone', async () => {
+    const fx = await makeWorkItemFixture({ name: 'NoAns', identifier: 'NOAN' });
+    const grant = await seedGrant(fx, -60_000);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(fakeMonitorProvider, 'refreshCredential').mockRejectedValueOnce(
+      new MonitorProviderCallError('refreshCredential', null, 'No response within 60000ms.'),
+    );
+
+    await expect(monitorCredentialService.getAccessToken(grant.id)).rejects.toBeInstanceOf(
+      MonitorProviderCallError,
+    );
+
+    const row = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(row.refreshUncertainAt).not.toBeNull();
+    expect(row.refreshLeaseUntil).toBeNull();
+    // The provider may have rotated; overwriting or clearing the pair would only
+    // destroy the one token that still works if it did NOT.
+    expect(decryptToken(row.refreshTokenEncrypted)).toBe('stored-refresh');
+
+    // A later successful refresh is what clears the mark.
+    await monitorCredentialService.getAccessToken(grant.id);
+    const after = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(after.refreshUncertainAt).toBeNull();
+  });
+
+  it('retries the pair write through a transient database error rather than losing it', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Retry', identifier: 'RTPW' });
+    const grant = await seedGrant(fx, -60_000);
+    const store = vi
+      .spyOn(monitorInstallationRepository, 'storeRefreshedTokens')
+      .mockRejectedValueOnce(new Error('Connection terminated unexpectedly'));
+
+    const credential = await monitorCredentialService.getAccessToken(grant.id);
+
+    expect(credential.token).toBe('fake-access-token-1');
+    expect(store).toHaveBeenCalledTimes(2);
+    const row = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(decryptToken(row.refreshTokenEncrypted)).toBe('fake-refresh-token-1');
+  });
+
+  it('surfaces a pair write that keeps failing, after its last attempt', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Down', identifier: 'DOWN' });
+    const grant = await seedGrant(fx, -60_000);
+    const store = vi
+      .spyOn(monitorInstallationRepository, 'storeRefreshedTokens')
+      .mockRejectedValue(new Error('the database is down'));
+
+    await expect(monitorCredentialService.getAccessToken(grant.id)).rejects.toThrow(
+      'the database is down',
+    );
+    expect(store).toHaveBeenCalledTimes(3);
+  });
+
+  it('records a provider failure that is not a typed call error in our own words', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Untyped', identifier: 'UNTY' });
+    const grant = await seedGrant(fx, -60_000);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(fakeMonitorProvider, 'refreshCredential').mockRejectedValueOnce(new Error('boom'));
+
+    await expect(monitorCredentialService.getAccessToken(grant.id)).rejects.toThrow('boom');
+
+    const row = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(row.healthReason).toBe('The refresh failed.');
+    // Not a "no answer": nothing says the provider ever saw it.
+    expect(row.refreshUncertainAt).toBeNull();
+    expect(row.refreshLeaseUntil).toBeNull();
+  });
+
+  it('names the earlier lost answer on the refusal that follows it', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Since', identifier: 'SNCE' });
+    const grant = await seedGrant(fx, -60_000);
+    const lostAt = new Date(Date.now() - 5 * 60_000);
+    await adminDb.monitorInstallation.update({
+      where: { id: grant.id },
+      data: { refreshUncertainAt: lostAt },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(fakeMonitorProvider, 'refreshCredential').mockRejectedValueOnce(
+      new MonitorProviderCallError('refreshCredential', 400, 'Given refresh token does not exist'),
+    );
+
+    await expect(monitorCredentialService.getAccessToken(grant.id)).rejects.toThrow();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![1]).toMatchObject({
+      providerReason: 'Given refresh token does not exist',
+      refreshUncertainSince: lostAt.toISOString(),
+    });
+  });
+
+  it('writes ONE log line per refresh, with its duration and new expiry and no token', async () => {
+    const fx = await makeWorkItemFixture({ name: 'LogOk', identifier: 'LGOK' });
+    const grant = await seedGrant(fx, -60_000);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await monitorCredentialService.getAccessToken(grant.id);
+
+    const lines = info.mock.calls.filter((c) => String(c[0]).includes('monitorCredentialService'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]![1]).toMatchObject({
+      installationRowId: grant.id,
+      provider: 'sentry',
+      durationMs: expect.any(Number),
+      expiresAt: expect.any(String),
+    });
+    const serialized = JSON.stringify(lines);
+    expect(serialized).not.toContain('fake-access-token');
+    expect(serialized).not.toContain('fake-refresh-token');
+    expect(serialized).not.toContain('v1.');
+  });
+
+  it('a refusal also carries its duration on its one line', async () => {
+    const fx = await makeWorkItemFixture({ name: 'LogNo', identifier: 'LGNO' });
+    const grant = await seedGrant(fx, -60_000);
+    fakeMonitorState().failNext.add('refreshCredential');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await expect(monitorCredentialService.getAccessToken(grant.id)).rejects.toThrow();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![1]).toMatchObject({ durationMs: expect.any(Number) });
+    expect(info.mock.calls.filter((c) => String(c[0]).includes('monitorCredential'))).toEqual([]);
+  });
+});
+
+describe('the refresh LEASE keeps it single-flight without an open lock (MOTIR-8184)', () => {
+  it('waits on a LIVE lease and takes the holder’s pair, making no provider call', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Lease', identifier: 'LEAS' });
+    const grant = await seedGrant(fx, -60_000);
+    // Another process holds the lease and is mid-call.
+    await adminDb.monitorInstallation.update({
+      where: { id: grant.id },
+      data: { refreshLeaseUntil: new Date(Date.now() + 30_000) },
+    });
+    // …and stores its pair a moment later, releasing the lease.
+    const holder = (async () => {
+      await new Promise((r) => setTimeout(r, 800));
+      await adminDb.monitorInstallation.update({
+        where: { id: grant.id },
+        data: {
+          accessTokenEncrypted: encryptToken('holder-access'),
+          refreshTokenEncrypted: encryptToken('holder-refresh'),
+          tokenExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000),
+          refreshLeaseUntil: null,
+        },
+      });
+    })();
+
+    const credential = await monitorCredentialService.getAccessToken(grant.id);
+    await holder;
+
+    expect(credential.token).toBe('holder-access');
+    expect(fakeMonitorState().refreshCount).toBe(0);
+  });
+
+  it('takes over an EXPIRED lease — a process that died mid-call does not wedge the grant', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Stale', identifier: 'STAL' });
+    const grant = await seedGrant(fx, -60_000);
+    await adminDb.monitorInstallation.update({
+      where: { id: grant.id },
+      data: { refreshLeaseUntil: new Date(Date.now() - 1_000) },
+    });
+
+    const credential = await monitorCredentialService.getAccessToken(grant.id);
+
+    expect(credential.token).toBe('fake-access-token-1');
+    expect(fakeMonitorState().refreshCount).toBe(1);
+  });
+
+  it('a FORCED refresh that waited on another one spends no second refresh token', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Force', identifier: 'FORC' });
+    const grant = await seedGrant(fx, 4 * 60 * 60 * 1000);
+    const { state } = rotatingProvider({ delayMs: 800 });
+
+    // Two callers both saw a 401 on a fresh-looking token and force a refresh
+    // at once: one refreshes, the other waits on its lease and takes its pair.
+    const [a, b] = await Promise.all([
+      monitorCredentialService.forceRefresh(grant.id),
+      monitorCredentialService.forceRefresh(grant.id),
+    ]);
+
+    expect(state.calls).toBe(1);
+    expect(a.token).toBe('rot-access-1');
+    expect(b.token).toBe('rot-access-1');
+  });
+
+  it('lets a stopping process wait for a refresh in flight to COMMIT its pair', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Drain', identifier: 'DRAN' });
+    const grant = await seedGrant(fx, -60_000);
+    rotatingProvider({ delayMs: 1_000 });
+
+    const pending = monitorCredentialService.getAccessToken(grant.id);
+    // Let the refresh take its lease and reach the provider.
+    await new Promise((r) => setTimeout(r, 300));
+    const drained = await monitorCredentialService.settleInFlightRefreshes(10_000);
+
+    expect(drained.pending).toBe(0);
+    const row = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(decryptToken(row.refreshTokenEncrypted)).toBe('rot-refresh-1');
+    await pending;
+  });
+
+  it('answers at once when nothing is in flight', async () => {
+    await expect(monitorCredentialService.settleInFlightRefreshes(10_000)).resolves.toEqual({
+      pending: 0,
+    });
   });
 });
 

@@ -557,6 +557,8 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     explanationMd: { row: 'explanation' },
     priority: { row: 'priority' },
     type: { row: 'type' },
+    // A RE-KIND of the target (bug MOTIR-8192 · AMENDMENT 25).
+    kind: { row: 'kind' },
     storyPoints: { row: 'storyPoints' },
     estimateMinutes: { row: 'estimateMinutes' },
     // A leaf's DIFFICULTY (MOTIR-6133 carries it, MOTIR-6137 renders it).
@@ -602,7 +604,7 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     status:
       'MOTIR-5359 — a re-scoping patch (title / description / repository) on an in-progress-category target resets its status on approve',
     executor:
-      'MOTIR-6259 — a patch that re-types a target with NO executor seeds the type default on approve (`resolveExecutor`)',
+      'MOTIR-6259 — a patch that re-types a target with NO executor seeds the type default on approve (`resolveExecutor`); MOTIR-8192 — a re-kind to a container clears it',
   };
 
   it('declares the patch key set exactly — the constant cannot drift from the interface', () => {

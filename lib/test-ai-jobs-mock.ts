@@ -28,6 +28,14 @@
 //   - GET  /v1/jobs/:id             → the settled result, from the fixture.
 //   - GET  /v1/jobs/:id/stream      → the SSE the relay forwards.
 //
+// A FAILED planning run settles with `ai_job_failed` unless its outcome declares
+// `problemCode: 'ai_job_abandoned'` (Story MOTIR-8301 · MOTIR-8311) — the problem
+// motir-ai's reaper writes when the machine holding a job stopped renewing its
+// lease. Without that arm the lane could not reach a LOST MACHINE at all: core's
+// lost-machine fact read `false` on every failure, nothing was ever resumed
+// automatically, and a spec asserting the automatic resume would have gone green
+// on code that never resumes.
+//
 // The fixture is a JSON FILE (MOTIR_AI_JOBS_FIXTURE_PATH), re-read on EVERY
 // request, so a spec can rewrite it between turns — one question answers with
 // citations, the next answers honestly with none, the third redirects to a plan
@@ -60,6 +68,12 @@ export interface AskJobOutcome {
   forward?: { text: string } | null;
   offerForward?: { text: string } | null;
   run?: { readable: boolean; reason?: string | null } | null;
+  /**
+   * The code graph could not be read for this answer (Story MOTIR-8136 · MOTIR-8144):
+   * the result carries motir-ai's top-level `codeUnreadable` signal beside the answer.
+   * Present only when declared, so every other reply is byte-identical to before.
+   */
+  codeUnreadable?: boolean;
 }
 
 /**
@@ -151,7 +165,45 @@ export interface PlanJobOutcome {
    * so the run records no narration.
    */
   turn?: { message: string; question?: string | null };
+  /**
+   * Where a FAILED run stopped (Story MOTIR-7905 · MOTIR-7920), carried on the settled
+   * `error` exactly as motir-ai's `Problem.walkStop` is, and announced by a `walk_position`
+   * progress frame before the terminal `status: failed` frame. Absent ⇒ the failure names no
+   * stop point, as before.
+   */
+  walkStop?: {
+    phase: 'lay' | 'author';
+    target: string | null;
+    targetTitle?: string | null;
+    depth: number;
+    planId?: string | null;
+    reasonCode: string;
+    detail?: string;
+  };
+  /**
+   * The run HALTED on an unreadable code graph and wrote no plan (Story MOTIR-8136 ·
+   * MOTIR-8144): `result` is motir-ai's halt envelope — an empty delta and the
+   * `codeUnreadable` signal, no `turn`. Wins over `turn` when both are declared.
+   */
+  codeUnreadable?: boolean;
+  /**
+   * The problem a FAILED run settles with (Story MOTIR-8301 · MOTIR-8311). Absent ⇒
+   * `ai_job_failed`, the handler's own rejection, so every existing reply is
+   * byte-identical. `ai_job_abandoned` is motir-ai's REAPER problem — the machine
+   * holding the job stopped renewing its lease — copied from `ABANDONED` in
+   * motir-ai `src/jobs/reaper.ts` (with `problem()` in `src/problem.ts`). The stream
+   * keeps its `status: failed` frame either way, as motir-ai's does.
+   */
+  problemCode?: 'ai_job_failed' | 'ai_job_abandoned';
 }
+
+/** motir-ai's `codeUnreadable` signal, as `CodeUnreadableEnvelope` shapes it. */
+const CODE_UNREADABLE_SIGNAL = {
+  halt: 'code_unreadable',
+  repoRef: 'acme/web',
+  repoRefs: ['acme/web'],
+  reason: 'snapshot_integrity',
+} as const;
 
 /** One recorded `POST /v1/jobs` (diagnostic; the spec owns the fixture file). */
 export interface SubmittedJob {
@@ -166,6 +218,11 @@ export interface SubmittedJob {
    * `POST /api/internal/ai/log-bug` — exactly as motir-ai would for that job.
    */
   readBackToken?: string;
+  /**
+   * The `resume` a `plan` submit carried (MOTIR-7910/7920) — how a spec proves a Resume press
+   * was sent, and for the SAME plan.
+   */
+  resume?: { planId: string; fromJobId: string };
   /**
    * The RUN SNAPSHOT an `ask_project` submit carried (`context.run`, Story
    * MOTIR-7990 · MOTIR-8004): the plan the typed-into run is writing, and whether
@@ -254,12 +311,14 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
   if (!p) return index;
   try {
     const token = kind === 'plan' && !refused ? readBackTokenOf(rawBody) : null;
+    const resume = kind === 'plan' && !refused ? resumeOf(rawBody) : null;
     const snapshot = submitContext(rawBody);
     const entry: SubmittedJob = {
       kind,
       hasCode: submitCarriesCode(rawBody),
       ...(refused ? { refused } : { jobId: jobIdFor(kind, index) }),
       ...(token ? { readBackToken: token } : {}),
+      ...(resume ? { resume } : {}),
       ...(snapshot.runPlanId !== undefined ? { runPlanId: snapshot.runPlanId } : {}),
       ...(snapshot.runReadable !== undefined ? { runReadable: snapshot.runReadable } : {}),
       ...(kind === 'plan' && snapshot.planId !== undefined ? { planId: snapshot.planId } : {}),
@@ -284,6 +343,19 @@ function readBackTokenOf(rawBody: string): string | null {
   try {
     const token = (JSON.parse(rawBody) as { readBackToken?: unknown }).readBackToken;
     return typeof token === 'string' && token !== '' ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The `resume` a submit body carried, or null. */
+function resumeOf(rawBody: string): { planId: string; fromJobId: string } | null {
+  try {
+    const r = (JSON.parse(rawBody) as { resume?: { planId?: unknown; fromJobId?: unknown } })
+      .resume;
+    return typeof r?.planId === 'string' && typeof r.fromJobId === 'string'
+      ? { planId: r.planId, fromJobId: r.fromJobId }
+      : null;
   } catch {
     return null;
   }
@@ -532,8 +604,17 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const id = decodeURIComponent(req.path.split('?')[0]!.split('/').slice(-2)[0]!);
       // A planning run the fixture declared FAILED ends the way motir-ai ends a
       // dead run: a terminal `status: failed` frame, then the close.
+      const stop = planRunFails(id) ? planOutcomeAt(kindOf(id).index).walkStop : undefined;
+      const position = stop
+        ? `event: walk_position\ndata: ${JSON.stringify({
+            phase: stop.phase,
+            target: stop.target,
+            targetTitle: stop.targetTitle ?? null,
+            depth: stop.depth,
+          })}\n\n`
+        : '';
       const data = planRunFails(id)
-        ? `event: search\ndata: {}\n\nevent: status\ndata: {"status":"failed"}\n\nevent: done\ndata: {}\n\n`
+        ? `event: search\ndata: {}\n\n${position}event: status\ndata: {"status":"failed"}\n\nevent: done\ndata: {}\n\n`
         : planRunReportsStatus(id)
           ? `event: search\ndata: {}\n\nevent: status\ndata: {"status":"succeeded"}\n\nevent: done\ndata: {}\n\n`
           : `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`;
@@ -565,16 +646,31 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
         return { statusCode: 200, data: held, responseOptions: json };
       }
       if (planRunFails(id)) {
+        const failure = planOutcomeAt(index);
         const data: Record<string, unknown> = {
           status: 'failed',
           result: null,
-          error: {
-            type: 'about:blank',
-            title: 'AI job failed',
-            status: 502,
-            code: 'ai_job_failed',
-            detail: 'The fixture declared this planning run failed.',
-          },
+          error:
+            failure.problemCode === 'ai_job_abandoned'
+              ? {
+                  // motir-ai's reaper problem, as `problem('ai_job_abandoned')` builds it and
+                  // the reap statement extends it with the job id and its detail.
+                  type: 'https://motir.co/errors/ai_job_abandoned',
+                  title: 'Planning job abandoned',
+                  status: 500,
+                  code: 'ai_job_abandoned',
+                  jobId: id,
+                  detail:
+                    'the worker holding this job stopped renewing its lease (claimedBy e2e-lost-machine); nothing about the request was judged, so a resubmit is the right response',
+                }
+              : {
+                  type: 'about:blank',
+                  title: 'AI job failed',
+                  status: 502,
+                  code: 'ai_job_failed',
+                  detail: 'The fixture declared this planning run failed.',
+                  ...(failure.walkStop ? { walkStop: failure.walkStop } : {}),
+                },
         };
         return { statusCode: 200, data, responseOptions: json };
       }
@@ -620,6 +716,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                   : {}),
                 ...(outcome.run !== undefined ? { run: outcome.run } : {}),
               },
+              ...(outcome.codeUnreadable ? { codeUnreadable: CODE_UNREADABLE_SIGNAL } : {}),
             }
           : kind === 'debug_bug' && debugBugOutcomeAt(index).debugBug !== undefined
             ? { debugBug: debugBugOutcomeAt(index).debugBug }
@@ -641,10 +738,16 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                       ...(routing.missing ? { missing: routing.missing } : {}),
                     },
                   }
-                : kind === 'plan' && planOutcomeAt(index).turn
-                  ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
-                    { turn: planOutcomeAt(index).turn }
-                  : {};
+                : kind === 'plan' && planOutcomeAt(index).codeUnreadable
+                  ? // The HALT on an unreadable code graph (MOTIR-8144): no plan, no turn — only the
+                    // signal (the delta field is left out for the reason the routing arm gives).
+                    {
+                      codeUnreadable: CODE_UNREADABLE_SIGNAL,
+                    }
+                  : kind === 'plan' && planOutcomeAt(index).turn
+                    ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
+                      { turn: planOutcomeAt(index).turn }
+                    : {};
       const settled: Record<string, unknown> = { status: 'succeeded', result };
       return { statusCode: 200, data: settled, responseOptions: json };
     })

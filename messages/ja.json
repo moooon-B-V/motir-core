@@ -214,6 +214,7 @@
     "outcomeDeclined": "却下済み",
     "field_title": "タイトル",
     "field_priority": "優先度",
+    "field_kind": "種別",
     "field_type": "種類",
     "field_executor": "実行者",
     "field_storyPoints": "ストーリーポイント",
@@ -298,6 +299,7 @@
     "liveAnnounce": "{count, plural, other {# 件の項目}}が計画に追加されました",
     "liveStarting": "開始中…",
     "liveStalled": "停滞中",
+    "liveResuming": "再開中",
     "progress": {
       "settling": "会話を整理しています",
       "layingChildrenOf": "配置中: {title}",
@@ -320,7 +322,13 @@
       "detailsLastActivity": "最終アクティビティ {time}",
       "detailsStalled": "{duration}の間、何も書き込まれず、報告もされていません。計画が停止した可能性があります。",
       "pointer": "ワークベンチで追跡",
-      "pointerSentence": "このページを離れても、計画の作成は続きます。「ワークベンチ › 計画中」から追跡できます。"
+      "pointerSentence": "このページを離れても、計画の作成は続きます。「ワークベンチ › 計画中」から追跡できます。",
+      "resumingReason": "中断したところから続行",
+      "resumingSecond": "2回目の試行",
+      "detailsResumingHead": "中断したところから続行",
+      "detailsResuming": "このプランを作成していたマシンが失われました。Motir がプランを自動的に再開し、中断したところから続行します — 作成済みの項目は保持され、作成し直されることはありません。",
+      "detailsResumedAt": "{time} に自動的に再開",
+      "detailsResumedAtSecond": "{time} に自動的に再開 · 2回目の試行"
     },
     "cue": {
       "drafting": "下書き中",
@@ -3423,6 +3431,11 @@
       "displayLanguage": {
         "label": "表示言語",
         "desc": "メニュー、ラベル、日付がこの言語で表示されます。"
+      },
+      "contentLanguage": {
+        "label": "コンテンツ言語 · {org}",
+        "desc": "Motir のプランナーとエージェントが {org} の新しい作業を書く言語です。組織のオーナーと管理者が設定します。あなたの表示言語は変わりません。",
+        "changeLink": "組織の設定で変更"
       }
     },
     "profile": {
@@ -5406,6 +5419,15 @@
       "save": "変更を保存",
       "saved": "組織を更新しました",
       "saveError": "変更を保存できませんでした",
+      "contentLanguageLabel": "コンテンツ言語",
+      "contentLanguageHelp": "Motir のプランナーとエージェントがこの組織の新しい作業を書く言語です。Motir 自体のメニューの表示言語は変わりません。それは各自の表示言語です。",
+      "contentLanguageChangedBy": "{person} が {date} に {from} から変更",
+      "contentLanguageFormerMember": "退出したメンバー",
+      "contentLanguageConfirmTitle": "コンテンツ言語を変更しますか？",
+      "contentLanguageConfirmBody": "今後、Motir のプランナーとエージェントは {org} の新しい作業を<b>{from}</b>ではなく<b>{to}</b>で書きます。",
+      "contentLanguageConfirmKeeps": "既存の作業はそのテキストと言語を保持します。翻訳や書き換えは行われず、新しく書かれるものだけが変わります。",
+      "contentLanguageConfirmRecorded": "この変更はあなたの名前と今日の日付とともに記録されます。",
+      "contentLanguageConfirmCta": "{to}に変更",
       "workspacesSummary": "{count, plural, other {# 個のワークスペース}}",
       "membersSummary": "{count, plural, other {# 人のメンバー}}",
       "billing": "請求と使用量",
@@ -6368,7 +6390,7 @@
       "ctaCurrent": "現在のプラン",
       "ctaTrialUsed": "トライアル使用済み",
       "footer": "年払い(Stripe のデフォルト)の料金を表示しています。比較するには上で「月払い」に切り替えてください。税金はチェックアウト時に自動で適用されます。クレジットは内部的な利用枠であり、表示価格は AI プランの料金で、Stripe から {org} 組織に請求されます。Motir のシートは別途請求されます。Motir プランの画面で管理してください。",
-      "seatIncluded": "+ Motir シート 1 つ · 作業項目数の上限なし",
+      "seatIncluded": "+ Motir シート {count, plural, other {# つ}} · 作業項目数の上限なし",
       "seatNone": "Motir シートなし · 項目数の上限 250",
       "seatCustom": "Motir シート込み(カスタム)",
       "customPool": "カスタムのクレジットプール",
@@ -6399,6 +6421,14 @@
           "useCase": "詳細な計画と、大量のエージェント作業に。",
           "prev": "Pro",
           "features": ["継続的なエージェント作業にも十分な余裕", "忙しいチームにも対応できる処理量"]
+        },
+        "max_x2": {
+          "useCase": "詳細な計画と、Max の 2 倍のエージェント作業に。",
+          "prev": "Max",
+          "features": [
+            "Max の 2 倍の月間クレジットプール",
+            "複数のエージェントを同時に動かせる余裕"
+          ]
         },
         "enterprise": {
           "useCase": "カスタムの利用量と、組織の管理機能。",
@@ -6622,6 +6652,31 @@
       "logIn": "ログイン",
       "signUp": "新規登録"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "プロジェクトを理解する",
+          "kicker": "何を、誰のために作るのか"
+        },
+        "vision": {
+          "label": "作るもの",
+          "kicker": "v1 の形"
+        },
+        "feasibility": {
+          "label": "作る価値はありますか?",
+          "kicker": "現実的な検証"
+        },
+        "validation": {
+          "label": "求められていますか?",
+          "kicker": "市場"
+        }
+      },
+      "optional": "オプション",
+      "readHint": "<b>閲覧のみ。</b>気になる点があれば、チャットで Motir に伝えてください。Motir が内容を書き直します。まだ何も確定していません。",
+      "openQuestions": "未解決の質問",
+      "crossLinksLabel": "方向性のほかの部分",
+      "related": "関連"
+    },
     "landing": {
       "badge": "Vibe プロジェクト",
       "headline": "何を作りたいですか?",
@@ -6654,36 +6709,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "AI で構築",
-      "headingDefault": "どのように始めますか?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "準備ができたら始めましょう",
-      "subheadDefault": "作りたいものを説明してください。Motir が一緒に計画し、エージェントが構築します。",
+      "subheadDefault": "あなたはアイデアを持ってくるだけ。Motir がプロジェクトのすべてを届けます。計画、デザイン、開発、ドキュメント、そしてそこに至るまでの経緯のすべてを。",
       "subheadCarried": "最初のアイデアはそのまま残してあります。必要なら追記して、続行してください。",
       "howItWorks": "Motir の仕組みを見る",
-      "ideaLabel": "あなたのアイデア",
+      "howItWorksNewTab": "（新しいタブで開きます）",
+      "ideaLabel": "何を作りますか？",
       "carriedLabel": "アイデアから引き継ぎ",
       "placeholder": "作りたいものを説明してください。誰のためのものか、ユーザーができるべき中心的なこと、必須の要件など。完璧でなくても大丈夫です。次に追加の質問をします。",
-      "startCta": "計画を始める",
+      "startCta": "始める",
       "continueCta": "このアイデアで続行",
-      "hintDefault": "大まかなアイデアから始められます。ディスカバリーチャットで追加の質問をします。",
+      "hintDefault": "数文で十分です。残りは Motir が質問します。",
       "hintCarried": "続行する前に追加・修正できます。ここからはディスカバリーチャットが引き継ぎます。",
-      "or": "または",
-      "importTitle": "既存のプロジェクトがあります — 移行する",
-      "importDesc": "リポジトリを接続すると、Motir がコードを読み取り、既存の内容を踏まえて計画します。Jira、Linear、Plane から既存の作業項目を取り込むこともできます。",
-      "importCta": "移行"
+      "importTitle": "すでにプロジェクトをお持ちですか？",
+      "importDesc": "Motir は何かを変更する前に、コード、タスク、履歴を読み込み、次に進めることを計画します。何をリリースするかはあなたが決めます。",
+      "importCta": "それもバイブで進められます"
     },
     "import": {
       "title": "既存のプロジェクトをインポート",
-      "body": "リポジトリの接続と、Jira・Linear・Plane からの作業のインポートは近日対応予定です。現在は AI で新しいプロジェクトを始められます。",
+      "body": "リポジトリの接続と、Jira・Linear・Plane からの作業のインポートは近日対応予定です。現在は、アイデアから新しいプロジェクトを始められます。",
       "back": "最初に戻る"
     },
     "howItWorks": {
-      "title": "Motir の仕組み",
-      "body": "アイデア → 計画 → エージェントによる構築、という一連の流れを紹介するガイドを準備中です。今はアイデアから始めてください。Motir が途中で追加の質問をします。",
-      "back": "最初に戻る"
+      "title": "作業は AI が。判断はあなたが。",
+      "body": "あなたはアイデアを持ってくるだけ。Motir は理解できるまで質問し、計画、デザイン、プロダクト、ドキュメントを目に見える形で一歩ずつ作り、あなたが選ぶべきところでは必ず立ち止まります。",
+      "back": "最初に戻る",
+      "sections": {
+        "say": {
+          "title": "望むことを伝える",
+          "body": "数文でも、とりとめのないメモでも構いません。Motir は理解できるまで質問します。"
+        },
+        "watch": {
+          "title": "形になっていく様子を見守る",
+          "body": "計画、デザイン、プロダクト、ドキュメントが、目に見える形で一歩ずつ作られていきます。"
+        },
+        "decide": {
+          "title": "決める",
+          "body": "すべての成果物があなたのもとに戻り、確認し、試し、承認できます。何をリリースするかは、常にあなたが決めます。"
+        }
+      },
+      "developers": {
+        "title": "開発者向け：Motir の仕組み",
+        "body": "Motir のプロジェクトはすべて同じ仕組みで動きます。モジュールは Motir とそのエージェント、スイッチを操作するのはあなたです。motir.co でモジュールごとに解説しています。",
+        "cta": "motir.co で読む",
+        "newTab": "（新しいタブで開きます）"
+      }
     },
     "connectGate": {
-      "title": "AI による計画が設定されていません",
+      "title": "計画機能はまだ接続されていません",
       "body": "計画は Motir Cloud で実行されます。このセルフホストのワークスペースはまだ接続されていません。",
       "cta": "Motir AI を接続"
     },
@@ -6854,6 +6928,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "ロードマップに戻る",
+      "breadcrumb": "パンくずリスト",
+      "breadcrumbRoadmap": "ロードマップ",
+      "breadcrumbDirection": "方向性",
+      "kicker": "方向性 · {tier}",
+      "tierName": {
+        "discovery": "発見",
+        "vision": "ビジョン",
+        "feasibility": "実現可能性",
+        "validation": "検証"
+      },
+      "openFullPage": "全画面で開く",
+      "continue": "続行",
+      "close": "閉じる",
+      "loading": "方向性ドキュメントを読み込み中",
+      "errorTitle": "このドキュメントを読み込めませんでした",
+      "errorBodyRetry": "方向性の読み込み中に問題が発生しました。しばらくしてからもう一度お試しください。",
+      "errorBodyClose": "方向性の読み込み中に問題が発生しました。閉じてからもう一度お試しください。",
+      "emptyTitle": "{label}はまだ準備できていません",
+      "emptyTitleFallback": "方向性のこの部分はまだ準備できていません",
+      "emptyBody": "このプロジェクトではこの段階はまだ作成されていません。Motir がチャットでまとめると、ここに表示されます。"
+    },
     "heading": "ロードマップ",
     "subtitle": "{project} のロードマップ",
     "noProjectTitle": "プロジェクトが選択されていません",
@@ -6977,13 +7074,16 @@
       "state_error": "GitHub のサインインを確認できませんでした。もう一度接続してください。",
       "error": "GitHub への接続中に問題が発生しました。もう一度お試しください。",
       "not_configured": "このデプロイではまだ GitHub が設定されていません。",
-      "installed": "GitHub App をインストールしました。Motir は選択したリポジトリを読み取れるようになり、アプリがホスト型の実行のブランチをプッシュしてプルリクエストを作成します。",
+      "installed": "GitHub アカウントをこの組織にリンクしました。このアカウントがすでにここで接続したリポジトリはそのまま残ります。追加するには「リポジトリを追加または削除」を使ってください。",
       "repos_updated": "リポジトリへのアクセスを更新しました。Motir は GitHub で選択したリポジトリを読み取ります。ここで完了させる作業はほかにありません。",
       "install_unbound": "Motir GitHub App は GitHub にインストールされましたが、このワークスペースからではないため、まだ接続されていません。接続するには、ここからインストールを開始してください。",
       "install_expired": "GitHub での操作中にインストールリンクの有効期限が切れました。問題は発生していません。設定からもう一度始めてください。",
       "install_forbidden": "このインストールを開始したワークスペースのメンバーではないため、何も接続されていません。",
       "install_provider_error": "Motir は App の接続を完了するために GitHub に接続できませんでした。もう一度お試しください。",
-      "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。"
+      "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。",
+      "select_repos": "Motir GitHub App はインストール済みです。この組織が接続する、このアカウントのリポジトリを選択してください。",
+      "repo_unavailable": "そのリポジトリは既に別の組織に接続されているため、ここには追加されませんでした。ほかには何も変更されていません。",
+      "installation_not_accessible": "GitHub 上でその GitHub アカウントを表示できないため、この組織にリンクされませんでした。何も変更されていません。"
     },
     "connect": {
       "title": "GitHub を接続",
@@ -6995,14 +7095,14 @@
       },
       "step2": {
         "eyebrow": "ステップ 2 · リポジトリへのアクセス",
-        "title": "Motir GitHub App をインストール",
-        "body": "Motir が読み取れるリポジトリを選びます。GitHub のインストール画面で対象のリポジトリを正確に指定できます。それ以外は Motir から見えず、選択はいつでも変更できます。"
+        "title": "GitHub アカウントをリンク",
+        "body": "Motir GitHub App がインストールされているアカウントを選ぶか、新しいアカウントにインストールしてから、この組織が接続するリポジトリを選びます。1 つのリポジトリは一度に 1 つの組織にのみ属します。"
       },
       "installLink": "Motir GitHub App をインストール",
       "cta": "GitHub を接続",
       "foot": "GitHub に移動して認可し、その後リポジトリを選択します。",
       "noInstallHref": "このデプロイでは Motir GitHub App をインストールできません。",
-      "orgFoot": "GitHub に移動して、この組織が Motir に許可するリポジトリを選択します。"
+      "orgFoot": "Motir GitHub App が GitHub アカウントにすでにインストールされている場合は、Motir に一覧表示されるため、再度インストールする必要はありません。"
     },
     "identity": {
       "connectedAs": "GitHub の ID · {name} として接続済み",
@@ -7303,6 +7403,97 @@
       "adminOnly": "Git ホストを接続・切断できるのは {org} のオーナーと管理者のみです。",
       "subtitleGeneric": "組織を GitHub または GitLab に一度接続すれば、組織内のすべてのプロジェクトが接続済みのリポジトリで作業できます。リポジトリを選択しても再びインデックスが作成されることはありません。",
       "identityAtAccount": "ご自身のアカウントは「設定 → アカウント → Git アカウント」で接続してください"
+    },
+    "accounts": {
+      "title": "GitHub アカウント",
+      "subtitle": "{org}がリポジトリを接続しているアカウントです。各リポジトリは一度に 1 つの組織にのみ属します。",
+      "connect": "GitHub を接続",
+      "linked": "リンク済み",
+      "meta": "{type} · ここで接続済みのリポジトリ {count, plural, other {# 件}}",
+      "type": {
+        "organization": "組織",
+        "personal": "個人"
+      },
+      "addOrRemove": "リポジトリを追加または削除",
+      "manageOnGithub": "GitHub で管理",
+      "disconnect": "接続解除",
+      "toastTitle": "{account}から {count, plural, other {# 件のリポジトリ}}を接続しました",
+      "toastBody": "「リポジトリ」に一覧表示されています。{org}のどのプロジェクトからも追加できるようになりました。"
+    },
+    "picker": {
+      "title": "GitHub を接続",
+      "description": "{org}が接続するリポジトリを持つ GitHub アカウントを選んでください。Motir GitHub App がインストールされていて、あなたが閲覧できるアカウントです。",
+      "accountsLabel": "アカウント",
+      "accountMeta": "{type} · Motir から見えるリポジトリ {count, plural, other {# 件}}",
+      "notLinked": "未リンク",
+      "linkedHere": "この組織にリンク済み",
+      "installOther": "別のアカウントにインストール",
+      "installOtherMeta": "GitHub を開き、まだ Motir GitHub App がインストールされていないアカウントにインストールします。",
+      "loadingAccounts": "GitHub アカウントを読み込んでいます…",
+      "accountsError": {
+        "title": "GitHub に接続できませんでした",
+        "body": "Motir GitHub App がインストールされているアカウントを Motir が読み込めませんでした。変更は行われていません。"
+      },
+      "retry": "再試行",
+      "noAccounts": {
+        "title": "リンクできる GitHub アカウントがまだありません",
+        "body": "あなたが閲覧できる GitHub アカウントのいずれにも Motir GitHub App がインストールされていません。続行するには、いずれかのアカウントにインストールしてください。"
+      },
+      "identity": {
+        "title": "まず GitHub アカウントを接続してください",
+        "body": "Motir は、あなた自身の GitHub ID を通じて閲覧できる GitHub アカウントを一覧表示します。「設定 → アカウント → Git アカウント」で接続してから、ここに戻ってください。",
+        "action": "Git アカウントへ移動"
+      },
+      "cancel": "キャンセル",
+      "back": "すべてのアカウント",
+      "reposTitle": "{account}のリポジトリを選択",
+      "reposDescription": "各リポジトリは一度に 1 つの組織にのみ属します。別の組織がすでに接続しているリポジトリはここに追加できません。",
+      "search": "リポジトリを検索",
+      "selectAll": "選択可能なものをすべて選択（{count}）",
+      "selected": "{count} 件選択済み",
+      "rowState": {
+        "selected": "選択済み",
+        "notSelected": "未選択"
+      },
+      "connectedElsewhere": "別の組織に接続済み",
+      "connectedHere": "ここで接続済み",
+      "noMatches": "検索に一致するリポジトリはありません。",
+      "hint": "{org}からリポジトリの接続を解除するには、「リポジトリ」でその行の「接続解除」を使ってください。",
+      "submit": "{count, plural, =0 {リポジトリを接続} other {# 件のリポジトリを接続}}",
+      "loadingRepos": "リポジトリを読み込んでいます…",
+      "reposError": {
+        "title": "リポジトリを読み込めませんでした",
+        "body": "Motir は GitHub から{account}のリポジトリを読み込めませんでした。変更は行われていません。"
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo}はたった今別の組織に接続されたため、追加できません。",
+        "repo_selection_required": "接続するリポジトリを 1 つ以上選んでください。",
+        "repository_not_visible": "これらのリポジトリのうち 1 つが、GitHub 上の Motir GitHub App から見えなくなりました。一覧を更新して、もう一度お試しください。",
+        "installation_not_accessible": "GitHub で{account}を閲覧できなくなったため、リンクできません。別のアカウントを選んでください。",
+        "generic": "これらのリポジトリの接続中に問題が発生しました。変更は行われていません。もう一度お試しください。"
+      },
+      "noneLeft": {
+        "title": "{account}から接続できるリポジトリは残っていません",
+        "body": "Motir GitHub App が{account}で閲覧できるリポジトリはすべて接続済みです。1 つのリポジトリは一度に 1 つの組織にのみ属します。",
+        "connectedHere": "この組織に接続済み",
+        "connectedElsewhere": "他の組織に接続済み",
+        "hint": "さらに追加するには、GitHub で Motir GitHub App に他のリポジトリへのアクセスを許可するか、別のアカウントを選んでください。",
+        "chooseAnother": "別のアカウントを選択",
+        "manageOnGithub": "GitHub でリポジトリを管理"
+      }
+    },
+    "accountDisconnect": {
+      "title": "{org}から{account}の接続を解除しますか？",
+      "repos": "この操作で削除されるのは、{org}と{account}のリンク、およびそのアカウントがここで接続した {count, plural, other {# 件のリポジトリ}}のみです：",
+      "projects": "これらのリポジトリを使えなくなるプロジェクト（{count, plural, other {# 件}}）：",
+      "noProjects": "{org}でこれらのリポジトリを使っているプロジェクトはまだありません。",
+      "retention": "Motir がこれらから作成したコードインデックスは {days} 日間保持されます。その前にアカウントを再度リンクしてこれらを選択すると、削除は取り消されます。期間が過ぎた後に再追加すると、完全なインデックス作成が必要になります。",
+      "others": "{account}にリンクしている他の組織には影響せず、Motir GitHub App は GitHub にインストールされたままです。すべての場所からアンインストールするには、GitHub で行ってください。",
+      "loading": "この接続解除による影響を読み込んでいます…",
+      "loadFailed": "Motir は{account}の接続解除による影響を読み込めませんでした。変更は行われていません。もう一度お試しください。",
+      "failed": "Motir は{account}の接続を解除できませんでした。変更は行われていません。もう一度お試しください。",
+      "cancel": "キャンセル",
+      "confirm": "接続解除"
     }
   },
   "aiPlanning": {
@@ -7369,7 +7560,8 @@
         "stale": "古い状態",
         "approved": "承認済み",
         "declined": "却下",
-        "closed": "終了"
+        "closed": "終了",
+        "waiting": "再開待ち"
       },
       "origin": {
         "mcp": "エージェントの計画",
@@ -7426,7 +7618,9 @@
         "approved": "承認済み · {time}"
       },
       "continuedFrom": "{when}の会話の続き",
-      "continuedFromAria": "この会話の元になった会話({when}に終了)を開く"
+      "continuedFromAria": "この会話の元になった会話({when}に終了)を開く",
+      "stop": "停止箇所: {where} · 原因: {why} · {time}",
+      "stopChange": "直前の変更を反映できませんでした · {time}"
     }
   },
   "planningWorkspace": {
@@ -7526,7 +7720,9 @@
         "notDecidable": "この計画はまだ判断できません。誰にも承認が依頼されていません。何も変更されていません。",
         "discard": "破棄できませんでした。提案はキャンバス上で待機したままです。もう一度試すか、承認してください。",
         "askSilent": "応答がありませんでした。別の聞き方で質問してみてください。",
-        "failedClosed": "その試行は完了しなかったため、このセッションは終了しました。保持していた作業項目は元の場所に戻っています。"
+        "failedClosed": "その試行は完了しなかったため、このセッションは終了しました。保持していた作業項目は元の場所に戻っています。",
+        "revisionInFlight": "Motir AI はすでにこの計画を修正中です。メッセージは保持されています。新しいバージョンが反映されたら、もう一度送信してください。",
+        "awaitingResume": "このセッションは再開待ちのため、まだメッセージを受け付けられません。先に再開してください。メッセージは保持されています。"
       },
       "answeredFrom": "{count, plural, =0 {何も引用せずに回答} other {# 件の作業項目に基づいて回答}}",
       "correctToAsk": "代わりにこれに回答",
@@ -7607,7 +7803,10 @@
         "layingLine": "{target} を配置しています",
         "authoringLine": "{title} を作成しています",
         "matchingLine": "すでに対応する作業項目があるか確認しています",
-        "writingLine": "診断内容を {key} に書き込んでいます"
+        "writingLine": "診断内容を {key} に書き込んでいます",
+        "resumed": "再開",
+        "resumedLine": "マシンが失われました — Motir が再開し、中断したところから続行します",
+        "resumedLineSecond": "再びマシンが失われました — 2回目の自動試行、中断したところから続行します"
       },
       "openerFollowUp": "{label} を選択しました。Motir AI がそれによって決まる作業を計画しています。",
       "composerPlaceholderGuide": "ステップがどうだったか Motir AI に伝えてください…",
@@ -7623,6 +7822,11 @@
         "groupLive": "{step} — 進行中",
         "groupFinished": "{step} — 完了"
       }
+    },
+    "codeUnreadable": {
+      "planBody": "現在コードを読み取れないため、プランは変更していません。Motir が対応しています。",
+      "planMarker": "何も書き込まれていません — プランは変更されていません。",
+      "askNotice": "この回答ではコードを読み取れませんでした。ここでのコードに関する内容は未確認として扱ってください。"
     },
     "targets": {
       "sectionLabel": "作業項目",
@@ -7794,6 +7998,16 @@
         "writing": "この会話から新しい計画を作成しています。",
         "restored": "この計画が変更する作業が再び開かれたため、この計画は再び有効です。新しいものは開始されていません。",
         "restoredOne": "{workItem} が再び開かれたため、この計画は再び有効です。新しいものは開始されていません。"
+      },
+      "refusal": {
+        "waitingOn": "{name}の対応待ち",
+        "waitingOnSomeone": "担当者の対応待ち",
+        "why": {
+          "question": "相手のプランナーが質問し、回答を待っています。",
+          "reply": "相手の会話が返信を待っています。",
+          "failed": "相手の試行が失敗し、再開を待っています。"
+        },
+        "openSession": "相手のセッションを開く"
       }
     },
     "arrival": {
@@ -7918,6 +8132,15 @@
       "earlierOpen": "開く",
       "disabledStreaming": "この実行が終わると利用できます",
       "swapped": "以前のセッションは終了しました。新しいセッションが開いています。"
+    },
+    "waiting": {
+      "failedHead": "この試行は停止しました",
+      "kept": "ここまでの計画は保持され、対象の作業項目は「計画中」のままです。",
+      "holdReason": "先に失敗した試行を再開してください。待機中は送信を一時停止しています。",
+      "onlyStarter": "再開できるのは {name} またはプロジェクトマネージャーのみです。",
+      "onlyStarterAnon": "再開できるのは開始した本人またはプロジェクトマネージャーのみです。",
+      "failureLine": "この計画への直前の変更を反映できませんでした · {when}",
+      "failureLineAgain": "直前の変更を再び反映できませんでした · {when}"
     }
   },
   "codeHealth": {
@@ -8051,6 +8274,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "プロジェクトを取り込む",
+      "lede": "Jira、Linear、Plane を接続すると、Motir が作業項目を引き継ぎ、今の状況から次に進めることを計画できるようになります。"
+    },
     "chrome": {
       "title": "作業項目をインポート",
       "titleInto": "作業項目をインポート · {project} へ",
@@ -8293,7 +8520,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "既存のプロジェクトを移行",
-      "planAi": "AI で計画"
+      "planAi": "代わりにアイデアから始める"
+    },
+    "hero": {
+      "headline": "すでにプロジェクトをお持ちですか？",
+      "lede": "Motir は何かを変更する前に、コード、タスク、履歴を読み込み、次に進めることを計画します。プロジェクトを動かすのは Motir、何をリリースするかを決めるのはあなたです。"
     },
     "rail": {
       "title": "移行の進行状況",
@@ -8319,16 +8550,30 @@
       "eyebrow": "既存のコードベース",
       "heading": "既存のコードベースを移行",
       "body": "リポジトリを接続し、Motir にコードを読み取らせて規約を導き出したら、必要に応じてバックログをインポートして計画します。",
-      "projectLine": "移行ウィザードはこのプロジェクトで実行されます。",
-      "cta": "開始"
+      "chooseLabel": "どのプロジェクトを移行しますか？",
+      "current": "現在開いています",
+      "currentMeta": "現在開いているプロジェクト",
+      "otherMeta": "このプロジェクトに切り替えてから開始します",
+      "ctaFor": "{project}で始める"
     },
     "connect": {
       "eyebrow": "ステップ 1/2 · セットアップ",
       "heading": "このプロジェクトのリポジトリを接続",
-      "body": "ワークスペースの設定で GitHub リポジトリを接続してください。Motir は GitProvider 層を通じてそれらを読み取り、プロジェクト全体で 1 つのコードグラフを作成します。",
-      "cta": "GitHub の設定を開く",
+      "body": "Motir は GitHub で接続したリポジトリを読み込み、プロジェクト全体のコードを 1 つのマップにまとめます。",
       "gitlabNote": "GitLab の接続は近日対応予定です。",
-      "next": "リポジトリを接続しました"
+      "checking": "接続済みのリポジトリを確認しています…",
+      "missingTitle": "接続済みのリポジトリはまだありません",
+      "missingHint": "新しいタブで GitHub を接続してください。Motir が接続を自動で検知するので、ここで確認する必要はありません。",
+      "connectCta": "GitHub を接続",
+      "newTab": "（新しいタブで開きます）",
+      "waitingTitle": "GitHub を待っています",
+      "waitingHint": "もう一方のタブで接続を完了してください。Motir は、あなたが戻ったときと、それまでの間も数秒ごとに再確認します。",
+      "reopenCta": "GitHub の設定をもう一度開く",
+      "detected": "{count, plural, other {# 件のリポジトリが接続されています}}",
+      "detectedHint": "Motir が読み込めるリポジトリです。続行するとインデックス作成が始まります。",
+      "listLabel": "接続済みのリポジトリ",
+      "continue": "続行",
+      "manage": "GitHub でリポジトリを管理"
     },
     "index": {
       "eyebrow": "ステップ 2/2 · セットアップ",
@@ -8351,15 +8596,15 @@
       "eyebrow": "任意 · インポートと計画",
       "heading": "既存のバックログを取り込む",
       "body": "すでに Jira、Linear、GitHub、Plane、CSV で作業を管理していますか? このプロジェクトにインポートしましょう。何かが書き込まれる前に、ドライランのプレビューを確認できます。取り込むバックログがなければスキップしてください。",
-      "cta": "インポーターを開く",
       "reconcile": "その後計画を生成すると、Motir が両者を調整し、重複が生じないようにします。",
       "skip": "インポートをスキップ",
-      "next": "インポートしました — 続行"
+      "bodyInline": "Jira、Linear、GitHub、Plane、CSV ですでに作業を管理していますか？ここで取り込めます。何かが書き込まれる前に、ドライランのプレビューを確認できます。取り込むバックログがなければ、この手順は飛ばしてください。",
+      "continue": "続行"
     },
     "decision": {
       "eyebrow": "セットアップ完了",
       "heading": "コードベースが Motir に取り込まれました",
-      "body": "今すぐ AI でプロジェクトを計画するか、ここで終了して後でプロジェクトから計画してください。",
+      "body": "Motir に今すぐ次に進めることを計画させることも、ここで終了して後でプロジェクトから計画することもできます。何をリリースするかはあなたが決めます。",
       "planNow": "今すぐプロジェクトを計画",
       "finishLater": "終了 — 後で計画する"
     },
@@ -8368,6 +8613,18 @@
       "heading": "計画を続ける",
       "body": "このプロジェクトの計画を開始しています。計画ワークスペースで続けてください。",
       "cta": "計画を続ける"
+    },
+    "questions": {
+      "eyebrow": "あなたの方向性",
+      "heading": "いくつかの質問",
+      "body": "Motir はコードを読み込みました。プロジェクトの今後についていくつか答えていただくと、その両方から最初の計画を作成します。",
+      "progress": "質問 {n}/約 {total}",
+      "draftingTitle": "最初の計画を作成しています",
+      "draftingBody": "コード、バックログ、回答をもとに作成しています。このページを離れても構いません。準備ができたら Motir がお知らせします。",
+      "draftingWaits": "Motir がコードを読み終えるのを待っています。その後、作成が自動で始まります。",
+      "readyTitle": "最初の計画ができました",
+      "readyBody": "{project}向けに {count, plural, other {# 件の項目}}を作成しました。承認するまで確定ではありません。",
+      "readyCta": "計画を確認する"
     }
   },
   "repositorySet": {
@@ -8744,7 +9001,8 @@
         "decision_confirmation": "決定の確認",
         "plan_approval": "計画の承認",
         "agent_review": "エージェントのレビュー",
-        "manual_work": "手作業"
+        "manual_work": "手作業",
+        "planning_session": "プランニングセッション"
       },
       "reviewRow": "{key} をレビュー — {sentence}",
       "pullRequest": {
@@ -8940,6 +9198,70 @@
         "unknownLine": "現在は作成されていません。"
       },
       "ceiling": "作成中の計画のうち、新しい {shown} 件を表示しています。残りの {rest} 件は<link>計画ページ</link>にあります。"
+    },
+    "planningSession": {
+      "kind": "計画セッション",
+      "waitingToResume": "再開待ち",
+      "resume": "再開",
+      "resuming": "再開中…",
+      "open": "開く",
+      "failedAt": "{when}に失敗",
+      "written": "{m}件中{n}件を作成済み",
+      "second": "2回目の試行",
+      "stoppedAt": "停止箇所",
+      "because": "原因: {reason}",
+      "resumingNote": "停止した箇所から再開します。開始すると、この行は消えます。",
+      "reopened": "「再開待ち」から再開 · 開始者: あなた · 最終アクティビティ: {when}",
+      "openAria": "失敗した計画セッションを開く — {sentence}",
+      "couldNot": "再開を開始できませんでした。",
+      "stop": {
+        "lay": "{title}を配置中",
+        "layTop": "プロジェクトの最上位を配置中",
+        "author": "{title}を作成中",
+        "draft": "新しい項目を下書き中"
+      },
+      "reason": {
+        "rate_limited": "モデルのレート制限に達したため",
+        "out_of_credits": "組織のクレジットが尽きたため",
+        "model_unavailable": "AIプロバイダーが利用できなかったため",
+        "token_expired": "AIプロバイダーとの接続の有効期限が切れたため",
+        "prompt_too_large": "プランのコンテキストがモデルの上限を超えたため",
+        "internal": "こちら側で問題が発生したため"
+      },
+      "refusal": {
+        "credits": "組織の Motir AI クレジットが尽きています。クレジットを追加してから再開してください。",
+        "notOwner": "このセッションを再開できるのは、開始した本人かプロジェクトマネージャーのみです。",
+        "ended": "このセッションはその間に終了しました。開いて経緯を確認してください。",
+        "notFailed": "このセッションはもう再開待ちではありません。開いて現在の状況を確認してください。",
+        "notResumable": "このセッションが保持していた計画は続行できません。開いて現在の状況を確認してください。",
+        "unavailable": "Motir AI に接続できませんでした。しばらくしてからもう一度お試しください。"
+      },
+      "left": {
+        "title": "「再開待ち」に移動しました",
+        "line": "試行は失敗しましたが、ここまでの計画は保持されています。「再開待ち」から再開してください。",
+        "link": "「再開待ち」へ移動",
+        "turn": "同じ会話で修正されました — この項目は消えます。",
+        "carry": "新しい会話に引き継がれました — この項目は消えます。",
+        "decided": "決定されました — この項目は消えます。",
+        "again": "ここで計画をやり直しています — この項目は消えます。"
+      },
+      "form": {
+        "b": {
+          "badChange": "この計画への直前の変更を反映できませんでした",
+          "stateWaiting": "承認待ち",
+          "stateStale": "最新ではありません",
+          "nextReply": "計画は引き続き待機中です。返信すると続行します。",
+          "nextAgain": "変更の対象だった作業は完了しました。続行するには計画をもう一度作成してください。"
+        },
+        "c": {
+          "ended": "会話は{when}に終了しました",
+          "gloss": "次のメッセージで、計画が新しい会話に引き継がれます。",
+          "chip": "会話は終了しました"
+        },
+        "walk": {
+          "alsoWaiting": "承認待ちの計画がもう1件あります:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12245,6 +12567,10 @@
         "title": "この対象について、別の判断がすでに待機中です。",
         "next": "ページを再読み込みして確認してください。"
       },
+      "deliveryUnreadable": {
+        "title": "この作業項目のプルリクエストの一つが、この組織から見えなくなりました。",
+        "next": "何も決定されていません。そのリポジトリは現在別の組織に属しています。ここで再接続するか、そのプルリクエストと作業項目のリンクを解除してください。"
+      },
       "decidedImmutable": {
         "title": "この判断はすでに記録されており、変更できません。",
         "next": "ページを再読み込みしてください。繰り返し発生する場合は、報告すべき不具合です。"
@@ -12870,6 +13196,7 @@
         "proceed": "はい、却下します"
       },
       "handoff": {
+        "conversing": "ご依頼の内容と、それがプロジェクトのどこに当てはまるかを確認しています。計画を始める前に、質問させていただく場合があります。",
         "writing": "必要な情報がそろいました。これから計画を作成します。ここで待つ必要はありません。いつでも閉じてください。計画は<link>あなたの対応待ち</link>であなたを待っています。",
         "rewriting": "この計画の新しいバージョンを作成しています。閉じても大丈夫です。作成中は「計画中」にあり、完了したら<link>あなたの対応待ち</link>に戻るので、そこで判断できます。"
       }
@@ -12990,6 +13317,15 @@
       },
       "consequence": "完了にすると {key} が完了に移動します。",
       "consequenceMerges": "完了にするとここに記録されます。プルリクエストがマージされると {key} は完了に移動します。"
+    },
+    "planningSession": {
+      "row": {
+        "kind": "計画セッション",
+        "asked": "Motir AI からの質問:",
+        "waitReply": "Motir AI があなたの返信を待っています。",
+        "since": "{when}から",
+        "open": "計画セッションを開く — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

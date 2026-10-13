@@ -214,6 +214,7 @@
     "outcomeDeclined": "afgewezen",
     "field_title": "Titel",
     "field_priority": "Prioriteit",
+    "field_kind": "Soort",
     "field_type": "Type",
     "field_executor": "Uitvoerder",
     "field_storyPoints": "Storypoints",
@@ -298,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# item} other {# items}} aan het plan toegevoegd",
     "liveStarting": "Bezig met starten…",
     "liveStalled": "Vastgelopen",
+    "liveResuming": "Wordt hervat",
     "progress": {
       "settling": "Gesprek wordt geordend",
       "layingChildrenOf": "Indelen: {title}",
@@ -320,7 +322,13 @@
       "detailsLastActivity": "Laatste activiteit {time}",
       "detailsStalled": "Er is al {duration} niets geschreven of gemeld. Het plan is mogelijk gestopt.",
       "pointer": "Volgen vanuit de werkbank",
-      "pointerSentence": "Je kunt weggaan — dit plan wordt verder geschreven. Volg het vanuit Werkbank › In planning."
+      "pointerSentence": "Je kunt weggaan — dit plan wordt verder geschreven. Volg het vanuit Werkbank › In planning.",
+      "resumingReason": "gaat verder waar het stopte",
+      "resumingSecond": "tweede poging",
+      "detailsResumingHead": "Gaat verder waar het stopte",
+      "detailsResuming": "De machine die dit plan schreef, is verloren gegaan. Motir heeft het plan zelf opnieuw gestart, en het gaat verder waar het stopte — items die al zijn geschreven blijven behouden en worden niet opnieuw geschreven.",
+      "detailsResumedAt": "Automatisch hervat om {time}",
+      "detailsResumedAtSecond": "Automatisch hervat om {time} · tweede poging"
     },
     "cue": {
       "drafting": "Wordt opgesteld",
@@ -3423,6 +3431,11 @@
       "displayLanguage": {
         "label": "Weergavetaal",
         "desc": "Menu's, labels en datums gebruiken deze taal."
+      },
+      "contentLanguage": {
+        "label": "Inhoudstaal · {org}",
+        "desc": "De taal waarin de planner en agents van Motir nieuw werk voor {org} schrijven. Ingesteld door de eigenaren en beheerders van de organisatie; je weergavetaal verandert er niet door.",
+        "changeLink": "Wijzigen in Organisatie-instellingen"
       }
     },
     "profile": {
@@ -5406,6 +5419,15 @@
       "save": "Wijzigingen opslaan",
       "saved": "Organisatie bijgewerkt",
       "saveError": "Wijzigingen konden niet worden opgeslagen",
+      "contentLanguageLabel": "Inhoudstaal",
+      "contentLanguageHelp": "De taal waarin de planner en agents van Motir nieuw werk voor deze organisatie schrijven. De taal van de menu’s van Motir verandert er niet door: dat is ieders eigen weergavetaal.",
+      "contentLanguageChangedBy": "Gewijzigd van {from} door {person} op {date}",
+      "contentLanguageFormerMember": "een voormalig lid",
+      "contentLanguageConfirmTitle": "Inhoudstaal wijzigen?",
+      "contentLanguageConfirmBody": "Vanaf nu schrijven de planner en agents van Motir nieuw werk voor {org} in het <b>{to}</b> in plaats van het <b>{from}</b>.",
+      "contentLanguageConfirmKeeps": "Bestaand werk behoudt zijn tekst en taal. Er wordt niets vertaald of herschreven: alleen nieuw schrijfwerk verandert.",
+      "contentLanguageConfirmRecorded": "De wijziging wordt vastgelegd met je naam en de datum van vandaag.",
+      "contentLanguageConfirmCta": "Wijzigen naar {to}",
       "workspacesSummary": "{count, plural, one {# werkruimte} other {# werkruimtes}}",
       "membersSummary": "{count, plural, one {# lid} other {# leden}}",
       "billing": "Facturering en gebruik",
@@ -6368,7 +6390,7 @@
       "ctaCurrent": "Huidig abonnement",
       "ctaTrialUsed": "Proefperiode gebruikt",
       "footer": "Jaarlijkse facturering (de standaard van Stripe) wordt getoond — schakel hierboven over naar Maandelijks om te vergelijken. Btw wordt automatisch toegepast bij het afrekenen. Credits zijn een interne gebruikstoewijzing; de getoonde prijs is de kosten van het AI-abonnement, door Stripe gefactureerd aan de organisatie {org}. Je Motir-plekken worden apart gefactureerd — beheer ze op het scherm van het Motir-abonnement.",
-      "seatIncluded": "+ 1 Motir-plek · werkitems onbeperkt",
+      "seatIncluded": "+ {count, plural, one {# Motir-plek} other {# Motir-plekken}} · werkitems onbeperkt",
       "seatNone": "Geen Motir-plek · limiet van 250 items",
       "seatCustom": "Motir-plekken inbegrepen (op maat)",
       "customPool": "Tegoedpool op maat",
@@ -6399,6 +6421,14 @@
           "useCase": "Gedetailleerde planning, plus zwaar agentwerk.",
           "prev": "Pro",
           "features": ["Ruimte voor aanhoudend agentwerk", "Doorvoer voor een druk team"]
+        },
+        "max_x2": {
+          "useCase": "Gedetailleerde planning, plus agentwerk op twee keer het volume van Max.",
+          "prev": "Max",
+          "features": [
+            "Twee keer de maandelijkse creditpool van Max",
+            "Ruimte voor meerdere agents tegelijk"
+          ]
         },
         "enterprise": {
           "useCase": "Volume op maat, plus beheer op organisatieniveau.",
@@ -6622,6 +6652,31 @@
       "logIn": "Inloggen",
       "signUp": "Registreren"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Je project begrijpen",
+          "kicker": "Wat je bouwt en voor wie"
+        },
+        "vision": {
+          "label": "Wat we gaan bouwen",
+          "kicker": "De vorm van v1"
+        },
+        "feasibility": {
+          "label": "Is het de moeite waard om te bouwen?",
+          "kicker": "Een realiteitscheck"
+        },
+        "validation": {
+          "label": "Zullen mensen het willen?",
+          "kicker": "De markt"
+        }
+      },
+      "optional": "optioneel",
+      "readHint": "<b>Alleen-lezen.</b> Klopt er iets niet? Zeg het Motir gewoon in de chat; Motir herschrijft het stuk voor je. Er ligt nog niets vast.",
+      "openQuestions": "Open vragen",
+      "crossLinksLabel": "Andere delen van je richting",
+      "related": "Gerelateerd"
+    },
     "landing": {
       "badge": "Vibe-project",
       "headline": "Wat wil je bouwen?",
@@ -6654,36 +6709,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "Bouwen met AI",
-      "headingDefault": "Hoe wil je beginnen?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "Klaar wanneer jij dat bent",
-      "subheadDefault": "Beschrijf wat je wilt bouwen. Motir plant het samen met jou, daarna bouwen agents het.",
+      "subheadDefault": "Jij brengt het idee. Motir levert het hele project: het plan, het ontwerp, de bouw, de documenten en het volledige verhaal van hoe het zover kwam.",
       "subheadCarried": "We hebben het idee waarmee je begon bewaard. Voeg desgewenst meer toe en ga dan verder.",
       "howItWorks": "Bekijk hoe Motir werkt",
-      "ideaLabel": "Je idee",
+      "howItWorksNewTab": "(opent in een nieuw tabblad)",
+      "ideaLabel": "Wat ga je bouwen?",
       "carriedLabel": "Overgenomen uit je idee",
       "placeholder": "Beschrijf wat je wilt bouwen — voor wie het is, de belangrijkste dingen die mensen ermee moeten kunnen en eventuele must-haves. Het hoeft niet perfect te zijn — we stellen hierna vervolgvragen.",
-      "startCta": "Beginnen met plannen",
+      "startCta": "Beginnen",
       "continueCta": "Doorgaan met dit idee",
-      "hintDefault": "Je kunt met een ruw idee beginnen — de verkenningschat stelt vervolgvragen.",
+      "hintDefault": "Een paar zinnen is genoeg. Motir vraagt naar de rest.",
       "hintCarried": "Voeg iets toe of verfijn het voordat je verdergaat — de verkenningschat neemt het vanaf hier over.",
-      "or": "OF",
-      "importTitle": "Ik heb een bestaand project — migreren",
-      "importDesc": "Koppel je repository en Motir leest je code en plant daarna verder op wat er al is. Je kunt ook bestaande werkitems uit Jira, Linear of Plane meenemen.",
-      "importCta": "Migreren"
+      "importTitle": "Heb je al een project?",
+      "importDesc": "Motir leest je code, taken en geschiedenis voordat het iets verandert, en plant daarna wat er volgt. Jij beslist wat er live gaat.",
+      "importCta": "Dat kunnen we ook viben"
     },
     "import": {
       "title": "Een bestaand project importeren",
-      "body": "Een repository koppelen en je werk uit Jira, Linear of Plane importeren komt binnenkort. Voorlopig kun je een nieuw project met AI beginnen.",
+      "body": "Een repository koppelen en je werk uit Jira, Linear of Plane importeren komt binnenkort. Voorlopig kun je een nieuw project beginnen vanuit je idee.",
       "back": "Terug naar het begin"
     },
     "howItWorks": {
-      "title": "Hoe Motir werkt",
-      "body": "Een volledige rondleiding — idee → plan → agents bouwen het — is onderweg. Begin voorlopig met je idee; Motir stelt onderweg vervolgvragen.",
-      "back": "Terug naar het begin"
+      "title": "AI doet het werk. Jij neemt de beslissingen.",
+      "body": "Jij brengt het idee. Motir vraagt door tot het het begrijpt, en maakt dan stap voor stap het plan, het ontwerp, het product en de documenten, voor iedereen zichtbaar, en stopt overal waar een keuze aan jou is.",
+      "back": "Terug naar het begin",
+      "sections": {
+        "say": {
+          "title": "Zeg wat je wilt",
+          "body": "Een paar zinnen of een rommelige braindump. Motir blijft vragen tot het begrijpt wat je bedoelt."
+        },
+        "watch": {
+          "title": "Zie het vorm krijgen",
+          "body": "Het plan, de ontwerpen, het product en de documenten worden stap voor stap gemaakt, voor iedereen zichtbaar."
+        },
+        "decide": {
+          "title": "Jij beslist",
+          "body": "Elk onderdeel komt terug bij jou om te bekijken, uit te proberen en goed te keuren. Jij houdt de regie over wat er live gaat."
+        }
+      },
+      "developers": {
+        "title": "Hoe Motir werkt, voor developers",
+        "body": "Elk Motir-project loopt door hetzelfde instrument: de modules zijn Motir en zijn agents, de schakelaars zijn van jou. Op motir.co lees je het module voor module.",
+        "cta": "Lees het op motir.co",
+        "newTab": "(opent in een nieuw tabblad)"
+      }
     },
     "connectGate": {
-      "title": "AI-planning is niet geconfigureerd",
+      "title": "Planning is nog niet gekoppeld",
       "body": "Planning draait op Motir Cloud; deze zelf gehoste werkruimte heeft nog geen verbinding.",
       "cta": "Motir AI koppelen"
     },
@@ -6854,6 +6928,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Terug naar roadmap",
+      "breadcrumb": "Kruimelpad",
+      "breadcrumbRoadmap": "Roadmap",
+      "breadcrumbDirection": "Richting",
+      "kicker": "Richting · {tier}",
+      "tierName": {
+        "discovery": "Verkenning",
+        "vision": "Visie",
+        "feasibility": "Haalbaarheid",
+        "validation": "Validatie"
+      },
+      "openFullPage": "Volledige pagina openen",
+      "continue": "Doorgaan",
+      "close": "Sluiten",
+      "loading": "Richtingsdocument laden",
+      "errorTitle": "Dit document kon niet worden geladen",
+      "errorBodyRetry": "Er ging iets mis bij het lezen van je richting. Probeer het zo opnieuw.",
+      "errorBodyClose": "Er ging iets mis bij het lezen van je richting. Sluit dit venster en probeer het opnieuw.",
+      "emptyTitle": "{label}: nog niet klaar",
+      "emptyTitleFallback": "Dit deel van je richting is nog niet klaar",
+      "emptyBody": "Dit niveau is voor dit project nog niet opgesteld. Het verschijnt hier zodra Motir het in de chat uitschrijft."
+    },
     "heading": "Roadmap",
     "subtitle": "Roadmap van {project}",
     "noProjectTitle": "Geen project geselecteerd",
@@ -6977,13 +7074,16 @@
       "state_error": "De GitHub-inlog kon niet worden geverifieerd. Probeer opnieuw te koppelen.",
       "error": "Er ging iets mis bij het koppelen met GitHub. Probeer het opnieuw.",
       "not_configured": "GitHub is nog niet geconfigureerd op deze installatie.",
-      "installed": "GitHub-app geïnstalleerd — Motir kan nu je geselecteerde repository's lezen, en de app pusht de branches van gehoste runs en opent hun pull requests.",
+      "installed": "GitHub-account gekoppeld aan deze organisatie. Repository's die het hier al verbond, blijven behouden — voeg er meer toe met Repository's toevoegen of verwijderen.",
       "repos_updated": "Toegang tot repository's bijgewerkt. Motir leest de repository's die je op GitHub hebt geselecteerd — hier hoef je verder niets af te ronden.",
       "install_unbound": "De Motir GitHub-app is op GitHub geïnstalleerd, maar niet vanuit deze werkruimte, dus hij is er nog niet aan gekoppeld. Start de installatie vanaf hier om hem te koppelen.",
       "install_expired": "De installatielink is verlopen terwijl je op GitHub was. Er is niets kapot — begin opnieuw vanuit Instellingen.",
       "install_forbidden": "Je bent geen lid van de werkruimte van waaruit deze installatie is gestart, dus er is niets gekoppeld.",
       "install_provider_error": "Motir kon GitHub niet bereiken om het koppelen van de app af te ronden. Probeer het opnieuw.",
-      "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren."
+      "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren.",
+      "select_repos": "De Motir GitHub App is geïnstalleerd. Kies welke repository's van het account deze organisatie koppelt.",
+      "repo_unavailable": "Die repository is al gekoppeld aan een andere organisatie en is daarom hier niet toegevoegd. Verder is er niets veranderd.",
+      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd."
     },
     "connect": {
       "title": "GitHub koppelen",
@@ -6995,14 +7095,14 @@
       },
       "step2": {
         "eyebrow": "Stap 2 · Toegang tot repository's",
-        "title": "De Motir GitHub-app installeren",
-        "body": "Kies welke repository's Motir mag lezen — je kiest de precieze repo's op het installatiescherm van GitHub. Motir ziet de rest nooit, en je kunt de selectie altijd wijzigen."
+        "title": "Een GitHub-account koppelen",
+        "body": "Kies een account waarop de Motir GitHub-app is geïnstalleerd — of installeer de app op een nieuw account — en kies vervolgens welke van de repository's deze organisatie verbindt. Een repository hoort bij één organisatie tegelijk."
       },
       "installLink": "De Motir GitHub-app installeren",
       "cta": "GitHub koppelen",
       "foot": "Je wordt naar GitHub gestuurd om toestemming te geven en daarna om repository's te kiezen.",
       "noInstallHref": "Het installeren van de Motir GitHub-app is niet beschikbaar op deze installatie.",
-      "orgFoot": "Je wordt naar GitHub gestuurd om te kiezen tot welke repository's deze organisatie Motir toegang geeft."
+      "orgFoot": "Als de Motir GitHub-app al op je GitHub-account is geïnstalleerd, toont Motir dat account — je installeert de app niet opnieuw."
     },
     "identity": {
       "connectedAs": "GitHub-identiteit · gekoppeld als {name}",
@@ -7303,6 +7403,97 @@
       "adminOnly": "Alleen eigenaren en beheerders van {org} kunnen een git-host koppelen of loskoppelen.",
       "subtitleGeneric": "Koppel je organisatie één keer aan GitHub of GitLab. Elk project in de organisatie kan dan aan een gekoppelde repository werken — als je er een kiest, wordt hij nooit opnieuw geïndexeerd.",
       "identityAtAccount": "Koppel je eigen account via Instellingen → Account → Git-accounts"
+    },
+    "accounts": {
+      "title": "GitHub-accounts",
+      "subtitle": "De accounts waaruit {org} repository's verbindt. Elke repository hoort bij één organisatie tegelijk.",
+      "connect": "GitHub verbinden",
+      "linked": "Gekoppeld",
+      "meta": "{type} · {count, plural, one {# repository} other {# repository's}} hier verbonden",
+      "type": {
+        "organization": "Organisatie",
+        "personal": "Persoonlijk"
+      },
+      "addOrRemove": "Repository's toevoegen of verwijderen",
+      "manageOnGithub": "Beheren op GitHub",
+      "disconnect": "Ontkoppelen",
+      "toastTitle": "{count, plural, one {# repository} other {# repository's}} uit {account} verbonden",
+      "toastBody": "Ze staan onder Repository's — elk project in {org} kan ze nu toevoegen."
+    },
+    "picker": {
+      "title": "GitHub verbinden",
+      "description": "Kies het GitHub-account waarvan {org} de repository's moet verbinden. Dit zijn de accounts met de Motir GitHub-app die je kunt zien.",
+      "accountsLabel": "Accounts",
+      "accountMeta": "{type} · {count, plural, one {# repository} other {# repository's}} zichtbaar voor Motir",
+      "notLinked": "Niet gekoppeld",
+      "linkedHere": "Gekoppeld aan deze organisatie",
+      "installOther": "Installeren op een ander account",
+      "installOtherMeta": "Opent GitHub om de Motir GitHub-app te installeren op een account dat de app nog niet heeft.",
+      "loadingAccounts": "GitHub-accounts laden…",
+      "accountsError": {
+        "title": "GitHub is niet bereikbaar",
+        "body": "Motir kon de accounts waarop de Motir GitHub-app is geïnstalleerd niet laden. Er is niets gewijzigd."
+      },
+      "retry": "Opnieuw proberen",
+      "noAccounts": {
+        "title": "Nog geen GitHub-account om te koppelen",
+        "body": "De Motir GitHub-app is niet geïnstalleerd op een GitHub-account dat je kunt zien. Installeer de app op een account om verder te gaan."
+      },
+      "identity": {
+        "title": "Verbind eerst je GitHub-account",
+        "body": "Motir toont de GitHub-accounts die je via je eigen GitHub-identiteit kunt zien. Verbind die in Instellingen → Account → Git-accounts en kom daarna hier terug.",
+        "action": "Naar Git-accounts"
+      },
+      "cancel": "Annuleren",
+      "back": "Alle accounts",
+      "reposTitle": "Repository's kiezen uit {account}",
+      "reposDescription": "Elke repository hoort bij één organisatie tegelijk. Repository's die een andere organisatie al heeft verbonden, kunnen hier niet worden toegevoegd.",
+      "search": "Repository's zoeken",
+      "selectAll": "Alle beschikbare selecteren ({count})",
+      "selected": "{count} geselecteerd",
+      "rowState": {
+        "selected": "geselecteerd",
+        "notSelected": "niet geselecteerd"
+      },
+      "connectedElsewhere": "Verbonden met een andere organisatie",
+      "connectedHere": "Hier verbonden",
+      "noMatches": "Geen repository komt overeen met je zoekopdracht.",
+      "hint": "Gebruik Ontkoppelen in de rij van een repository onder Repository's om die los te koppelen van {org}.",
+      "submit": "{count, plural, =0 {Repository's verbinden} one {# repository verbinden} other {# repository's verbinden}}",
+      "loadingRepos": "Repository's laden…",
+      "reposError": {
+        "title": "Repository's konden niet worden geladen",
+        "body": "Motir kon de repository's van {account} niet laden vanuit GitHub. Er is niets gewijzigd."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} is zojuist verbonden met een andere organisatie en kan niet worden toegevoegd.",
+        "repo_selection_required": "Kies ten minste één repository om te verbinden.",
+        "repository_not_visible": "Een van deze repository's is op GitHub niet meer zichtbaar voor de Motir GitHub-app. Vernieuw de lijst en probeer het opnieuw.",
+        "installation_not_accessible": "Je kunt {account} niet meer zien op GitHub, dus het kan niet worden gekoppeld. Kies een ander account.",
+        "generic": "Er ging iets mis bij het verbinden van deze repository's. Er is niets gewijzigd — probeer het opnieuw."
+      },
+      "noneLeft": {
+        "title": "Niets meer te verbinden uit {account}",
+        "body": "Elke repository die de Motir GitHub-app op {account} kan zien, is al verbonden. Een repository hoort bij één organisatie tegelijk.",
+        "connectedHere": "Verbonden met deze organisatie",
+        "connectedElsewhere": "Verbonden met andere organisaties",
+        "hint": "Geef de Motir GitHub-app op GitHub toegang tot andere repository's om meer aan te bieden, of kies een ander account.",
+        "chooseAnother": "Ander account kiezen",
+        "manageOnGithub": "Repository's beheren op GitHub"
+      }
+    },
+    "accountDisconnect": {
+      "title": "{account} ontkoppelen van {org}?",
+      "repos": "Dit verwijdert alleen de koppeling van {org} met {account} en de {count, plural, one {# repository} other {# repository's}} die het hier verbond:",
+      "projects": "{count, plural, one {# project verliest} other {# projecten verliezen}} deze repository's:",
+      "noProjects": "Nog geen enkel project in {org} gebruikt deze repository's.",
+      "retention": "De code-index die Motir ervan heeft gebouwd, blijft {days} dagen bewaard. Als je het account vóór die tijd opnieuw koppelt en ze kiest, wordt het verwijderen geannuleerd; daarna betekent het opnieuw toevoegen van een repository een volledige indexering.",
+      "others": "Andere organisaties die aan {account} zijn gekoppeld, worden niet beïnvloed en de Motir GitHub-app blijft op GitHub geïnstalleerd. Doe dat op GitHub om de app overal te verwijderen.",
+      "loading": "Laden wat deze ontkoppeling beïnvloedt…",
+      "loadFailed": "Motir kon niet laden wat het ontkoppelen van {account} beïnvloedt. Er is niets gewijzigd — probeer het opnieuw.",
+      "failed": "Motir kon {account} niet ontkoppelen. Er is niets gewijzigd — probeer het opnieuw.",
+      "cancel": "Annuleren",
+      "confirm": "Ontkoppelen"
     }
   },
   "aiPlanning": {
@@ -7369,7 +7560,8 @@
         "stale": "Verouderd",
         "approved": "Goedgekeurd",
         "declined": "Afgewezen",
-        "closed": "Gesloten"
+        "closed": "Gesloten",
+        "waiting": "Te hervatten"
       },
       "origin": {
         "mcp": "Agentplan",
@@ -7426,7 +7618,9 @@
         "approved": "Goedgekeurd · {time}"
       },
       "continuedFrom": "Voortgezet uit het gesprek van {when}",
-      "continuedFromAria": "Het gesprek openen waarop dit voortbouwt, gesloten {when}"
+      "continuedFromAria": "Het gesprek openen waarop dit voortbouwt, gesloten {when}",
+      "stop": "Gestopt bij {where} · omdat {why} · {time}",
+      "stopChange": "Je laatste wijziging kon niet worden doorgevoerd · {time}"
     }
   },
   "planningWorkspace": {
@@ -7526,7 +7720,9 @@
         "notDecidable": "Over dit plan kan nog niet worden beslist — er is nog niemand gevraagd het goed te keuren. Er is niets gewijzigd.",
         "discard": "Verwijderen is niet gelukt. Het voorstel staat nog op het canvas — probeer het opnieuw, of keur het goed.",
         "askSilent": "Er kwam niets terug. Probeer het op een andere manier te vragen.",
-        "failedClosed": "Die poging is niet gelukt, dus deze sessie is gesloten. De werkitems die erin zaten, staan weer waar ze stonden."
+        "failedClosed": "Die poging is niet gelukt, dus deze sessie is gesloten. De werkitems die erin zaten, staan weer waar ze stonden.",
+        "revisionInFlight": "Motir AI is dit plan al aan het herzien. Je bericht is bewaard — verstuur het opnieuw zodra de nieuwe versie er is.",
+        "awaitingResume": "Deze sessie wacht op hervatting en kan nog geen bericht aannemen. Hervat haar eerst — je bericht is bewaard."
       },
       "answeredFrom": "{count, plural, =0 {Beantwoord zonder iets aan te halen} one {Beantwoord op basis van # werkitem} other {Beantwoord op basis van # werkitems}}",
       "correctToAsk": "In plaats daarvan dit beantwoorden",
@@ -7607,7 +7803,10 @@
         "layingLine": "{target} indelen",
         "authoringLine": "{title} schrijven",
         "matchingLine": "Controleren of een werkitem dit al dekt",
-        "writingLine": "De diagnose op {key} zetten"
+        "writingLine": "De diagnose op {key} zetten",
+        "resumed": "hervatten",
+        "resumedLine": "Machine verloren — Motir heeft het opnieuw gestart en het gaat verder waar het stopte",
+        "resumedLineSecond": "Machine opnieuw verloren — tweede automatische poging, gaat verder waar het stopte"
       },
       "openerFollowUp": "Je hebt net {label} gekozen. Motir AI plant wat daarop wacht.",
       "composerPlaceholderGuide": "Vertel Motir AI hoe de stap ging…",
@@ -7623,6 +7822,11 @@
         "groupLive": "{step} — bezig",
         "groupFinished": "{step} — klaar"
       }
+    },
+    "codeUnreadable": {
+      "planBody": "Ik kan je code nu niet lezen, dus ik heb je plan niet gewijzigd. Motir is ermee bezig.",
+      "planMarker": "Er is niets geschreven — je plan is ongewijzigd.",
+      "askNotice": "Ik kon je code voor dit antwoord niet lezen. Beschouw alles wat hier over de code staat als onbevestigd."
     },
     "targets": {
       "sectionLabel": "Werkitems",
@@ -7794,6 +7998,16 @@
         "writing": "Er wordt een nieuw plan geschreven vanuit dit gesprek.",
         "restored": "Werk dat dit plan wijzigt is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart.",
         "restoredOne": "{workItem} is weer open, dus dit plan is weer actueel. Er is niets nieuws gestart."
+      },
+      "refusal": {
+        "waitingOn": "Wacht op {name}",
+        "waitingOnSomeone": "Wacht op iemand",
+        "why": {
+          "question": "De planner stelde een vraag en wacht op het antwoord.",
+          "reply": "Het gesprek wacht op een antwoord.",
+          "failed": "De poging is mislukt en wacht tot die wordt hervat."
+        },
+        "openSession": "Hun sessie openen"
       }
     },
     "arrival": {
@@ -7918,6 +8132,15 @@
       "earlierOpen": "Openen",
       "disabledStreaming": "Beschikbaar zodra deze run klaar is",
       "swapped": "Je eerdere sessie is gesloten. Er is een nieuwe sessie geopend."
+    },
+    "waiting": {
+      "failedHead": "Deze poging is gestopt",
+      "kept": "Het plan tot nu toe is bewaard en de bijbehorende werkitems blijven op ‘In planning’.",
+      "holdReason": "Hervat eerst de mislukte poging. Verzenden is gepauzeerd zolang die wacht.",
+      "onlyStarter": "Alleen {name} of een projectmanager kan dit hervatten.",
+      "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten.",
+      "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd · {when}",
+      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}"
     }
   },
   "codeHealth": {
@@ -8051,6 +8274,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "Breng je project mee",
+      "lede": "Koppel Jira, Linear of Plane, en Motir neemt je werkitems over, zodat het vanaf waar je nu staat kan plannen wat er volgt."
+    },
     "chrome": {
       "title": "Werkitems importeren",
       "titleInto": "Werkitems importeren · in {project}",
@@ -8293,7 +8520,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "Een bestaand project migreren",
-      "planAi": "Plannen met AI"
+      "planAi": "Begin liever vanuit een idee"
+    },
+    "hero": {
+      "headline": "Heb je al een project?",
+      "lede": "Motir leest je code, taken en geschiedenis voordat het iets verandert, en plant daarna wat er volgt. Motir runt het project. Jij beslist wat er live gaat."
     },
     "rail": {
       "title": "Je migratie",
@@ -8319,16 +8550,30 @@
       "eyebrow": "Bestaande codebase",
       "heading": "Een bestaande codebase migreren",
       "body": "Koppel je repository's, laat Motir de code lezen en conventies afleiden, en importeer daarna optioneel je Backlog en plan.",
-      "projectLine": "De migratiewizard draait voor dit project.",
-      "cta": "Beginnen"
+      "chooseLabel": "Welk project migreer je?",
+      "current": "Nu geopend",
+      "currentMeta": "Het project dat je open hebt",
+      "otherMeta": "Schakelt naar dit project en begint dan",
+      "ctaFor": "Beginnen met {project}"
     },
     "connect": {
       "eyebrow": "Stap 1 van 2 · Inrichten",
       "heading": "De repository's in dit project koppelen",
-      "body": "Koppel je GitHub-repository's in de werkruimte-instellingen. Motir leest ze via de GitProvider-koppeling om één codegraaf voor het hele project te bouwen.",
-      "cta": "GitHub-instellingen openen",
+      "body": "Motir leest de repository's die je op GitHub koppelt en maakt één overzicht van de code in het hele project.",
       "gitlabNote": "GitLab koppelen komt binnenkort.",
-      "next": "Ik heb mijn repo's gekoppeld"
+      "checking": "Controleren op gekoppelde repository's…",
+      "missingTitle": "Nog geen repository's gekoppeld",
+      "missingHint": "Koppel GitHub in een nieuw tabblad. Motir merkt de koppeling zelf op, dus je hoeft hier niets te bevestigen.",
+      "connectCta": "GitHub koppelen",
+      "newTab": "(opent in een nieuw tabblad)",
+      "waitingTitle": "Wachten op GitHub",
+      "waitingHint": "Rond het koppelen af in het andere tabblad. Motir controleert opnieuw als je terugkomt, en tot die tijd elke paar seconden.",
+      "reopenCta": "GitHub-instellingen opnieuw openen",
+      "detected": "{count, plural, one {# repository is gekoppeld} other {# repository's zijn gekoppeld}}",
+      "detectedHint": "Dit zijn de repository's die Motir kan lezen. Het indexeren begint als je doorgaat.",
+      "listLabel": "Gekoppelde repository's",
+      "continue": "Doorgaan",
+      "manage": "Repository's beheren op GitHub"
     },
     "index": {
       "eyebrow": "Stap 2 van 2 · Inrichten",
@@ -8351,15 +8596,15 @@
       "eyebrow": "Optioneel · Importeren en plannen",
       "heading": "Je bestaande Backlog meenemen",
       "body": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Importeer het in dit project — je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
-      "cta": "De importtool openen",
       "reconcile": "Als je daarna een plan genereert, brengt Motir de twee met elkaar in overeenstemming, zodat er niets dubbel komt.",
       "skip": "Import overslaan",
-      "next": "Ik heb geïmporteerd — doorgaan"
+      "bodyInline": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Neem het hier direct mee. Je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
+      "continue": "Doorgaan"
     },
     "decision": {
       "eyebrow": "Inrichten voltooid",
       "heading": "Je codebase staat in Motir",
-      "body": "Plan je project nu met AI, of rond af en plan later vanuit het project.",
+      "body": "Motir kan nu plannen wat er volgt, of je rondt af en plant later vanuit het project. Jij beslist wat er live gaat.",
       "planNow": "Mijn project nu plannen",
       "finishLater": "Afronden — ik plan later"
     },
@@ -8368,6 +8613,18 @@
       "heading": "Verder plannen",
       "body": "Je bent begonnen met het plannen van dit project. Ga verder in de planningsomgeving.",
       "cta": "Verder plannen"
+    },
+    "questions": {
+      "eyebrow": "Jouw richting",
+      "heading": "Een paar vragen",
+      "body": "Motir heeft je code gelezen. Geef een paar antwoorden over waar het project naartoe gaat, en Motir maakt op basis van beide een eerste plan.",
+      "progress": "Vraag {n} van ongeveer {total}",
+      "draftingTitle": "Je eerste plan wordt opgesteld",
+      "draftingBody": "Op basis van je code, je Backlog en je antwoorden. Je kunt deze pagina verlaten; Motir laat het je weten als het klaar is.",
+      "draftingWaits": "Wachten tot Motir klaar is met het lezen van je code; daarna begint het opstellen vanzelf.",
+      "readyTitle": "Je eerste plan is klaar",
+      "readyBody": "{count, plural, one {# item is} other {# items zijn}} opgesteld voor {project}. Niets is definitief totdat je het goedkeurt.",
+      "readyCta": "Je plan bekijken"
     }
   },
   "repositorySet": {
@@ -8744,7 +9001,8 @@
         "decision_confirmation": "Beslissing bevestigen",
         "plan_approval": "Goedkeuring van plan",
         "agent_review": "Agentreview",
-        "manual_work": "Handmatig werk"
+        "manual_work": "Handmatig werk",
+        "planning_session": "Planningssessie"
       },
       "reviewRow": "{key} beoordelen — {sentence}",
       "pullRequest": {
@@ -8940,6 +9198,70 @@
         "unknownLine": "Wordt niet meer geschreven."
       },
       "ceiling": "Je {shown} nieuwste plannen die worden geschreven, worden getoond. De andere {rest} staan op de <link>pagina Plannen</link>."
+    },
+    "planningSession": {
+      "kind": "Planningssessie",
+      "waitingToResume": "Te hervatten",
+      "resume": "Hervatten",
+      "resuming": "Wordt hervat…",
+      "open": "Openen",
+      "failedAt": "{when} mislukt",
+      "written": "{n} van {m} geschreven",
+      "second": "Tweede poging",
+      "stoppedAt": "Gestopt bij",
+      "because": "omdat {reason}",
+      "resumingNote": "Gaat verder waar het gestopt is. Deze rij verdwijnt zodra het begint.",
+      "reopened": "Heropend vanuit ‘Te hervatten’ · door jou gestart · laatst actief {when}",
+      "openAria": "De mislukte planningssessie openen — {sentence}",
+      "couldNot": "De hervatting kon niet worden gestart.",
+      "stop": {
+        "lay": "{title} wordt neergezet",
+        "layTop": "Het hoogste niveau van het project wordt neergezet",
+        "author": "{title} wordt geschreven",
+        "draft": "Een nieuw item wordt opgesteld"
+      },
+      "reason": {
+        "rate_limited": "het model de limiet voor aanvragen bereikte",
+        "out_of_credits": "de organisatie geen tegoed meer had",
+        "model_unavailable": "de AI-aanbieder niet beschikbaar was",
+        "token_expired": "de verbinding met de AI-aanbieder verlopen was",
+        "prompt_too_large": "de context van het plan te groot was voor het model",
+        "internal": "er aan onze kant iets misging"
+      },
+      "refusal": {
+        "credits": "Je organisatie heeft geen Motir AI-tegoed meer. Voeg tegoed toe en hervat dan.",
+        "notOwner": "Alleen de persoon die deze sessie startte of een projectmanager kan hem hervatten.",
+        "ended": "Deze sessie is intussen beëindigd. Open hem om te zien hoe.",
+        "notFailed": "Deze sessie wacht niet meer op hervatting. Open hem om te zien hoe het ervoor staat.",
+        "notResumable": "Het plan van deze sessie kan niet worden voortgezet. Open de sessie om te zien hoe het ervoor staat.",
+        "unavailable": "Motir AI was niet bereikbaar. Probeer het zo meteen opnieuw."
+      },
+      "left": {
+        "title": "Verplaatst naar ‘Te hervatten’",
+        "line": "De poging is mislukt en het plan tot nu toe is bewaard. Hervat het vanuit ‘Te hervatten’.",
+        "link": "Naar ‘Te hervatten’",
+        "turn": "In hetzelfde gesprek herzien — deze regel verdwijnt.",
+        "carry": "Meegenomen naar een nieuw gesprek — deze regel verdwijnt.",
+        "decided": "Besloten — deze regel verdwijnt.",
+        "again": "Hier opnieuw gepland — deze regel verdwijnt."
+      },
+      "form": {
+        "b": {
+          "badChange": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd",
+          "stateWaiting": "Wacht op je goedkeuring",
+          "stateStale": "Verouderd",
+          "nextReply": "Het plan wacht nog. Reageer om verder te gaan.",
+          "nextAgain": "Het werk dat het wijzigt is afgerond. Plan het opnieuw om verder te gaan."
+        },
+        "c": {
+          "ended": "Het gesprek eindigde {when}",
+          "gloss": "Je volgende bericht neemt het plan mee naar een nieuw gesprek.",
+          "chip": "Gesprek beëindigd"
+        },
+        "walk": {
+          "alsoWaiting": "Wacht ook op je goedkeuring:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12245,6 +12567,10 @@
         "title": "Er wacht al een andere beslissing over dit onderwerp.",
         "next": "Laad de pagina opnieuw om hem te zien."
       },
+      "deliveryUnreadable": {
+        "title": "Een pull request op dit werkitem is niet meer zichtbaar voor deze organisatie.",
+        "next": "Er is niets besloten. De repository hoort nu bij een andere organisatie: koppel hem hier opnieuw, of ontkoppel die pull request van het werkitem."
+      },
       "decidedImmutable": {
         "title": "Deze beslissing is al vastgelegd en kan niet worden gewijzigd.",
         "next": "Laad de pagina opnieuw. Als dit blijft gebeuren, is het een defect dat het melden waard is."
@@ -12870,6 +13196,7 @@
         "proceed": "Ja, afwijzen"
       },
       "handoff": {
+        "conversing": "Ik zoek uit waar je om vraagt en waar het in het project past. Misschien stel ik je een vraag voordat ik begin met plannen.",
         "writing": "Ik heb wat ik nodig heb — ik schrijf het plan nu. Je hoeft hier niet te wachten: sluit dit wanneer je wilt, en het plan staat voor je klaar in <link>Wacht op jou</link>.",
         "rewriting": "Ik schrijf een nieuwe versie van dit plan. Je kunt dit sluiten — terwijl ik werk staat het onder In planning, en zodra ik klaar ben keert het terug naar <link>Wacht op jou</link> zodat je kunt beslissen."
       }
@@ -12990,6 +13317,15 @@
       },
       "consequence": "Als klaar markeren verplaatst {key} naar Klaar.",
       "consequenceMerges": "Als klaar markeren legt het hier vast. {key} gaat naar Klaar zodra de pull request wordt gemerged."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planningssessie",
+        "asked": "Motir AI vroeg:",
+        "waitReply": "Motir AI wacht op je antwoord.",
+        "since": "sinds {when}",
+        "open": "De planningssessie openen — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

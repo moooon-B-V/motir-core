@@ -1,5 +1,6 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { getSession } from '@/lib/auth';
+import { contentLanguageFromAcceptLanguage } from '@/lib/i18n/contentLanguage';
 import type { WorkspaceContext } from './context';
 import { WORKSPACE_COOKIE_NAME, resolveWorkspaceFromIds } from './middleware';
 
@@ -46,7 +47,15 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   const cookieWorkspaceId = pinned ?? cookieStore?.get(WORKSPACE_COOKIE_NAME)?.value ?? null;
 
   const userId = session.user.id;
-  const workspaceId = await resolveWorkspaceFromIds(userId, cookieWorkspaceId, session.user.name);
+  // Seeds the content language of a default org the self-heal mints (Story
+  // MOTIR-7731 · MOTIR-8093) — `getSession()` already read these headers.
+  const acceptLanguage = (await headers()).get('accept-language');
+  const workspaceId = await resolveWorkspaceFromIds(
+    userId,
+    cookieWorkspaceId,
+    session.user.name,
+    contentLanguageFromAcceptLanguage(acceptLanguage),
+  );
   if (!workspaceId) return null;
   return { userId, workspaceId };
 }

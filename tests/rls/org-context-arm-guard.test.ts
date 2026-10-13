@@ -264,7 +264,7 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       "organisation is not — that is the system-context guard's axis, not this one.",
   },
   'lib/services/githubInstallationService.ts#listOrganizationInstallations': {
-    tables: ['github_installation', 'github_repo'],
+    tables: ['github_installation', 'github_installation_org_link', 'github_repo'],
     source: 'scan',
     why:
       'MOTIR-4836 — the ORGANISATION`s GitHub connection, for the connection card on ' +
@@ -281,7 +281,30 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'org-bound transaction, so it is this site`s table too and its arm ' +
       '(`github_repo_org_read`, MOTIR-4677) is what makes the read TOTAL rather than an ' +
       'installation with an empty repo list — the arm-the-JOIN-target-too clause, arriving ' +
-      'here as a second statement rather than a join.',
+      'here as a second statement rather than a join. MOTIR-8223 moved the read onto the ' +
+      "organisation's LINK rows (`github_installation_org_link_org_read`, MOTIR-8218), joined to " +
+      'the installation (`github_installation_linked_org_read` admits one stamped with another ' +
+      'linked organisation), because the stamp names only the first organisation an account ' +
+      'was linked to.',
+  },
+  'lib/services/githubAccountDisconnectService.ts#loadOwnLink': {
+    tables: [
+      'github_installation',
+      'github_installation_org_link',
+      'github_repo',
+      'project_repository',
+    ],
+    source: 'scan',
+    why:
+      'MOTIR-8222 — the per-organisation disconnect of one GitHub account, and its preview. ' +
+      'The admin-gated, org-bound read loads the installation, THIS organisation`s link row, ' +
+      'its repositories under that installation and their project links. Each answers under ' +
+      'an org arm: github_installation_org_read / github_installation_linked_org_read (the ' +
+      'installation may be stamped with another linked organisation), ' +
+      'github_installation_org_link_org_read (MOTIR-8218), github_repo_org_read (MOTIR-4677) ' +
+      'and project_repository_org_read (MOTIR-4679). Only the READ is org-bound: the clears ' +
+      'are workspace-bound per affected workspace and the deletes run under the system ' +
+      'context, the `disconnectFromOrganisation` split.',
   },
   'lib/services/organizationRepoService.ts#listRepositoryUsage': {
     tables: ['github_repo', 'project_repository'],
@@ -339,12 +362,18 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       '(org_membership_visible_active_or_own), both admitted by the bound app.organization_id',
   },
   'lib/services/organizationErasureSweepService.ts#writeTombstone': {
-    tables: ['organization', 'organization_deletion_request', 'organization_membership'],
+    tables: [
+      'organization',
+      'organization_content_language_change',
+      'organization_deletion_request',
+      'organization_membership',
+    ],
     source: 'scan',
     why:
       'MOTIR-6400 — the erasure tombstone, with no actor: it reads the org and its roster (the ' +
-      'erased notice captures the Owner and Admins first), deletes every membership, scrubs the ' +
-      'org and marks the request erased, all under the bound app.organization_id',
+      'erased notice captures the Owner and Admins first), deletes every membership and (MOTIR-8094) ' +
+      'the attributed content-language history, scrubs the org and marks the request erased, all ' +
+      'under the bound app.organization_id',
   },
   'lib/services/organizationRetentionPurgeService.ts#runDue': {
     tables: ['organization', 'organization_deletion_request'],

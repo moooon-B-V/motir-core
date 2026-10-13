@@ -162,7 +162,7 @@ describe('ONE validator module serves every proposal door (MOTIR-6133)', () => {
     const body = bodyOf(GATE, 'function assertDifficultyOnLeaf(');
     expect(body.match(/isDifficultyRefusedOnKind\(/g) ?? []).toHaveLength(2);
     expect(bodyOf(GATE, 'export function validatePlanProposals(')).toContain(
-      'assertDifficultyOnLeaf(item, liveById)',
+      'assertDifficultyOnLeaf(item, projectedLiveById)',
     );
   });
 });

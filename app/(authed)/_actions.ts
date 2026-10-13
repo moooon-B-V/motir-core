@@ -1,7 +1,8 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { getSession } from '@/lib/auth';
+import { contentLanguageFromAcceptLanguage } from '@/lib/i18n/contentLanguage';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -104,6 +105,8 @@ export async function createWorkspaceAction(name: string): Promise<CreateWorkspa
       name: trimmed,
       ownerUserId: session.user.id,
       organizationId: activeOrg?.organization.id,
+      // Read only when no org is active and a fresh one is minted (MOTIR-8093).
+      contentLanguage: contentLanguageFromAcceptLanguage((await headers()).get('accept-language')),
     }));
   } catch (err) {
     if (err instanceof EntitlementExceededError) {
@@ -204,6 +207,7 @@ export async function createOrganizationAction(name: string): Promise<Organizati
   const organization = await organizationsService.createOrganization({
     name: trimmed,
     actorUserId: session.user.id,
+    contentLanguage: contentLanguageFromAcceptLanguage((await headers()).get('accept-language')),
   });
 
   const cookieStore = await cookies();

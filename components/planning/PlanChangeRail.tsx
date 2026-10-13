@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  CodeUnreadableAskNotice,
+  CodeUnreadableDeclinedTurn,
+} from '@/components/planning/CodeUnreadableTurn';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
@@ -13,6 +17,7 @@ import {
   MessageCircleQuestionMark,
   PenLine,
   RefreshCw,
+  RotateCcw,
   SearchCheck,
   Sparkles,
   SquarePen,
@@ -22,6 +27,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { PlanBriefing } from '@/components/planning/PlanBriefing';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
@@ -73,6 +79,7 @@ import type {
   PlanChangeProgress,
   QueuedTurn,
 } from '@/lib/hooks/usePlanChangeConversation';
+import { planRunPhase } from '@/lib/planning/planRunPhase';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -92,6 +99,11 @@ import {
   WaitingPlanStillWaits,
   TargetRefusal,
 } from '@/components/planning/SessionEndParts';
+import {
+  AlsoWaitingPlan,
+  FailedWaitingNotice,
+  WaitingPlanFailureLine,
+} from '@/components/planning/SessionWaitingParts';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
@@ -296,6 +308,16 @@ export interface PlanChangeRailProps {
   /** PLAN IT AGAIN on the stale notice (MOTIR-7945's accept; design state 10). */
   onPlanAgain?: () => void;
   /**
+   * RESUME a session waiting on a failed attempt (Story MOTIR-7905 · MOTIR-7918). Optional: a
+   * host that offers none draws the failure line without the control.
+   */
+  onResume?: () => void;
+  /**
+   * May THIS viewer resume the session — its starter, or a project manager (design panel 3b /
+   * 3c). Absent ⇒ true. False draws the failure line read-only, naming who can.
+   */
+  canResume?: boolean;
+  /**
    * SELECT a proposal on the canvas from the chip an answer names it with
    * (MOTIR-7998; design state 3b). Optional: absent, the chip is drawn as text.
    */
@@ -344,6 +366,8 @@ export function PlanChangeRail({
   onAnswerRestart,
   onCarrySend,
   onPlanAgain,
+  onResume,
+  canResume = true,
   onSelectProposal,
   onAnswerRunPause,
   onShowEarlierNarration,
@@ -359,13 +383,20 @@ export function PlanChangeRail({
   const declinedHere = state.decided === 'declined' && Boolean(state.review?.gate);
   // A PLAN RUN is writing (MOTIR-6037's hand-off, Panel 9): the planner has what it needs
   // and the run is a server job, so the reader may leave. An ASK run carries no plan id.
-  const writing = state.phase === 'streaming' && state.planId !== null;
+  // ⚠️ ONLY ONCE THE RUN HAS SETTLED ITS TARGET (MOTIR-8203). Before that the run is
+  // still in its conversation phase and may come back with a question, so "I have
+  // what I need" would be false and would send the person away at the one moment
+  // the planner may need them. `planRunPhase` is the one definition of the boundary.
+  const runPhase = planRunPhase(state);
+  const writing = runPhase === 'planning';
+  const conversing = runPhase === 'conversation';
   // …and it is REWRITING the plan in hand rather than writing a first one.
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
   const ts = useTranslations('planningWorkspace.session');
   // The Planning tab's own copy (§ 36.13) — its reopened line, nothing else.
   const tWorkbenchPlanning = useTranslations('workbench.planning');
+  const tWorkbenchPlanningSession = useTranslations('workbench.planningSession');
   const tr = useTranslations('planningWorkspace.restart');
   const format = useFormatter();
   const [draft, setDraft] = useState(initialDraft ?? '');
@@ -520,6 +551,46 @@ export function PlanChangeRail({
   // THE ENDED SESSION (AMENDMENT 23 §1): read from the server's row, so a reload
   // draws the same end. It accepts no turn — the composer slot says so instead.
   const ended = Boolean(state.session?.endedAt);
+  // A FAILED HOSTED ATTEMPT WAITS TO BE RESUMED (Story MOTIR-7905 · MOTIR-7918): the session
+  // is OPEN, so there is no end marker, no *Start a new session* and no Try again — the
+  // failure line with Resume stands in their place. Read from the server's row, so a reload
+  // draws the same thing. `resumable === false` is situation 2 (a plan waits), MOTIR-7941's.
+  const failure = !ended ? (state.session?.failure ?? null) : null;
+  const awaitsResume = failure !== null && failure.resumable !== false;
+  // The first failure this viewer saw on this session: a newer one is *failed again*.
+  const [firstFailure, setFirstFailure] = useState<{ sessionId: string; at: string } | null>(null);
+  const failureSessionId = state.session?.id ?? null;
+  const failureAt = failure?.failedAt ?? null;
+  // Adjusted DURING RENDER (React's derived-state pattern): remember the first failure seen on
+  // this session, without an effect's extra frame.
+  if (
+    failureSessionId !== null &&
+    failureAt !== null &&
+    (firstFailure === null || firstFailure.sessionId !== failureSessionId)
+  ) {
+    setFirstFailure({ sessionId: failureSessionId, at: failureAt });
+  }
+  // OPENED ON A PENDING QUESTION (Story MOTIR-7905 · MOTIR-7918; panel 1): a door that lands on
+  // a session whose planner is waiting for an answer scrolls the question into view and puts the
+  // cursor in the composer, ONCE per opened session. A question that arrives LIVE in a thread
+  // the viewer is already in is not "opened on" and steals nothing.
+  const railRef = useRef<HTMLElement>(null);
+  const openedRef = useRef<string | null>(null);
+  const openedSessionId = state.session?.id ?? null;
+  const hasPendingQuestion = question !== null;
+  useEffect(() => {
+    if (openedSessionId === null || state.phase === 'loading') return;
+    if (openedRef.current === openedSessionId) return;
+    openedRef.current = openedSessionId;
+    if (!hasPendingQuestion) return;
+    document.getElementById(PENDING_QUESTION_ID)?.scrollIntoView({ block: 'center' });
+    railRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus();
+  }, [openedSessionId, hasPendingQuestion, state.phase]);
+  const failedAgain =
+    failureAt !== null &&
+    firstFailure !== null &&
+    firstFailure.sessionId === failureSessionId &&
+    failureAt > firstFailure.at;
   // PLAN SOMETHING NEW (MOTIR-7650; design panels 1 + 5): offered on the viewer's
   // OWN open `conversation` session only — never on a guide conversation (A3.5), a
   // read-only reopen, somebody else's session, or an ended one, which already
@@ -639,6 +710,7 @@ export function PlanChangeRail({
 
   return (
     <aside
+      ref={railRef}
       className="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
       aria-label={t('railLabel')}
     >
@@ -699,6 +771,22 @@ export function PlanChangeRail({
             <PenLine className="mt-px size-3.5 flex-none" aria-hidden />
             <span>
               {tWorkbenchPlanning('reopened', {
+                when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+              })}
+            </span>
+          </p>
+        ) : state.reopened && launch.via === 'resume' ? (
+          // REOPENED FROM TO RESUME (MOTIR-7917; design `design/workbench/design-notes.md`
+          // § 37.2): a failed session's **Open** carries `planVia=resume`. The tab is the
+          // reader's own list, so — as with Planning — there is one form and no *started
+          // by {name}* twin.
+          <p
+            data-testid="planning-reopened-from-resume"
+            className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <RotateCcw className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>
+              {tWorkbenchPlanningSession('reopened', {
                 when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
               })}
             </span>
@@ -851,6 +939,11 @@ export function PlanChangeRail({
               }
               afterConfirm={i > 0 && turns[i - 1]?.confirm === 'new_session'}
               midRun={midRunPropsFor(turn, i, turns, state, onSelectProposal)}
+              outageRetry={
+                latest && turn.id === latest.id && turn.codeUnreadable === 'declined'
+                  ? { onRetry, disabled: busy || userTurns.length === 0 }
+                  : null
+              }
             />
             {/* THE COPIED DIVIDER (AMENDMENT 23 §6; MOTIR-7633 sheet 3), under the
               last turn carried over from the ended session. */}
@@ -919,6 +1012,15 @@ export function PlanChangeRail({
             the run carries on server-side and the plan will be waiting in To approve.
             A revision of the plan in hand gets its own form. The link is a real
             anchor to the tab (§22.9). */}
+        {/* THE CONVERSATION PHASE (MOTIR-8203): until the run settles what it is
+            planning, the planner says only what is true — it is working out the
+            ask and may still have a question. Keyed, like the hand-off it gives way
+            to at `target_settled`; a question ends the run before either is due. */}
+        {conversing ? (
+          <Bubble role="assistant" testId="plan-conversation-phase">
+            {tp('handoff.conversing')}
+          </Bubble>
+        ) : null}
         {writing ? (
           <Bubble role="assistant" testId="plan-handoff">
             {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
@@ -939,6 +1041,7 @@ export function PlanChangeRail({
           streaming={state.phase === 'streaming'}
           sessionHeads={narrationGroups.some((group) => group.session !== null)}
           heads={narrationHeadLines(narrationGroups, tc)}
+          autoResume={state.liveReview?.progress?.autoResume ?? null}
         />
         {/* THE PLANNER'S OWN WORDS (Story MOTIR-8060 · MOTIR-8064;
             `plan-change-run-live--narration.mock.html`): one group per session
@@ -1001,14 +1104,29 @@ export function PlanChangeRail({
             approved or declined. */}
         {state.review && !state.decided && !index.isEmpty ? (
           <>
-            <Bubble role="assistant">
-              {tc('summary', {
-                added: index.counts.added,
-                changed: index.counts.changed,
-                removed: index.counts.removed,
-              })}
-            </Bubble>
-            <Bubble role="assistant">{tc('lockedNote')}</Bubble>
+            {/* The planner's briefing (MOTIR-8149) replaces the two canned lines:
+                its section 3 says what was left untouched and section 6 gives the
+                counts, so they would only repeat it. A plan with no summary
+                (written before the briefing existed) keeps the canned pair. */}
+            {state.review.summary?.trim() ? (
+              <Bubble role="assistant" testId="plan-change-briefing">
+                <PlanBriefing
+                  summary={state.review.summary}
+                  workItemRefs={state.session?.workItemRefs ?? {}}
+                />
+              </Bubble>
+            ) : (
+              <>
+                <Bubble role="assistant">
+                  {tc('summary', {
+                    added: index.counts.added,
+                    changed: index.counts.changed,
+                    removed: index.counts.removed,
+                  })}
+                </Bubble>
+                <Bubble role="assistant">{tc('lockedNote')}</Bubble>
+              </>
+            )}
             {gated ? (
               <GatedReviewBlock
                 view={gateView}
@@ -1160,8 +1278,32 @@ export function PlanChangeRail({
         {/* DECIDED WHILE TYPING (design state 6): refused in place, the words kept. */}
         {ended && state.carryDecided ? <CarryDecidedNotice text={state.carryDecided.text} /> : null}
 
+        {/* THE FAILURE LINE (Story MOTIR-7905 · MOTIR-7918; panels 3–5): where the walk stopped,
+            why, and Resume. The plan so far stays on the canvas. */}
+        {awaitsResume && failure ? (
+          <FailedWaitingNotice
+            failure={failure}
+            failedAgain={failedAgain}
+            resuming={state.resuming === true}
+            resumeError={state.resumeError ?? null}
+            canResume={canResume && Boolean(onResume)}
+            starterName={state.reopened?.startedBy?.name ?? null}
+            onResume={() => onResume?.()}
+          />
+        ) : null}
+        {/* …beside a plan that WAITS (design panel 6): the walk is Resume's, the plan stays reachable. */}
+        {awaitsResume && state.session?.waitingPlan ? (
+          <AlsoWaitingPlan session={state.session} />
+        ) : null}
+        {/* A failure beside a waiting plan (situation 2; MOTIR-7941): ONE current failure line, an
+            open composer, no Resume — the next turn continues the session. */}
+        {failure && !awaitsResume ? (
+          <WaitingPlanFailureLine failure={failure} again={failedAgain} />
+        ) : null}
+
         {state.errorCode &&
         !ended &&
+        (failure === null || isTurnRefusal(state.errorCode)) &&
         state.errorCode !== 'timedOut' &&
         !(gated && (state.errorCode === 'stale' || state.errorCode === 'decided')) ? (
           <div className="flex flex-col items-start gap-2">
@@ -1171,15 +1313,17 @@ export function PlanChangeRail({
             >
               {tc(errorKey(state.errorCode))}
             </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
-              onClick={onRetry}
-              disabled={busy || userTurns.length === 0}
-            >
-              {tc('retry')}
-            </Button>
+            {isTurnRefusal(state.errorCode) ? null : (
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
+                onClick={onRetry}
+                disabled={busy || userTurns.length === 0}
+              >
+                {tc('retry')}
+              </Button>
+            )}
           </div>
         ) : null}
 
@@ -1222,7 +1366,7 @@ export function PlanChangeRail({
           {...(onStartNewSession ? { onStartNew: onStartNewSession } : {})}
           pending={busy}
         />
-      ) : state.readOnly ? (
+      ) : awaitsResume && !canResume ? null : state.readOnly ? (
         // A member without `ai:plan` reads a reopened conversation and cannot
         // continue it — the composer is REPLACED by the reason (design §19.8,
         // panel 6), in the composer's own slot.
@@ -1261,6 +1405,9 @@ export function PlanChangeRail({
             state.phase === 'loading' ||
             state.phase === 'deciding' ||
             heldBlocks ||
+            // A session waiting to resume takes no ordinary turn — the server refuses the
+            // submit (MOTIR-7916), and Resume is the only thing that restarts the walk.
+            awaitsResume ||
             Boolean(state.stalePlan?.pressing)
           }
           // The pending question travels to the composer, not to a header pill:
@@ -1298,6 +1445,11 @@ export function PlanChangeRail({
       )}
     </aside>
   );
+}
+
+/** The two refusals of a TURN on a session that waits — said in place, never retried. */
+function isTurnRefusal(code: string): boolean {
+  return code === 'PLAN_REVISION_IN_FLIGHT' || code === 'SESSION_AWAITING_RESUME';
 }
 
 /** The mid-run inputs for the turn at `index` (MOTIR-7998): its matching mailbox
@@ -1350,6 +1502,12 @@ function errorKey(code: string): string {
       return 'error.notDecidable';
     case 'SESSION_UNAVAILABLE':
       return 'error.session';
+    // A turn on a session that waits (MOTIR-7941): a revision already runs, or the session holds
+    // a failed walk that only Resume continues. Said in place; the draft is kept.
+    case 'PLAN_REVISION_IN_FLIGHT':
+      return 'error.revisionInFlight';
+    case 'SESSION_AWAITING_RESUME':
+      return 'error.awaitingResume';
     // The ask job ran and produced nothing at all. NOT the honest "I could not
     // find that" — that is prose the handler returns, and it lands as an ordinary
     // answer bubble with no citations. This is the empty case, and core writes
@@ -1484,6 +1642,9 @@ interface TurnProps {
   afterConfirm: boolean;
   /** The MID-RUN conversation's per-turn inputs (MOTIR-7998). */
   midRun: MidRunTurnProps;
+  /** Try again under a declined outage turn (MOTIR-8141) — null on every turn but the
+   *  latest assistant one. */
+  outageRetry: { onRetry: () => void; disabled: boolean } | null;
 }
 
 /** What a turn needs to draw the mid-run conversation: the mailbox entry its
@@ -1548,6 +1709,7 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
     debugOutcome,
     restartConfirm,
     midRun,
+    outageRetry,
   }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const tr = useTranslations('planningWorkspace.restart');
@@ -1586,6 +1748,11 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
         </div>
       );
     }
+    // THE OUTAGE, DECLINED (MOTIR-8141): a plan-writing turn that wrote nothing because
+    // the code could not be read. The notice alone, never the failure treatment.
+    if (turn.codeUnreadable === 'declined') {
+      return <CodeUnreadableDeclinedTurn retry={outageRetry} />;
+    }
     return (
       <>
         {/* Why a SECOND assistant turn exists, in the passive marker voice. It
@@ -1615,6 +1782,8 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
             ) : undefined
           }
         >
+          {/* An answer given WITHOUT the code carries the notice first (MOTIR-8141). */}
+          {turn.codeUnreadable === 'answered' ? <CodeUnreadableAskNotice /> : null}
           {/* The shipped render path, so a report's `[KEY](motir:<id>)` references
               become the same live `WorkItemRefChip` they are everywhere else —
               never a second inline treatment invented for this surface. THIS IS

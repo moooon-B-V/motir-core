@@ -129,3 +129,17 @@ export interface MigrateIndexStatusDto {
   hasRunning: boolean;
   allIndexed: boolean;
 }
+
+/**
+ * The plan a migrate run's generate step drafted (MOTIR-8254, design
+ * `design/onboarding-migrate/` § Revision 6, Panel 6c) — what the wizard's
+ * "A few questions" step reads to say the plan is ready, how many items it
+ * proposes, and where "Review your plan" goes. `planId` is null until the
+ * generation job has opened its plan; `status` is the plan's own status
+ * (`generating` while it is still being drafted).
+ */
+export interface MigrateGeneratedPlanDto {
+  planId: string | null;
+  status: string | null;
+  itemCount: number;
+}

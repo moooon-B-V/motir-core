@@ -33,6 +33,10 @@ import type { StampComponent } from '@/lib/approvalGates/stamp';
 //     trigger). Both are raw Postgres failures that must not escape, and both
 //     are produced in ONE place: `translateApprovalGateWriteError` in
 //     `approvalGateRepository`. Nothing else constructs them.
+//     `ApprovalGateDeliveryUnreadableError` (Bug MOTIR-8236) is the third, and
+//     the one that is a READ: `workItemDeliveryRepository.listByWorkItemWithChecks`
+//     raises it when a delivery's joins come back NULL under RLS, so the gate and
+//     merge readers never dereference a member this reader cannot see.
 //   * SERVICE tier — the five below. The door applies each before it writes.
 //
 // ⚠️ `ApprovalGateAlreadyDecidedError` and `ApprovalGateDecidedImmutableError`
@@ -54,6 +58,7 @@ import type { StampComponent } from '@/lib/approvalGates/stamp';
 export type ApprovalGateErrorTag =
   // REPOSITORY tier — a database refused the write.
   | 'APPROVAL_GATE_ALREADY_AWAITING'
+  | 'APPROVAL_GATE_DELIVERY_UNREADABLE'
   | 'APPROVAL_GATE_DECIDED_IMMUTABLE'
   // SERVICE tier — the decide door refused the request.
   | 'APPROVAL_GATE_NOT_FOUND'
@@ -134,6 +139,37 @@ export class ApprovalGateAlreadyAwaitingError extends ApprovalGateError {
   ) {
     super(message);
     this.name = 'ApprovalGateAlreadyAwaitingError';
+  }
+}
+
+/**
+ * A card's delivery set holds a member this reader CANNOT SEE (Bug MOTIR-8236), so no
+ * decision may be taken over it.
+ *
+ * A `work_item_delivery` row is admitted on the CARD's workspace; the pull request and
+ * the repository it joins are admitted through `github_repo`'s policies, which key on
+ * the REPOSITORY's workspace and organisation. When the repository stops belonging to
+ * the card's organisation, the row stays visible and its joins come back NULL — a value
+ * the generated type says cannot happen, which every gate and merge reader then
+ * dereferenced (`TypeError: Cannot read properties of null (reading 'checkRuns')`).
+ *
+ * The DISPLAY reads drop such a member (MOTIR-8215). The approval gate and
+ * approve-and-merge must not: a decision over part of the set would merge or approve
+ * pull requests nobody was shown, so they refuse, naming the deliveries that cannot be
+ * read. Raised at the repository's edge, like the two refusals above, because the
+ * repository is the layer whose return type was the lie.
+ */
+export class ApprovalGateDeliveryUnreadableError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_DELIVERY_UNREADABLE' as const;
+  readonly code = 'APPROVAL_GATE_DELIVERY_UNREADABLE' as const;
+  constructor(
+    readonly workItemId: string,
+    readonly deliveryIds: readonly string[],
+  ) {
+    super(
+      `Work item ${workItemId} is delivered by ${deliveryIds.length} pull request(s) this reader cannot see (deliveries ${deliveryIds.join(', ')}); nothing can be decided over a set that is only partly visible.`,
+    );
+    this.name = 'ApprovalGateDeliveryUnreadableError';
   }
 }
 
@@ -321,6 +357,9 @@ export class ApprovalGateStaleSubjectError extends ApprovalGateError {
 
 /** Why {@link ApprovalGateVerbNotOfferedError} refused — the three shapes a verb can miss by. */
 export type VerbNotOfferedReason =
+  /** ANY decision sent to a `planning_session` gate (MOTIR-7913): the person answers by
+   *  SENDING A TURN, and the gate offers no verb at all. */
+  | 'no_verbs_on_planning_session'
   | 'choose_on_other_kind'
   | 'approve_on_choice'
   | 'unknown_option'

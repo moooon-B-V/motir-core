@@ -214,6 +214,7 @@
     "outcomeDeclined": "declined",
     "field_title": "Title",
     "field_priority": "Priority",
+    "field_kind": "Kind",
     "field_type": "Type",
     "field_executor": "Executor",
     "field_storyPoints": "Story points",
@@ -298,6 +299,7 @@
     "liveAnnounce": "{count, plural, one {# item} other {# items}} added to the plan",
     "liveStarting": "Starting…",
     "liveStalled": "Stalled",
+    "liveResuming": "Resuming",
     "progress": {
       "settling": "Settling the conversation",
       "layingChildrenOf": "Laying: {title}",
@@ -320,7 +322,13 @@
       "detailsLastActivity": "Last activity {time}",
       "detailsStalled": "Nothing has been written or reported for {duration}. The plan may have stopped.",
       "pointer": "Follow from Workbench",
-      "pointerSentence": "You can leave — this plan keeps being written. Follow it from Workbench › Planning."
+      "pointerSentence": "You can leave — this plan keeps being written. Follow it from Workbench › Planning.",
+      "resumingReason": "picking up where it stopped",
+      "resumingSecond": "second attempt",
+      "detailsResumingHead": "Picking up where it stopped",
+      "detailsResuming": "The machine writing this plan was lost. Motir started the plan again by itself, and it continues from where it stopped — the items already written are kept and are not written again.",
+      "detailsResumedAt": "Resumed automatically at {time}",
+      "detailsResumedAtSecond": "Resumed automatically at {time} · second attempt"
     },
     "cue": {
       "drafting": "Drafting",
@@ -3423,6 +3431,11 @@
       "displayLanguage": {
         "label": "Display language",
         "desc": "Menus, labels and dates use this language."
+      },
+      "contentLanguage": {
+        "label": "Content language · {org}",
+        "desc": "The language Motir’s planner and agents write {org}’s new work in. Set by the organization’s owners and admins; it doesn’t change your display language.",
+        "changeLink": "Change in Organization settings"
       }
     },
     "profile": {
@@ -5406,6 +5419,15 @@
       "save": "Save changes",
       "saved": "Organization updated",
       "saveError": "Couldn’t save changes",
+      "contentLanguageLabel": "Content language",
+      "contentLanguageHelp": "The language Motir’s planner and agents write this organization’s new work in. It doesn’t change the language Motir’s own menus are shown in — that is each person’s display language.",
+      "contentLanguageChangedBy": "Changed from {from} by {person} on {date}",
+      "contentLanguageFormerMember": "a former member",
+      "contentLanguageConfirmTitle": "Change the content language?",
+      "contentLanguageConfirmBody": "From now on, Motir’s planner and agents write {org}’s new work in <b>{to}</b> instead of <b>{from}</b>.",
+      "contentLanguageConfirmKeeps": "Work that already exists keeps its text and its language. Nothing is translated or rewritten — only new writing changes.",
+      "contentLanguageConfirmRecorded": "The change is recorded with your name and today’s date.",
+      "contentLanguageConfirmCta": "Change to {to}",
       "workspacesSummary": "{count, plural, one {# workspace} other {# workspaces}}",
       "membersSummary": "{count, plural, one {# member} other {# members}}",
       "billing": "Billing & usage",
@@ -6368,7 +6390,7 @@
       "ctaCurrent": "Current plan",
       "ctaTrialUsed": "Trial used",
       "footer": "Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is applied automatically at checkout. Credits are an internal usage allotment; the price shown is the AI plan fee, billed by Stripe to the {org} organization. Your Motir seats are billed separately — manage them on the Motir plan screen.",
-      "seatIncluded": "+ 1 Motir seat · work items uncapped",
+      "seatIncluded": "+ {count, plural, one {# Motir seat} other {# Motir seats}} · work items uncapped",
       "seatNone": "No Motir seat · 250-item cap",
       "seatCustom": "Motir seats included (custom)",
       "customPool": "Custom credit pool",
@@ -6396,6 +6418,14 @@
           "useCase": "Detailed planning, plus heavy agent work.",
           "prev": "Pro",
           "features": ["Headroom for sustained agent work", "Throughput for a busy team"]
+        },
+        "max_x2": {
+          "useCase": "Detailed planning, plus agent work at twice the Max volume.",
+          "prev": "Max",
+          "features": [
+            "Twice the Max monthly credit pool",
+            "Room for several agents running at once"
+          ]
         },
         "enterprise": {
           "useCase": "Custom volume, plus org controls.",
@@ -6619,6 +6649,31 @@
       "logIn": "Log in",
       "signUp": "Sign up"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Understanding your project",
+          "kicker": "What you're building & who for"
+        },
+        "vision": {
+          "label": "What we'll build",
+          "kicker": "The shape of v1"
+        },
+        "feasibility": {
+          "label": "Is it worth building?",
+          "kicker": "A reality check"
+        },
+        "validation": {
+          "label": "Will people want it?",
+          "kicker": "The market"
+        }
+      },
+      "optional": "optional",
+      "readHint": "<b>Read-only.</b> Anything off? Just tell Motir in the chat — it rewrites the write-up for you. Nothing's locked yet.",
+      "openQuestions": "Open questions",
+      "crossLinksLabel": "Other parts of your direction",
+      "related": "Related"
+    },
     "landing": {
       "badge": "Vibe project",
       "headline": "What do you want to build?",
@@ -6651,36 +6706,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "Build with AI",
-      "headingDefault": "How would you like to start?",
+      "headingDefault": "Vibe the project",
       "headingCarried": "Ready when you are",
-      "subheadDefault": "Describe what you want to build. Motir plans it with you, then agents build it.",
+      "subheadDefault": "You bring the idea. Motir delivers the whole project: the plan, the design, the build, the documents, and the full story of how it got there.",
       "subheadCarried": "We kept the idea you started with. Add more if you like, then continue.",
       "howItWorks": "See how Motir works",
-      "ideaLabel": "Your idea",
+      "howItWorksNewTab": "(opens in a new tab)",
+      "ideaLabel": "What are you building?",
       "carriedLabel": "Carried over from your idea",
       "placeholder": "Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. Don't worry about getting it perfect — we'll ask follow-up questions next.",
-      "startCta": "Start planning",
+      "startCta": "Start",
       "continueCta": "Continue with this idea",
-      "hintDefault": "You can start with a rough idea — the discovery chat asks follow-up questions.",
+      "hintDefault": "A few sentences is enough. Motir asks about the rest.",
       "hintCarried": "Add or refine anything before you continue — the discovery chat takes it from here.",
-      "or": "OR",
-      "importTitle": "I have an existing project — migrate it",
-      "importDesc": "Connect your repository and Motir reads your code, then plans on top of what's already there. You can also bring over existing work items from Jira, Linear or Plane.",
-      "importCta": "Migrate"
+      "importTitle": "Already have a project?",
+      "importDesc": "Motir reads your code, tasks and history before changing anything, then plans what's next. You decide what ships.",
+      "importCta": "We can vibe it too"
     },
     "import": {
       "title": "Import an existing project",
-      "body": "Connecting a repository and importing your work from Jira, Linear or Plane is coming soon. For now, you can start a new project with AI.",
+      "body": "Connecting a repository and importing your work from Jira, Linear or Plane is coming soon. For now, you can start a new project from your idea.",
       "back": "Back to start"
     },
     "howItWorks": {
-      "title": "How Motir works",
-      "body": "A full walkthrough — idea → plan → agents build it — is on its way. For now, start with your idea and Motir asks follow-up questions along the way.",
-      "back": "Back to start"
+      "title": "AI does the work. You make the calls.",
+      "body": "You bring the idea. Motir asks until it understands, then makes the plan, the design, the product and the documents step by step, out in the open, and stops wherever a choice is yours.",
+      "back": "Back to start",
+      "sections": {
+        "say": {
+          "title": "Say what you want",
+          "body": "A few sentences or a messy brain dump. Motir asks until it understands."
+        },
+        "watch": {
+          "title": "Watch it take shape",
+          "body": "The plan, the designs, the product and the documents get made step by step, out in the open."
+        },
+        "decide": {
+          "title": "You decide",
+          "body": "Every piece comes back to you to look at, try and approve. You stay in charge of what ships."
+        }
+      },
+      "developers": {
+        "title": "How Motir works, for developers",
+        "body": "Every Motir project runs through the same instrument: the modules are Motir and its agents, and the switches are yours. motir.co walks through it module by module.",
+        "cta": "Read it on motir.co",
+        "newTab": "(opens in a new tab)"
+      }
     },
     "connectGate": {
-      "title": "AI planning isn't configured",
+      "title": "Planning isn't connected yet",
       "body": "Planning runs on Motir Cloud; this self-hosted workspace has no connection yet.",
       "cta": "Connect Motir AI"
     },
@@ -6851,6 +6925,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "Back to roadmap",
+      "breadcrumb": "Breadcrumb",
+      "breadcrumbRoadmap": "Roadmap",
+      "breadcrumbDirection": "Direction",
+      "kicker": "Direction · {tier}",
+      "tierName": {
+        "discovery": "Discovery",
+        "vision": "Vision",
+        "feasibility": "Feasibility",
+        "validation": "Validation"
+      },
+      "openFullPage": "Open full page",
+      "continue": "Continue",
+      "close": "Close",
+      "loading": "Loading the direction doc",
+      "errorTitle": "Couldn't load this doc",
+      "errorBodyRetry": "Something went wrong reading your direction. Try again in a moment.",
+      "errorBodyClose": "Something went wrong reading your direction. Close and try again.",
+      "emptyTitle": "{label} isn't ready yet",
+      "emptyTitleFallback": "This part of your direction isn't ready yet",
+      "emptyBody": "This tier hasn't been drafted for this project. It'll appear here once Motir writes it up in the chat."
+    },
     "heading": "Roadmap",
     "subtitle": "{project}'s roadmap",
     "noProjectTitle": "No project selected",
@@ -6974,13 +7071,16 @@
       "state_error": "The GitHub sign-in couldn't be verified. Please try connecting again.",
       "error": "Something went wrong connecting to GitHub. Please try again.",
       "not_configured": "GitHub isn't configured on this deployment yet.",
-      "installed": "GitHub App installed — Motir can now read your selected repositories, and its app pushes hosted runs’ branches and opens their pull requests.",
+      "installed": "GitHub account linked to this organisation. Repositories it already connected here are kept — add more with Add or remove repositories.",
       "repos_updated": "Repository access updated. Motir reads the repositories you selected on GitHub — there is nothing else to finish here.",
       "install_unbound": "The Motir GitHub App was installed on GitHub, but not from this workspace, so it isn't connected to it yet. Start the install from here to connect it.",
       "install_expired": "The install link expired while you were on GitHub. Nothing is broken — start again from Settings.",
       "install_forbidden": "You are not a member of the workspace this install was started from, so nothing was connected.",
       "install_provider_error": "Motir couldn't reach GitHub to finish connecting the App. Please try again.",
-      "install_error": "We couldn't finish setting up the GitHub App. Please try installing again."
+      "install_error": "We couldn't finish setting up the GitHub App. Please try installing again.",
+      "select_repos": "The Motir GitHub App is installed. Choose which of the account's repositories this organisation connects.",
+      "repo_unavailable": "That repository is already connected to another organisation, so it wasn't added here. Nothing else changed.",
+      "installation_not_accessible": "You can't see that GitHub account on GitHub, so it wasn't linked to this organisation. Nothing was changed."
     },
     "connect": {
       "title": "Connect GitHub",
@@ -6992,14 +7092,14 @@
       },
       "step2": {
         "eyebrow": "Step 2 · Repository access",
-        "title": "Install the Motir GitHub App",
-        "body": "Choose which repositories Motir may read — you pick the exact repos on GitHub's install screen. Motir never sees the rest, and you can change the selection any time."
+        "title": "Link a GitHub account",
+        "body": "Pick an account the Motir GitHub App is installed on — or install it on a new one — then choose which of its repositories this organisation connects. A repository belongs to one organisation at a time."
       },
       "installLink": "Install the Motir GitHub App",
       "cta": "Connect GitHub",
       "foot": "You'll be sent to GitHub to authorize, then to pick repositories.",
       "noInstallHref": "Installing the Motir GitHub App isn’t available on this deployment.",
-      "orgFoot": "You’ll be sent to GitHub to choose which repositories this organisation grants Motir."
+      "orgFoot": "If the Motir GitHub App is already installed on your GitHub account, Motir lists it — you won't install it again."
     },
     "identity": {
       "connectedAs": "GitHub identity · connected as {name}",
@@ -7300,6 +7400,97 @@
       "adminOnly": "Only owners and admins of {org} can connect or disconnect a git host.",
       "subtitleGeneric": "Connect your organisation to GitHub or GitLab once. Every project in the organisation can then work on a connected repository — picking one never indexes it again.",
       "identityAtAccount": "Connect your own account in Settings → Account → Git accounts"
+    },
+    "accounts": {
+      "title": "GitHub accounts",
+      "subtitle": "The accounts {org} connects repositories from. Each repository belongs to one organisation at a time.",
+      "connect": "Connect GitHub",
+      "linked": "Linked",
+      "meta": "{type} · {count, plural, one {# repository} other {# repositories}} connected here",
+      "type": {
+        "organization": "Organisation",
+        "personal": "Personal"
+      },
+      "addOrRemove": "Add or remove repositories",
+      "manageOnGithub": "Manage on GitHub",
+      "disconnect": "Disconnect",
+      "toastTitle": "Connected {count, plural, one {# repository} other {# repositories}} from {account}",
+      "toastBody": "They're listed under Repositories — any project in {org} can now add them."
+    },
+    "picker": {
+      "title": "Connect GitHub",
+      "description": "Choose the GitHub account whose repositories {org} should connect. These are the accounts the Motir GitHub App is installed on that you can see.",
+      "accountsLabel": "Accounts",
+      "accountMeta": "{type} · {count, plural, one {# repository} other {# repositories}} visible to Motir",
+      "notLinked": "Not linked",
+      "linkedHere": "Linked to this organisation",
+      "installOther": "Install on another account",
+      "installOtherMeta": "Opens GitHub to install the Motir GitHub App on an account that doesn't have it yet.",
+      "loadingAccounts": "Loading GitHub accounts…",
+      "accountsError": {
+        "title": "Couldn't reach GitHub",
+        "body": "Motir couldn't load the accounts the Motir GitHub App is installed on. Nothing was changed."
+      },
+      "retry": "Try again",
+      "noAccounts": {
+        "title": "No GitHub account to link yet",
+        "body": "The Motir GitHub App isn't installed on any GitHub account you can see. Install it on one to continue."
+      },
+      "identity": {
+        "title": "Connect your GitHub account first",
+        "body": "Motir lists the GitHub accounts you can see through your own GitHub identity. Connect it in Settings → Account → Git accounts, then come back here.",
+        "action": "Go to Git accounts"
+      },
+      "cancel": "Cancel",
+      "back": "All accounts",
+      "reposTitle": "Choose repositories from {account}",
+      "reposDescription": "Each repository belongs to one organisation at a time. Repositories another organisation already connected can't be added here.",
+      "search": "Search repositories",
+      "selectAll": "Select all available ({count})",
+      "selected": "{count} selected",
+      "rowState": {
+        "selected": "selected",
+        "notSelected": "not selected"
+      },
+      "connectedElsewhere": "Connected to another organisation",
+      "connectedHere": "Connected here",
+      "noMatches": "No repository matches your search.",
+      "hint": "To disconnect a repository from {org}, use Disconnect on its row in Repositories.",
+      "submit": "{count, plural, =0 {Connect repositories} one {Connect # repository} other {Connect # repositories}}",
+      "loadingRepos": "Loading repositories…",
+      "reposError": {
+        "title": "Couldn't load repositories",
+        "body": "Motir couldn't load {account}'s repositories from GitHub. Nothing was changed."
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} was just connected to another organisation and can't be added.",
+        "repo_selection_required": "Choose at least one repository to connect.",
+        "repository_not_visible": "One of these repositories is no longer visible to the Motir GitHub App on GitHub. Refresh the list and try again.",
+        "installation_not_accessible": "You can no longer see {account} on GitHub, so it can't be linked. Choose another account.",
+        "generic": "Something went wrong connecting these repositories. Nothing was changed — try again."
+      },
+      "noneLeft": {
+        "title": "Nothing left to connect from {account}",
+        "body": "Every repository the Motir GitHub App can see on {account} is already connected. A repository belongs to one organisation at a time.",
+        "connectedHere": "Connected to this organisation",
+        "connectedElsewhere": "Connected to other organisations",
+        "hint": "To offer more, give the Motir GitHub App access to other repositories on GitHub, or choose another account.",
+        "chooseAnother": "Choose another account",
+        "manageOnGithub": "Manage repositories on GitHub"
+      }
+    },
+    "accountDisconnect": {
+      "title": "Disconnect {account} from {org}?",
+      "repos": "This removes only {org}'s link to {account} and the {count, plural, one {# repository} other {# repositories}} it connected here:",
+      "projects": "{count, plural, one {# project loses} other {# projects lose}} these repositories:",
+      "noProjects": "No project in {org} uses these repositories yet.",
+      "retention": "The code index Motir built from them is kept for {days} days. Linking the account again and choosing them before then cancels the removal; after that, re-adding one means a full index.",
+      "others": "Other organisations linked to {account} are not affected, and the Motir GitHub App stays installed on GitHub. To uninstall it everywhere, do that on GitHub.",
+      "loading": "Loading what this disconnect affects…",
+      "loadFailed": "Motir couldn't load what disconnecting {account} affects. Nothing was changed — try again.",
+      "failed": "Motir couldn't disconnect {account}. Nothing was changed — try again.",
+      "cancel": "Cancel",
+      "confirm": "Disconnect"
     }
   },
   "aiPlanning": {
@@ -7366,7 +7557,8 @@
         "stale": "Stale",
         "approved": "Approved",
         "declined": "Declined",
-        "closed": "Closed"
+        "closed": "Closed",
+        "waiting": "Waiting to resume"
       },
       "origin": {
         "mcp": "Agent plan",
@@ -7423,7 +7615,9 @@
         "approved": "Approved · {time}"
       },
       "continuedFrom": "Continued from the {when} conversation",
-      "continuedFromAria": "Open the conversation this one continues, closed {when}"
+      "continuedFromAria": "Open the conversation this one continues, closed {when}",
+      "stop": "Stopped at {where} · because {why} · {time}",
+      "stopChange": "Your last change could not be made · {time}"
     }
   },
   "planningWorkspace": {
@@ -7523,7 +7717,9 @@
         "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
         "askSilent": "Nothing came back. Try asking that a different way.",
-        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were."
+        "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were.",
+        "revisionInFlight": "Motir AI is already revising this plan. Your message is kept — send it again once the new version lands.",
+        "awaitingResume": "This session is waiting to be resumed, so it can't take a message yet. Resume it first — your message is kept."
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToAsk": "Answer this instead",
@@ -7604,7 +7800,10 @@
         "layingLine": "Laying out {target}",
         "authoringLine": "Writing {title}",
         "matchingLine": "Checking whether a work item already covers it",
-        "writingLine": "Writing the diagnosis onto {key}"
+        "writingLine": "Writing the diagnosis onto {key}",
+        "resumed": "resume",
+        "resumedLine": "Lost its machine — Motir started it again and it picks up where it stopped",
+        "resumedLineSecond": "Lost its machine again — second automatic attempt, picking up where it stopped"
       },
       "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates.",
       "composerPlaceholderGuide": "Tell Motir AI how the step went…",
@@ -7620,6 +7819,11 @@
         "groupLive": "{step} — in progress",
         "groupFinished": "{step} — finished"
       }
+    },
+    "codeUnreadable": {
+      "planBody": "I can't read your code right now, so I haven't changed your plan. Motir is on it.",
+      "planMarker": "Nothing was written — your plan is unchanged.",
+      "askNotice": "I couldn't read your code for this answer. Treat anything about the code here as unconfirmed."
     },
     "targets": {
       "sectionLabel": "Work items",
@@ -7791,6 +7995,16 @@
         "writing": "A new plan is being written from this conversation.",
         "restored": "Work this plan changes is open again, so this plan is current again. Nothing new was started.",
         "restoredOne": "{workItem} is open again, so this plan is current again. Nothing new was started."
+      },
+      "refusal": {
+        "waitingOn": "Waiting on {name}",
+        "waitingOnSomeone": "Waiting on someone",
+        "why": {
+          "question": "Their planner asked a question and is waiting for the answer.",
+          "reply": "Their conversation is waiting for their reply.",
+          "failed": "Their attempt failed and is waiting for them to resume it."
+        },
+        "openSession": "Open their session"
       }
     },
     "arrival": {
@@ -7915,6 +8129,15 @@
       "earlierOpen": "Open it",
       "disabledStreaming": "Available when this run finishes",
       "swapped": "Your earlier session is closed. A new session is open."
+    },
+    "waiting": {
+      "failedHead": "This attempt stopped",
+      "kept": "The plan so far is kept, and the work items it covers stay at Planning.",
+      "holdReason": "Resume the failed attempt first. Sending is paused while it waits.",
+      "onlyStarter": "Only {name} or a project manager can resume this.",
+      "onlyStarterAnon": "Only the person who started this or a project manager can resume it.",
+      "failureLine": "Your last change to this plan could not be made · {when}",
+      "failureLineAgain": "Your last change could not be made again · {when}"
     }
   },
   "codeHealth": {
@@ -8048,6 +8271,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "Bring your project in",
+      "lede": "Connect Jira, Linear or Plane, and Motir carries your work items over so it can plan what's next from where you are."
+    },
     "chrome": {
       "title": "Import work items",
       "titleInto": "Import work items · into {project}",
@@ -8290,7 +8517,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "Migrate an existing project",
-      "planAi": "Plan with AI"
+      "planAi": "Start from an idea instead"
+    },
+    "hero": {
+      "headline": "Already have a project?",
+      "lede": "Motir reads your code, tasks and history before changing anything, then plans what's next. It runs the project. You decide what ships."
     },
     "rail": {
       "title": "Your migration",
@@ -8316,16 +8547,30 @@
       "eyebrow": "Existing codebase",
       "heading": "Migrate an existing codebase",
       "body": "Connect your repositories, let Motir read the code and derive conventions, then optionally import your backlog and plan.",
-      "projectLine": "The migrate wizard runs for this project.",
-      "cta": "Start"
+      "chooseLabel": "Which project are you migrating?",
+      "current": "Open now",
+      "currentMeta": "The project you have open",
+      "otherMeta": "Switches to this project, then starts",
+      "ctaFor": "Start with {project}"
     },
     "connect": {
       "eyebrow": "Step 1 of 2 · Set up",
       "heading": "Connect the repositories in this project",
-      "body": "Connect your GitHub repositories in workspace settings. Motir reads them through the GitProvider seam to build one code graph across the project.",
-      "cta": "Open GitHub settings",
+      "body": "Motir reads the repositories you connect on GitHub and builds one map of the code across the project.",
       "gitlabNote": "GitLab connect is coming soon.",
-      "next": "I've connected my repos"
+      "checking": "Checking for connected repositories…",
+      "missingTitle": "No repositories connected yet",
+      "missingHint": "Connect GitHub in a new tab. Motir notices the connection by itself, so there is nothing to confirm here.",
+      "connectCta": "Connect GitHub",
+      "newTab": "(opens in a new tab)",
+      "waitingTitle": "Waiting for GitHub",
+      "waitingHint": "Finish connecting in the other tab. Motir checks again when you come back, and every few seconds until then.",
+      "reopenCta": "Open GitHub settings again",
+      "detected": "{count, plural, one {# repository is connected} other {# repositories are connected}}",
+      "detectedHint": "These are the repositories Motir can read. Indexing starts when you continue.",
+      "listLabel": "Connected repositories",
+      "continue": "Continue",
+      "manage": "Manage repositories on GitHub"
     },
     "index": {
       "eyebrow": "Step 2 of 2 · Set up",
@@ -8348,15 +8593,15 @@
       "eyebrow": "Optional · Import & plan",
       "heading": "Bring in your existing backlog",
       "body": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Import it into this project — you'll review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
-      "cta": "Open the importer",
       "reconcile": "When you then generate a plan, Motir reconciles the two so nothing is duplicated.",
       "skip": "Skip import",
-      "next": "I've imported — continue"
+      "bodyInline": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Bring it in right here. You review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
+      "continue": "Continue"
     },
     "decision": {
       "eyebrow": "Set up complete",
       "heading": "Your codebase is in Motir",
-      "body": "Plan your project now with AI, or finish and plan later from the project.",
+      "body": "Motir can plan what's next now, or you can finish and plan later from the project. You decide what ships.",
       "planNow": "Plan my project now",
       "finishLater": "Finish — I'll plan later"
     },
@@ -8365,6 +8610,18 @@
       "heading": "Continue planning",
       "body": "You started planning this project. Continue in the planning workspace.",
       "cta": "Continue planning"
+    },
+    "questions": {
+      "eyebrow": "Your direction",
+      "heading": "A few questions",
+      "body": "Motir has read your code. A few answers about where the project is going, and it drafts your first plan from both.",
+      "progress": "Question {n} of about {total}",
+      "draftingTitle": "Drafting your first plan",
+      "draftingBody": "From your code, your backlog and your answers. You can leave this page; Motir tells you when it is ready.",
+      "draftingWaits": "Waiting for Motir to finish reading your code, then drafting starts by itself.",
+      "readyTitle": "Your first plan is ready",
+      "readyBody": "{count, plural, one {# item is} other {# items are}} drafted for {project}. Nothing is final until you approve it.",
+      "readyCta": "Review your plan"
     }
   },
   "repositorySet": {
@@ -8741,7 +8998,8 @@
         "decision_confirmation": "Confirm decision",
         "plan_approval": "Plan approval",
         "agent_review": "Agent review",
-        "manual_work": "Manual work"
+        "manual_work": "Manual work",
+        "planning_session": "Planning session"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {
@@ -8937,6 +9195,70 @@
         "unknownLine": "No longer being written."
       },
       "ceiling": "Showing your {shown} newest plans being written. The other {rest} are on the <link>Plans page</link>."
+    },
+    "planningSession": {
+      "kind": "Planning session",
+      "waitingToResume": "Waiting to resume",
+      "resume": "Resume",
+      "resuming": "Resuming…",
+      "open": "Open",
+      "failedAt": "failed {when}",
+      "written": "{n} of {m} written",
+      "second": "Second attempt",
+      "stoppedAt": "Stopped at",
+      "because": "because {reason}",
+      "resumingNote": "Picking the walk up where it stopped. This row clears when it starts.",
+      "reopened": "Reopened from To resume · started by you · last active {when}",
+      "openAria": "Open the failed planning session — {sentence}",
+      "couldNot": "Could not start a resume.",
+      "stop": {
+        "lay": "Laying {title}",
+        "layTop": "Laying the project's top level",
+        "author": "Writing {title}",
+        "draft": "Drafting a new item"
+      },
+      "reason": {
+        "rate_limited": "the model was rate-limited",
+        "out_of_credits": "the organization ran out of credits",
+        "model_unavailable": "the AI provider was unavailable",
+        "token_expired": "its connection to the AI provider expired",
+        "prompt_too_large": "the plan's context was too large for the model",
+        "internal": "something went wrong on our side"
+      },
+      "refusal": {
+        "credits": "Your organization is out of Motir AI credits. Add credits, then resume.",
+        "notOwner": "Only the person who started this session or a project manager can resume it.",
+        "ended": "This session ended meanwhile. Open it to see how.",
+        "notFailed": "This session is not waiting to resume any more. Open it to see where it stands.",
+        "notResumable": "The plan this session held can't be continued. Open it to see where it stands.",
+        "unavailable": "Motir AI could not be reached. Try again in a moment."
+      },
+      "left": {
+        "title": "Moved to To resume",
+        "line": "Its attempt failed, and the plan so far is kept. Resume it from To resume.",
+        "link": "Go to To resume",
+        "turn": "Revised in the same conversation — this entry is gone.",
+        "carry": "Carried into a new conversation — this entry is gone.",
+        "decided": "Decided — this entry is gone.",
+        "again": "Planning it again here — this entry is gone."
+      },
+      "form": {
+        "b": {
+          "badChange": "Your last change to this plan could not be made",
+          "stateWaiting": "Waiting for your approval",
+          "stateStale": "Out of date",
+          "nextReply": "The plan is still waiting. Reply to carry on.",
+          "nextAgain": "The work it changes has finished. Plan it again to carry on."
+        },
+        "c": {
+          "ended": "The conversation ended {when}",
+          "gloss": "Your next message carries the plan into a new conversation.",
+          "chip": "Conversation ended"
+        },
+        "walk": {
+          "alsoWaiting": "Also waiting for your approval:"
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12242,6 +12564,10 @@
         "title": "Another decision on this subject is already waiting.",
         "next": "Reload the page to see it."
       },
+      "deliveryUnreadable": {
+        "title": "A pull request on this work item is no longer visible to this organization.",
+        "next": "Nothing was decided. Its repository now belongs to another organization: reconnect it here, or unlink that pull request from the work item."
+      },
       "decidedImmutable": {
         "title": "This decision was already recorded and cannot be changed.",
         "next": "Reload the page. If this keeps happening, it is a defect worth reporting."
@@ -12867,6 +13193,7 @@
         "proceed": "Yes, decline"
       },
       "handoff": {
+        "conversing": "I’m working out what you’re asking for and where it fits in the project. I may ask you a question before I start planning.",
         "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>Waiting on you</link>.",
         "rewriting": "I’m writing a new version of this plan. You can close this — it is under Planning while I work, and it comes back to <link>Waiting on you</link> for you to decide once I’m done."
       }
@@ -12987,6 +13314,15 @@
       },
       "consequence": "Marking done moves {key} to Done.",
       "consequenceMerges": "Marking done records it here. {key} moves to Done when its pull request merges."
+    },
+    "planningSession": {
+      "row": {
+        "kind": "Planning session",
+        "asked": "Motir AI asked:",
+        "waitReply": "Motir AI is waiting for your reply.",
+        "since": "since {when}",
+        "open": "Open the planning session — {sentence}"
+      }
     }
   },
   "approvalOverlay": {

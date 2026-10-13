@@ -27,16 +27,20 @@ import { planRepository } from '@/lib/repositories/planRepository';
 //
 // ⚠️ WHAT DOES NOT TOUCH THE GATE (§11.5c, §11.7), stated so nobody "completes" it:
 //
-//   · A REVISION (`revision: true` append on a `planned` plan). The plan stays
-//     `planned` and the gate is HELD — derived from the revision lease by the handler
+//   · A REVISION. Since Bug MOTIR-8208 a revision RE-OPENS a `planned` plan to
+//     `generating` while it runs and closes it again through `markPlanned` (whose
+//     `raise` is then a no-op) — but it never supersedes the gate: the gate stays
+//     `awaiting` and is HELD, derived from the revision lease by the handler
 //     (`planGateHeldOf`), never written. Superseding would drop the row out of To
 //     approve mid-conversation and re-raise it a moment later as a new question: two
-//     rows in the record for one question.
+//     rows in the record for one question. A revision that dies gives the plan back
+//     to `planned` and calls `raise`, again a no-op over the gate still awaiting.
 //   · A CORRECTION outside a lease (`update_plan_proposal`, `withdraw_plan_proposal`
 //     short of the last). It moves the digest and supersedes nothing — the door's
 //     stamp refuses a reader who read the old version (§11.3).
-//   · THE ABANDONED-PLAN SWEEP (`abandonedPlanService`). It selects and re-checks only
-//     `generating` plans, which have no gate. If it ever widens to `planned` it owes a
+//   · THE ABANDONED-PLAN SWEEP (`abandonedPlanService`). It declines only `generating`
+//     plans no revision re-opened, which have no gate; a re-opened plan it gives back
+//     to `planned`, gate untouched. If it ever declines a `planned` one it owes a
 //     supersede cause of its own under the enum's one-member-per-path rule.
 //   · The EMPTY close. `markPlanned` over zero proposals writes `declined` /
 //     `discarded`: there was never a question.

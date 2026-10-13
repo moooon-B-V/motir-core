@@ -4,7 +4,11 @@ import { searchParamsToEntries } from '@/lib/navigation/searchParamsToEntries';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
-import { MigrateWizard } from './_components/MigrateWizard';
+import { projectsService } from '@/lib/services/projectsService';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
+import { MigrateWizard, type MigrateImporterSeed } from './_components/MigrateWizard';
+import { loadImportWizard } from '../import/_data';
+import { resolveJustConnected } from '../import/_justConnected';
 import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 // The migrate-onboarding wizard (Story 7.15 · MOTIR-934) — the stepped,
@@ -30,10 +34,8 @@ export default async function MigrateOnboardingPage({
   // opened. The return address rides the query the hand-off wrote; `null` means
   // they came in by another door — the entrance, a bookmark, a fresh sign-up —
   // and those keep the destination they always had.
-  const back = onboardingReturnHref(
-    new URLSearchParams(searchParamsToEntries(await searchParams)),
-    'completed',
-  );
+  const sp = await searchParams;
+  const back = onboardingReturnHref(new URLSearchParams(searchParamsToEntries(sp)), 'completed');
 
   const session = await getSession();
   if (!session) redirect('/sign-in?next=%2Fonboarding%2Fmigrate');
@@ -80,20 +82,53 @@ export default async function MigrateOnboardingPage({
   // filed as MOTIR-2092 rather than bolted onto this gate.
   if (ctx.project.onboardingRanAt) redirect(back ?? '/roadmap');
 
-  const run = await migrateOnboardingService.getForProject(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  // One wave: the run, the workspace's projects and the inline importer's data
+  // are independent reads (CLAUDE.md, "Parallelise the reads").
+  //  - Start is a CHOICE of project (MOTIR-8251 Revision 4), and with exactly one
+  //    project there is nothing to choose: the run starts on arrival (Revision
+  //    3). The condition is the workspace's project count — the schema has no
+  //    "created at sign-up" flag, and none is needed.
+  //  - The importer runs INSIDE the Import step (Revision 6), so this page reads
+  //    what the import page reads, for the active project. A run can reach
+  //    Import without a reload, so the read does not wait for that step.
+  const [run, projects, importLoad] = await allSettledOrThrow([
+    migrateOnboardingService.getForProject(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    projectsService.listProjects(ctx.workspaceId, ctx.userId),
+    loadImportWizard({ projectId: ctx.projectId }),
+  ]);
 
   // A completed run means the project's plan was approved — onboarding is done.
   // Land the user on the roadmap, not the wizard.
   if (run?.status === 'completed') redirect(back ?? '/roadmap');
+
+  const importer: MigrateImporterSeed | null =
+    importLoad.kind === 'wizard'
+      ? {
+          project: importLoad.data.project,
+          statuses: importLoad.data.statuses,
+          connected: importLoad.data.connected,
+          existingImportId: importLoad.data.existingImport?.id ?? null,
+        }
+      : null;
 
   return (
     <MigrateWizard
       initialRun={run}
       projectName={ctx.project.name}
       userInitial={(session.user.name?.[0] ?? 'M').toUpperCase()}
+      projects={(run === null ? projects : []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        identifier: p.identifier,
+      }))}
+      activeProjectId={ctx.projectId}
+      autoStart={run === null && projects.length === 1}
+      importer={importer}
+      // A vendor OAuth round trip returns to the Import step (lib/import/oauthReturn.ts).
+      justConnected={resolveJustConnected(sp)}
     />
   );
 }

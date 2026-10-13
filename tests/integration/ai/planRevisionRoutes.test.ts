@@ -1031,7 +1031,7 @@ describe('GET — reading what the plan currently PROPOSES', () => {
 });
 
 describe('POST — the REVISION pass', () => {
-  it('APPENDS to a `planned` plan when it declares itself a revision, and `final` RELEASES', async () => {
+  it('APPENDS to a `planned` plan when it declares itself a revision, and `final` CLOSES it', async () => {
     const fx = await makeWorkItemFixture();
     const { planId } = await plannedPlan(fx, 'job-8');
     await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
@@ -1044,10 +1044,11 @@ describe('POST — the REVISION pass', () => {
       final: true,
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ planId, planned: false, released: true });
+    // The revision re-opened the plan, so its `final` closes it through
+    // `markPlanned` (MOTIR-8208) and reports it truthfully as `planned`.
+    expect(await res.json()).toMatchObject({ planId, planned: true, released: true });
 
-    // The plan is still `planned` — a revision does not open one and does not
-    // close one — and it is decidable again.
+    // The plan is `planned` again — and decidable.
     expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
       'planned',
     );

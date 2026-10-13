@@ -14,7 +14,11 @@ import {
 } from '@/lib/approvalGates/errors';
 import { planSubjectVersion } from '@/lib/approvalGates/planApprovalDigest';
 import { revisionLeaseOf, type RevisionLeaseRow } from '@/lib/planChange/revisionLease';
-import { PlanNotFoundError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
+import {
+  PlanNotFoundError,
+  PlanNotInExpectedStatusError,
+  PlanRevisionInFlightError,
+} from '@/lib/plans/errors';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -128,11 +132,28 @@ export async function readPlanGateHeld(
   return planGateHeldOf(await planRevisionRepository.listByPlan(planId, tx));
 }
 
-/** Refuse anything but a `planned` plan, whatever the digest says (§11.3). */
-function assertPlanned(plan: Plan): void {
+/**
+ * Refuse anything but a `planned` plan, whatever the digest says (§11.3) — and,
+ * FIRST, a plan a revision holds (Bug MOTIR-8208). A revision re-opens its plan to
+ * `generating`, so the status test alone would refuse it as not `planned` and drop
+ * the reason that actually holds: who is revising it, and until when.
+ */
+async function assertDecidable(plan: Plan, tx: Prisma.TransactionClient): Promise<Plan> {
+  // A re-opening revision that LAPSED gives the plan back to `planned` first — the
+  // lease is the authority, and a lapsed lease made the plan decidable before any
+  // revision re-opened anything.
+  if (await (await lazyPlansService()).settleLapsedRevisionWithin(tx, plan.id, plan.workspaceId)) {
+    const restored = await planRepository.findById(plan.id, plan.workspaceId, tx);
+    if (restored) plan = restored;
+  }
+  const held = await readPlanGateHeld(plan.id, tx);
+  if (held) {
+    throw new PlanRevisionInFlightError(plan.id, held.heldBy, new Date(held.expiresAt));
+  }
   if (plan.status !== 'planned') {
     throw new PlanNotInExpectedStatusError(plan.id, plan.status, 'planned');
   }
+  return plan;
 }
 
 /** The onboarding rename's placeholder, when the entrance passed one through the door
@@ -222,9 +243,9 @@ export const planApprovalGateHandler: GateHandler<Plan> = {
   /** APPROVE — materialize the plan exactly as `approvePlan` does (§11.4, §11.5). */
   async approve(args: GateEffectArgs): Promise<GateEffect> {
     const { gate, ctx, tx } = args;
-    const plan = await planOf(gate, tx);
-    if (!plan || !args.prepared) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
-    assertPlanned(plan);
+    const found = await planOf(gate, tx);
+    if (!found || !args.prepared) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
+    const plan = await assertDecidable(found, tx);
     const { afterCommit } = await (
       await lazyPlansService()
     ).approvePlanWithin(tx, plan.id, ctx, args.prepared as ApprovePlanPreparation, {
@@ -237,9 +258,9 @@ export const planApprovalGateHandler: GateHandler<Plan> = {
    *  `planned` (§11.4). The note is optional; see the header. */
   async decline(args: GateEffectArgs): Promise<GateEffect> {
     const { gate, ctx, tx } = args;
-    const plan = await planOf(gate, tx);
-    if (!plan) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
-    assertPlanned(plan);
+    const found = await planOf(gate, tx);
+    if (!found) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
+    const plan = await assertDecidable(found, tx);
     const { afterCommit } = await (await lazyPlansService()).declinePlanWithin(tx, plan.id, ctx);
     return planDecisionEffect(afterCommit);
   },

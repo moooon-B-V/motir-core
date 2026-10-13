@@ -48,6 +48,11 @@ interface PolicyRow {
  * sixth arm written without them would be as expensive and as dangerous as the
  * first cut of these was. A guard that enumerates its subjects only earns its
  * keep if each new subject is added to it.
+ *
+ * SEVEN since MOTIR-8218: `github_installation_org_link_org_read` is the same
+ * shape on the installation ↔ organisation link table, and
+ * `github_installation_linked_org_read` admits an installation to every
+ * organisation LINKED to it through an uncorrelated `IN (SELECT …)` over it.
  */
 const ORG_READ_ARMS = [
   'github_repo_org_read',
@@ -55,6 +60,8 @@ const ORG_READ_ARMS = [
   'github_check_run_org_read',
   'project_repository_org_read',
   'github_installation_org_read',
+  'github_installation_org_link_org_read',
+  'github_installation_linked_org_read',
 ] as const;
 
 async function arms(): Promise<PolicyRow[]> {
@@ -71,7 +78,7 @@ afterAll(async () => {
 });
 
 describe('the org read arms resolve the organisation ONCE, not once per row', () => {
-  it('all five exist', async () => {
+  it('all seven exist', async () => {
     expect((await arms()).map((p) => p.polname).sort()).toEqual([...ORG_READ_ARMS].sort());
   });
 
@@ -95,7 +102,7 @@ describe('the org read arms resolve the organisation ONCE, not once per row', ()
     ).toEqual([]);
   });
 
-  it('all five call the shared resolver', async () => {
+  it('all seven call the shared resolver', async () => {
     for (const p of await arms()) {
       expect(p.qual ?? '', p.polname).toContain('app_caller_organization_id');
     }

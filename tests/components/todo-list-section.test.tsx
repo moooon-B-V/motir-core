@@ -55,6 +55,8 @@ function todo(over: Partial<WorkItemTodoDto> = {}): WorkItemTodoDto {
     id: `todo-${seq}`,
     text: `Step ${seq}`,
     notesMd: null,
+    textLanguage: null,
+    notesLanguage: null,
     commandText: null,
     executor: 'human',
     position: `a${seq}`,

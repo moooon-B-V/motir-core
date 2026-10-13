@@ -3705,6 +3705,38 @@ export const workItemRepository = {
   },
 
   /**
+   * The DIRECT children of a set of parents with each child's KIND, in ONE
+   * round-trip — what a plan `modify` that RE-KINDS its target is judged against
+   * (bug MOTIR-8192): the new kind must legally parent every child the target
+   * keeps, the question `findChildren` answers for one item on the direct
+   * `updateWorkItem` path. Same read-exclusion as {@link findChildren}: ARCHIVED
+   * and TRIAGE children are not children. `workspaceId`-gated. Empty
+   * `parentIds` short-circuits to `[]`.
+   */
+  async findChildKindsForItems(
+    parentIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    Array<{ parentId: string; id: string; identifier: string; title: string; kind: WorkItemKind }>
+  > {
+    if (parentIds.length === 0) return [];
+    const client = tx ?? dbRead;
+    const rows = await client.workItem.findMany({
+      where: { parentId: { in: parentIds }, workspaceId, archivedAt: null, triagedAt: null },
+      select: { id: true, parentId: true, identifier: true, title: true, kind: true },
+      orderBy: { position: 'asc' },
+    });
+    return rows.map((r) => ({
+      parentId: r.parentId as string,
+      id: r.id,
+      identifier: r.identifier,
+      title: r.title,
+      kind: r.kind,
+    }));
+  },
+
+  /**
    * The DIRECT children of a set of parents, in ONE round-trip — the
    * parent→child completion dependency the sprint-finishability check walks
    * (`validate_sprint`). A parent can only be finished once ALL its children

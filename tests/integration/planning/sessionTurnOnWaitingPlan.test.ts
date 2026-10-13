@@ -23,11 +23,12 @@ import { truncateAuthTables } from '../../helpers/db';
 
 let jobSeq = 0;
 const submitJobMock = vi.fn(async () => ({ jobId: `job-${++jobSeq}` }));
+const getJobMock = vi.fn();
 
 vi.mock('@/lib/ai/motirAiClient', () => ({
   submitJob: (...args: unknown[]) => submitJobMock(...(args as [])),
   streamJob: vi.fn(),
-  getJob: vi.fn(),
+  getJob: (...args: unknown[]) => getJobMock(...args),
   getConvention: vi.fn(),
   getCodeAudit: vi.fn(),
   refreshCodeAudit: vi.fn(),
@@ -54,6 +55,8 @@ beforeEach(async () => {
   await truncateAuthTables();
   submitJobMock.mockReset();
   submitJobMock.mockImplementation(async () => ({ jobId: `job-${++jobSeq}` }));
+  getJobMock.mockReset();
+  getJobMock.mockResolvedValue({ status: 'running' });
   fx = await makeWorkItemFixture();
 });
 
@@ -156,6 +159,92 @@ describe('a turn over a PLANNED plan revises it', () => {
         { planId?: string },
       ];
       expect(lastCall[2].planId).toBe(planId);
+    },
+  );
+
+  it(
+    'a turn while THIS conversation’s revision RUNS is QUEUED for it, not refused (MOTIR-8352)',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const target = await card('Re-opened');
+      const { sessionId, planId } = await conversationWithPlannedPlan([target.id]);
+      await say(sessionId, 'Keep the PDF report');
+      const revision = await planChangeSessionsService.submit(me(), { sessionId });
+      // The revision re-opened the plan: it reads `generating` while it is rewritten…
+      expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
+        'generating',
+      );
+      const submitsBefore = submitJobMock.mock.calls.length;
+
+      // …and a rail that is not streaming it (a reload, another tab) sends through
+      // the submit. The turn reaches the RUNNING revision's mailbox instead of being
+      // refused, and the answer is that same job — never a second plan or revision.
+      await say(sessionId, 'And make it weekly');
+      const second = await planChangeSessionsService.submit(me(), { sessionId });
+
+      expect(second.jobId).toBe(revision.jobId);
+      expect(second.planId).toBe(planId);
+      expect(submitJobMock.mock.calls.length).toBe(submitsBefore);
+      expect(await plansIn(sessionId)).toBe(1);
+      expect(await trail(planId, 'revision_started')).toHaveLength(1);
+      const queued = await adminDb.planChangeMailboxEntry.findMany({
+        where: { sessionId, jobId: revision.jobId },
+      });
+      expect(queued.map((e) => [e.kind, e.body, e.disposition])).toEqual([
+        ['turn', 'And make it weekly', 'fold'],
+      ]);
+
+      // A retried send queues the sentence once.
+      await planChangeSessionsService.submit(me(), { sessionId });
+      expect(
+        await adminDb.planChangeMailboxEntry.count({ where: { sessionId, jobId: revision.jobId } }),
+      ).toBe(1);
+    },
+  );
+
+  it(
+    'a turn after the revision ENDED its job, while its lease still holds, is refused PLAN_REVISION_IN_FLIGHT — nothing is left to read it',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const target = await card('Ended');
+      const { sessionId } = await conversationWithPlannedPlan([target.id]);
+      await say(sessionId, 'Keep the PDF report');
+      const revision = await planChangeSessionsService.submit(me(), { sessionId });
+      getJobMock.mockResolvedValue({ status: 'succeeded' });
+
+      await say(sessionId, 'And make it weekly');
+      const second = await planChangeSessionsService
+        .submit(me(), { sessionId })
+        .catch((e: unknown) => e);
+
+      expect((second as { code?: string }).code).toBe('PLAN_REVISION_IN_FLIGHT');
+      expect(await plansIn(sessionId)).toBe(1);
+      expect(
+        await adminDb.planChangeMailboxEntry.count({ where: { sessionId, jobId: revision.jobId } }),
+      ).toBe(0);
+    },
+  );
+
+  it(
+    'a turn while SOMEBODY ELSE holds the plan (an MCP revision hold) is still refused PLAN_REVISION_IN_FLIGHT',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const target = await card('Held elsewhere');
+      const { sessionId, planId } = await conversationWithPlannedPlan([target.id]);
+      // An MCP holder: a lease with no job of this conversation behind it.
+      await plansService.acquireRevisionLease(planId, me(), {
+        source: 'mcp',
+        harness: 'Claude Code',
+        model: null,
+      });
+
+      await say(sessionId, 'Keep the PDF report');
+      const out = await planChangeSessionsService
+        .submit(me(), { sessionId })
+        .catch((e: unknown) => e);
+
+      expect((out as { code?: string }).code).toBe('PLAN_REVISION_IN_FLIGHT');
+      expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(0);
     },
   );
 
@@ -271,11 +360,12 @@ describe('a turn over a PLANNED plan revises it', () => {
       await say(sessionId, 'Change it');
       const out = await planChangeSessionsService.submit(me(), { sessionId });
 
-      await planSessionEndService.endSessionForFailedJob(out.jobId, {
-        userId: fx.ownerId,
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-      });
+      await planSessionEndService.settleFailedJob(
+        out.jobId,
+        { userId: fx.ownerId, workspaceId: fx.workspaceId, projectId: fx.projectId },
+        { status: 'failed' },
+        { readJob: async () => ({ error: { code: 'rate_limited' }, walkStop: null }) },
+      );
 
       const ended = await trail(planId, 'revision_ended');
       expect(ended).toHaveLength(1);
@@ -284,10 +374,11 @@ describe('a turn over a PLANNED plan revises it', () => {
       expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
         'planned',
       );
-      // The session's failure is recorded as before.
-      expect(
-        (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } })).endReason,
-      ).toBe('failed');
+      // The failure is RECORDED on the session, which stays open beside its plan
+      // (MOTIR-7905 · MOTIR-7936) — it is no longer ended.
+      const after = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+      expect(after.endedAt).toBeNull();
+      expect(after.failedJobId).toBe(out.jobId);
     },
   );
 });

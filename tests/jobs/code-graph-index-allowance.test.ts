@@ -10,7 +10,10 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
+import { aiPlanGateService } from '@/lib/services/aiPlanGateService';
+import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
 import {
+  AI_PLAN_INDEX_PAUSE_REASON,
   indexDrawKey,
   indexPauseReasonFor,
   isIndexHardStop,
@@ -450,4 +453,58 @@ describe('the pause bookkeeping NEVER fails a run (MOTIR-4544 top-up)', () => {
     expect(counts).toEqual([0, 0]);
     expect((await repoRow()).indexPausedReason).toBeNull();
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AN ORGANISATION WITH NO PAID AI PLAN (MOTIR-8235).
+//
+// Index admission asks the paid-plan gate first (MOTIR-6909). Its refusal used
+// to be WAITED on like a full lane — sixty attempts over most of an hour — and
+// then thrown as `IndexDispatchFailedError`, which the monitor filed as a
+// production error once per repository. The plan does not change while a run
+// waits, so the refusal is now a recorded pause: asked once, nothing booted, the
+// run a SUCCEEDED no-op, the reason on the repository row.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('no paid AI plan: a recorded pause, never a 60-attempt failure (MOTIR-8235)', () => {
+  it('asks admission ONCE, boots nothing, and succeeds as a no-op carrying the reason', async () => {
+    const plan = vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue(false);
+    const admit = vi.spyOn(codeGraphIndexAdmissionService, 'admit');
+
+    const { result, error } = await runIndex('alw-noplan');
+
+    expect(error).toBeUndefined();
+    expect(result).toEqual({ indexed: false, reason: AI_PLAN_INDEX_PAUSE_REASON });
+    expect(plan).toHaveBeenCalled();
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+
+    const runs = await indexJobRuns();
+    expect(runs.map((r) => r.status)).toEqual(['succeeded']);
+    // No `output.repoRef`: §6's "this repo is indexed" claim is never made.
+    expect(runs[0]!.output).toEqual({ indexed: false, reason: 'paused_index_ai_plan_required' });
+
+    const row = await repoRow();
+    expect(row.indexPausedReason).toBe('paused_index_ai_plan_required');
+    expect(row.indexPausedAt).toBeInstanceOf(Date);
+    // The indexing claim taken before admission is released with the pause.
+    expect(row.indexingRunId).toBeNull();
+    expect(row.indexedHeadSha).toBeNull();
+  }, 30_000);
+
+  it('a paid organisation indexes as before, and lifts that pause', async () => {
+    vi.spyOn(aiPlanGateService, 'hasPaidAiPlan').mockResolvedValue(false);
+    const { installationId, workspaceId } = await runIndex('alw-plan-lift');
+    expect((await repoRow()).indexPausedReason).toBe('paused_index_ai_plan_required');
+
+    vi.mocked(aiPlanGateService.hasPaidAiPlan).mockResolvedValue(true);
+    const engine = new JobTestEngine({ function: codeGraphIndex });
+    const again = await engine.execute({
+      events: [indexEventFor({ installationId, workspaceId, eventId: 'evt-alw-plan-lift-2' })],
+    });
+
+    expect(again.result).toMatchObject({ indexed: true, repoRef: INDEX_REPO_REF });
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect((await repoRow()).indexPausedReason).toBeNull();
+  }, 60_000);
 });

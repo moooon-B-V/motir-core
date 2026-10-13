@@ -377,12 +377,13 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     {
       method: 'createCardlessAwaitingIfAbsent',
       writes: 'awaiting',
-      callers: ['lib/services/planGateService.ts'],
+      // …and the `planning_session` gate's raise (MOTIR-7913), the same card-less shape.
+      callers: ['lib/services/planGateService.ts', 'lib/services/planningSessionGateService.ts'],
     },
     {
       method: 'supersedeAwaitingCardlessBySubject',
       writes: 'superseded',
-      callers: ['lib/services/planGateService.ts'],
+      callers: ['lib/services/planGateService.ts', 'lib/services/planningSessionGateService.ts'],
     },
     // Bug MOTIR-7146: a gate whose SUBJECT no longer resolves is withdrawn when a read
     // observes it — `subject_gone`, product-written, no actor, never a decision. By ID,

@@ -149,9 +149,9 @@ export const pl: McpSummaryTranslations = {
   },
   create_work_item: {
     summary:
-      'Utwórz Epik, Historię, Zadanie, Błąd lub Podzadanie pod elementem nadrzędnym albo w folderze; punkty, oszacowanie, typ, executor, trudność, repozytorium i oznaczenie przestarzałości w jednym wywołaniu.',
+      'Utwórz Epik, Historię, Zadanie, Błąd lub Podzadanie pod elementem nadrzędnym albo w folderze; punkty, oszacowanie, typ, executor, trudność, repozytorium, oznaczenie przestarzałości i język treści w jednym wywołaniu.',
     source:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo, obsolescence mark and content language in one call.',
   },
   delete_comment: {
     summary:

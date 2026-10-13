@@ -224,6 +224,59 @@ describe('a project that switched capture OFF sends `false` on BOTH bypassing en
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// 1b. THE SHARED BUILDER — three submits, one set of always-present fields (MOTIR-7916)
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('submitPlanEditJob, submitRevise and submitResume each send the always-present fields', () => {
+  it('generateExplanations, the consent flag and the onboarding marker, on every one', async () => {
+    const fx = await makeFixture();
+    const c = projectCtx(fx);
+    const planId = await plannedPlan(fx);
+    await projectAiSettingsService.updateAiSettings(
+      fx.project.identifier,
+      { aiRecordPlanningMistakes: false },
+      { userId: fx.ownerId, workspaceId: fx.workspaceId },
+    );
+
+    bodies.length = 0;
+    await aiPlanEditsService.submitAugment('add a thing', c);
+    const edit = bodies[0]!;
+    bodies.length = 0;
+    await aiPlanEditsService.submitRevise(planId, 'split it', c);
+    const revise = bodies[0]!;
+    bodies.length = 0;
+    await aiPlanEditsService.submitResume(planId, 'job-failed', c);
+    const resume = bodies[0]!;
+
+    for (const [name, body] of Object.entries({ edit, revise, resume })) {
+      const context = ctxOf(body);
+      expect(context, `${name} dropped generateExplanations`).toHaveProperty(
+        'generateExplanations',
+      );
+      expect(context[WIRE_KEY], `${name} sent the wrong consent value`).toBe(false);
+      expect(context, `${name} dropped the onboarding marker`).toHaveProperty('onboarding');
+    }
+  });
+
+  it('only the resume carries `resume` on the envelope, and a resume names no planId in the bag', async () => {
+    const fx = await makeFixture();
+    const c = projectCtx(fx);
+    const planId = await plannedPlan(fx);
+
+    bodies.length = 0;
+    await aiPlanEditsService.submitAugment('add a thing', c);
+    const edit = bodies[0]!;
+    bodies.length = 0;
+    await aiPlanEditsService.submitResume(planId, 'job-failed', c);
+    const resume = bodies[0]!;
+
+    expect(edit).not.toHaveProperty('resume');
+    expect(resume['resume']).toEqual({ planId, fromJobId: 'job-failed' });
+    expect(ctxOf(resume)).not.toHaveProperty('planId');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // 2. THE CALL SITES — derived from the source, not from a list of entrances
 // ════════════════════════════════════════════════════════════════════════════
 

@@ -292,10 +292,15 @@ describe('the confirmation gate — kind-parent grammar, re-validated at persist
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
+    const itemId = withItems.items[0]!.id;
     // …then the reviewer re-kinds it to a story, which a bug may NOT parent.
-    // The planner's own check ran BEFORE this edit, which is exactly why the
-    // gate re-validates independently at persist.
-    await plansService.updateProposal(plan.id, withItems.items[0]!.id, { kind: 'story' }, fx.ctx);
+    // Since MOTIR-8192 the edit door refuses that itself…
+    await expect(
+      plansService.updateProposal(plan.id, itemId, { kind: 'story' }, fx.ctx),
+    ).rejects.toBeInstanceOf(PlanGrammarError);
+    // …so the gate is a BACKSTOP for a proposal edited before that check shipped:
+    // seed the broken kind underneath the service, as MOTIR-3539's tests do.
+    await patchProposedFields(itemId, { kind: 'story' });
 
     await expectRejectedWithNoWrite(fx, plan.id, PlanGrammarError);
   });

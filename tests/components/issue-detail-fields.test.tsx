@@ -154,6 +154,7 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
     descriptionMd: '# Hello',
     explanationMd: null,
     explanationSource: 'user_authored',
+    languages: { title: null, description: null, explanation: null },
     status: 'todo',
     priority: 'high',
     assigneeId: 'u_assignee',

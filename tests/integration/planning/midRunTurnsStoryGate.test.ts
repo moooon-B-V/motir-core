@@ -170,6 +170,7 @@ function reviewFor(projectId: string) {
         observedAt: '2026-10-09T10:06:00.000Z',
         authored: 1,
         proposed: 2,
+        autoResume: null,
         steps: [
           {
             sessionKey: 's1',

@@ -93,6 +93,7 @@ export type PersonalDataDelegate =
   | 'publicRequestVote'
   | 'accountDeletionRequest'
   | 'organizationDeletionRequest'
+  | 'organizationContentLanguageChange'
   | 'dataExportRequest'
   | 'projectMembership'
   | 'notification'
@@ -332,6 +333,17 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     basis:
       'Organization deletions the reader scheduled or cancelled — the record names them as the actor.',
     where: (userId) => ({ OR: [{ requestedByUserId: userId }, { cancelledByUserId: userId }] }),
+  },
+  {
+    table: 'organization_content_language_change',
+    model: 'organizationContentLanguageChange',
+    tier: 'identity',
+    // `changed_by_user_id` attributes an organisation's content-language change to
+    // the person who made it (Story MOTIR-7731) — the "this person did this" shape
+    // `organization_deletion_request` is exported for. The table's policy carries an
+    // `app.user_id` arm on that column, so the identity context admits these rows.
+    basis: 'Content-language changes the reader made to an organization.',
+    where: (userId) => ({ changedByUserId: userId }),
   },
   {
     table: 'data_export_request',

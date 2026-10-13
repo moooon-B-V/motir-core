@@ -1,5 +1,9 @@
 import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
+import {
+  FAILED_WAITING_WHERE,
+  UNDECIDED_PLAN_STATUSES,
+} from '@/lib/planChange/sessionWaitingState';
 
 /** A plan the abandoned-plan sweep may act on — every `generating` plan past the
  *  grace, carrying the proposal COUNT read in the same statement.
@@ -36,13 +40,6 @@ export interface GeneratingRequestedByScope {
   workspaceId: string;
   projectIds: readonly string[];
   userId: string;
-  /**
-   * The reader's `planned` plans a REVISION currently holds (Bug MOTIR-7988) —
-   * resolved by the service from the revision lease, which lives on the trail and
-   * so cannot be a column test. They are being written again, so they belong in
-   * the set; omitted or empty, the set is the `generating` plans alone.
-   */
-  revisingPlanIds?: readonly string[];
 }
 
 /**
@@ -66,25 +63,28 @@ export interface RevisionHoldScope {
  *   - `workspaceId` is explicit because RLS is inert under the dev/CI superuser;
  *   - `createdById = userId` excludes a cadence plan by construction (its
  *     requester is null) and a teammate's plan alike — no `origin` test needed;
- *   - `status = 'generating'`, or a `planned` plan named in `revisingPlanIds`
- *     (MOTIR-7988): a plan a revision holds is being written again, and it is
- *     back in the set until the lease ends. A plan proposed, declined or failed
- *     has left the set on the next read.
+ *   - `status = 'generating'`. A plan a revision is rewriting is in the set by
+ *     that test alone: the revision RE-OPENS it (`planned` → `generating`, Bug
+ *     MOTIR-8208) and closes it again when it ends, so the status says what the
+ *     listing used to have to be told (MOTIR-7988's `revisingPlanIds`, retired).
+ *     A plan proposed, declined or failed has left the set on the next read.
  *
  * Served by `@@index([projectId, status, createdAt])` — `generating` is a small
  * tail and `createdById` filters inside it, so no new index is added.
  */
 function generatingRequestedByWhere(scope: GeneratingRequestedByScope): Prisma.PlanWhereInput {
-  const revising = scope.revisingPlanIds ?? [];
   return {
     workspaceId: scope.workspaceId,
     projectId: { in: [...scope.projectIds] },
     createdById: scope.userId,
-    ...(revising.length === 0
-      ? { status: 'generating' }
-      : {
-          OR: [{ status: 'generating' }, { status: 'planned', id: { in: [...revising] } }],
-        }),
+    status: 'generating',
+    // A plan whose SESSION is failed and waiting to resume is NOT being written (MOTIR-7914):
+    // the failure path leaves it `generating` on purpose, and without this carve-out it would
+    // sit here and turn *stalled* — a claim that is false, because it waits for the person to
+    // press Resume. It lives on To resume instead. The definition is imported, never re-spelled
+    // (`lib/planChange/sessionWaitingState.ts`); a plan with NO session (an MCP plan) and a plan
+    // whose session is open and not failed both stay in the set.
+    NOT: { session: { is: { ...FAILED_WAITING_WHERE } } },
   };
 }
 
@@ -145,7 +145,172 @@ export const planRepository = {
    *  (AMENDMENT 23 §2). */
   async countUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.plan.count({
-      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
+    });
+  },
+
+  /** How many of a session's plans WAIT FOR A DECISION (`planned` / `stale`), leaving one
+   *  out — the end arms' guard (MOTIR-7936): a session holding a plan a person is yet to
+   *  decide is never ended by a failure beside it. `excludePlanId` is the plan being
+   *  declined, so it never counts itself. */
+  async countAwaitingDecisionBySession(
+    sessionId: string,
+    excludePlanId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.plan.count({
+      where: {
+        sessionId,
+        status: { in: ['planned', 'stale'] },
+        ...(excludePlanId ? { id: { not: excludePlanId } } : {}),
+      },
+    });
+  },
+
+  /**
+   * `planned` / `stale` plans — and `generating` ones, which a revision may have
+   * RE-OPENED (Bug MOTIR-8208; the service tells the two apart from the trail) — whose
+   * revision lease is HELD BY A JOB THAT STARTED BEFORE
+   * `olderThan` and never ended: the latest `revision_started` row has no later
+   * `revision_ended`. The sweep's backstop for a revision whose failure no relay saw
+   * (MOTIR-7936). Cross-workspace — runs under the system context against the plan and
+   * plan_revision system-read policies.
+   */
+  async listStaleRevisionCandidates(
+    olderThan: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      workspaceId: string;
+      projectId: string;
+      sessionId: string | null;
+      sourceJobId: string | null;
+      status: string;
+      leaseStartedAt: Date;
+    }>
+  > {
+    return tx.$queryRaw`
+      SELECT p."id", p."workspace_id" AS "workspaceId", p."project_id" AS "projectId",
+             p."session_id" AS "sessionId", p."source_job_id" AS "sourceJobId",
+             p."status"::text AS "status",
+             (SELECT max(r."changed_at") FROM "plan_revision" r
+               WHERE r."plan_id" = p."id" AND r."change_kind" = 'revision_started') AS "leaseStartedAt"
+      FROM "plan" p
+      WHERE p."status" IN ('planned', 'stale', 'generating')
+        AND EXISTS (
+          SELECT 1 FROM "plan_revision" s
+          WHERE s."plan_id" = p."id" AND s."change_kind" = 'revision_started'
+            AND s."changed_at" <= ${olderThan}
+            AND NOT EXISTS (
+              SELECT 1 FROM "plan_revision" e
+              WHERE e."plan_id" = p."id" AND e."change_kind" = 'revision_ended'
+                AND (e."changed_at", e."id") > (s."changed_at", s."id")
+            )
+        )
+      ORDER BY p."created_at" ASC, p."id" ASC
+      LIMIT ${limit}
+    `;
+  },
+
+  /**
+   * `generating` plans with an OPEN revision (a `revision_started` with no later
+   * `revision_ended`) whose trail has written nothing since `lapsedBefore` — the
+   * candidates for a re-opening revision whose lease LAPSED (Bug MOTIR-8208). A
+   * superset: a revision of a plan that was already `generating` is here too, and the
+   * service's re-check under the plan lock (`revisionReopenedFrom`) leaves it alone.
+   * Cross-workspace — runs under the system context against the plan and
+   * plan_revision system-read policies.
+   */
+  async listLapsedRevisionCandidates(
+    lapsedBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    return tx.$queryRaw`
+      SELECT p."id", p."workspace_id" AS "workspaceId"
+      FROM "plan" p
+      WHERE p."status" = 'generating'
+        AND EXISTS (
+          SELECT 1 FROM "plan_revision" s
+          WHERE s."plan_id" = p."id" AND s."change_kind" = 'revision_started'
+            AND NOT EXISTS (
+              SELECT 1 FROM "plan_revision" e
+              WHERE e."plan_id" = p."id" AND e."change_kind" = 'revision_ended'
+                AND (e."changed_at", e."id") > (s."changed_at", s."id")
+            )
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "plan_revision" r
+          WHERE r."plan_id" = p."id" AND r."changed_at" > ${lapsedBefore}
+        )
+      ORDER BY p."created_at" ASC, p."id" ASC
+      LIMIT ${limit}
+    `;
+  },
+
+  /**
+   * A session's LATEST plan with what a RESUME checks (MOTIR-7916): its id, status and the
+   * job that wrote it. Read cheaply before a job is spent and again under the locks before
+   * the bind.
+   */
+  async findLatestForResume(sessionId: string, tx: Prisma.TransactionClient) {
+    return tx.plan.findFirst({
+      where: { sessionId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true, status: true, sourceJobId: true, projectId: true },
+    });
+  },
+
+  /**
+   * RE-POINT a `generating` plan at the job that now writes it (MOTIR-7916): the bind a resume
+   * makes. ONE conditional `updateMany` on `status = 'generating'`, so a plan that was decided
+   * or declined meanwhile is left alone and the caller learns it from the return. Also stamps
+   * `lastActivityAt`, so the resumed plan does not read as stalled before its first signal.
+   */
+  async repointSourceJob(
+    planId: string,
+    jobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.plan.updateMany({
+      where: { id: planId, status: 'generating' },
+      data: { sourceJobId: jobId, lastActivityAt: new Date() },
+    });
+    return result.count > 0;
+  },
+
+  /**
+   * The UNDECIDED plans of a PAGE of sessions in ONE read (MOTIR-7939) — what To resume names
+   * a session's form and its waiting plan by, and the plan fields the progress read needs, so
+   * naming a page costs no per-row query. Newest first within a session.
+   */
+  async listUndecidedBySessions(sessionIds: readonly string[], tx: Prisma.TransactionClient) {
+    if (sessionIds.length === 0) return [];
+    return tx.plan.findMany({
+      where: { sessionId: { in: [...sessionIds] }, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
+      select: {
+        id: true,
+        sessionId: true,
+        projectId: true,
+        status: true,
+        title: true,
+        createdAt: true,
+        lastActivityAt: true,
+        authorSource: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** Every UNDECIDED plan of a session with what a turn on a failed session classifies by
+   *  (MOTIR-7938): its id, status, producing job and age. */
+  async listUndecidedBySession(sessionId: string, tx: Prisma.TransactionClient) {
+    return tx.plan.findMany({
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
+      select: { id: true, status: true, title: true, sourceJobId: true, createdAt: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
 
@@ -158,7 +323,7 @@ export const planRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Plan | null> {
     return tx.plan.findFirst({
-      where: { sessionId, status: { in: ['generating', 'planned', 'stale'] } },
+      where: { sessionId, status: { in: [...UNDECIDED_PLAN_STATUSES] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },
@@ -320,7 +485,7 @@ export const planRepository = {
       where: {
         projectId,
         workspaceId,
-        status: { in: ['generating', 'planned', 'stale'] },
+        status: { in: [...UNDECIDED_PLAN_STATUSES] },
         AND: [
           { NOT: { status: 'generating', sourceJobId: null, items: { none: {} } } },
           // ⚠️ A CLOSED plan holding NOTHING is nobody's decision either
@@ -344,90 +509,36 @@ export const planRepository = {
   },
 
   /**
-   * The ABANDONED-PLAN candidates, across workspaces — the discovery read behind
-   * the reconciling sweep (MOTIR-3064; widened to PARTIAL plans by MOTIR-3189).
-   * Returns `generating` plans that have a PRODUCER and are older than
-   * `olderThan`, whatever they hold; the sweep then asks motir-ai what became of
-   * each one's job and terminates only the ones whose producer is provably gone.
+   * Every `generating` plan, STALEST FIRST (`lastActivityAt` ascending, `id` breaking
+   * a tie) — the abandoned-plan sweep's candidates (MOTIR-8132). Cross-workspace, so
+   * it runs under `withSystemContext` against the plan policy's system-read arm.
    *
-   * THIS IS THE OTHER HALF OF {@link findUndecidedByProject}'s exclusion, and the
-   * two are deliberately disjoint. MOTIR-3051 excluded the orphan with NO
-   * producer, because that row can be judged from itself. This one carries a
-   * `sourceJobId`, so it is indistinguishable BY THE ROW from a generation that
-   * is going perfectly well and simply has not appended yet — the answer is not
-   * in the plan table at all, it is in whether the job behind it is still alive.
-   * So the gate cannot widen to cover it, and a sweep that ASKS is the shape
-   * (`docs/decisions/agent-authored-plans.md` AMENDMENT 2).
+   * There is no age predicate any more: the sweep judges every candidate by its
+   * silence (`now - lastActivityAt`) and a job's fast-path answer, and a plan inside
+   * the threshold is still selected because a job that already ENDED is dead at once.
+   * Stalest first means a backlog bigger than `limit` drains the plans most likely to
+   * be dead before the ones still writing. The `(status, createdAt)` index serves the
+   * `status = 'generating'` filter, and the generating set is small.
    *
-   * ⚠️ `olderThan` IS A CORRECTNESS ARGUMENT, NOT A PERFORMANCE ONE. Between
-   * `submitExpand`'s `createPlan` and motir-ai's first append a healthy plan
-   * holds zero items with a live job — the exact shape this read selects. The age
-   * bound is what keeps the sweep out of that window entirely, so it can never
-   * race a submit it would otherwise be asking about milliseconds after it
-   * happened.
-   *
-   * ⚠️ IT IS NO LONGER EMPTY-ONLY (MOTIR-3189), AND THE EXCLUSION DID NOT FALL
-   * FOR BEING TOO CAUTIOUS. MOTIR-3064 AC 5 read: *"a PARTIAL plan is a real
-   * proposal a person can read and decline — the release valve works there, so
-   * nothing here may touch it."* Read, yes. Decline, no: `declinePlan` and
-   * `approvePlan` both re-read under their row lock and refused anything but
-   * `planned`, so there was no path out of `generating` for anyone — not the
-   * sweep, not a person, not a token. The exclusion protected a human decision
-   * the status guard made impossible, and stranded every partial plan
-   * permanently, which is the same harm MOTIR-3064 existed to remove:
-   * `findUndecidedByProject` reads `generating` as UNDECIDED whatever the plan
-   * holds. The valve is real now — `declinePlan` accepts `generating` and
-   * records `discarded` — and this arm covers the plans nobody is coming back
-   * to look at.
-   *
-   * ⚠️ SO THE COUNT IS SELECTED RATHER THAN ASSERTED, AND THE WRITE COMPARES IT.
-   * `items: { none: {} }` was doing two jobs — the filter here, and the write's
-   * did-it-move guard. With the filter gone the guard cannot stay a presence
-   * test, so the candidate carries `_count.items` and the write refuses on a
-   * MISMATCH. `row_moved` then keeps meaning exactly what it always meant (the
-   * row changed between the ask and the act) while a plan that was ALREADY
-   * partial at discovery goes through.
-   *
-   * Cross-workspace, so it runs under `withSystemContext` against the plan
-   * policy's `FOR SELECT` system arm; every write the sweep then makes re-binds
-   * to that row's own workspace. **`plan_item` still needs its arm, and the
-   * direction has REVERSED into the safe one.** Under `items: { none: {} }` an
-   * RLS-hidden proposal made a correlated `NOT EXISTS` vacuously true and
-   * WIDENED the scan onto exactly the rows the exclusion protected. Under
-   * `_count` a hidden proposal reads the count LOW, the write re-counts under
-   * the plan's own workspace context, the two disagree, and the verdict is
-   * `row_moved` — nothing is terminated. A blind spot here now costs a pass
-   * rather than a plan. The arm (MOTIR-3064's migration) stays: the scan reads
-   * `plan_item` either way, and a permanently-`row_moved` sweep is a broken one.
-   *
-   * Bounded by `take` and ordered oldest-first, so a backlog drains over
-   * successive passes rather than in one long transaction.
+   * The candidate carries `_count.items` (MOTIR-3189) so the sweep's write can refuse
+   * on a MISMATCH — a proposal that arrived during the ask. It is also what makes an
+   * RLS blind spot in this cross-workspace scan fail SAFE: a hidden proposal reads the
+   * count low here, the write re-counts under the plan's own workspace, the two
+   * disagree, and nothing is terminated.
    */
   async listAbandonedCandidates(
-    olderThan: Date,
     limit: number,
     tx: Prisma.TransactionClient,
   ): Promise<AbandonedPlanCandidate[]> {
     // ⚠️ NO `sourceJobId` PREDICATE (MOTIR-3236). This clause used to read
-    // `sourceJobId: { not: null }`, and the cast that followed stated that
-    // narrowing in the type system. Both are gone, and the reason is a shape
-    // rather than one more case: the predicate had become a WHITELIST of the
-    // plan shapes the sweep knew how to judge, so each newly-recognised shape
-    // cost a schema-adjacent query edit (MOTIR-3051, MOTIR-3064, MOTIR-3189, and
-    // then the job-less plan this one is about — four defects, one shape).
-    //
-    // So SELECTION is now the cheap, total question — is it `generating` and
-    // past the grace? — and the JUDGEMENT is `classifyAbandonedCandidate`, a
-    // pure decision table with a unit test per arm. `sourceJobId` is an INPUT to
-    // that table now, not a condition of being seen by it; the next unrecognised
-    // shape is a new arm, not a new migration-adjacent predicate.
+    // `sourceJobId: { not: null }`: the predicate had become a WHITELIST of the plan
+    // shapes the sweep knew how to judge. SELECTION is the cheap, total question —
+    // is it `generating`? — and the JUDGEMENT is `classifyAbandonedCandidate`, a pure
+    // decision table with a unit test per arm.
     return tx.plan.findMany({
-      where: {
-        status: 'generating',
-        createdAt: { lte: olderThan },
-      },
+      where: { status: 'generating' },
       include: { _count: { select: { items: true } } },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ lastActivityAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
   },
@@ -629,8 +740,11 @@ export const planRepository = {
   },
 
   /**
-   * The `planned` plans in a scope that wrote a trail row at or after `since`
-   * (Bug MOTIR-7988) — the CANDIDATES for a held revision lease. A lease is held
+   * The `planned` and `generating` plans in a scope that wrote a trail row at or
+   * after `since` (Bug MOTIR-7988) — the CANDIDATES for a held revision lease. A
+   * revision RE-OPENS a `planned` plan to `generating` while it runs (Bug
+   * MOTIR-8208), so a held plan is usually `generating`; `planned` stays in the set
+   * for the moment between a revision's close and its lease's end. A lease is held
    * only while the plan's latest trail row is inside the window, so a plan with no
    * row since `now − window` cannot be held, and this narrows the lease read to the
    * handful of plans anyone touched in the last few minutes. The exact verdict is
@@ -639,7 +753,7 @@ export const planRepository = {
    * Every trail row counts here, internal ones included: a superset is harmless,
    * the exact read excludes them.
    */
-  async findPlannedIdsWithTrailSince(
+  async findRevisablePlanIdsWithTrailSince(
     scope: RevisionHoldScope,
     since: Date,
     tx: Prisma.TransactionClient,
@@ -649,7 +763,7 @@ export const planRepository = {
       where: {
         workspaceId: scope.workspaceId,
         projectId: { in: [...scope.projectIds] },
-        status: 'planned',
+        status: { in: ['planned', 'generating'] },
         ...(scope.createdById ? { createdById: scope.createdById } : {}),
         revisions: { some: { changedAt: { gte: since } } },
       },

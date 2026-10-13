@@ -192,8 +192,12 @@ describe('GUARD · MOTIR-CORE HAS NO OPINION — the one the whole model rests o
     const service = stripped('lib/services/migrateOnboardingService.ts');
     const gate = service.slice(
       service.indexOf('if (!stepIsKept(run, wiring.from))'),
-      service.indexOf('// (1) Kick the current step'),
+      // A CODE anchor: `stripped` drops comments, so a comment anchor is -1 and
+      // the slice would run to the end of the file (it did, once MOTIR-8254 added
+      // a plan reader with an `itemCount` far below the gate).
+      service.indexOf('if (wiring.ensureKicked)'),
     );
+    expect(service.indexOf('if (wiring.ensureKicked)')).toBeGreaterThan(0);
     expect(gate.length).toBeGreaterThan(40);
     expect(gate).not.toMatch(/readOnboardingSubstrate|itemCount|repositoryConnected/);
   });

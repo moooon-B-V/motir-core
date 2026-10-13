@@ -73,6 +73,9 @@ const NEVER_A_REVISION_KEY: Record<string, string> = {
   resumeState:
     'derived from the latest run’s end by resumeStateService, never a revision (MOTIR-7707)',
   resumeRunId: 'written with resumeState by the same derivation, never a revision (MOTIR-7707)',
+  titleLanguage: 'recorded with the title by its writer, never a revision (MOTIR-8096)',
+  descriptionLanguage: 'recorded with the description by its writer, never a revision (MOTIR-8096)',
+  explanationLanguage: 'recorded with the explanation by its writer, never a revision (MOTIR-8096)',
 };
 
 type Disposition = 'shape' | 'ignored' | 'unclassified' | 'both';

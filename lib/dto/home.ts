@@ -2,6 +2,7 @@ import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
 import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
+import type { ToResumeForm } from '@/lib/planChange/toResumeForm';
 import type { ApprovalGateKindDTO, ApprovalGateStateDTO } from '@/lib/dto/approvalGate';
 import type {
   ExecutorDto,
@@ -196,6 +197,14 @@ export interface HomeWorkItemRowDto {
 export interface HomePageDto {
   items: HomeWorkItemRowDto[];
   /**
+   * The reader's FAILED planning sessions that fall in this window (Story MOTIR-7905 ·
+   * MOTIR-7914). Only `listToResume` fills it, and only when the reader has any; every
+   * other tab's page leaves the key absent. A session is not a work item, so it does not
+   * ride `items` — it is windowed WITH the gated runs, ahead of them, so the one `total`
+   * and the shipped pager are unchanged.
+   */
+  planningSessions?: ToResumePlanningSessionDto[];
+  /**
    * The size of the whole SET this page is a window on — the pager's denominator. On
    * To do, In progress and Recently finished it counts GROUPS (a standalone row is a
    * group of one; MOTIR-8015), as it counts entries on To fix and To resume. The strip
@@ -206,6 +215,50 @@ export interface HomePageDto {
   page: number;
   /** The window size — `HOME_PAGE_SIZE` unless the caller narrowed it. */
   pageSize: number;
+}
+
+/**
+ * ONE failed hosted planning session waiting for its owner to Resume it — an entry of the
+ * Workbench's To resume tab (Story MOTIR-7905 · MOTIR-7914). The naming fields are the
+ * shape {@link WorkbenchPlanningRowDto} carries, so the entry composes § 29's plan-naming
+ * forms from the same fields; `failure` is exactly what the session stored, untranslated.
+ */
+export interface ToResumePlanningSessionDto {
+  sessionId: string;
+  /** WHICH of the three forms this entry is (MOTIR-7939; decision MOTIR-7906): a failed walk
+   *  to Resume, a failure beside a plan that waits for approval, or a session that ended
+   *  `failed` before MOTIR-7905 and still holds one. Derived, never stored. */
+  form: ToResumeForm;
+  /** The plan the entry OPENS ON — a `failed_walk`'s `generating` plan, otherwise the waiting
+   *  plan — or null when the session wrote none. */
+  planId: string | null;
+  /** The opened plan's `Plan.title`, as written, or null. */
+  title: string | null;
+  /** The session's most recent `planned` / `stale` plan, or null — the second line of a
+   *  `failed_walk` entry that also holds one, and the entry's own plan on the other two forms. */
+  waitingPlan: { planId: string; title: string | null; status: 'planned' | 'stale' } | null;
+  /** The project's name — the leading line's last fallback. */
+  projectName: string;
+  /** The session's `targetKeys` in stored order, each with the target's title
+   *  (null when the key no longer resolves in the project). */
+  targets: { key: string; title: string | null }[];
+  /** What the session stored, untranslated; null only on `ended_with_waiting_plan`, whose
+   *  failure record was cleared when the session ended. */
+  failure: {
+    /** ISO-8601. */
+    failedAt: string;
+    /** The stable reason code as stored (`rate_limited`, `out_of_credits`, …). */
+    reason: string;
+    stopPhase: 'lay' | 'author' | null;
+    stopRef: string | null;
+    stopTitle: string | null;
+  } | null;
+  /** ISO-8601 — when the session ended; set only on `ended_with_waiting_plan`. */
+  endedAt: string | null;
+  /** The ONE progress derivation's snapshot (design: *N of M written*) — asked only for a
+   *  `failed_walk`; null when the plan has none to give or the form carries none. The entry is
+   *  NOT dropped: the plan is still the person's work. */
+  progress: PlanProgressSnapshot | null;
 }
 
 /**
@@ -282,7 +335,8 @@ export interface HomeTabCountsDto {
    *  (MOTIR-6604). Counted with the list's own slice, so it equals `listToFix().total`. */
   toFix: number;
   /** Waiting on an approval gate — one per gated RUN whose cards wait To resume
-   *  (MOTIR-7707), the same number `listToResume().total` returns. Carved out of In progress. */
+   *  (MOTIR-7707), PLUS one per failed planning session of the reader's (MOTIR-7914): the same
+   *  number `listToResume().total` returns. Carved out of In progress. */
   toResume: number;
   /** Finished inside the rolling window (`HOME_FINISHED_WINDOW_DAYS`). */
   recentlyFinished: number;

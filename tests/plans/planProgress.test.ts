@@ -14,7 +14,7 @@ import {
 import type { PlanStepDto } from '@/lib/dto/plans';
 
 // Story MOTIR-7820 · Subtask MOTIR-7825 — the ONE progress derivation, pure.
-// Every number and phrase key here is the design's (Part XXV §25.9, §25.13).
+// Every number and phrase key here is the design's (Part XXVI §26.9, §26.13).
 
 const T0 = Date.parse('2026-10-08T12:00:00.000Z');
 const at = (ms: number) => new Date(T0 + ms).toISOString();
@@ -47,6 +47,7 @@ function snap(over: Partial<PlanProgressSnapshot> = {}): PlanProgressSnapshot {
     observedAt: at(0),
     authored: 0,
     proposed: 0,
+    autoResume: null,
     steps: [],
     ...over,
   };
@@ -68,11 +69,11 @@ function build(args: {
 }
 
 describe('the threshold and the copy keys are the design’s', () => {
-  it('PLAN_STALLED_AFTER_MS is 15 minutes (§25.9)', () => {
+  it('PLAN_STALLED_AFTER_MS is 15 minutes (§26.9)', () => {
     expect(PLAN_STALLED_AFTER_MS).toBe(900_000);
   });
 
-  it('maps every phrase to its §25.13 copy key', () => {
+  it('maps every phrase to its §26.13 copy key', () => {
     expect(PLAN_STEP_PHRASE_MESSAGE_KEY).toEqual({
       settling: 'planReview.progress.settling',
       layingTopLevel: 'planReview.progress.layingTopLevel',
@@ -142,6 +143,75 @@ describe('readPlanProgress — states and their precedence', () => {
     const early = readPlanProgress(s, T0 - 5_000);
     expect(early.elapsedMs).toBe(0);
     expect(early.sinceActivityMs).toBe(0);
+  });
+});
+
+// Story MOTIR-8301 · MOTIR-8309 — a plan Motir resumed BY ITSELF after its machine was lost
+// reads `resuming` until its new job writes (design Part XXVII §27.2, §27.5, §27.6).
+describe('readPlanProgress — resuming after an automatic resume', () => {
+  const MIN = 60_000;
+  const T = 30 * MIN; // the resume instant, relative to T0
+  const resumed = (
+    over: { steps?: PlanStepDto[]; lastActivityAt?: string; proposed?: number } = {},
+  ) =>
+    buildPlanProgressSnapshot({
+      plan: { createdAt: at(0), lastActivityAt: over.lastActivityAt ?? at(T) },
+      steps: over.steps ?? [],
+      addRows:
+        over.proposed === 0 ? [] : [row({ id: 'p1' }), row({ id: 'p2', hasDescription: false })],
+      committedTitles: new Map(),
+      requireExplanation: true,
+      observedAt: at(T),
+      autoResume: { at: at(T), count: 1 },
+    });
+
+  it('reads resuming from the resume to exactly 15 min after it, then stalled', () => {
+    const s = resumed();
+    expect(readPlanProgress(s, T0 + T + MIN).state).toBe('resuming');
+    expect(readPlanProgress(s, T0 + T + PLAN_STALLED_AFTER_MS).state).toBe('resuming');
+    const past = readPlanProgress(s, T0 + T + PLAN_STALLED_AFTER_MS + 1);
+    expect(past.state).toBe('stalled');
+  });
+
+  it('the lost machine’s step is dropped from the snapshot and is never live', () => {
+    const s = resumed({
+      steps: [step({ sessionKey: 'dead', kind: 'settle', startedAt: at(T - 2 * MIN) })],
+    });
+    expect(s.steps).toEqual([]);
+    const r = readPlanProgress(s, T0 + T + MIN);
+    expect(r.state).toBe('resuming');
+    expect(r.liveSteps).toEqual([]);
+    // …and afterwards too: once the new job writes, it is still not on the list.
+    const later = { ...s, lastActivityAt: at(T + 1_000) };
+    expect(readPlanProgress(later, T0 + T + 2 * MIN).liveSteps).toEqual([]);
+  });
+
+  it('a step started at or after the resume is the new job’s: working, that step live', () => {
+    for (const startedAt of [at(T), at(T + 20_000)]) {
+      const s = resumed({ steps: [step({ sessionKey: 'new', kind: 'settle', startedAt })] });
+      const r = readPlanProgress(s, T0 + T + MIN);
+      expect(r.state).toBe('working');
+      expect(r.liveSteps.map((x) => x.sessionKey)).toEqual(['new']);
+    }
+  });
+
+  it('a write after the resume with no step reads writing — or starting with nothing proposed', () => {
+    expect(readPlanProgress(resumed({ lastActivityAt: at(T + 1_000) }), T0 + T + MIN).state).toBe(
+      'writing',
+    );
+    expect(
+      readPlanProgress(resumed({ lastActivityAt: at(T + 1_000), proposed: 0 }), T0 + T + MIN).state,
+    ).toBe('starting');
+  });
+
+  it('carries the resume on the reading, and none when there was no automatic resume', () => {
+    const s = resumed();
+    expect(readPlanProgress(s, T0 + T + MIN).autoResume).toEqual({ at: at(T), count: 1 });
+    const second = { ...s, autoResume: { at: at(T), count: 2 } };
+    expect(readPlanProgress(second, T0 + T + MIN).autoResume?.count).toBe(2);
+    const plain = build({ steps: [] });
+    expect(plain.autoResume).toBeNull();
+    expect(readPlanProgress(plain, T0).autoResume).toBeNull();
   });
 });
 

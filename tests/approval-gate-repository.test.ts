@@ -138,7 +138,7 @@ describe('approvalGateRepository — THE ROUTING READ', () => {
   it('returns the gates routed to the reader, and counts the same set', async () => {
     const mine = await seedRouted(fx.ownerId);
     await seedRouted(null); // reported by the owner too — the fallback arm
-    const scope = { projectIds: [fx.projectId], userId: fx.ownerId };
+    const scope = { projectIds: [fx.projectId], userId: fx.ownerId, awaitingSessionIds: [] };
 
     const rows = await withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.findAwaitingRoutedTo(scope, { skip: 0, take: 50 }, tx),
@@ -161,7 +161,7 @@ describe('approvalGateRepository — THE ROUTING READ', () => {
     // which is the access leak the service's own note is about.
     const rows = await withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.findAwaitingRoutedTo(
-        { projectIds: [], userId: fx.ownerId },
+        { projectIds: [], userId: fx.ownerId, awaitingSessionIds: [] },
         { skip: 0, take: 50 },
         tx,
       ),
@@ -170,7 +170,10 @@ describe('approvalGateRepository — THE ROUTING READ', () => {
     expect(rows).toEqual([]);
     expect(
       await withWorkspaceContext(fx.ctx, (tx) =>
-        approvalGateRepository.countAwaitingRoutedTo({ projectIds: [], userId: fx.ownerId }, tx),
+        approvalGateRepository.countAwaitingRoutedTo(
+          { projectIds: [], userId: fx.ownerId, awaitingSessionIds: [] },
+          tx,
+        ),
       ),
     ).toBe(0);
   });

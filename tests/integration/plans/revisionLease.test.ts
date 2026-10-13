@@ -62,11 +62,12 @@ describe('the revision LEASE — a decision that races a revision is refused', (
       PlanRevisionInFlightError,
     );
 
-    // NOTHING happened: the plan is still `planned`, its proposal is still a
-    // proposal, and no work item exists. The refusal is thrown inside the
-    // transaction, before `materialize`, so this is the whole point of the card.
+    // NOTHING happened: the plan is still the one the revision re-opened
+    // (`generating`, MOTIR-8208), its proposal is still a proposal, and no work
+    // item exists. The refusal is thrown inside the transaction, before
+    // `materialize`, so this is the whole point of the card.
     const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
-    expect(plan.status).toBe('planned');
+    expect(plan.status).toBe('generating');
     const items = await adminDb.planItem.findMany({ where: { planId } });
     expect(items).toHaveLength(1);
     expect(items[0]!.workItemId).toBeNull();
@@ -100,7 +101,7 @@ describe('the revision LEASE — a decision that races a revision is refused', (
       PlanRevisionInFlightError,
     );
     expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
-      'planned',
+      'generating',
     );
   });
 
@@ -214,7 +215,8 @@ describe('AMENDMENT 10 D1 — a revision may APPEND to a `planned` plan', () => 
     // on the trail, which is what makes a `planned` plan growing legible to the
     // reviewer holding it.
     expect((await trail(planId)).filter((r) => r.changeKind === 'appended')).toHaveLength(2);
-    // And the plan is STILL `planned` — a revision does not re-open one.
+    // And the plan is STILL `planned` — the APPEND does not re-open one; the
+    // revision's lease does (MOTIR-8208), and this append took none.
     expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
       'planned',
     );
@@ -297,7 +299,7 @@ describe('the job-token door — the SECOND caller of two one-caller methods', (
     ).rejects.toMatchObject({ code: 'NO_PLAN_FOR_JOB' });
   });
 
-  it('`final` on a REVISION releases the lease instead of marking the plan planned', async () => {
+  it('`final` on a REVISION closes the plan it re-opened through markPlanned, then releases', async () => {
     const fx = await makeWorkItemFixture();
     const { planId } = await plannedPlan(fx);
     await bindJob(planId, 'job-final-1');
@@ -311,7 +313,9 @@ describe('the job-token door — the SECOND caller of two one-caller methods', (
       actor: AGENT,
     });
 
-    expect(result.planned).toBe(false);
+    // MOTIR-8208: the revision re-opened the plan, so its `final` CLOSES it — the
+    // same close a generation takes — and `planned` is reported truthfully.
+    expect(result.planned).toBe(true);
     expect(result.released).toBe(true);
     expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
       'planned',
@@ -331,5 +335,154 @@ describe('the job-token door — the SECOND caller of two one-caller methods', (
     const edited = (await trail(planId)).filter((r) => r.changeKind === 'edited');
     expect(edited).toHaveLength(1);
     expect(edited[0]!.diff).toMatchObject({ correction: true });
+  });
+});
+
+// Bug MOTIR-8208 — a revision RE-OPENS the plan it rewrites (`planned` →
+// `generating`) and closes it again when it ends, so its steps and notes land, and
+// a failed or abandoned revision never leaves the plan `generating` with nobody
+// writing it.
+describe('MOTIR-8208 — a revision re-opens the plan and closes it again', () => {
+  const gatesOf = (planId: string) =>
+    adminDb.approvalGate.findMany({ where: { kind: 'plan_approval', subjectId: planId } });
+  const statusOf = async (planId: string) =>
+    (await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status;
+
+  it('the acquire moves a `planned` plan to `generating`, records where from, and keeps its gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await plannedPlan(fx);
+    expect((await gatesOf(planId)).map((g) => g.state)).toEqual(['awaiting']);
+
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+
+    expect(await statusOf(planId)).toBe('generating');
+    const started = (await trail(planId)).filter((r) => r.changeKind === 'revision_started');
+    expect(started).toHaveLength(1);
+    expect(started[0]!.diff).toMatchObject({ revision: true, reopenedFrom: 'planned' });
+    // The question is the SAME question: held, never superseded or re-asked.
+    expect((await gatesOf(planId)).map((g) => g.state)).toEqual(['awaiting']);
+  });
+
+  it('a step and a narration land on the revised plan — no PLAN_NOT_GENERATING', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await plannedPlan(fx);
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+
+    const step = await plansService.reportPlanStep(
+      planId,
+      { sessionKey: 'revise-1', targetRef: null, step: 'settle' },
+      fx.ctx,
+    );
+    expect(step.kind).toBe('step');
+    const note = await plansService.reportPlanStep(
+      planId,
+      { sessionKey: 'revise-1', targetRef: null, narration: ['Splitting the story.'] },
+      fx.ctx,
+    );
+    expect(note.kind).toBe('narration');
+  });
+
+  it('the close goes through markPlanned — briefing written, one `planned` row, the gate unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await plannedPlan(fx);
+    const gateBefore = (await gatesOf(planId))[0]!;
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title: 'The split half', kind: 'story' } }],
+      fx.ctx,
+      { revision: true },
+    );
+
+    const closed = await plansService.closeRevision(planId, fx.ctx, AGENT, {
+      summary: 'Split the story in two.',
+    });
+
+    expect(closed).toMatchObject({ planned: true, released: true, status: 'planned' });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.status).toBe('planned');
+    expect(plan.summary).toBe('Split the story in two.');
+    const kinds = (await trail(planId)).map((r) => r.changeKind);
+    expect(kinds.filter((k) => k === 'planned')).toHaveLength(2);
+    expect(kinds.slice(-2)).toEqual(['planned', 'revision_ended']);
+    const gates = await gatesOf(planId);
+    expect(gates).toHaveLength(1);
+    expect(gates[0]!.id).toBe(gateBefore.id);
+    expect(gates[0]!.state).toBe('awaiting');
+    // …and it is decidable again.
+    await plansService.approvePlan(planId, fx.ctx);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(2);
+  });
+
+  it('a revision that withdrew every proposal closes into the empty close — discarded', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await plannedPlan(fx);
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+    await plansService.withdrawProposal(planId, itemId, fx.ctx);
+    expect(await statusOf(planId)).toBe('generating');
+
+    const closed = await plansService.closeRevision(planId, fx.ctx, AGENT);
+    expect(closed.status).toBe('declined');
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.decisionReason).toBe('discarded');
+  });
+
+  it('a release that is not a close (a failure) gives the plan back `planned` as it stands', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await plannedPlan(fx);
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title: 'Half-written', kind: 'task' } }],
+      fx.ctx,
+      { revision: true },
+    );
+
+    const released = await plansService.releaseRevisionLease(planId, fx.ctx, AGENT, {
+      failed: true,
+    });
+
+    expect(released.released).toBe(true);
+    expect(await statusOf(planId)).toBe('planned');
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(2);
+    const ended = (await trail(planId)).filter((r) => r.changeKind === 'revision_ended');
+    expect(ended[0]!.diff).toMatchObject({ failed: true, restoredTo: 'planned' });
+    expect((await gatesOf(planId)).map((g) => g.state)).toEqual(['awaiting']);
+    // The person can ask for the revision again.
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+    expect(await statusOf(planId)).toBe('generating');
+  });
+
+  it('a lease taken AGAIN after it lapsed still gives the plan back when it ends', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await plannedPlan(fx);
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+    for (const row of await trail(planId)) {
+      await adminDb.planRevision.update({
+        where: { id: row.id },
+        data: { changedAt: new Date(row.changedAt.getTime() - PLAN_REVISION_LEASE_MS - 1000) },
+      });
+    }
+    // Retaken over the still-`generating` plan: this start re-opens nothing itself.
+    await plansService.acquireRevisionLease(planId, fx.ctx, AGENT);
+    const starts = (await trail(planId)).filter((r) => r.changeKind === 'revision_started');
+    expect(starts).toHaveLength(2);
+    expect(starts[1]!.diff).not.toHaveProperty('reopenedFrom');
+
+    await plansService.releaseRevisionLease(planId, fx.ctx, AGENT);
+    expect(await statusOf(planId)).toBe('planned');
+  });
+
+  it('a revision of a plan that was still `generating` re-opens and restores nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Still writing', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    await plansService.acquireRevisionLease(plan.id, fx.ctx, AGENT);
+    expect(await statusOf(plan.id)).toBe('generating');
+    await plansService.releaseRevisionLease(plan.id, fx.ctx, AGENT);
+    expect(await statusOf(plan.id)).toBe('generating');
   });
 });

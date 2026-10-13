@@ -72,6 +72,9 @@ export interface RevisionLeaseRow {
   changedAt: Date;
   actorHarness?: string | null;
   actorModel?: string | null;
+  /** The row's diff — read only by {@link revisionReopenedFrom}, so a reader
+   *  that never asks whether a revision RE-OPENED the plan may leave it out. */
+  diff?: unknown;
 }
 
 /** A held lease: who has the plan, and until when. */
@@ -125,4 +128,87 @@ export function revisionLeaseOf(
   // (Part X §4): a harness name is what a reader recognises, and the model is one
   // level of detail below what a refusal needs to say.
   return { heldBy: start.actorHarness ?? null, expiresAt };
+}
+
+/**
+ * WHICH JOB HOLDS THE LEASE, or `null` when nothing holds it or the holder is not a
+ * job (Bug MOTIR-8352). A hosted revision's acquire records its motir-ai job on the
+ * `revision_started` row's diff (`{ jobId }`); an MCP `hold_plan_revision` holder
+ * records none. So a conversation can tell ITS OWN running revision — the one its
+ * `lastJobId` names — from somebody else's, by the lease rather than by the plan's
+ * `sourceJobId`, which an MCP hold leaves pointing at the walk that wrote the plan.
+ *
+ * Same rows and same order contract as {@link revisionLeaseOf}, whose verdict on
+ * whether the lease is held this follows exactly.
+ */
+export function revisionLeaseJobId(rows: readonly RevisionLeaseRow[], now: Date): string | null {
+  if (!revisionLeaseOf(rows, now)) return null;
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    if (rows[i]!.changeKind !== REVISION_STARTED_KIND) continue;
+    const diff = rows[i]!.diff;
+    const jobId =
+      typeof diff === 'object' && diff !== null
+        ? (diff as Record<string, unknown>)['jobId']
+        : undefined;
+    return typeof jobId === 'string' && jobId.length > 0 ? jobId : null;
+  }
+  return null;
+}
+
+/**
+ * The `diff` key a `revision_started` row carries when its acquire RE-OPENED the
+ * plan (Bug MOTIR-8208): the status the plan held before the revision moved it to
+ * `generating`, and so the status the revision's end gives back.
+ */
+export const REVISION_REOPENED_FROM_KEY = 'reopenedFrom';
+
+/**
+ * WHICH STATUS AN OPEN REVISION RE-OPENED THE PLAN FROM, or `null` when the open
+ * revision did not re-open it — or no revision is open (Bug MOTIR-8208).
+ *
+ * A revision of a `planned` plan moves it back to `generating` for as long as the
+ * revision runs, so its steps, notes and appends land on a plan that is being
+ * written, and its end closes the plan again. The status it came from is recorded
+ * on the `revision_started` row that moved it, and this reads it back.
+ *
+ * ⚠️ IT READS THE WHOLE OPEN CHAIN, not only the latest start. A revision whose
+ * lease LAPSED and was taken again writes a second `revision_started` over a plan
+ * that is already `generating`, which carries no `reopenedFrom` of its own — and
+ * the plan still has to go back to `planned` when that second revision ends. So
+ * the walk runs backwards to the first `revision_ended` and answers the
+ * `reopenedFrom` of any start inside that chain.
+ *
+ * Pure, and independent of the lease WINDOW: a lapsed revision that re-opened its
+ * plan still owes the plan its status back, which is exactly the case the failure
+ * settle and the abandoned-plan sweep exist for. `rows` is oldest first, as
+ * {@link revisionLeaseOf} requires.
+ */
+export function revisionReopenedFrom(rows: readonly RevisionLeaseRow[]): 'planned' | null {
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const row = rows[i]!;
+    if (row.changeKind === REVISION_ENDED_KIND) return null;
+    if (row.changeKind !== REVISION_STARTED_KIND) continue;
+    const diff = row.diff;
+    if (
+      diff !== null &&
+      typeof diff === 'object' &&
+      (diff as Record<string, unknown>)[REVISION_REOPENED_FROM_KEY] === 'planned'
+    ) {
+      return 'planned';
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether a plan is `generating` because an open revision RE-OPENED it (Bug
+ * MOTIR-8208) — what tells a plan being REVISED from one being generated for the
+ * first time, for the readers that must treat the two differently (the
+ * abandoned-plan sweep, a conversation's next turn, the failure settle).
+ */
+export function isReopenedByRevision(
+  plan: { status: string },
+  trail: readonly RevisionLeaseRow[],
+): boolean {
+  return plan.status === 'generating' && revisionReopenedFrom(trail) !== null;
 }

@@ -1,3 +1,4 @@
+import type { Locale } from '@/lib/i18n/locales';
 import type { ExecutorDto } from '@/lib/dto/workItems';
 
 /**
@@ -42,6 +43,12 @@ export interface WorkItemTodoDto {
    * *"go to the dashboard"* actionable.
    */
   notesMd: string | null;
+  /**
+   * The language `text` / `notesMd` was written in (Story MOTIR-7731 ·
+   * MOTIR-8096); `null` = none recorded, never read as `en`.
+   */
+  textLanguage: Locale | null;
+  notesLanguage: Locale | null;
   commandText: string | null;
   /**
    * Who this operation is FOR. **Declarative: it authorizes nothing** (ADR §2).

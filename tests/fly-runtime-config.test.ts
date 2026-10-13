@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MONITOR_REFRESH_LEASE_MS } from '@/lib/services/monitorCredentialService';
 
 /**
  * Guards for MOTIR-2387 — the Fly runtime: `output: 'standalone'`, the
@@ -447,6 +448,52 @@ describe('fly.toml — the deployment configuration', () => {
       .filter((line) => !line.trimStart().startsWith('#'))
       .filter((line) => /^\s*(machine_count|count|machines)\s*=/.test(line));
     expect(assignments).toEqual([]);
+  });
+
+  it('gives a stopping machine long enough to store a credential refresh in flight', () => {
+    // MOTIR-8184. Fly SIGKILLs a machine `kill_timeout` after SIGTERM (5 s by
+    // default). The worker's drain waits for an in-flight monitor token refresh
+    // to commit the pair the provider has already rotated — up to the refresh
+    // LEASE. A kill_timeout shorter than that lease lets a deploy land between
+    // Sentry's answer and our write, which is the connection-killing window this
+    // card closed. Fly caps the value at 300 s.
+    const line = flyToml.split('\n').find((l) => /^kill_timeout\s*=/.test(l));
+    expect(line, 'fly.toml must set a top-level kill_timeout').toBeDefined();
+    const match = /"(\d+)s"/.exec(line ?? '');
+    expect(match).not.toBeNull();
+    const seconds = Number(match![1]);
+    expect(seconds * 1000).toBeGreaterThan(MONITOR_REFRESH_LEASE_MS);
+    expect(seconds).toBeLessThanOrEqual(300);
+  });
+
+  it('holds traffic off a new app machine until its readiness check passes', () => {
+    // MOTIR-8231. With no check, Fly's proxy sent a freshly deployed machine
+    // requests the moment its port opened — before any route module had loaded
+    // or any pool connection existed — and its first webhook failed with a P2028
+    // `maxWait` at uptime 15 s. A service check is what the proxy routes on.
+    const block = /^\s*\[\[http_service\.checks\]\]\s*$([\s\S]*?)(?=^\s*\[|(?![\s\S]))/m.exec(
+      flyToml,
+    );
+    expect(block, 'fly.toml must declare an [[http_service.checks]] entry').not.toBeNull();
+    const keys = new Map(
+      (block?.[1] ?? '')
+        .split('\n')
+        .map((l) => /^\s*([a-z_]+)\s*=\s*"([^"]*)"/.exec(l))
+        .filter((m): m is RegExpExecArray => m !== null)
+        .map((m) => [m[1], m[2]] as const),
+    );
+    expect(keys.get('path')).toBe('/api/health/ready');
+    expect(keys.get('method')?.toLowerCase()).toBe('get');
+    for (const key of ['grace_period', 'interval', 'timeout']) {
+      expect(keys.get(key), `${key} is set`).toMatch(/^\d+s$/);
+    }
+    // The check must answer inside its own interval, or two overlap.
+    expect(Number.parseInt(keys.get('timeout')!, 10)).toBeLessThan(
+      Number.parseInt(keys.get('interval')!, 10),
+    );
+    // And the route it names must exist — a check against a 404 keeps every
+    // machine out of rotation for ever.
+    expect(existsSync(join(root, 'app/api/health/ready/route.ts'))).toBe(true);
   });
 });
 

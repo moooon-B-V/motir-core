@@ -214,6 +214,7 @@
     "outcomeDeclined": "已拒绝",
     "field_title": "标题",
     "field_priority": "优先级",
+    "field_kind": "种类",
     "field_type": "类型",
     "field_executor": "执行者",
     "field_storyPoints": "故事点",
@@ -298,6 +299,7 @@
     "liveAnnounce": "计划新增了 {count, plural, other {#}} 个工作项",
     "liveStarting": "正在启动…",
     "liveStalled": "已停滞",
+    "liveResuming": "正在继续",
     "progress": {
       "settling": "正在梳理对话",
       "layingChildrenOf": "正在铺设：{title}",
@@ -320,7 +322,13 @@
       "detailsLastActivity": "最近活动于 {time}",
       "detailsStalled": "已 {duration} 没有写入或报告。计划可能已停止。",
       "pointer": "在工作台跟进",
-      "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。"
+      "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。",
+      "resumingReason": "从中断处接着写",
+      "resumingSecond": "第二次尝试",
+      "detailsResumingHead": "从中断处接着写",
+      "detailsResuming": "编写此计划的机器丢失了。Motir 已自动重新开始此计划，它会从中断处继续 — 已写好的工作项会保留，不会重写。",
+      "detailsResumedAt": "已于 {time} 自动继续",
+      "detailsResumedAtSecond": "已于 {time} 自动继续 · 第二次尝试"
     },
     "cue": {
       "drafting": "起草中",
@@ -3423,6 +3431,11 @@
       "displayLanguage": {
         "label": "显示语言",
         "desc": "菜单、标签和日期将使用此语言。"
+      },
+      "contentLanguage": {
+        "label": "内容语言 · {org}",
+        "desc": "Motir 的规划器和智能体为 {org} 编写新工作时使用的语言。由组织的所有者和管理员设置，不会改变你的显示语言。",
+        "changeLink": "在组织设置中更改"
       }
     },
     "profile": {
@@ -5406,6 +5419,15 @@
       "save": "保存更改",
       "saved": "组织已更新",
       "saveError": "无法保存更改",
+      "contentLanguageLabel": "内容语言",
+      "contentLanguageHelp": "Motir 的规划器和智能体为本组织编写新工作时使用的语言。它不会改变 Motir 自身菜单的显示语言——那是每个人自己的显示语言。",
+      "contentLanguageChangedBy": "由 {person} 于 {date} 从 {from} 更改",
+      "contentLanguageFormerMember": "一位已离开的成员",
+      "contentLanguageConfirmTitle": "更改内容语言？",
+      "contentLanguageConfirmBody": "今后，Motir 的规划器和智能体将用<b>{to}</b>而不是<b>{from}</b>为 {org} 编写新工作。",
+      "contentLanguageConfirmKeeps": "已有的工作保留其文本和语言。不会翻译或改写任何内容——只有新的写作会改变。",
+      "contentLanguageConfirmRecorded": "此次更改会连同你的名字和今天的日期一起记录。",
+      "contentLanguageConfirmCta": "更改为{to}",
       "workspacesSummary": "{count, plural, other {#}} 个工作区",
       "membersSummary": "{count, plural, other {#}} 名成员",
       "billing": "账单与用量",
@@ -6368,7 +6390,7 @@
       "ctaCurrent": "当前套餐",
       "ctaTrialUsed": "试用已用",
       "footer": "当前显示按年计费（Stripe 默认）—— 可在上方切换到按月对比。结账时自动计税。额度是内部用量配额；所示价格为 AI 套餐费用，由 Stripe 向 {org} 组织收取。你的 Motir 席位单独计费 —— 请在 Motir 套餐页面管理。",
-      "seatIncluded": "+ 1 个 Motir 席位 · 工作项不受上限",
+      "seatIncluded": "+ {count, plural, other {# 个 Motir 席位}} · 工作项不受上限",
       "seatNone": "无 Motir 席位 · 250 个工作项上限",
       "seatCustom": "包含 Motir 席位（定制）",
       "customPool": "定制额度池",
@@ -6392,6 +6414,11 @@
           "useCase": "详细规划，外加大量智能体工作。",
           "prev": "Pro",
           "features": ["充足的持续智能体工作余量", "满足繁忙团队的吞吐"]
+        },
+        "max_x2": {
+          "useCase": "详细规划，外加两倍于 Max 的智能体工作。",
+          "prev": "Max",
+          "features": ["两倍于 Max 的每月额度池", "可同时运行多个智能体的余量"]
         },
         "enterprise": {
           "useCase": "定制用量，外加组织管控。",
@@ -6615,6 +6642,31 @@
       "logIn": "登录",
       "signUp": "注册"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "理解你的项目",
+          "kicker": "你在做什么、为谁而做"
+        },
+        "vision": {
+          "label": "我们要做什么",
+          "kicker": "v1 的形态"
+        },
+        "feasibility": {
+          "label": "值得做吗？",
+          "kicker": "现实检验"
+        },
+        "validation": {
+          "label": "会有人想要它吗？",
+          "kicker": "市场"
+        }
+      },
+      "optional": "可选",
+      "readHint": "<b>只读。</b>有哪里不对？在聊天中告诉 Motir 即可，它会为你重写这份文档。目前还没有任何内容被锁定。",
+      "openQuestions": "待解答的疑问",
+      "crossLinksLabel": "方向的其他部分",
+      "related": "相关"
+    },
     "landing": {
       "badge": "氛围项目",
       "headline": "你想做点什么？",
@@ -6647,36 +6699,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "用 AI 构建",
-      "headingDefault": "你想如何开始？",
+      "headingDefault": "Vibe the project",
       "headingCarried": "随时可以开始",
-      "subheadDefault": "描述你想构建的东西。Motir 会与你一起规划，然后由智能体来构建。",
+      "subheadDefault": "你带来想法，Motir 交付整个项目：计划、设计、构建、文档，以及它如何一步步成形的完整经过。",
       "subheadCarried": "我们保留了你最初的想法。如果愿意，可以补充更多，然后继续。",
       "howItWorks": "了解 Motir 的工作方式",
-      "ideaLabel": "你的想法",
+      "howItWorksNewTab": "（在新标签页中打开）",
+      "ideaLabel": "你在构建什么？",
       "carriedLabel": "沿用你的想法",
       "placeholder": "描述你想构建的东西——面向谁、人们应该能做的核心事情，以及任何必备功能。不必追求完美——接下来我们会追问细节。",
-      "startCta": "开始规划",
+      "startCta": "开始",
       "continueCta": "沿用这个想法继续",
-      "hintDefault": "可以从一个粗略的想法开始——发现对话会追问后续问题。",
+      "hintDefault": "几句话就够了，剩下的 Motir 会来问。",
       "hintCarried": "继续之前可以补充或完善任何内容——接下来交给发现对话。",
-      "or": "或",
-      "importTitle": "我已有一个项目——迁移它",
-      "importDesc": "连接你的代码仓库，Motir 会读取你的代码，然后在现有基础上进行规划。你也可以从 Jira、Linear 或 Plane 导入现有的工作项。",
-      "importCta": "迁移"
+      "importTitle": "已经有项目了？",
+      "importDesc": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。发布什么由你决定。",
+      "importCta": "它同样可以 Vibe"
     },
     "import": {
       "title": "导入现有项目",
-      "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以用 AI 开始一个新项目。",
+      "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以从你的想法开始一个新项目。",
       "back": "返回开始"
     },
     "howItWorks": {
-      "title": "Motir 的工作方式",
-      "body": "完整的流程介绍——想法 → 规划 → 由智能体构建——即将推出。目前，你可以先从你的想法开始，Motir 会在过程中追问后续问题。",
-      "back": "返回开始"
+      "title": "AI 做事，你拍板。",
+      "body": "你带来想法。Motir 会一直问，直到弄明白为止，然后一步步做出计划、设计、产品和文档，全程公开透明，凡是该由你做的选择，它都会停下。",
+      "back": "返回开始",
+      "sections": {
+        "say": {
+          "title": "说出你想要什么",
+          "body": "几句话，或者一堆零散的想法都行。Motir 会一直问，直到弄明白为止。"
+        },
+        "watch": {
+          "title": "看着它逐步成形",
+          "body": "计划、设计、产品和文档一步步做出来，全程公开透明。"
+        },
+        "decide": {
+          "title": "你来决定",
+          "body": "每一部分都会回到你手上，供你查看、试用和批准。发布什么，始终由你掌控。"
+        }
+      },
+      "developers": {
+        "title": "面向开发者：Motir 的工作方式",
+        "body": "每个 Motir 项目都运行在同一台“仪器”上：模块是 Motir 和它的智能体，开关属于你。motir.co 会逐个模块讲清楚。",
+        "cta": "到 motir.co 阅读",
+        "newTab": "（在新标签页中打开）"
+      }
     },
     "connectGate": {
-      "title": "尚未配置 AI 规划",
+      "title": "规划尚未连接",
       "body": "规划运行在 Motir Cloud 上；此自托管工作区尚未建立连接。",
       "cta": "连接 Motir AI"
     },
@@ -6847,6 +6918,29 @@
     }
   },
   "roadmap": {
+    "directionDoc": {
+      "backToRoadmap": "返回路线图",
+      "breadcrumb": "面包屑导航",
+      "breadcrumbRoadmap": "路线图",
+      "breadcrumbDirection": "方向",
+      "kicker": "方向 · {tier}",
+      "tierName": {
+        "discovery": "探索",
+        "vision": "愿景",
+        "feasibility": "可行性",
+        "validation": "市场验证"
+      },
+      "openFullPage": "打开完整页面",
+      "continue": "继续",
+      "close": "关闭",
+      "loading": "正在加载方向文档",
+      "errorTitle": "无法加载此文档",
+      "errorBodyRetry": "读取你的方向时出错了。请稍后重试。",
+      "errorBodyClose": "读取你的方向时出错了。请关闭后重试。",
+      "emptyTitle": "{label}尚未就绪",
+      "emptyTitleFallback": "你的方向的这一部分尚未就绪",
+      "emptyBody": "此项目尚未起草这一层级。Motir 在聊天中写好后，它会显示在这里。"
+    },
     "heading": "路线图",
     "subtitle": "{project} 的路线图",
     "noProjectTitle": "未选择项目",
@@ -6970,13 +7064,16 @@
       "state_error": "无法验证此次 GitHub 登录，请重新尝试连接。",
       "error": "连接 GitHub 时出错，请重试。",
       "not_configured": "此部署尚未配置 GitHub。",
-      "installed": "已安装 Motir GitHub App——Motir 现在可以读取你选择的仓库，它的应用会推送托管运行的分支并打开它们的拉取请求。",
+      "installed": "GitHub 账户已关联到本组织。它此前在这里连接的仓库会保留——可通过“添加或移除仓库”添加更多。",
       "repos_updated": "仓库访问权限已更新。Motir会读取你在GitHub上选择的仓库，无需再做任何操作。",
       "install_unbound": "已在GitHub上安装Motir GitHub App，但安装并非从此工作区发起，因此尚未与它关联。请从这里重新发起安装以完成关联。",
       "install_expired": "安装链接在你停留GitHub期间已过期。并未出错——请从设置中重新开始。",
       "install_forbidden": "你不是发起此次安装的工作区的成员，因此未连接任何内容。",
       "install_provider_error": "Motir无法连接GitHub以完成App的关联，请重试。",
-      "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。"
+      "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。",
+      "select_repos": "已安装 Motir GitHub App。请选择此组织要连接该账号下的哪些仓库。",
+      "repo_unavailable": "该仓库已连接到另一个组织，因此未在此添加。其他内容均未更改。",
+      "installation_not_accessible": "你在 GitHub 上看不到该 GitHub 账号，因此它未关联到此组织。未做任何更改。"
     },
     "connect": {
       "title": "连接 GitHub",
@@ -6988,14 +7085,14 @@
       },
       "step2": {
         "eyebrow": "第 2 步 · 仓库访问",
-        "title": "安装 Motir GitHub App",
-        "body": "选择 Motir 可读取的仓库——你在 GitHub 的安装页面上挑选具体仓库。Motir 不会看到其余仓库，你可以随时更改所选范围。"
+        "title": "关联 GitHub 账户",
+        "body": "选择一个已安装 Motir GitHub App 的账户——或在新账户上安装——然后选择本组织要连接其中哪些仓库。一个仓库同一时间只属于一个组织。"
       },
       "installLink": "安装 Motir GitHub App",
       "cta": "连接 GitHub",
       "foot": "你将被带到 GitHub 进行授权，然后选择仓库。",
       "noInstallHref": "此部署不支持安装 Motir GitHub App。",
-      "orgFoot": "你将前往 GitHub，选择本组织授予 Motir 的仓库。"
+      "orgFoot": "如果你的 GitHub 账户已安装 Motir GitHub App，Motir 会将其列出——无需再次安装。"
     },
     "identity": {
       "connectedAs": "GitHub 身份 · 已连接为 {name}",
@@ -7296,6 +7393,97 @@
       "adminOnly": "只有 {org} 的所有者和管理员可以连接或断开 Git 平台。",
       "subtitleGeneric": "将你的组织与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
       "identityAtAccount": "在「设置 → 账户 → Git 账户」中连接你自己的账户"
+    },
+    "accounts": {
+      "title": "GitHub 账户",
+      "subtitle": "{org} 从这些账户连接仓库。每个仓库同一时间只属于一个组织。",
+      "connect": "连接 GitHub",
+      "linked": "已关联",
+      "meta": "{type} · 在此连接了 {count, plural, other {# 个仓库}}",
+      "type": {
+        "organization": "组织",
+        "personal": "个人"
+      },
+      "addOrRemove": "添加或移除仓库",
+      "manageOnGithub": "在 GitHub 上管理",
+      "disconnect": "断开连接",
+      "toastTitle": "已从 {account} 连接 {count, plural, other {# 个仓库}}",
+      "toastBody": "它们已列在“仓库”下——{org} 中的任何项目现在都可以添加它们。"
+    },
+    "picker": {
+      "title": "连接 GitHub",
+      "description": "选择 {org} 要连接其仓库的 GitHub 账户。以下是可见的、已安装 Motir GitHub App 的账户。",
+      "accountsLabel": "账户",
+      "accountMeta": "{type} · Motir 可见 {count, plural, other {# 个仓库}}",
+      "notLinked": "未关联",
+      "linkedHere": "已关联到本组织",
+      "installOther": "安装到其他账户",
+      "installOtherMeta": "打开 GitHub，在尚未安装 Motir GitHub App 的账户上安装它。",
+      "loadingAccounts": "正在加载 GitHub 账户…",
+      "accountsError": {
+        "title": "无法连接 GitHub",
+        "body": "Motir 无法加载已安装 Motir GitHub App 的账户。未做任何更改。"
+      },
+      "retry": "重试",
+      "noAccounts": {
+        "title": "暂无可关联的 GitHub 账户",
+        "body": "可见的 GitHub 账户均未安装 Motir GitHub App。请在其中一个账户上安装后继续。"
+      },
+      "identity": {
+        "title": "请先连接你的 GitHub 账户",
+        "body": "Motir 通过你自己的 GitHub 身份列出你可见的 GitHub 账户。请在“设置 → 账户 → Git 账户”中连接，然后返回此处。",
+        "action": "前往 Git 账户"
+      },
+      "cancel": "取消",
+      "back": "所有账户",
+      "reposTitle": "从 {account} 选择仓库",
+      "reposDescription": "每个仓库同一时间只属于一个组织。其他组织已连接的仓库无法在此添加。",
+      "search": "搜索仓库",
+      "selectAll": "全选可用项（{count}）",
+      "selected": "已选 {count} 个",
+      "rowState": {
+        "selected": "已选择",
+        "notSelected": "未选择"
+      },
+      "connectedElsewhere": "已连接到其他组织",
+      "connectedHere": "已在此连接",
+      "noMatches": "没有与搜索匹配的仓库。",
+      "hint": "要从 {org} 断开某个仓库，请在“仓库”中该仓库所在行使用“断开连接”。",
+      "submit": "{count, plural, =0 {连接仓库} other {连接 # 个仓库}}",
+      "loadingRepos": "正在加载仓库…",
+      "reposError": {
+        "title": "无法加载仓库",
+        "body": "Motir 无法从 GitHub 加载 {account} 的仓库。未做任何更改。"
+      },
+      "errors": {
+        "repository_owned_by_other_organization": "{repo} 刚刚被连接到其他组织，无法添加。",
+        "repo_selection_required": "请至少选择一个要连接的仓库。",
+        "repository_not_visible": "其中一个仓库在 GitHub 上已对 Motir GitHub App 不可见。请刷新列表后重试。",
+        "installation_not_accessible": "你在 GitHub 上已无法看到 {account}，因此无法关联。请选择其他账户。",
+        "generic": "连接这些仓库时出错。未做任何更改——请重试。"
+      },
+      "noneLeft": {
+        "title": "{account} 中已没有可连接的仓库",
+        "body": "Motir GitHub App 在 {account} 上可见的所有仓库均已连接。一个仓库同一时间只属于一个组织。",
+        "connectedHere": "已连接到本组织",
+        "connectedElsewhere": "已连接到其他组织",
+        "hint": "如需提供更多仓库，请在 GitHub 上授予 Motir GitHub App 访问其他仓库的权限，或选择其他账户。",
+        "chooseAnother": "选择其他账户",
+        "manageOnGithub": "在 GitHub 上管理仓库"
+      }
+    },
+    "accountDisconnect": {
+      "title": "要将 {account} 从 {org} 断开连接吗？",
+      "repos": "此操作仅移除 {org} 与 {account} 的关联，以及它在此连接的 {count, plural, other {# 个仓库}}：",
+      "projects": "{count, plural, other {# 个项目}}将失去这些仓库：",
+      "noProjects": "{org} 中暂无项目使用这些仓库。",
+      "retention": "Motir 基于这些仓库构建的代码索引会保留 {days} 天。在此之前重新关联该账户并选择它们，即可取消移除；超过期限后，重新添加仓库需要完整重建索引。",
+      "others": "关联到 {account} 的其他组织不受影响，Motir GitHub App 仍安装在 GitHub 上。如需在所有位置卸载，请在 GitHub 上操作。",
+      "loading": "正在加载此次断开连接的影响范围…",
+      "loadFailed": "Motir 无法加载断开 {account} 的影响范围。未做任何更改——请重试。",
+      "failed": "Motir 无法断开 {account}。未做任何更改——请重试。",
+      "cancel": "取消",
+      "confirm": "断开连接"
     }
   },
   "aiPlanning": {
@@ -7362,7 +7550,8 @@
         "stale": "已过时",
         "approved": "已批准",
         "declined": "已拒绝",
-        "closed": "已关闭"
+        "closed": "已关闭",
+        "waiting": "待继续"
       },
       "origin": {
         "mcp": "智能体计划",
@@ -7419,7 +7608,9 @@
         "approved": "已批准 · {time}"
       },
       "continuedFrom": "接续 {when} 的对话",
-      "continuedFromAria": "打开此对话所接续的对话（{when} 关闭）"
+      "continuedFromAria": "打开此对话所接续的对话（{when} 关闭）",
+      "stop": "停在{where} · 原因：{why} · {time}",
+      "stopChange": "你上一次的修改没能完成 · {time}"
     }
   },
   "planningWorkspace": {
@@ -7519,7 +7710,9 @@
         "notDecidable": "这份计划暂时还不能决定 —— 还没有人被请求批准它。没有任何改动。",
         "discard": "放弃没有成功。提案仍在画布上等待处理 —— 可以重试，或直接批准。",
         "askSilent": "没有得到任何回复。换一种方式提问试试。",
-        "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。"
+        "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。",
+        "revisionInFlight": "Motir AI 正在修订这个计划。你的消息已保留——新版本完成后请再发送一次。",
+        "awaitingResume": "此会话正在等待继续，暂时无法接收消息。请先继续它——你的消息已保留。"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToAsk": "改为回答这个问题",
@@ -7600,7 +7793,10 @@
         "layingLine": "正在铺开 {target}",
         "authoringLine": "正在撰写 {title}",
         "matchingLine": "正在检查是否已有工作项覆盖它",
-        "writingLine": "正在把诊断写入 {key}"
+        "writingLine": "正在把诊断写入 {key}",
+        "resumed": "继续",
+        "resumedLine": "机器丢失 — Motir 已重新开始，从中断处继续",
+        "resumedLineSecond": "机器再次丢失 — 第二次自动尝试，从中断处继续"
       },
       "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
       "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…",
@@ -7616,6 +7812,11 @@
         "groupLive": "{step} —— 进行中",
         "groupFinished": "{step} —— 已完成"
       }
+    },
+    "codeUnreadable": {
+      "planBody": "我现在无法读取你的代码，因此没有更改你的计划。Motir 正在处理。",
+      "planMarker": "未写入任何内容——你的计划保持不变。",
+      "askNotice": "这次回答中我无法读取你的代码。请将此处关于代码的任何内容视为未经确认。"
     },
     "targets": {
       "sectionLabel": "工作项",
@@ -7787,6 +7988,16 @@
         "writing": "正在基于本对话撰写新计划。",
         "restored": "此计划涉及的工作已重新打开，此计划重新生效。没有开始新计划。",
         "restoredOne": "{workItem} 已重新打开，此计划重新生效。没有开始新计划。"
+      },
+      "refusal": {
+        "waitingOn": "正在等待 {name}",
+        "waitingOnSomeone": "正在等待某人",
+        "why": {
+          "question": "对方的规划器提出了疑问，正在等回答。",
+          "reply": "对方的对话正在等回复。",
+          "failed": "对方的尝试失败了，正在等对方继续。"
+        },
+        "openSession": "打开他们的会话"
       }
     },
     "arrival": {
@@ -7911,6 +8122,15 @@
       "earlierOpen": "打开",
       "disabledStreaming": "本次运行结束后可用",
       "swapped": "你之前的会话已关闭，新的会话已打开。"
+    },
+    "waiting": {
+      "failedHead": "这次尝试停下了",
+      "kept": "已写的计划得到保留，它涉及的工作项仍处于规划中。",
+      "holdReason": "请先继续这次失败的尝试。在它等待期间，发送已暂停。",
+      "onlyStarter": "只有 {name} 或项目管理员可以继续它。",
+      "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
+      "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
+      "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
     }
   },
   "codeHealth": {
@@ -8044,6 +8264,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "把你的项目带进来",
+      "lede": "连接 Jira、Linear 或 Plane，Motir 会把你的工作项迁移过来，从你现在的进度出发规划下一步。"
+    },
     "chrome": {
       "title": "导入工作项",
       "titleInto": "导入工作项 · 到 {project}",
@@ -8286,7 +8510,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "迁移现有项目",
-      "planAi": "用 AI 规划"
+      "planAi": "改为从一个想法开始"
+    },
+    "hero": {
+      "headline": "已经有项目了？",
+      "lede": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。它负责运转项目，由你决定发布什么。"
     },
     "rail": {
       "title": "你的迁移",
@@ -8312,16 +8540,30 @@
       "eyebrow": "现有代码库",
       "heading": "迁移现有代码库",
       "body": "连接你的仓库，让 Motir 读取代码并推导编码规范，然后可选地导入你的工作项并规划。",
-      "projectLine": "迁移向导将针对此项目运行。",
-      "cta": "开始"
+      "chooseLabel": "你要迁移哪个项目？",
+      "current": "当前打开",
+      "currentMeta": "你当前打开的项目",
+      "otherMeta": "先切换到这个项目，再开始",
+      "ctaFor": "从 {project} 开始"
     },
     "connect": {
       "eyebrow": "第 1 步，共 2 步 · 设置",
       "heading": "连接本项目中的仓库",
-      "body": "在工作区设置中连接你的 GitHub 仓库。Motir 通过 GitProvider 接口读取它们，为整个项目构建一个代码图谱。",
-      "cta": "打开 GitHub 设置",
+      "body": "Motir 会读取你在 GitHub 上连接的仓库，为整个项目建立一张代码地图。",
       "gitlabNote": "GitLab 连接即将推出。",
-      "next": "我已连接仓库"
+      "checking": "正在检查已连接的仓库……",
+      "missingTitle": "还没有连接任何仓库",
+      "missingHint": "在新标签页中连接 GitHub。Motir 会自己发现连接，这里不需要你确认。",
+      "connectCta": "连接 GitHub",
+      "newTab": "（在新标签页中打开）",
+      "waitingTitle": "正在等待 GitHub",
+      "waitingHint": "在另一个标签页中完成连接。你回来时 Motir 会再检查一次，在那之前每隔几秒检查一次。",
+      "reopenCta": "再次打开 GitHub 设置",
+      "detected": "{count, plural, other {已连接 # 个仓库}}",
+      "detectedHint": "这些是 Motir 可以读取的仓库。继续后开始索引。",
+      "listLabel": "已连接的仓库",
+      "continue": "继续",
+      "manage": "在 GitHub 上管理仓库"
     },
     "index": {
       "eyebrow": "第 2 步，共 2 步 · 设置",
@@ -8344,16 +8586,16 @@
       "eyebrow": "可选 · 导入与规划",
       "heading": "导入你现有的工作项",
       "body": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作项？将其导入此项目——写入前你会先预览试运行结果。没有工作项要导入则跳过。",
-      "cta": "打开导入器",
       "reconcile": "随后生成计划时，Motir 会核对二者，避免重复。",
       "skip": "跳过导入",
-      "next": "已导入——继续"
+      "bodyInline": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作？就在这里导入。写入任何内容之前，你会先查看试运行预览。没有工作项要导入就跳过这一步。",
+      "continue": "继续"
     },
     "decision": {
       "eyebrow": "设置完成",
       "heading": "你的代码库已进入 Motir",
-      "body": "现在用 AI 规划项目，或先完成稍后从项目中规划。",
-      "planNow": "现在用 AI 规划",
+      "body": "Motir 现在就可以规划下一步，你也可以先完成，稍后从项目中规划。发布什么由你决定。",
+      "planNow": "现在规划我的项目",
       "finishLater": "完成——稍后规划"
     },
     "resume": {
@@ -8361,6 +8603,18 @@
       "heading": "继续规划",
       "body": "你已开始规划此项目。在规划工作区中继续。",
       "cta": "继续规划"
+    },
+    "questions": {
+      "eyebrow": "你的方向",
+      "heading": "几个问题",
+      "body": "Motir 已经读过你的代码。回答几个关于项目走向的问题，它会结合两者起草你的第一份计划。",
+      "progress": "第 {n} 个问题，共约 {total} 个",
+      "draftingTitle": "正在起草你的第一份计划",
+      "draftingBody": "依据你的代码、工作项和回答。你可以离开这个页面，计划好了 Motir 会告诉你。",
+      "draftingWaits": "正在等待 Motir 读完你的代码，之后会自动开始起草。",
+      "readyTitle": "你的第一份计划已就绪",
+      "readyBody": "已为 {project} 起草 {count, plural, other {# 个工作项}}。在你批准之前，一切都不是最终的。",
+      "readyCta": "查看你的计划"
     }
   },
   "repositorySet": {
@@ -8737,7 +8991,8 @@
         "decision_confirmation": "确认决策",
         "plan_approval": "计划审批",
         "agent_review": "智能体审查",
-        "manual_work": "人工工作"
+        "manual_work": "人工工作",
+        "planning_session": "规划会话"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {
@@ -8933,6 +9188,70 @@
         "unknownLine": "已不再编写。"
       },
       "ceiling": "显示你最新的 {shown} 个正在编写的计划。其余 {rest} 个请见<link>计划页</link>。"
+    },
+    "planningSession": {
+      "kind": "规划会话",
+      "waitingToResume": "待继续",
+      "resume": "继续",
+      "resuming": "正在继续…",
+      "open": "打开",
+      "failedAt": "{when}失败",
+      "written": "已写 {n}/{m}",
+      "second": "第二次尝试",
+      "stoppedAt": "停在",
+      "because": "原因：{reason}",
+      "resumingNote": "正在从停下的地方接着写。开始后此行会消失。",
+      "reopened": "从“待继续”重新打开 · 由你发起 · 最近活动 {when}",
+      "openAria": "打开失败的规划会话——{sentence}",
+      "couldNot": "无法开始继续。",
+      "stop": {
+        "lay": "正在铺设「{title}」",
+        "layTop": "正在铺设项目顶层",
+        "author": "正在撰写「{title}」",
+        "draft": "正在起草新条目"
+      },
+      "reason": {
+        "rate_limited": "请求过于频繁",
+        "out_of_credits": "组织的额度已用完",
+        "model_unavailable": "AI 服务暂不可用",
+        "token_expired": "与 AI 服务的连接已过期",
+        "prompt_too_large": "计划的上下文对该模型来说过大",
+        "internal": "我们这边出了故障"
+      },
+      "refusal": {
+        "credits": "你的组织的 Motir AI 额度已用完。补充额度后再继续。",
+        "notOwner": "只有发起此会话的人或项目管理员可以继续它。",
+        "ended": "此会话已在此期间结束。打开它查看经过。",
+        "notFailed": "此会话已不再等待继续。打开它查看当前状态。",
+        "notResumable": "此会话持有的计划无法继续。打开它查看当前状态。",
+        "unavailable": "无法连接 Motir AI。请稍后再试。"
+      },
+      "left": {
+        "title": "已移到“待继续”",
+        "line": "其尝试失败了，目前写好的计划已保留。请在“待继续”中继续。",
+        "link": "前往“待继续”",
+        "turn": "已在同一对话中修订——此条目将消失。",
+        "carry": "已带入新的对话——此条目将消失。",
+        "decided": "已决定——此条目将消失。",
+        "again": "正在此处重新规划——此条目将消失。"
+      },
+      "form": {
+        "b": {
+          "badChange": "你上一次对这个计划的修改没能完成",
+          "stateWaiting": "等待你的批准",
+          "stateStale": "已过期",
+          "nextReply": "计划仍在等你。回复即可继续。",
+          "nextAgain": "它所改动的工作已经完成。重新规划即可继续。"
+        },
+        "c": {
+          "ended": "对话已于{when}结束",
+          "gloss": "你的下一条消息会把计划带进一个新的对话。",
+          "chip": "对话已结束"
+        },
+        "walk": {
+          "alsoWaiting": "另有一个计划在等你批准："
+        }
+      }
     }
   },
   "approvalRecords": {
@@ -12238,6 +12557,10 @@
         "title": "该对象已有另一项决定在等待处理。",
         "next": "请重新加载页面以查看。"
       },
+      "deliveryUnreadable": {
+        "title": "此工作项上的某个拉取请求对本组织已不可见。",
+        "next": "未做出任何决定。其仓库现已属于另一个组织：请在此重新连接该仓库，或解除该拉取请求与工作项的关联。"
+      },
       "decidedImmutable": {
         "title": "该决定已记录，无法更改。",
         "next": "请重新加载页面。若反复出现，这是一个值得上报的缺陷。"
@@ -12863,6 +13186,7 @@
         "proceed": "确认拒绝"
       },
       "handoff": {
+        "conversing": "我正在弄清你想要什么，以及它在项目中的位置。开始规划之前，我可能会先问你一件事。",
         "writing": "信息已经足够——我现在开始编写计划。你不必在这里等待：随时可以关闭，计划完成后会在<link>等你处理</link>中等你。",
         "rewriting": "我正在编写此计划的新版本。你可以关闭这里——我编写期间它在“规划”中，等我完成后它会回到<link>等你处理</link>，由你决定。"
       }
@@ -12983,6 +13307,15 @@
       },
       "consequence": "标记完成后 {key} 将移至“已完成”。",
       "consequenceMerges": "标记完成会在此记录。{key} 会在其拉取请求合并后移至“已完成”。"
+    },
+    "planningSession": {
+      "row": {
+        "kind": "规划会话",
+        "asked": "Motir AI 提问：",
+        "waitReply": "Motir AI 在等你回复。",
+        "since": "自 {when}",
+        "open": "打开规划会话——{sentence}"
+      }
     }
   },
   "approvalOverlay": {

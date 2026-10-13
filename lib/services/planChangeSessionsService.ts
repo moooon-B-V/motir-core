@@ -5,6 +5,7 @@ import {
   type PlanChangeTurn,
   type PlanChangeTurnConfirm,
   type PlanChangeTurnIntent,
+  type PlanChangeTurnOutage,
   type PlanChangeTurnRole,
 } from '@/generated/prisma/client';
 
@@ -27,7 +28,12 @@ import {
   toSeedAncestors,
 } from '@/lib/planning/refusalSeed';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { CLEARED_FAILURE_COLUMNS, sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import {
+  clearWithin as clearPlanningSessionGate,
+  raiseWithin as raisePlanningSessionGate,
+} from '@/lib/services/planningSessionGateService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
@@ -38,6 +44,7 @@ import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
+import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
@@ -54,7 +61,10 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
 import { plansService } from '@/lib/services/plansService';
 import { planDriftService } from '@/lib/services/planDriftService';
-import { PlanNotFoundError } from '@/lib/plans/errors';
+import { PlanNotFoundError, PlanRevisionInFlightError } from '@/lib/plans/errors';
+import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
+import { classifyFailedWaitingTurn } from '@/lib/planChange/failedWaitingTurn';
+import { isReopenedByRevision, revisionLeaseJobId } from '@/lib/planChange/revisionLease';
 import {
   classifySessionTurn,
   type SessionTurnPlanStatus,
@@ -64,6 +74,7 @@ import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
   GuideSessionNotPlannableError,
+  PlanSessionAwaitingResumeError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -74,6 +85,8 @@ import {
   PlanSessionPlanDecidedError,
   PlanSessionPlanStaleError,
   PlanAgainNotAvailableError,
+  PlanChangeJobNotRunningError,
+  PlanChangeMailboxJobMismatchError,
   type StalePlanFinishedCard,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
@@ -149,6 +162,48 @@ export function buildAccumulatedIntent(
     `Apply the ACCUMULATED intent below as a single change — later turns REFINE ` +
     `earlier ones rather than replacing them:\n\n${numbered}`
   );
+}
+
+/**
+ * What a FAILED-WAITING session's overlay needs beyond the failure itself (Story MOTIR-7905 ·
+ * MOTIR-7918 / MOTIR-7941): whether its way on is **Resume** — the SAME classifier the submit
+ * door refuses by (`classifyFailedWaitingTurn`'s `refuse_resume`), so the screen and the server
+ * cannot disagree — and the plan that WAITS for the person beside it, if any (the session's most
+ * recent undecided `planned` / `stale` plan).
+ */
+async function failedWaitingShape(
+  row: PlanChangeSession,
+  pctx: ProjectContext,
+  tx?: Prisma.TransactionClient,
+): Promise<{
+  resumable: boolean;
+  waitingPlan: { planId: string; title: string | null; status: 'planned' | 'stale' } | null;
+}> {
+  const read = async (t: Prisma.TransactionClient) => {
+    const rows = await planRepository.listUndecidedBySession(row.id, t);
+    return Promise.all(rows.map(async (p) => ({ ...p, status: await turnStatusOf(p, t) })));
+  };
+  const plans = tx
+    ? await read(tx)
+    : await withWorkspaceServiceContext(pctx.workspaceId, (t) => read(t));
+  const resumable =
+    classifyFailedWaitingTurn({
+      waiting: sessionWaitingState(row),
+      failedJobId: row.failedJobId,
+      plans,
+    }) === 'refuse_resume';
+  // Newest first (the repository orders it): the first `planned` / `stale` one waits.
+  const waiting = plans.find((p) => p.status === 'planned' || p.status === 'stale');
+  return {
+    resumable,
+    waitingPlan: waiting
+      ? {
+          planId: waiting.id,
+          title: waiting.title,
+          status: waiting.status === 'stale' ? 'stale' : 'planned',
+        }
+      : null,
+  };
 }
 
 /** Read a session's thread and map both to the DTO. `tx` joins a surrounding
@@ -237,7 +292,20 @@ async function toDto(
       ? await readAnswerEntry(tx)
       : await withWorkspaceServiceContext(pctx.workspaceId, readAnswerEntry)
     : undefined;
-  const dto = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
+  const base = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
+  // Whether a FAILED session holds a half-written walk that only Resume continues, or a plan
+  // that waits for the person (situation 2) — the one fact the overlay needs to choose between
+  // Resume + a held composer and the decide door + an open one (MOTIR-7918 / MOTIR-7941). The
+  // SAME classifier the submit door refuses by, so the screen and the server cannot disagree.
+  const shape = base.failure ? await failedWaitingShape(row, pctx, tx) : null;
+  const dto = shape
+    ? {
+        ...base,
+        failure: { ...base.failure!, resumable: shape.resumable },
+        failedWaiting: shape.resumable ? ('resume' as const) : ('reply' as const),
+        waitingPlan: shape.waitingPlan,
+      }
+    : base;
   if (fileIds.length === 0) return dto;
   const attachments = await attachmentsService.listViewableByIds(fileIds, {
     userId: pctx.userId,
@@ -336,6 +404,12 @@ async function resolveCitations(
   return wanted.filter((c) => known.has(c));
 }
 
+/** The English the declined-turn row carries (MOTIR-8141): never rendered — the rail draws
+ *  `planningWorkspace.codeUnreadable.planBody` from the stored face — but every turn row
+ *  has a non-empty body, and this is the one a reader of the table meets. */
+const DECLINED_FALLBACK_BODY =
+  "I can't read your code right now, so I haven't changed your plan. Motir is on it.";
+
 interface AppendTurn {
   role: PlanChangeTurnRole;
   body: string;
@@ -355,6 +429,8 @@ interface AppendTurn {
   attachmentIds?: readonly string[];
   /** The fixed confirm core writes on an `assistant` turn (MOTIR-7649). */
   confirm?: PlanChangeTurnConfirm | null;
+  /** How a code-graph outage touched this `assistant` turn (MOTIR-8141). */
+  codeUnreadable?: PlanChangeTurnOutage | null;
   /** The planning job running when a `user` turn was typed (MOTIR-7996). */
   runJobId?: string | null;
   /** The text an `assistant` answer offered to forward (MOTIR-7996). */
@@ -426,6 +502,7 @@ async function appendWithin(
         anchorKey: turn.anchorKey ?? null,
         attachmentIds: turn.attachmentIds ? [...turn.attachmentIds] : [],
         confirm: turn.confirm ?? null,
+        codeUnreadable: turn.codeUnreadable ?? null,
         runJobId: turn.runJobId ?? null,
         forwardOffer: turn.forwardOffer ?? null,
         // An explicit literal, not the DTO itself: Prisma's JSON input wants an
@@ -458,6 +535,20 @@ async function appendWithin(
       throw new PlanChangeTurnConflictError(fresh.id, seq);
     }
     throw err;
+  }
+
+  // THE PLANNING-SESSION GATE (MOTIR-7913), in the same transaction as the turn and under
+  // the same lock: the person's turn ANSWERS whatever the session was waiting on, and a
+  // planner turn that carries a question starts the wait. A reply wait is raised by the
+  // sweep, never here.
+  if (turn.role === 'user') {
+    await clearPlanningSessionGate(tx, { sessionId: fresh.id, cause: 'answered' });
+  } else if (turn.role === 'assistant' && turn.question) {
+    await raisePlanningSessionGate(tx, {
+      sessionId: fresh.id,
+      workspaceId: pctx.workspaceId,
+      cause: 'question',
+    });
   }
 
   // Every turn is activity, so it pushes the session's lease out too (AMENDMENT
@@ -789,6 +880,25 @@ function undecidedStatus(status: string): SessionTurnPlanStatus {
   return status === 'planned' || status === 'stale' ? status : 'generating';
 }
 
+/**
+ * An undecided plan's status AS A CONVERSATION'S NEXT TURN READS IT (Bug MOTIR-8208).
+ * A revision RE-OPENS the plan it rewrites (`planned` → `generating`), but that plan
+ * is still the one the conversation waits on: a turn sent while the revision runs
+ * REVISES it — and is refused `PLAN_REVISION_IN_FLIGHT` until the revision ends —
+ * rather than opening a second plan beside it as a `generating` plan would. So a
+ * re-opened plan reads as `planned` here, exactly as it read before the re-open.
+ */
+async function turnStatusOf(
+  plan: { id: string; status: string },
+  tx: Prisma.TransactionClient,
+): Promise<SessionTurnPlanStatus> {
+  const status = undecidedStatus(plan.status);
+  if (status !== 'generating') return status;
+  return isReopenedByRevision(plan, await planRevisionRepository.listByPlan(plan.id, tx))
+    ? 'planned'
+    : status;
+}
+
 /** The revision actor a conversation's revise records — Motir's own planner. */
 const SESSION_REVISION_ACTOR = { source: 'native', harness: 'Motir', model: null } as const;
 
@@ -804,9 +914,115 @@ async function reviseWithinSession(
   pctx: ProjectContext,
   planId: string,
   intent: string,
+  opts: { clearFailure?: boolean } = {},
 ): Promise<PlanChangeSubmitResultDto> {
   const { jobId } = await aiPlanEditsService.submitSessionRevision(planId, intent, pctx);
-  return bindRevisionTurn(session, pctx, { jobId, planId }, intent);
+  return bindRevisionTurn(session, pctx, { jobId, planId }, intent, opts);
+}
+
+/**
+ * REVISE the waiting plan — or, when THIS conversation's own revision is still
+ * running on it, QUEUE the turn for that revision (Bug MOTIR-8352).
+ *
+ * A rail that is streaming the revision sends a turn to the job's mailbox and
+ * never reaches the submit. A rail that is NOT streaming it — after a reload, in
+ * another tab, an MCP caller of `submit_plan_session` — has no job in hand, so its
+ * send arrives here, and the revision's lease refused it `PLAN_REVISION_IN_FLIGHT`:
+ * the person's correction was lost while the run that should read it was still
+ * working. Now the refusal stands only when the hold is somebody else's (another
+ * session's job, an MCP `hold_plan_revision` holder): the lease's job is this
+ * session's `lastJobId` and it is still running ⇒ the newest user turn goes into
+ * its mailbox, and the answer is that RUNNING job, so the caller streams the
+ * revision its turn now rides on rather than a second one.
+ *
+ * The mailbox key is derived from the turn (`queued-revision:<turnId>`), so a
+ * retried submit queues the sentence once.
+ */
+async function reviseOrQueueWithinSession(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  planId: string,
+  intent: string,
+  turns: ReadonlyArray<Pick<PlanChangeTurn, 'id' | 'role' | 'body' | 'jobId' | 'seq'>>,
+  opts: { clearFailure?: boolean } = {},
+): Promise<PlanChangeSubmitResultDto> {
+  try {
+    return await reviseWithinSession(session, pctx, planId, intent, opts);
+  } catch (err) {
+    if (!(err instanceof PlanRevisionInFlightError)) throw err;
+    const queued = await queueForRunningRevision(session, pctx, planId, turns);
+    if (!queued) throw err;
+    return queued;
+  }
+}
+
+/**
+ * The newest user turn, queued on the session's RUNNING revision of `planId` — or
+ * null when the revision holding the plan is not this session's, has nothing new
+ * to carry, or has ended in the meantime (the caller then keeps its refusal).
+ */
+async function queueForRunningRevision(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  planId: string,
+  turns: ReadonlyArray<Pick<PlanChangeTurn, 'id' | 'role' | 'body' | 'jobId' | 'seq'>>,
+): Promise<PlanChangeSubmitResultDto | null> {
+  const jobId = session.lastJobId;
+  if (!jobId) return null;
+  // The job the lease names (a hosted acquire records it); a hold whose job is not
+  // this session's last submission — or that has no job at all, an MCP holder — is
+  // somebody else's revision.
+  const holder = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) =>
+    revisionLeaseJobId(await planRevisionRepository.listByPlan(planId, tx), new Date()),
+  );
+  if (holder !== jobId) return null;
+  const turn = latestTurnAfterSubmission(turns, jobId);
+  if (!turn) return null;
+  try {
+    await planChangeMailboxService.attachTurn(
+      {
+        jobId,
+        sessionId: session.id,
+        body: turn.body,
+        idempotencyKey: `queued-revision:${turn.id}`,
+        disposition: 'fold',
+      },
+      pctx,
+    );
+  } catch (err) {
+    // The revision finished (or the thread moved on) between the refusal and the
+    // queue: there is no run left to read it, so the caller's refusal is the answer.
+    if (err instanceof PlanChangeJobNotRunningError) return null;
+    if (err instanceof PlanChangeMailboxJobMismatchError) return null;
+    throw err;
+  }
+  const fresh = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+    planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx),
+  );
+  if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+  return { jobId, planId, session: await toDto(fresh, pctx) };
+}
+
+/**
+ * The newest `user` turn written AFTER the `system` marker that submitted `jobId`
+ * — the turn this send carries. Null when there is none: everything the person
+ * typed before that marker is already in the revision's intent.
+ */
+export function latestTurnAfterSubmission<
+  T extends Pick<PlanChangeTurn, 'role' | 'body' | 'jobId' | 'seq'>,
+>(turns: readonly T[], jobId: string): T | null {
+  const ordered = [...turns].sort((a, b) => a.seq - b.seq);
+  let markerSeq = -1;
+  for (const t of ordered) {
+    if (t.role === 'system' && t.jobId === jobId) markerSeq = t.seq;
+  }
+  if (markerSeq < 0) return null;
+  for (let i = ordered.length - 1; i >= 0; i -= 1) {
+    const t = ordered[i]!;
+    if (t.seq <= markerSeq) return null;
+    if (t.role === 'user' && t.body.trim().length > 0) return t;
+  }
+  return null;
 }
 
 /**
@@ -820,6 +1036,7 @@ async function bindRevisionTurn(
   pctx: ProjectContext,
   submitted: { jobId: string; planId: string },
   intent: string,
+  opts: { clearFailure?: boolean } = {},
 ): Promise<PlanChangeSubmitResultDto> {
   const { jobId, planId } = submitted;
   const bound = await withWorkspaceContext(
@@ -835,7 +1052,17 @@ async function bindRevisionTurn(
         session.id,
         pctx,
         { role: 'system', body: intent, jobId },
-        { lastJobId: jobId, lastSubmittedAt: new Date() },
+        {
+          lastJobId: jobId,
+          lastSubmittedAt: new Date(),
+          // The failure record is cleared in the SAME update, under the SAME session lock
+          // that re-read `endedAt` above (MOTIR-7938): a restart that won the lock never
+          // sees a cleared record, and a double send clears it once. Clearing an absent
+          // record is a no-op write of nulls.
+          ...(opts.clearFailure && sessionWaitingState(fresh) === 'failed'
+            ? CLEARED_FAILURE_COLUMNS
+            : {}),
+        },
         tx,
       );
       return toDto(row, pctx, tx);
@@ -918,7 +1145,7 @@ async function claimPlanAgain(
       const turn = classifySessionTurn({
         origin: fresh.origin,
         endedAt: fresh.endedAt,
-        latestUndecided: latest ? { id: latest.id, status: undecidedStatus(latest.status) } : null,
+        latestUndecided: latest ? { id: latest.id, status: await turnStatusOf(latest, tx) } : null,
         planAgainOf: stalePlanId,
       });
       if (turn.kind === 'revise') return turn;
@@ -1771,6 +1998,9 @@ export const planChangeSessionsService = {
       /** The exact text this answer OFFERS to forward to the running planner
        *  (MOTIR-7996) — the offered `user` turn's body. */
       forwardOffer?: string | null;
+      /** Set when the answer was given WITHOUT the code (MOTIR-8141): the stored
+       *  face its notice is drawn from. */
+      codeUnreadable?: PlanChangeTurnOutage | null;
     },
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
@@ -1789,6 +2019,7 @@ export const planChangeSessionsService = {
         citations,
         debugLanding: input.debugLanding ?? null,
         forwardOffer: input.forwardOffer ?? null,
+        codeUnreadable: input.codeUnreadable ?? null,
       },
       {},
       async (tx) =>
@@ -2298,6 +2529,36 @@ export const planChangeSessionsService = {
     if (session.lastJobId !== jobId) return toDto(session, pctx);
 
     const job = await getJob(jobId, pctx.projectId);
+
+    // THE OUTAGE FACE (Story MOTIR-8136 · MOTIR-8141). A plan-writing job that met an
+    // unreadable code graph ends SUCCESSFULLY and wrote no plan; it is NOT the failed
+    // path ("That didn't go through") and it is not silent either — the person is told
+    // plainly, on a turn that remembers it. The words are the catalogue's, drawn from
+    // the stored face (`planningWorkspace.codeUnreadable`), never from this body; the
+    // English here is only the non-empty fallback every turn row must carry. Same
+    // idempotency gate as the append below, so a replayed settle writes nothing.
+    if (readCodeUnreadable(job.result) === 'declined') {
+      return appendLocked(
+        session,
+        pctx,
+        {
+          role: 'assistant',
+          body: DECLINED_FALLBACK_BODY,
+          jobId,
+          codeUnreadable: 'declined',
+        },
+        {},
+        async (tx) =>
+          (await planChangeTurnRepository.findByJobIdAndRole(
+            session.id,
+            jobId,
+            'assistant',
+            pctx.workspaceId,
+            tx,
+          )) !== null,
+      );
+    }
+
     const utterance = readPlanningTurn(job.result);
     if (!utterance) return toDto(session, pctx); // (3)
 
@@ -2398,6 +2659,33 @@ export const planChangeSessionsService = {
     // A guide conversation never plans (AMENDMENT 2, A2.2): refused before its
     // turns are read, so no plan-edit job is ever submitted for one.
     if (session.origin === 'guide') throw new GuideSessionNotPlannableError(session.id);
+    // A FAILED-WAITING session submits nothing new (Story MOTIR-7905 · MOTIR-7916): the
+    // ordinary submit would open a SECOND plan beside the one the session holds and make the
+    // failure record name a job that is no longer the session's attempt. The ways on are Resume
+    // (`planSessionResumeService`) or ending the session. A PRE-check, not a re-check under the
+    // lock: the one window left needs the running attempt to fail in the same instant a person
+    // submits, and closing it would orphan an already-opened plan.
+    // NARROWED BY MOTIR-7938: only a session holding a resumable failed walk (or a shape with no
+    // other exit) is refused. A failed session whose most recent undecided plan is `planned` /
+    // `stale` — situation 2 — falls through to the revise routing, and the bind clears the
+    // failure in the same transaction that records the turn.
+    const failedTurn = classifyFailedWaitingTurn({
+      waiting: sessionWaitingState(session),
+      failedJobId: session.failedJobId,
+      plans:
+        sessionWaitingState(session) === 'failed'
+          ? await withWorkspaceServiceContext(pctx.workspaceId, async (tx) =>
+              Promise.all(
+                (await planRepository.listUndecidedBySession(session.id, tx)).map(async (p) => ({
+                  ...p,
+                  status: await turnStatusOf(p, tx),
+                })),
+              ),
+            )
+          : [],
+    });
+    if (failedTurn === 'refuse_resume') throw new PlanSessionAwaitingResumeError(session.id);
+    const clearFailure = failedTurn === 'continue';
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
       planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
     );
@@ -2425,16 +2713,21 @@ export const planChangeSessionsService = {
     // plan is revised in place, a `stale` one is answered in words, and an
     // accept of that answer plans it again. Read outside any lock — every
     // branch that writes re-checks under its own lock.
-    const latest = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planRepository.findLatestUndecidedBySession(session.id, tx),
-    );
+    const latest = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const row = await planRepository.findLatestUndecidedBySession(session.id, tx);
+      return row ? { id: row.id, status: await turnStatusOf(row, tx) } : null;
+    });
     const turn = classifySessionTurn({
       origin: session.origin,
       endedAt: session.endedAt,
-      latestUndecided: latest ? { id: latest.id, status: undecidedStatus(latest.status) } : null,
+      latestUndecided: latest,
       planAgainOf: opts.planAgainOf,
     });
-    if (turn.kind === 'revise') return reviseWithinSession(session, pctx, turn.planId, intent);
+    if (turn.kind === 'revise') {
+      return reviseOrQueueWithinSession(session, pctx, turn.planId, intent, turns, {
+        clearFailure,
+      });
+    }
     if (turn.kind === 'stale') throw await staleOutcome(turn.planId, pctx);
     if (turn.kind === 'plan_again_refused') {
       throw await planAgainRefusal(
@@ -2449,7 +2742,9 @@ export const planChangeSessionsService = {
     if (turn.kind === 'plan_again') {
       const claimed = await claimPlanAgain(session, pctx, turn.stalePlanId);
       if (claimed.kind === 'revise') {
-        return reviseWithinSession(session, pctx, claimed.planId, intent);
+        return reviseOrQueueWithinSession(session, pctx, claimed.planId, intent, turns, {
+          clearFailure,
+        });
       }
       claim = claimed;
     }
@@ -2487,7 +2782,13 @@ export const planChangeSessionsService = {
       session,
       pctx,
       { role: 'system', body: intent, jobId },
-      { lastJobId: jobId, lastSubmittedAt: new Date() },
+      {
+        lastJobId: jobId,
+        lastSubmittedAt: new Date(),
+        // A turn that bound on a failed session (Plan it again on its stale plan) clears the
+        // record in the same update (MOTIR-7938), as the revise bind does.
+        ...(clearFailure ? CLEARED_FAILURE_COLUMNS : {}),
+      },
     );
     // HEARTBEAT (MOTIR-2787). Submitting is the thread proving it is alive, so it
     // pushes the target lease out by a fresh window. Without this a conversation

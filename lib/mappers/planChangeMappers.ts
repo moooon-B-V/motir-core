@@ -8,10 +8,14 @@ import type {
   PlanChangeRunPauseDto,
   PlanChangeSessionDto,
   PlanChangeTurnConfirmDto,
+  PlanChangeTurnOutageDto,
   PlanChangeTurnDto,
   PlanChangeTurnIntentDto,
   PlanChangeTurnRoleDto,
+  PlanSessionAwaitingPersonDto,
+  PlanSessionFailureDto,
 } from '@/lib/dto/planChange';
+import { isAwaitingPerson, isFailedWaiting } from '@/lib/planChange/sessionWaitingState';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { readGuideTurnRecord } from '@/lib/ai/guideWorkItem';
 
@@ -85,6 +89,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     guide: readGuideTurnRecord(row.guideTurn),
     attachmentIds: row.attachmentIds,
     confirm: (row.confirm as PlanChangeTurnConfirmDto | null) ?? null,
+    codeUnreadable: (row.codeUnreadable as PlanChangeTurnOutageDto | null) ?? null,
     runJobId: row.runJobId,
     forwardOffer: row.forwardOffer,
     forwarded: row.forwardedEntryId ? { mailboxEntryId: row.forwardedEntryId } : null,
@@ -92,6 +97,36 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/**
+ * The failure a session is waiting to resume from, or null (MOTIR-7908). Keyed on
+ * the shared predicate, so an ENDED row reads null even if its columns were left set
+ * — the same rule every other reader of the waiting state applies. `failedJobId` and
+ * `failureDetail` are deliberately not mapped: they are server-side only.
+ */
+function toPlanSessionFailureDto(row: PlanChangeSession): PlanSessionFailureDto | null {
+  if (!isFailedWaiting(row) || row.failedAt === null || row.failureReason === null) return null;
+  return {
+    failedAt: row.failedAt.toISOString(),
+    reason: row.failureReason,
+    stopPhase: row.failureStopPhase ?? null,
+    stopRef: row.failureStopRef ?? null,
+    stopTitle: row.failureStopTitle ?? null,
+  };
+}
+
+function toPlanSessionAwaitingPersonDto(
+  row: PlanChangeSession,
+): PlanSessionAwaitingPersonDto | null {
+  if (
+    !isAwaitingPerson(row) ||
+    row.awaitingPersonSince === null ||
+    row.awaitingPersonCause === null
+  ) {
+    return null;
+  }
+  return { since: row.awaitingPersonSince.toISOString(), cause: row.awaitingPersonCause };
 }
 
 /** The session plus its FULL ordered thread — the resume payload. `turns` MUST
@@ -122,6 +157,8 @@ export function toPlanChangeSessionDto(
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     endReason: row.endReason ?? null,
     copiedFromSessionId: row.copiedFromSessionId ?? null,
+    failure: toPlanSessionFailureDto(row),
+    awaitingPerson: toPlanSessionAwaitingPersonDto(row),
     runPause: runPause ? toPlanChangeRunPauseDto(runPause, runPauseEntryRead) : null,
   };
 }

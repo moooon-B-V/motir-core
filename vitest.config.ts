@@ -3125,7 +3125,7 @@ export default defineConfig({
         'scripts/i18n/glossary.ts',
         'scripts/i18n/messageShape.ts',
         'scripts/i18n/sourceRecord.ts',
-        'app/**/_components/AuthLanguageControl.tsx',
+        'components/i18n/AuthLanguageControl.tsx',
         // ── Story MOTIR-5266 · /ready's Expand opens the planning overlay (MOTIR-7877) ──
         // The nudge became a LAUNCHER (MOTIR-7876): it reads the nudge, hides on ✕,
         // and shallowPushes the overlay's start-turn address. Measured on this branch
@@ -3143,6 +3143,27 @@ export default defineConfig({
         // start-turn lines asserted by `tests/components/planning-start-turn.test.tsx`
         // and `tests/integration/planning/readyExpandStartTurnGate.test.tsx`.
         'app/**/ready/_components/ExpansionNudgeBanner.tsx',
+        // Story MOTIR-8238 · MOTIR-8256 — the restyled onboarding surface: the
+        // shared layout primitives, the hero's waves, the entrance, the top bar,
+        // and the two `(onboarding)` pages the story changed (written `app/**/…`,
+        // per the route-group note above). Each is pinned at ≥ 90 on every metric
+        // in `thresholds` below, MEASURED on this branch against the onboarding
+        // component specs. `MigrateWizard.tsx` / `ImportWizard.tsx` are not gated
+        // here: the story restyled their frames without changing their behaviour.
+        'components/onboarding/layout/OnboardingBrandBar.tsx',
+        'components/onboarding/layout/OnboardingHero.tsx',
+        'components/onboarding/layout/OnboardingLinkOut.tsx',
+        'components/onboarding/layout/OnboardingSection.tsx',
+        'components/onboarding/layout/OnboardingWizardBar.tsx',
+        'components/onboarding/layout/OnboardingWorkBand.tsx',
+        'components/onboarding/layout/SectionArt.tsx',
+        'components/onboarding/layout/WarmButton.tsx',
+        'components/onboarding/layout/index.ts',
+        'components/brand/HeroWaves.tsx',
+        'components/onboarding/OnboardingEntrance.tsx',
+        'components/onboarding/OnboardingTopBar.tsx',
+        'app/**/onboarding/how-it-works/page.tsx',
+        'app/**/onboarding/direction/\\[tier\\]/page.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -7158,7 +7179,7 @@ export default defineConfig({
         'scripts/i18n/glossary.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'scripts/i18n/messageShape.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'scripts/i18n/sourceRecord.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
-        'app/**/_components/AuthLanguageControl.tsx': {
+        'components/i18n/AuthLanguageControl.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -7166,6 +7187,91 @@ export default defineConfig({
         },
         // Story MOTIR-5266 · MOTIR-7877 — measured above (`include`), pinned at the floor.
         'app/**/ready/_components/ExpansionNudgeBanner.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-8238 · MOTIR-8256 — measured above (`include`), pinned at the floor.
+        'components/onboarding/layout/OnboardingBrandBar.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/OnboardingHero.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/OnboardingLinkOut.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/OnboardingSection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/OnboardingWizardBar.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/OnboardingWorkBand.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/SectionArt.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/WarmButton.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/layout/index.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/brand/HeroWaves.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/OnboardingEntrance.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/onboarding/OnboardingTopBar.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/onboarding/how-it-works/page.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/onboarding/direction/\\[tier\\]/page.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

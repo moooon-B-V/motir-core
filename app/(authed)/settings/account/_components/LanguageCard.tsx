@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
@@ -17,7 +18,17 @@ import { setLocale } from '@/lib/i18n/actions';
 // the SETTINGS-ROW grammar (a label + description on the left, the control on the
 // right, hairline-separated) — the pattern that scales as region / timezone /
 // date-format rows land later.
-export function LanguageCard() {
+//
+// A second row shows the ACTIVE organisation's CONTENT language read-only
+// (MOTIR-8095 · `org-admin--content-language.mock.html` panel 2): the language
+// Motir's planner and agents write that organisation's new work in. It is no
+// control here — owners and admins change it on the org General card, and get a
+// link there. No active organisation, no row.
+export interface LanguageCardProps {
+  contentLanguage?: { orgName: string; language: Locale; canChange: boolean } | null;
+}
+
+export function LanguageCard({ contentLanguage = null }: LanguageCardProps = {}) {
   const current = useLocale() as Locale;
   const t = useTranslations('settings.language');
   const router = useRouter();
@@ -71,6 +82,34 @@ export function LanguageCard() {
           />
         </div>
       </div>
+      {contentLanguage ? (
+        <div
+          data-testid="content-language-readonly"
+          className="mt-4 flex flex-col gap-2 border-t border-(--el-border-soft) pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+        >
+          <div className="min-w-0">
+            <div className="font-sans text-sm font-medium text-(--el-text)">
+              {t('contentLanguage.label', { org: contentLanguage.orgName })}
+            </div>
+            <div className="mt-0.5 max-w-[24rem] font-sans text-xs leading-snug text-(--el-text-muted)">
+              {t('contentLanguage.desc', { org: contentLanguage.orgName })}
+            </div>
+            {contentLanguage.canChange ? (
+              <Link
+                href="/settings/organization"
+                className="mt-1 inline-block font-sans text-xs font-medium text-(--el-link)"
+              >
+                {t('contentLanguage.changeLink')}
+              </Link>
+            ) : null}
+          </div>
+          <div className="w-[12rem] shrink-0 pt-0.5">
+            <span lang={contentLanguage.language} className="font-sans text-sm text-(--el-text)">
+              {localeLabel[contentLanguage.language]}
+            </span>
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }

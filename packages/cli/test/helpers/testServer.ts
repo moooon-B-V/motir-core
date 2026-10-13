@@ -366,6 +366,8 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     obsolescence: null,
     obsolescenceNoteMd: null,
     descriptionMd: null,
+    // Each text field's recorded language (MOTIR-8098) — required-and-nullable.
+    languages: { title: null, description: null, explanation: null },
     parentKey: null,
     folderId: null,
     folderPath: null,

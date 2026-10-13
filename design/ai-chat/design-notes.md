@@ -5129,6 +5129,30 @@ pass on it. It amends `plan-change-run-live.mock.html` sheet 3 and the MOTIR-406
 section, which stay as records. It gates **MOTIR-7979** (the rendering and the en
 and zh catalogues).
 
+## ⭐ The overlay waits with you — the pending question, failed-waiting-to-resume, and the refusal's "Waiting on {name}" (MOTIR-7907, 2026-10-10)
+
+Mock: `planning-workspace--waiting-on-you.mock.html` (a DELTA; composes the shipped rail, composer and session-end parts). Decision MOTIR-7906.
+
+- **Pending question (panels 1, 2).** Reached from Waiting on you, the overlay opens on the question as the pending turn, using the shipped render (`PENDING_QUESTION_ID = 'plan-change-pending-question'`), with the composer focused and its placeholder _Answer Motir AI…_. **Answered:** the pending turn becomes an ordinary turn, the Waiting on you row clears, and the walk's progress line resumes.
+- **Failed, waiting to resume (panels 3–6, 8–10).** A hosted attempt that failed no longer ends the session. The overlay shows the **failure block** (where it stopped in the progress line's step words, why, the sentence that the plan so far is kept and its cards stay at Planning), the plan so far left visible on the canvas with its proposals intact, **Resume** in place of retry and of _Start a new session_, and the composer still usable. **A turn sent while failed is held, not a resume:** Resume is the only thing that restarts the walk (an ordinary submit is refused on a failed walk; MOTIR-7916); the composer's note is carried into the next attempt. Resuming: Resume disabled and the progress line returns. Failed again: the new reason replaces the old with _Second attempt_. _Plan something new_ from this state is MOTIR-7647's control, placed and not redrawn; confirming it ends the session and clears the To resume entry.
+- **Who may resume (changed after review, 2026-10-10):** the starter OR a project manager. Panel 3b draws a manager opening another member's failed session (Resume enabled, _started by {name}_, no hold taken); panel 3c draws a plain member who did not start it (read-only: no Resume, no composer, the sentence naming who can).
+- **SUPERSEDED:** MOTIR-7633's state _attempt failed → Closed · Start a new session_ **for a hosted attempt**. It stands for an attempt a failure ended BEFORE this story (legacy sessions). **STANDS:** the copy offer for non-failure ends, take-back, the read-only view, the end marker.
+- **The refusal (panel 7).** A delta on MOTIR-7633's: it names the holder and says **Waiting on {name}** in place of _free by about HH:MM_, keeping the link to their session where the viewer may read it. The sentence under it differs by cause (question · reply · failed) and tells the refused member only what the holder's state is — not the question's text or the failure's reason.
+- **Strings:** `planningWorkspace.waiting.pending|answered|cleared|failedHead|stopped|because|kept|resume|resuming|again` and `planningWorkspace.session.refusal.waitingOn|why.question|why.reply|why.failed|openSession`, en and zh as drawn.
+- **Tokens:** `--el-*` roles and shape tokens only; the failure keeps the warning role MOTIR-7633 used (`--el-icon-muted` glyph + `Waiting to resume` yellow tint pill; no danger ink).
+- **GIVES:** MOTIR-7918 (the whole overlay surface; sized 65 min — the refusal and four failure states are now specified, re-check at claim), MOTIR-7916 (the held-composer rule). **TAKES:** the failed→Closed state from MOTIR-7633 (hosted attempts only).
+
+## ⭐ The overlay on an OPEN failed session whose plan waits — situation 2 (MOTIR-7935, 2026-10-10)
+
+Mock: `planning-workspace--failed-with-waiting-plan.mock.html` (a DELTA on MOTIR-7907's overlay mock; replaces nothing of it). Cites MOTIR-7907's overlay section and the carry design's states 2 and 10 (`planningWorkspace.session.stalePlan.*`).
+
+- **Opened (5a).** The earlier turns, then **one** failure line (_Your last change to this plan could not be made · {when}_, the warning role MOTIR-7633 / MOTIR-7907 keep), the waiting plan unchanged on the canvas with **Approve / Decline** as shipped, and an **enabled chatbox**. No Resume, no retry, no _Start a new session_, no _Closed_ marker: the session is OPEN. States: turn in flight (5b: the sent turn pending, composer disabled) · answered (5c: the failure line leaves the thread, the turns stay, the plan is revised in place as the SAME plan, the entry is gone) · approved from here (5d: the decide door's approved state; the session ends as approve ends it today) · failed again (5e: the turns and ONE failure line for the new failure).
+- **⚠️ DESIGN DECISION — only the CURRENT failure is drawn.** The thread draws at most ONE failure line: the single record `findWaitingState` returns. A failure that a later turn cleared, or a newer failure overwrote, is NOT redrawn after a reload, and no list of past failures is drawn. Why: the session stores one failure record and `markFailed` overwrites it; the turns are what persist. A line per past failure would need a failure-history store no card owns and no requirement asks for. No code card is owed a failure-history store by this design.
+- **A failed walk beside a waiting plan (6).** The canvas opens on the walk (the entry's first line) with its stop and **Resume**; the waiting plan stays decidable beside it. **The composer is DISABLED, with its reason** — an ordinary turn on a session holding a failed `generating` walk is refused (MOTIR-7916; `classifyFailedWaitingTurn` → `refuse_resume`) and revising the older plan while a walk is half-written would put two live jobs on one session. _Plan something new_ stays offered. The same one-current-failure rule applies.
+- **A STALE waiting plan (8a–8c).** Opened: the plan reads _Out of date_, **no Approve** (a stale plan cannot be approved), Decline kept, composer enabled, the failure line present. The turn is **answered with the carry design's stale-plan message** (the finished work item named, **Plan it again**) and the failure line **stays** — nothing was spent, so nothing cleared. After **Plan it again**: the new plan is written in the same session, the failure line leaves (the accepted fresh attempt binds a turn and clears the failure), the out-of-date plan stays reachable, and the entry leaves To resume.
+- **Strings:** `planningWorkspace.waiting.failureLine|failureLineAgain|holdReason|writing`, en and zh as drawn; carry strings cited, not new.
+- **GIVES:** MOTIR-7941 (the overlay states, the one-current-failure rule and the stale placement; 80 min — now fully specified, still fits), MOTIR-7938 (the composer-hold reason). **TAKES:** the stale-plan message from the carry design's state 10.
+
 ---
 
 ## ⭐ The planning thread while a run works — answer, forward, offer, ask (MOTIR-7992, 2026-10-09)
@@ -5893,3 +5917,149 @@ key under `act.call` — `act.call.tool.*` (40 keys), `act.call.family.*` (12),
 `tests/design-three-file-set.test.ts` pass on it. It amends sheet 3 and MOTIR-7975's
 section, which stay as records. It gates **MOTIR-8064** (the rendering and the en
 and zh catalogues).
+
+## 2026-10-12 — the vibe layout in discovery: the lockup in `OnboardingTopBar`, the chat rail's voice, a brand row on the direction-doc page (MOTIR-8251)
+
+**Amends:** the onboarding top bar (the `wz-bar` drawn in [`onboarding.mock.html`](./onboarding.mock.html)
+and shipped by MOTIR-1488 as `components/onboarding/OnboardingTopBar.tsx`) — its brand position and its
+trailing end — and the onboarding-origin direction-doc page. **Delta mock:**
+[`onboarding--vibe-lockup.mock.html`](./onboarding--vibe-lockup.mock.html). `onboarding.mock.html` is a
+record and is **not edited**. Story MOTIR-8238; sibling sections:
+[`design/onboarding-migrate/design-notes.md` § 2026-10-12](../onboarding-migrate/design-notes.md) and
+[`design/import/design-notes.md` § 2026-10-12](../import/design-notes.md).
+
+**Composes, never re-draws:** MOTIR-8250's Pattern panel A (the lockup) —
+`design/onboarding-entrance/onboarding-entrance--vibe-layout.mock.html` **Panel 6** — and the
+language control from `design/auth/auth-frame--language-control.mock.html` (MOTIR-8286's control, in
+MOTIR-8250's position: the last control of the bar).
+
+**Design system — files read:** root `package.json`, `app/globals.css` (lines 13 and 25),
+`packages/design-system/package.json` (**`0.13.0`**, exports `./mock`), `app/layout.tsx`. No
+`DESIGN.md`. **Verdict: ON MOTIR DESIGN — branch (a)**, built with `renderMock` from the package's
+`Button`, `Combobox`, `Spinner` and `buttonVariants`, plus `@motir/brand`'s `BrandMark`; axes
+`warm-editorial` · `motir` · `motir`, light and dark per frame. Nothing is proposed for the package.
+
+**Shipped reality read** at `origin/main`: `OnboardingTopBar.tsx` (52 px; lavender tile with the AI
+glyph + `topbarProject`; the step caption in `--el-accent-on-surface` mono; ghost Save & exit with
+`History`), `DiscoveryChatRail.tsx` (header dot + `railLabel`; the avatar is `BrandMark` mark,
+inverted, 13 px; `assistantName` is not rendered), `DiscoveryOnboarding.tsx` (grid `1fr_22rem`),
+`app/(onboarding)/onboarding/direction/[tier]/page.tsx` (`main`, `bg-(--el-surface)`, `max-w-[60rem]`),
+`DirectionDocFullPage.tsx`, `TierDocModal.tsx` and `messages/en.json`. motir.co read at
+`motir-marketing` `origin/main` **`06c0411`**.
+
+### Panels (light AND dark)
+
+| #   | Panel                                                                                                     | frame         |
+| --- | --------------------------------------------------------------------------------------------------------- | ------------- |
+| 1   | Discovery canvas + chat rail with the top bar — the one change is the brand position and the trailing end | 1280          |
+| 2   | Top-bar strips — 2a with a project name · 2b the fallback ("New project") · 2c revisiting a step          | light \| dark |
+| 3   | Language control in the bar — 3a pending · 3b failed · 3c open                                            | light \| dark |
+| 4   | Chat rail close-up — header, one assistant turn, composer (voice only; layout unchanged)                  | light \| dark |
+| 5   | Access path — the tier-doc modal's "Open full page" (a new tab to `/onboarding/direction/{tier}`)         | 620 × 2       |
+| 6   | Direction-doc page, onboarding origin, with a doc — the slim brand row added                              | 1280          |
+| 7   | Direction-doc page, the error state                                                                       | 1280          |
+
+### What changes, and what does not
+
+- **`OnboardingTopBar`.** The lavender tile with the AI glyph is TAKEN. The `BrandMark` **lockup** (22
+  px, not a link) takes it, then a 1 px `--el-border` divider, then `{project} · new project` (or the
+  fallback). Lockup rather than glyph: the glyph alone is the chat rail's assistant avatar, so a
+  glyph-only bar reads as "the assistant"; and without the divider the fallback would read "Motir New
+  project". The step caption and Save & exit are unchanged; the **language control** joins the trailing
+  end, after Save & exit. Height stays 52 px.
+- **The chat rail — voice only.** The English voice card (MOTIR-8248) re-worded no `onboarding.chat.*`
+  key, so the rail is drawn exactly as shipped: "Chat", the glyph avatar on `--el-accent`, "Reply, or
+  ask a question…". No visible assistant name is added. The layout (`1fr_22rem`) is unchanged.
+- **The direction-doc page (onboarding origin only).** A slim brand row — the lockup (24 px, not a
+  link) and the language control — on the onboarding wrapper `page.tsx`, inside the same
+  `max-w-[60rem]` column. **No second Back:** the shared component's own "Back to roadmap" already goes
+  to `/onboarding` in this origin. `DirectionDocFullPage` and the in-shell `/direction/[tier]` are
+  **unchanged**.
+- **Behaviour is unchanged**: Save & exit, the canvas, the rail, the modal's new-tab door, the doc
+  page's links and its error state.
+
+### Per-element `--el-*` and shape role
+
+| element                     | colour                                                    | shape / size                         |
+| --------------------------- | --------------------------------------------------------- | ------------------------------------ |
+| top bar                     | unchanged (`--el-page-bg` ground, `border-b --el-border`) | 52 px                                |
+| lockup                      | `brand.css` (glyph + word in `--el-text`)                 | 22 px (bar) · 24 px (doc row)        |
+| divider                     | `--el-border`                                             | 1 px × 16 px                         |
+| project label               | `--el-text`                                               | 14 px, truncates                     |
+| step caption                | `--el-accent-on-surface` mono (unchanged)                 | —                                    |
+| Save & exit                 | `Button ghost sm` (unchanged)                             | `--radius-btn`, `--height-btn-sm`    |
+| language control            | package `Combobox` trigger                                | `--radius-input`, `--height-control` |
+| rail avatar                 | `--el-accent` fill, inverted glyph (unchanged)            | `rounded-full`                       |
+| doc brand row               | no fill, no rule, on the page's `--el-surface`            | `py-4`, `max-w-[60rem]`              |
+| doc breadcrumb · error body | drawn `--el-text-secondary` (see F3)                      | —                                    |
+| focus ring                  | `--el-accent-on-surface`                                  | `ring-2`                             |
+
+### Slot → key
+
+| slot                                                        | key                                                                                                                                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| bar label · project · fallback                              | `onboarding.chat.{topbarLabel,topbarProject,topbarProjectFallback}`                                                                                                  |
+| step caption                                                | `onboarding.chat.canvas.caption`                                                                                                                                     |
+| Save & exit                                                 | `onboarding.chat.saveExit`                                                                                                                                           |
+| language control                                            | `auth.language.{label,switching,failed,retry}` + `localeLabel`                                                                                                       |
+| rail header · composer · send · drafting                    | `onboarding.chat.{railLabel,composerPlaceholder,send,drafting}`                                                                                                      |
+| canvas stations and pills                                   | `onboarding.chat.canvas.*` (unchanged)                                                                                                                               |
+| modal "Open full page"                                      | `issueViews.openFullPage` — see F2                                                                                                                                   |
+| doc "Back to roadmap" · "Roadmap" · "Direction" · doc title | `publicProjects.requestBackToRoadmap` · `roadmap.canvas.breadcrumbRoot` · `platformAdmin.ideas.kind.direction` · `onboarding.landing.steps.understandTitle` — see F2 |
+| doc error copy · "Direction · Discovery" kicker             | **no key** — see F2                                                                                                                                                  |
+
+The chat turn, the idea and the doc body are fixtures, not product copy.
+
+### Findings
+
+- **F1 — the card's premise "Motir AI kept as the assistant's name" is wrong.**
+  `onboarding.chat.assistantName` is "Motir" and is not rendered anywhere; the rail shows no name. The
+  design keeps it that way.
+- **F2 — `DirectionDocFullPage` and `TierDocModal` hard-code English literals** ("Back to roadmap",
+  "Roadmap", "Direction", "Couldn't load this doc", "Open full page", …). The mock draws the values
+  that match existing keys (listed above) and draws the error copy and the "Direction · Discovery"
+  kicker as shipped, flagged as having **no key**. A Chinese E2E (MOTIR-8257) will see English there.
+  Moving them onto keys is outside this card; MOTIR-8255 should file it.
+- **F3 — the shipped breadcrumb and error body use `--el-text-muted` on the `--el-surface` page**:
+  4.17:1, an AA failure today. The mock draws them in `--el-text-secondary`. Because the component is
+  shared with the in-shell route, the fix is the component's, not this wrapper's.
+- **F4 — MOTIR-8286's premise** assumes the wizard, the importer and the direction-doc page render
+  `OnboardingTopBar`; only discovery does. This design gives the other three their own trailing
+  language control (the sibling sections and Panel 6 here).
+- **F5 — the card asked for a Back in the doc page's brand row.** It is not drawn: the shared
+  component's "Back to roadmap" already returns to `/onboarding`, and a second one would be a
+  duplicate. This changes MOTIR-8255's criteria.
+
+- **F6 — the working tree already moves on this bar.** MOTIR-8252, building in the same worktree,
+  has an uncommitted `OnboardingTopBar.tsx` that swaps the tile for `BrandMark` lockup at **28 px with
+  no divider**. This design specifies **22 px plus the 1 px divider** (and the language control): 28
+  px is the hero bar's size, the 52 px bar is denser, and the divider is what keeps the fallback from
+  reading "Motir New project". Whoever lands the bar (MOTIR-8252 or MOTIR-8255) should reconcile to
+  this section.
+
+### Chinese-length risks (for MOTIR-8249 / MOTIR-8258)
+
+`topbarProject` with a long project name (truncates before the caption; the lockup and the controls
+never shrink).
+
+### GIVES / TAKES
+
+- **TAKES** the lavender AI-glyph tile from `OnboardingTopBar`.
+- **GIVES MOTIR-8255** the build: the bar's lockup + divider + language control, the rail (no change),
+  the doc page's brand row, F3 and F5.
+- **GIVES MOTIR-8286** the language control in this bar and on the doc page (Panels 3, 6, 7).
+- **GIVES MOTIR-8256** the pairs to gate (the lockup on `--el-page-bg`, the doc row on `--el-surface`);
+  **MOTIR-8249 / MOTIR-8258** the CJK risk; **MOTIR-8257** the E2E context and F2.
+- **Premises taken from** MOTIR-1488, MOTIR-8248 and MOTIR-8250.
+
+### Revision 4 (2026-10-12) — the warm pass
+
+The vibe-layout board in this area takes the warm pass described in `design/onboarding-migrate/design-notes.md` § _Revision 4_: the hero glow and warm waves, the orange step dot, and orange (`--el-highlight`) for the current step, the picked row and the "you are here" marker, with `--el-tint-yellow` behind progress. Every label stays on the ink tokens; the orange is used for fills, rings, borders and glyphs only.
+
+### Revision 5 (2026-10-12) — warm on the button only
+
+The warm pass narrows to the primary button and small marks (the step dot, spinners, progress fills); every surface returns to the cool shipped look. See `design/onboarding-migrate/design-notes.md` § _Revision 5_ for the two new roles (`--el-cta-warm`, `--el-cta-warm-text`) and their measured contrast.
+
+### Revision 6 (2026-10-12) — how this canvas is reached
+
+This board is the discovery canvas for a person who starts from an idea. It is not the migrate wizard's "A few questions", which is now a step of the wizard page (`design/onboarding-migrate/design-notes.md` § _Revision 6_, Panels 6a–6d). The new Panel 0 draws the door: the migrate wizard's bar link **Start from an idea instead** → `/onboarding/discovery`, with its focus ring; the entrance's Start reaches it too. Panel 1's note no longer lists the wizard's Decision and Resume, which now advance in place.

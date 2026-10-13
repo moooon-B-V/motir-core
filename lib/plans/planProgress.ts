@@ -1,5 +1,5 @@
 // THE ONE PROGRESS DERIVATION for a `generating` plan (Story MOTIR-7820 ·
-// Subtask MOTIR-7825; design `design/ai-planning/design-notes.md` Part XXV).
+// Subtask MOTIR-7825; design `design/ai-planning/design-notes.md` Part XXVI).
 //
 // ⚠️ EVERY SURFACE THAT SHOWS A PLAN'S PROGRESS READS IT FROM HERE, BY NAME.
 // The progress line (pane and compact form), the canvas cues and the Workbench ›
@@ -37,7 +37,7 @@ import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import type { PlanStepDto, PlanStepKindDto } from '@/lib/dto/plans';
 
 /**
- * THE stalled threshold — design Part XXV §25.9: **15 minutes**, measured (the
+ * THE stalled threshold — design Part XXVI §26.9: **15 minutes**, measured (the
  * longest healthy quiet stretch observed on real walks was 582 s, so the
  * story's assumed 10 minutes left 3 % headroom). It has TWO uses and they are
  * deliberately the same number:
@@ -46,6 +46,10 @@ import type { PlanStepDto, PlanStepKindDto } from '@/lib/dto/plans';
  *   2. a single step is dropped as QUIET when `now − step.startedAt >
  *      PLAN_STALLED_AFTER_MS` — a session that died without clearing stops
  *      naming an item even while its siblings keep the plan alive.
+ * The abandoned-plan sweep's DEAD rule reads it too (MOTIR-8132), with the same
+ * comparison, so the rail's `stalled` and the sweep's `silent` cannot disagree.
+ * A plan RESUMED AUTOMATICALLY (MOTIR-8309) is measured from the resume, for free:
+ * the resume's bind stamps `lastActivityAt` with the resume's own instant.
  * Re-measure and change THIS constant; never a surface.
  */
 export const PLAN_STALLED_AFTER_MS = 900_000;
@@ -72,7 +76,7 @@ export type PlanStepPhrase =
   | 'draftingNew';
 
 /**
- * The design's copy key for each phrase (Part XXV §25.13). TOTAL over
+ * The design's copy key for each phrase (Part XXVI §26.13). TOTAL over
  * {@link PlanStepPhrase}, so a sixth phrase fails the compiler here rather than
  * rendering a blank on the line.
  */
@@ -101,7 +105,7 @@ export interface PlanProgressStep {
 
 /** The time-independent half — built once, on the server. */
 export interface PlanProgressSnapshot {
-  /** `Plan.createdAt` (ISO) — elapsed counts from here (design §25.2). */
+  /** `Plan.createdAt` (ISO) — elapsed counts from here (design §26.2). */
   startedAt: string;
   /** `Plan.lastActivityAt` (ISO). */
   lastActivityAt: string;
@@ -113,9 +117,21 @@ export interface PlanProgressSnapshot {
   proposed: number;
   /** Ordered by `startedAt`, ties by `sessionKey` — the design's "earliest in words" order. */
   steps: PlanProgressStep[];
+  /**
+   * The session's LATEST automatic resume (MOTIR-8309; design Part XXVII) — its
+   * server instant (ISO, `PlanChangeSession.lastAutoResumedAt`) and the session's
+   * `autoResumeCount`. `null` when the plan's session was never resumed
+   * automatically, or the plan has no session.
+   */
+  autoResume: PlanAutoResume | null;
 }
 
-export type PlanProgressState = 'starting' | 'working' | 'writing' | 'stalled';
+export interface PlanAutoResume {
+  at: string;
+  count: number;
+}
+
+export type PlanProgressState = 'starting' | 'working' | 'writing' | 'stalled' | 'resuming';
 
 /** The time-dependent half — `readPlanProgress(snapshot, now)`. */
 export interface PlanProgressReading {
@@ -127,6 +143,8 @@ export interface PlanProgressReading {
   elapsedMs: number;
   sinceActivityMs: number;
   lastActivityAt: string;
+  /** The snapshot's {@link PlanProgressSnapshot.autoResume}, passed through for the popover. */
+  autoResume: PlanAutoResume | null;
 }
 
 /**
@@ -274,6 +292,10 @@ const iso = (v: string | Date): string => (typeof v === 'string' ? v : v.toISOSt
  * - a SET target that no longer resolves is DROPPED: a withdrawn `planItem:`
  *   (withdrawal deletes the row) or a committed id with no title. Naming it
  *   would point the canvas at nothing.
+ * - with `autoResume` set, a step that STARTED BEFORE the resume is DROPPED: it
+ *   is the lost machine's own row, never cleared, and naming it would say a
+ *   dead session is authoring an item (MOTIR-8309). Dropping it HERE, not at
+ *   read time, keeps the canvas cues and the words on one list.
  * Steps are ordered by `startedAt`, ties by `sessionKey`.
  */
 export function buildPlanProgressSnapshot(args: {
@@ -283,10 +305,16 @@ export function buildPlanProgressSnapshot(args: {
   committedTitles: ReadonlyMap<string, string>;
   requireExplanation: boolean;
   observedAt: string | Date;
+  autoResume?: { at: string | Date; count: number } | null;
 }): PlanProgressSnapshot {
   const addById = new Map(args.addRows.map((r) => [r.id, r]));
+  const autoResume = args.autoResume
+    ? { at: iso(args.autoResume.at), count: args.autoResume.count }
+    : null;
+  const resumedAtMs = autoResume ? Date.parse(autoResume.at) : null;
   const resolved: PlanProgressStep[] = [];
   for (const step of args.steps) {
+    if (resumedAtMs !== null && Date.parse(iso(step.startedAt)) < resumedAtMs) continue;
     const base = {
       sessionKey: step.sessionKey,
       kind: step.kind,
@@ -332,6 +360,7 @@ export function buildPlanProgressSnapshot(args: {
     authored,
     proposed,
     steps: resolved,
+    autoResume,
   };
 }
 
@@ -340,9 +369,15 @@ export function buildPlanProgressSnapshot(args: {
 /**
  * Read a snapshot at `nowMs` (a SERVER-time instant — `serverNow(…)` on a
  * client). Precedence: `stalled` (quiet past the threshold; no live steps) →
+ * `resuming` (Motir resumed the plan by itself and its new job has neither
+ * signalled nor written since: `lastActivityAt` has not moved past the resume's
+ * own stamp, and no step started at or after it — design Part XXVII §27.6) →
  * `working` (any live step) → `starting` (nothing proposed yet) → `writing`
  * (a planner between steps, or one that never signals: counts and times, no
  * step words, no cue).
+ *
+ * `resuming` is an EQUALITY test, not a tolerance: the automatic resume records
+ * its instant with the same `now` the bind stamps on the plan's activity.
  */
 export function readPlanProgress(
   snapshot: PlanProgressSnapshot,
@@ -356,6 +391,7 @@ export function readPlanProgress(
     elapsedMs,
     sinceActivityMs,
     lastActivityAt: snapshot.lastActivityAt,
+    autoResume: snapshot.autoResume,
   };
   if (sinceActivityMs > PLAN_STALLED_AFTER_MS) {
     return { ...common, state: 'stalled', liveSteps: [] };
@@ -364,8 +400,17 @@ export function readPlanProgress(
   const liveSteps = snapshot.steps.filter(
     (s) => nowMs - Date.parse(s.startedAt) <= PLAN_STALLED_AFTER_MS,
   );
-  const state: PlanProgressState =
-    liveSteps.length > 0 ? 'working' : snapshot.proposed === 0 ? 'starting' : 'writing';
+  const resuming =
+    snapshot.autoResume !== null &&
+    liveSteps.length === 0 &&
+    Date.parse(snapshot.lastActivityAt) <= Date.parse(snapshot.autoResume.at);
+  const state: PlanProgressState = resuming
+    ? 'resuming'
+    : liveSteps.length > 0
+      ? 'working'
+      : snapshot.proposed === 0
+        ? 'starting'
+        : 'writing';
   return { ...common, state, liveSteps };
 }
 

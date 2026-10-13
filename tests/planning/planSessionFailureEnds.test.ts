@@ -11,6 +11,12 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
+// ⚠️ SINCE MOTIR-7912 A FAILED HOSTED ATTEMPT NO LONGER ENDS ITS SESSION through the
+// relays or the sweep — they RECORD it (`tests/integration/planning/sessionFailureWaits.test.ts`
+// holds that split, with `canceled`, `guide` and a non-`generating` plan as the arms that
+// still end). What stands here is the END ITSELF (`endSessionForFailedJob`, the no-producer
+// sweep arm, the idle close), which those arms still call.
+//
 // A FAILED ATTEMPT ENDS ITS SESSION (story MOTIR-7630 · MOTIR-7638) — against a
 // REAL Postgres. `docs/decisions/agent-authored-plans.md` AMENDMENT 23 §2: the
 // stream relays end the session on a terminal frame, the abandoned-plan sweep ends
@@ -119,6 +125,11 @@ describe('the relay — a terminal frame ends the attempt', () => {
   );
 });
 
+// Since MOTIR-8132 the sweep RECORDS a dead plan on a `conversation` / `mcp` session
+// (`tests/integration/planning/silentPlanSweep.test.ts`), so the arm that still ENDS
+// the session is driven here through a `guide` session. A plan is dead when it has
+// been silent for longer than `PLAN_STALLED_AFTER_MS`, so the seed backdates
+// `lastActivityAt` as well as `createdAt`.
 describe('the abandoned-plan sweep — the backstop', () => {
   async function abandonedPlanIn(sessionId: string) {
     return adminDb.plan.create({
@@ -128,13 +139,14 @@ describe('the abandoned-plan sweep — the backstop', () => {
         sessionId,
         status: 'generating',
         createdAt: new Date(Date.now() - 72 * HOUR),
+        lastActivityAt: new Date(Date.now() - 72 * HOUR),
       },
     });
   }
 
   it('run alone, ends the session `failed`', { timeout: DB_TEST_TIMEOUT_MS }, async () => {
     const card = await seedCard();
-    const sessionId = await openSession(card);
+    const sessionId = await openSession(card, { origin: 'guide' });
     await abandonedPlanIn(sessionId);
 
     await abandonedPlanService.reconcileAbandoned();
@@ -148,7 +160,7 @@ describe('the abandoned-plan sweep — the backstop', () => {
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const card = await seedCard();
-      const sessionId = await openSession(card, { lastJobId: 'job-1' });
+      const sessionId = await openSession(card, { lastJobId: 'job-1', origin: 'guide' });
       await abandonedPlanIn(sessionId);
       await planSessionEndService.endSessionForFailedJob('job-1', pctx());
       const first = await endOf(sessionId);
@@ -164,7 +176,7 @@ describe('the abandoned-plan sweep — the backstop', () => {
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const card = await seedCard();
-      const sessionId = await openSession(card);
+      const sessionId = await openSession(card, { origin: 'guide' });
       const plan = await abandonedPlanIn(sessionId);
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 

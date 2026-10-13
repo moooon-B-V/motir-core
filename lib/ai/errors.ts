@@ -4,6 +4,7 @@
 // failures that sit underneath it — into motir-core typed errors, so no caller
 // ever branches on a raw HTTP status or an upstream JSON shape.
 
+import type { JobWalkStop } from '@/lib/planChange/failureRecord';
 import type { Problem, JobStatus, PlannerModelListReason, ResultEnvelope } from './types';
 
 export abstract class MotirAiError extends Error {
@@ -252,7 +253,21 @@ export interface JobView {
   status: JobStatus;
   result: ResultEnvelope | null;
   error: MotirAiError | null;
+  /** Where a failed planning walk stopped, parsed from `error.walkStop`; `null` when
+   *  absent or malformed (MOTIR-7912) — a motir-ai that predates it still works. */
+  walkStop?: JobWalkStop | null;
+  /**
+   * Whether motir-ai failed this job because the MACHINE holding it stopped renewing
+   * its lease (its reaper's `ai_job_abandoned`, MOTIR-8304) — so nothing about the
+   * request was judged. Read from the raw problem before `errorFromProblem` maps it to
+   * the same `MotirAiUnavailableError` an outage gets, which is why it rides beside
+   * `error` rather than in it. Optional, and absent reads as `false`.
+   */
+  lostMachine?: boolean;
 }
+
+/** The problem code motir-ai's reaper fails an abandoned job with (`src/jobs/reaper.ts`). */
+export const AI_JOB_ABANDONED_PROBLEM_CODE = 'ai_job_abandoned';
 
 // Map a problem+json (from a non-2xx response or a failed job's error) onto the
 // right typed error, keyed by the contract §5 `code` (falling back to HTTP
@@ -283,7 +298,8 @@ export function errorFromProblem(p: Problem): MotirAiError {
     // than left to the 5xx fallback below, which would produce the same class by
     // accident: the point of the distinct code is that a reader of this switch
     // can see the case exists and that a resubmit is the right response to it,
-    // where `ai_job_failed` means the handler ran and rejected something.
+    // where `ai_job_failed` means the handler ran and rejected something. The
+    // lost-machine distinction itself is kept on `JobView.lostMachine` (MOTIR-8304).
     case 'ai_job_abandoned':
     case 'internal_error':
       return new MotirAiUnavailableError(p.detail ?? p.title);

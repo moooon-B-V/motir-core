@@ -4,7 +4,6 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
 import { PLANNING_STATUS_KEY, PLAN_TARGET_PLAN_LEASE_MS } from '@/lib/planChange/targetLock';
-import { ABANDONED_PLAN_MAX_AGE_HOURS } from '@/lib/services/abandonedPlanService';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -110,11 +109,11 @@ describe('committedPlanTargets — what a plan is ABOUT (D1)', () => {
 });
 
 describe('the plan lease window (D9)', () => {
-  it('is ABANDONED_PLAN_MAX_AGE_HOURS, so the two cannot drift', () => {
-    // `targetLock.ts` is a pure leaf and cannot import a service, so the number
-    // is restated there and pinned HERE — the agreement is a test rather than an
-    // import, which is what keeps the leaf a leaf.
-    expect(PLAN_TARGET_PLAN_LEASE_MS).toBe(ABANDONED_PLAN_MAX_AGE_HOURS * 60 * 60 * 1000);
+  it('is twenty-four hours', () => {
+    // It used to be pinned to the sweep's 24-hour max age. MOTIR-8132
+    // retired that constant (the sweep judges silence now) and MOTIR-8130 left the
+    // lock lease where it was, so the number is pinned on its own.
+    expect(PLAN_TARGET_PLAN_LEASE_MS).toBe(24 * 60 * 60 * 1000);
   });
 });
 

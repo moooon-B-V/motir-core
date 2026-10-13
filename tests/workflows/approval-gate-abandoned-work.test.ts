@@ -47,7 +47,8 @@ afterAll(async () => {
 
 /** Every registered kind a WORK ITEM can hold — `plan_approval` belongs to a plan. */
 const CARD_KINDS = (Object.keys(APPROVAL_GATE_HANDLERS) as ApprovalGateKind[]).filter(
-  (kind) => kind !== 'plan_approval',
+  // `planning_session` is the second card-less kind (MOTIR-7913), held to the same constraint.
+  (kind) => kind !== 'plan_approval' && kind !== 'planning_session',
 );
 
 let seq = 0;

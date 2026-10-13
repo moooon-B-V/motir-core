@@ -158,20 +158,20 @@ model User {
   // cannot be hard-deleted) and can be assigned many (assignee — SetNull on
   // the FK: deleting an assignee leaves the issue unassigned, never removes
   // it). Named relations because there are two distinct User↔WorkItem edges.
-  reportedWorkItems                WorkItem[]                    @relation("WorkItemReporter")
-  assignedWorkItems                WorkItem[]                    @relation("WorkItemAssignee")
+  reportedWorkItems                WorkItem[]                          @relation("WorkItemReporter")
+  assignedWorkItems                WorkItem[]                          @relation("WorkItemAssignee")
   // Back-relation for the triage submitter (Subtask 6.11.4). A user may have
   // submitted many triage items (in-app, or — via 6.12 — as a signed-in
   // non-member). SetNull on the FK: a deleted submitter just loses attribution.
-  submittedTriageItems             WorkItem[]                    @relation("WorkItemTriageSubmitter")
+  submittedTriageItems             WorkItem[]                          @relation("WorkItemTriageSubmitter")
   // Back-relation for WorkItemLink (Subtask 1.4.3). A user creates many
   // issue-to-issue links (createdBy — Restrict: a user with links on record
   // cannot be hard-deleted, mirroring the reporter pattern).
-  createdWorkItemLinks             WorkItemLink[]                @relation("WorkItemLinkCreatedBy")
+  createdWorkItemLinks             WorkItemLink[]                      @relation("WorkItemLinkCreatedBy")
   // Back-relation for WorkItemRevision (Subtask 1.4.6). A user authors many
   // revisions (changedBy — Restrict on the FK: a user with audit history on
   // record cannot be hard-deleted, mirroring the reporter pattern).
-  authoredWorkItemRevisions        WorkItemRevision[]            @relation("WorkItemRevisionAuthor")
+  authoredWorkItemRevisions        WorkItemRevision[]                  @relation("WorkItemRevisionAuthor")
   // Back-relation for Attachment (Subtask 2.3.7). A user uploads many
   // attachments (uploader — Cascade on the FK: deleting a user removes their
   // uploaded blobs' audit rows). Modelled to keep the schema graph in sync
@@ -195,19 +195,19 @@ model User {
   // pattern) and is mentioned in many (Cascade: a mention row is notification
   // substrate, not audit — it goes with the user, mirroring
   // projectMemberships).
-  authoredComments                 Comment[]                     @relation("CommentAuthor")
+  authoredComments                 Comment[]                           @relation("CommentAuthor")
   commentMentions                  CommentMention[]
   // To-dos this user TICKED (Story MOTIR-3808 · MOTIR-3813). SetNull, NOT
   // Cascade: a departing member must not vaporise the record that a step was
   // completed — the tick survives, its attribution does not. Same reasoning as
   // `Attachment.uploader`'s SetNull one tier over.
-  completedWorkItemTodos           WorkItemTodo[]                @relation("WorkItemTodoCompletedBy")
+  completedWorkItemTodos           WorkItemTodo[]                      @relation("WorkItemTodoCompletedBy")
   // Back-relations for Component + Watcher (Subtask 5.4.1). A user is the
   // default assignee of many components (SetNull: a departed user clears the
   // default, never blocks) and watches many issues (Cascade: a watcher row
   // is notification substrate, not audit — it goes with the user, mirroring
   // commentMentions).
-  defaultAssigneeComponents        Component[]                   @relation("ComponentDefaultAssignee")
+  defaultAssigneeComponents        Component[]                         @relation("ComponentDefaultAssignee")
   watchers                         Watcher[]
   // Back-relation for CustomFieldValue (Subtask 5.3.1). A user can be the
   // VALUE of a `user`-type custom field on many issues (SetNull on the FK:
@@ -219,20 +219,20 @@ model User {
   // admins change owner first when a shared filter must survive a departure)
   // and stars many (Cascade: preference substrate, not audit — the watchers
   // pattern).
-  savedFilters                     SavedFilter[]                 @relation("SavedFilterOwner")
-  savedFilterStars                 SavedFilterStar[]             @relation("SavedFilterStarUser")
+  savedFilters                     SavedFilter[]                       @relation("SavedFilterOwner")
+  savedFilterStars                 SavedFilterStar[]                   @relation("SavedFilterStarUser")
   // Per-user filter subscriptions (Subtask 6.2.5) — emailed-results loop.
   // Cascade: a subscription is preference substrate (the star semantics),
   // not audit, so it dies with the user.
-  savedFilterSubscriptions         SavedFilterSubscription[]     @relation("SavedFilterSubscriptionUser")
+  savedFilterSubscriptions         SavedFilterSubscription[]           @relation("SavedFilterSubscriptionUser")
   // Automation rules this user owns (Subtask 6.6.1) — the rule actor (the
   // recorded 6.6 deviation: rule actions run as the owner). Cascade with the
   // user, the savedFilters semantics: a departing admin's rules go with them
   // (an admin reassigns the owner first if a rule must survive).
-  automationRules                  AutomationRule[]              @relation("AutomationRuleOwner")
+  automationRules                  AutomationRule[]                    @relation("AutomationRuleOwner")
   // Dashboards (Story 6.3) — owned grids ride the SavedFilter owner
   // semantics (Cascade; change-owner is the recorded extension).
-  dashboards                       Dashboard[]                   @relation("DashboardOwner")
+  dashboards                       Dashboard[]                         @relation("DashboardOwner")
   // In-app notifications (Story 5.7 · Subtask 5.7.2). Two distinct User↔
   // Notification edges, so named relations. As the RECIPIENT a user owns many
   // notifications (Cascade: a notification row is per-user notification
@@ -240,13 +240,13 @@ model User {
   // As the ACTOR (who caused it — rendered as the row avatar) a user appears
   // on many (SetNull on the FK: a departed actor leaves the row intact and
   // unattributed, never blocks a delete — the assignee semantics).
-  notifications                    Notification[]                @relation("NotificationRecipient")
-  actedNotifications               Notification[]                @relation("NotificationActor")
+  notifications                    Notification[]                      @relation("NotificationRecipient")
+  actedNotifications               Notification[]                      @relation("NotificationActor")
   // Per-user notification preferences (Story 5.7 · Subtask 5.7.6) — the
   // per-user × event-type × channel toggle matrix that gates BOTH the in-app
   // fan-in (5.7.3) and the DONE email job (5.1.6). Cascade: preferences are
   // personal substrate, they die with the user (the notifications pattern).
-  notificationPreferences          NotificationPreference[]      @relation("UserNotificationPreferences")
+  notificationPreferences          NotificationPreference[]            @relation("UserNotificationPreferences")
   // Personal access tokens (Story 7.8 · Subtask 7.8.1) — the per-user bearer
   // credentials AI agents present to the MCP server. Cascade: a token is
   // personal auth substrate, it dies with the user (the notifications /
@@ -281,7 +281,7 @@ model User {
   // personal appearance substrate, it dies with the user (the
   // notificationPreferences / apiTokens pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
-  appearancePreference             UserAppearancePreference?     @relation("UserAppearancePreference")
+  appearancePreference             UserAppearancePreference?           @relation("UserAppearancePreference")
   // The user's GitHub OAuth identity binding (Story 7.10 · MOTIR-1498) — the
   // identity-only grant (0 or 1 per user). Cascade: it's personal auth
   // substrate carrying only an encrypted user token, it dies with the user
@@ -338,82 +338,82 @@ model User {
   // pointer, never blocks the delete (the `WorkspaceMembership.activeProject`
   // semantics). Modelled on both sides per the FK-`@relation` rule so
   // `migrate dev` reports no drift.
-  lastActiveProject                Project?                      @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
+  lastActiveProject                Project?                            @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
   // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
   // deleted decider never blocks the plan's history; modelled both sides.
-  decidedPlans                     Plan[]                        @relation("PlanDecidedBy")
+  decidedPlans                     Plan[]                              @relation("PlanDecidedBy")
   // Design results this user has WITHDRAWN (MOTIR-3215). SetNull on the FK so a
   // deleted withdrawer leaves the withdrawal on record, unattributed — the same
   // audit-not-ownership semantics as `approvedAcceptanceEvidences`. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
-  withdrawnDesignEvidences         DesignEvidence[]              @relation("DesignEvidenceWithdrawnBy")
+  withdrawnDesignEvidences         DesignEvidence[]                    @relation("DesignEvidenceWithdrawnBy")
   // How-to-test records this user published (MOTIR-5328). SetNull on the FK:
   // a deleted publisher leaves the record, unattributed.
-  publishedTestInstructions        TestInstructions[]            @relation("TestInstructionsPublishedBy")
+  publishedTestInstructions        TestInstructions[]                  @relation("TestInstructionsPublishedBy")
   /// Approval gates this user decided (the audit's "who", ADR §6a). `SetNull` on
   /// the gate keeps the row — the back-relation is the inverse of that. NAMED
   /// since MOTIR-4912, because `routedToApprovalGates` is a second relation to
   /// the same model and an unnamed pair is ambiguous.
-  approvalGates                    ApprovalGate[]                @relation("ApprovalGateDecidedBy")
+  approvalGates                    ApprovalGate[]                      @relation("ApprovalGateDecidedBy")
   /// Approval gates ROUTED to this user at creation (ADR §6a · MOTIR-4912).
   /// `SetNull` likewise — the routing is context for the decision, so losing it
   /// on a departure costs the audit nothing it is built on.
-  routedToApprovalGates            ApprovalGate[]                @relation("ApprovalGateRoutedTo")
-  requestedPlans                   Plan[]                        @relation("PlanCreatedBy")
+  routedToApprovalGates            ApprovalGate[]                      @relation("ApprovalGateRoutedTo")
+  requestedPlans                   Plan[]                              @relation("PlanCreatedBy")
   // Plan CONTENT mutations this user made (Story MOTIR-3532 · MOTIR-3535) — the
   // append-only trail beside the plan's own three party columns. SetNull on the
   // FK so a departed author leaves the change on record, unattributed: the trail
   // is the plan's history, not the person's, and the same audit-not-ownership
   // semantics `decidedPlans` above uses. Modelled both sides per the
   // FK-`@relation` rule.
-  authoredPlanRevisions            PlanRevision[]                @relation("PlanRevisionAuthor")
+  authoredPlanRevisions            PlanRevision[]                      @relation("PlanRevisionAuthor")
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
-  createdImports                   Import[]                      @relation("ImportCreatedBy")
+  createdImports                   Import[]                            @relation("ImportCreatedBy")
   // Plan-change conversations this user opened + the turns they wrote (Story
   // 7.30 · MOTIR-1728). SetNull on both FKs so a departed author leaves the
   // thread intact and unattributed (the `Notification` ACTOR semantics) —
   // the conversation is project history, not personal substrate. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
-  createdPlanChangeSessions        PlanChangeSession[]           @relation("PlanChangeSessionCreatedBy")
-  endedPlanChangeSessions          PlanChangeSession[]           @relation("PlanChangeSessionEndedBy")
-  authoredPlanChangeTurns          PlanChangeTurn[]              @relation("PlanChangeTurnAuthor")
+  createdPlanChangeSessions        PlanChangeSession[]                 @relation("PlanChangeSessionCreatedBy")
+  endedPlanChangeSessions          PlanChangeSession[]                 @relation("PlanChangeSessionEndedBy")
+  authoredPlanChangeTurns          PlanChangeTurn[]                    @relation("PlanChangeTurnAuthor")
   // Sharpen sessions this user opened (cascade: the session is theirs alone) and
   // the turns they authored (set null). Task MOTIR-1101 · MOTIR-8182.
-  createdSharpenSessions           SharpenSession[]              @relation("SharpenSessionCreatedBy")
-  authoredSharpenTurns             SharpenTurn[]                 @relation("SharpenTurnAuthor")
+  createdSharpenSessions           SharpenSession[]                    @relation("SharpenSessionCreatedBy")
+  authoredSharpenTurns             SharpenTurn[]                       @relation("SharpenTurnAuthor")
   // Mid-run mailbox entries this user attached to a RUNNING planning job
   // (Story MOTIR-4054 · MOTIR-4067). SetNull, the same actor semantics as the
   // turn above — a departed author leaves the record of what was said.
-  authoredPlanChangeMailboxEntries PlanChangeMailboxEntry[]      @relation("PlanChangeMailboxEntryAuthor")
+  authoredPlanChangeMailboxEntries PlanChangeMailboxEntry[]            @relation("PlanChangeMailboxEntryAuthor")
   // Planner pauses this user answered (Story MOTIR-7990 · MOTIR-8007). SetNull —
   // a departed answerer leaves the record of what was chosen.
-  answeredPlanChangeRunPauses      PlanChangeRunPause[]          @relation("PlanChangeRunPauseAnswerer")
+  answeredPlanChangeRunPauses      PlanChangeRunPause[]                @relation("PlanChangeRunPauseAnswerer")
   // Planning-target leases this user's sessions hold (Story MOTIR-2786 ·
   // MOTIR-2787). SetNull — a departed holder leaves the lease for the sweep to
   // expire rather than stranding the item.
-  heldPlanTargetLocks              PlanTargetLock[]              @relation("PlanTargetLockHeldBy")
+  heldPlanTargetLocks              PlanTargetLock[]                    @relation("PlanTargetLockHeldBy")
   // Platform-staff actions this user performed against the estate (MOTIR-2896).
   // Restrict on the FK: a user with audit rows on record cannot be hard-deleted
   // (the `WorkItem.reporter` precedent) — the evidence of what an operator did
   // must outlive their account. Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
-  platformAuditEntries             PlatformAuditLog[]            @relation("PlatformAuditLogActor")
+  platformAuditEntries             PlatformAuditLog[]                  @relation("PlatformAuditLogActor")
   // Models this platform superadmin added to the hosted-run model list
   // (Story MOTIR-7521 · MOTIR-7525). SetNull: the entry outlives the account,
   // and the hash-chained audit log keeps WHO for ever.
-  platformRunModelsAdded           PlatformRunModel[]            @relation("PlatformRunModelAddedBy")
+  platformRunModelsAdded           PlatformRunModel[]                  @relation("PlatformRunModelAddedBy")
   ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
   // role must not block, or cascade into, a tenant's suspension state — the
   // hash-chained audit log keeps WHO for ever.
-  suspendedOrganizations           Organization[]                @relation("OrganizationSuspendedBy")
-  updatedOrgFeatureFlags           OrgFeatureFlag[]              @relation("OrgFeatureFlagUpdatedBy")
+  suspendedOrganizations           Organization[]                      @relation("OrganizationSuspendedBy")
+  updatedOrgFeatureFlags           OrgFeatureFlag[]                    @relation("OrgFeatureFlagUpdatedBy")
   // Staff "View as" sessions (Story 10.3 · MOTIR-749): the ones this account
   // OPENED as a platform operator, and the ones opened AS this account.
-  impersonationSessionsOperated    ImpersonationSession[]        @relation("ImpersonationSessionOperator")
-  impersonationSessionsTargeted    ImpersonationSession[]        @relation("ImpersonationSessionTarget")
+  impersonationSessionsOperated    ImpersonationSession[]              @relation("ImpersonationSessionOperator")
+  impersonationSessionsTargeted    ImpersonationSession[]              @relation("ImpersonationSessionTarget")
   // What this account has agreed to, and when (Story 8.4 · MOTIR-1135). A LIST
   // and append-only: the row set IS the evidence, so an acceptance is never
   // overwritten by the next one. Cascade — the record is about a person's
@@ -435,8 +435,9 @@ model User {
   // Organization deletions this person scheduled / cancelled (MOTIR-6391). SetNull on
   // both: the request is the ORG's record and outlives the account that acted on it
   // (a closing org's Owner may themselves be erased first — DECISION §5).
-  requestedOrganizationDeletions   OrganizationDeletionRequest[] @relation("OrganizationDeletionRequestedBy")
-  cancelledOrganizationDeletions   OrganizationDeletionRequest[] @relation("OrganizationDeletionCancelledBy")
+  requestedOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionRequestedBy")
+  contentLanguageChanges           OrganizationContentLanguageChange[] @relation("OrganizationContentLanguageChangedBy")
+  cancelledOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionCancelledBy")
   // Enterprise requests this person sent from Billing & plans (MOTIR-7605). SetNull:
   // the request is the ORG's sales record and outlives the account that sent it.
   enterpriseRequests               EnterpriseRequest[]
@@ -447,23 +448,23 @@ model User {
   dataExportRequests               DataExportRequest[]
   // Folders this person created (Story MOTIR-5308 · MOTIR-5312). Restrict,
   // matching `WorkItem.reporter`: the creator is durable attribution.
-  createdFolders                   Folder[]                      @relation("FolderCreator")
-  createdPages                     Page[]                        @relation("PageCreator")
-  updatedPages                     Page[]                        @relation("PageUpdater")
-  archivedPages                    Page[]                        @relation("PageArchiver")
+  createdFolders                   Folder[]                            @relation("FolderCreator")
+  createdPages                     Page[]                              @relation("PageCreator")
+  updatedPages                     Page[]                              @relation("PageUpdater")
+  archivedPages                    Page[]                              @relation("PageArchiver")
   // Page versions this person authored (Story MOTIR-5754). Restrict, as
   // `Page.updatedBy`: authorship is durable attribution.
-  pageVersions                     PageVersion[]                 @relation("PageVersionAuthor")
+  pageVersions                     PageVersion[]                       @relation("PageVersionAuthor")
   // Decision pages this person published (Story MOTIR-5761). Restrict, as
   // `PageVersion.author`: publishing is durable attribution.
-  decisionPagePublications         DecisionPagePublication[]     @relation("DecisionPagePublisher")
-  pageWorkItemLinksCreated         PageWorkItemLink[]            @relation("PageWorkItemLinkCreator")
+  decisionPagePublications         DecisionPagePublication[]           @relation("DecisionPagePublisher")
+  pageWorkItemLinksCreated         PageWorkItemLink[]                  @relation("PageWorkItemLinkCreator")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
   // SetNull, NOT Cascade: removing the person must not remove the binding; the
   // reconciler reads the null binder and records a named failure telling someone
   // to re-bind, rather than inventing another identity.
-  boundMonitorConnections          MonitorConnection[]           @relation("MonitorConnectionBinder")
+  boundMonitorConnections          MonitorConnection[]                 @relation("MonitorConnectionBinder")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1379,8 +1380,10 @@ model Organization {
   /// the organisation, and which projects use it is visibility configuration.
   /// Back-relations of two Cascade FKs, modelled on both sides per the
   /// FK-`@relation` rule.
-  githubInstallations GithubInstallation[]
-  githubRepos         GithubRepo[]
+  githubInstallations        GithubInstallation[]
+  githubRepos                GithubRepo[]
+  /// The GitHub accounts this organisation is linked to (MOTIR-8218).
+  githubInstallationOrgLinks GithubInstallationOrgLink[]
 
   /// Whether every member of this organization must hold a second factor
   /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
@@ -1489,6 +1492,19 @@ model Organization {
   agentInstanceStorageCharges AgentInstanceStorageCharge[]
   /// An agent's boot attempts (`agent-instances.md` AMENDMENT 6, MOTIR-7397). Cascade.
   agentInstanceBootAttempts   AgentInstanceBootAttempt[]
+
+  // ── Content language (Story MOTIR-7731 · MOTIR-8092) ──────────────────────
+  /// The language Motir's planner and agents write this organisation's NEW work
+  /// in — one of the eleven codes in `lib/i18n/locales.ts`. Text validated in
+  /// code by `isLocale`, never a Postgres enum, for the same reason as
+  /// `User.locale`: adding a locale needs no migration. Distinct from every
+  /// person's DISPLAY language, which it never changes. Existing organisations
+  /// were backfilled `en` by the column default; a new one is set at
+  /// registration from the registrant's browser (MOTIR-8093).
+  contentLanguage        String                              @default("en") @map("content_language")
+  /// Who changed `contentLanguage`, from what, to what and when — written only
+  /// by `organizationContentLanguageService` (MOTIR-8094). Cascade.
+  contentLanguageChanges OrganizationContentLanguageChange[]
 
   @@map("organization")
 }
@@ -1638,6 +1654,8 @@ model Workspace {
   // installation is bound to NO workspace (MOTIR-1931); its repos are tenanted
   // through `githubRepos` below, not through here.
   githubInstallations         GithubInstallation[]
+  /// The account links connected FROM this workspace (MOTIR-8218).
+  githubInstallationOrgLinks  GithubInstallationOrgLink[]
   // Connected/created repositories owned by this workspace (MOTIR-1931). Tenancy
   // is a property of the REPO, not of the installation: one shared provisioning
   // installation holds every tenant's created repos, so the repo row is what says
@@ -2749,6 +2767,13 @@ model WorkItem {
   title                 String
   descriptionMd         String?                       @db.Text // "what to do" — Markdown source
   explanationMd         String?                       @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
+  /// The language each work content field was WRITTEN in (Story MOTIR-7731 ·
+  /// MOTIR-8092) — one of the eleven codes in `lib/i18n/locales.ts`, or NULL for
+  /// "no language recorded" (every row written before the story, and imports).
+  /// Deliberately no default: NULL must stay distinguishable from a real `en`.
+  titleLanguage         String?                       @map("title_language")
+  descriptionLanguage   String?                       @map("description_language")
+  explanationLanguage   String?                       @map("explanation_language")
   explanationSource     WorkItemExplanationSource     @default(user_authored)
   status                String                        @default("open")
   priority              WorkItemPriority              @default(medium)
@@ -5304,6 +5329,13 @@ enum ApprovalGateKind {
   /// No pull request — Mark done is TERMINAL and writes `done` (Workflow A).
   manual_work
 
+  /// A HOSTED PLANNING SESSION that needs its person (Story MOTIR-7905 · MOTIR-7913;
+  /// ADR `approval-gates.md` §1's MOTIR-7906 amendment): the planner stopped with a
+  /// WHAT question, or the conversation waits on the person's reply. Card-less like
+  /// `plan_approval`, its subject is the `PlanChangeSession.id`, it is routed to the
+  /// session's owner, and it has NO verbs — the person answers by sending a turn.
+  planning_session
+
   @@map("approval_gate_kind")
 }
 
@@ -5412,6 +5444,13 @@ enum ApprovalGateSupersedeCause {
   /// parent cascade, the rollup — so the question closes without being recorded as
   /// approved (MOTIR-7474; `docs/decisions/manual-work-gate.md` §6).
   closed_without_decision
+
+  /// The person SENT A TURN on the planning session a `planning_session` gate asked
+  /// about (MOTIR-7913) — the question is answered.
+  answered
+  /// The planning session a `planning_session` gate asked about ENDED, for any reason
+  /// (MOTIR-7913).
+  session_ended
 
   @@map("approval_gate_supersede_cause")
 }
@@ -5912,13 +5951,13 @@ model CommentMention {
 /// would be representable and meaningless). `doneById` is SetNull so a
 /// departing member cannot erase the record that a step was completed.
 model WorkItemTodo {
-  id          String    @id @default(cuid())
-  workspaceId String    @map("workspace_id")
-  workItemId  String    @map("work_item_id")
+  id            String    @id @default(cuid())
+  workspaceId   String    @map("workspace_id")
+  workItemId    String    @map("work_item_id")
   /// The step, in plain text. One operation. Capped by the service at
   /// `TODO_TEXT_MAX_LENGTH` — see the model note on why the number is a
   /// constraint and `lib/workItemTodos/limits.ts` for its single home.
-  text        String    @db.Text
+  text          String    @db.Text
   /// The INSTRUCTIONS for this one operation — optional Markdown, the *how*.
   ///
   /// ⚠️ THIS IS NOT A SECOND WORK ITEM, and the reason is what it does NOT
@@ -5932,17 +5971,22 @@ model WorkItemTodo {
   /// The row's `text` still answers *"is this one operation?"* on its own
   /// one-line bar — NAVIGATION IS NOT AN OPERATION, so "go to the dashboard,
   /// find the setting" belongs here and never as three tickable rows.
-  notesMd     String?   @map("notes_md") @db.Text
+  notesMd       String?   @map("notes_md") @db.Text
+  /// The language `text` / `notesMd` were written in (Story MOTIR-7731 ·
+  /// MOTIR-8092): a `lib/i18n/locales.ts` code, or NULL for "no language
+  /// recorded". No default, so an unrecorded row never reads as `en`.
+  textLanguage  String?   @map("text_language")
+  notesLanguage String?   @map("notes_language")
   /// The command this step runs, when it runs one — its OWN column, never
   /// parsed out of `text` (ADR §5). Non-null ⇔ the row is copyable; a parse
   /// would break on the first sentence containing a backtick, and silently.
-  commandText String?   @map("command_text") @db.Text
-  executor    Executor?
-  position    String    @db.Text
-  doneAt      DateTime? @map("done_at")
-  doneById    String?   @map("done_by_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  commandText   String?   @map("command_text") @db.Text
+  executor      Executor?
+  position      String    @db.Text
+  doneAt        DateTime? @map("done_at")
+  doneById      String?   @map("done_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
@@ -7165,6 +7209,41 @@ enum PlanSessionEndReason {
   @@map("plan_session_end_reason")
 }
 
+/// WHY a hosted planning attempt failed, as motir-ai's CLOSED vocabulary
+/// (`walkStop.reasonCode`, motir-ai `docs/contract.md` §5; Story MOTIR-7905).
+/// A CODE, never motir-ai's English: core translates each member (en / zh) at
+/// render time. The failure path maps any code it does not recognise, and a
+/// missing `walkStop`, to `internal` before it writes, so the column is total.
+enum PlanSessionFailureReason {
+  rate_limited
+  out_of_credits
+  model_unavailable
+  token_expired
+  prompt_too_large
+  internal
+
+  @@map("plan_session_failure_reason")
+}
+
+/// Which kind of session the failed walk had open (Story MOTIR-7905). Null on the
+/// session when the attempt failed before the walk reached a level.
+enum PlanSessionWalkPhase {
+  lay
+  author
+
+  @@map("plan_session_walk_phase")
+}
+
+/// WHY an open session is waiting on its owner (Story MOTIR-7905):
+///   * `question` — a hosted phase returned to the conversation with a WHAT question;
+///   * `reply`    — the planner replied, no job is running, and the person left.
+enum PlanSessionAwaitingCause {
+  question
+  reply
+
+  @@map("plan_session_awaiting_cause")
+}
+
 /// An AI-planning proposal bundle (Story 7.21 — the Plan substrate). A `Plan`
 /// gathers proposed `PlanItem` operations the user reviews and approves/declines
 /// as ONE unit. Nothing it proposes is real until approve: an `add` lives only
@@ -7750,16 +7829,59 @@ model GithubInstallation {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace    Workspace?                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// Modelled on BOTH sides with the same action the SQL uses (the FK-`@relation`
   /// rule). Cascade, exactly as the workspace relation above: a deleted
   /// organisation takes its connections with it.
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repos        GithubRepo[]
+  /// The organisations this installation is linked to (MOTIR-8218). One row per
+  /// organisation; the installation itself stays ONE fact about GitHub.
+  orgLinks     GithubInstallationOrgLink[]
 
   @@index([workspaceId])
   @@index([organizationId])
   @@map("github_installation")
+}
+
+/// THE LINK BETWEEN ONE GITHUB ACCOUNT AND ONE ORGANISATION (Story MOTIR-8216 ·
+/// MOTIR-8218).
+///
+/// A GitHub App installation is one account, and since this story one account
+/// can serve several Motir organisations, each with its own disjoint subset of
+/// the account's repositories. The installation row stays the single GitHub-side
+/// fact, keyed on GitHub's unique `installation_id`; WHICH organisations use it
+/// is this table. Its `workspace_id` / `organization_id` columns are left in
+/// place for the deploy window (the old build still writes them) — contracting
+/// them is not this story's.
+///
+/// ⚠️ Motir's SHARED PROVISIONING INSTALLATION (MOTIR-1931) gets NO row here:
+/// it is owned by no tenant, so there is nothing to link, and the backfill only
+/// copies rows that carry an organisation. That is what keeps it invisible to
+/// every tenant read of "my accounts".
+///
+/// RLS: an org read arm (`github_installation_org_link_org_read`, the
+/// `github_installation_org_read` shape), a read for the workspace the link was
+/// connected from, and writes under the system context only.
+model GithubInstallationOrgLink {
+  id             String   @id @default(cuid())
+  /// FK → GithubInstallation.id (the internal cuid, NOT GitHub's numeric id).
+  installationId String   @map("installation_id")
+  organizationId String   @map("organization_id")
+  /// The tier the link was connected FROM, as `github_repo` records it.
+  workspaceId    String   @map("workspace_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  installation GithubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// One link per (installation, organisation): a re-run install refreshes it in place.
+  @@unique([installationId, organizationId])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@map("github_installation_org_link")
 }
 
 /// A repository selected on a GitHub App installation (Story 7.10 · MOTIR-891).
@@ -8010,6 +8132,13 @@ model GithubRepo {
   @@unique([installationId, repoId])
   @@index([installationId])
   @@index([workspaceId])
+  /// The host identity of the repository (MOTIR-8218) — what the one-org-per-repo
+  /// guard (`trg_github_repo_one_organization`) and webhook routing look up by.
+  /// NOT unique, deliberately: one organisation legitimately holds the same
+  /// repository twice after a takeover (the provisioning row keeps its coordinates
+  /// while the tenant's own installation re-selects it). What may never happen is
+  /// two ORGANISATIONS holding it, and that is the trigger's to refuse.
+  @@index([provider, repoId])
   /// Serves the org-tier reads this column exists for, and — once MOTIR-4677
   /// rewrites them — the RLS predicate itself, exactly as `@@index([workspaceId])`
   /// serves `github_repo_workspace_or_system` today.
@@ -8903,19 +9032,19 @@ enum MigrateOnboardingStatus {
 /// exactly one session through `Plan.sessionId` (§5). Workspace-scoped tenant
 /// data (RLS in the same migration).
 model PlanChangeSession {
-  id                  String                @id @default(cuid())
-  workspaceId         String                @map("workspace_id")
-  projectId           String                @map("project_id")
+  id                  String                    @id @default(cuid())
+  workspaceId         String                    @map("workspace_id")
+  projectId           String                    @map("project_id")
   /// Who opened the thread. SetNull — a departed author leaves the conversation
   /// intact and unattributed (the `Notification` actor semantics).
-  createdById         String?               @map("created_by_id")
+  createdById         String?                   @map("created_by_id")
   /// The number of turns on the thread — the READ-DERIVED value an append
   /// allocates the next `seq` from. Appends lock this row (`SELECT … FOR UPDATE`)
   /// and re-read it inside the transaction, so two concurrent appends serialize
   /// into two ordered turns instead of colliding on `seq` (the
   /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
   /// DB-level backstop, translated to a typed error.
-  turnCount           Int                   @default(0) @map("turn_count")
+  turnCount           Int                       @default(0) @map("turn_count")
   /// The CANONICAL anchor-set discriminator (7.12.3 · MOTIR-909) — what makes a
   /// thread "the conversation about THESE work items" rather than "the project's
   /// conversation". Derived, never client-supplied: `targetKeys` deduped, sorted,
@@ -8923,31 +9052,31 @@ model PlanChangeSession {
   /// PROJECT-WIDE thread — the shipped 7.30 conversation, unchanged — so the
   /// `(project_id, scope_key)` unique still admits exactly one of those per
   /// project while allowing one contextual thread per distinct anchor set.
-  scopeKey            String                @default("") @map("scope_key")
+  scopeKey            String                    @default("") @map("scope_key")
   /// The anchor SET this thread is scoped to, as work-item IDENTIFIERS ("MOTIR-812"),
   /// in the same canonical order `scopeKey` is built from. Empty on the project-wide
   /// thread. Stored (not re-derived from `scopeKey`) because it is what a RESUMED
   /// thread re-submits as the motir-ai `context.targetKeys` anchor set, and what the
   /// panel labels the conversation with. Identifiers, not FKs — the same opaque-token
   /// posture `last_job_id` takes; a deleted anchor must not cascade the conversation.
-  targetKeys          String[]              @default([]) @map("target_keys")
+  targetKeys          String[]                  @default([]) @map("target_keys")
   /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
   /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
   /// a resumed rail re-attaches its stream / diff review to.
-  lastJobId           String?               @map("last_job_id")
+  lastJobId           String?                   @map("last_job_id")
   /// When that submission happened. Null until the thread has been submitted at
   /// least once (a thread can accumulate turns without ever submitting).
-  lastSubmittedAt     DateTime?             @map("last_submitted_at")
+  lastSubmittedAt     DateTime?                 @map("last_submitted_at")
   /// When the session was last USED — every turn (user, assistant, system) and
   /// every submit moves it (AMENDMENT 17 §3). The resume window and the Plans
   /// page's newest-activity order both read it. Not `updatedAt`, which any
   /// bookkeeping write (a lock, a label) would also move.
-  lastActivityAt      DateTime              @default(now()) @map("last_activity_at")
+  lastActivityAt      DateTime                  @default(now()) @map("last_activity_at")
   /// WHICH DOOR opened the session (AMENDMENT 17 §4) — NOT `Plan.origin`, which
   /// answers what decided to start a plan. `legacy` is written only by the
   /// MOTIR-6020 backfill, for a pre-existing plan whose conversation cannot be
   /// identified.
-  origin              PlanSessionOrigin     @default(conversation)
+  origin              PlanSessionOrigin         @default(conversation)
   /// The REFUSED approval gate that SEEDED this session (story MOTIR-6068 ·
   /// MOTIR-6207; `agent-authored-plans.md` AMENDMENT 17 §9). Written ONLY at the
   /// session's creation by a seeded first turn
@@ -8955,29 +9084,78 @@ model PlanChangeSession {
   /// afterwards; NULL on every unseeded session. A seeded start resumes only a
   /// session of the SAME seed. SetNull — a gate row that goes leaves the
   /// conversation intact and unseeded.
-  seedGateId          String?               @map("seed_gate_id")
+  seedGateId          String?                   @map("seed_gate_id")
   /// When the session ENDED (AMENDMENT 23 §1). **A session is OPEN ⟺ this is
   /// NULL.** An ended session is never resumed and accepts no turn. Written only
   /// by the one end operation, together with `endReason` and `endedById`.
-  endedAt             DateTime?             @map("ended_at")
+  endedAt             DateTime?                 @map("ended_at")
   /// Why it ended — see `PlanSessionEndReason`. Null exactly when `endedAt` is.
-  endReason           PlanSessionEndReason? @map("end_reason")
+  endReason           PlanSessionEndReason?     @map("end_reason")
   /// The person who ended it (a decider, or the person who restarted); NULL when
   /// Motir ended it (a failure, the idle sweep). SetNull — a departed member
   /// leaves the end recorded and unattributed.
-  endedById           String?               @map("ended_by_id")
+  endedById           String?                   @map("ended_by_id")
   /// The ENDED session this one's conversation was copied from (AMENDMENT 23
   /// §6) — written once, at creation, by the copy start; NULL otherwise. SetNull:
   /// the copy outlives its source.
-  copiedFromSessionId String?               @map("copied_from_session_id")
+  copiedFromSessionId String?                   @map("copied_from_session_id")
+  // ── THE SESSION'S WAITING STATE (Story MOTIR-7905 · MOTIR-7908) ───────────────
+  // An OPEN session can be waiting on its person in one of two ways, and never both
+  // (the `plan_change_session_one_wait` CHECK). Both are cleared by the one end write
+  // (`endSessionWithin`), which the same CHECK requires: an ENDED session waits on
+  // nothing. The definitions every reader shares live in
+  // `lib/planChange/sessionWaitingState.ts` — read them there, not here.
+  //
+  // ── FAILED, waiting to resume ─────────────────────────────────────────────────
+  /// When core observed the session's latest hosted attempt FAIL partway through a
+  /// walk. Written by the failure path (`markFailed`), cleared by the resume when the
+  /// new attempt binds (`clearFailure`) or by the end. **failed-waiting ⟺ ended_at IS
+  /// NULL AND failed_at IS NOT NULL.**
+  failedAt            DateTime?                 @map("failed_at")
+  /// The motir-ai job that failed (an OPAQUE token, like `lastJobId`). The resume
+  /// submits it as `resume.fromJobId`: the failed attempt's settled PART 1 lives on
+  /// that job's row in motir-ai.
+  failedJobId         String?                   @map("failed_job_id")
+  /// WHY, as motir-ai's closed code — never its English.
+  failureReason       PlanSessionFailureReason? @map("failure_reason")
+  /// motir-ai's `walkStop.detail` (at most 300 characters). For support and logs
+  /// ONLY — never rendered to the person and never on the DTO.
+  failureDetail       String?                   @map("failure_detail")
+  /// The kind of session the walk had open; null when the attempt failed before it
+  /// reached a level.
+  failureStopPhase    PlanSessionWalkPhase?     @map("failure_stop_phase")
+  /// An opaque reference to the level's parent, or to the card being authored (a
+  /// `planItem:<id>` or a work-item key), stored exactly as motir-ai reports it.
+  /// Core never resolves it to a row: the resume reads the PLAN's own state.
+  failureStopRef      String?                   @map("failure_stop_ref")
+  /// That level's or card's title at the moment of failure, so a row can name it
+  /// without a second read.
+  failureStopTitle    String?                   @map("failure_stop_title")
+  // ── AWAITING ITS PERSON ───────────────────────────────────────────────────────
+  /// When the conversation began waiting on its owner's next turn. Written by the
+  /// planning-session gate (`markAwaitingPerson`), cleared by the person's next turn
+  /// or by the end. **awaiting-person ⟺ ended_at IS NULL AND awaiting_person_since
+  /// IS NOT NULL.**
+  awaitingPersonSince DateTime?                 @map("awaiting_person_since")
+  /// `question` or `reply` — see `PlanSessionAwaitingCause`.
+  awaitingPersonCause PlanSessionAwaitingCause? @map("awaiting_person_cause")
   /// How many bugs a GUIDE conversation has filed through its `file_bug` action
   /// (Story MOTIR-7797 · MOTIR-7800; decision MOTIR-7798 Q3). Read and bumped
   /// under this row's lock in the transaction that files the bug, so two
   /// concurrent filings cannot both pass `GUIDE_BUGS_PER_CONVERSATION`. Always 0
   /// on a session that is not a guide.
-  guideBugsFiled      Int                   @default(0) @map("guide_bugs_filed")
-  createdAt           DateTime              @default(now()) @map("created_at")
-  updatedAt           DateTime              @updatedAt @map("updated_at")
+  guideBugsFiled      Int                       @default(0) @map("guide_bugs_filed")
+  // ── AUTOMATIC RESUME ──────────────────────────────────────────────────────────
+  /// How many times Motir has resumed this conversation by itself after its
+  /// planning machine was lost (Story MOTIR-8301 · MOTIR-8305). Bumped by
+  /// `recordAutoResume` in ONE statement that also enforces the bound
+  /// (`AUTO_RESUMES_PER_SESSION`), so two concurrent callers cannot both pass it.
+  /// A CHECK keeps it non-negative.
+  autoResumeCount     Int                       @default(0) @map("auto_resume_count")
+  /// When Motir last resumed this conversation by itself. Null until the first.
+  lastAutoResumedAt   DateTime?                 @map("last_auto_resumed_at")
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
 
   workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -9017,6 +9195,9 @@ model PlanChangeSession {
   /// The SEEDED-session read (AMENDMENT 17 §9): "this member's most recent
   /// session seeded by this gate" — `findSeededForUser`.
   @@index([seedGateId, createdById, lastActivityAt])
+  /// The TO RESUME read (Story MOTIR-7905): "this member's failed-waiting sessions",
+  /// newest failure first.
+  @@index([workspaceId, createdById, failedAt])
   @@index([workspaceId])
   @@map("plan_change_session")
 }
@@ -9159,6 +9340,15 @@ model PlanChangeTurn {
   /// mailbox. Null on every other turn, and on every turn written before the
   /// column existed — a null reads exactly as it always did (no back-fill).
   runJobId              String?                @map("run_job_id")
+  /// How the CODE-GRAPH OUTAGE touched this `assistant` turn (Story MOTIR-8136 ·
+  /// MOTIR-8141; `design/code-context/design-notes.md` §17) — `declined` for a
+  /// plan-writing turn that wrote NO plan because the code could not be read,
+  /// `answered` for a question that was answered without it. Written in the SAME
+  /// append as the turn, from the job result's own outage signal, so the notice
+  /// survives a reload and stays in the history after the graph returns. Null on
+  /// every other turn, role and row written before the column existed (no
+  /// back-fill): a null reads exactly as the turn always did.
+  codeUnreadable        PlanChangeTurnOutage?  @map("code_unreadable")
   /// The exact text an `assistant` ANSWER offered to FORWARD to the running
   /// planner (MOTIR-7996) — the offered `user` turn's own body, in the person's
   /// words. Set only by a mid-run ask settle whose result carried `offerForward`;
@@ -9566,6 +9756,17 @@ enum PlanChangeTurnConfirm {
   new_session
 
   @@map("plan_change_turn_confirm")
+}
+
+/// How a code-graph outage touched an `assistant` turn (Story MOTIR-8136 ·
+/// MOTIR-8141) — the stored face the rail draws from, `design-notes.md` §17.
+enum PlanChangeTurnOutage {
+  /// A plan-writing job met the outage and wrote no plan.
+  declined
+  /// A question job was answered without the code.
+  answered
+
+  @@map("plan_change_turn_outage")
 }
 
 /// ONE work item held EXCLUSIVELY by ONE planning session (Story MOTIR-2786 ·
@@ -11576,6 +11777,31 @@ model OrganizationDeletionRequest {
   @@map("organization_deletion_request")
 }
 
+/// One change of an organisation's content language (Story MOTIR-7731 ·
+/// MOTIR-8092) — the "who / from / to / when" record. Written only by
+/// `organizationContentLanguageService.changeContentLanguage` (MOTIR-8094), in
+/// the same transaction as the `Organization.contentLanguage` update, and never
+/// for a no-op change. The registration default writes no row, so an
+/// organisation with no rows has never had its language changed.
+model OrganizationContentLanguageChange {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  /// Who changed it. SetNull: the record of the change outlives the account.
+  changedByUserId String?  @map("changed_by_user_id")
+  /// `lib/i18n/locales.ts` codes, validated in code (`isLocale`).
+  fromLanguage    String   @map("from_language")
+  toLanguage      String   @map("to_language")
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  changedBy    User?        @relation("OrganizationContentLanguageChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  /// The history read, newest first.
+  @@index([organizationId, changedAt])
+  @@index([changedByUserId])
+  @@map("organization_content_language_change")
+}
+
 /// One email notice sent about an {@link OrganizationDeletionRequest} (Story
 /// MOTIR-6306 · MOTIR-6395) — the DEDUPE record that makes each notice
 /// exactly-once per (request, kind, daysLeft) whatever the job engine's own
@@ -12889,6 +13115,31 @@ model MonitorInstallation {
   /// When the health above was last established. NULL until the first probe.
   healthCheckedAt DateTime? @map("health_checked_at")
 
+  /// The single-flight LEASE on a token refresh (MOTIR-8184). Set in a short
+  /// transaction before the provider call and cleared by the transaction that
+  /// stores the rotated pair, so no transaction — and no row lock — is open while
+  /// the provider is answering. A caller that finds a live lease waits for it
+  /// rather than spending the same rotating refresh token a second time. A lease
+  /// left behind by a process that died mid-call simply expires. NULL when no
+  /// refresh is in flight.
+  refreshLeaseUntil DateTime? @map("refresh_lease_until")
+
+  /// When a refresh last went out and got NO ANSWER — a timeout or a dropped
+  /// connection (MOTIR-8184). The provider may still have rotated the refresh
+  /// token on its side, so the stored pair is left as it is and this records that
+  /// the next refusal is most likely the consequence of that lost answer rather
+  /// than the customer revoking the integration. Cleared by a successful refresh.
+  refreshUncertainAt DateTime? @map("refresh_uncertain_at")
+
+  /// When the provider PERMANENTLY refused this grant's refresh token — a 4xx
+  /// answer such as Sentry's "Given refresh token does not exist" (MOTIR-8170).
+  /// NULL while the refresh token is believed good. Set, the grant can never
+  /// refresh again until a person re-authorises, so the reconciling poll skips
+  /// every binding on it rather than spending a provider call and a warn line on
+  /// each five-minute tick. A successful refresh and a re-authorisation both
+  /// clear it. A timeout or a 5xx never sets it: those are retried next tick.
+  refreshRevokedAt DateTime? @map("refresh_revoked_at")
+
   /// Per-provider context that carries NO secret — Sentry's organisation slug,
   /// so the room can say which org is connected without a provider call. Json?
   /// because the shape is the provider's; the discriminator above says how to
@@ -13851,6 +14102,18 @@ enum IdeaCategory {
   family_care
   /// Public sector
   public_sector
+  /// Entertainment & media
+  entertainment_media
+  /// Hospitality & travel
+  hospitality_travel
+  /// Mobility & automotive
+  mobility
+  /// Energy & climate
+  energy_climate
+  /// Manufacturing
+  manufacturing
+  /// Local services
+  local_services
   // ── Consumer
   /// Personal growth
   personal_growth
@@ -13858,6 +14121,12 @@ enum IdeaCategory {
   personal_finance
   /// Health & wellness
   health_wellness
+  /// Social & community
+  social_community
+  /// Silver economy
+  silver_economy
+  /// Independent work
+  independent_work
   // ── Platform
   /// AI infrastructure
   ai_infrastructure

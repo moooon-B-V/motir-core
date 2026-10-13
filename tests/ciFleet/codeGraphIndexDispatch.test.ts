@@ -850,6 +850,48 @@ describe('the in-process composition QUEUES for admission rather than dropping',
     expect(released).toEqual([]);
   });
 
+  // ⚠️ MOTIR-8235: AN ORGANISATION WITH NO PAID AI PLAN IS AN ANSWER, NOT A FULL
+  // LANE. Waiting sixty attempts on it changed nothing and ended in an
+  // `IndexDispatchFailedError` the monitor filed as a production error. One ask,
+  // no wait, nothing booted.
+  it('returns an ai_plan_required refusal on the FIRST ask, without waiting', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValue({
+      outcome: 'deferred',
+      reason: 'ai_plan_required',
+      detail: "This organization has no paid AI plan, so its CI does not run on Motir's runners.",
+    });
+    const sleep = vi.fn(async () => {});
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'admission_deferred', reason: 'ai_plan_required' });
+    expect((outcome as { detail: string }).detail).not.toContain('refused for');
+    expect(vi.mocked(codeGraphIndexAdmissionService.admit)).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+  });
+
+  // The other half of the same line: an UNREADABLE plan is a transient (motir-ai
+  // unreachable), so it stays on the wait like every other deferral.
+  it('still waits through plan_unknown, then proceeds', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValueOnce({
+      outcome: 'deferred',
+      reason: 'plan_unknown',
+      detail: "Motir could not read this organization's AI plan",
+    });
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    expect(vi.mocked(codeGraphIndexAdmissionService.admit)).toHaveBeenCalledTimes(2);
+    expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+  });
+
   // A redelivery of a job whose container is already up must not be refused
   // capacity it is already holding — it proceeds on the slot it has.
   it('proceeds on an ALREADY-HELD slot instead of waiting for a new one', async () => {

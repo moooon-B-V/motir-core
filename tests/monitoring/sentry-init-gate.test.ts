@@ -19,11 +19,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const init = vi.hoisted(() => vi.fn());
 const captureRouterTransitionStart = vi.hoisted(() => vi.fn());
 const captureRequestError = vi.hoisted(() => vi.fn());
+const withScope = vi.hoisted(() => vi.fn());
 
 vi.mock('@sentry/nextjs', () => ({
   init,
   captureRouterTransitionStart,
   captureRequestError,
+  withScope,
 }));
 
 /** Every monitoring variable cleared — the self-hoster's environment. */
@@ -109,6 +111,28 @@ describe('the transaction-stall monitor sits behind the SAME gate (MOTIR-6701)',
     expect(isTransactionStallMonitorRunning()).toBe(false);
   });
 
+  // MOTIR-8265: the blocking-stack watchdog is a THREAD and an inspector
+  // session, so it must not exist where Sentry does not.
+  it('starts NO watchdog thread, inspector session or GC observer when the DSN is unset', async () => {
+    await import('@/sentry.server.config');
+    const { __forTests, isLoopBlockWatchdogRunning } =
+      await import('@/lib/monitoring/loopBlockWatchdog');
+    expect(isLoopBlockWatchdogRunning()).toBe(false);
+    expect(__forTests.threadId()).toBeNull();
+  });
+
+  it('starts the watchdog thread when the DSN is set, and stopping it ends the thread', async () => {
+    vi.stubEnv('SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
+    await import('@/sentry.server.config');
+    const { __forTests } = await import('@/lib/monitoring/loopBlockWatchdog');
+    const { stopTransactionStallMonitor } = await import('@/lib/monitoring/transactionStall');
+    expect(__forTests.threadId()).not.toBeNull();
+    const exited = __forTests.exited();
+    stopTransactionStallMonitor();
+    await exited;
+    expect(__forTests.threadId()).toBeNull();
+  });
+
   it('starts the monitor on the server when the DSN is set', async () => {
     vi.stubEnv('SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
     await import('@/sentry.server.config');
@@ -166,9 +190,18 @@ describe('the CLIENT cannot read a runtime environment, and says so', () => {
 });
 
 describe('the server request-error hook is always exported (`instrumentation.ts`)', () => {
-  it('is Sentry.captureRequestError, with no DSN set', async () => {
+  it('forwards to Sentry.captureRequestError, with no DSN set', async () => {
+    // A wrapper since MOTIR-8214 (it tags the digest), so the export is no longer
+    // the SDK function itself — what must hold is that every call reaches it.
+    captureRequestError.mockClear();
     const mod = await import('@/instrumentation');
-    expect(mod.onRequestError).toBe(captureRequestError);
+    const args = [
+      new Error('boom'),
+      { path: '/workbench', method: 'GET', headers: {} },
+      { routerKind: 'App Router', routePath: '/workbench', routeType: 'render' },
+    ] as Parameters<typeof mod.onRequestError>;
+    mod.onRequestError(...args);
+    expect(captureRequestError).toHaveBeenCalledWith(...args);
     expect(init).not.toHaveBeenCalled();
   });
 

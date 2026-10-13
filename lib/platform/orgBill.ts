@@ -1,4 +1,4 @@
-import { BILLING_CATALOG } from '@/lib/billing/catalog';
+import { BILLING_CATALOG, INCLUDED_TRACKER_SEATS_PER_AI_PLAN } from '@/lib/billing/catalog';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
 
 /**
@@ -61,7 +61,10 @@ export function buildOrgBill(
     const cadence = tracker.priceId === 'tracker_annual' ? 'annual' : 'monthly';
     const unitCents = cents(BILLING_CATALOG.seatPlan.prices[cadence].amountUsd);
     // A paid AI plan bundles one seat (8.1.22): it is not billed again here.
-    const seats = Math.max(0, memberCount - (status.motir.aiIncludedSeat ? 1 : 0));
+    const seats = Math.max(
+      0,
+      memberCount - (status.motir.aiIncludedSeat ? INCLUDED_TRACKER_SEATS_PER_AI_PLAN : 0),
+    );
     money.push({
       key: 'seats',
       basis: { seats, unitCents, cadence },

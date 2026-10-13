@@ -325,7 +325,7 @@ describe('SEAM: add_plan_items → getPlanReview → the plan’s SHAPE', () => 
 });
 
 describe('GUARD: the abandonment predicate does not RE-NARROW', () => {
-  it('a job-less generating row past the grace IS returned by the candidate read', async () => {
+  it('a job-less generating row IS returned by the candidate read', async () => {
     // The property four defects in this path kept losing, asserted against the
     // SHAPE rather than the SQL text: it is one row in a fixture.
     const fx = await makeWorkItemFixture();
@@ -340,7 +340,7 @@ describe('GUARD: the abandonment predicate does not RE-NARROW', () => {
     });
 
     const candidates = await withSystemContext((tx) =>
-      planRepository.listAbandonedCandidates(new Date(Date.now() - 15 * 60 * 1000), 50, tx),
+      planRepository.listAbandonedCandidates(50, tx),
     );
 
     expect(candidates.map((c) => c.id)).toContain(plan.id);

@@ -25,6 +25,18 @@ export class OrgSlugCollisionError extends Error {
   }
 }
 
+/**
+ * A content language outside the eleven locales (Story MOTIR-7731 · MOTIR-8094).
+ * The codes are exact: `EN` and `''` are refused like `sv`.
+ */
+export class InvalidContentLanguageError extends Error {
+  readonly code = 'INVALID_CONTENT_LANGUAGE' as const;
+  constructor(language: string) {
+    super(`"${language}" is not a supported content language.`);
+    this.name = 'InvalidContentLanguageError';
+  }
+}
+
 export class AlreadyOrgMemberError extends Error {
   readonly code = 'ALREADY_ORG_MEMBER' as const;
   constructor(userId: string, organizationId: string) {

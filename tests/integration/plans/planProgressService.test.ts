@@ -81,6 +81,7 @@ const planInputs = async (ids: string[]) =>
     createdAt: p.createdAt,
     lastActivityAt: p.lastActivityAt,
     authorSource: p.authorSource,
+    sessionId: p.sessionId,
   }));
 
 /** Every statement the pg driver sends, minus the transaction's own frames. */

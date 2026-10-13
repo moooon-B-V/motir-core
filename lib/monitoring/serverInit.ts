@@ -3,6 +3,7 @@ import {
   serverMonitoringEnvironment,
   serverSentryDsn,
 } from './config';
+import { dropClientDisconnectAborts } from './clientDisconnect';
 import { dropExpectedDomainErrors } from './expectedDomainErrors';
 import { tagTransactionStall } from './transactionStall';
 
@@ -31,16 +32,17 @@ import { tagTransactionStall } from './transactionStall';
 // rather than once.
 
 /**
- * The Node runtimes' `beforeSend`: drop an expected domain 4xx, then tag a
- * Prisma transaction timeout (P2028) with what the process was waiting on
- * (MOTIR-6701, `./transactionStall`). The drop runs first so nothing is tagged
- * that is not going to be sent.
+ * The Node runtimes' `beforeSend`: drop React's abort for a client that left a
+ * streaming page (MOTIR-8204, `./clientDisconnect`) and an expected domain 4xx,
+ * then tag a Prisma transaction timeout (P2028) with what the process was
+ * waiting on (MOTIR-6701, `./transactionStall`). The drops run first so nothing
+ * is tagged that is not going to be sent.
  */
 export function serverBeforeSend(
   ...args: Parameters<typeof dropExpectedDomainErrors>
 ): ReturnType<typeof dropExpectedDomainErrors> {
-  const [, hint] = args;
-  const kept = dropExpectedDomainErrors(...args);
+  const [event, hint] = args;
+  const kept = dropClientDisconnectAborts(event, hint) && dropExpectedDomainErrors(event, hint);
   return kept ? tagTransactionStall(kept, hint) : null;
 }
 

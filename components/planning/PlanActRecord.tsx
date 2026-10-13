@@ -8,6 +8,7 @@ import {
   ListTree,
   MessageSquareText,
   PenLine,
+  RotateCcw,
   ScanSearch,
   SearchCheck,
   Send,
@@ -112,12 +113,20 @@ export function runningBarLine(acts: readonly PlanChangeProgress[], tc: Tc): str
  * group heads (`heads`) — when a session's group first appears, its step words
  * change, or it ends. A narration sentence is never announced. The record `<ol>`
  * is its next sibling, ordinary content of the transcript's `role="log"`.
+ *
+ * ⚠️ THE AUTOMATIC RESUME'S ROW (Story MOTIR-8301 · MOTIR-8309; design Part
+ * XXVII §27.7). A plan Motir resumed by itself after its machine was lost opens
+ * its record with ONE quiet act row saying so. It is drawn from the plan's
+ * progress (`autoResume`, the session's own record), not from the stream, so a
+ * reload draws it too; the new job's acts append below it. It is not a stream
+ * act, so the announcer does not say it.
  */
 export function PlanActRecord({
   acts: allActs,
   streaming,
   sessionHeads = false,
   heads = NO_HEADS,
+  autoResume = null,
 }: {
   acts: readonly PlanChangeProgress[];
   streaming: boolean;
@@ -125,6 +134,8 @@ export function PlanActRecord({
   sessionHeads?: boolean;
   /** The narration's group heads, in words, for the announcer. */
   heads?: readonly NarrationHeadLine[];
+  /** The session's latest automatic resume, when the plan has one. */
+  autoResume?: { count: number } | null;
 }) {
   const tc = useTranslations('planningWorkspace.conversation');
   const acts = allActs;
@@ -148,11 +159,12 @@ export function PlanActRecord({
           {said}
         </p>
       </div>
-      {drawn.length > 0 ? (
+      {drawn.length > 0 || autoResume ? (
         <ol
           data-testid="plan-change-acts"
           className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
         >
+          {autoResume ? <ResumedRow second={autoResume.count === 2} tc={tc} /> : null}
           {drawn.map(({ act, index }) => {
             // The newest act is live while the run streams; an open step carries
             // the spinner on its own row until a row that is not a step follows it.
@@ -168,6 +180,25 @@ export function PlanActRecord({
 }
 
 const NO_HEADS: readonly NarrationHeadLine[] = [];
+
+function ResumedRow({ second, tc }: { second: boolean; tc: Tc }) {
+  return (
+    <li
+      data-testid="plan-change-act-resumed"
+      className="flex items-start gap-2 text-xs text-(--el-text-secondary)"
+    >
+      <span className="mt-px shrink-0 text-(--el-text-secondary)">
+        <RotateCcw className="size-3.5" aria-hidden="true" />
+      </span>
+      <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+        {tc('act.resumed')}
+      </span>
+      <span className="min-w-0 flex-1">
+        {tc(second ? 'act.resumedLineSecond' : 'act.resumedLine')}
+      </span>
+    </li>
+  );
+}
 
 function ActRow({ act, live, tc }: { act: PlanChangeProgress; live: boolean; tc: Tc }) {
   return (

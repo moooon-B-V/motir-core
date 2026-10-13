@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChevronLeft, FileQuestion } from 'lucide-react';
 import { DirectionDocView } from '@/components/onboarding/DirectionDocView';
+import { useTierLabel } from '@/components/onboarding/useTierLabel';
 import {
-  TIER_META,
   type DirectionDocKind,
   type DirectionDocView as DirectionDocModel,
   type FeatureCatalogView,
@@ -45,7 +46,8 @@ export function DirectionDocFullPage({
   origin = 'roadmap',
 }: DirectionDocFullPageProps) {
   const router = useRouter();
-  const meta = TIER_META[tier];
+  const t = useTranslations('roadmap.directionDoc');
+  const label = useTierLabel()(tier);
   const basePath = origin === 'onboarding' ? '/onboarding/direction' : '/direction';
   const backClassName =
     'inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)';
@@ -56,34 +58,32 @@ export function DirectionDocFullPage({
         {origin === 'onboarding' ? (
           <Link href={ONBOARDING_ENTRY_PATH} className={backClassName}>
             <ChevronLeft className="size-4" aria-hidden="true" />
-            Back to roadmap
+            {t('backToRoadmap')}
           </Link>
         ) : (
           <button type="button" onClick={() => router.back()} className={backClassName}>
             <ChevronLeft className="size-4" aria-hidden="true" />
-            Back to roadmap
+            {t('backToRoadmap')}
           </button>
         )}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
-          <span className="text-(--el-text-muted)">Roadmap</span>
+        <nav aria-label={t('breadcrumb')} className="flex items-center gap-1.5 text-sm">
+          <span className="text-(--el-text-secondary)">{t('breadcrumbRoadmap')}</span>
           <span className="text-(--el-text-faint)" aria-hidden="true">
             ›
           </span>
-          <span className="text-(--el-text-muted)">Direction</span>
+          <span className="text-(--el-text-secondary)">{t('breadcrumbDirection')}</span>
           <span className="text-(--el-text-faint)" aria-hidden="true">
             ›
           </span>
-          <span className="font-semibold text-(--el-text)">{meta.label}</span>
+          <span className="font-semibold text-(--el-text)">{label}</span>
         </nav>
       </div>
 
       <div className="py-8">
         {error ? (
           <div className="mx-auto flex max-w-[45rem] flex-col items-center gap-1 py-16 text-center">
-            <p className="text-sm font-semibold text-(--el-text)">Couldn&apos;t load this doc</p>
-            <p className="text-sm text-(--el-text-muted)">
-              Something went wrong reading your direction. Try again in a moment.
-            </p>
+            <p className="text-sm font-semibold text-(--el-text)">{t('errorTitle')}</p>
+            <p className="text-sm text-(--el-text-secondary)">{t('errorBodyRetry')}</p>
           </div>
         ) : doc ? (
           <DirectionDocView
@@ -95,13 +95,8 @@ export function DirectionDocFullPage({
         ) : (
           <div className="mx-auto flex max-w-[45rem] flex-col items-center gap-2 py-16 text-center">
             <FileQuestion className="size-7 text-(--el-text-faint)" aria-hidden="true" />
-            <p className="text-sm font-semibold text-(--el-text)">
-              {meta.label} isn&apos;t ready yet
-            </p>
-            <p className="max-w-[24rem] text-sm text-(--el-text-muted)">
-              This tier hasn&apos;t been drafted for this project. It&apos;ll appear here once Motir
-              writes it up in the chat.
-            </p>
+            <p className="text-sm font-semibold text-(--el-text)">{t('emptyTitle', { label })}</p>
+            <p className="max-w-[24rem] text-sm text-(--el-text-secondary)">{t('emptyBody')}</p>
           </div>
         )}
       </div>

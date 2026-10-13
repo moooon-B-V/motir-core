@@ -44,28 +44,50 @@ export interface CatalogPrice {
   priceLookupKey: string;
 }
 
-/** A Motir AI plan tier (the motir-ai `PlanTier`) as the storefront renders it. */
+/**
+ * A Motir AI plan tier (the motir-ai `PlanTier`) as the storefront renders it.
+ *
+ * PRICED PER ORGANISATION (MOTIR-8390): an org holds ONE AI plan, its credits are
+ * whole-org credits, and a plan is always bought at quantity 1 — its price is never
+ * per user or per seat. Every paid plan includes ONE tracker seat at no charge
+ * (`includedTrackerSeats`); seats beyond it are billed per user at `seatPlan`.
+ */
 export interface AiPlanCatalogEntry {
-  /** The `PlanTier.key` (matches the usage read's `tier.key`). */
-  key: 'free' | 'standard' | 'pro' | 'max' | 'enterprise';
+  /**
+   * The `PlanTier.key` (matches the usage read's `tier.key`). An org on a tier the
+   * catalog does not list (a staff-set `enterprise`) still reads its tier from
+   * motir-ai; it simply has no storefront card.
+   */
+  key: 'free' | 'standard' | 'pro' | 'max' | 'max_x2';
   /** Customer-facing name ("Standard", "Pro", …). */
   name: string;
   /**
    * The tier's credit grant (ADR §2) — its size AND its cadence, because Free's
    * 300 is a one-time signup grant while every paid tier refreshes monthly.
-   * `null` for Enterprise (a custom pool).
    */
   allotment: CreditAllotment | null;
   /** The recommended/anchor tier (Pro) — accent-bordered in the storefront. */
   recommended: boolean;
   /**
-   * The recurring prices, keyed by cadence. `null` for plans with no Stripe
-   * object: Free (the one-time signup grant) and Enterprise (custom/invoiced).
+   * The recurring prices, keyed by cadence. `null` for a plan with no Stripe
+   * object: Free (the one-time signup grant).
    */
   prices: Record<BillingCadence, CatalogPrice> | null;
+  /**
+   * Tracker seats included at no charge with this plan: 1 for every paid plan (the
+   * solo founder's seat), 0 for Free, which holds no AI plan subscription. DATA only
+   * — motir-core's seat resync bills `max(0, members - included)` while the plan is
+   * live. Read `INCLUDED_TRACKER_SEATS_PER_AI_PLAN` rather than typing a 1.
+   */
+  includedTrackerSeats: number;
 }
 
-/** The Motir (seats / scaled-tracker) plan — per-seat, billed by membership count. */
+/**
+ * The Motir (seats / scaled-tracker) plan — PRICED PER USER, billed by membership
+ * count. A different product from the AI plans: an org on a live AI plan has one
+ * seat included (`AiPlanCatalogEntry.includedTrackerSeats`) and pays this fee for
+ * each seat beyond it; an org with no AI plan pays it for every seat.
+ */
 export interface SeatPlanCatalogEntry {
   name: string;
   /** Per-seat prices by cadence (the `tracker_*` lookup keys). */
@@ -109,27 +131,30 @@ export const BILLING_CATALOG: BillingCatalog = {
       allotment: { credits: 300, cadence: 'one_time' },
       recommended: false,
       prices: null,
+      includedTrackerSeats: 0,
     },
     // `starter` removed by the 2026-06-23 amendment (8.1.18 / MOTIR-1308).
     {
       key: 'standard',
       name: 'Standard',
-      allotment: { credits: 2000, cadence: 'monthly' },
+      allotment: { credits: 5000, cadence: 'monthly' },
       recommended: false,
       prices: {
         monthly: { amountUsd: 25, priceLookupKey: 'standard_pool_monthly' },
         annual: { amountUsd: 200, priceLookupKey: 'standard_pool_annual' },
       },
+      includedTrackerSeats: 1,
     },
     {
       key: 'pro',
       name: 'Pro',
-      allotment: { credits: 8000, cadence: 'monthly' },
+      allotment: { credits: 15000, cadence: 'monthly' },
       recommended: true, // the anchor tier; pro_pool_annual is Stripe's default Price
       prices: {
         monthly: { amountUsd: 75, priceLookupKey: 'pro_pool_monthly' },
         annual: { amountUsd: 600, priceLookupKey: 'pro_pool_annual' },
       },
+      includedTrackerSeats: 1,
     },
     {
       key: 'max',
@@ -140,15 +165,24 @@ export const BILLING_CATALOG: BillingCatalog = {
         monthly: { amountUsd: 150, priceLookupKey: 'max_pool_monthly' },
         annual: { amountUsd: 1200, priceLookupKey: 'max_pool_annual' },
       },
+      includedTrackerSeats: 1,
     },
-    // Enterprise — custom/invoiced, no public Stripe object (tier set by staff).
+    // Max ×2 — a plan of its own (MOTIR-8390): twice Max's pool at twice its price,
+    // on both cadences. The lookup keys are the ones the Stripe card (MOTIR-8395)
+    // created. Bought at quantity 1 like every AI plan; there is no multiplier.
     {
-      key: 'enterprise',
-      name: 'Enterprise',
-      allotment: null,
+      key: 'max_x2',
+      name: 'Max ×2',
+      allotment: { credits: 60000, cadence: 'monthly' },
       recommended: false,
-      prices: null,
+      prices: {
+        monthly: { amountUsd: 300, priceLookupKey: 'max_x2_pool_monthly' },
+        annual: { amountUsd: 2400, priceLookupKey: 'max_x2_pool_annual' },
+      },
+      includedTrackerSeats: 1,
     },
+    // No Enterprise card (MOTIR-8390). An org staff set to the `enterprise` tier
+    // keeps it in motir-ai; it just has nothing to buy here.
   ],
   seatPlan: {
     name: 'Motir',
@@ -159,11 +193,28 @@ export const BILLING_CATALOG: BillingCatalog = {
   },
   creditTopup: {
     unitCredits: 1000,
-    unitAmountUsd: 10,
+    unitAmountUsd: 5,
     priceLookupKey: 'credit_topup',
     bundleUnits: [1, 5, 10],
   },
 };
+
+/** Tracker seats included with any live AI plan — read this, never type a 1. */
+export const INCLUDED_TRACKER_SEATS_PER_AI_PLAN: number = Math.max(
+  ...BILLING_CATALOG.aiPlans.filter((p) => p.prices !== null).map((p) => p.includedTrackerSeats),
+);
+
+/**
+ * The largest monthly credit pool any plan grants (60,000, Max ×2 today) — computed
+ * from the entries, so the calculator's ceiling moves with the catalog.
+ */
+export function maxMonthlyPlanCredits(): number {
+  return Math.max(
+    ...BILLING_CATALOG.aiPlans.flatMap((p) =>
+      p.allotment?.cadence === 'monthly' ? [p.allotment.credits] : [],
+    ),
+  );
+}
 
 // Every lookup key a Checkout may legitimately start — the allow-list
 // `startCheckout` validates against, so the boundary never forwards an arbitrary
@@ -190,8 +241,11 @@ export const DEFAULT_CHECKOUT_QUANTITY = 1;
  * of the allow-list above (MOTIR-2949).
  *
  * Only the credit TOP-UP is a multi-unit line, and only at the bundle sizes the
- * storefront actually offers. Every recurring plan is exactly one unit: the AI
- * pool is priced per org, and the scaled tracker's seat count is owned by the
+ * storefront actually offers. Every recurring AI plan — Max ×2 included — is
+ * exactly one unit: the AI pool is priced per org, and nothing here limits how
+ * many plans an org holds (motir-ai routes a second plan checkout to the upgrade
+ * path). The tracker seat's per-user quantity is carried by the seat flow
+ * (`setSeatQuantity`), not by this guard: the scaled tracker's seat count is owned by the
  * `system.billing-seat-sync` job (`billingService.syncScaledTrackerSeats`), which
  * resets a subscription's quantity to the membership count. A one-time payment
  * has NO such reconciler — the Session IS the charge — so a client-supplied

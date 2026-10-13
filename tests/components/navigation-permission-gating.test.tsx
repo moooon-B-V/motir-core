@@ -51,7 +51,7 @@ afterEach(() => cleanup());
 
 // ── The org menu reads the org settings REGISTRY ───────────────────────────────
 
-const ACME: OrganizationDTO = { id: 'org_acme', name: 'Acme', slug: 'acme' };
+const ACME: OrganizationDTO = { id: 'org_acme', name: 'Acme', slug: 'acme', contentLanguage: 'en' };
 
 function openOrgMenu(role: string, { cloudBilling = true, workspaceTierRevealed = false } = {}) {
   renderWithIntl(

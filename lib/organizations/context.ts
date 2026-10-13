@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { retryOnceBeforeBody } from '@/lib/workspaces/retryBeforeBody';
 
 // Runtime half of the organization-RLS pair (Story 6.10). The DB half lives in
 // prisma/migrations/.../add_organization_tier: the `organization` and
@@ -47,11 +48,15 @@ export async function withOrgContext<T>(
   ctx: OrganizationContext,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
-    await tx.$executeRaw`SELECT set_config('app.organization_id', ${ctx.organizationId}, true)`;
-    return fn(tx);
-  });
+  // Retried once on a P2028 raised before `fn` starts, as in `withWorkspaceContext`.
+  return retryOnceBeforeBody((bodyStarted) =>
+    db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.organization_id', ${ctx.organizationId}, true)`;
+      bodyStarted();
+      return fn(tx);
+    }),
+  );
 }
 
 /**
@@ -79,10 +84,13 @@ export async function withOrgServiceWriteContext<T>(
   organizationId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
-    return fn(tx);
-  });
+  return retryOnceBeforeBody((bodyStarted) =>
+    db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
+      bodyStarted();
+      return fn(tx);
+    }),
+  );
 }
 
 /**

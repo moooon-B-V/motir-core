@@ -668,8 +668,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'billing.ci.pausedBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'billing.agents.unavailable': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'billing.search.unavailable': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
-    'onboarding.entrance.hintDefault': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
-    'onboarding.howItWorks.body': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'onboarding.chat.composerPlaceholder':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'github.development.fix.rearm': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
@@ -722,6 +720,10 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'import.errors.generic': "an issue in the SOURCE tracker being imported — that tool's own noun",
     'onboardingMigrate.rail.discoveryStep':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    // MOTIR-8254: the "A few questions" step the rail names — a question asked.
+    'onboardingMigrate.questions.heading': 'a question asked — 几个问题, not a work item',
+    'onboardingMigrate.questions.body': 'a question asked — 几个问题, not a work item',
+    'onboardingMigrate.questions.progress': 'a question asked — 第 n 个问题, not a work item',
     'designResult.frameFailedBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'workbench.approvals.subjectGone.manual_work':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',

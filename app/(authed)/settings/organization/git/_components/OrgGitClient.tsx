@@ -20,17 +20,22 @@ import { RepositoryInventory } from './RepositoryInventory';
 // A disconnect changes both, so it does both: the row leaves this island
 // immediately, and `router.refresh()` re-reads the server half. Assuming the
 // refresh covers the island is the recurring bug the contract exists to stop.
+//
+// ⚠️ A CHANGE MADE ABOVE IT — a GitHub account linked or disconnected in the
+// connection card (MOTIR-8223) — reaches it through its `key`: the page keys
+// this island by the set of repository ids it was seeded with, so a refresh
+// that changes the set remounts it with the new rows.
 export function OrgGitClient({
   initialRows,
   organizationName,
   canDisconnect,
-  manageOnGithubHref,
+  manageOnGithubHrefs,
   retentionDays,
 }: {
   initialRows: OrgRepoInventoryRowDto[];
   organizationName: string;
   canDisconnect: boolean;
-  manageOnGithubHref: string | null;
+  manageOnGithubHrefs: Readonly<Record<string, string>>;
   retentionDays: number;
 }) {
   const router = useRouter();
@@ -53,7 +58,7 @@ export function OrgGitClient({
       rows={rows}
       organizationName={organizationName}
       canDisconnect={canDisconnect}
-      manageOnGithubHref={manageOnGithubHref}
+      manageOnGithubHrefs={manageOnGithubHrefs}
       onDisconnect={onDisconnect}
       retentionDays={retentionDays}
     />

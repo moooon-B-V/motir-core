@@ -8,7 +8,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 //
 //   * every per-kind FLOOR a registered gate handler names
 //     (`APPROVAL_GATE_HANDLERS[kind].permission`: `work_item:edit`, and
-//     `ai:decide_plan` for a plan) — the door asserts it before anything else;
+//     `ai:decide_plan` for a plan, `ai:plan` for a planning session) — the door asserts it before anything else;
 //   * `approval:decide_any` — the escape hatch that decides anyone's gate.
 //
 // Routing itself needs no key: a gate is routed to its card's assignee (or
@@ -23,6 +23,9 @@ export const APPROVAL_ACT_PERMISSIONS: readonly PermissionKey[] = [
   'work_item:edit',
   'approval:decide_any',
   'ai:decide_plan',
+  // The `planning_session` gate's floor (MOTIR-7913): it offers no verb, but its row is
+  // listed in Waiting on you for the session's owner, who holds `ai:plan`.
+  'ai:plan',
 ];
 
 /** Whether a reader holding `held` can act in the Approvals room. */

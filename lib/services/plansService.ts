@@ -82,16 +82,21 @@ import {
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
 import {
+  assertAddKindPlacementLegal,
   assertBlockedByLevels,
   assertFolderPlacementsLegal,
+  assertKindChangesLegal,
   assertProposalSetSelfConsistent,
   assertReparentLegal,
   assertSupersedesGraphAcyclic,
   collectReferencedFolderIds,
   collectReferencedWorkItemIds,
   DEFAULT_PROPOSED_KIND,
+  projectedKindOverrides,
   proposedParentAnchorIds,
   validatePlanProposals,
+  withProjectedKinds,
+  type KindChangeContext,
   type LiveFolderState,
   type LiveWorkItemState,
   type ProposalNode,
@@ -100,6 +105,11 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import {
+  assertReKindedAddKeepsNoLeafFields,
+  isContainerKind,
+  validateProposedKindChange,
+} from '@/lib/plans/validateProposedKind';
 import {
   assertMarkTargetIsFinished,
   patchSetsObsolescence,
@@ -113,6 +123,9 @@ import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { hasText, toOrgContentLanguage } from '@/lib/workItems/contentLanguage';
+import type { Locale } from '@/lib/i18n/locales';
 import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
@@ -151,6 +164,8 @@ import {
   revisionLeaseOf,
   REVISION_STARTED_KIND,
   REVISION_ENDED_KIND,
+  REVISION_REOPENED_FROM_KEY,
+  revisionReopenedFrom,
 } from '@/lib/planChange/revisionLease';
 import {
   resolveAuthoredRepoPinsInProject,
@@ -218,6 +233,7 @@ import {
 } from '@/lib/mappers/planMappers';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
@@ -270,6 +286,41 @@ const BLOCKED_STATUS_KEY = 'blocked';
 // `MAX_PAGE_LIMIT` is untouched: a caller may still ask for more.
 const DEFAULT_PAGE_LIMIT = 10;
 const MAX_PAGE_LIMIT = 100;
+
+/**
+ * STAMP A PLAN'S ACTIVITY, AND LET A RETURNING PRODUCER RESUME (MOTIR-8132) — the one
+ * door every content write and step signal stamps `lastActivityAt` through, in the
+ * write's own transaction.
+ *
+ * The abandoned-plan sweep RECORDS a failure on the session of a `generating` plan that
+ * went silent past `PLAN_STALLED_AFTER_MS`, and leaves the plan, its proposals and its
+ * held cards exactly where they were. So a producer that comes back — a hosted job
+ * that was only slow, an MCP author resuming a skeleton — must be able to pick the
+ * plan up by WRITING: when the plan is `generating` and the latest of its session, and
+ * that session is failed-waiting, the record is cleared here, beside the stamp. The
+ * plan then reads `working` / `writing` again with everything it held.
+ *
+ * Lock order is the sweep's (`recordFailureWithin`): the write already holds the plan
+ * row, and the clear takes the session row after it. A write the sweep raced either
+ * moved the stamp before the sweep's compare-and-set (nothing recorded) or lands after
+ * the record and clears it here.
+ */
+async function stampPlanActivity(
+  plan: { id: string; sessionId: string | null; status: string; workspaceId: string },
+  at: Date,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await planRepository.touchActivity(plan.id, at, tx);
+  if (plan.status !== 'generating' || !plan.sessionId) return;
+  const session = await planChangeSessionRepository.findWaitingState(
+    plan.sessionId,
+    plan.workspaceId,
+    tx,
+  );
+  if (!session || sessionWaitingState(session) !== 'failed') return;
+  if ((await planRepository.findLatestIdBySession(plan.sessionId, tx)) !== plan.id) return;
+  await planChangeSessionRepository.clearFailure(plan.sessionId, tx);
+}
 
 function clampLimit(limit: number | undefined): number {
   if (limit == null || !Number.isFinite(limit)) return DEFAULT_PAGE_LIMIT;
@@ -772,6 +823,11 @@ function validateProposal(p: ProposalInput): void {
     // sizing alone, or an explicit `null` that clears it.
     validateStoryPoints(p.patch.storyPoints ?? null);
     validateEstimateMinutes(p.patch.estimateMinutes ?? null);
+    // A `modify` may RE-KIND the target (bug MOTIR-8192 · AMENDMENT 25).
+    // MEMBERSHIP only here — `epic` refused by name; the parent, the children
+    // and the leaf fields need the tree, and run in `addProposals`' transaction
+    // (`assertKindChangesLegalAtAppend`) and again at approve.
+    validateProposedKindChange(p.patch.kind, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify` may RE-JUDGE the target's difficulty (MOTIR-6133). MEMBERSHIP
     // only here — this pass is pure and the target's KIND needs a read, so the
     // container half runs inside `addProposals`' transaction
@@ -1153,6 +1209,10 @@ async function runPersistGate(
     ctx,
     tx,
   );
+  // The committed tree around every target a `modify` RE-KINDS (bug MOTIR-8192)
+  // — skipped entirely when no proposal re-kinds, so a plan that changes no kind
+  // costs exactly what it cost before.
+  const kindChangeContextById = await resolveKindChangeContexts(nodes, rows, ctx, tx);
   validatePlanProposals({
     items: nodes,
     liveById,
@@ -1164,7 +1224,144 @@ async function runPersistGate(
     markTargetStatusCategoryById,
     folderById,
     edgeAncestorsById,
+    kindChangeContextById,
   });
+}
+
+/**
+ * The committed tree around every target a `modify` in `nodes` RE-KINDS (bug
+ * MOTIR-8192 · AMENDMENT 25) — its parent's kind, its folder filing, its leaf
+ * fields and its live children — in at most two batched reads, both skipped
+ * when no proposal carries `patch.kind`. `rows` are the live rows the caller
+ * already read for the plan's referenced ids; a target missing from them is left
+ * to `materialize`, as every other live-row question is.
+ *
+ * With a `tx`, the reads run on it (the caller holds the workspace GUC and has
+ * lifted the project narrowing); without one they open their own workspace
+ * context, as `runPersistGate`'s pre-transaction pass does.
+ */
+async function resolveKindChangeContexts(
+  nodes: readonly ProposalNode[],
+  rows: readonly WorkItem[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<Map<string, KindChangeContext>> {
+  const out = new Map<string, KindChangeContext>();
+  const targetIds = new Set(
+    nodes
+      .filter((n) => n.op === 'modify' && n.workItemId && n.patch?.kind !== undefined)
+      .map((n) => n.workItemId!),
+  );
+  if (targetIds.size === 0) return out;
+  const targets = rows.filter((r) => targetIds.has(r.id));
+  if (targets.length === 0) return out;
+  const parentIds = [
+    ...new Set(targets.map((t) => t.parentId).filter((id): id is string => id !== null)),
+  ];
+  const read = async (t: Prisma.TransactionClient) => ({
+    parents: await workItemRepository.findByIdsInWorkspace(parentIds, ctx.workspaceId, t),
+    children: await workItemRepository.findChildKindsForItems(
+      targets.map((r) => r.id),
+      ctx.workspaceId,
+      t,
+    ),
+  });
+  const { parents, children } = tx
+    ? await read(tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, read);
+  const parentKindById = new Map(parents.map((p) => [p.id, p.kind as string]));
+  for (const target of targets) {
+    out.set(target.id, {
+      parentId: target.parentId,
+      parentKind: target.parentId ? (parentKindById.get(target.parentId) ?? null) : null,
+      filed: target.folderId !== null,
+      type: target.type,
+      difficulty: target.difficulty,
+      children: children
+        .filter((c) => c.parentId === target.id)
+        .map((c) => ({ id: c.id, key: c.identifier, title: c.title, kind: c.kind })),
+    });
+  }
+  return out;
+}
+
+/**
+ * Run the RE-KIND gate over a proposal set at the APPEND (bug MOTIR-8192 ·
+ * AMENDMENT 25) — the same `assertKindChangesLegal` the approve path runs, given
+ * the same context, so a re-kind admitted here cannot be refused there for a
+ * reason the author could have been told while the plan was still theirs.
+ *
+ * The whole batch is judged, INCLUDING the proposals already on the plan, for
+ * the reason `assertReparentsLegalAtAppend` gives: a re-kind is a question about
+ * the projected tree, and the plan's other proposals are part of it. Skipped
+ * with no read when nothing in `nodes` re-kinds. The project narrowing is lifted
+ * for the reason that function lifts it.
+ */
+async function assertKindChangesLegalAtAppend(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (!nodes.some((n) => n.op === 'modify' && n.patch?.kind !== undefined)) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace(
+      collectReferencedWorkItemIds(nodes),
+      ctx.workspaceId,
+      tx,
+    );
+    const liveById = new Map<string, LiveWorkItemState>(rows.map((r) => [r.id, toLiveState(r)]));
+    const contexts = await resolveKindChangeContexts(nodes, rows, ctx, tx);
+    assertKindChangesLegal(nodes, liveById, contexts);
+  });
+}
+
+/**
+ * Hold an `add` whose KIND an edit just changed to the rules a new kind owes
+ * (bug MOTIR-8192 · AMENDMENT 25 §4) — at the correction and at every
+ * `editAddProposal` mode, the doors that can re-kind a proposed card:
+ *
+ *   - a CONTAINER keeps no `type` / `executor` — refused by name, the same
+ *     refusal-not-clear rule a `modify` follows (`assertReKindedAddKeepsNoLeafFields`;
+ *     `todos` and `difficulty` were already refused on the merged kind);
+ *   - its PARENT admits the new kind, and the new kind admits every proposal
+ *     the plan hangs under it (`assertAddKindPlacementLegal`).
+ *
+ * Run UNCONDITIONALLY when the edit supplies a kind — not left to the close's
+ * before/after verdict, which admits a write to a plan that was already
+ * unapprovable — because an illegal kind is a mistake this write introduces.
+ * `nodes` is the plan's proposal set WITH the edited `add` already merged.
+ */
+async function assertReKindedAddLegal(
+  addId: string,
+  merged: PlanItemProposedFields,
+  nodes: readonly ProposalNode[],
+  label: string,
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  assertReKindedAddKeepsNoLeafFields(merged.kind ?? DEFAULT_PROPOSED_KIND, merged, label);
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace(
+      collectReferencedWorkItemIds(nodes),
+      ctx.workspaceId,
+      tx,
+    );
+    assertAddKindPlacementLegal(addId, nodes, new Map(rows.map((r) => [r.id, toLiveState(r)])));
+  });
+}
+
+/** A live row in the shape the plan gate reads. */
+function toLiveState(r: WorkItem): LiveWorkItemState {
+  return {
+    id: r.id,
+    key: r.identifier,
+    title: r.title,
+    kind: r.kind,
+    status: r.status,
+    projectId: r.projectId,
+  };
 }
 
 /**
@@ -2163,6 +2360,60 @@ function assertPlanProposalsEditable(plan: Pick<Plan, 'id' | 'status'>): void {
   }
 }
 
+/**
+ * GIVE A RE-OPENED PLAN ITS STATUS BACK (Bug MOTIR-8208): `generating` → `planned`,
+ * with the plan's question asked again in the same transaction.
+ *
+ * The caller holds the plan's row lock and has just written the `revision_ended`
+ * row that records the end, so the status change is on the trail. `raise` is
+ * idempotent: the gate the plan held when the revision re-opened it is still
+ * `awaiting`, so in the ordinary case it writes nothing, and a plan whose
+ * revision withdrew every proposal is asked nothing, exactly as `raise` decides.
+ */
+async function restoreReopenedPlanWithin(
+  planId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const restored = await planRepository.update(planId, { status: 'planned' }, tx);
+  await planGateService.raise(restored, tx);
+}
+
+/**
+ * GIVE BACK A RE-OPENED PLAN WHOSE REVISION LAPSED (Bug MOTIR-8208), in the caller's
+ * transaction and under its plan lock: the lease's window ran out with no
+ * `revision_ended`, so nobody is writing the plan, and it goes back to `planned` as
+ * it stands — one `revision_ended` signed by Motir, then the restore.
+ *
+ * The lease is the authority here exactly as it was before a revision re-opened
+ * anything: a lapsed lease made the plan decidable then, and it makes it `planned`
+ * now. Called by the decision paths first (so a person who presses Approve the
+ * moment a revision lapses is not refused for a status nobody holds) and by the
+ * planning-lock sweep's lapsed-revision pass. Returns whether it restored.
+ */
+async function settleLapsedRevisionWithin(
+  planId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const fresh = await planRepository.findById(planId, workspaceId, tx);
+  if (!fresh || fresh.status !== 'generating') return false;
+  const rows = await planRevisionRepository.listByPlan(planId, tx);
+  if (!revisionReopenedFrom(rows) || revisionLeaseOf(rows, now)) return false;
+  await planRevisionsService.recordRevision(
+    {
+      planId,
+      changeKind: REVISION_ENDED_KIND,
+      changedById: null,
+      actor: { source: 'native', harness: 'Motir', model: null },
+      diff: { revision: true, lapsed: true, restoredTo: 'planned' },
+    },
+    tx,
+  );
+  await restoreReopenedPlanWithin(planId, tx);
+  return true;
+}
+
 function assertKnownRepoRole(role: unknown, planItemId: string | null, label: string): void {
   if (role === undefined || role === null || isProjectRepoRole(role)) return;
   const printed = typeof role === 'string' ? role : String(JSON.stringify(role) ?? role);
@@ -2281,6 +2532,14 @@ async function materialize(
   if (statusKey == null) throw new NoInitialStatusError(plan.projectId);
 
   const adds = items.filter((i) => i.op === 'add');
+  // The language every approved add's text is recorded in (Story MOTIR-7731 ·
+  // MOTIR-8097). A proposal carries no language of its own, and the planner is
+  // asked to write in the organisation's content language, so that is what the
+  // created rows record. Read ONCE, in this transaction, before the per-item
+  // loop — approve's round-trip budget (MOTIR-3396) gains one query, not N.
+  const orgLanguage = toOrgContentLanguage(
+    await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+  );
   // The provenance guard, RE-RUN here (MOTIR-2990). `addProposals` already
   // rejects an unknown `planningProvenance.source` at the append, and this is the
   // same check at the persist boundary — the "core re-checks, defense in depth"
@@ -2383,6 +2642,11 @@ async function materialize(
       // at its schema default (`user_authored`). Intra-plan temp-ref tokens in the
       // explanation are rewritten in Pass 3, like the description.
       explanationMd: normalizedExplanationMd ?? null,
+      // The recorded language of each written field (MOTIR-8097); an empty body
+      // records NULL. Pass 3's temp-ref rewrite is not an edit and leaves these.
+      titleLanguage: orgLanguage,
+      descriptionLanguage: hasText(normalizedDescriptionMd) ? orgLanguage : null,
+      explanationLanguage: hasText(normalizedExplanationMd) ? orgLanguage : null,
       ...(typeof normalizedExplanationMd === 'string' && normalizedExplanationMd.trim() !== ''
         ? {
             explanationSource:
@@ -2562,12 +2826,15 @@ async function materialize(
     const createdTodos: MaterializedTodo[] = [];
     let lastTodoPosition: string | null = null;
     for (const todo of pf.todos ?? []) {
+      const notesMd = normalizeNotes(todo.notesMd);
       const row = await workItemTodoRepository.create(
         {
           workspaceId: ctx.workspaceId,
           workItemId: created.id,
           text: requireText(todo.text),
-          notesMd: normalizeNotes(todo.notesMd),
+          notesMd,
+          textLanguage: orgLanguage,
+          notesLanguage: hasText(notesMd) ? orgLanguage : null,
           commandText: normalizeCommand(todo.commandText),
           executor: (todo.executor ?? pf.executor ?? 'human') as WorkItemCreateInput['executor'],
           position: keyForAppend(lastTodoPosition),
@@ -3213,6 +3480,28 @@ async function applyModify(
     update.explanationMd = normalizedExplanationMd;
     diff.explanationMd = { from: current.explanationMd, to: normalizedExplanationMd };
   }
+  // Re-record the language of each text field this modify CHANGED (Story
+  // MOTIR-7731 · MOTIR-8097) — the app-service rule: an untouched field keeps
+  // its recorded language (NULL included), an emptied one records NULL. The
+  // org's language is read only when a changed field needs it. Not part of the
+  // revision diff — the language is a property of the text, not an edit.
+  const changedText = [
+    ['titleLanguage', 'title' in update ? update.title : undefined],
+    ['descriptionLanguage', 'descriptionMd' in update ? update.descriptionMd : undefined],
+    ['explanationLanguage', 'explanationMd' in update ? update.explanationMd : undefined],
+  ] as const;
+  let modifyLanguage: Locale | null = null;
+  for (const [column, value] of changedText) {
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || !hasText(value)) {
+      update[column] = null;
+      continue;
+    }
+    modifyLanguage ??= toOrgContentLanguage(
+      await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+    );
+    update[column] = modifyLanguage;
+  }
   if (patch.priority !== undefined && patch.priority !== current.priority) {
     update.priority = patch.priority as WorkItemUpdateInput['priority'];
     diff.priority = { from: current.priority, to: patch.priority };
@@ -3239,6 +3528,27 @@ async function applyModify(
     if (nextExecutor !== current.executor) {
       update.executor = nextExecutor as WorkItemUpdateInput['executor'];
       diff.executor = { from: current.executor, to: nextExecutor };
+    }
+  }
+  // RE-KIND the target (bug MOTIR-8192 · AMENDMENT 25) — the same `kind` diff
+  // cell `workItemsService.updateWorkItem` records, so the activity feed renders
+  // it through the disposition already registered.
+  //
+  // ⚠️ EVERY GUARD HAS ALREADY RUN, as for the re-parent below: the parent, the
+  // children it keeps and the leaf fields were judged at the append and again by
+  // `validatePlanProposals` (`assertKindChangesLegal`). A container's `type` and
+  // `difficulty` therefore arrive cleared by this same patch or not at all.
+  //
+  // The EXECUTOR is the one leaf field no patch key reaches (AMENDMENT 4 D3a), so
+  // a re-kind to a container DERIVES it to `null` here — the end state
+  // `updateWorkItem` insists on, where a person clears it by hand — and the
+  // review shows that row before the button (`planReviewService.buildChanges`).
+  if (patch.kind !== undefined && patch.kind !== current.kind) {
+    update.kind = patch.kind as WorkItemUpdateInput['kind'];
+    diff.kind = { from: current.kind, to: patch.kind };
+    if (isContainerKind(patch.kind) && current.executor !== null) {
+      update.executor = null;
+      diff.executor = { from: current.executor, to: null };
     }
   }
   // Leaf sizing re-scope (MOTIR-1532) — the SAME point/estimate columns the `add`
@@ -3668,18 +3978,12 @@ async function assertReparentsLegalAtAppend(
   await withProjectNarrowingSuspended(tx, planProjectId, async () => {
     const referenced = collectReferencedWorkItemIds(nodes);
     const rows = await workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, tx);
-    const liveById = new Map<string, LiveWorkItemState>(
-      rows.map((r) => [
-        r.id,
-        {
-          id: r.id,
-          key: r.identifier,
-          title: r.title,
-          kind: r.kind,
-          status: r.status,
-          projectId: r.projectId,
-        },
-      ]),
+    // At their PROJECTED kinds (bug MOTIR-8192) — a move of, or under, a card
+    // this plan re-kinds is judged against the kind it will have, as the approve
+    // gate judges it.
+    const liveById = withProjectedKinds(
+      new Map<string, LiveWorkItemState>(rows.map((r) => [r.id, toLiveState(r)])),
+      projectedKindOverrides(nodes),
     );
     const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
     const folderById = await resolveFolderById(nodes, ctx, tx);
@@ -3744,7 +4048,9 @@ async function assertModifyDifficultiesLegalAtAppend(
     );
     const kindById = new Map(rows.map((r) => [r.id, r.kind as string]));
     for (const p of judged) {
-      const kind = kindById.get(p.workItemId!);
+      // The PROJECTED kind (bug MOTIR-8192): a patch that re-kinds its target
+      // is judged against the kind it will have.
+      const kind = p.patch!.kind ?? kindById.get(p.workItemId!);
       if (kind === undefined) continue;
       validateProposedDifficulty(
         p.patch!.difficulty,
@@ -4019,6 +4325,24 @@ async function applyAddProposalEdit(
     next,
     proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
   );
+  // And a RE-KIND, held to what the new kind owes (bug MOTIR-8192 ·
+  // AMENDMENT 25 §4) — the deepen and both review edits can change `kind`,
+  // and none of them re-ran the kind-parent grammar before.
+  if (input.kind !== undefined) {
+    await assertReKindedAddLegal(
+      item.id,
+      next,
+      (await planItemRepository.findByPlan(fresh.id, tx)).map((i) =>
+        i.id === item.id
+          ? { ...toProposalNode(i), proposedFields: next as ProposalNode['proposedFields'] }
+          : toProposalNode(i),
+      ),
+      proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      ctx,
+      fresh.projectId,
+      tx,
+    );
+  }
   await planItemRepository.update(
     planItemId,
     { proposedFields: next as unknown as Prisma.InputJsonValue },
@@ -4060,7 +4384,7 @@ async function applyAddProposalEdit(
     tx,
   );
   // The plan's activity stamp (MOTIR-7822), beside the trail row it mirrors.
-  await planRepository.touchActivity(fresh.id, new Date(), tx);
+  await stampPlanActivity(fresh, new Date(), tx);
 }
 
 /**
@@ -4090,6 +4414,7 @@ async function applyAddProposalEdit(
 async function releasePlanTargetLocks(
   plan: { id: string; projectId: string; sessionId: string | null },
   ctx: ServiceContext,
+  opts: { approved?: boolean } = {},
 ): Promise<void> {
   // ⚠️ THE PLAN'S OWN LOCKS FIRST, AND UNCONDITIONALLY (MOTIR-5646). This
   // function used to open with `if (!plan.sourceJobId) return;` — and
@@ -4118,8 +4443,12 @@ async function releasePlanTargetLocks(
     );
   }
 
-  // The SESSION half, unchanged: a plan produced by a planning conversation also
-  // hands that conversation's own leases back when it is decided.
+  // The SESSION half: a plan produced by a planning conversation also hands that
+  // conversation's own leases back when it is decided. On an APPROVE
+  // (`opts.approved`) a target the session held while it was hand-parked at
+  // `planning` is RESTED at `todo` / `blocked`, because the conversation's plan
+  // parked nothing itself, so `restPlanTargets` found no plan-held lock to rest
+  // and this lock is the card's only record (bug MOTIR-8356).
   if (!plan.sessionId) return;
   const sessionId = plan.sessionId;
   try {
@@ -4127,11 +4456,15 @@ async function releasePlanTargetLocks(
       planRepository.findLatestIdBySession(sessionId, tx),
     );
     if (latest !== plan.id) return;
-    await planTargetLockService.releaseForSession(sessionId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-      projectId: plan.projectId,
-    });
+    await planTargetLockService.releaseForSession(
+      sessionId,
+      {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        projectId: plan.projectId,
+      },
+      opts,
+    );
   } catch (err) {
     console.warn(
       `[plansService] releasing planning-target locks for plan ${plan.id} failed; the lease will expire and the sweep will clear it`,
@@ -4404,7 +4737,8 @@ async function readerMaySeePlan(
   const held = await projectAccessService.getPermissions(plan.projectId, ctx, tx);
   if (holdsRecordView(held, ctx, 'plan:view_any')) return true;
   const routedPlanIds = await approvalGateRepository.findAwaitingRoutedPlanIds(
-    { projectIds: [plan.projectId], userId: ctx.userId },
+    // The plan kind alone is selected, so no planning-session set is owed.
+    { projectIds: [plan.projectId], userId: ctx.userId, awaitingSessionIds: [] },
     tx,
   );
   if (plan.sessionId !== null) {
@@ -4568,7 +4902,7 @@ async function withGeneratingPlanStep<T>(
       }
       const now = new Date();
       const out = await write(fresh, tx, now);
-      await planRepository.touchActivity(planId, now, tx);
+      await stampPlanActivity(fresh, now, tx);
       return out;
     },
   );
@@ -4952,6 +5286,13 @@ export const plansService = {
             await assertReparentsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
 
+          // ⚠️ THE RE-KIND GATE, AT THE APPEND (bug MOTIR-8192 · AMENDMENT 25) —
+          // for the re-parent gate's own reason: a re-kind is judged against
+          // committed rows that exist already, so the author hears about an
+          // illegal one while the plan is still theirs. Skipped, with no read,
+          // when no proposal on the plan carries `patch.kind`.
+          await assertKindChangesLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
+
           // ⚠️ THE FOLDER GATE, AT THE APPEND (MOTIR-5414) — the second check on
           // this path that costs a read, and skipped entirely unless some
           // proposal on the plan files into a folder.
@@ -5098,7 +5439,7 @@ export const plansService = {
           }
           // The plan's activity stamp (MOTIR-7822) — EVERY append, an empty one
           // included: an append is a planner alive and writing.
-          await planRepository.touchActivity(planId, new Date(), tx);
+          await stampPlanActivity(fresh, new Date(), tx);
           const allItems = await planItemRepository.findByPlan(planId, tx);
           return { row: fresh, items: allItems, appendedItemIds };
         },
@@ -5208,7 +5549,13 @@ export const plansService = {
   async markPlanned(
     planId: string,
     ctx: ServiceContext,
-    opts: { productName?: string | null; summary?: string | null } = {},
+    opts: {
+      productName?: string | null;
+      summary?: string | null;
+      revision?: boolean;
+      /** The job's resolved planning model (Bug MOTIR-8420); see the write below. */
+      authorModel?: string | null;
+    } = {},
   ): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -5236,6 +5583,15 @@ export const plansService = {
     // `brief_edited` row, and this is the planner's own first write, recorded by
     // the close.
     const summary = normalizeSelfReported(opts.summary);
+
+    // THE PLANNING MODEL (Bug MOTIR-8420). motir-ai resolves it per job AFTER
+    // core created this plan, so the close is the first write that can carry
+    // it. Recorded only on a NATIVE plan whose column is still empty, decided
+    // under the plan lock below: an `mcp` plan's self-reported model is never
+    // overwritten from this seam, and the first model to close a plan wins.
+    // Recorded is not exposed — `redactNativeActor` nulls it on every tenant
+    // read (`work-item-provenance.md` Decision 6).
+    const authorModel = normalizeSelfReported(opts.authorModel);
 
     // The project's TERMINAL statuses, for the close-time gate below. Resolved
     // OUT HERE because `getTerminalStatusKeys` opens its OWN workspace context
@@ -5297,6 +5653,11 @@ export const plansService = {
         const proposals = await planItemRepository.findByPlan(planId, tx);
         assertProposalSetSelfConsistent(proposals.map(toProposalNode));
 
+        const modelWrite =
+          authorModel != null && fresh.authorSource === 'native' && fresh.authorModel == null
+            ? { authorModel }
+            : {};
+
         // ⚠️ A CLOSE OVER *NOTHING* IS A DECISION, NOT A REVIEW REQUEST
         // (MOTIR-4124). `planned` is the status that puts a plan in front of a
         // person and hands them a button (MOTIR-3560), and a plan proposing
@@ -5335,6 +5696,7 @@ export const plansService = {
               decisionReason: 'discarded',
               ...(productName != null ? { productName } : {}),
               ...(summary != null ? { summary } : {}),
+              ...modelWrite,
             },
             tx,
           );
@@ -5361,6 +5723,7 @@ export const plansService = {
             plannedAt: new Date(),
             ...(productName != null ? { productName } : {}),
             ...(summary != null ? { summary } : {}),
+            ...modelWrite,
           },
           tx,
         );
@@ -5409,8 +5772,12 @@ export const plansService = {
     // ASK — *a plan is waiting for you in Motir* — and there is nothing waiting:
     // the plan is decided before this line runs. Recording one would put a
     // pointer to a discarded plan on a run's leg.
+    //
+    // ⚠️ NOR DOES THE CLOSE OF A REVISION (Bug MOTIR-8208): the plan was the run's
+    // finding when it first closed, and a revision re-opening and closing it again
+    // is the same plan, not a second one waiting.
     if (row.status === 'planned') {
-      await recordSubmittedPlanFinding(row, count, ctx);
+      if (!opts.revision) await recordSubmittedPlanFinding(row, count, ctx);
     } else {
       // A discarded close is as terminal as a decline, so it releases the
       // planning-target locks the same way `declinePlan` does. A plan with zero
@@ -5849,7 +6216,7 @@ export const plansService = {
           tx,
         );
         // The plan's activity stamp (MOTIR-7822).
-        await planRepository.touchActivity(planId, new Date(), tx);
+        await stampPlanActivity(fresh, new Date(), tx);
         return { row: updated, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
@@ -6101,6 +6468,28 @@ export const plansService = {
             next,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
+          // A RE-KIND, held to what the new kind owes (bug MOTIR-8192 ·
+          // AMENDMENT 25 §4): no leaf field on a container, and a placement the
+          // plan's own tree admits — judged with this correction's parentRef.
+          if (input.kind !== undefined) {
+            await assertReKindedAddLegal(
+              item.id,
+              next,
+              all.map((i) =>
+                i.id === item.id
+                  ? {
+                      ...toProposalNode(i),
+                      parentRef: input.parentRef !== undefined ? input.parentRef : i.parentRef,
+                      proposedFields: next as ProposalNode['proposedFields'],
+                    }
+                  : toProposalNode(i),
+              ),
+              proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+              ctx,
+              plan.projectId,
+              tx,
+            );
+          }
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter(
@@ -6133,6 +6522,12 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's RE-KIND (bug MOTIR-8192), held to the
+            // append's membership check here and to its tree check below.
+            validateProposedKindChange(
+              input.patch?.kind,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             // The replacement patch's MARK (MOTIR-6629), held to the append's check.
             validateProposedObsolescence(
               input.patch,
@@ -6170,15 +6565,16 @@ export const plansService = {
               proposalLabel({ op: item.op, workItemId: item.workItemId }),
             );
             // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
-            // TARGET's live kind — the append's two halves in one call, since the
-            // transaction is already open.
+            // TARGET's PROJECTED kind — the patch's re-kind when it carries one
+            // (bug MOTIR-8192), else the live kind — the append's two halves in
+            // one call, since the transaction is already open.
             if (input.patch?.difficulty !== undefined && input.patch?.difficulty !== null) {
               const target = item.workItemId
                 ? await workItemRepository.findById(item.workItemId, tx)
                 : null;
               validateProposedDifficulty(
                 input.patch.difficulty,
-                target ? target.kind : null,
+                input.patch.kind ?? (target ? target.kind : null),
                 proposalLabel({ op: item.op, workItemId: item.workItemId }),
               );
             }
@@ -6280,6 +6676,16 @@ export const plansService = {
             tx,
           );
         }
+        // …and the append's RE-KIND gate (bug MOTIR-8192), for the same reason:
+        // a kind the projected tree refuses is a mistake this write introduces.
+        if (correctedNode.op === 'modify' && correctedNode.patch?.kind !== undefined) {
+          await assertKindChangesLegalAtAppend(
+            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
+            ctx,
+            plan.projectId,
+            tx,
+          );
+        }
 
         await planItemRepository.update(planItemId, data, tx);
 
@@ -6320,7 +6726,7 @@ export const plansService = {
           tx,
         );
         // The plan's activity stamp (MOTIR-7822).
-        await planRepository.touchActivity(planId, new Date(), tx);
+        await stampPlanActivity(fresh, new Date(), tx);
         return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
@@ -6421,7 +6827,7 @@ export const plansService = {
           tx,
         );
         // The plan's activity stamp (MOTIR-7822).
-        await planRepository.touchActivity(planId, new Date(), tx);
+        await stampPlanActivity(fresh, new Date(), tx);
 
         const remaining = await planItemRepository.findByPlan(planId, tx);
 
@@ -7423,8 +7829,26 @@ export const plansService = {
         // (`getOutcome` and the abandoned-plan sweep are both scoped to
         // `generating`, which a revised plan is not). The lease is what makes a
         // single scalar safe: one plan is revised by one job.
-        if (opts.jobId) {
-          await planRepository.update(planId, { sourceJobId: opts.jobId }, tx);
+        //
+        // ⚠️ AND THE RE-OPEN RIDES IT TOO (Bug MOTIR-8208). A revision of a
+        // `planned` plan moves it back to `generating` for as long as it runs: the
+        // revision WRITES the plan again, so its steps and notes (which only a
+        // `generating` plan takes) land, and Approve and Decline are unavailable
+        // until it closes. The status it came from is recorded on this start row,
+        // which is what {@link closeRevision} and every failure path read to give
+        // it back. The plan's `plan_approval` gate is untouched: it stays
+        // `awaiting` and HELD (the lease is what holds it), so the question a
+        // person was asked is the same question when the plan closes again.
+        const reopens = fresh.status === 'planned';
+        if (opts.jobId || reopens) {
+          await planRepository.update(
+            planId,
+            {
+              ...(opts.jobId ? { sourceJobId: opts.jobId } : {}),
+              ...(reopens ? { status: 'generating', lastActivityAt: at } : {}),
+            },
+            tx,
+          );
         }
         await planRevisionsService.recordRevision(
           {
@@ -7432,7 +7856,11 @@ export const plansService = {
             changeKind: REVISION_STARTED_KIND,
             ...generationActor(fresh, ctx),
             actor,
-            diff: { revision: true, ...(opts.jobId ? { jobId: opts.jobId } : {}) },
+            diff: {
+              revision: true,
+              ...(opts.jobId ? { jobId: opts.jobId } : {}),
+              ...(reopens ? { [REVISION_REOPENED_FROM_KEY]: 'planned' } : {}),
+            },
           },
           tx,
         );
@@ -7492,26 +7920,139 @@ export const plansService = {
       async (tx) => {
         const locked = await planRepository.lockById(planId, tx);
         if (!locked) throw new PlanNotFoundError(planId);
-        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-        if (!fresh) throw new PlanNotFoundError(planId);
-        const held = revisionLeaseOf(
-          await planRevisionRepository.listByPlan(planId, tx),
-          new Date(),
-        );
-        if (!held) return { planId, released: false };
-        await planRevisionsService.recordRevision(
-          {
-            planId,
-            changeKind: REVISION_ENDED_KIND,
-            ...generationActor(fresh, ctx),
-            actor,
-            diff: { revision: true, ...diff },
-          },
-          tx,
-        );
-        return { planId, released: true };
+        return plansService.releaseRevisionLeaseWithin(tx, planId, ctx, actor, diff);
       },
     );
+  },
+
+  /**
+   * RELEASE THE LEASE INSIDE THE CALLER'S TRANSACTION, with no permission assertion
+   * (Story MOTIR-7905 · MOTIR-7936) — the body of {@link releaseRevisionLease}, for a SYSTEM
+   * caller: the failure settle (a relay's terminal frame, or the abandoned-plan sweep) gives a
+   * dead revision's lease back at once, so the plan is decidable now rather than in ten minutes.
+   *
+   * The caller holds the plan's row lock (`planRepository.lockById`). Idempotent: with nothing
+   * held it writes nothing and reports `released: false`, so a relay and the sweep settling one
+   * failure leave ONE `revision_ended` row.
+   */
+  async releaseRevisionLeaseWithin(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    ctx: ServiceContext,
+    actor: PlanRevisionAgentActor,
+    diff: Record<string, unknown> = {},
+    opts: { closeExpired?: boolean } = {},
+  ): Promise<{ planId: string; released: boolean }> {
+    const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+    if (!fresh) throw new PlanNotFoundError(planId);
+    // `closeExpired` reads the lease as of the epoch, so a start with no end counts as held
+    // however old it is: the failure settle writes the closing row an expired lease never
+    // got, which is what stops the sweep from re-finding the plan on every pass.
+    const rows = await planRevisionRepository.listByPlan(planId, tx);
+    const held = revisionLeaseOf(rows, opts.closeExpired ? new Date(0) : new Date());
+    // A revision that RE-OPENED the plan owes it its status back however its lease
+    // stands (Bug MOTIR-8208): a lapsed lease over a `generating` plan is still a
+    // plan nobody is writing, and leaving it there is the stuck state this closes.
+    const reopened = fresh.status === 'generating' ? revisionReopenedFrom(rows) : null;
+    if (!held && !reopened) return { planId, released: false };
+    await planRevisionsService.recordRevision(
+      {
+        planId,
+        changeKind: REVISION_ENDED_KIND,
+        ...generationActor(fresh, ctx),
+        actor,
+        diff: { revision: true, ...diff, ...(reopened ? { restoredTo: reopened } : {}) },
+      },
+      tx,
+    );
+    if (reopened) await restoreReopenedPlanWithin(planId, tx);
+    return { planId, released: true };
+  },
+
+  /**
+   * {@link restoreReopenedPlanWithin} for a SYSTEM caller that has just ended a
+   * re-opening revision itself (`planSessionEndService.releaseRevisionForFailedJob`),
+   * in its transaction and under its plan lock.
+   */
+  async restoreReopenedPlanWithin(tx: Prisma.TransactionClient, planId: string): Promise<void> {
+    await restoreReopenedPlanWithin(planId, tx);
+  },
+
+  /** {@link settleLapsedRevisionWithin}, for a caller outside this service holding the
+   *  plan's lock in its own transaction (the planning-lock sweep, the plan gate's door). */
+  async settleLapsedRevisionWithin(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    workspaceId: string,
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    return settleLapsedRevisionWithin(planId, workspaceId, tx, now);
+  },
+
+  /**
+   * CLOSE A REVISION (Bug MOTIR-8208) — the end of a revision pass, for the two
+   * doors that end one on purpose: a hosted revision's final append and the MCP
+   * `hold_plan_revision { op: 'end' }`.
+   *
+   * A revision that RE-OPENED its plan closes it the way a generation closes —
+   * through {@link markPlanned}, so the close's gate, the briefing and the empty
+   * close all apply to the revised plan exactly as they did to the first one —
+   * and then ends the lease. A revision that did not re-open it (a plan that was
+   * still `generating` when the revision began, or one closed already) only ends
+   * the lease, as before.
+   *
+   * ⚠️ A CLOSE THE GATE REFUSES STILL GIVES THE PLAN BACK. The refusal is
+   * re-thrown so the caller learns why, but the lease is released first, which
+   * restores the plan to `planned` as it stands: a revision whose result cannot
+   * be closed must not leave the plan `generating` with nobody writing it, and
+   * the person can ask for the revision again.
+   */
+  async closeRevision(
+    planId: string,
+    ctx: ServiceContext,
+    actor: PlanRevisionAgentActor,
+    opts: {
+      summary?: string | null;
+      /** The job's resolved planning model (Bug MOTIR-8420), for `markPlanned`. */
+      authorModel?: string | null;
+      /** Extra keys for the `revision_ended` row on the plan's trail. */
+      trailDiff?: Record<string, unknown>;
+    } = {},
+  ): Promise<{ planId: string; released: boolean; planned: boolean; status: string }> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    const reopened =
+      plan.status === 'generating'
+        ? await withWorkspaceServiceContext(ctx.workspaceId, async (tx) =>
+            revisionReopenedFrom(await planRevisionRepository.listByPlan(planId, tx)),
+          )
+        : null;
+    let status = plan.status as string;
+    if (reopened) {
+      try {
+        const closed = await plansService.markPlanned(planId, ctx, {
+          summary: opts.summary ?? null,
+          authorModel: opts.authorModel ?? null,
+          revision: true,
+        });
+        status = closed.status;
+      } catch (err) {
+        await plansService.releaseRevisionLease(planId, ctx, actor, {
+          ...opts.trailDiff,
+          closeRefused: true,
+        });
+        throw err;
+      }
+    }
+    const { released } = await plansService.releaseRevisionLease(
+      planId,
+      ctx,
+      actor,
+      opts.trailDiff ?? {},
+    );
+    return { planId, released, planned: status === 'planned', status };
   },
 
   /**
@@ -7916,8 +8457,21 @@ async function approveWithin(
     prep;
   const locked = await planRepository.lockById(planId, tx);
   if (!locked) throw new PlanNotFoundError(planId);
+  // A revision that re-opened the plan and LAPSED gives it back first (MOTIR-8208),
+  // so the status read below is the one the lease says it has.
+  await settleLapsedRevisionWithin(planId, ctx.workspaceId, tx);
   const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
   if (!fresh) throw new PlanNotFoundError(planId);
+  // ⚠️ REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
+  // under the lock, before a single row is materialized. Approve is
+  // one-shot, so the only safe answer to "a revision is halfway through
+  // rewriting this set" is not to materialize it. The reviewer waits,
+  // reads what changed, and approves the plan they asked for.
+  //
+  // FIRST, ahead of the status test (Bug MOTIR-8208): a revision RE-OPENS the
+  // plan to `generating`, so the status alone would refuse it as not `planned`
+  // and lose the answer the reviewer needs — who is revising it, and until when.
+  await assertNoRevisionInFlight(planId, tx);
   if (fresh.status !== 'planned') {
     throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
   }
@@ -7925,12 +8479,6 @@ async function approveWithin(
   // converse) — under the plan lock, which the raise takes too, so no gate can land
   // between this read and the `approved` write.
   await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
-  // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
-  // under the lock, before a single row is materialized. Approve is
-  // one-shot, so the only safe answer to "a revision is halfway through
-  // rewriting this set" is not to materialize it. The reviewer waits,
-  // reads what changed, and approves the plan they asked for.
-  await assertNoRevisionInFlight(planId, tx);
   const proposals = await planItemRepository.findByPlan(planId, tx);
   // …AND THE EMPTINESS CHECK AGAIN, ON THE FRESH SET UNDER THE LOCK
   // (MOTIR-4146). Same placement and same reason as `assertRepoPins
@@ -8142,7 +8690,7 @@ async function afterApproveCommit(
 
   // Give the conversation its targets back — the epic's stories now exist, so
   // the level the lock was held at is finished (MOTIR-2787).
-  await releasePlanTargetLocks(plan, ctx);
+  await releasePlanTargetLocks(plan, ctx, { approved: true });
 
   // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
   // approved plan is what the set's cardinality is derived from, so this is the
@@ -8251,6 +8799,9 @@ async function declineWithin(
 ) {
   const locked = await planRepository.lockById(planId, tx);
   if (!locked) throw new PlanNotFoundError(planId);
+  // A lapsed re-opening revision gives the plan back first (MOTIR-8208): declining it
+  // is then the decision on a `planned` plan it is, never a DISCARD of one being written.
+  await settleLapsedRevisionWithin(planId, ctx.workspaceId, tx);
   const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
   if (!fresh) throw new PlanNotFoundError(planId);
   if (fresh.status !== 'planned' && fresh.status !== 'generating' && fresh.status !== 'stale') {
@@ -8260,13 +8811,15 @@ async function declineWithin(
     // (MOTIR-3025).
     throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned, stale or generating');
   }
-  // The PLAIN decline is for a plan nobody is being asked about (§11.8 item 5 — a
-  // `generating` or `stale` plan); an asked one is declined through the door.
-  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
   // A DECLINE is refused under the lease too, and for a reason of its own:
   // `declined` is a closed decision, so a revision that finishes writing
   // into a declined plan leaves proposals on a plan nobody will ever read.
+  // Ahead of the gate test, so a plan a revision RE-OPENED (MOTIR-8208) is
+  // refused for the revision, which is the reason that holds.
   await assertNoRevisionInFlight(planId, tx);
+  // The PLAIN decline is for a plan nobody is being asked about (§11.8 item 5 — a
+  // `generating` or `stale` plan); an asked one is declined through the door.
+  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
   const updated = await planRepository.update(
     planId,
     {

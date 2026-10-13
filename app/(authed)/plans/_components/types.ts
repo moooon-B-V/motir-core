@@ -30,6 +30,19 @@ export interface SessionRowView {
   planCount: number;
   /** The session's state, END first (AMENDMENT 23 §1) — what the chip says. */
   state: PlanSessionStateDto;
+  /** The failed attempt's STOP LINE while the session is OPEN and waiting on it (Story MOTIR-7905
+   *  · MOTIR-7921 / MOTIR-7944), else null. Untranslated: the row words it from the codes, so
+   *  `walk` (a `waiting` row: where it stopped and why) and `change` (a failure beside a plan
+   *  that waits: *your last change could not be made*) are two sentences. `timeLabel` is the
+   *  relative time, formatted on the server. */
+  failure?: {
+    kind: 'walk' | 'change';
+    reason: string;
+    stopPhase: 'lay' | 'author' | null;
+    stopTitle: string | null;
+    timeLabel: string;
+    fullLabel: string;
+  } | null;
   /** How it ENDED, or null while it is open (MOTIR-7642). The time is formatted on
    *  the server: `HH:mm` today, else the short date; `fullLabel` is the whole
    *  date-time, for the line's `title`. */

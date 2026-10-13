@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { WarmButton as Button } from '@/components/onboarding/layout/WarmButton';
 import { Pill } from '@/components/ui/Pill';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';

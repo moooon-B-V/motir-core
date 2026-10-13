@@ -39,6 +39,8 @@ vi.mock('next/headers', () => ({
     set: (name: string, value: string) => void cookieJar.set(name, value),
     delete: (name: string) => void cookieJar.delete(name),
   }),
+  // The action reads Accept-Language for a freshly minted org's content language (MOTIR-8093).
+  headers: async () => new Headers(),
 }));
 vi.mock('@/lib/services/workspacesService', () => ({
   workspacesService: { createWorkspace },
@@ -132,6 +134,8 @@ describe('createWorkspaceAction — the §4.4 workspace cap', () => {
       name: 'Fresh',
       ownerUserId: 'user_5130',
       organizationId: 'org_5130',
+      // No Accept-Language on the request, so the fallback (MOTIR-8093).
+      contentLanguage: 'en',
     });
     expect(cookieJar.get(WORKSPACE_COOKIE_NAME)).toBe('ws_new');
     expect(ensureDefaultProject).toHaveBeenCalledWith({

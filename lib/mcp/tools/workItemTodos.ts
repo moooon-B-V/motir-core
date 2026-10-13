@@ -10,10 +10,12 @@ import {
   TODO_NOTES_MAX_LENGTH,
   TODO_TEXT_MAX_LENGTH,
 } from '@/lib/workItemTodos/limits';
+import type { Locale } from '@/lib/i18n/locales';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
 import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
+import { languageArgs, languageInput, languagesInput } from './contentLanguage';
 
 // The to-do tools (Story MOTIR-6739 · MOTIR-6725) — the MCP door onto a
 // COMMITTED card's to-do list (Story MOTIR-3808,
@@ -89,6 +91,9 @@ const addInputSchema = {
         'Rendered with a copy button on the work item page.',
     ),
   executor: executorField,
+  // The language of the step's text and notes (Story MOTIR-7731 · MOTIR-8098).
+  language: languageInput,
+  languages: languagesInput(['text', 'notes'] as const),
 };
 
 const todoIdField = z
@@ -139,6 +144,8 @@ const updateInputSchema = {
     .describe(
       'Who the step is for: "human" or "coding_agent". Omitted ⇒ unchanged; null clears it.',
     ),
+  language: languageInput,
+  languages: languagesInput(['text', 'notes'] as const),
 };
 
 const deleteInputSchema = {
@@ -166,6 +173,9 @@ function presentTodo(todo: WorkItemTodoDto): Record<string, unknown> {
     position: todo.position,
     text: todo.text,
     notesMd: todo.notesMd,
+    // The recorded language of each text field; null when none was recorded.
+    textLanguage: todo.textLanguage,
+    notesLanguage: todo.notesLanguage,
     commandText: todo.commandText,
     executor: todo.executor,
     done: todo.done,
@@ -217,6 +227,8 @@ export async function runAddWorkItemTodo(
     notesMd?: string;
     commandText?: string;
     executor?: 'coding_agent' | 'human';
+    language?: Locale;
+    languages?: { text?: Locale; notes?: Locale };
   },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
@@ -229,6 +241,7 @@ export async function runAddWorkItemTodo(
         notesMd: args.notesMd,
         commandText: args.commandText,
         executor: args.executor,
+        ...languageArgs(args),
       },
       ctx,
     );
@@ -297,6 +310,8 @@ export async function runUpdateWorkItemTodo(
     notesMd?: string | null;
     commandText?: string | null;
     executor?: 'coding_agent' | 'human' | null;
+    language?: Locale;
+    languages?: { text?: Locale; notes?: Locale };
   },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
@@ -310,6 +325,7 @@ export async function runUpdateWorkItemTodo(
         notesMd: args.notesMd,
         commandText: args.commandText,
         executor: args.executor,
+        ...languageArgs(args),
       },
       ctx,
     );
@@ -378,7 +394,9 @@ export function registerWorkItemTodos(server: McpServer, resolveContext: McpCont
       description:
         'Read a work item’s TO-DO LIST (by identifier, e.g. "ACME-7"): its steps in list order — ' +
         'each with its `id`, `text`, optional `notesMd` instructions and `commandText`, who it is ' +
-        'for (`executor`), and whether it is `done` — plus the progress (`done` of `total`). A ' +
+        'for (`executor`), whether it is `done`, and the recorded language of its text and notes ' +
+        '(`textLanguage` / `notesLanguage`, null when none was recorded) — plus the progress ' +
+        '(`done` of `total`). A ' +
         'work item with no steps answers an empty list and 0 of 0. Honors the same access checks ' +
         'as the UI.',
       inputSchema: listInputSchema,
@@ -392,7 +410,9 @@ export function registerWorkItemTodos(server: McpServer, resolveContext: McpCont
       description:
         'Append ONE step to the END of a work item’s to-do list (by identifier, e.g. "ACME-7"). ' +
         'A step is one operation: `text` over the cap is refused, never truncated. Returns the ' +
-        'new step (with its `id`) and the list’s progress. Needs permission to edit the work ' +
+        'new step (with its `id`) and the list’s progress. `language` (or per-field `languages`) ' +
+        "names the language of the text; omitted, the organisation's content language is " +
+        'recorded. Needs permission to edit the work ' +
         'item. Honors the same access checks as the UI.',
       inputSchema: addInputSchema,
     },

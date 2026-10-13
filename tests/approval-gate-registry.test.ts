@@ -47,6 +47,7 @@ const ALL_KINDS = [
   'agent_review',
   // Story MOTIR-7460 · MOTIR-7474: a manual card a run reached, waiting on a person.
   'manual_work',
+  'planning_session',
 ] as const satisfies readonly ApprovalGateKind[];
 
 describe('the approval-gate registry — totality at runtime', () => {
@@ -73,6 +74,7 @@ describe('the approval-gate registry — totality at runtime', () => {
       'agent_review',
       // MOTIR-7474 (Story MOTIR-7460): MANUAL WORK — Mark done, no Request changes.
       'manual_work',
+      'planning_session',
     ]);
     expect(isRegisteredGateKind('manual_work')).toBe(true);
     expect(isRegisteredGateKind('agent_review')).toBe(true);

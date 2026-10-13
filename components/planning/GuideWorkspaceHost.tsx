@@ -61,7 +61,11 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
       resizable
       proposalPresent={false}
       canvas={
-        <div className="flex h-full min-h-0 flex-col bg-(--el-canvas)">
+        // ⚠️ `min-w-0` IS LOAD-BEARING (MOTIR-8232). This div is the frame's grid item, and a
+        // grid item's automatic minimum width is its min-content — which includes the crumb's
+        // non-wrapping title. A long card title stretched the `1fr` track past its share and
+        // pushed the chat column off the right edge (and the divider with it).
+        <div className="flex h-full min-h-0 min-w-0 flex-col bg-(--el-canvas)">
           <div className="flex items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2">
             <button
               type="button"

@@ -11,12 +11,16 @@
   MOTIR-2992 (the vitest gate), MOTIR-2993 (the E2E). AMENDMENT 3 is consumed by
   MOTIR-3095 (projected validity on the MCP), MOTIR-3096 (projected reads),
   MOTIR-3097 (the story's vitest gate). AMENDMENT 6 amends AMENDMENT 2 — its
-  empty-only exclusion — and is written by MOTIR-3189.
+  empty-only exclusion — and is written by MOTIR-3189. AMENDMENT 23's 2026-10-10
+  sub-amendment (situation 2) is consumed by MOTIR-7936, 7938, 7939, 7940, 7941 and 7942.
   AMENDMENT 10 amends AMENDMENT 8's boundary — it is written by MOTIR-3596 and consumed by
   MOTIR-3598 (the job-token door), MOTIR-3599 (the `revise_plan` submit), MOTIR-3600 (the motir-ai
   handler), MOTIR-3601 (the review-surface affordance) and MOTIR-3602 (the story's vitest gate).
   AMENDMENT 17 (sessions as records, `Plan.sessionId`) is written by MOTIR-6018 and consumed by
   MOTIR-6019 through MOTIR-6028, the children of story MOTIR-6011.
+  AMENDMENT 23's failure clauses are amended by its 2026-10-09 sub-amendment (MOTIR-7906, the
+  decision card; written by MOTIR-7911) and consumed by story MOTIR-7905's code subtasks
+  (MOTIR-7908 through MOTIR-7921 and their follow-ons) and by the carry story MOTIR-7928.
   AMENDMENT 23 §6's 2026-10-09 amendment (an ended session whose plan still waits is carried WITH
   that plan) is written by MOTIR-7931 and consumed by the children of story MOTIR-7928.
 
@@ -1484,6 +1488,13 @@ terminal_.
   arm writes.
 - **It does not shorten the grace or the max age.** Both constants are untouched; what changed is
   which rows are measured against them.
+
+> **Amended by AMENDMENT 26 (MOTIR-8130 · MOTIR-8132, 2026-10-11).** The `no_producer` arm, its
+> `no_producer_recent` keep, `max_age`, the 15-minute grace and the 24-hour constant they shared are
+> gone. A `generating` plan with or without a producer is judged by one rule — silent past
+> `PLAN_STALLED_AFTER_MS` — and a dead plan on a `conversation` / `mcp` session is recorded, not
+> declined. The bullet above is superseded; the re-shape this amendment made (select every
+> `generating` plan, let the table decide) stands.
 
 ---
 
@@ -4032,6 +4043,61 @@ decision page `cmuvqpwut00k3hxoibeafy0he`, which is the record of authority. MOT
 §1 (the columns, the `closed` state and the backfill in
 `20261005220000_plan_change_session_end`).
 
+### AMENDMENT 23 — sub-amendment (MOTIR-7906 · MOTIR-7911, 2026-10-09): a FAILURE no longer ends a hosted session — true resume
+
+Decided by **MOTIR-7906** (planner-recorded, owner answer A of run 20261008-195233: _true resume_),
+which supersedes AMENDMENT 23 on its **failure clauses only**. Nothing above is edited; each struck
+clause below stays legible so a reader arriving from MOTIR-7629, 7630, 7632 or 7638 lands on the
+correction.
+
+**What is struck.**
+
+- ~~`endSession` is the single writer of its end (`failed`, `idle`, `restarted`, `declined`,
+  `approved`)~~ — `failed` is no longer a way a hosted session ends. It stays in the vocabulary for
+  rows already written (see _What stands_).
+- ~~a failed attempt ends its session as soon as Motir observes the failure~~ — the stream relays
+  (`endSessionForFailedJob`) and the hourly abandoned-plan sweep (`endSessionForAbandonedPlan`) no
+  longer end the session of a failed attempt (MOTIR-7638, MOTIR-7630's _"a failed attempt closes it
+  at once"_).
+- ~~a failed session's `generating` plan is declined as `abandoned`~~ and ~~its cards are given
+  back~~ (MOTIR-7632 §2).
+- ~~a failed … session reads **Closed** on the Plans list~~ and ~~a failed … session can be copied
+  into a fresh one~~ for a failure (MOTIR-7641, MOTIR-7633 / MOTIR-7643's failed-and-Closed overlay
+  with _Start a new session_).
+
+**What replaces it.** When a hosted planning attempt fails partway through a lay or author walk,
+the session **stays open**, its `generating` plan keeps every proposal it wrote, and its cards stay
+held at Planning. The session waits in the Workbench's **To resume** tab, naming where the walk
+stopped and why. **Resume** starts a new attempt in the **same session on the same plan** and the
+walk continues from the next unfinished level or card, reading the plan itself as the record of
+progress (closed levels and authored proposals are not redone).
+
+- **The discriminator is the session's failure record, not a new plan status.** A failed plan stays
+  `generating`; it is told apart from a stalled one by the session's failure columns (when, the
+  reason, where the walk stopped), which are recorded by MOTIR-7908.
+- **Both sweeps spare a waiting session.** `closeIdleSessions` and `endSessionForAbandonedPlan`
+  never end a session that is failed-waiting or awaiting its person; only a person ends it
+  (restart / _Plan something new_, decline, or approve). A session that is neither keeps the idle
+  close.
+- **Another member** who tries to plan a held card is refused naming the holder and that the
+  session is _waiting on <name>_, with no free-by time.
+- **A failure beside a waiting plan (situation 2)** is the same failed-waiting state: the
+  `planned` / `stale` plan stays decidable, and the person's next turn continues in that session
+  and clears the failure. That behaviour, and the carry of a session already ended `failed`, are
+  recorded in the situation-2 and carry stories (MOTIR-7937 and MOTIR-7928) and are **not** stated
+  here.
+
+**What stands.** Decline, approve and a person's restart still END a session; an ended session is
+never resumed; **Closed** (Motir's ending) versus **Declined** (a person's) is kept; an idle,
+non-waiting session still closes after the lease; and the copy-into-a-new-session offer remains for a
+session ended any other way. Sessions already ended `failed` under the old rule are not rewritten.
+
+**Out of scope:** MCP-authored plans (`prompts/plan.py` or any MCP client — its return goes to its
+own terminal and it has no hosted job to fail) and `guide` sessions keep their current behaviour.
+
+The decision page (MOTIR-7906) is the record of authority; where it differs from this summary, the
+page wins. It supersedes the decision page `cmuvqpwut00k3hxoibeafy0he` **on these clauses only**.
+
 ### AMENDMENT 23 §6, amended 2026-10-09 — an ended session whose plan still waits is carried WITH that plan
 
 **What changed, and on whose word.** Story MOTIR-7928 (_A waiting plan whose session has ended keeps
@@ -4088,6 +4154,66 @@ turn. Where an undecided plan is decided is MOTIR-7883's overlay, not this block
 waits (MOTIR-7932). MOTIR-7905 consumes the same mechanism for its sessions that ended `failed`
 before it.
 
+### AMENDMENT 23 — sub-amendment (MOTIR-7906 · MOTIR-7937, 2026-10-10): situation 2 — a failure beside a waiting plan
+
+**On whose word.** The owner rule of 2026-10-08, verbatim: _"situation 2 the plan should be in to
+resume tab"_ and _"if the user starts to chat to ask further change of the plan, we can create a new
+session to carry the existing plan."_ The decision page is **MOTIR-7906**, whose _Decision_ and
+Consequences 6–8 are the source of every clause below; this block decides nothing the page does not.
+
+**What is struck, for a FAILURE only** (the 2026-10-09 block above struck the same text for a failed
+`generating` plan and is not restated):
+
+- ~~a `planned` plan waits under a session that reads Closed and "is decided on its own
+  surface, as today"~~ — a session whose later run FAILED beside a `planned` / `stale` plan is not
+  ended and does not read Closed; it waits in To resume.
+- ~~a failed … session reads **Closed** on the Plans list~~ — here for a session that holds a
+  waiting plan. (`endSessionWithin` declining only a `generating` plan and leaving a `planned` /
+  `stale` one under an ended session was how situation 2 arose.)
+
+**The rule now.**
+
+- A failure never ends a hosted session, whatever plans it holds. Two shapes arrive here: a failed
+  REVISION of the waiting plan, and a failed run that opened a newer `generating` plan.
+- Every undecided plan stays exactly as it is and stays **decidable**. A failed revision releases
+  its revision lease at once, so the person is not refused for the next ten minutes.
+- The session's cards stay held.
+- The session waits in **To resume**, naming the waiting plan and the failure. Opening it shows the
+  overlay with the plan, its decide door and a chatbox.
+- This is the SAME failed-waiting state as the 2026-10-09 block's, not a second state (Consequence 6).
+  Only what the session holds differs.
+- A job canceled beside a waiting plan declines only the canceled attempt's own `generating` plan
+  and leaves the session open with no failure record: the person stopped it, and the waiting plan
+  carries on.
+
+**How the person continues — one line per form.**
+
+- **A failed walk** (a failed `generating` plan) takes **Resume**: the 2026-10-09 block's rule.
+- **A failure beside a waiting plan** is continued by the person's **next turn in that same
+  session**. That turn revises the plan, clears the failure, and carries nothing — the session is
+  still open.
+- **Both at once** (the failed run also opened a newer `generating` plan): Resume continues that
+  walk, and the waiting plan stays decidable beside it.
+
+**Sessions ended `failed` before this.** Such a session lists in To resume too, keyed on its most
+recent UNDECIDED plan (Consequence 7: its latest plan is usually the declined failed attempt). It has
+**no Resume**, because an ended session is never resumed. The person's first turn carries the plan
+into a NEW session by the mechanism in the heading _AMENDMENT 23 §6, amended 2026-10-09 — an ended
+session whose plan still waits is carried WITH that plan_, which this block does not restate. The
+entry clears once the plan is carried or decided.
+
+**Waiting on you (Consequence 8).** Yes: the waiting plan's `plan_approval` row stays in Waiting on you
+where MOTIR-7460 puts it, and the To resume entry is about the failure; the two open the same overlay.
+
+**What still stands.** Decline, approve and a person's restart END a session; an ended session is never
+reopened; **Closed** versus **Declined** is kept; `idle` still closes a session that is not waiting;
+take-back to the owner's own open session stands. **Out of scope:** MCP-authored plans and `guide`
+sessions keep their current behaviour.
+
+- **Consumed by:** MOTIR-7936 (the failure path beside a waiting plan), MOTIR-7938 (the next turn),
+  MOTIR-7939 (To resume's three forms), MOTIR-7940 and MOTIR-7941 (their rendering) and MOTIR-7942
+  (the situation-2 gate).
+
 ## AMENDMENT 24 — a REVISION rewrites a landed card in place: `update_plan_item { revision: true }` (2026-10-08)
 
 AMENDMENT 12 gave a `planned` plan its third verb — the append — behind a declared `revision: true`,
@@ -4113,3 +4239,87 @@ may not have re-read. **What it does not change:** the permission (`ai:view_plan
 CLI-minted token is still refused), the editable fields (a revision, like a deepen, cannot re-parent,
 re-edge or re-pin — those are `update_plan_proposal`'s), and `updateProposal`'s own attribution (a
 reviewer's inline edit is still that person's).
+
+## AMENDMENT 25 — a `modify` RE-KINDS a committed card: `patch.kind`, judged on the projected tree (bug MOTIR-8192, 2026-10-11)
+
+A re-plan that finds a committed `task` is really a `story` had no way to say so on the plan a person
+approves. `PLAN_ITEM_PATCH_KEYS` carried no `kind`, so `assertKnownPatchKeys` refused the key at the
+append (AMENDMENT 20's refuse-by-name rule doing its job), and the only door was `change_kind`,
+outside the plan. The correction door already carried `kind` for an `add`, but held it to fewer rules
+than the direct door holds a kind change: a type stayed on a re-kinded container, and the parent and
+children were judged only by the close's before/after verdict, which admits a write to a plan that
+was already unapprovable.
+
+**§1 — the key.** `PlanItemPatch.kind` is one of `story` · `task` · `bug` · `subtask`
+(`MODIFY_KIND_TARGETS`), the set `change_kind` offers, and for its reason: an `epic` is scaffolding a
+plan lays with an `add`. `epic` and every non-member are refused by name at the append and the
+correction (`validateProposedKindChange`, `INVALID_PROPOSAL`), and as `unknown_kind` at the close and
+approve. Applied by `applyModify` with the `kind` revision cell `workItemsService` records; the review
+shows a `kind` change row (`Kind  task → story`). It moves no rail row in the peek.
+
+**§2 — the tree it is judged on.** The append, the correction and approve ask the questions
+`workItemsService.updateWorkItem`'s kind path asks, against the PROJECTED tree
+(`assertKindChangesLegal`, fed by `plansService.resolveKindChangeContexts`): the target's parent
+admits the new kind; the new kind admits every committed child the target KEEPS (a child the plan
+moves away or removes is not kept; a child the plan re-kinds is judged at its own projected kind);
+both refusals are `illegal_parent`, naming the child. Every other placement question in the gate —
+an `add` under the target, a `modify` moving a card under it or moving the target itself, the
+difficulty check — reads the target at its projected kind (`withProjectedKinds`). The `work_item`
+kind trigger backstops the parent half only; it never looks at a row's children.
+
+**§3 — the leaf fields: REFUSED, not cleared.** A container keeps no `type` and no `difficulty`.
+When a re-kind to `story` would leave the target's own value standing, the proposal is refused by
+name — `type_on_container` (a new grammar reason) or `difficulty_on_container` — and the author adds
+`type: null` / `difficulty: null` to the patch. Clearing silently was the alternative and is
+rejected: it would erase a field the author never mentioned, on an approve nobody watches, which is
+the opposite of what the direct door does (`TypeNotAllowedOnKindError` / `DifficultyNotAllowedOnKindError`).
+
+**§3a — the executor is DERIVED.** AMENDMENT 4 D3a stands: `executor` is not a patch key, and
+AMENDMENT 20 §1 declined to add one. So a re-kind to a container sets the executor to `null` at
+approve, beside the `kind` write — the end state the direct door insists on — and the review shows it
+as a derived `executor` change row, the way MOTIR-6259's seeded executor is shown. MOTIR-8192's own
+example patch carried `executor: null`; that key is still refused, and needs no replacement.
+
+**§4 — an `add`'s kind correction.** When a correction, a deepen, a review edit or a revision
+SUPPLIES a kind, the edited `add` is held to the same rules before the write: a container keeps no
+`type` or `executor` (`assertReKindedAddKeepsNoLeafFields`, refused by name; `todos` and `difficulty`
+were already refused on the merged kind), its parent admits the new kind, and the new kind admits
+every proposal the plan hangs under it (`assertAddKindPlacementLegal`). An edit that does not supply a
+kind is not re-judged, so a proposal written before this rule is not refused for an unrelated edit.
+An `add` that PROPOSES a container with a `type` at the append is unchanged by this amendment.
+
+**Not in scope.** motir-ai's `MODIFY_PATCH_KEYS` mirror. A plan authored there cannot propose a re-kind
+until it learns the key; nothing it sends today changes.
+
+---
+
+## AMENDMENT 26 — a `generating` plan is dead when it is SILENT, and dead is RECORDED (story MOTIR-8128 · decision MOTIR-8130 · MOTIR-8132, 2026-10-11)
+
+The abandoned-plan sweep judged a plan by its AGE (`now - createdAt`) against a 15-minute grace and
+a 24-hour max age, while the rail judged the same plan by its SILENCE
+(`now - lastActivityAt > PLAN_STALLED_AFTER_MS`). The two disagreed for up to a day, and a job-less
+MCP plan could only be declined, never resumed. The decision page on MOTIR-8130 records the
+reasoning; what it changed:
+
+- **One rule.** A `generating` plan is dead when `now - lastActivityAt > PLAN_STALLED_AFTER_MS` —
+  the rail's comparison, equal is not dead. `lastActivityAt` is never null (a plan that never wrote
+  reads its `createdAt`), so the old grace's job is done by the rule itself. Selection is every
+  `generating` plan, stalest first, still bounded per pass.
+- **The job is a fast path only.** `failed`, `canceled`, or `succeeded` while still `generating`,
+  and a 404, are dead at once. `queued` / `running`, an unreachable motir-ai and no job at all fall
+  through to the silence rule (`silent`). The keep reasons for a generation are `writing`,
+  `session_waiting`, `row_moved` and `revision_held`.
+- **Dead is recorded, never declined,** on the plan's open `conversation` or `mcp` session, through
+  `recordFailureWithin` — now a compare-and-set on `lastActivityAt`, so a write that lands between
+  the read and the record wins. To resume lists both origins. A job-less plan is recorded with
+  `failed_job_id` NULL, `internal` and no stop point (the `failure_whole` CHECK no longer requires
+  the job id); Resume is not offered for it.
+- **A write resumes it.** Every content write and step signal stamps activity through one helper,
+  which clears a failed-waiting session's record when the plan is its latest and `generating`.
+- **Origins with no resume surface keep the decline** — a `generation`, `expand` or `cadence`
+  session, or no session — now reached by silence or the fast path instead of the day.
+- **The sweep runs on `SUB_HOURLY_CADENCE` (`*/5`)**, the conforming cadence, so worst-case detection
+  is 20 minutes after the last write and a job motir-ai reports dead is settled within 5.
+
+Unchanged: the revision backstop (it keeps its own lease-age window), the target-lock leases, the
+value of `PLAN_STALLED_AFTER_MS`, and motir-ai.
