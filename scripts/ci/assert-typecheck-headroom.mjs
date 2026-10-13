@@ -389,8 +389,8 @@ export function nearTheLineWarning(reading, failAt) {
   return (
     `::warning title=TypeScript heap headroom::${reading.project} is at ` +
     `${(reading.fraction * 100).toFixed(1)}% of the heap budget; this check fails above ` +
-    `${Math.round(failAt * 100)}%. Move a tests/ directory between tsconfig.tests.json and ` +
-    `tsconfig.tests-platform.json (or split a new project by area) before it blocks a pull request.`
+    `${Math.round(failAt * 100)}%. Act before it blocks a pull request: check its type ` +
+    `instantiations first, then move or split an area out of it (the failure message lists both levers).`
   );
 }
 

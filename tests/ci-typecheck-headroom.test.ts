@@ -192,6 +192,9 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
     const line = nearTheLineWarning(near[0]!, 0.9);
     expect(line).toMatch(/^::warning title=TypeScript heap headroom::nearing is at 85\.0%/);
     expect(line).toContain('fails above 90%');
+    // Any project can be the one nearing the line (the app project was the first
+    // to trip it), so the advice must not assume a tests/ project.
+    expect(line).not.toContain('tests/ directory');
     expect(line).not.toContain('\n');
   });
 
