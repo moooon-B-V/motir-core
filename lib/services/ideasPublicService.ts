@@ -11,11 +11,13 @@ import {
 import {
   IdeaListCapExceededError,
   IdeaNotFoundError,
+  IdeasUnavailableError,
   InvalidIdeaFilterError,
 } from '@/lib/ideas/errors';
 import { localizeLabel, type PublicIdeaLocale } from '@/lib/ideas/publicLocale';
 import type { PublicIdeaFilters } from '@/lib/ideas/types';
 import { toPublicIdeaDto } from '@/lib/mappers/ideaMappers';
+import { isConnectionError, retryReadOnceOnConnectionError } from '@/lib/prisma/connectionError';
 import {
   ideaPublicRepository,
   type PublicIdeaQuery,
@@ -39,6 +41,32 @@ import {
  * English as before.
  */
 export const PUBLIC_IDEA_LIST_CAP = 500;
+
+/**
+ * Every public read goes through here (MOTIR-8350). A connection the pool hands
+ * out can already be dead — Neon's pooler, a compute restart or an idle cut
+ * closed it, and the pool has not processed the close yet — and the read then
+ * fails with `Connection terminated unexpectedly`. One retry takes a fresh
+ * connection and answers. A second connection failure is an outage, and is
+ * named, so the route answers a handled 503 rather than an unhandled 500.
+ * These reads write nothing, so repeating one is always safe.
+ */
+async function publicRead<T>(read: () => Promise<T>): Promise<T> {
+  try {
+    return await retryReadOnceOnConnectionError(read);
+  } catch (err) {
+    if (isConnectionError(err)) throw new IdeasUnavailableError(err);
+    throw err;
+  }
+}
+
+/** Both results once BOTH have settled; the first failure, in order, is thrown. */
+async function bothSettled<A, B>(a: Promise<A>, b: Promise<B>): Promise<[A, B]> {
+  const [first, second] = await Promise.allSettled([a, b]);
+  if (first.status === 'rejected') throw first.reason;
+  if (second.status === 'rejected') throw second.reason;
+  return [first.value, second.value];
+}
 
 /** The longest free-text query honoured; longer input is cut, not refused. */
 export const PUBLIC_IDEA_QUERY_MAX = 200;
@@ -68,6 +96,7 @@ export const ideasPublicService = {
    * @throws InvalidIdeaFilterError for a category or kind outside the closed set.
    *   An unknown TAG is not an error: it simply matches nothing.
    * @throws IdeaListCapExceededError when the read reaches the cap.
+   * @throws IdeasUnavailableError when the database connection drops twice.
    */
   async listActive(
     filters: PublicIdeaFilters = {},
@@ -75,10 +104,17 @@ export const ideasPublicService = {
   ): Promise<PublicIdeaListDto> {
     const query = parseFilters(filters);
     const translated = locale === 'en' ? undefined : locale;
-    const [rows, counts] = await Promise.all([
-      ideaPublicRepository.listActive(query, PUBLIC_IDEA_LIST_CAP + 1, translated),
-      ideaPublicRepository.categoryCounts({ ...query, category: undefined }, translated),
-    ]);
+    // Each read is retried on its own, and the pair is SETTLED before either
+    // failure is thrown: a sibling still running when the request answers would
+    // hold a connection the pool has already been asked to replace.
+    const [rows, counts] = await bothSettled(
+      publicRead(() =>
+        ideaPublicRepository.listActive(query, PUBLIC_IDEA_LIST_CAP + 1, translated),
+      ),
+      publicRead(() =>
+        ideaPublicRepository.categoryCounts({ ...query, category: undefined }, translated),
+      ),
+    );
     if (rows.length > PUBLIC_IDEA_LIST_CAP)
       throw new IdeaListCapExceededError(PUBLIC_IDEA_LIST_CAP);
 
@@ -97,7 +133,9 @@ export const ideasPublicService = {
 
   /** Every tag in use on an active idea, with its active count, labelled in `locale`. */
   async listTags(locale: PublicIdeaLocale = 'en'): Promise<PublicIdeaTagDto[]> {
-    const rows = await ideaPublicRepository.tagCounts(locale === 'en' ? undefined : locale);
+    const rows = await publicRead(() =>
+      ideaPublicRepository.tagCounts(locale === 'en' ? undefined : locale),
+    );
     return rows.map((r) => {
       const label = localizeLabel(
         {
@@ -118,9 +156,8 @@ export const ideasPublicService = {
    * a public reader cannot tell a retired idea ever existed.
    */
   async getBySlug(slug: string, locale: PublicIdeaLocale = 'en'): Promise<PublicIdeaDto> {
-    const row = await ideaPublicRepository.findActiveBySlug(
-      slug,
-      locale === 'en' ? undefined : locale,
+    const row = await publicRead(() =>
+      ideaPublicRepository.findActiveBySlug(slug, locale === 'en' ? undefined : locale),
     );
     if (!row) throw new IdeaNotFoundError(slug);
     return toPublicIdeaDto(row, locale);
