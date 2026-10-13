@@ -60,6 +60,8 @@ import {
   OptimisticObsolescenceHeaderLink,
 } from './_components/OptimisticMarkProvider';
 import { PlacementProvider } from './_components/PlacementProvider';
+import { ItemTranslationOfferProvider } from './_components/ItemTranslationOfferProvider';
+import { workItemTranslationReadService } from '@/lib/services/workItemTranslationReadService';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
 import { EpicNotPublicBlock, EpicNotPublicPill } from './_components/EpicNotPublic';
@@ -252,6 +254,28 @@ export default async function ItemView({
   // reserved and its neighbours shift when it fills, which is what the in-place
   // rule exists to prevent. This group already has the figure at no marginal
   // cost, so it is cheaper to not be late at all.
+  // The locale and the to-do list are each read ONCE and shared: the tier-two
+  // group below renders them, and the translation offer is built from both.
+  const localeRead = getLocale() as Promise<Locale>;
+  const todoListRead = workItemTodosService.listTodos(item.id, svc);
+  // THE TRANSLATION OFFER (Story MOTIR-7735 · MOTIR-8121): for a signed-in
+  // reader, which fields differ from their interface language and which already
+  // have a kept translation — computed from the item's CURRENT text, no AI call,
+  // no write. A Visitor (the public project host) gets none: customers' text is
+  // shown as written. A failed read degrades to no offer rather than rejecting
+  // the group; the page then renders exactly as it did before the feature.
+  const translationOfferRead = isVisitor
+    ? null
+    : Promise.all([localeRead, todoListRead])
+        .then(([readerLocale, todos]) =>
+          workItemTranslationReadService.getTranslationOffer({
+            workItem: item,
+            todos: todos.items,
+            readerLocale,
+            ctx: svc,
+          }),
+        )
+        .catch(() => null);
   const [
     members,
     sprints,
@@ -269,6 +293,7 @@ export default async function ItemView({
     pendingDecisions,
     planHold,
     repairRun,
+    translationOffer,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -296,7 +321,7 @@ export default async function ItemView({
     // Epic/parent subtree roll-up (Subtask 4.3.5) — one bounded recursive-CTE
     // aggregate, ONLY when the item has children. A leaf shows none.
     detail.children.length > 0 ? estimationService.rollupForParent(item.id, ctx.read) : null,
-    getLocale() as Promise<Locale>,
+    localeRead,
     // Work-item references (Story 5.8 · 5.8.6) — every `[KEY](motir:<id>)` in
     // the description / explanation and every bare `MOTIR-N` in the title,
     // resolved to its LIVE summary so the body chips render live and open the
@@ -325,7 +350,7 @@ export default async function ItemView({
     // (`design/work-items/design-notes.md` § *Placement*), and on a card whose
     // work IS the list it is what the reader came for. One small ordered read
     // on the same card, so it costs the group nothing and adds no serial await.
-    workItemTodosService.listTodos(item.id, svc),
+    todoListRead,
     // The UNDECIDED plans that name this card (bug MOTIR-4197 · design
     // MOTIR-4256 §2–§3). TIER TWO, IN THIS GROUP: the element is the first
     // child of the content column, so arriving late would push Description down, and it
@@ -385,6 +410,7 @@ export default async function ItemView({
           .findOpenRepairRuns([item.id], svc)
           .then((runs) => runs.get(item.id) ?? null)
       : null,
+    translationOfferRead,
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -452,7 +478,7 @@ export default async function ItemView({
   // Visitor holds neither.
   const canSendToAgent = canRunHosted && !isVisitor && held.has('instance:use');
 
-  return (
+  const page = (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
       {/* THE ERRORS DOOR (MOTIR-5744): the ⋯ menu (header) and the Errors section
           (late stack) are two page tiers; this is the one channel between them. */}
@@ -872,5 +898,11 @@ export default async function ItemView({
         </OptimisticStatusProvider>
       </MonitorErrorsDoorProvider>
     </EstimationConfigProvider>
+  );
+  // The offer reaches every client island of the view through one provider; it
+  // draws nothing itself (MOTIR-8121). The tree above is bound to `page` so
+  // wrapping it does not re-indent four hundred lines.
+  return (
+    <ItemTranslationOfferProvider offer={translationOffer}>{page}</ItemTranslationOfferProvider>
   );
 }

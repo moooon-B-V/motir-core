@@ -4,7 +4,9 @@ import { requestTranslation } from '@/lib/ai/translateClient';
 import type { Tenant } from '@/lib/ai/types';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
+import type { TranslateResponseDTO } from '@/lib/dto/workItemTranslation';
 import type { Locale } from '@/lib/i18n/locales';
+import { toTranslateResponseDTO } from '@/lib/mappers/workItemTranslationMappers';
 import { FieldLockTimeoutError } from '@/lib/translation/errors';
 import { fieldRef, hashFieldText, type TranslatableField } from '@/lib/translation/fieldRevision';
 import { classifyFields } from '@/lib/translation/needsTranslation';
@@ -251,5 +253,26 @@ export const workItemTranslationService = {
           ? { fieldRef: f.fieldRef, status: 'ready', text: kept[f.fieldRef]! }
           : fresh.get(f.fieldRef)!,
     );
+  },
+
+  /**
+   * The translate ROUTE's call (MOTIR-8121): {@link translateWorkItem} mapped to
+   * the response DTO, which carries status and text only. A `no_credit`,
+   * `failed` or `timeout` field is an ordinary entry beside `ready` ones.
+   */
+  async translateForReader(
+    input: TranslateWorkItemInput,
+    deps: TranslationDoorDeps = defaultTranslationDoorDeps,
+  ): Promise<TranslateResponseDTO> {
+    // The browse-gated read, made HERE rather than through the injectable
+    // `deps.loadSubject`: the reader-facing door always reads the item as the
+    // reader, and stating it in this body is what lets the permission walk
+    // (`tests/permissions/noUngovernedOperation.test.ts`) see the gate.
+    const subject = await loadSubject(input.workItemId, input.actor);
+    const results = await this.translateWorkItem(input, {
+      ...deps,
+      loadSubject: async () => subject,
+    });
+    return toTranslateResponseDTO(input.targetLanguage, results);
   },
 };

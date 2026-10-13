@@ -469,6 +469,11 @@ describe('each Visitor page renders its shared body for a consented Visitor', ()
     expect(JSON.stringify(named(tree, 'WorkItemTitle')[0]!.props)).toContain('Visible story');
     expect(named(tree, 'WatchControl')).toHaveLength(0);
     expect(named(tree, 'PlanHistorySection')).toHaveLength(0);
+    // No translation offer on the public host (MOTIR-8121): a Visitor reads
+    // customers' text as written, so the provider is mounted with nothing in it.
+    const offers = named(tree, 'ItemTranslationOfferProvider');
+    expect(offers).toHaveLength(1);
+    expect((offers[0]!.props as { offer: unknown }).offer).toBeNull();
     const late = named(tree, 'LateUpperSections')[0]!.props as {
       reads: Promise<{ acceptanceEligibility: unknown }>;
     };
