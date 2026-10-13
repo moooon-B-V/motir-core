@@ -13,11 +13,7 @@ import {
   PlanTargetLockedError,
 } from '@/lib/planChange/errors';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
-import {
-  PlanNotEditableError,
-  PlanNotFoundError,
-  PlanRevisionInFlightError,
-} from '@/lib/plans/errors';
+import { PlanNotEditableError, PlanNotFoundError } from '@/lib/plans/errors';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
@@ -51,10 +47,14 @@ import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 let jobSeq = 0;
 const submitJobMock = vi.fn(async () => ({ jobId: `job-${++jobSeq}` }));
+// Bug MOTIR-8352 — a send that meets the conversation's own running revision is
+// queued into that job's mailbox, which first asks motir-ai whether it still runs.
+const getJobMock = vi.fn(async () => ({ status: 'running' }));
 
 vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
   submitJob: (...args: unknown[]) => submitJobMock(...(args as [])),
+  getJob: (...args: unknown[]) => getJobMock(...(args as [])),
 }));
 
 const routeSession = {
@@ -993,22 +993,30 @@ describe('the edges around the carry — what an old tab or a second press meets
   );
 
   it(
-    'a second send while the carried plan is being revised is refused before a job is spent',
+    'a second send while the carried plan is being revised is QUEUED for that revision — no job is spent',
     T,
     async () => {
+      // Bug MOTIR-8352: this used to be refused PLAN_REVISION_IN_FLIGHT, so a
+      // correction sent from a rail that was not streaming the revision was lost.
+      // It now joins the running revision's mailbox, and still spends no job.
       const { sourceId, planId } = await conversationWithPlannedPlan('In flight');
       const out = await planChangeSessionsService.startCopied(me(), sourceId, { body: 'One' });
-      await planChangeSessionsService.submit(me(), { sessionId: out.id });
+      const revision = await planChangeSessionsService.submit(me(), { sessionId: out.id });
       await planChangeSessionsService.appendTurn('Two', me(), { sessionId: out.id });
       submitJobMock.mockClear();
 
-      await expect(
-        planChangeSessionsService.submit(me(), { sessionId: out.id }),
-      ).rejects.toBeInstanceOf(PlanRevisionInFlightError);
+      const second = await planChangeSessionsService.submit(me(), { sessionId: out.id });
+      expect(second.jobId).toBe(revision.jobId);
+      expect(second.planId).toBe(planId);
       expect(submitJobMock).not.toHaveBeenCalled();
       expect(
         (await trailOf(planId)).filter((r) => r.changeKind === 'revision_started'),
       ).toHaveLength(1);
+      expect(
+        await adminDb.planChangeMailboxEntry.count({
+          where: { sessionId: out.id, jobId: revision.jobId },
+        }),
+      ).toBe(1);
     },
   );
 
