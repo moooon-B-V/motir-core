@@ -1,8 +1,9 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { MonitorBinderUnavailableError } from '@/lib/monitors/errors';
 import type { NormalizedMonitorIssue } from '@/lib/monitors/types';
 import { encryptToken } from '@/lib/monitors/tokenCrypto';
+import { monitorIssueRepository } from '@/lib/repositories/monitorIssueRepository';
 import {
   MONITOR_BUG_TITLE_MAX_LENGTH,
   monitorBugTitle,
@@ -481,6 +482,178 @@ describe('the fix-release guard — an event from a release that predates the fi
     );
     expect(result).toEqual({ ...first, outcome: 'updated' });
     expect(await bugsIn(fx.projectId)).toHaveLength(1);
+  });
+});
+
+// ── A DUPLICATE IS NOT A COMPLETION (Bug MOTIR-8512) ─────────────────────────
+// A bug a person closed as a duplicate sits in the done category, but its work
+// lives on in the card it duplicates. A recurrence belongs to that card: the link
+// moves there and nothing is filed — otherwise every consolidation re-arms a
+// re-file per duplicate (24 cancelled duplicates → 24 new bugs, 2026-10-13).
+describe('a done bug closed as a DUPLICATE', () => {
+  const recurrence = { lastSeenAt: new Date('2026-09-19T09:00:00.000Z'), eventCount: 12 };
+
+  /** File issue 1's bug and a second, live bug to consolidate it into. */
+  async function consolidated() {
+    const seeded = await seedConnection();
+    const duplicate = await monitorIngestionService.reconcileIssue(seeded.connection, issue());
+    const canonical = await monitorIngestionService.reconcileIssue(
+      seeded.connection,
+      issue({ externalId: 'sentry-issue-2', title: 'The tracking card' }),
+    );
+    return { ...seeded, duplicate, canonical };
+  }
+
+  async function markDuplicate(fx: WorkItemFixture, fromId: string, toId: string, status: string) {
+    await adminDb.workItem.update({ where: { id: fromId }, data: { status } });
+    await adminDb.workItemLink.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        fromId,
+        toId,
+        kind: 'duplicates',
+        createdById: fx.ownerId,
+      },
+    });
+  }
+
+  const linkOf = (externalIssueId: string) =>
+    adminDb.monitorIssue.findFirstOrThrow({ where: { externalIssueId } });
+
+  it('recurring MOVES the link to the open card it duplicates and files nothing', async () => {
+    const { fx, connection, duplicate, canonical } = await consolidated();
+    await markDuplicate(fx, duplicate.workItemId, canonical.workItemId, 'cancelled');
+    // The resolve-back already ran for the cancelled duplicate.
+    await adminDb.monitorIssue.updateMany({
+      where: { externalIssueId: 'sentry-issue-1' },
+      data: { resolveState: 'resolved', resolveAttemptedAt: new Date('2026-09-18T10:00:00.000Z') },
+    });
+
+    const result = await monitorIngestionService.reconcileIssue(connection, issue(recurrence));
+
+    expect(result).toEqual({
+      outcome: 'updated',
+      workItemId: canonical.workItemId,
+      identifier: canonical.identifier,
+    });
+    expect(await bugsIn(fx.projectId)).toHaveLength(2);
+    const link = await linkOf('sentry-issue-1');
+    expect(link).toMatchObject({
+      workItemId: canonical.workItemId,
+      filedWorkItemIdentifier: canonical.identifier,
+      eventCount: 12,
+      // The resolve-back starts over for the card that now carries the issue.
+      resolveState: null,
+      resolveAttemptedAt: null,
+    });
+    // The cancelled duplicate is left exactly as the person closed it.
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: duplicate.workItemId } })).status,
+    ).toBe('cancelled');
+  });
+
+  it('follows a CHAIN of done duplicates to the live card at its end', async () => {
+    const { fx, connection, duplicate, canonical } = await consolidated();
+    const middle = await monitorIngestionService.reconcileIssue(
+      connection,
+      issue({ externalId: 'sentry-issue-3', title: 'An earlier consolidation' }),
+    );
+    await markDuplicate(fx, duplicate.workItemId, middle.workItemId, 'cancelled');
+    await markDuplicate(fx, middle.workItemId, canonical.workItemId, 'cancelled');
+
+    const result = await monitorIngestionService.reconcileIssue(connection, issue(recurrence));
+
+    expect(result).toMatchObject({ outcome: 'updated', workItemId: canonical.workItemId });
+    expect(await bugsIn(fx.projectId)).toHaveLength(3);
+    expect((await linkOf('sentry-issue-1')).workItemId).toBe(canonical.workItemId);
+  });
+
+  it('whose target is itself DONE re-files as today, relates_to the old bug', async () => {
+    const { fx, connection, duplicate, canonical } = await consolidated();
+    await markDuplicate(fx, duplicate.workItemId, canonical.workItemId, 'cancelled');
+    await adminDb.workItem.update({
+      where: { id: canonical.workItemId },
+      data: { status: 'done' },
+    });
+
+    const result = await monitorIngestionService.reconcileIssue(connection, issue(recurrence));
+
+    expect(result.outcome).toBe('refiled');
+    expect(result.workItemId).not.toBe(canonical.workItemId);
+    expect(await bugsIn(fx.projectId)).toHaveLength(3);
+    const relates = await adminDb.workItemLink.findFirst({
+      where: { fromId: result.workItemId, toId: duplicate.workItemId, kind: 'relates_to' },
+    });
+    expect(relates).not.toBeNull();
+    expect((await linkOf('sentry-issue-1')).workItemId).toBe(result.workItemId);
+  });
+
+  it('a duplicate CYCLE of done cards ends the walk and re-files', async () => {
+    const { fx, connection, duplicate, canonical } = await consolidated();
+    await markDuplicate(fx, duplicate.workItemId, canonical.workItemId, 'cancelled');
+    await markDuplicate(fx, canonical.workItemId, duplicate.workItemId, 'cancelled');
+
+    const result = await monitorIngestionService.reconcileIssue(connection, issue(recurrence));
+
+    expect(result.outcome).toBe('refiled');
+    expect(await bugsIn(fx.projectId)).toHaveLength(3);
+  });
+});
+
+// ── THE BUG AND ITS LINK COMMIT TOGETHER (Bug MOTIR-8512) ────────────────────
+// The create used to commit on its own while the link waited on an outer
+// transaction; when that one expired (P2028) the bug stood unlinked and every
+// later poll filed another. The failure is injected at the link write itself —
+// the last statement of the filing — so everything before it has run.
+describe('a link write that fails after the bug is created', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const expired = () =>
+    new Error('Transaction API error: A commit cannot be executed on an expired transaction.');
+
+  it('a FIRST filing rolls the bug back, and the next reconcile files exactly one', async () => {
+    const { fx, connection } = await seedConnection();
+    vi.spyOn(monitorIssueRepository, 'markFiled').mockRejectedValueOnce(expired());
+
+    await expect(monitorIngestionService.reconcileIssue(connection, issue())).rejects.toThrow(
+      /expired transaction/,
+    );
+    expect(await bugsIn(fx.projectId)).toHaveLength(0);
+    expect(await adminDb.monitorIssue.count()).toBe(0);
+
+    const retried = await monitorIngestionService.reconcileIssue(connection, issue());
+    const again = await monitorIngestionService.reconcileIssue(connection, issue());
+
+    expect(retried.outcome).toBe('filed');
+    expect(again).toEqual({ ...retried, outcome: 'updated' });
+    const bugs = await bugsIn(fx.projectId);
+    expect(bugs.map((b) => b.id)).toEqual([retried.workItemId]);
+    expect((await adminDb.monitorIssue.findFirstOrThrow()).workItemId).toBe(retried.workItemId);
+  });
+
+  it('a RE-FILE leaves the link on the done bug, and the next reconcile files exactly one', async () => {
+    const { fx, connection } = await seedConnection();
+    const first = await monitorIngestionService.reconcileIssue(connection, issue());
+    await adminDb.workItem.update({ where: { id: first.workItemId }, data: { status: 'done' } });
+    const recurred = issue({ lastSeenAt: new Date('2026-09-19T09:00:00.000Z') });
+    vi.spyOn(monitorIssueRepository, 'markFiled').mockRejectedValueOnce(expired());
+
+    await expect(monitorIngestionService.reconcileIssue(connection, recurred)).rejects.toThrow(
+      /expired transaction/,
+    );
+    expect((await bugsIn(fx.projectId)).map((b) => b.id)).toEqual([first.workItemId]);
+    expect((await adminDb.monitorIssue.findFirstOrThrow()).workItemId).toBe(first.workItemId);
+
+    const retried = await monitorIngestionService.reconcileIssue(connection, recurred);
+    const again = await monitorIngestionService.reconcileIssue(connection, recurred);
+
+    expect(retried.outcome).toBe('refiled');
+    expect(again).toEqual({ ...retried, outcome: 'updated' });
+    const open = (await bugsIn(fx.projectId)).filter((b) => b.status !== 'done');
+    expect(open.map((b) => b.id)).toEqual([retried.workItemId]);
+    expect((await adminDb.monitorIssue.findFirstOrThrow()).workItemId).toBe(retried.workItemId);
   });
 });
 

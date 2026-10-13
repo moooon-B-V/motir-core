@@ -160,6 +160,21 @@ export class MonitorBinderUnavailableError extends Error {
 }
 
 /**
+ * The issue's link moved between the reconciler's decision to file and the
+ * filing transaction's lock (Bug MOTIR-8512): another reconciler filed for the
+ * same issue first. Thrown from INSIDE the create's transaction, so the bug this
+ * reconciler was about to file rolls back with it; the reconciler then decides
+ * again against the row as it now stands. It never leaves the service.
+ */
+export class MonitorFilingRaceError extends Error {
+  readonly code = 'MONITOR_FILING_RACE' as const;
+  constructor(readonly externalIssueId: string) {
+    super(`Issue ${externalIssueId} was filed by another reconciler first.`);
+    this.name = 'MonitorFilingRaceError';
+  }
+}
+
+/**
  * A minimum level that is not one of the vocabulary's members (Story MOTIR-4929
  * · Subtask MOTIR-5579). `null` — every level — is always valid; anything else
  * must be one of `lib/monitors/levels.ts`'s `MONITOR_LEVELS`.
