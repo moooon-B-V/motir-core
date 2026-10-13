@@ -161,6 +161,7 @@ const COGNATES: Record<string, Record<string, string>> = {
   de: {
     'onboarding.landing.optional.optionalTag': '"optional" is the German word',
     'onboardingMigrate.rail.importOptional': '"optional" is the German word',
+    'onboarding.directionDoc.optional': '"optional" is the German word',
     'onboarding.chat.railLabel': '"Chat" is the German word',
     'onboarding.chat.topbarLabel': '"Onboarding" is the loanword German product copy uses',
     'onboarding.design.theme.name': '"Theme" is the loanword German UI copy uses',
