@@ -50,6 +50,7 @@ function progress(): PlanProgressSnapshot {
     observedAt: iso(T0),
     authored: 1,
     proposed: 5,
+    autoResume: null,
     steps: [],
   };
 }

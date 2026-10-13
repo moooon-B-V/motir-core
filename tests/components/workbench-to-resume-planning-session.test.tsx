@@ -68,6 +68,7 @@ function session(over: Partial<ToResumePlanningSessionDto> = {}): ToResumePlanni
       observedAt: AGO,
       authored: 7,
       proposed: 12,
+      autoResume: null,
       steps: [],
     },
     ...over,

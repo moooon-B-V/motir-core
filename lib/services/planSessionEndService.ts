@@ -29,10 +29,11 @@ import { PlanChangeSessionNotFoundError } from '@/lib/planChange/errors';
 import {
   failureRecordFrom,
   type JobWalkPosition,
-  type JobWalkStop,
+  type FailedJobFacts,
 } from '@/lib/planChange/failureRecord';
 import type { PlanSessionFailureRecord } from '@/lib/planChange/sessionWaitingState';
 import { getJob } from '@/lib/ai/motirAiClient';
+import type { AutoResumeOutcome } from '@/lib/services/planSessionResumeService';
 import { clearWithin as clearPlanningSessionGate } from '@/lib/services/planningSessionGateService';
 
 // THE ONE END OPERATION (story MOTIR-7630 · MOTIR-7637;
@@ -416,7 +417,9 @@ export type RecordFailureOutcome =
   | 'ended'
   | 'plan_not_generating'
   | 'not_latest'
-  | 'activity_moved';
+  | 'activity_moved'
+  /** The session has bound a newer attempt since its caller read it (MOTIR-8307). */
+  | 'job_moved';
 
 /**
  * RECORD A FAILED ATTEMPT ON ITS OPEN SESSION, INSIDE THE CALLER'S TRANSACTION
@@ -443,7 +446,7 @@ export async function recordFailureWithin(
   sessionId: string,
   workspaceId: string,
   record: PlanSessionFailureRecord,
-  opts: { onlyPlanId?: string; lastActivityAt?: Date } = {},
+  opts: { onlyPlanId?: string; lastActivityAt?: Date; onlyLastJobId?: string } = {},
 ): Promise<RecordFailureOutcome> {
   const latestPlanId = await planRepository.findLatestIdBySession(sessionId, tx);
   if (latestPlanId) await planRepository.lockById(latestPlanId, tx);
@@ -451,6 +454,12 @@ export async function recordFailureWithin(
   if (!locked) throw new PlanChangeSessionNotFoundError(sessionId);
   const fresh = await planChangeSessionRepository.findWaitingState(sessionId, workspaceId, tx);
   if (!fresh || fresh.endedAt) return 'ended';
+  // A relay settling the attempt it read is answered only while that attempt is still the
+  // session's: an automatic resume the sweep bound in between (MOTIR-8307) is a NEWER attempt,
+  // and recording the old job's failure over it would fail a session that is running.
+  if (opts.onlyLastJobId !== undefined && fresh.lastJobId !== opts.onlyLastJobId) {
+    return 'job_moved';
+  }
   if (opts.onlyPlanId !== undefined && latestPlanId !== opts.onlyPlanId) return 'not_latest';
   const plan = latestPlanId ? await planRepository.findById(latestPlanId, workspaceId, tx) : null;
   // A failed REVISION leaves a `planned` / `stale` plan beside the failure (MOTIR-7936):
@@ -480,6 +489,21 @@ export interface SettleFailedJobResult {
    *  recorded (a canceled job, or a plan with no open conversation session). */
   settled: 'recorded' | 'ended' | 'released';
   sessionId: string | null;
+  /** Which settle arm answered: a walk's session, or a revision (MOTIR-8304). */
+  arm: 'session' | 'revision';
+  /**
+   * `true` only when the job was READ and motir-ai reports it lost its machine
+   * (`JobView.lostMachine`). A canceled job, a non-conversation session and a read
+   * that failed all report `false`: unknown resolves to not lost, so that failure
+   * waits in To resume (MOTIR-8304).
+   */
+  lostMachine: boolean;
+  /**
+   * The automatic resume this settle started or skipped (MOTIR-8307) — attempted only for a
+   * walk's session whose failure was RECORDED because its machine was lost; `null` whenever
+   * no attempt was made.
+   */
+  autoResume: AutoResumeOutcome | null;
 }
 
 /** The seam a test replaces: what motir-ai says about the failed job. */
@@ -487,7 +511,7 @@ export interface SettleFailedJobDeps {
   readJob?: (
     jobId: string,
     coreProjectId: string,
-  ) => Promise<{ error: { code: string; message?: string } | null; walkStop: JobWalkStop | null }>;
+  ) => Promise<Omit<FailedJobFacts, 'lostMachine'> & { lostMachine?: boolean }>;
 }
 
 /**
@@ -526,14 +550,21 @@ export async function settleFailedJob(
   );
   if (!session || session.endedAt) return null;
 
-  const end = async (): Promise<SettleFailedJobResult> => {
+  const end = async (lostMachine = false): Promise<SettleFailedJobResult> => {
     // No `actorId`: Motir ended it, so the restores are signed by the session's starter.
     await endSession(session.id, 'failed', { workspaceId: ctx.workspaceId });
-    return { settled: 'ended', sessionId: session.id };
+    return {
+      settled: 'ended',
+      sessionId: session.id,
+      arm: 'session',
+      lostMachine,
+      autoResume: null,
+    };
   };
   if (input.status === 'canceled' || session.origin !== 'conversation') return end();
 
   const job = await (deps.readJob ?? readFailedJob)(jobId, ctx.projectId).catch(() => null);
+  const lostMachine = job?.lostMachine ?? false;
   const record = failureRecordFrom({
     failedJobId: jobId,
     now: new Date(),
@@ -542,11 +573,22 @@ export async function settleFailedJob(
     error: job?.error ?? null,
   });
   const outcome = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    recordFailureWithin(tx, session.id, ctx.workspaceId, record),
+    recordFailureWithin(tx, session.id, ctx.workspaceId, record, { onlyLastJobId: jobId }),
   );
-  if (outcome === 'recorded') return { settled: 'recorded', sessionId: session.id };
-  if (outcome === 'ended') return null;
-  return end();
+  if (outcome === 'recorded') {
+    // AWAITED before returning, so by the time the relay sends its terminal frame the session
+    // is already re-bound and no longer failed.
+    const autoResume = lostMachine
+      ? await resumeAutomaticallySafely({
+          sessionId: session.id,
+          workspaceId: ctx.workspaceId,
+          projectId: ctx.projectId,
+        })
+      : null;
+    return { settled: 'recorded', sessionId: session.id, arm: 'session', lostMachine, autoResume };
+  }
+  if (outcome === 'ended' || outcome === 'job_moved') return null;
+  return end(lostMachine);
 }
 
 /**
@@ -599,6 +641,7 @@ async function settleFailedRevision(
   const job = recordable
     ? await (deps.readJob ?? readFailedJob)(jobId, ctx.projectId).catch(() => null)
     : null;
+  const lostMachine = job?.lostMachine ?? false;
   const record = recordable
     ? failureRecordFrom({
         failedJobId: jobId,
@@ -636,16 +679,54 @@ async function settleFailedRevision(
         const outcome = await recordFailureWithin(tx, session.id, ctx.workspaceId, record, {
           onlyPlanId: plan.id,
         });
-        if (outcome === 'recorded') return { settled: 'recorded', sessionId: session.id };
+        if (outcome === 'recorded') {
+          return {
+            settled: 'recorded',
+            sessionId: session.id,
+            arm: 'revision',
+            lostMachine,
+            autoResume: null,
+          };
+        }
       }
-      return { settled: 'released', sessionId: session?.id ?? null } as const;
+      return {
+        settled: 'released',
+        sessionId: session?.id ?? null,
+        arm: 'revision',
+        lostMachine,
+        autoResume: null,
+      };
     },
   );
 }
 
-async function readFailedJob(jobId: string, coreProjectId: string) {
+/**
+ * THE AUTOMATIC RESUME, AS A FAILURE-RECORDING PATH CALLS IT (MOTIR-8307): any throw becomes a
+ * `submit_refused` skip, so the relay and the sweep never see an exception from it — the
+ * failure stands recorded and waits in To resume. Loaded lazily: the resume service reaches
+ * `planChangeSessionsService`, which imports this module.
+ */
+export async function resumeAutomaticallySafely(input: {
+  sessionId: string;
+  workspaceId: string;
+  projectId: string;
+}): Promise<AutoResumeOutcome> {
+  try {
+    const { planSessionResumeService } = await import('@/lib/services/planSessionResumeService');
+    return await planSessionResumeService.resumeAutomatically(input);
+  } catch (err) {
+    console.warn(`[auto-resume] session ${input.sessionId} failed`, err);
+    return { started: false, reason: 'submit_refused' };
+  }
+}
+
+async function readFailedJob(jobId: string, coreProjectId: string): Promise<FailedJobFacts> {
   const view = await getJob(jobId, coreProjectId);
-  return { error: view.error, walkStop: view.walkStop };
+  return {
+    error: view.error,
+    walkStop: view.walkStop ?? null,
+    lostMachine: view.lostMachine ?? false,
+  };
 }
 
 /**

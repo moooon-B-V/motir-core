@@ -246,6 +246,7 @@ describe('PlanProposalViews — the progress line', () => {
     observedAt: new Date(T0).toISOString(),
     authored: 1,
     proposed: 5,
+    autoResume: null,
     steps: [
       {
         sessionKey: 's1',
@@ -321,6 +322,7 @@ describe('PlanProposalViews — the canvas cues read the one clock', () => {
     observedAt: new Date(T0).toISOString(),
     authored: 1,
     proposed: 2,
+    autoResume: null,
     steps: [
       {
         sessionKey: 's1',

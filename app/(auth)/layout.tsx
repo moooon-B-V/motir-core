@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { type ReactNode } from 'react';
 import { BrandMark } from '@/components/brand/BrandMark';
-import { AuthLanguageControl } from './_components/AuthLanguageControl';
-import { AuthWaves } from './_components/AuthWaves';
+import { HeroWaves } from '@/components/brand/HeroWaves';
+import { AuthLanguageControl } from '@/components/i18n/AuthLanguageControl';
 
 /**
  * Shared frame for the auth pages (sign-in, sign-up, reset-password,
@@ -91,7 +91,7 @@ import { AuthWaves } from './_components/AuthWaves';
  * `py-12`. That costs `/device` 32px of PAGE height below `lg`, where no fold
  * budget was measured, and no card height anywhere.
  *
- * THE WAVE LINES behind the card are motir.co's hero background (`AuthWaves`),
+ * THE WAVE LINES behind the card are motir.co's hero background (`HeroWaves`),
  * so arriving from the marketing site does not feel like changing products. The
  * canvas is `absolute inset-0 -z-10` inside this `relative isolate` frame: out of
  * flow (no fold cost), above the wash and under everything else. It comes after
@@ -107,7 +107,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
       <header className="absolute top-2 right-6 z-10">
         <AuthLanguageControl />
       </header>
-      <AuthWaves />
+      <HeroWaves />
       <main className="w-full max-w-[28rem] has-[[data-auth-wide]]:max-w-[40rem] lg:has-[[data-auth-wide=consent]]:max-w-[64rem]">
         {/* The card is the brand row's column: `gap-8` matches the rhythm
             `AuthShell` already sets inside itself, so the lockup reads as the

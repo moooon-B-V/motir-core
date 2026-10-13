@@ -21,7 +21,9 @@ type DotState = 'done' | 'current' | 'todo' | 'locked';
  * locked states (design Panel 0). The Import step is drawn LOCKED until the
  * dry-run preview has been reviewed (`previewed`), making the confirm-before-write
  * gate visible. Colour roles per the design: done → `--el-success`, current →
- * `--el-accent`, locked → dashed `--el-border-strong` + `--el-text-faint`.
+ * the warm CTA pair (`--el-cta-warm` fill, `--el-cta-warm-text` numeral, a 22 %
+ * halo — MOTIR-8251 Revision 5, the same pair as the primary button), locked →
+ * dashed `--el-border-strong` + `--el-text-faint`.
  */
 export function StepRail({
   current,
@@ -56,7 +58,7 @@ export function StepRail({
                   'flex size-6 shrink-0 items-center justify-center rounded-full text-xs',
                   state === 'done' && 'bg-(--el-success) text-(--el-text-inverted)',
                   state === 'current' &&
-                    'bg-(--el-accent) text-(--el-accent-text) ring-4 ring-[color-mix(in_srgb,var(--el-accent)_18%,transparent)]',
+                    'bg-(--el-cta-warm) font-semibold text-(--el-cta-warm-text) ring-4 ring-[color-mix(in_srgb,var(--el-cta-warm)_22%,transparent)]',
                   state === 'todo' && 'border border-(--el-border-strong) text-(--el-text-faint)',
                   state === 'locked' &&
                     'border border-dashed border-(--el-border-strong) text-(--el-text-faint)',

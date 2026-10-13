@@ -3366,6 +3366,15 @@
      (The planning node's done/total meter is NOT this role: it means DONE and
      stays --el-success.) */
   --el-progress-fill: var(--color-primary-fill);
+  /* The WARM primary CTA (MOTIR-8251 Revision 5 · built by MOTIR-8254) — the
+     onboarding screens' one warm element: the palette's decorative highlight as
+     the FILL, ink as the LABEL. The label is dark in BOTH themes, because white
+     on the motir orange is 3.8:1 light / 3.3:1 dark (under AA) while ink is
+     4.65:1 light and the dark page ink 5.9:1 dark. Both inputs are palette
+     tokens, so a data-palette swap re-tints it; the dark label is set in the
+     dark block below. A treatment of Button's primary variant, not a variant. */
+  --el-cta-warm: var(--el-highlight);
+  --el-cta-warm-text: var(--el-text);
   /* The rich-text editor's FOCUS indicator (MOTIR-7584). Resolves to the
      decorative accent the editor borrowed before the role existed; a palette
      whose accent is decorative-only (motir) points it back at its focus hue. */
@@ -4052,6 +4061,9 @@
    one-shade-darker. */
 [data-theme='dark'] {
   --el-sidebar-item-bg-hover: #222222;
+  /* The warm CTA's label is the dark PAGE ink in dark (MOTIR-8251 Revision 5):
+     the brighter dark orange carries a dark label at 5.9:1, never a light one. */
+  --el-cta-warm-text: var(--el-page-bg);
   /* THE DARK ACCENT INK (MOTIR-3745). Light keeps the plain
      var(--color-primary) alias declared in the Tier-3 block above, byte for
      byte — this is a DARK-ONLY lift, and deliberately so: the light accent

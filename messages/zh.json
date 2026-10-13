@@ -299,6 +299,7 @@
     "liveAnnounce": "计划新增了 {count, plural, other {#}} 个工作项",
     "liveStarting": "正在启动…",
     "liveStalled": "已停滞",
+    "liveResuming": "正在继续",
     "progress": {
       "settling": "正在梳理对话",
       "layingChildrenOf": "正在铺设：{title}",
@@ -321,7 +322,13 @@
       "detailsLastActivity": "最近活动于 {time}",
       "detailsStalled": "已 {duration} 没有写入或报告。计划可能已停止。",
       "pointer": "在工作台跟进",
-      "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。"
+      "pointerSentence": "你可以离开 — 此计划会继续编写。可在“工作台 › 规划”中跟进。",
+      "resumingReason": "从中断处接着写",
+      "resumingSecond": "第二次尝试",
+      "detailsResumingHead": "从中断处接着写",
+      "detailsResuming": "编写此计划的机器丢失了。Motir 已自动重新开始此计划，它会从中断处继续 — 已写好的工作项会保留，不会重写。",
+      "detailsResumedAt": "已于 {time} 自动继续",
+      "detailsResumedAtSecond": "已于 {time} 自动继续 · 第二次尝试"
     },
     "cue": {
       "drafting": "起草中",
@@ -6687,36 +6694,55 @@
       }
     },
     "entrance": {
-      "eyebrow": "用 AI 构建",
-      "headingDefault": "你想如何开始？",
+      "headingDefault": "Vibe the project",
       "headingCarried": "随时可以开始",
-      "subheadDefault": "描述你想构建的东西。Motir 会与你一起规划，然后由智能体来构建。",
+      "subheadDefault": "你带来想法，Motir 交付整个项目：计划、设计、构建、文档，以及它如何一步步成形的完整经过。",
       "subheadCarried": "我们保留了你最初的想法。如果愿意，可以补充更多，然后继续。",
       "howItWorks": "了解 Motir 的工作方式",
-      "ideaLabel": "你的想法",
+      "howItWorksNewTab": "（在新标签页中打开）",
+      "ideaLabel": "你在构建什么？",
       "carriedLabel": "沿用你的想法",
       "placeholder": "描述你想构建的东西——面向谁、人们应该能做的核心事情，以及任何必备功能。不必追求完美——接下来我们会追问细节。",
-      "startCta": "开始规划",
+      "startCta": "开始",
       "continueCta": "沿用这个想法继续",
-      "hintDefault": "可以从一个粗略的想法开始——发现对话会追问后续问题。",
+      "hintDefault": "几句话就够了，剩下的 Motir 会来问。",
       "hintCarried": "继续之前可以补充或完善任何内容——接下来交给发现对话。",
-      "or": "或",
-      "importTitle": "我已有一个项目——迁移它",
-      "importDesc": "连接你的代码仓库，Motir 会读取你的代码，然后在现有基础上进行规划。你也可以从 Jira、Linear 或 Plane 导入现有的工作项。",
-      "importCta": "迁移"
+      "importTitle": "已经有项目了？",
+      "importDesc": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。发布什么由你决定。",
+      "importCta": "它同样可以 Vibe"
     },
     "import": {
       "title": "导入现有项目",
-      "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以用 AI 开始一个新项目。",
+      "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以从你的想法开始一个新项目。",
       "back": "返回开始"
     },
     "howItWorks": {
-      "title": "Motir 的工作方式",
-      "body": "完整的流程介绍——想法 → 规划 → 由智能体构建——即将推出。目前，你可以先从你的想法开始，Motir 会在过程中追问后续问题。",
-      "back": "返回开始"
+      "title": "AI 做事，你拍板。",
+      "body": "你带来想法。Motir 会一直问，直到弄明白为止，然后一步步做出计划、设计、产品和文档，全程公开透明，凡是该由你做的选择，它都会停下。",
+      "back": "返回开始",
+      "sections": {
+        "say": {
+          "title": "说出你想要什么",
+          "body": "几句话，或者一堆零散的想法都行。Motir 会一直问，直到弄明白为止。"
+        },
+        "watch": {
+          "title": "看着它逐步成形",
+          "body": "计划、设计、产品和文档一步步做出来，全程公开透明。"
+        },
+        "decide": {
+          "title": "你来决定",
+          "body": "每一部分都会回到你手上，供你查看、试用和批准。发布什么，始终由你掌控。"
+        }
+      },
+      "developers": {
+        "title": "面向开发者：Motir 的工作方式",
+        "body": "每个 Motir 项目都运行在同一台“仪器”上：模块是 Motir 和它的智能体，开关属于你。motir.co 会逐个模块讲清楚。",
+        "cta": "到 motir.co 阅读",
+        "newTab": "（在新标签页中打开）"
+      }
     },
     "connectGate": {
-      "title": "尚未配置 AI 规划",
+      "title": "规划尚未连接",
       "body": "规划运行在 Motir Cloud 上；此自托管工作区尚未建立连接。",
       "cta": "连接 Motir AI"
     },
@@ -7762,7 +7788,10 @@
         "layingLine": "正在铺开 {target}",
         "authoringLine": "正在撰写 {title}",
         "matchingLine": "正在检查是否已有工作项覆盖它",
-        "writingLine": "正在把诊断写入 {key}"
+        "writingLine": "正在把诊断写入 {key}",
+        "resumed": "继续",
+        "resumedLine": "机器丢失 — Motir 已重新开始，从中断处继续",
+        "resumedLineSecond": "机器再次丢失 — 第二次自动尝试，从中断处继续"
       },
       "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。",
       "composerPlaceholderGuide": "告诉 Motir AI 这一步进展如何…",
@@ -8230,6 +8259,10 @@
     }
   },
   "import": {
+    "hero": {
+      "headline": "把你的项目带进来",
+      "lede": "连接 Jira、Linear 或 Plane，Motir 会把你的工作项迁移过来，从你现在的进度出发规划下一步。"
+    },
     "chrome": {
       "title": "导入工作项",
       "titleInto": "导入工作项 · 到 {project}",
@@ -8472,7 +8505,11 @@
   "onboardingMigrate": {
     "brandBar": {
       "flowName": "迁移现有项目",
-      "planAi": "用 AI 规划"
+      "planAi": "改为从一个想法开始"
+    },
+    "hero": {
+      "headline": "已经有项目了？",
+      "lede": "在改动任何东西之前，Motir 会先读懂你的代码、任务和历史，再规划下一步。它负责运转项目，由你决定发布什么。"
     },
     "rail": {
       "title": "你的迁移",
@@ -8498,16 +8535,30 @@
       "eyebrow": "现有代码库",
       "heading": "迁移现有代码库",
       "body": "连接你的仓库，让 Motir 读取代码并推导编码规范，然后可选地导入你的工作项并规划。",
-      "projectLine": "迁移向导将针对此项目运行。",
-      "cta": "开始"
+      "chooseLabel": "你要迁移哪个项目？",
+      "current": "当前打开",
+      "currentMeta": "你当前打开的项目",
+      "otherMeta": "先切换到这个项目，再开始",
+      "ctaFor": "从 {project} 开始"
     },
     "connect": {
       "eyebrow": "第 1 步，共 2 步 · 设置",
       "heading": "连接本项目中的仓库",
-      "body": "在工作区设置中连接你的 GitHub 仓库。Motir 通过 GitProvider 接口读取它们，为整个项目构建一个代码图谱。",
-      "cta": "打开 GitHub 设置",
+      "body": "Motir 会读取你在 GitHub 上连接的仓库，为整个项目建立一张代码地图。",
       "gitlabNote": "GitLab 连接即将推出。",
-      "next": "我已连接仓库"
+      "checking": "正在检查已连接的仓库……",
+      "missingTitle": "还没有连接任何仓库",
+      "missingHint": "在新标签页中连接 GitHub。Motir 会自己发现连接，这里不需要你确认。",
+      "connectCta": "连接 GitHub",
+      "newTab": "（在新标签页中打开）",
+      "waitingTitle": "正在等待 GitHub",
+      "waitingHint": "在另一个标签页中完成连接。你回来时 Motir 会再检查一次，在那之前每隔几秒检查一次。",
+      "reopenCta": "再次打开 GitHub 设置",
+      "detected": "{count, plural, other {已连接 # 个仓库}}",
+      "detectedHint": "这些是 Motir 可以读取的仓库。继续后开始索引。",
+      "listLabel": "已连接的仓库",
+      "continue": "继续",
+      "manage": "在 GitHub 上管理仓库"
     },
     "index": {
       "eyebrow": "第 2 步，共 2 步 · 设置",
@@ -8530,16 +8581,16 @@
       "eyebrow": "可选 · 导入与规划",
       "heading": "导入你现有的工作项",
       "body": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作项？将其导入此项目——写入前你会先预览试运行结果。没有工作项要导入则跳过。",
-      "cta": "打开导入器",
       "reconcile": "随后生成计划时，Motir 会核对二者，避免重复。",
       "skip": "跳过导入",
-      "next": "已导入——继续"
+      "bodyInline": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作？就在这里导入。写入任何内容之前，你会先查看试运行预览。没有工作项要导入就跳过这一步。",
+      "continue": "继续"
     },
     "decision": {
       "eyebrow": "设置完成",
       "heading": "你的代码库已进入 Motir",
-      "body": "现在用 AI 规划项目，或先完成稍后从项目中规划。",
-      "planNow": "现在用 AI 规划",
+      "body": "Motir 现在就可以规划下一步，你也可以先完成，稍后从项目中规划。发布什么由你决定。",
+      "planNow": "现在规划我的项目",
       "finishLater": "完成——稍后规划"
     },
     "resume": {
@@ -8547,6 +8598,18 @@
       "heading": "继续规划",
       "body": "你已开始规划此项目。在规划工作区中继续。",
       "cta": "继续规划"
+    },
+    "questions": {
+      "eyebrow": "你的方向",
+      "heading": "几个问题",
+      "body": "Motir 已经读过你的代码。回答几个关于项目走向的问题，它会结合两者起草你的第一份计划。",
+      "progress": "第 {n} 个问题，共约 {total} 个",
+      "draftingTitle": "正在起草你的第一份计划",
+      "draftingBody": "依据你的代码、工作项和回答。你可以离开这个页面，计划好了 Motir 会告诉你。",
+      "draftingWaits": "正在等待 Motir 读完你的代码，之后会自动开始起草。",
+      "readyTitle": "你的第一份计划已就绪",
+      "readyBody": "已为 {project} 起草 {count, plural, other {# 个工作项}}。在你批准之前，一切都不是最终的。",
+      "readyCta": "查看你的计划"
     }
   },
   "repositorySet": {

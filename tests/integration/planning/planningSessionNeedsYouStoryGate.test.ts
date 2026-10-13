@@ -271,7 +271,13 @@ describe('1 · a failure keeps everything', () => {
 
       const out = await relayFailure('job-1');
 
-      expect(out).toEqual({ settled: 'recorded', sessionId: f.sessionId });
+      expect(out).toEqual({
+        settled: 'recorded',
+        sessionId: f.sessionId,
+        arm: 'session',
+        lostMachine: false,
+        autoResume: null,
+      });
       const s = await sessionRow(f.sessionId);
       expect(s.endedAt).toBeNull();
       expect(s.failureReason).toBe('rate_limited');

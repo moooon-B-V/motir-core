@@ -170,8 +170,9 @@ describe('the active-workspace resolver WAITS past 5 s and still answers (MOTIR-
 // ~12.9 s (host CPU steal) with idle pool connections, so the 2 s `maxWait`
 // expired and Prisma threw P2028 "Unable to start a transaction in the given
 // time" out of this resolver — every authed page and API route that resolves the
-// workspace failed. The read-only block is retried ONCE; the cases below drive
-// the rejection instead of waiting for a stall.
+// workspace failed. The transaction is retried ONCE (by `withUserContext` since
+// MOTIR-8333); the cases below drive the rejection instead of waiting for a
+// stall.
 
 const MAX_WAIT = 'Transaction API error: Unable to start a transaction in the given time.';
 const EXPIRED =
@@ -213,14 +214,16 @@ describe('the active-workspace resolver retries a transaction that could not sta
     expect(start).toHaveBeenCalledTimes(2);
   });
 
-  it('does not retry the timeout half of P2028', async () => {
+  // MOTIR-8333: the retry moved into `withUserContext` and covers both halves, as
+  // long as the body has not started — this rejection never reached the body.
+  it('also retries the timeout half when it struck before the body ran', async () => {
     const { owner, workspace } = await makeMemberWithWorkspace();
     const start = vi.spyOn(db, '$transaction').mockRejectedValueOnce(p2028(EXPIRED));
 
     await expect(
       workspacesService.resolveActiveWorkspace(owner.id, workspace.id, 'Ada'),
-    ).rejects.toMatchObject({ code: 'P2028' });
-    expect(start).toHaveBeenCalledTimes(1);
+    ).resolves.toBe(workspace.id);
+    expect(start).toHaveBeenCalledTimes(2);
   });
 
   it("does not retry a maxWait raised from ensureDefaultWorkspace's own transaction", async () => {

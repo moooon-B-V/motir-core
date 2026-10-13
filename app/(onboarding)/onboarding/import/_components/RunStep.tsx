@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CheckCircle2, XCircle } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import { WarmButton as Button } from '@/components/onboarding/layout/WarmButton';
 import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils/cn';
 import { Footer } from './ConnectStep';
@@ -40,12 +40,19 @@ export function RunStep({
   mapping,
   project,
   confirmCount,
+  onContinue,
+  continueLabel,
 }: {
   importId: string;
   connection: ConnectionConfig;
   mapping: Mapping;
   project: { id: string; name: string };
   confirmCount: number;
+  /** When the importer runs inside the migrate wizard (MOTIR-8254, design
+   *  Revision 6, Panel 4f): the finished state's action continues the wizard
+   *  instead of leaving for the backlog, which would end onboarding half way. */
+  onContinue?: () => void;
+  continueLabel?: string;
 }) {
   const t = useTranslations('import');
 
@@ -171,9 +178,15 @@ export function RunStep({
             <Button variant="secondary" onClick={retry}>
               {t('run.retry')}
             </Button>
-            <a href={issuesHref}>
-              <Button>{t('run.viewBacklog')}</Button>
-            </a>
+            {onContinue ? (
+              <Button onClick={onContinue} rightIcon={<ArrowRight className="size-4" />}>
+                {continueLabel}
+              </Button>
+            ) : (
+              <a href={issuesHref}>
+                <Button>{t('run.viewBacklog')}</Button>
+              </a>
+            )}
           </div>
         }
       >
@@ -196,9 +209,15 @@ export function RunStep({
         skipped: counts.skipped,
       })}
       action={
-        <a href={issuesHref}>
-          <Button>{t('run.viewBacklog')}</Button>
-        </a>
+        onContinue ? (
+          <Button onClick={onContinue} rightIcon={<ArrowRight className="size-4" />}>
+            {continueLabel}
+          </Button>
+        ) : (
+          <a href={issuesHref}>
+            <Button>{t('run.viewBacklog')}</Button>
+          </a>
+        )
       }
     >
       {countsRegion}

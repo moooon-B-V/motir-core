@@ -9124,6 +9124,15 @@ model PlanChangeSession {
   /// concurrent filings cannot both pass `GUIDE_BUGS_PER_CONVERSATION`. Always 0
   /// on a session that is not a guide.
   guideBugsFiled      Int                       @default(0) @map("guide_bugs_filed")
+  // ── AUTOMATIC RESUME ──────────────────────────────────────────────────────────
+  /// How many times Motir has resumed this conversation by itself after its
+  /// planning machine was lost (Story MOTIR-8301 · MOTIR-8305). Bumped by
+  /// `recordAutoResume` in ONE statement that also enforces the bound
+  /// (`AUTO_RESUMES_PER_SESSION`), so two concurrent callers cannot both pass it.
+  /// A CHECK keeps it non-negative.
+  autoResumeCount     Int                       @default(0) @map("auto_resume_count")
+  /// When Motir last resumed this conversation by itself. Null until the first.
+  lastAutoResumedAt   DateTime?                 @map("last_auto_resumed_at")
   createdAt           DateTime                  @default(now()) @map("created_at")
   updatedAt           DateTime                  @updatedAt @map("updated_at")
 

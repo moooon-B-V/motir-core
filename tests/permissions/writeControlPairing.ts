@@ -305,6 +305,13 @@ export type ControlExemption =
   | { kind: 'known-gap'; card: `MOTIR-${number}` };
 
 export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
+  // Start's project choice (MOTIR-8254) switches to a project the page listed
+  // through `listProjects`, which returns only browsable projects; the action's
+  // own missing `project:browse` check is MOTIR-6319's to add.
+  'app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx': {
+    kind: 'known-gap',
+    card: 'MOTIR-6319',
+  },
   'app/(authed)/items/[key]/_components/DevelopmentLinkControl.tsx': {
     kind: 'mounted-by',
     parents: ['app/(authed)/items/[key]/_components/LateSections.tsx'],

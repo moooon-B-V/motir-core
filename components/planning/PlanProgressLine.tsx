@@ -33,13 +33,20 @@ import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 // a filter over the steps, never a phrase chosen from `kind`.
 //
 // ⚠️ WHAT IS LIVE (§26.14). The MARKER is the only live region: `role="status"`,
-// and its text is the STATE WORD alone (Starting… · Being written · Stalled ·
-// Reconnecting), so a screen reader hears a state change once and never a tick,
+// and its text is the STATE WORD alone (Starting… · Being written · Resuming ·
+// Stalled · Reconnecting), so a screen reader hears a state change once and never a tick,
 // a count or a step moving between items. The progress button is NOT live — six
 // parallel sessions would otherwise announce every few seconds — and the compact
 // form is plain text.
 //
 // Motion: none (C7). The line's text is swapped in place.
+//
+// RESUMING (Story MOTIR-8301 · MOTIR-8309; design Part XXVII §27.2–27.4): a plan
+// Motir resumed by itself after its machine was lost. The marker says so in the
+// in-progress role — there is nothing for the person to do — the tail leads with
+// a reason (and `second attempt` on the session's second automatic resume), and
+// the popover says what happened in place of a step list. The derivation decides
+// the state; this file only words it.
 
 export type PlanProgressDensity = 'pane' | 'compact';
 
@@ -94,18 +101,22 @@ function stepWords(step: PlanProgressStep, tRoot: Translate): string {
   return step.targetTitle !== null ? tRoot(key, { title: step.targetTitle }) : tRoot(key);
 }
 
-type MarkerState = 'starting' | 'writing' | 'stalled' | 'reconnecting';
+export type MarkerState = 'starting' | 'writing' | 'resuming' | 'stalled' | 'reconnecting';
 
+/** §27.2's precedence: reconnecting → stalled → resuming → starting → writing. */
 function markerOf(reading: PlanProgressClockReading, failing: boolean): MarkerState {
   if (failing) return 'reconnecting';
   if (reading.state === 'stalled') return 'stalled';
+  if (reading.state === 'resuming') return 'resuming';
   if (reading.state === 'starting') return 'starting';
   return 'writing';
 }
 
-const MARKER_WORD: Record<MarkerState, string> = {
+/** The marker's word, TOTAL over {@link MarkerState}. */
+export const MARKER_WORD: Record<MarkerState, string> = {
   starting: 'liveStarting',
   writing: 'liveWriting',
+  resuming: 'liveResuming',
   stalled: 'liveStalled',
   reconnecting: 'liveReconnecting',
 };
@@ -124,19 +135,31 @@ function MarkerDot({ marker }: { marker: MarkerState }) {
 
 /** One `· value` segment. `drop` hides it (separator and value together) below
  *  the header's width — §26.2's drop order, on the container, not the viewport. */
-function Segment({ children, drop }: { children: ReactNode; drop?: string }) {
+function Segment({
+  children,
+  drop,
+  testId,
+}: {
+  children: ReactNode;
+  drop?: string;
+  testId?: string;
+}) {
   return (
     <>
       <span aria-hidden="true" className={`shrink-0 ${drop ?? ''}`}>
         ·
       </span>
-      <span className={`shrink-0 tabular-nums ${drop ?? ''}`}>{children}</span>
+      <span data-testid={testId} className={`shrink-0 tabular-nums ${drop ?? ''}`}>
+        {children}
+      </span>
     </>
   );
 }
 
-// §26.2's drop order: last activity first (< 720 px), then elapsed and the
-// pointer (< 560 px). Counts never drop.
+// §26.2's drop order, with §27.3's resuming segments in front: the reason and
+// `second attempt` first (< 800 px), then last activity (< 720 px), then elapsed
+// and the pointer (< 560 px). Counts never drop.
+const DROP_REASON = '@max-[50rem]:hidden';
 const DROP_LAST_ACTIVITY = '@max-[45rem]:hidden';
 const DROP_ELAPSED = '@max-[35rem]:hidden';
 
@@ -170,6 +193,8 @@ export function PlanProgressLineView({
 
   const marker = markerOf(reading, failing);
   const stalled = reading.state === 'stalled';
+  const resuming = reading.state === 'resuming';
+  const secondAttempt = reading.autoResume?.count === 2;
   const first = reading.liveSteps[0] ?? null;
   const more = reading.liveSteps.length - 1;
   const firstWords = first ? stepWords(first, tRoot) : null;
@@ -204,17 +229,32 @@ export function PlanProgressLineView({
   // The line's tail — `step words · +N more` leads; with no step, the first
   // segment carries no separator.
   const tail = (leadingSeparator: boolean) => {
-    const parts: { key: string; node: ReactNode; drop?: string }[] = [];
+    const parts: { key: string; node: ReactNode; drop?: string; testId?: string }[] = [];
+    if (resuming) {
+      parts.push({
+        key: 'reason',
+        node: t('progress.resumingReason'),
+        drop: DROP_REASON,
+        testId: 'plan-progress-reason',
+      });
+      if (secondAttempt) {
+        parts.push({ key: 'second', node: t('progress.resumingSecond'), drop: DROP_REASON });
+      }
+    }
     if (counts) parts.push({ key: 'counts', node: counts });
     parts.push({ key: 'elapsed', node: elapsed, drop: DROP_ELAPSED });
     parts.push({ key: 'activity', node: activity, drop: DROP_LAST_ACTIVITY });
     return parts.map((p, i) =>
       i === 0 && !leadingSeparator ? (
-        <span key={p.key} className={`shrink-0 tabular-nums ${p.drop ?? ''}`}>
+        <span
+          key={p.key}
+          data-testid={p.testId}
+          className={`shrink-0 tabular-nums ${p.drop ?? ''}`}
+        >
           {p.node}
         </span>
       ) : (
-        <Segment key={p.key} drop={p.drop}>
+        <Segment key={p.key} drop={p.drop} testId={p.testId}>
           {p.node}
         </Segment>
       ),
@@ -277,9 +317,13 @@ export function PlanProgressLineView({
         >
           <div className="flex flex-col gap-3 p-(--spacing-card-padding)">
             <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
-              {t('progress.detailsNow')}
+              {resuming ? t('progress.detailsResumingHead') : t('progress.detailsNow')}
             </span>
-            {reading.liveSteps.length > 0 ? (
+            {resuming ? (
+              <p data-testid="plan-progress-resuming" className="text-sm text-(--el-text)">
+                {t('progress.detailsResuming')}
+              </p>
+            ) : reading.liveSteps.length > 0 ? (
               <ul className="flex flex-col gap-2">
                 {reading.liveSteps.map((step) => (
                   <li key={step.sessionKey} className="flex flex-col gap-0.5">
@@ -309,6 +353,18 @@ export function PlanProgressLineView({
                   duration: elapsed,
                 })}
               </span>
+              {/* The resumed-at row OUTLIVES the state (§27.4): "when did Motir pick this
+                  up" is what a person reading a stalled resumed plan wants to know. */}
+              {reading.autoResume ? (
+                <span data-testid="plan-progress-resumed-at">
+                  {t(
+                    reading.autoResume.count === 2
+                      ? 'progress.detailsResumedAtSecond'
+                      : 'progress.detailsResumedAt',
+                    { time: time(reading.autoResume.at) },
+                  )}
+                </span>
+              ) : null}
               <span>
                 {t('progress.detailsLastActivity', { time: time(reading.lastActivityAt) })}
               </span>

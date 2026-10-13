@@ -57,6 +57,9 @@ export default defineConfig({
       'tests/integration/plans/revisionLease.test.ts',
       'tests/integration/workbench/revision-hold-listing.test.ts',
       'tests/integration/ai/abandonedPlanSweep.test.ts',
+      // Story MOTIR-8301 (a lost machine's plan resumes itself) added the relay's `job_moved`
+      // guard and `resumeAutomaticallySafely` to the measured service.
+      'tests/integration/planning/sessionAutoResume.test.ts',
     ],
     coverage: {
       provider: 'v8',

@@ -31,6 +31,8 @@ const AUDITED: Record<string, string> = {
     'endSession (restarted) is a row of planReviewVersion.test.ts; it discards a generating plan.',
   'lib/services/abandonedPlanService.ts':
     'reconcileAbandoned is a row of planReviewVersion.test.ts.',
+  'lib/services/planSessionResumeService.ts':
+    'resumeAutomatically is a row of planReviewVersion.test.ts; the manual resume binds through the same bindWithin, whose repointSourceJob stamps lastActivityAt.',
   'lib/services/planDriftService.ts':
     'moves a PLANNED plan to `stale` (planStatusCanBeStale); never acts on a `generating` plan.',
   'lib/services/planRevisionsService.ts':

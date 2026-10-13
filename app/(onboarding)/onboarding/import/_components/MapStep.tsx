@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { WarmButton as Button } from '@/components/onboarding/layout/WarmButton';
 import { Pill } from '@/components/ui/Pill';
 import { Combobox } from '@/components/ui/Combobox';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';

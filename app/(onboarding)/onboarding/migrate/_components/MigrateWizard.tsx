@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -8,38 +8,64 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
   BookOpenText,
   Check,
+  CheckCircle2,
   Download,
-  ExternalLink,
   GitBranch,
-  Loader2,
-  Sparkles,
+  ListChecks,
 } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/Button';
+import { buttonVariants } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Spinner } from '@/components/ui/Spinner';
+import {
+  BAR_GHOST_HOVER,
+  BAR_SECONDARY_HOVER,
+  OnboardingHero,
+  OnboardingWizardBar,
+  OnboardingWorkBand,
+  WARM_CTA,
+  WarmButton as Button,
+} from '@/components/onboarding/layout';
+import { DiscoveryChatBubble } from '@/components/onboarding/DiscoveryChatRail';
+import { setActiveProjectAction } from '@/app/(authed)/_project-actions';
 import { cn } from '@/lib/utils/cn';
 import { onboardingReturnHref } from '@/lib/planning/onboardingReturn';
 import { HANDOFF_PARAM_NAMES } from '@/lib/planning/onboardingHandoff';
+import { useDiscoveryChat } from '@/lib/hooks/useDiscoveryChat';
+import { useOpenPlanOverlay } from '@/lib/hooks/useOpenPlanOverlay';
 import { isMigrateOnboardingStep } from '@/lib/dto/migrateOnboarding';
 import type {
+  MigrateGeneratedPlanDto,
   MigrateIndexStatusDto,
   MigrateOnboardingDto,
   MigrateOnboardingStepDto,
 } from '@/lib/dto/migrateOnboarding';
+import {
+  ImportWizard,
+  type ImportWizardProps,
+} from '@/app/(onboarding)/onboarding/import/_components/ImportWizard';
 
 // The migrate-onboarding wizard UI (Story 7.15 · MOTIR-934) — the stepped,
-// resumable set-up shell. Designed by MOTIR-930 (`design/onboarding-migrate/`):
-// required tier = Connect · Index, optional tier = Import work items, then a
-// plan-now-or-later decision. A client island seeded from the Server
-// Component's read of the state machine; it drives step transitions through
-// the migrate API routes (advance / skip-import / index-status poll) — NEVER
-// the service layer directly (the 4-layer rule).
+// resumable set-up shell, on the onboarding vibe layout since MOTIR-8254
+// (`design/onboarding-migrate/` § 2026-10-12 and its Revisions 1–6): the lockup
+// bar, a hero (full on a run's first screen, compact after), and one work band
+// holding the rail and the current step.
 //
-// Conventions (MOTIR-930 design-notes + CLAUDE.md): ONLY `--el-*` colour +
-// element-semantic shape tokens; rail states pair a marker + label + tint
-// (finding #35, never colour-alone); the index progress region is `aria-live`;
-// the rail + Back/Next + decision are keyboard-reachable.
+// ONE PAGE TO FINISH ONBOARDING (Revision 6). Every step before the plan is
+// ready happens here: the importer runs inside the Import step, and "A few
+// questions" is a step of this page driven by the same discovery turn API the
+// discovery canvas uses. The only exit at the end is Review your plan.
+//
+// A client island seeded from the Server Component's read of the state machine;
+// it drives step transitions through the migrate API routes (start / advance /
+// skip-import / index-status / plan) — NEVER the service layer directly (the
+// 4-layer rule).
+//
+// Conventions (CLAUDE.md): ONLY `--el-*` colour + element-semantic shape tokens;
+// the one warm element on a screen is its primary button (`WarmButton`); rail
+// states pair a marker + label (never colour alone); status regions are polite.
 
 const STEP_RANK: Record<MigrateOnboardingStepDto, number> = {
   connect: 0,
@@ -52,13 +78,61 @@ const STEP_RANK: Record<MigrateOnboardingStepDto, number> = {
   done: 7,
 };
 
+/** How often the Connect step re-reads the connection while it waits on the
+ *  other tab (Revision 1, 2c). */
+const CONNECT_POLL_MS = 5000;
+/** How often the drafting status re-asks the machine whether the plan is ready. */
+const GENERATE_POLL_MS = 5000;
+
+/** The repositories the GitHub settings page connects — opened in a NEW tab, so
+ *  this one stays on the wizard and notices the connection (Revision 1). The
+ *  git connect surface is organisation-tier (Story MOTIR-4669 · MOTIR-4680). */
+const GIT_SETTINGS_HREF = '/settings/organization/git';
+
+export interface MigrateWizardProject {
+  id: string;
+  name: string;
+  identifier: string;
+}
+
+/** What the inline importer needs from the server (the import page's own read). */
+export type MigrateImporterSeed = Pick<
+  ImportWizardProps,
+  'project' | 'statuses' | 'connected' | 'existingImportId'
+>;
+
 export interface MigrateWizardProps {
   initialRun: MigrateOnboardingDto | null;
   projectName: string;
   userInitial: string;
+  /** The workspace's projects, for Start's choice (Revision 4). */
+  projects?: MigrateWizardProject[];
+  /** The project the person has open — pre-selected on Start. */
+  activeProjectId?: string;
+  /** No run and only one project: start the run on arrival, no Start panel
+   *  (Revision 3). */
+  autoStart?: boolean;
+  /** The inline importer's data; null when it could not be read. */
+  importer?: MigrateImporterSeed | null;
+  /** A vendor OAuth round trip just returned to the Import step. */
+  justConnected?: ImportWizardProps['justConnected'];
 }
 
-export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateWizardProps) {
+type RunResult =
+  | { kind: 'ok'; run: MigrateOnboardingDto }
+  | { kind: 'conflict' }
+  | { kind: 'failed' };
+
+export function MigrateWizard({
+  initialRun,
+  projectName,
+  userInitial,
+  projects = [],
+  activeProjectId,
+  autoStart = false,
+  importer = null,
+  justConnected,
+}: MigrateWizardProps) {
   const t = useTranslations('onboardingMigrate');
   const router = useRouter();
   // THE RETURN ADDRESS the hand-off wrote (MOTIR-4770), if this user came from
@@ -76,6 +150,14 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
   const [run, setRun] = useState<MigrateOnboardingDto | null>(initialRun);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // THE HERO RULE (Revision 3): full on a run's FIRST screen — Start, or Connect
+  // when the run starts itself — and compact after any start, advance or skip.
+  const [heroFull, setHeroFull] = useState(initialRun === null);
+  // Revision 3: with one project, the run starts on arrival. Until it lands the
+  // Connect step shows its Checking state; a failed start falls back to Start.
+  const [autoStartFailed, setAutoStartFailed] = useState(false);
+  // Revision 6, 6d: a run resumed at `discovery` first offers Continue planning.
+  const [resumed, setResumed] = useState(initialRun?.step !== 'discovery');
 
   // A completed run should have redirected server-side; guard the client too.
   useEffect(() => {
@@ -89,9 +171,19 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
     }
   }, [run, router, searchParams]);
 
+  /** Re-read the run itself — the authoritative state after a 409. */
+  const reread = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/onboarding/migrate/${id}`, { cache: 'no-store' });
+      if (res.ok) setRun((await res.json()) as MigrateOnboardingDto);
+    } catch {
+      // the next action re-reads again
+    }
+  }, []);
+
   /** POST a migrate route + apply the returned run (or surface the error). */
   const postRunRoute = useCallback(
-    async (path: string, body?: unknown): Promise<MigrateOnboardingDto | null> => {
+    async (path: string, body?: unknown): Promise<RunResult> => {
       setBusy(true);
       setError(null);
       try {
@@ -103,72 +195,163 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
         });
         if (res.status === 409) {
           // A run already exists (start) or the current step's exit condition is
-          // unmet (advance) — reload to re-read the authoritative run state.
-          router.refresh();
-          return null;
+          // unmet (advance). The run is a client island, so a refresh would not
+          // reach it (CLAUDE.md, page state): re-read the run where there is one.
+          if (run) await reread(run.id);
+          else router.refresh();
+          return { kind: 'conflict' };
         }
         if (!res.ok) throw new Error(`migrate route ${path} → ${res.status}`);
-        return (await res.json()) as MigrateOnboardingDto;
+        const next = (await res.json()) as MigrateOnboardingDto;
+        setRun(next);
+        return { kind: 'ok', run: next };
       } catch {
         setError(t('common.error'));
-        return null;
+        return { kind: 'failed' };
       } finally {
         setBusy(false);
       }
     },
-    [router, t],
+    [reread, router, run, t],
   );
 
-  const startRun = useCallback(() => {
-    // THE PLANNER'S KEPT SET (MOTIR-4759), forwarded on the START call. It rides
-    // the address the hand-off wrote (MOTIR-4769) and belongs to the run rather
-    // than to this page: a user who reloads mid-journey must not have their step
-    // set re-derived from whatever URL they happen to be on.
-    void postRunRoute('/api/onboarding/migrate', { keptSteps: keptStepsFromQuery }).then((next) => {
-      if (next) setRun(next);
-    });
-  }, [postRunRoute, keptStepsFromQuery]);
+  const startRun = useCallback(
+    async (opts: { arrival: boolean }) => {
+      // THE PLANNER'S KEPT SET (MOTIR-4759), forwarded on the START call. It rides
+      // the address the hand-off wrote (MOTIR-4769) and belongs to the run rather
+      // than to this page: a user who reloads mid-journey must not have their step
+      // set re-derived from whatever URL they happen to be on.
+      const result = await postRunRoute('/api/onboarding/migrate', {
+        keptSteps: keptStepsFromQuery,
+      });
+      if (result.kind === 'ok' && !opts.arrival) setHeroFull(false);
+      return result;
+    },
+    [postRunRoute, keptStepsFromQuery],
+  );
 
-  const advance = useCallback(() => {
-    if (!run) return;
-    void postRunRoute(`/api/onboarding/migrate/${run.id}/advance`).then((next) => {
-      if (next) setRun(next);
+  // Revision 3: one project, no run → start on arrival (once, StrictMode-safe).
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || initialRun !== null || autoStarted.current) return;
+    autoStarted.current = true;
+    void startRun({ arrival: true }).then((r) => {
+      if (r.kind === 'failed') setAutoStartFailed(true);
     });
+  }, [autoStart, initialRun, startRun]);
+
+  /** Start for a picked project (Revision 4): switch to it first when it is not
+   *  the open one, then start the run for it. */
+  const startFor = useCallback(
+    async (projectId: string) => {
+      if (activeProjectId && projectId !== activeProjectId) {
+        setBusy(true);
+        try {
+          await setActiveProjectAction(projectId);
+        } catch {
+          setBusy(false);
+          setError(t('common.error'));
+          return;
+        }
+      }
+      await startRun({ arrival: false });
+    },
+    [activeProjectId, startRun, t],
+  );
+
+  const advance = useCallback(async (): Promise<RunResult> => {
+    if (!run) return { kind: 'failed' };
+    const result = await postRunRoute(`/api/onboarding/migrate/${run.id}/advance`);
+    if (result.kind === 'ok') setHeroFull(false);
+    return result;
   }, [postRunRoute, run]);
 
   const skipImport = useCallback(() => {
     if (!run) return;
-    void postRunRoute(`/api/onboarding/migrate/${run.id}/skip-import`).then((next) => {
-      if (next) setRun(next);
+    void postRunRoute(`/api/onboarding/migrate/${run.id}/skip-import`).then((r) => {
+      if (r.kind === 'ok') setHeroFull(false);
     });
   }, [postRunRoute, run]);
 
-  /** "Plan my project now" — advance past the silent audit_convention step
-   *  (which kicks the per-repo convention derivation) then hand off to the
-   *  universal PlanningWorkspace, which drives discovery / generate / review. */
-  const planNow = useCallback(() => {
-    if (!run) return;
-    setBusy(true);
-    void postRunRoute(`/api/onboarding/migrate/${run.id}/advance`).then((next) => {
-      // Whether the advance landed on `discovery` or the run was already past
-      // audit_convention, the planning workspace is the canonical next surface.
-      void next;
-      router.push('/onboarding/discovery');
-    });
-  }, [postRunRoute, router, run]);
+  const arriving = autoStart && run === null && !autoStartFailed;
+  const saveExitHref = onboardingReturnHref(searchParams, 'abandoned') ?? '/roadmap';
+
+  const bar = (
+    <OnboardingWizardBar flowName={t('brandBar.flowName')} userInitial={userInitial}>
+      <Link
+        href="/onboarding/discovery"
+        className={cn(
+          buttonVariants({ variant: 'secondary', size: 'sm' }),
+          'gap-1.5',
+          BAR_SECONDARY_HOVER,
+        )}
+      >
+        {t('brandBar.planAi')}
+        <ArrowRight className="size-3.5" aria-hidden />
+      </Link>
+      {/* ⚠️ ABANDONING IS NOT COMPLETING, and the difference is the whole of
+          MOTIR-4770 AC3. Somebody who walks away goes back to the PAGE — with
+          no workspace re-opening around them, because re-opening a window
+          somebody deliberately left is the opposite failure to stranding them,
+          and it is the easier one to write by accident. */}
+      <Link
+        href={saveExitHref}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), BAR_GHOST_HOVER)}
+      >
+        {t('common.saveExit')}
+      </Link>
+    </OnboardingWizardBar>
+  );
+
+  let panel: React.ReactNode;
+  if (run === null) {
+    panel = arriving ? (
+      <ConnectPanel runId={null} onAdvance={advance} busy />
+    ) : (
+      <StartPanel
+        projects={projects}
+        activeProjectId={activeProjectId}
+        projectName={projectName}
+        onStart={startFor}
+        busy={busy}
+      />
+    );
+  } else if (run.step === 'connect') {
+    panel = <ConnectPanel runId={run.id} onAdvance={advance} busy={busy} />;
+  } else if (run.step === 'index') {
+    panel = <IndexPanel runId={run.id} onAdvance={advance} busy={busy} />;
+  } else if (run.step === 'import') {
+    panel = (
+      <ImportPanel
+        importer={importer}
+        justConnected={justConnected}
+        onContinue={() => void advance()}
+        onSkip={skipImport}
+        busy={busy}
+      />
+    );
+  } else if (run.step === 'audit_convention') {
+    panel = <DecisionPanel onPlanNow={() => void advance()} busy={busy} />;
+  } else if (!resumed) {
+    panel = <ResumePanel onResume={() => setResumed(true)} />;
+  } else {
+    panel = <QuestionsPanel run={run} projectName={projectName} onRun={setRun} onReread={reread} />;
+  }
 
   return (
-    <div className="flex h-dvh flex-col bg-(--el-page-bg)">
-      <BrandBar
-        flowName={t('brandBar.flowName')}
-        userInitial={userInitial}
-        planAiLabel={t('brandBar.planAi')}
-        saveExitHref={onboardingReturnHref(searchParams, 'abandoned') ?? '/roadmap'}
-        saveExitLabel={t('common.saveExit')}
+    <div className="flex min-h-dvh flex-col bg-(--el-page-bg)">
+      <OnboardingHero
+        bar={bar}
+        compact={!heroFull}
+        headline={t('hero.headline')}
+        lede={t('hero.lede')}
       />
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex min-h-full w-full max-w-[64rem] flex-col gap-6 px-6 py-8 md:flex-row md:gap-10">
-          <Rail step={run?.step ?? null} keptSteps={run?.keptSteps ?? []} />
+      <OnboardingWorkBand>
+        <div className="mx-auto flex w-full max-w-[72rem] flex-col gap-8 md:flex-row md:items-start md:gap-14">
+          <Rail
+            step={run?.step ?? (arriving ? 'connect' : null)}
+            keptSteps={run?.keptSteps ?? []}
+          />
           <section className="min-w-0 flex-1">
             {error ? (
               <p
@@ -179,85 +362,11 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
                 {error}
               </p>
             ) : null}
-            {run === null ? (
-              <StartPanel onStart={startRun} busy={busy} projectName={projectName} />
-            ) : run.step === 'connect' ? (
-              <ConnectPanel onAdvance={advance} busy={busy} />
-            ) : run.step === 'index' ? (
-              <IndexPanel runId={run.id} onAdvance={advance} busy={busy} />
-            ) : run.step === 'import' ? (
-              <ImportPanel onAdvance={advance} onSkip={skipImport} busy={busy} />
-            ) : run.step === 'audit_convention' ? (
-              <DecisionPanel onPlanNow={planNow} busy={busy} />
-            ) : (
-              <ResumePanel />
-            )}
+            {panel}
           </section>
         </div>
-      </main>
+      </OnboardingWorkBand>
     </div>
-  );
-}
-
-// ── Brand bar ──────────────────────────────────────────────────────────────
-
-function BrandBar({
-  flowName,
-  userInitial,
-  planAiLabel,
-  saveExitLabel,
-  saveExitHref,
-}: {
-  flowName: string;
-  userInitial: string;
-  planAiLabel: string;
-  saveExitLabel: string;
-  /** Where LEAVING lands — the host page, never the workspace (MOTIR-4770). */
-  saveExitHref: string;
-}) {
-  return (
-    <header className="flex items-center gap-3 border-b border-(--el-border) px-6 py-3.5">
-      <span className="flex items-center gap-2 text-sm font-semibold text-(--el-text)">
-        <span
-          className="grid size-7 place-items-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
-          aria-hidden
-        >
-          <Sparkles className="size-4" strokeWidth={2} />
-        </span>
-        Motir
-      </span>
-      <span className="text-sm text-(--el-text-muted)">·</span>
-      <span className="text-sm text-(--el-text-secondary)">{flowName}</span>
-      <span className="ml-auto flex items-center gap-2">
-        <Link
-          href="/onboarding/discovery"
-          className={cn(
-            buttonVariants({ variant: 'secondary', size: 'sm' }),
-            'gap-1.5 text-(--el-accent-on-surface)',
-          )}
-        >
-          <Sparkles className="size-3.5" strokeWidth={2.2} aria-hidden />
-          {planAiLabel}
-        </Link>
-        {/* ⚠️ ABANDONING IS NOT COMPLETING, and the difference is the whole of
-            MOTIR-4770 AC3. Somebody who walks away goes back to the PAGE — with
-            no workspace re-opening around them, because re-opening a window
-            somebody deliberately left is the opposite failure to stranding them,
-            and it is the easier one to write by accident. */}
-        <Link
-          href={saveExitHref}
-          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
-        >
-          {saveExitLabel}
-        </Link>
-        <span
-          className="grid size-7 place-items-center rounded-full bg-(--el-tint-sky) text-xs font-semibold text-(--el-text-strong)"
-          aria-hidden
-        >
-          {userInitial}
-        </span>
-      </span>
-    </header>
   );
 }
 
@@ -293,6 +402,9 @@ const RAIL_STEPS: readonly (keyof typeof STEP_LABEL_KEY)[] = [
   'discovery',
 ];
 
+const RAIL_GROUP =
+  'mt-5 mb-0 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase';
+
 function Rail({
   step,
   keptSteps,
@@ -308,18 +420,16 @@ function Rail({
   const runs = (s: MigrateOnboardingStepDto) => keptSteps.length === 0 || keptSteps.includes(s);
 
   return (
-    <nav aria-label={t('rail.title')} className="w-full flex-none md:w-56 md:flex-shrink-0">
-      <p className="text-sm font-semibold text-(--el-text)">{t('rail.title')}</p>
-      <p className="mt-1 text-xs text-(--el-text-muted)">
+    <nav aria-label={t('rail.title')} className="w-full flex-none md:w-56">
+      <p className="m-0 text-sm font-semibold text-(--el-text)">{t('rail.title')}</p>
+      <p className="m-0 mt-1 text-xs text-(--el-text-secondary)">
         {collapsed.length > 0 ? t('rail.subShort') : t('rail.sub')}
       </p>
 
       {collapsed.length > 0 ? (
         <>
-          <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-            {t('rail.answeredGroup')}
-          </p>
-          <ul className="mt-2">
+          <p className={RAIL_GROUP}>{t('rail.answeredGroup')}</p>
+          <ul className="m-0 mt-2 list-none p-0">
             <li
               data-testid="migrate-rail-collapsed"
               className="flex items-start gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-2 text-sm text-(--el-text-secondary)"
@@ -349,12 +459,29 @@ function Rail({
 
       {runs('connect') || runs('index') ? (
         <>
-          <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-            {t('rail.setUp')}
-          </p>
-          <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
+          <p className={RAIL_GROUP}>{t('rail.setUp')}</p>
+          <ul className="m-0 mt-2 flex list-none flex-row flex-wrap gap-2 p-0 md:flex-col md:gap-1">
             {runs('connect') ? <RailStep label={t('rail.connect')} state={stateOf(0)} /> : null}
             {runs('index') ? <RailStep label={t('rail.index')} state={stateOf(1)} /> : null}
+          </ul>
+        </>
+      ) : null}
+
+      {/* Revision 6: the rail reads in the order the person goes through it —
+          Set up, then Import (optional), then Your direction. */}
+      {runs('import') ? (
+        <>
+          <p className={RAIL_GROUP}>
+            {t('rail.import')}
+            <span className="rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-0.5 text-[0.65rem] font-semibold text-(--el-text-strong) normal-case">
+              {t('rail.importOptional')}
+            </span>
+          </p>
+          <ul className="m-0 mt-2 flex list-none flex-row flex-wrap gap-2 p-0 md:flex-col md:gap-1">
+            <RailStep
+              label={t('rail.importStep')}
+              state={rank > 2 ? 'done' : rank === 2 ? 'current' : 'optional'}
+            />
           </ul>
         </>
       ) : null}
@@ -367,28 +494,9 @@ function Rail({
               planner's identifiers for questions the user is simply being asked;
               a rail that listed them would teach a stranger four words before it
               told them anything. The row says what it IS. */}
-          <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-            {t('rail.directionGroup')}
-          </p>
-          <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
+          <p className={RAIL_GROUP}>{t('rail.directionGroup')}</p>
+          <ul className="m-0 mt-2 flex list-none flex-row flex-wrap gap-2 p-0 md:flex-col md:gap-1">
             <RailStep label={t('rail.discoveryStep')} state={stateOf(4)} />
-          </ul>
-        </>
-      ) : null}
-
-      {runs('import') ? (
-        <>
-          <p className="mt-5 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-            {t('rail.import')}
-            <span className="rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-0.5 text-[0.65rem] text-(--el-text-secondary) normal-case">
-              {t('rail.importOptional')}
-            </span>
-          </p>
-          <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
-            <RailStep
-              label={t('rail.importStep')}
-              state={rank > 2 ? 'done' : rank === 2 ? 'current' : 'optional'}
-            />
           </ul>
         </>
       ) : null}
@@ -412,7 +520,7 @@ function RailStep({
         // Every non-current step takes the same ink: the CURRENT step is the
         // one that paints `--el-surface` under itself, and `--el-text-muted`
         // is 4.17:1 there (MOTIR-2477). The state is carried by the ring and
-        // the numeral chip below, not by three shades of grey.
+        // the marker below, not by three shades of grey.
         state !== 'current' && 'text-(--el-text-secondary)',
       )}
       aria-current={state === 'current' ? 'step' : undefined}
@@ -421,10 +529,12 @@ function RailStep({
         className={cn(
           'grid size-5 flex-none place-items-center rounded-full text-[0.7rem] font-semibold',
           state === 'done' && 'bg-(--el-tint-mint) text-(--el-text-strong)',
-          state === 'current' && 'bg-(--el-accent) text-(--el-accent-text)',
-          state === 'upcoming' && 'border border-(--el-border) text-(--el-text-muted)',
+          // The one warm mark on the rail (Revision 5): the current marker.
+          state === 'current' &&
+            'bg-(--el-highlight) ring-4 ring-[color-mix(in_srgb,var(--el-highlight)_22%,transparent)]',
+          state === 'upcoming' && 'border border-(--el-border) text-(--el-text-secondary)',
           state === 'optional' &&
-            'border border-dashed border-(--el-border) text-(--el-text-muted)',
+            'border border-dashed border-(--el-border) text-(--el-text-secondary)',
         )}
         aria-hidden
       >
@@ -443,12 +553,17 @@ function RailStep({
 
 function StepHead({ eyebrow, heading, body }: { eyebrow: string; heading: string; body: string }) {
   return (
-    <div className="mb-5">
-      <p className="text-xs font-semibold tracking-wide text-(--el-accent-on-surface) uppercase">
+    <div className="mb-6 grid gap-2">
+      <p className="m-0 flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.1em] text-(--el-text-secondary) uppercase">
+        <span className="size-2 flex-none rounded-full bg-(--el-highlight)" aria-hidden />
         {eyebrow}
       </p>
-      <h2 className="mt-1.5 text-xl font-semibold text-(--el-text)">{heading}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-(--el-text-secondary)">{body}</p>
+      <h2 className="m-0 font-serif text-[28px] leading-[0.98] font-bold tracking-[-0.03em] text-balance text-(--el-text) md:text-[34px]">
+        {heading}
+      </h2>
+      <p className="m-0 mt-1 max-w-[60ch] text-[15px] leading-normal text-(--el-text-secondary) md:text-[16px]">
+        {body}
+      </p>
     </div>
   );
 }
@@ -470,57 +585,218 @@ function PanelFoot({
   return (
     <div className="mt-6 flex items-center gap-3">
       {onBack ? (
-        <Button variant="secondary" size="md" onClick={onBack} disabled={busy}>
-          <ArrowLeft className="size-4" aria-hidden />
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={onBack}
+          disabled={busy}
+          leftIcon={<ArrowLeft className="size-4" />}
+        >
           {t('common.back')}
         </Button>
       ) : null}
       <span className="flex-1" />
-      <Button variant="primary" size="md" onClick={onNext} disabled={nextDisabled || busy}>
+      <Button
+        variant="primary"
+        size="md"
+        onClick={onNext}
+        disabled={nextDisabled || busy}
+        rightIcon={<ArrowRight className="size-4" />}
+      >
         {nextLabel}
-        <ArrowRight className="size-4" aria-hidden />
       </Button>
     </div>
   );
 }
 
+const KEY_TILES = ['bg-(--el-tint-sky)', 'bg-(--el-tint-lavender)', 'bg-(--el-tint-mint)'] as const;
+
+/**
+ * Start — a CHOICE of project (Revision 4). It exists only when there is
+ * something to choose (two or more projects; one project starts on arrival),
+ * so it lists every project in the workspace with the open one pre-selected.
+ */
 function StartPanel({
+  projects,
+  activeProjectId,
+  projectName,
   onStart,
   busy,
-  projectName,
 }: {
-  onStart: () => void;
-  busy: boolean;
+  projects: MigrateWizardProject[];
+  activeProjectId?: string;
   projectName: string;
+  onStart: (projectId: string) => void;
+  busy: boolean;
 }) {
   const t = useTranslations('onboardingMigrate');
+  // Without a list (a failed read, an arrival fallback) the open project is the
+  // only row — the choice still says which project the run is for.
+  const rows: MigrateWizardProject[] =
+    projects.length > 0
+      ? projects
+      : [{ id: activeProjectId ?? '', name: projectName, identifier: '' }];
+  const [picked, setPicked] = useState(activeProjectId ?? rows[0]!.id);
+  const pickedRow = rows.find((p) => p.id === picked) ?? rows[0]!;
+
   return (
     <div>
       <StepHead eyebrow={t('start.eyebrow')} heading={t('start.heading')} body={t('start.body')} />
-      <Card tint="lavender">
-        <div className="flex items-center gap-3">
-          <span
-            className="grid size-9 flex-none place-items-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-text-strong)"
-            aria-hidden
-          >
-            <GitBranch className="size-5" strokeWidth={2} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-(--el-text)">{projectName}</p>
-            <p className="text-xs text-(--el-text-muted)">{t('start.projectLine')}</p>
-          </div>
-          <Button variant="primary" size="md" onClick={onStart} disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-            {t('start.cta')}
-          </Button>
-        </div>
-      </Card>
+      <fieldset className="m-0 grid gap-2 border-0 p-0">
+        <legend className="mb-3 p-0 text-sm font-semibold text-(--el-text)">
+          {t('start.chooseLabel')}
+        </legend>
+        {rows.map((p, i) => {
+          const selected = p.id === pickedRow.id;
+          const current = p.id === activeProjectId;
+          return (
+            <label
+              key={p.id || i}
+              className={cn(
+                'flex cursor-pointer items-center gap-3 rounded-(--radius-card) border px-(--spacing-card-padding) py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--focus-ring-color)',
+                selected
+                  ? 'border-(--el-accent-on-surface) bg-(--el-surface) ring-1 ring-(--el-accent-on-surface)'
+                  : 'border-(--el-border) bg-(--el-page-bg) hover:border-(--el-border-strong)',
+              )}
+            >
+              <input
+                type="radio"
+                name="migrate-project"
+                value={p.id}
+                checked={selected}
+                onChange={() => setPicked(p.id)}
+                className="size-4 flex-none"
+              />
+              <span
+                aria-hidden
+                className={cn(
+                  'grid size-9 flex-none place-items-center rounded-(--radius-control) font-mono text-xs font-semibold text-(--el-text-strong)',
+                  KEY_TILES[i % KEY_TILES.length],
+                )}
+              >
+                {(p.identifier || p.name).slice(0, 2).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-(--el-text)">
+                  {p.name}
+                </span>
+                <span className="block text-xs text-(--el-text-secondary)">
+                  {current ? t('start.currentMeta') : t('start.otherMeta')}
+                </span>
+              </span>
+              {current ? (
+                <span className="flex-none rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-text-strong)">
+                  {t('start.current')}
+                </span>
+              ) : null}
+            </label>
+          );
+        })}
+      </fieldset>
+      <div className="mt-6 flex">
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => onStart(pickedRow.id)}
+          loading={busy}
+          rightIcon={<ArrowRight className="size-4" />}
+        >
+          {t('start.ctaFor', { project: pickedRow.name })}
+        </Button>
+      </div>
     </div>
   );
 }
 
-function ConnectPanel({ onAdvance, busy }: { onAdvance: () => void; busy: boolean }) {
+type ConnectState = 'checking' | 'missing' | 'waiting' | 'connected';
+
+/**
+ * Connect — DETECTS the connection by itself (Revision 1). It reads the
+ * project's repositories on arrival, again whenever this tab regains focus, and
+ * every few seconds while the person is connecting in the other tab. There is
+ * no "I've connected my repos" button: Continue appears once there is
+ * something to continue with.
+ */
+function ConnectPanel({
+  runId,
+  onAdvance,
+  busy,
+}: {
+  /** Null while the run is still being started on arrival (Revision 3). */
+  runId: string | null;
+  onAdvance: () => Promise<RunResult>;
+  busy: boolean;
+}) {
   const t = useTranslations('onboardingMigrate');
+  const [state, setState] = useState<ConnectState>('checking');
+  const [repos, setRepos] = useState<string[]>([]);
+  const waitingRef = useRef(false);
+  const inFlight = useRef(false);
+  const seq = useRef(0);
+
+  const read = useCallback(async () => {
+    if (!runId || inFlight.current) return;
+    inFlight.current = true;
+    const mine = ++seq.current;
+    try {
+      const res = await fetch(`/api/onboarding/migrate/${runId}/index-status`, {
+        cache: 'no-store',
+      });
+      if (!res.ok || mine !== seq.current) return;
+      const status = (await res.json()) as MigrateIndexStatusDto;
+      if (status.repos.length > 0) {
+        setRepos(status.repos.map((r) => r.repoRef));
+        setState('connected');
+      } else {
+        setRepos([]);
+        setState(waitingRef.current ? 'waiting' : 'missing');
+      }
+    } catch {
+      // a transient failure keeps the current state; the next trigger re-reads
+    } finally {
+      inFlight.current = false;
+    }
+  }, [runId]);
+
+  // Read on arrival, and again when this tab comes back into view.
+  useEffect(() => {
+    if (!runId) return;
+    // Deferred a tick so the first read lands from a callback, like every later
+    // one (react-hooks/set-state-in-effect).
+    const first = window.setTimeout(() => void read(), 0);
+    const onFocus = () => void read();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void read();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearTimeout(first);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [runId, read]);
+
+  // Poll ONLY while waiting on the other tab.
+  useEffect(() => {
+    if (state !== 'waiting') return;
+    const id = window.setInterval(() => void read(), CONNECT_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [state, read]);
+
+  const openedSettings = () => {
+    waitingRef.current = true;
+    setState((s) => (s === 'connected' ? s : 'waiting'));
+  };
+
+  const onContinue = () => {
+    void onAdvance().then((r) => {
+      // The machine did not see the connection yet: read it again rather than
+      // leaving the person on a button that silently did nothing.
+      if (r.kind === 'conflict') void read();
+    });
+  };
+
   return (
     <div>
       <StepHead
@@ -529,21 +805,121 @@ function ConnectPanel({ onAdvance, busy }: { onAdvance: () => void; busy: boolea
         body={t('connect.body')}
       />
       <Card>
-        <div className="flex flex-col gap-3">
-          {/* The git connect surface moved to the ORGANISATION tier (Story
-              MOTIR-4669 · MOTIR-4680) and the workspace route is deleted; this
-              link follows it rather than riding the permanent redirect. */}
-          <Link
-            href="/settings/organization/git"
-            className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'w-fit gap-2')}
-          >
-            <ExternalLink className="size-4" aria-hidden />
-            {t('connect.cta')}
-          </Link>
-          <p className="text-xs text-(--el-text-muted)">{t('connect.gitlabNote')}</p>
-        </div>
+        {state === 'checking' ? (
+          <div className="flex min-h-[148px] flex-col gap-3" aria-busy="true">
+            <p
+              role="status"
+              className="m-0 flex items-center gap-2.5 text-sm text-(--el-text-secondary)"
+            >
+              <span aria-hidden className="flex-none text-(--el-highlight)">
+                <Spinner size="sm" />
+              </span>
+              {t('connect.checking')}
+            </p>
+          </div>
+        ) : state === 'connected' ? (
+          <div className="flex flex-col gap-3">
+            <div role="status" className="grid gap-1">
+              <p className="m-0 flex items-center gap-2.5 text-sm font-semibold text-(--el-text)">
+                <CheckCircle2 className="size-4 flex-none text-(--el-success)" aria-hidden />
+                {t('connect.detected', { count: repos.length })}
+              </p>
+              <p className="m-0 max-w-[60ch] text-sm leading-normal text-(--el-text-secondary)">
+                {t('connect.detectedHint')}
+              </p>
+            </div>
+            <ul
+              aria-label={t('connect.listLabel')}
+              className="m-0 flex list-none flex-col gap-2 p-0"
+            >
+              {repos.map((ref) => {
+                const [owner, ...rest] = ref.split('/');
+                const name = rest.join('/') || ref;
+                return (
+                  <li
+                    key={ref}
+                    className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
+                  >
+                    <GitBranch
+                      className="size-4 flex-none text-(--el-text-secondary)"
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)">
+                      {rest.length > 0 ? (
+                        <span className="text-(--el-text-secondary)">{owner}/</span>
+                      ) : null}
+                      {name}
+                    </span>
+                    <Check className="size-4 flex-none text-(--el-success)" aria-hidden />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : (
+          <div className="flex min-h-[148px] flex-col gap-3">
+            <div role="status" className="grid gap-1">
+              <p className="m-0 flex items-center gap-2.5 text-sm font-semibold text-(--el-text)">
+                {state === 'waiting' ? (
+                  <span aria-hidden className="flex-none text-(--el-highlight)">
+                    <Spinner size="sm" />
+                  </span>
+                ) : (
+                  <GitBranch className="size-4 flex-none text-(--el-text-secondary)" aria-hidden />
+                )}
+                {state === 'waiting' ? t('connect.waitingTitle') : t('connect.missingTitle')}
+              </p>
+              <p className="m-0 max-w-[60ch] text-sm leading-normal text-(--el-text-secondary)">
+                {state === 'waiting' ? t('connect.waitingHint') : t('connect.missingHint')}
+              </p>
+            </div>
+            <a
+              href={GIT_SETTINGS_HREF}
+              target="_blank"
+              rel="noopener"
+              onClick={openedSettings}
+              className={cn(
+                buttonVariants({
+                  variant: state === 'waiting' ? 'secondary' : 'primary',
+                  size: 'md',
+                }),
+                'w-fit gap-2',
+                state !== 'waiting' && WARM_CTA,
+              )}
+            >
+              <span>{state === 'waiting' ? t('connect.reopenCta') : t('connect.connectCta')}</span>
+              <ArrowUpRight className="size-4" aria-hidden />
+              <span className="sr-only"> {t('connect.newTab')}</span>
+            </a>
+            <p className="m-0 text-xs text-(--el-text-secondary)">{t('connect.gitlabNote')}</p>
+          </div>
+        )}
       </Card>
-      <PanelFoot nextLabel={t('connect.next')} onNext={onAdvance} busy={busy} />
+      {state === 'connected' ? (
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <a
+            href={GIT_SETTINGS_HREF}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-1.5 rounded-(--radius-control) text-sm text-(--el-text-secondary) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
+          >
+            <span>{t('connect.manage')}</span>
+            <ArrowUpRight className="size-4" aria-hidden />
+            <span className="sr-only"> {t('connect.newTab')}</span>
+          </a>
+          <span className="ml-auto">
+            <Button
+              variant="primary"
+              size="md"
+              onClick={onContinue}
+              loading={busy}
+              rightIcon={<ArrowRight className="size-4" />}
+            >
+              {t('connect.continue')}
+            </Button>
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -554,7 +930,7 @@ function IndexPanel({
   busy,
 }: {
   runId: string;
-  onAdvance: () => void;
+  onAdvance: () => Promise<RunResult>;
   busy: boolean;
 }) {
   const t = useTranslations('onboardingMigrate');
@@ -598,10 +974,9 @@ function IndexPanel({
       <Card>
         <div className="flex items-center gap-3">
           {hasRunning && !allIndexed ? (
-            <Loader2
-              className="size-5 flex-none animate-spin text-(--el-accent-on-surface)"
-              aria-hidden
-            />
+            <span aria-hidden className="flex-none text-(--el-highlight)">
+              <Spinner size="sm" />
+            </span>
           ) : (
             <span
               className={cn(
@@ -614,10 +989,10 @@ function IndexPanel({
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-(--el-text)">
+            <p className="m-0 text-sm font-semibold text-(--el-text)">
               {allIndexed ? t('index.completeTitle') : t('index.building')}
             </p>
-            <p className="text-xs text-(--el-text-muted)">
+            <p className="m-0 text-xs text-(--el-text-secondary)">
               {total > 0 ? t('index.aggregate', { done, total }) : t('index.waiting')}
             </p>
           </div>
@@ -625,9 +1000,9 @@ function IndexPanel({
             {pct}%
           </span>
         </div>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-(--el-muted)">
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-(--el-tint-yellow)">
           <div
-            className="h-full rounded-full bg-(--el-accent) transition-[width] duration-300"
+            className="h-full rounded-full bg-(--el-progress-fill) transition-[width] duration-300"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -637,7 +1012,7 @@ function IndexPanel({
             <p className="mt-4 mb-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
               {t('index.perRepo')}
             </p>
-            <ul className="flex flex-col gap-2">
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {status.repos.map((repo) => {
                 const indexed = repo.status === 'indexed';
                 const [owner, ...rest] = repo.repoRef.split('/');
@@ -647,13 +1022,18 @@ function IndexPanel({
                     key={repo.repoRef}
                     className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
                   >
-                    <GitBranch className="size-4 flex-none text-(--el-text-muted)" aria-hidden />
+                    <GitBranch
+                      className="size-4 flex-none text-(--el-text-secondary)"
+                      aria-hidden
+                    />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm text-(--el-text)">
-                        <span className="text-(--el-text-muted)">{owner}/</span>
+                      <span className="block truncate font-mono text-[13px] text-(--el-text)">
+                        <span className="text-(--el-text-secondary)">{owner}/</span>
                         {name}
                       </span>
-                      <span className="block text-xs text-(--el-text-muted)">{repo.provider}</span>
+                      <span className="block text-xs text-(--el-text-secondary)">
+                        {repo.provider}
+                      </span>
                     </span>
                     <span
                       className={cn(
@@ -673,16 +1053,14 @@ function IndexPanel({
           </>
         ) : null}
 
-        {allIndexed ? (
-          <p className="mt-4 text-xs text-(--el-text-muted)">{t('index.completeNote')}</p>
-        ) : (
-          <p className="mt-4 text-xs text-(--el-text-muted)">{t('index.callout')}</p>
-        )}
+        <p className="m-0 mt-4 text-xs text-(--el-text-secondary)">
+          {allIndexed ? t('index.completeNote') : t('index.callout')}
+        </p>
       </Card>
 
       <PanelFoot
         nextLabel={t('index.next')}
-        onNext={onAdvance}
+        onNext={() => void onAdvance()}
         nextDisabled={!allIndexed}
         busy={busy}
       />
@@ -690,12 +1068,21 @@ function IndexPanel({
   );
 }
 
+/**
+ * Import — the importer IN the step (Revision 6, 4a–4f): its own rail and steps
+ * inside one card, Skip import in its Cancel slot, and Continue on its finished
+ * state. A vendor OAuth round trip returns here (`lib/import/oauthReturn.ts`).
+ */
 function ImportPanel({
-  onAdvance,
+  importer,
+  justConnected,
+  onContinue,
   onSkip,
   busy,
 }: {
-  onAdvance: () => void;
+  importer: MigrateImporterSeed | null;
+  justConnected?: ImportWizardProps['justConnected'];
+  onContinue: () => void;
   onSkip: () => void;
   busy: boolean;
 }) {
@@ -705,30 +1092,34 @@ function ImportPanel({
       <StepHead
         eyebrow={t('import.eyebrow')}
         heading={t('import.heading')}
-        body={t('import.body')}
+        body={t('import.bodyInline')}
       />
       <Card>
-        <div className="flex flex-col gap-4">
-          <Link
-            href="/onboarding/import"
-            className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'w-fit gap-2')}
-          >
-            <ExternalLink className="size-4" aria-hidden />
-            {t('import.cta')}
-          </Link>
-          <p className="text-xs text-(--el-text-muted)">{t('import.reconcile')}</p>
-          <div className="flex items-center gap-2">
+        {importer ? (
+          <ImportWizard
+            project={importer.project}
+            statuses={importer.statuses}
+            connected={importer.connected}
+            existingImportId={importer.existingImportId}
+            justConnected={justConnected}
+            embedded={{
+              skipLabel: t('import.skip'),
+              onSkip,
+              continueLabel: t('import.continue'),
+              onContinue,
+              busy,
+            }}
+          />
+        ) : (
+          // The importer's data could not be read: the step can still be left.
+          <div className="flex justify-end">
             <Button variant="ghost" size="md" onClick={onSkip} disabled={busy}>
               {t('import.skip')}
             </Button>
-            <span className="flex-1" />
-            <Button variant="secondary" size="md" onClick={onAdvance} disabled={busy}>
-              {t('import.next')}
-              <ArrowRight className="size-4" aria-hidden />
-            </Button>
           </div>
-        </div>
+        )}
       </Card>
+      <p className="m-0 mt-4 text-xs text-(--el-text-secondary)">{t('import.reconcile')}</p>
     </div>
   );
 }
@@ -743,12 +1134,16 @@ function DecisionPanel({ onPlanNow, busy }: { onPlanNow: () => void; busy: boole
         body={t('decision.body')}
       />
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Button variant="primary" size="lg" onClick={onPlanNow} disabled={busy} className="flex-1">
-          {busy ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-          ) : (
-            <Sparkles className="size-4" aria-hidden />
-          )}
+        {/* Revision 6: Plan my project now advances to "A few questions" on
+            THIS page; it no longer leaves for the discovery canvas. */}
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={onPlanNow}
+          loading={busy}
+          rightIcon={<ArrowRight className="size-4" />}
+          className="flex-1"
+        >
           {t('decision.planNow')}
         </Button>
         <Link
@@ -762,7 +1157,9 @@ function DecisionPanel({ onPlanNow, busy }: { onPlanNow: () => void; busy: boole
   );
 }
 
-function ResumePanel() {
+/** 6d — planning was already under way: Continue planning resumes "A few
+ *  questions" in place (Revision 6). */
+function ResumePanel({ onResume }: { onResume: () => void }) {
   const t = useTranslations('onboardingMigrate');
   return (
     <div>
@@ -771,13 +1168,372 @@ function ResumePanel() {
         heading={t('resume.heading')}
         body={t('resume.body')}
       />
-      <Link
-        href="/onboarding/discovery"
-        className={cn(buttonVariants({ variant: 'primary', size: 'md' }), 'gap-2')}
+      <Button
+        variant="primary"
+        size="md"
+        onClick={onResume}
+        rightIcon={<ArrowRight className="size-4" />}
       >
         {t('resume.cta')}
-        <ArrowRight className="size-4" aria-hidden />
-      </Link>
+      </Button>
     </div>
+  );
+}
+
+type QuietAdvance =
+  | { kind: 'ok'; run: MigrateOnboardingDto }
+  | { kind: 'conflict' }
+  | { kind: 'failed' };
+
+/** Ask the machine to move on WITHOUT painting a busy state or an error: the
+ *  questions step polls it, and an unmet exit (409) is the expected answer. */
+async function quietAdvance(runId: string): Promise<QuietAdvance> {
+  try {
+    const res = await fetch(`/api/onboarding/migrate/${runId}/advance`, { method: 'POST' });
+    if (res.status === 409) return { kind: 'conflict' };
+    if (!res.ok) return { kind: 'failed' };
+    return { kind: 'ok', run: (await res.json()) as MigrateOnboardingDto };
+  } catch {
+    return { kind: 'failed' };
+  }
+}
+
+/**
+ * "A few questions" (Revision 6, 6a–6c) — the step the rail has always named,
+ * on this page. `discovery` is one conversation card over the discovery turn
+ * API; `generate` is the drafting status; `review` is the ready card whose
+ * Review your plan is the one exit at the end of onboarding.
+ */
+function QuestionsPanel({
+  run,
+  projectName,
+  onRun,
+  onReread,
+}: {
+  run: MigrateOnboardingDto;
+  projectName: string;
+  onRun: (run: MigrateOnboardingDto) => void;
+  onReread: (id: string) => Promise<void>;
+}) {
+  const t = useTranslations('onboardingMigrate');
+  return (
+    <div>
+      <StepHead
+        eyebrow={t('questions.eyebrow')}
+        heading={t('questions.heading')}
+        body={t('questions.body')}
+      />
+      {run.step === 'discovery' ? (
+        <DiscoveryCard run={run} onRun={onRun} onReread={onReread} />
+      ) : run.step === 'generate' ? (
+        <DraftingCard run={run} onRun={onRun} />
+      ) : (
+        <ReadyCard runId={run.id} projectName={projectName} />
+      )}
+    </div>
+  );
+}
+
+/** 6a — the conversation. The machine's discovery step submits the opening,
+ *  code-grounded turn itself; this card shows its reply first, then the turns. */
+function DiscoveryCard({
+  run,
+  onRun,
+  onReread,
+}: {
+  run: MigrateOnboardingDto;
+  onRun: (run: MigrateOnboardingDto) => void;
+  onReread: (id: string) => Promise<void>;
+}) {
+  const t = useTranslations('onboardingMigrate');
+  // Ask the machine once on entry: it submits the opening turn (and records its
+  // job) the first time, and answers 409 until the conversation drafts a doc.
+  const kicked = useRef(false);
+  const [kickFailed, setKickFailed] = useState(false);
+  useEffect(() => {
+    if (run.discoveryJobId || kicked.current) return;
+    kicked.current = true;
+    void quietAdvance(run.id).then((r) => {
+      if (r.kind === 'ok') onRun(r.run);
+      else if (r.kind === 'conflict') void onReread(run.id);
+      else setKickFailed(true);
+    });
+  }, [run.id, run.discoveryJobId, onRun, onReread]);
+
+  return (
+    <Card>
+      {run.discoveryJobId ? (
+        <Conversation runId={run.id} jobId={run.discoveryJobId} onRun={onRun} />
+      ) : kickFailed ? (
+        <p role="alert" className="m-0 flex items-center gap-2 text-sm text-(--el-text-strong)">
+          <AlertCircle className="size-4 flex-none" aria-hidden />
+          {t('common.error')}
+        </p>
+      ) : (
+        <p
+          role="status"
+          className="m-0 flex items-center gap-2.5 text-sm text-(--el-text-secondary)"
+        >
+          <span aria-hidden className="flex-none text-(--el-highlight)">
+            <Spinner size="sm" />
+          </span>
+          {t('questions.heading')}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function Conversation({
+  runId,
+  jobId,
+  onRun,
+}: {
+  runId: string;
+  jobId: string;
+  onRun: (run: MigrateOnboardingDto) => void;
+}) {
+  const chatT = useTranslations('onboarding.chat');
+  const t = useTranslations('onboardingMigrate');
+  const chat = useDiscoveryChat({ attachJobId: jobId });
+  const { turns, working, isStreaming, pendingAsk, error, producedKinds } = chat.state;
+  const [draft, setDraft] = useState('');
+
+  // The conversation drafted its first direction doc: the machine's discovery
+  // exit is met, so move on to drafting the plan — in place, once.
+  const moved = useRef(false);
+  useEffect(() => {
+    if (producedKinds.length === 0 || isStreaming || moved.current) return;
+    moved.current = true;
+    void quietAdvance(runId).then((r) => {
+      if (r.kind === 'ok') onRun(r.run);
+      else moved.current = false;
+    });
+  }, [producedKinds.length, isStreaming, runId, onRun]);
+
+  const answered = turns.filter((x) => x.role === 'user').length;
+  const n = answered + 1;
+  const total = Math.max(5, n);
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const text = draft.trim();
+    if (!text || isStreaming) return;
+    chat.send(text);
+    setDraft('');
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <span className="w-fit rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-text-strong) tabular-nums">
+        {t('questions.progress', { n, total })}
+      </span>
+      <div role="log" aria-label={chatT('railLabel')} className="flex flex-col gap-3">
+        {turns.map((turn) => (
+          <DiscoveryChatBubble key={turn.id} turn={turn} />
+        ))}
+        {working || (isStreaming && turns[turns.length - 1]?.role !== 'assistant') ? (
+          <p className="m-0 flex items-center gap-2 text-sm text-(--el-text-secondary)">
+            <span aria-hidden className="flex-none text-(--el-highlight)">
+              <Spinner size="sm" />
+            </span>
+            {working?.phase === 'drafting' ? chatT('drafting') : chatT('working')}
+          </p>
+        ) : null}
+        {error ? (
+          <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)">
+            <p className="m-0">{chatT('errorBody')}</p>
+            <button
+              type="button"
+              onClick={chat.dismissError}
+              className="mt-1 font-medium text-(--el-link) underline-offset-2 hover:underline"
+            >
+              {chatT('dismiss')}
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {pendingAsk && !isStreaming ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<ListChecks className="size-4" />}
+            onClick={() => chat.decideValidateEarly(chatT('replies.proveDemand'))}
+          >
+            {chatT('proveDemandLabel')}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => chat.decideValidateEarly(chatT('replies.buildItAll'))}
+          >
+            {chatT('buildItAllLabel')}
+          </Button>
+        </div>
+      ) : null}
+      <form
+        onSubmit={submit}
+        className="flex items-center gap-2 border-t border-(--el-border) pt-4"
+      >
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          disabled={isStreaming}
+          placeholder={chatT('composerPlaceholder')}
+          aria-label={chatT('composerPlaceholder')}
+          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          disabled={isStreaming || draft.trim().length === 0}
+        >
+          {chatT('send')}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+/** 6b — the plan is being drafted. The machine's generate step starts the draft
+ *  on its first ask and moves to `review` once the plan is no longer generating,
+ *  so this card keeps asking until it does. */
+function DraftingCard({
+  run,
+  onRun,
+}: {
+  run: MigrateOnboardingDto;
+  onRun: (run: MigrateOnboardingDto) => void;
+}) {
+  const t = useTranslations('onboardingMigrate');
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (failed) return;
+    let stopped = false;
+    let timer: number | undefined;
+    const tick = async () => {
+      const r = await quietAdvance(run.id);
+      if (stopped) return;
+      if (r.kind === 'ok') {
+        onRun(r.run);
+        if (r.run.step === 'generate') timer = window.setTimeout(tick, GENERATE_POLL_MS);
+      } else if (r.kind === 'conflict') {
+        timer = window.setTimeout(tick, GENERATE_POLL_MS);
+      } else {
+        // Out of credits or the planner unreachable — a hard stop, said once.
+        setFailed(true);
+      }
+    };
+    void tick();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [run.id, failed, onRun]);
+
+  if (failed) {
+    return (
+      <p
+        role="alert"
+        className="m-0 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-3 text-sm text-(--el-text-strong)"
+      >
+        <AlertCircle className="size-4 flex-none" aria-hidden />
+        {t('common.error')}
+      </p>
+    );
+  }
+
+  const waitingOnCode = !run.codeGraphReady;
+  return (
+    <Card>
+      <div className="flex flex-col gap-3" role="status" aria-busy="true">
+        <p className="m-0 flex items-center gap-2.5 text-sm font-semibold text-(--el-text)">
+          <span aria-hidden className="flex-none text-(--el-highlight)">
+            <Spinner size="sm" />
+          </span>
+          {t('questions.draftingTitle')}
+        </p>
+        <p className="m-0 max-w-[60ch] text-sm leading-normal text-(--el-text-secondary)">
+          {waitingOnCode ? t('questions.draftingWaits') : t('questions.draftingBody')}
+        </p>
+        <div className="h-1.5 w-full max-w-[24rem] overflow-hidden rounded-full bg-(--el-tint-yellow)">
+          <div
+            className={cn(
+              'h-full animate-pulse rounded-full bg-(--el-progress-fill)',
+              waitingOnCode ? 'w-[8%]' : 'w-[55%]',
+            )}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** 6c — the plan is ready. */
+function ReadyCard({ runId, projectName }: { runId: string; projectName: string }) {
+  const [plan, setPlan] = useState<MigrateGeneratedPlanDto | null>(null);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/onboarding/migrate/${runId}/plan`, { cache: 'no-store' });
+        if (res.ok && live) setPlan((await res.json()) as MigrateGeneratedPlanDto);
+      } catch {
+        // the card still renders; the review link waits for the plan id
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [runId]);
+
+  const t = useTranslations('onboardingMigrate');
+  return (
+    <Card>
+      <div className="flex flex-col items-start gap-3" role="status">
+        <span
+          aria-hidden
+          className="flex size-11 items-center justify-center rounded-full bg-(--el-tint-mint) text-(--el-text-strong)"
+        >
+          <CheckCircle2 className="size-5" />
+        </span>
+        <p className="m-0 text-base font-semibold text-(--el-text-strong)">
+          {t('questions.readyTitle')}
+        </p>
+        <p className="m-0 max-w-[60ch] text-sm leading-normal text-(--el-text-secondary)">
+          {t('questions.readyBody', { count: plan?.itemCount ?? 0, project: projectName })}
+        </p>
+        <div className="pt-2">
+          {plan?.planId ? (
+            <ReviewPlanButton planId={plan.planId} />
+          ) : (
+            <Button variant="primary" size="md" loading>
+              {t('questions.readyCta')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** The one exit at the end of onboarding: the plan's review, opened the way the
+ *  generation hand-off opens it (`GenerationFlow`'s PlannedHandOff). A child,
+ *  because the hook needs a plan id. */
+function ReviewPlanButton({ planId }: { planId: string }) {
+  const t = useTranslations('onboardingMigrate');
+  const { open } = useOpenPlanOverlay(planId, undefined, { host: '/plans' });
+  return (
+    <Button
+      variant="primary"
+      size="md"
+      onClick={() => open()}
+      rightIcon={<ArrowRight className="size-4" />}
+    >
+      {t('questions.readyCta')}
+    </Button>
   );
 }

@@ -284,3 +284,143 @@ token block is copied 1:1 from `app/globals.css` (Tier-0 → Tier-3 wiring), no 
 - **aria-live** — the import progress counts sit in a `role="status" aria-live="polite"` region so
   screen readers hear the advancing totals; the streaming log is `aria-hidden` (decorative echo of the
   same counts).
+
+## 2026-10-12 — the vibe layout on the importer: the wizard's bar, a hero, no outer card (MOTIR-8251)
+
+**Amends:** MOTIR-937's importer (§ _Panels + copy + per-element `--el-*` role_ — the chrome, the
+project picker and every step — and § _Access path_). **Delta mock:**
+[`import-wizard--vibe-layout.mock.html`](./import-wizard--vibe-layout.mock.html).
+`import-wizard.mock.html` is a record and is **not edited**. Story MOTIR-8238; sibling sections:
+[`design/onboarding-migrate/design-notes.md` § 2026-10-12](../onboarding-migrate/design-notes.md)
+(whose bar this one composes) and [`design/ai-chat/design-notes.md` § 2026-10-12](../ai-chat/design-notes.md).
+
+**Composes, never re-draws:** MOTIR-8250's Pattern panel —
+`design/onboarding-entrance/onboarding-entrance--vibe-layout.mock.html` **Panel 6** (A the lockup ·
+B the hero · C one section band) — and the migrate wizard's bar from the sibling section above.
+
+**Design system — files read:** root `package.json` (`"@motir/design-system": "workspace:*"`),
+`app/globals.css` (lines 13 and 25), `packages/design-system/package.json` (**`0.13.0`**, exports
+`./mock`), `app/layout.tsx`. No `DESIGN.md`. **Verdict: ON MOTIR DESIGN — branch (a)**, built with
+`renderMock` from the package's `Button`, `Card`, `Pill`, `Input`, `FormField`, `Combobox`,
+`Spinner`, `EmptyState` and `buttonVariants`, plus `@motir/brand`'s `BrandMark` and
+`WAVE_BAND_PATH`; axes `warm-editorial` · `motir` · `motir`, light and dark per frame, focus ring on
+`--el-accent-on-surface`. Nothing is proposed for the package.
+
+**Shipped reality read** at the branch head: `app/(onboarding)/onboarding/import/page.tsx` (the
+`max-w-[41.25rem]` picker `Card`, its `EmptyState`, no bar, no user; the Connect step's Cancel → `ONBOARDING_ENTRY_PATH`),
+`ImportWizard.tsx`, `StepRail.tsx`, `ConnectStep.tsx`, `MapStep.tsx`, `PreviewStep.tsx`, `RunStep.tsx`
+and `messages/en.json`. Every string is read by key. motir.co read at `motir-marketing` `origin/main`
+**`06c0411`** (see the sibling section).
+
+### Panels (light AND dark)
+
+| #   | Panel                                                                                             | frame   |
+| --- | ------------------------------------------------------------------------------------------------- | ------- |
+| 0   | Access paths — the wizard's Import step door ("Open the importer", focused) and the OAuth returns | 620 × 2 |
+| 1   | Project picker with projects — the **full** hero; the list is the section band's action slot      | 1280    |
+| 2   | Project picker, empty — the shipped `EmptyState` in the same slot                                 | 1280    |
+| 3   | Connect, no source picked — the **compact** hero from here on                                     | 1280    |
+| 4   | Connect, Jira connected (the OAuth success return)                                                | 1280    |
+| 5   | Connect, the OAuth-returned failure (rose alert)                                                  | 1280    |
+| 6   | Map, two unresolved statuses (Next blocked)                                                       | 1280    |
+| 7   | Preview — dry run shown, Import unlocked                                                          | 1280    |
+| 8   | Import running                                                                                    | 1280    |
+| 9   | Import finished                                                                                   | 1280    |
+| 10  | A typed error — the run failed (`IMPORT_SOURCE_NOT_CONNECTED`)                                    | 1280    |
+| 11  | Narrow — picker and Connect                                                                       | 390 × 2 |
+
+### What changes, and what does not
+
+- **A bar, where there was none.** The importer composes the migrate wizard's bar: the lockup (22 px,
+  not a link), `· {import.chrome.title}`, then Save & exit, the language control (MOTIR-8286) and the
+  decorative user initial. There is no planAi link. Save & exit goes to `/onboarding`, the same place the
+  Connect step's own Cancel link goes; that Cancel stays where it is (`ConnectStep.tsx` line 300), so the
+  bar adds an exit on every step and removes none.
+- **A hero.** The full hero on the arrival screen (the project picker, nothing chosen yet); the
+  compact hero on every step after it, exactly as the wizard.
+- **No outer centred `Card`.** The `max-w-[41.25rem]` card around the picker and around the wizard
+  is TAKEN. The picker becomes one section band (Pattern C): the question at the H2 scale (56 px, 34
+  narrow) on the left, the body and the project list on the right, each row a link to
+  `?projectId=…`. The wizard becomes a work band: the chrome title at the step-heading scale (serif
+  34), the dry-run note on Preview, the `StepRail`, and the step.
+- **Behaviour is unchanged on every step**: the same query-string states, the same OAuth returns, the
+  same Map gating, the same dry-run-before-write, the same run terminal states and Retry.
+- Measured from the frame top at 1280: picker band 382, controls end 683; Connect last control 720;
+  Map 1212; Preview 1048; Run 750. The heading and the first control start above a 768 px fold.
+
+### Per-element `--el-*` and shape role
+
+The bar, hero, waves, band, eyebrow, step heading, focus ring and hover override are exactly the
+sibling section's table. In addition:
+
+| element                        | colour                                                              | shape / size                                |
+| ------------------------------ | ------------------------------------------------------------------- | ------------------------------------------- |
+| picker H2 · body               | `--el-text` · `--el-text-secondary`                                 | serif 56 (34 narrow) · 18 `max-w-[44ch]`    |
+| picker row                     | `--el-card` ground, `--el-border`, `--el-text` name                 | `--radius-control`, `--spacing-control-x/y` |
+| step rail (`StepRail`)         | unchanged roles; captions `--el-text-secondary`                     | unchanged                                   |
+| Map warning pill · status line | `Pill` `severity: warning` · `--el-tint-peach` + `--el-text-strong` | `--radius-badge`                            |
+| OAuth failure / run failed     | `--el-tint-rose`, glyph `--el-danger-on-surface`                    | `--radius-card`                             |
+| run finished                   | `--el-tint-mint`, `--el-text-strong`                                | `--radius-card`                             |
+
+### Slot → key
+
+| slot                                      | key                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| hero H1 · lede                            | `import.hero.headline` · `import.hero.lede`                        |
+| bar flow name                             | `import.chrome.title`                                              |
+| Save & exit                               | `onboardingMigrate.common.saveExit` (see F1)                       |
+| language control                          | `auth.language.{label,switching,failed,retry}` + `localeLabel`     |
+| picker H2 · body · label · empty          | `import.projectPicker.{heading,body,label,empty}`                  |
+| work-band heading                         | `import.chrome.titleInto` (see F2)                                 |
+| dry-run note                              | `import.chrome.dryRun`                                             |
+| steps, connect, map, preview, run, errors | `import.{steps,connect,map,preview,run,errors}.*` (unchanged keys) |
+| access door                               | `onboardingMigrate.import.eyebrow` + the wizard's `import.cta`     |
+
+Fixtures (project names, Jira/Linear values, row data, counts) are not product copy.
+
+### Findings
+
+- **F1 — the importer has no Save & exit key of its own** and no user to draw an initial for:
+  `page.tsx` does not read the session today. The mock borrows `onboardingMigrate.common.saveExit`
+  (same English, same destination). MOTIR-8254 must either add `import.chrome.saveExit` or import the
+  wizard's key on purpose, and must read the session in `page.tsx` for the initial.
+- **F2 — the card names the heading "Import into {project}"**; the only key is
+  `import.chrome.titleInto` = "Import work items · into {project}", and that is what is drawn. No key
+  was invented.
+- **F3 — MOTIR-8286's premise** assumes the importer renders `OnboardingTopBar`; it renders no bar.
+  This design gives it the wizard's bar, with the language control in it.
+- **F4 — the shipped captions use `--el-text-muted`**, as the wizard's do; on the hero's
+  `--el-surface` they fail (4.17:1). The mock draws them in `--el-text-secondary`.
+
+### Chinese-length risks (for MOTIR-8249 / MOTIR-8258)
+
+The full hero's 96 px H1; `import.chrome.titleInto` at 34 px with a long project name (it wraps —
+`text-balance` is on); the picker question at 56 px; the flow name in the narrow bar (truncates).
+
+### Narrow (390)
+
+The wizard's narrow bar, one row shorter (no planAi): lockup … language · initial; then the flow name
+… Save & exit. Source cards run two to a row; the picker band stacks the H2 above the list.
+
+### GIVES / TAKES
+
+- **TAKES** the outer centred `Card` from the picker and the wizard.
+- **GIVES** the importer a brand bar (lockup, flow name, Save & exit, language, initial) and a hero.
+- **GIVES MOTIR-8254** the build, F1 and F4; **MOTIR-8286** the language control in this bar;
+  **MOTIR-8256** the pairs to gate (the sibling section's, plus the picker row on `--el-page-bg`);
+  **MOTIR-8249 / MOTIR-8258** the CJK risks; **MOTIR-8257** the E2E context — routes, query states and
+  keys are unchanged; the bar adds a second link to `/onboarding` named "Save & exit", so a spec that
+  finds a link to `/onboarding` by href alone now matches two.
+- **Premises taken from** MOTIR-937, MOTIR-8248 and MOTIR-8250.
+
+### Revision 4 (2026-10-12) — the warm pass
+
+The vibe-layout board in this area takes the warm pass described in `design/onboarding-migrate/design-notes.md` § _Revision 4_: the hero glow and warm waves, the orange step dot, and orange (`--el-highlight`) for the current step, the picked row and the "you are here" marker, with `--el-tint-yellow` behind progress. Every label stays on the ink tokens; the orange is used for fills, rings, borders and glyphs only.
+
+### Revision 5 (2026-10-12) — warm on the button only
+
+The warm pass narrows to the primary button and small marks (the step dot, spinners, progress fills); every surface returns to the cool shipped look. See `design/onboarding-migrate/design-notes.md` § _Revision 5_ for the two new roles (`--el-cta-warm`, `--el-cta-warm-text`) and their measured contrast.
+
+### Revision 6 (2026-10-12) — the importer runs inside the migrate wizard
+
+The migrate wizard no longer links to `/onboarding/import`. Its Import step renders this board's step rail and steps (Panels 3–10) inside the wizard page, with Skip import in the Cancel slot and Continue in place of View imported backlog; the vendor OAuth callbacks return to the wizard's Import step. See `design/onboarding-migrate/design-notes.md` § _Revision 6_ (Panels 4a–4f). The standalone route drawn here stays for the person who reaches it directly; Panel 0 now says so and no longer draws the wizard's Open the importer link, which retires.

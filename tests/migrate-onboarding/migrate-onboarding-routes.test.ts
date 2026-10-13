@@ -48,6 +48,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 const { POST: startRoute } = await import('@/app/api/onboarding/migrate/route');
 const { GET: getRoute } = await import('@/app/api/onboarding/migrate/[id]/route');
 const { POST: advanceRoute } = await import('@/app/api/onboarding/migrate/[id]/advance/route');
+const { GET: planRoute } = await import('@/app/api/onboarding/migrate/[id]/plan/route');
 
 const BASE = 'http://localhost:3000/api/onboarding/migrate';
 
@@ -171,5 +172,47 @@ describe('POST /api/onboarding/migrate/:id/advance', () => {
     );
     expect(ok.status).toBe(200);
     expect((await ok.json()).step).toBe('index');
+  });
+});
+
+describe('GET /api/onboarding/migrate/:id/plan — the drafted plan (MOTIR-8254)', () => {
+  it('names no plan before generation, then the plan the generate job opened', async () => {
+    const fx = await makeWorkItemFixture();
+    useProject(fx);
+    const started = await (await startRoute(new Request(BASE, { method: 'POST' }))).json();
+    const params = { params: Promise.resolve({ id: started.id }) };
+
+    const before = await planRoute(new Request(`${BASE}/${started.id}/plan`), params);
+    expect(before.status).toBe(200);
+    expect(await before.json()).toEqual({ planId: null, status: null, itemCount: 0 });
+
+    // The generate step records its job; the plan binds to it by sourceJobId.
+    await adminDb.migrateOnboarding.update({
+      where: { id: started.id },
+      data: { generateJobId: 'job-generate-1' },
+    });
+    const plan = await adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        status: 'planned',
+        sourceJobId: 'job-generate-1',
+      },
+    });
+
+    const after = await planRoute(new Request(`${BASE}/${started.id}/plan`), {
+      params: Promise.resolve({ id: started.id }),
+    });
+    expect(after.status).toBe(200);
+    expect(await after.json()).toEqual({ planId: plan.id, status: 'planned', itemCount: 0 });
+  });
+
+  it('404s a bogus id', async () => {
+    const fx = await makeWorkItemFixture();
+    useProject(fx);
+    const res = await planRoute(new Request(`${BASE}/nope/plan`), {
+      params: Promise.resolve({ id: 'nope' }),
+    });
+    expect(res.status).toBe(404);
   });
 });

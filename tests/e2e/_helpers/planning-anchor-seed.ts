@@ -32,6 +32,8 @@ export interface PlanningAnchorSeed {
   /** The story between them — the level the deep anchor sits ON. */
   storyTitle: string;
   storyKey: string;
+  /** Its id — the `parentRef` a planner's `add` under the story names. */
+  storyId: string;
   /** The DEEP anchor: a subtask two levels below the root. */
   subtaskTitle: string;
   subtaskKey: string;
@@ -110,6 +112,7 @@ export async function seedPlanningAnchorTree(email: string): Promise<PlanningAnc
     epicKey: epic.identifier,
     storyTitle,
     storyKey: story.identifier,
+    storyId: story.id,
     subtaskTitle,
     subtaskKey: subtask.identifier,
     siblingTitle,

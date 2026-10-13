@@ -99,7 +99,7 @@ const deps = (state: PlanJobStateDto, onAsk?: () => Promise<void>): AbandonedPla
     await onAsk?.();
     return state;
   },
-  getJobWalkStop: async () => null,
+  getFailedJobFacts: async () => ({ walkStop: null, lostMachine: false }),
 });
 
 async function toResumeSessionIds(): Promise<string[]> {
@@ -119,7 +119,14 @@ describe('a silent plan is RECORDED, not declined', () => {
       const summary = await abandonedPlanService.reconcileAbandoned();
 
       expect(summary.outcomes).toEqual([
-        { planId, projectId: fx.projectId, outcome: 'awaiting_resume', reason: 'silent' },
+        {
+          planId,
+          projectId: fx.projectId,
+          outcome: 'awaiting_resume',
+          reason: 'silent',
+          lostMachine: false,
+          autoResume: null,
+        },
       ]);
       expect(summary.declined).toBe(0);
       const plan = await planRow(planId);
