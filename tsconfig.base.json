@@ -152,6 +152,39 @@
   // config's file count answers what it would cost. Do not estimate a split from a
   // count of test files.
   //
+  // ⚠️ AND A JSON FILE IS PRICED BY ITS SIZE, NOT AS ONE FILE (MOTIR-8405). With
+  // `resolveJsonModule`, every imported `.json` is parsed and given a literal
+  // object type, one property per key. `messages/` holds eleven catalogues and
+  // ten source records at ~0.8 MB each — 21 of the app project's 7019 files, and
+  // 17.9 MB of its 101.7 MB of input, against 19.7 MB for all of `lib/`. The
+  // app project was at 84.4% in CI with `Instantiations` unremarkable (3.10M, no
+  // file standing out in `--generateTrace`), so the per-file cost was the JSON.
+  //
+  // Nothing reads those literal types: `lib/i18n/messages.ts` takes each
+  // catalogue as `Messages` (`Record<string, unknown>`), and
+  // `lib/apiDocs/mcpCatalogueLocale.ts` reads a source record as
+  // `Record<string, string>`. So each translated catalogue and source record has
+  // a `<locale>.d.json.ts` sidecar, which `allowArbitraryExtensions` lets the
+  // checker resolve INSTEAD of the JSON beside it. Only `en.json` is still parsed
+  // — it is the shape every sidecar declares, and the one catalogue whose keys
+  // the code is written against. Bundlers, vitest and the catalogue scripts read
+  // the JSON exactly as before; a `.d.*.ts` is never emitted or bundled.
+  //
+  // Three cold runs each of `tsc -b tsconfig.app.json`, alternating, one
+  // unchanged tree (`c1ef9a49d`), node 22, `--max-old-space-size=4096`:
+  //
+  //   configuration           Symbols    Types     Memory used (of 4.05 GB budget)
+  //   JSON catalogues         3.02M      1.06M     78.9% / 78.9% / 80.3%
+  //   sidecars                2.52M      0.86M     70.9% / 70.9% / 75.1%
+  //
+  // `Instantiations` is 3,098,737 on both sides: the saving is parse and symbol
+  // memory, not checking. The cost of the sidecar is that a translated catalogue
+  // is TYPED as English's shape — a key a locale lacks reads as present to the
+  // checker, which is what `withEnglishFallback` makes true at runtime anyway.
+  // `tests/typecheck-program.test.ts` fails a catalogue with no sidecar and an
+  // `include` glob that names the JSON again, since either puts the cost back
+  // with every check green.
+  //
   // Nothing extends this file for its own sake. It exists so the four real
   // projects — `tsconfig.json` (Next's product program), `tsconfig.tests.json`,
   // `tsconfig.scripts.json` and the composite `tsconfig.app.json` layered on the
@@ -177,6 +210,9 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // Lets `messages/<locale>.d.json.ts` stand in for `messages/<locale>.json`
+    // (MOTIR-8405, the block above).
+    "allowArbitraryExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,

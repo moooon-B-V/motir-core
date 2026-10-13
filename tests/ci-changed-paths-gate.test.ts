@@ -1083,7 +1083,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
 
     it('runs every leg in full, with coverage, on every event — no `if:` on the step', () => {
       expect(fullStep).toContain(
-        'run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/12 --reporter=default --reporter=blob --coverage',
+        'run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/20 --reporter=default --reporter=blob --coverage',
       );
       expect(fullStep).not.toMatch(/^\s*if:/m);
       expect(uploadStep).not.toMatch(/^\s*if:/m);
