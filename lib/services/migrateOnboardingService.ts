@@ -27,11 +27,15 @@ import { projectsService } from '@/lib/services/projectsService';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { aiChatService } from '@/lib/services/aiChatService';
 import { aiConventionService } from '@/lib/services/aiConventionService';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import type {
+  MigrateConnectOutcome,
+  MigrateConnectStateDto,
   MigrateGeneratedPlanDto,
   MigrateIndexStatusDto,
   MigrateOnboardingDto,
@@ -182,6 +186,54 @@ const CONNECT: StepWiring = {
     return { ready: true, patch: { connectedRepoRef: repoRef } };
   },
 };
+
+/**
+ * THE CONNECT STEP'S OUTCOME (MOTIR-8472) — total over the world shapes, and the
+ * order of these lines IS the specification:
+ *
+ * | usable repositories | installation bound | left from this step | outcome                    |
+ * | ------------------- | ------------------ | ------------------- | -------------------------- |
+ * | > 0                 | —                  | no                  | `already_connected`        |
+ * | > 0                 | —                  | yes                 | `connected`                |
+ * | 0                   | yes                | —                   | `no_repositories_selected` |
+ * | 0                   | no                 | yes                 | `install_cancelled`        |
+ * | 0                   | no                 | no                  | `not_started`              |
+ *
+ * There is no default arm: every member has a different remedy, and a fallback
+ * that picked a plausible one would send somebody to install an App their
+ * organisation already has.
+ */
+function classifyConnectOutcome(world: {
+  repositoryCount: number;
+  installationBound: boolean;
+  departed: boolean;
+}): MigrateConnectOutcome {
+  if (world.repositoryCount > 0) return world.departed ? 'connected' : 'already_connected';
+  if (world.installationBound) return 'no_repositories_selected';
+  return world.departed ? 'install_cancelled' : 'not_started';
+}
+
+/** The `before` snapshot's version prefix. Bump it if the token's shape changes;
+ *  a token of an unknown version is read as absent, never as an error. */
+const CONNECT_SNAPSHOT_PREFIX = 'mcs1.';
+
+/** Mint the connect step's `before` token for one run. It witnesses DEPARTURE
+ *  only — it names the run and nothing about the world, so nothing in it can go
+ *  stale — and it is not signed: a forged one can at worst relabel the caller's
+ *  own run between `install_cancelled` and `not_started`, whose remedy is the
+ *  same. */
+function mintConnectSnapshot(runId: string): string {
+  return CONNECT_SNAPSHOT_PREFIX + Buffer.from(runId, 'utf8').toString('base64url');
+}
+
+/** Does `before` witness that the person left THIS run's connect step? An absent,
+ *  unparseable, unknown-version or other-run token is `false` — never an error. */
+function snapshotWitnessesDeparture(before: string | null | undefined, runId: string): boolean {
+  if (!before || !before.startsWith(CONNECT_SNAPSHOT_PREFIX)) return false;
+  const encoded = before.slice(CONNECT_SNAPSHOT_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]+$/.test(encoded)) return false;
+  return Buffer.from(encoded, 'base64url').toString('utf8') === runId;
+}
 
 /** index → import. The index completed — advance to the optional import step. */
 const INDEX: StepWiring = {
@@ -1008,6 +1060,70 @@ export const migrateOnboardingService = {
       total,
       hasRunning,
       allIndexed: total > 0 && indexedCount === total,
+    };
+  },
+
+  /**
+   * The connect step's live read (Story MOTIR-8241 · MOTIR-8472) — what the
+   * wizard polls at `GET /api/onboarding/migrate/[id]/connect-state`: the
+   * organisation the connect flow targets, whether an installation is bound to
+   * it, the repositories Motir can use for this run, and ONE outcome value.
+   *
+   * ⚠️ TWO TIERS, deliberately. Whether an installation is BOUND is an
+   * organisation question (a sibling workspace's grant is this organisation's
+   * too), answered by `listBoundInstallationsForOrganization`. Which repositories
+   * are USABLE is the CONNECT exit gate's own question, answered by the gate's own
+   * read — so the step can never offer to continue while the gate refuses.
+   *
+   * Side-effect free and repeatable: the step re-reads on focus and on return
+   * (a selection changed in GitHub's own settings sends no signal back), so this
+   * writes nothing, kicks nothing and advances nothing. Browse-gated like
+   * `getIndexStatus`; a run outside the caller's workspace is not found.
+   */
+  async getConnectState(
+    id: string,
+    ctx: ServiceContext,
+    input: { before?: string | null } = {},
+  ): Promise<MigrateConnectStateDto> {
+    const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
+    if (!run) throw new MigrateOnboardingNotFoundError(id);
+    await projectAccessService.assertCanBrowse(run.projectId, ctx);
+
+    const { organizationId, accounts } = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+        const accounts = await githubInstallationService.listBoundInstallationsForOrganization({
+          organizationId,
+          tx,
+        });
+        return { organizationId, accounts };
+      },
+    );
+
+    // The gate's own read. Its empty set is `undefined`, never `[]` — normalise.
+    const code = await resolveWorkspaceConnectedRepos({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    const repositories = (code?.repos ?? []).map((repo) => ({
+      provider: repo.provider,
+      repoRef: repo.repoRef,
+      defaultBranch: repo.defaultBranch,
+    }));
+
+    return {
+      organizationId,
+      installation: { bound: accounts.length > 0, accounts },
+      repositories,
+      outcome: classifyConnectOutcome({
+        repositoryCount: repositories.length,
+        installationBound: accounts.length > 0,
+        departed: snapshotWitnessesDeparture(input.before, run.id),
+      }),
+      snapshot: mintConnectSnapshot(run.id),
     };
   },
 

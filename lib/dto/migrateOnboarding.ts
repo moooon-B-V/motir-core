@@ -143,3 +143,79 @@ export interface MigrateGeneratedPlanDto {
   status: string | null;
   itemCount: number;
 }
+
+/**
+ * What the migrate wizard's CONNECT step should say about its own world
+ * (Story MOTIR-8241 · MOTIR-8472) — ONE value, computed server-side, which the
+ * step renders rather than re-deriving from the fields beside it.
+ *
+ * A CLOSED union, and every member has a different remedy, which is why the
+ * classifier that produces it has no default arm:
+ *   - `already_connected` — usable repositories, and the person did not leave
+ *     for GitHub from this step: continue.
+ *   - `connected` — usable repositories, and the person DID leave from this step
+ *     (a valid `before` snapshot came back): continue.
+ *   - `no_repositories_selected` — an installation is bound to the organisation
+ *     but no usable repository came with it: change the selection on GitHub.
+ *   - `install_cancelled` — nothing bound and no repositories, but the person
+ *     left from this step and came back: install again.
+ *   - `not_started` — nothing bound, no repositories, never left: install.
+ *
+ * There is deliberately NO pending-owner member: the producer of that state is
+ * the setup callback's `?github=` report, which no row this read can see records,
+ * and a direct report outranks anything derived here.
+ */
+export type MigrateConnectOutcome =
+  | 'already_connected'
+  | 'connected'
+  | 'no_repositories_selected'
+  | 'install_cancelled'
+  | 'not_started';
+
+/** One GitHub installation bound to the run's organisation. */
+export interface MigrateConnectInstallationAccountDto {
+  /** The provider's installation id (`github_installation.installation_id`),
+   *  never Motir's internal row id. */
+  installationRef: string;
+  accountLogin: string;
+  accountType: string;
+}
+
+/** One repository Motir can use for this run, as the connect step lists it. */
+export interface MigrateConnectRepositoryDto {
+  provider: string;
+  /** `owner/name`. */
+  repoRef: string;
+  defaultBranch: string;
+}
+
+/**
+ * The connect step's live read (`GET /api/onboarding/migrate/[id]/connect-state`,
+ * MOTIR-8472). Two tenancy tiers sit side by side here ON PURPOSE, and each
+ * field names its own:
+ */
+export interface MigrateConnectStateDto {
+  /** ORGANISATION tier — the owning organisation of the run's workspace,
+   *  resolved from the workspace row (`resolveOrganizationId`), never from the
+   *  request. It is what the org-scoped connect-flow routes take. */
+  organizationId: string;
+  /** ORGANISATION tier — the GitHub installations bound to `organizationId`:
+   *  the rows stamped with it UNION its `github_installation_org_link` rows
+   *  (`githubInstallationService.listBoundInstallationsForOrganization`). A row
+   *  whose organisation is null (Motir's shared provisioning installation) never
+   *  counts. `bound` is `accounts.length > 0`. */
+  installation: {
+    bound: boolean;
+    accounts: MigrateConnectInstallationAccountDto[];
+  };
+  /** The repositories the CONNECT exit gate reads — the SAME call, so the step's
+   *  "connected" and the gate's `ready: true` are one fact. Always an array:
+   *  the resolver's `undefined` (nothing connected) arrives as `[]`. */
+  repositories: MigrateConnectRepositoryDto[];
+  /** The one value the step renders. */
+  outcome: MigrateConnectOutcome;
+  /** An opaque, run-scoped token the step echoes back as `?before=` when it
+   *  returns from GitHub, to witness that the person left from this step. It
+   *  carries no copy of the world and is not a secret. */
+  snapshot: string;
+}

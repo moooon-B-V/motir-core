@@ -784,6 +784,51 @@ export const githubInstallationService = {
   },
 
   /**
+   * THE ORGANISATION'S BOUND GITHUB INSTALLATIONS — *is anything installed for
+   * this organisation?* (Story MOTIR-8241 · MOTIR-8472), at the ORGANISATION
+   * tier, inside the caller's transaction.
+   *
+   * ⚠️ A UNION OF TWO SOURCES, because the two binding write paths are distinct:
+   * `bindInstallationForWorkspace` stamps the installation row with the workspace's
+   * organisation, while `linkExistingInstallation` (the setup route's organisation
+   * branch) writes only a `github_installation_org_link` row. Reading either one
+   * alone misses a real bound organisation. De-duplicated by installation, in the
+   * same order {@link listOrganizationInstallations} renders.
+   *
+   * Motir's shared provisioning installation has a NULL organisation, so the
+   * stamped read (an equality on `organization_id`) never returns it: it can not
+   * make a customer organisation report "bound".
+   *
+   * The caller owns the transaction and must already have resolved
+   * `organizationId` from a trusted row (the actor's workspace, never request
+   * input); this binds `app.organization_id` so the org read arm answers.
+   */
+  async listBoundInstallationsForOrganization(ctx: {
+    organizationId: string;
+    tx: Prisma.TransactionClient;
+  }): Promise<Array<{ installationRef: string; accountLogin: string; accountType: string }>> {
+    const { organizationId, tx } = ctx;
+    await bindOrganizationContext(tx, organizationId);
+    const stamped = await githubInstallationRepository.listByOrganizationId(organizationId, tx);
+    const links = await githubInstallationOrgLinkRepository.listByOrganizationId(
+      organizationId,
+      tx,
+    );
+    const seen = new Set<string>();
+    const bound: Array<{ installationRef: string; accountLogin: string; accountType: string }> = [];
+    for (const installation of [...stamped, ...links.map((link) => link.installation)]) {
+      if (seen.has(installation.id)) continue;
+      seen.add(installation.id);
+      bound.push({
+        installationRef: installation.installationId,
+        accountLogin: installation.accountLogin,
+        accountType: installation.accountType,
+      });
+    }
+    return bound;
+  },
+
+  /**
    * Mint a short-lived installation access token for the workspace's
    * installation, dispatched THROUGH the provider seam by the stored `provider`
    * discriminator (so GitLab would work with no change here). Never persists the
