@@ -10,6 +10,7 @@ import {
   setOrgBillingState,
   type BillingSeed,
 } from './_helpers/billing';
+import { db } from './_helpers/db-reset';
 import { BILLING_CATALOG, type AiPlanCatalogEntry } from '@/lib/billing/catalog';
 import { E2E_CHECKOUT_URL } from '@/lib/test-billing-mock';
 import type { BillingFixtureTier } from '@/lib/test-billing-mock';
@@ -37,7 +38,10 @@ import zh from '@/messages/zh.json';
 // Every step waits on the checkout request motir-core sends, or on the billing
 // panel's own read, before asserting — never on a timer. `beat()` is pacing.
 
-test.describe.configure({ timeout: 150_000 });
+// The walk is seven chapters with a page load each, paced for the reviewer:
+// 2.6 minutes on the lane's runner, so it gets the room its siblings' 150 s
+// leaves too tight.
+test.describe.configure({ timeout: 240_000 });
 
 const copy = en.billing;
 const billingPath = '/settings/organization/billing';
@@ -347,6 +351,9 @@ test.describe('The plan catalog: pools, Max ×2 and the included seat', () => {
     await beat();
 
     await chapter('中文: the same figures, the included seat and Max ×2', async () => {
+      // The signed-in account's saved language outranks the browser's cookie
+      // (`lib/i18n/resolveLocale.ts`), so the owner's account says 中文 too.
+      await db.user.update({ where: { id: seed.ownerId }, data: { locale: 'zh' } });
       await page
         .context()
         .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
