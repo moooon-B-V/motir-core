@@ -416,7 +416,7 @@ async function releaseOne(
   lock: PlanTargetLock,
   actor: ServiceContext,
   tx: Prisma.TransactionClient,
-  opts: { system?: boolean } = {},
+  opts: { system?: boolean; approved?: boolean } = {},
 ): Promise<PlanTargetReleaseOutcome> {
   await workItemRepository.lockById(lock.workItemId, tx);
   const item = await workItemRepository.findById(lock.workItemId, tx);
@@ -424,7 +424,9 @@ async function releaseOne(
 
   if (!item || item.status !== PLANNING_STATUS_KEY) return 'left_as_is';
   if (!lock.statusHeld) {
-    return isAdoptedByPlan(lock) ? restAdoptedTarget(item, actor, tx) : 'left_as_is';
+    return isAdoptedByPlan(lock) || (opts.approved === true && isHandParkedSessionLock(lock))
+      ? restAdoptedTarget(item, actor, tx)
+      : 'left_as_is';
   }
   await workItemsService.applyStatusTransition(lock.workItemId, lock.priorStatus, actor, tx, {
     // The restore is AUTHORITATIVE, not an interactive move: it puts the item
@@ -447,13 +449,36 @@ export type PlanTargetReleaseOutcome = 'restored' | 'rested' | 'left_as_is';
  * recorded `priorStatus: 'planning'` and moved nothing (`acquireOne`).
  *
  * PLAN-held only, deliberately. A SESSION that opens on a hand-parked card still
- * leaves it where the person put it on release (MOTIR-2425): a planning
- * conversation is not a decision about the card, and a session has no approve
- * that rests its targets either, so resting them on its release alone would make
- * the two endings of one conversation disagree.
+ * leaves it where the person put it when it ends WITHOUT a decision (MOTIR-2425):
+ * a planning conversation is not a decision about the card, so resting its targets
+ * on a decline, an idle close or a restart would make the endings of one
+ * conversation disagree. The one session ending that IS a decision is the APPROVE
+ * of the plan it produced, which rests the card through
+ * {@link isHandParkedSessionLock} (bug MOTIR-8356).
  */
 function isAdoptedByPlan(lock: PlanTargetLock): boolean {
   return lock.planId !== null && lock.priorStatus === PLANNING_STATUS_KEY;
+}
+
+/**
+ * Whether a lock is a CONVERSATION SESSION's hold on a card that was already
+ * hand-parked at `planning` when the session took it (bug MOTIR-8356): no plan
+ * holder, a recorded prior status of `planning`, and no status held. The plan a
+ * conversation produces parks nothing itself (`plansService.addProposals`), so
+ * when it is APPROVED there is no plan-held lock for `restPlanTargets` to rest and
+ * this session lock is the only record the card was ever parked. An approve rests
+ * it exactly as it rests an adopted plan-held target; every other ending of the
+ * session (a decline, an idle close, a restart) still leaves it where the person
+ * put it, because a conversation that produced nothing is not a decision about
+ * the card (MOTIR-2425).
+ */
+function isHandParkedSessionLock(lock: PlanTargetLock): boolean {
+  return (
+    lock.sessionId !== null &&
+    lock.planId === null &&
+    lock.priorStatus === PLANNING_STATUS_KEY &&
+    !lock.statusHeld
+  );
 }
 
 /**
@@ -1006,11 +1031,12 @@ export const planTargetLockService = {
   async releaseForSession(
     sessionId: string,
     pctx: PlanTargetLockContext,
+    opts: { approved?: boolean } = {},
   ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      (tx) => planTargetLockService.releaseForSessionWithin(sessionId, ctx, tx),
+      (tx) => planTargetLockService.releaseForSessionWithin(sessionId, ctx, tx, opts),
     );
   },
 
@@ -1025,7 +1051,7 @@ export const planTargetLockService = {
     sessionId: string,
     actor: ServiceContext,
     tx: Prisma.TransactionClient,
-    opts: { system?: boolean } = {},
+    opts: { system?: boolean; approved?: boolean } = {},
   ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
     const locks = await planTargetLockRepository.listBySessionId(sessionId, tx);
     const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];

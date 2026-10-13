@@ -4392,6 +4392,7 @@ async function editAddProposal(
 async function releasePlanTargetLocks(
   plan: { id: string; projectId: string; sessionId: string | null },
   ctx: ServiceContext,
+  opts: { approved?: boolean } = {},
 ): Promise<void> {
   // ⚠️ THE PLAN'S OWN LOCKS FIRST, AND UNCONDITIONALLY (MOTIR-5646). This
   // function used to open with `if (!plan.sourceJobId) return;` — and
@@ -4420,8 +4421,12 @@ async function releasePlanTargetLocks(
     );
   }
 
-  // The SESSION half, unchanged: a plan produced by a planning conversation also
-  // hands that conversation's own leases back when it is decided.
+  // The SESSION half: a plan produced by a planning conversation also hands that
+  // conversation's own leases back when it is decided. On an APPROVE
+  // (`opts.approved`) a target the session held while it was hand-parked at
+  // `planning` is RESTED at `todo` / `blocked`, because the conversation's plan
+  // parked nothing itself, so `restPlanTargets` found no plan-held lock to rest
+  // and this lock is the card's only record (bug MOTIR-8356).
   if (!plan.sessionId) return;
   const sessionId = plan.sessionId;
   try {
@@ -4429,11 +4434,15 @@ async function releasePlanTargetLocks(
       planRepository.findLatestIdBySession(sessionId, tx),
     );
     if (latest !== plan.id) return;
-    await planTargetLockService.releaseForSession(sessionId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-      projectId: plan.projectId,
-    });
+    await planTargetLockService.releaseForSession(
+      sessionId,
+      {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        projectId: plan.projectId,
+      },
+      opts,
+    );
   } catch (err) {
     console.warn(
       `[plansService] releasing planning-target locks for plan ${plan.id} failed; the lease will expire and the sweep will clear it`,
@@ -8615,7 +8624,7 @@ async function afterApproveCommit(
 
   // Give the conversation its targets back — the epic's stories now exist, so
   // the level the lock was held at is finished (MOTIR-2787).
-  await releasePlanTargetLocks(plan, ctx);
+  await releasePlanTargetLocks(plan, ctx, { approved: true });
 
   // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
   // approved plan is what the set's cardinality is derived from, so this is the
