@@ -157,7 +157,16 @@ describe('the design-asset guard lane (MOTIR-2442)', () => {
     // around it: a `design/*` PR that does not run this job is the exact state
     // MOTIR-2441 was filed for.
     expect(guardCode).not.toContain('startsWith(github.head_ref');
-    expect([...guardCode.matchAll(/^ {4}if:(.*)$/gm)]).toEqual([]);
+    // (The draft skip is the one condition every job carries; it reads no branch.)
+    expect(
+      [...guardCode.matchAll(/^ {4}if:(.*)$/gm)]
+        .map((m) => m[1]!.trim())
+        .filter(
+          (c) =>
+            c !==
+            "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+        ),
+    ).toEqual([]);
   });
 
   it('is gated through `CI complete` like every other job', () => {

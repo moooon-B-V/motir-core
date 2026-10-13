@@ -202,7 +202,16 @@ describe('the docs-guard lane (MOTIR-4408)', () => {
     // would have survived that move saying nothing.
     expect(guardCode).not.toContain('needs.changes.outputs.app');
     expect(guardCode).not.toContain('startsWith(github.head_ref');
-    expect([...guardCode.matchAll(/^ {4}if:(.*)$/gm)]).toEqual([]);
+    // The ONE condition allowed is the draft skip, which reads no diff output.
+    expect(
+      [...guardCode.matchAll(/^ {4}if:(.*)$/gm)]
+        .map((m) => m[1]!.trim())
+        .filter(
+          (c) =>
+            c !==
+            "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+        ),
+    ).toEqual([]);
   });
 
   it('runs the docs config, and needs no database to do it', () => {

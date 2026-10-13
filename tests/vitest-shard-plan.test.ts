@@ -162,7 +162,7 @@ describe('the Vitest leg plan divides the suite exactly once (MOTIR-3912)', () =
     // A leg id in the matrix that the plan does not know runs Vitest's own
     // partition instead of ours (the sequencer falls back on an unknown count);
     // a leg the plan knows and the matrix does not launch never runs its files.
-    const matrix = /\n {8}leg: \[([^\]]+)\]/.exec(CI_YML);
+    const matrix = /\n {8}leg:\s*\[([^\]]+)\]/.exec(CI_YML);
     expect(matrix, 'ci.yml `test` job declares a `leg:` matrix').not.toBeNull();
     const ids = (matrix?.[1] ?? '')
       .split(',')
