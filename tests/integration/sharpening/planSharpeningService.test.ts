@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { db } from '@/lib/db';
-import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { PermissionDeniedError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { planSharpeningService } from '@/lib/services/planSharpeningService';
 import { plansService } from '@/lib/services/plansService';
 import { SHARPENED_BLOCK_START } from '@/lib/sharpening/managedBlock';
@@ -327,5 +327,182 @@ describe('work-item scope', () => {
       planSharpeningService.writeBack(itemInput('not a key'), fx.ctx),
     ).rejects.toBeInstanceOf(SharpeningInputInvalidError);
     expect(await bodyOf(row.id)).toBe('Body.\n');
+  });
+});
+
+// Subtask MOTIR-8449 — a plan-scope call's second leg: the card being planned
+// (the plan's run session's `targetKeys[0]`) takes the same blocks.
+describe('plan scope — the card being planned', () => {
+  async function anchoredPlan(fx: WorkItemFixture, targetKeys: string[] | null): Promise<string> {
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Sharpen', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    if (targetKeys) {
+      const session = await adminDb.planChangeSession.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          scopeKey: targetKeys.join(','),
+          targetKeys,
+        },
+      });
+      await adminDb.plan.update({ where: { id: plan.id }, data: { sessionId: session.id } });
+    }
+    return plan.id;
+  }
+
+  async function card(fx: WorkItemFixture, body = 'Hand-written body.\n') {
+    const row = await createTestWorkItem(fx, { kind: 'task', title: 'Export invoices' });
+    await adminDb.workItem.update({ where: { id: row.id }, data: { descriptionMd: body } });
+    return row;
+  }
+
+  async function bodyOf(id: string): Promise<string> {
+    return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).descriptionMd ?? '';
+  }
+
+  async function revisionsOf(id: string): Promise<number> {
+    return adminDb.workItemRevision.count({ where: { workItemId: id, changeKind: 'updated' } });
+  }
+
+  it('lands on the plan AND on the anchor card, with the work-item scope’s blocks', async () => {
+    const fx = await makeWorkItemFixture();
+    const anchor = await card(fx);
+    const other = await card(fx);
+    const planId = await anchoredPlan(fx, [anchor.identifier, other.identifier].sort());
+    const first = [anchor.identifier, other.identifier].sort()[0]!;
+    const landed = first === anchor.identifier ? anchor : other;
+    const untouched = first === anchor.identifier ? other : anchor;
+
+    const result = await planSharpeningService.writeBack(planInput(planId), fx.ctx);
+    expect(await storedRequirement(planId)).toEqual({
+      ...REQUIREMENT,
+      plannerAssumptions: PLANNER,
+      settledAt: result.settledAt,
+    });
+
+    const body = await bodyOf(landed.id);
+    expect(body.startsWith('Hand-written body.\n')).toBe(true);
+    expect(count(body, SHARPENED_BLOCK_START)).toBe(2);
+    expect(body).toMatch(
+      /## Acceptance criteria\n\n<!-- motir:sharpened:start -->\n- What happens/,
+    );
+    expect(body).toContain("- Planner's assumption — Which date format? — ISO 8601");
+    // Only the FIRST anchor is the card being planned.
+    expect(await bodyOf(untouched.id)).toBe('Hand-written body.\n');
+
+    // The same blocks the work-item scope writes for the same input.
+    const twin = await card(fx);
+    await planSharpeningService.writeBack(
+      {
+        jobId: 'job-1',
+        scope: { workItemKey: twin.identifier },
+        requirement: REQUIREMENT,
+        plannerAssumptions: PLANNER,
+      },
+      fx.ctx,
+    );
+    expect(await bodyOf(twin.id)).toBe(body);
+
+    // An ordinary edit: one history row, by the token's user; status unchanged.
+    const revisions = await adminDb.workItemRevision.findMany({
+      where: { workItemId: landed.id, changeKind: 'updated' },
+    });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]!.changedById).toBe(fx.ctx.userId);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: landed.id } })).status).toBe(
+      landed.status,
+    );
+  });
+
+  it('is idempotent on both legs, and a superset replaces the card’s blocks', async () => {
+    const fx = await makeWorkItemFixture();
+    const anchor = await card(fx, '## Acceptance criteria\n\n- Hand-written criterion.\n');
+    const planId = await anchoredPlan(fx, [anchor.identifier]);
+
+    await planSharpeningService.writeBack(planInput(planId), fx.ctx);
+    const body = await bodyOf(anchor.id);
+    const stored = (await storedRequirement(planId)) as Record<string, unknown>;
+    await planSharpeningService.writeBack(planInput(planId), fx.ctx);
+    expect(await bodyOf(anchor.id)).toBe(body);
+    const again = (await storedRequirement(planId)) as Record<string, unknown>;
+    expect({ ...again, settledAt: null }).toEqual({ ...stored, settledAt: null });
+    expect(await revisionsOf(anchor.id)).toBe(1);
+
+    const superset = planInput(planId);
+    superset.requirement = { ...REQUIREMENT, constraints: '- Which store? — Postgres.' };
+    await planSharpeningService.writeBack(superset, fx.ctx);
+    const after = await bodyOf(anchor.id);
+    expect(count(after, SHARPENED_BLOCK_START)).toBe(2);
+    expect(after).toContain('- Which store? — Postgres.');
+    expect(after).toContain('- Hand-written criterion.');
+  });
+
+  it.each([
+    ['no run session', null],
+    ['a project-wide session', []],
+    ['an anchor that no longer resolves', ['ZZZ-999']],
+  ] as const)('with %s, lands on the plan alone', async (_label, keys) => {
+    const fx = await makeWorkItemFixture();
+    const bystander = await card(fx);
+    const planId = await anchoredPlan(fx, keys === null ? null : [...keys]);
+
+    const result = await planSharpeningService.writeBack(planInput(planId), fx.ctx);
+    expect((await storedRequirement(planId)) as unknown).toMatchObject({
+      settledAt: result.settledAt,
+    });
+    expect(await bodyOf(bystander.id)).toBe('Hand-written body.\n');
+    expect(await adminDb.workItemRevision.count({ where: { changeKind: 'updated' } })).toBe(0);
+  });
+
+  it('refuses a finished anchor after the plan leg landed, and a retry changes nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const anchor = await card(fx);
+    await adminDb.workItem.update({ where: { id: anchor.id }, data: { status: 'done' } });
+    const planId = await anchoredPlan(fx, [anchor.identifier]);
+
+    await expect(planSharpeningService.writeBack(planInput(planId), fx.ctx)).rejects.toBeInstanceOf(
+      SharpeningTargetFinishedError,
+    );
+    const stored = (await storedRequirement(planId)) as Record<string, unknown>;
+    expect(stored).toMatchObject(REQUIREMENT);
+    expect(await bodyOf(anchor.id)).toBe('Hand-written body.\n');
+
+    await expect(planSharpeningService.writeBack(planInput(planId), fx.ctx)).rejects.toBeInstanceOf(
+      SharpeningTargetFinishedError,
+    );
+    const again = (await storedRequirement(planId)) as Record<string, unknown>;
+    expect({ ...again, settledAt: null }).toEqual({ ...stored, settledAt: null });
+    expect(await bodyOf(anchor.id)).toBe('Hand-written body.\n');
+  });
+
+  it('refuses a user who can browse but not edit, writing neither leg', async () => {
+    const fx = await makeWorkItemFixture();
+    const anchor = await card(fx);
+    const planId = await anchoredPlan(fx, [anchor.identifier]);
+    const viewer = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: viewer.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+    });
+    await addToProjectAs({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: viewer.id,
+      role: 'viewer',
+    });
+
+    // A viewer may browse the project; the plan gate (`ai:view_plan`) or the
+    // edit gate refuses them before either leg writes.
+    const err = await planSharpeningService
+      .writeBack(planInput(planId), { userId: viewer.id, workspaceId: fx.workspaceId })
+      .catch((e: unknown) => e);
+    expect(err instanceof PermissionDeniedError || err instanceof ProjectAccessDeniedError).toBe(
+      true,
+    );
+    expect(await storedRequirement(planId)).toBeNull();
+    expect(await bodyOf(anchor.id)).toBe('Hand-written body.\n');
   });
 });

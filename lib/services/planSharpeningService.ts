@@ -19,7 +19,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { StaleWorkItemError } from '@/lib/workItems/errors';
+import { StaleWorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
@@ -43,6 +43,22 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //   • work-item scope → `work_item:edit` on the item's project (the ordinary
 //                       work-item update path, which also records the history
 //                       row); refused on a `done`-category status.
+//
+// A plan-scope call has a SECOND LEG (Subtask MOTIR-8449): the card being
+// planned — the plan's ANCHOR, its run session's `targetKeys[0]`, the same
+// derivation `PlanHoldDTO.anchorKey` documents — takes the same two managed
+// blocks the work-item scope writes, through the same writer
+// (`sharpenWorkItemBody`), so the two landings cannot drift. The anchor is read
+// from the plan's own run, never from the request, so a caller cannot choose
+// it. The legs run in order:
+//   1. the plan leg, in its own transaction under the plan's row lock — the
+//      primary landing, since the run writes its plan from the requirement;
+//   2. the anchor leg, AFTER that transaction commits (`updateWorkItem` opens
+//      its own). No anchor (no run session, or a project-wide one) or an anchor
+//      that no longer resolves writes nothing for the card and still succeeds.
+//      A finished anchor raises the shipped card refusal — the plan leg has
+//      already landed and is not rolled back, and because both legs are
+//      cumulative and idempotent a retry lands them byte-identically.
 //
 // ⚠️ DELIBERATELY NOT A `modify` PROPOSAL on a committed work item: the person
 // running Sharpen is the one answering, so the answers are their own direct
@@ -126,6 +142,18 @@ async function writeBackToPlan(
   input: SharpeningWriteBackInput,
   ctx: ServiceContext,
 ): Promise<string> {
+  const { settledAt, projectId, anchorKey } = await writeThePlanLeg(planId, input, ctx);
+  if (anchorKey) await writeTheAnchorLeg(projectId, anchorKey, input, ctx);
+  return settledAt;
+}
+
+/** Leg 1: the plan's requirement and its `perItem` proposals, in one
+ *  transaction. Answers the plan's anchor for leg 2, read in that transaction. */
+async function writeThePlanLeg(
+  planId: string,
+  input: SharpeningWriteBackInput,
+  ctx: ServiceContext,
+): Promise<{ settledAt: string; projectId: string; anchorKey: string | null }> {
   const plan = await withWorkspaceContext(ctx, (tx) =>
     planRepository.findById(planId, ctx.workspaceId, tx),
   );
@@ -136,7 +164,7 @@ async function writeBackToPlan(
   await projectAccessService.assertCanEdit(plan.projectId, ctx);
 
   const settledAt = new Date().toISOString();
-  await withWorkspaceContext(
+  const anchorKey = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
     async (tx) => {
       const locked = await planRepository.lockById(planId, tx);
@@ -191,9 +219,29 @@ async function writeBackToPlan(
         settledAt,
       };
       await planRepository.setSharpenedRequirement(planId, stored, tx);
+
+      // The card being planned: the run session's first anchor key, or none.
+      const subject = await planRepository.findHoldSubject(planId, tx);
+      return subject?.session?.targetKeys[0] ?? null;
     },
   );
-  return settledAt;
+  return { settledAt, projectId: plan.projectId, anchorKey };
+}
+
+/** Leg 2: the card being planned takes the same blocks the work-item scope
+ *  writes. An anchor the project no longer has is skipped, not refused. */
+async function writeTheAnchorLeg(
+  projectId: string,
+  anchorKey: string,
+  input: SharpeningWriteBackInput,
+  ctx: ServiceContext,
+): Promise<void> {
+  try {
+    await sharpenWorkItemBody(projectId, anchorKey, input, ctx);
+  } catch (err) {
+    if (err instanceof WorkItemNotFoundError) return;
+    throw err;
+  }
 }
 
 /** Only the six requirement parts, and only the ones that are strings. */
@@ -216,11 +264,23 @@ async function writeBackToWorkItem(
     throw new SharpeningInputInvalidError('`scope.workItemKey` must look like `MOTIR-123`.');
   }
   const project = await projectsService.getByKey(key.slice(0, key.lastIndexOf('-')), ctx);
+  await sharpenWorkItemBody(project.id, key, input, ctx);
+}
+
+/** The ONE card writer both landings use: the edit gate, the finished-card
+ *  refusal, the managed-block merge and the ordinary update path with its
+ *  stale-row retry. */
+async function sharpenWorkItemBody(
+  projectId: string,
+  key: string,
+  input: SharpeningWriteBackInput,
+  ctx: ServiceContext,
+): Promise<void> {
   const acceptance = acceptanceContent(input.requirement);
   const assumptions = assumptionsContent(input.requirement, input.plannerAssumptions);
 
   for (let attempt = 1; ; attempt += 1) {
-    const item = await workItemsService.getWorkItemByIdentifier(project.id, key, ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, key, ctx);
     // Edit first, status second: a person who may not edit learns nothing
     // about where the card stands.
     await projectAccessService.assertCanEdit(item.projectId, ctx);
