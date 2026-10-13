@@ -30,6 +30,7 @@ import {
 import type { DiscoverySession } from '@/lib/onboarding/discoveryLoop';
 import { type StationKind, type StationView, captureLines } from '@/lib/onboarding/canvasModel';
 import { Spinner } from '@/components/ui/Spinner';
+import { useTierLabel } from './useTierLabel';
 
 // The CONTENT of a canvas node (Subtask 7.3.11 / MOTIR-840) — the station card the
 // onboarding canvas (`OnboardingCanvas`) renders inside each `PlanningCanvas`
@@ -113,6 +114,7 @@ export function StationCard({
   const t = useTranslations('onboarding.chat.canvas');
   const tr = useTranslations('onboarding.chat.revisions');
   const tc = useTranslations('onboarding.chat');
+  const tierLabel = useTierLabel();
   const Icon = ICON[station.kind];
   const tierKind: DirectionDocKind | null = isTierKind(station.kind) ? station.kind : null;
   const active = station.state === 'active' || station.state === 'deciding';
@@ -120,7 +122,7 @@ export function StationCard({
   // loads (it just shows "Drafting now…" instead of a settled pill).
   const ringed = active || station.state === 'working';
   const isDesign = station.kind === 'design';
-  const title = tierKind ? TIER_META[tierKind].label : t(`stations.${station.kind}.title`);
+  const title = tierKind ? tierLabel(tierKind) : t(`stations.${station.kind}.title`);
   // The design step's CTA + state pill already say where it sits, so its "up next"
   // subtitle is redundant noise — drop it (every tier keeps its captured-facts
   // subtitle). The optional step instead carries the "can skip" tag below.

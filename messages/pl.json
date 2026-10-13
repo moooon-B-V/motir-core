@@ -6644,6 +6644,31 @@
       "logIn": "Zaloguj się",
       "signUp": "Zarejestruj się"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Poznajemy Twój projekt",
+          "kicker": "Co budujesz i dla kogo"
+        },
+        "vision": {
+          "label": "Co zbudujemy",
+          "kicker": "Kształt wersji v1"
+        },
+        "feasibility": {
+          "label": "Czy warto to budować?",
+          "kicker": "Zderzenie z rzeczywistością"
+        },
+        "validation": {
+          "label": "Czy ludzie będą tego chcieli?",
+          "kicker": "Rynek"
+        }
+      },
+      "optional": "opcjonalne",
+      "readHint": "<b>Tylko do odczytu.</b> Coś się nie zgadza? Po prostu powiedz o tym Motir na czacie – przepisze dokument za Ciebie. Nic nie jest jeszcze przesądzone.",
+      "openQuestions": "Otwarte pytania",
+      "crossLinksLabel": "Inne części Twojego kierunku",
+      "related": "Powiązane"
+    },
     "landing": {
       "badge": "Projekt na luzie",
       "headline": "Co chcesz zbudować?",

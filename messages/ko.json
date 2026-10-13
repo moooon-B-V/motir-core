@@ -6641,6 +6641,31 @@
       "logIn": "로그인",
       "signUp": "가입하기"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "프로젝트 이해하기",
+          "kicker": "무엇을, 누구를 위해 만드는지"
+        },
+        "vision": {
+          "label": "만들 내용",
+          "kicker": "v1의 모습"
+        },
+        "feasibility": {
+          "label": "만들 가치가 있을까요?",
+          "kicker": "현실 점검"
+        },
+        "validation": {
+          "label": "사람들이 원할까요?",
+          "kicker": "시장"
+        }
+      },
+      "optional": "선택",
+      "readHint": "<b>읽기 전용입니다.</b> 이상한 부분이 있나요? 채팅에서 Motir에게 말하면 Motir가 문서를 다시 써 줍니다. 아직 확정된 것은 없습니다.",
+      "openQuestions": "열린 질문",
+      "crossLinksLabel": "방향의 다른 부분",
+      "related": "관련 항목"
+    },
     "landing": {
       "badge": "바이브 프로젝트",
       "headline": "무엇을 만들고 싶으신가요?",

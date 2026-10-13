@@ -6647,6 +6647,31 @@
       "logIn": "Entrar",
       "signUp": "Cadastrar-se"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Entendendo seu projeto",
+          "kicker": "O que você está construindo e para quem"
+        },
+        "vision": {
+          "label": "O que vamos construir",
+          "kicker": "O formato da v1"
+        },
+        "feasibility": {
+          "label": "Vale a pena construir?",
+          "kicker": "Um choque de realidade"
+        },
+        "validation": {
+          "label": "As pessoas vão querer?",
+          "kicker": "O mercado"
+        }
+      },
+      "optional": "opcional",
+      "readHint": "<b>Somente leitura.</b> Algo errado? É só dizer ao Motir no chat, e ele reescreve o documento para você. Nada está definido ainda.",
+      "openQuestions": "Perguntas em aberto",
+      "crossLinksLabel": "Outras partes da sua direção",
+      "related": "Relacionados"
+    },
     "landing": {
       "badge": "Projeto vibe",
       "headline": "O que você quer construir?",

@@ -14,14 +14,11 @@ import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/project
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import { Spinner } from '@/components/ui/Spinner';
 import { IdeaCard, StationCard } from './StationNode';
+import { useTierLabel } from './useTierLabel';
 import { useCanvasLayout } from '@/lib/hooks/useCanvasLayout';
 import { type DiscoveryState, shouldShowDesignStep } from '@/lib/onboarding/discoveryLoop';
 import { type StationKind, type StationView, buildStations } from '@/lib/onboarding/canvasModel';
-import {
-  isDirectionDocKind,
-  TIER_META,
-  type DirectionDocKind,
-} from '@/lib/onboarding/directionDoc';
+import { isDirectionDocKind, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
 import {
   CANVAS_NODE_KEYS,
   ROW_DESIGN_Y,
@@ -95,6 +92,7 @@ export function OnboardingCanvas({
   willRefresh = [],
 }: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
+  const tierLabel = useTierLabel();
   const { positions, savePosition, resetPositions, loaded } = useCanvasLayout();
 
   // Work-item levels cached (a mutable ref, keyed by project+parent — a new key
@@ -156,6 +154,7 @@ export function OnboardingCanvas({
         willRefresh,
         onOpenDesign,
         onContinueStep,
+        tierLabel,
       };
 
       // The work-item READ for this level: the roots (the produced epics) back the
@@ -216,6 +215,7 @@ export function OnboardingCanvas({
       onOpenDesign,
       onContinueStep,
       registerItems,
+      tierLabel,
     ],
   );
 
@@ -302,6 +302,8 @@ type LoadInputs = {
   willRefresh: DirectionDocKind[];
   onOpenDesign: () => void;
   onContinueStep?: () => void;
+  /** The tier title in the reader's language (`useTierLabel`) — the crumb. */
+  tierLabel: (kind: DirectionDocKind) => string;
 };
 
 /** The pre-plan station nodes (idea → tiers → design / plan), from the live state. */
@@ -346,7 +348,7 @@ function buildStationNodes(r: LoadInputs): ProjectCanvasNode[] {
       id: key,
       parentId: null,
       searchText: key,
-      crumbLabel: isDirectionDocKind(key) ? TIER_META[key].label : undefined,
+      crumbLabel: isDirectionDocKind(key) ? r.tierLabel(key) : undefined,
       drillable: false,
       viewable,
       content,

@@ -6641,6 +6641,31 @@
       "logIn": "Log in",
       "signUp": "Sign up"
     },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Understanding your project",
+          "kicker": "What you're building & who for"
+        },
+        "vision": {
+          "label": "What we'll build",
+          "kicker": "The shape of v1"
+        },
+        "feasibility": {
+          "label": "Is it worth building?",
+          "kicker": "A reality check"
+        },
+        "validation": {
+          "label": "Will people want it?",
+          "kicker": "The market"
+        }
+      },
+      "optional": "optional",
+      "readHint": "<b>Read-only.</b> Anything off? Just tell Motir in the chat — it rewrites the write-up for you. Nothing's locked yet.",
+      "openQuestions": "Open questions",
+      "crossLinksLabel": "Other parts of your direction",
+      "related": "Related"
+    },
     "landing": {
       "badge": "Vibe project",
       "headline": "What do you want to build?",

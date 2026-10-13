@@ -129,12 +129,20 @@ export interface FeatureCatalogView {
 // design (`design/ai-chat/design-notes.md`, screens D–G). Colour routes through
 // the `--el-*` swap layer (never `--color-*`): discovery → info, vision → the
 // brand accent, feasibility → success, validation → warning.
+//
+// The label and kicker are CATALOGUE KEYS, not copy (MOTIR-8331): they resolve
+// under `DIRECTION_DOC_NAMESPACE` in the reader's language, so a reader on 中文
+// never gets an English doc heading. Read them with `useTierLabel` or
+// `useTranslations(DIRECTION_DOC_NAMESPACE)`.
+
+/** The `next-intl` namespace every key in `TierMeta` is relative to. */
+export const DIRECTION_DOC_NAMESPACE = 'onboarding.directionDoc';
 
 export interface TierMeta {
-  /** The plain-language full-screen title (design screens D–G). */
-  label: string;
-  /** The mono kicker above the title (design `.doc-meta`). */
-  kicker: string;
+  /** Catalogue key of the plain-language full-screen title (design screens D–G). */
+  labelKey: string;
+  /** Catalogue key of the mono kicker above the title (design `.doc-meta`). */
+  kickerKey: string;
   /** Optional tiers (feasibility, validation) carry the "optional" tag. */
   optional: boolean;
   /** The tier accent `--el-*` token (the kicker dot + section accents). */
@@ -143,26 +151,26 @@ export interface TierMeta {
 
 export const TIER_META: Record<DirectionDocKind, TierMeta> = {
   discovery: {
-    label: 'Understanding your project',
-    kicker: "What you're building & who for",
+    labelKey: 'tiers.discovery.label',
+    kickerKey: 'tiers.discovery.kicker',
     optional: false,
     accentVar: '--el-info',
   },
   vision: {
-    label: "What we'll build",
-    kicker: 'The shape of v1',
+    labelKey: 'tiers.vision.label',
+    kickerKey: 'tiers.vision.kicker',
     optional: false,
     accentVar: '--el-accent-on-surface',
   },
   feasibility: {
-    label: 'Is it worth building?',
-    kicker: 'A reality check',
+    labelKey: 'tiers.feasibility.label',
+    kickerKey: 'tiers.feasibility.kicker',
     optional: true,
     accentVar: '--el-success',
   },
   validation: {
-    label: 'Will people want it?',
-    kicker: 'The market',
+    labelKey: 'tiers.validation.label',
+    kickerKey: 'tiers.validation.kicker',
     optional: true,
     accentVar: '--el-warning',
   },
