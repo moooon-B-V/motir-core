@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { DirectionDocView } from '@/components/onboarding/DirectionDocView';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 import type {
   DirectionDocView as DirectionDocModel,
   FeatureCatalogView as FeatureCatalogModel,
@@ -148,5 +150,37 @@ describe('DirectionDocView', () => {
     const { container } = render(<DirectionDocView doc={visionDoc} />);
     const article = container.querySelector('.dd-doc') as HTMLElement;
     expect(article.style.getPropertyValue('--dd-accent')).toBe('var(--el-accent-on-surface)');
+  });
+
+  // MOTIR-8331: the doc's own chrome (title, kicker, optional tag, read-only
+  // hint, open-questions callout, cross-links) follows the reader's language.
+  it('renders its chrome in the reader’s language, with no English left over', () => {
+    render(
+      <DirectionDocView
+        doc={{ kind: 'feasibility', contentMd: VISION_MD }}
+        availableDocs={['discovery']}
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    const zh = zhMessages.onboarding.directionDoc;
+    expect(
+      screen.getByRole('heading', { level: 1, name: zh.tiers.feasibility.label }),
+    ).toBeTruthy();
+    expect(screen.getByText(zh.tiers.feasibility.kicker)).toBeTruthy();
+    expect(screen.getByText(zh.optional)).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: zh.openQuestions })).toBeTruthy();
+    const nav = screen.getByRole('navigation', { name: zh.crossLinksLabel });
+    expect(within(nav).getByText(zh.tiers.discovery.label)).toBeTruthy();
+    for (const english of [
+      'Is it worth building?',
+      'A reality check',
+      'optional',
+      'Open questions',
+      'Related',
+      'Understanding your project',
+    ]) {
+      expect(screen.queryByText(english)).toBeNull();
+    }
+    expect(screen.queryByText(/Read-only/)).toBeNull();
   });
 });

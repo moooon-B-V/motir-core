@@ -807,7 +807,7 @@ export async function createCheckoutSession(input: {
    */
   quantity?: number;
   idempotencyKey?: string;
-}): Promise<{ url: string }> {
+}): Promise<CheckoutSessionOutcome> {
   const { url, serviceToken } = config();
   const res = await aiFetch(`${url}/v1/stripe/checkout-session`, {
     method: 'POST',
@@ -815,8 +815,24 @@ export async function createCheckoutSession(input: {
     body: JSON.stringify(input),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
-  return readSessionUrl(res);
+  const body: unknown = await res.clone().json();
+  const outcome = (body as { outcome?: unknown; livePriceLookupKey?: unknown }) ?? {};
+  // An org already on a live AI plan gets a pointer to the upgrade path, a normal
+  // 200 and never a second subscription (motir-ai MOTIR-8386).
+  if (outcome.outcome === 'existing_plan' && typeof outcome.livePriceLookupKey === 'string') {
+    return { outcome: 'existing_plan', livePriceLookupKey: outcome.livePriceLookupKey };
+  }
+  return { outcome: 'session', ...(await readSessionUrl(res)) };
 }
+
+/**
+ * What a checkout answers (motir-ai MOTIR-8386): a session to redirect to, or — for
+ * an org that already holds a live AI plan — the plan it holds, so the caller sends
+ * the person to the upgrade path instead of a second subscription.
+ */
+export type CheckoutSessionOutcome =
+  | { outcome: 'session'; url: string }
+  | { outcome: 'existing_plan'; livePriceLookupKey: string };
 
 // POST /v1/stripe/portal-session — open a short-lived Billing Portal session for
 // an org that already has a Stripe Customer, returning its URL (the client

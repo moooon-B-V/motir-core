@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Piano attuale",
       "ctaTrialUsed": "Prova usata",
       "footer": "È mostrata la fatturazione annuale (il valore predefinito di Stripe): passa a Mensile qui sopra per confrontare. Le imposte vengono applicate automaticamente al checkout. I crediti sono una dotazione d’uso interna; il prezzo mostrato è il costo del piano AI, fatturato da Stripe all’organizzazione {org}. Le tue postazioni Motir vengono fatturate separatamente: gestiscile nella schermata del piano Motir.",
-      "seatIncluded": "+ 1 postazione Motir · elementi di lavoro senza limiti",
+      "seatIncluded": "+ {count, plural, one {# postazione Motir} other {# postazioni Motir}} · elementi di lavoro senza limiti",
       "seatNone": "Nessuna postazione Motir · limite di 250 elementi",
       "seatCustom": "Postazioni Motir incluse (personalizzate)",
       "customPool": "Pool di crediti personalizzato",
@@ -6423,6 +6423,14 @@
           "features": [
             "Margine per un lavoro continuativo degli agenti",
             "Capacità per un team molto attivo"
+          ]
+        },
+        "max_x2": {
+          "useCase": "Pianificazione dettagliata, più lavoro degli agenti al doppio del volume di Max.",
+          "prev": "Max",
+          "features": [
+            "Il doppio della dotazione mensile di crediti di Max",
+            "Spazio per più agenti in esecuzione insieme"
           ]
         },
         "enterprise": {
@@ -6646,6 +6654,31 @@
       "docs": "Documentazione",
       "logIn": "Accedi",
       "signUp": "Registrati"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Capire il tuo progetto",
+          "kicker": "Cosa stai creando e per chi"
+        },
+        "vision": {
+          "label": "Cosa creeremo",
+          "kicker": "La forma della v1"
+        },
+        "feasibility": {
+          "label": "Vale la pena realizzarlo?",
+          "kicker": "Una verifica di realtà"
+        },
+        "validation": {
+          "label": "Le persone lo vorranno?",
+          "kicker": "Il mercato"
+        }
+      },
+      "optional": "facoltativo",
+      "readHint": "<b>Sola lettura.</b> Qualcosa non va? Dillo a Motir nella chat: riscriverà il documento per te. Non c'è ancora nulla di definitivo.",
+      "openQuestions": "Domande aperte",
+      "crossLinksLabel": "Altre parti della tua direzione",
+      "related": "Correlati"
     },
     "landing": {
       "badge": "Progetto vibe",

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import enMessages from '@/messages/en.json';
 import {
   stripLeadingTitle,
   splitOpenQuestions,
@@ -105,7 +106,14 @@ describe('tier metadata', () => {
   it('has plain-language labels and an --el-* accent for every tier in journey order', () => {
     for (const kind of DIRECTION_DOC_ORDER) {
       const meta = TIER_META[kind];
-      expect(meta.label.length).toBeGreaterThan(0);
+      // label + kicker are catalogue keys (MOTIR-8331), each resolving to copy
+      const ns = enMessages.onboarding.directionDoc as unknown as Record<string, unknown>;
+      for (const key of [meta.labelKey, meta.kickerKey]) {
+        const copy = key.split('.').reduce<unknown>((node, part) => {
+          return (node as Record<string, unknown> | undefined)?.[part];
+        }, ns);
+        expect(typeof copy === 'string' && copy.length > 0, key).toBe(true);
+      }
       expect(meta.accentVar.startsWith('--el-')).toBe(true);
     }
     // the optional tiers are exactly feasibility + validation

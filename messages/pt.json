@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Plano atual",
       "ctaTrialUsed": "Teste usado",
       "footer": "A cobrança anual (o padrão do Stripe) é a exibida — mude para Mensal acima para comparar. Os impostos são aplicados automaticamente no checkout. Créditos são uma cota interna de uso; o preço exibido é o valor do plano de IA, cobrado pelo Stripe da organização {org}. Suas licenças do Motir são cobradas separadamente — gerencie-as na tela do plano Motir.",
-      "seatIncluded": "+ 1 licença do Motir · itens de trabalho sem limite",
+      "seatIncluded": "+ {count, plural, one {# licença do Motir} other {# licenças do Motir}} · itens de trabalho sem limite",
       "seatNone": "Sem licença do Motir · cota de item de trabalho: 250",
       "seatCustom": "Licenças do Motir incluídas (personalizado)",
       "customPool": "Conjunto de créditos personalizado",
@@ -6423,6 +6423,14 @@
           "features": [
             "Folga para trabalho contínuo de agentes",
             "Capacidade para uma equipe movimentada"
+          ]
+        },
+        "max_x2": {
+          "useCase": "Planejamento detalhado, mais trabalho de agente no dobro do volume do Max.",
+          "prev": "Max",
+          "features": [
+            "O dobro do pacote mensal de créditos do Max",
+            "Espaço para vários agentes rodando ao mesmo tempo"
           ]
         },
         "enterprise": {
@@ -6646,6 +6654,31 @@
       "docs": "Documentação",
       "logIn": "Entrar",
       "signUp": "Cadastrar-se"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Entendendo seu projeto",
+          "kicker": "O que você está construindo e para quem"
+        },
+        "vision": {
+          "label": "O que vamos construir",
+          "kicker": "O formato da v1"
+        },
+        "feasibility": {
+          "label": "Vale a pena construir?",
+          "kicker": "Um choque de realidade"
+        },
+        "validation": {
+          "label": "As pessoas vão querer?",
+          "kicker": "O mercado"
+        }
+      },
+      "optional": "opcional",
+      "readHint": "<b>Somente leitura.</b> Algo errado? É só dizer ao Motir no chat, e ele reescreve o documento para você. Nada está definido ainda.",
+      "openQuestions": "Perguntas em aberto",
+      "crossLinksLabel": "Outras partes da sua direção",
+      "related": "Relacionados"
     },
     "landing": {
       "badge": "Projeto vibe",

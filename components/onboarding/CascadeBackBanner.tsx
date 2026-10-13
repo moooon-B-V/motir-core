@@ -2,7 +2,8 @@
 
 import { useTranslations } from 'next-intl';
 import { CornerUpLeft, LockOpen, RotateCw } from 'lucide-react';
-import { TIER_META, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import { useTierLabel } from './useTierLabel';
 
 // The downstream-only cascade BACK-navigation banner (Subtask 7.3.71 / MOTIR-1179,
 // design screen G3 — the `.gate-banner.back` peach variant). Shown at the top of
@@ -22,6 +23,7 @@ export interface CascadeBackBannerProps {
 
 export function CascadeBackBanner({ willRefresh }: CascadeBackBannerProps) {
   const t = useTranslations('onboarding.chat.revisions');
+  const tierLabel = useTierLabel();
 
   return (
     <div
@@ -49,7 +51,7 @@ export function CascadeBackBanner({ willRefresh }: CascadeBackBannerProps) {
                 className="inline-flex items-center gap-1 rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
               >
                 <RotateCw className="size-3.5 text-(--el-text-muted)" aria-hidden="true" />
-                {TIER_META[kind].label}
+                {tierLabel(kind)}
               </span>
             ))}
           </div>
