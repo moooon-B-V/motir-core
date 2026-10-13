@@ -20,6 +20,7 @@ import { getJob } from '@/lib/ai/motirAiClient';
 import { failureRecordFrom, type JobWalkStop } from '@/lib/planChange/failureRecord';
 import {
   sessionWaitingState,
+  type SessionWaitingRow,
   type SessionWaitingState,
 } from '@/lib/planChange/sessionWaitingState';
 import type { PlanJobStateDto } from '@/lib/dto/plans';
@@ -384,6 +385,38 @@ async function readFailedJobFacts(
   }
 }
 
+/** The open `conversation` / `mcp` session a candidate is the LATEST plan of — the session arm's
+ *  subject (MOTIR-7912) — or null when there is none. */
+async function findRecordableSession(plan: {
+  id: string;
+  workspaceId: string;
+  sessionId: string | null;
+}) {
+  if (!plan.sessionId) return null;
+  return withWorkspaceServiceContext(plan.workspaceId, async (tx) => {
+    const row = await planChangeSessionRepository.findById(plan.sessionId!, plan.workspaceId, tx);
+    if (!row || row.endedAt || !RECORDABLE_SESSION_ORIGINS.has(row.origin)) return null;
+    const latest = await planRepository.findLatestIdBySession(row.id, tx);
+    return latest === plan.id ? row : null;
+  });
+}
+
+/**
+ * Whether the session ALREADY holds the answer the job ask would bring, so the ask is
+ * pointless (MOTIR-8407). A session awaiting its person is kept whatever the job says, and
+ * a failed-waiting one whose recorded failure is for THIS plan's job is kept whatever the
+ * job says — the job cannot become less dead. A failure recorded for another job, or none,
+ * still asks. The outcome is the one {@link classifySessionCandidate} would reach.
+ */
+export function sessionAlreadyAnswers(
+  session: SessionWaitingRow & { failedJobId: string | null },
+  sourceJobId: string | null,
+): boolean {
+  const state = sessionWaitingState(session);
+  if (state === 'awaiting_person') return true;
+  return state === 'failed' && sourceJobId !== null && session.failedJobId === sourceJobId;
+}
+
 export const abandonedPlanService = {
   /**
    * One reconciliation pass: read every `generating` plan, stalest first, ask
@@ -447,6 +480,21 @@ export const abandonedPlanService = {
       // network call to motir-ai, and a slow one must never be holding a row. It is
       // asked even inside the silence threshold, because the fast path is the whole
       // reason to ask (MOTIR-8132).
+      //
+      // EXCEPT where the plan's session already holds the answer (MOTIR-8407). A plan waiting
+      // in To resume stays `generating` for ever by design, and asking motir-ai about its
+      // dead job on every 5-minute pass is a request that resets motir-ai's 300 s idle clock
+      // each time, so a planning machine never suspends.
+      const waitingSession = await findRecordableSession(plan);
+      if (waitingSession && sessionAlreadyAnswers(waitingSession, plan.sourceJobId)) {
+        outcomes.push({
+          planId: plan.id,
+          projectId: plan.projectId,
+          outcome: 'left_as_is',
+          reason: 'session_waiting',
+        });
+        continue;
+      }
       const job = plan.sourceJobId
         ? await deps.resolveJobState(plan.sourceJobId, plan.projectId)
         : null;
@@ -473,18 +521,7 @@ export const abandonedPlanService = {
       // is judged by the second table: a waiting session is spared, and a dead
       // producer is RECORDED on it rather than the plan being declined. Every other
       // plan falls through to the decline.
-      const session = plan.sessionId
-        ? await withWorkspaceServiceContext(plan.workspaceId, async (tx) => {
-            const row = await planChangeSessionRepository.findById(
-              plan.sessionId!,
-              plan.workspaceId,
-              tx,
-            );
-            if (!row || row.endedAt || !RECORDABLE_SESSION_ORIGINS.has(row.origin)) return null;
-            const latest = await planRepository.findLatestIdBySession(row.id, tx);
-            return latest === plan.id ? row : null;
-          })
-        : null;
+      const session = await findRecordableSession(plan);
       if (session) {
         const decision = classifySessionCandidate(sessionWaitingState(session), verdict);
         if (decision.action === 'keep') {
