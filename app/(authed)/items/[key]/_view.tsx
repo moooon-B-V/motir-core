@@ -61,7 +61,10 @@ import {
 } from './_components/OptimisticMarkProvider';
 import { PlacementProvider } from './_components/PlacementProvider';
 import { ItemTranslationOfferProvider } from './_components/ItemTranslationOfferProvider';
-import { workItemTranslationReadService } from '@/lib/services/workItemTranslationReadService';
+import {
+  workItemTranslationReadService,
+  type TranslationOfferInput,
+} from '@/lib/services/workItemTranslationReadService';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
 import { EpicNotPublicBlock, EpicNotPublicPill } from './_components/EpicNotPublic';
@@ -83,6 +86,33 @@ import { isMotirAiConfigured } from '@/lib/ai/availability';
 // readiness) and the Epic-5 extension slots (comments · attachments · custom
 // fields · activity). Cross-workspace / missing → 404 (no existence leak);
 // unauthenticated → /sign-in; no active project → a hint, not a crash.
+
+/**
+ * The translation half of the page read (Story MOTIR-7735 · MOTIR-8121). It
+ * CHAINS on two reads the tier-two wave already holds — the locale and the
+ * to-do list — and is awaited inside that same wave, so it adds no round trip.
+ * A function of its own so the page body shows ONE wave to the serial-read
+ * guard (`tests/navigation/loading-boundary-guard.test.ts`), which counts a
+ * `Promise.all` in the body as an awaited wave whether or not it is awaited
+ * there. A failed read degrades to no offer rather than rejecting the wave.
+ */
+function translationReadFor(
+  workItem: TranslationOfferInput['workItem'],
+  localeRead: Promise<Locale>,
+  todoListRead: ReturnType<typeof workItemTodosService.listTodos>,
+  ctx: TranslationOfferInput['ctx'],
+) {
+  return Promise.all([localeRead, todoListRead])
+    .then(([readerLocale, todos]) =>
+      workItemTranslationReadService.getTranslationOffer({
+        workItem,
+        todos: todos.items,
+        readerLocale,
+        ctx,
+      }),
+    )
+    .catch(() => null);
+}
 
 export default async function ItemView({
   ctx: pageCtx,
@@ -266,16 +296,7 @@ export default async function ItemView({
   // the group; the page then renders exactly as it did before the feature.
   const translationOfferRead = isVisitor
     ? null
-    : Promise.all([localeRead, todoListRead])
-        .then(([readerLocale, todos]) =>
-          workItemTranslationReadService.getTranslationOffer({
-            workItem: item,
-            todos: todos.items,
-            readerLocale,
-            ctx: svc,
-          }),
-        )
-        .catch(() => null);
+    : translationReadFor(item, localeRead, todoListRead, svc);
   const [
     members,
     sprints,

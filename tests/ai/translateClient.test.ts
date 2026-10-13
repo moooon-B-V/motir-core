@@ -13,7 +13,7 @@ import {
   requestTranslation,
   type TranslateClientDeps,
 } from '@/lib/ai/translateClient';
-import type { Tenant } from '@/lib/ai/types';
+import type { TranslateTenant } from '@/lib/ai/translateClient';
 import { OrgFeatureDisabledError } from '@/lib/featureFlags/errors';
 
 // `requestTranslation` (Story MOTIR-7735 · MOTIR-8119) with every seam stubbed —
@@ -21,7 +21,7 @@ import { OrgFeatureDisabledError } from '@/lib/featureFlags/errors';
 // produces, the door sees one of `ok` / `no_credit` / `failed` / `timeout`, and
 // only a programming error escapes as a throw.
 
-const tenant: Tenant = {
+const tenant: TranslateTenant = {
   organizationId: 'org-1',
   isMeta: false,
   internalBilling: false,

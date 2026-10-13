@@ -51,9 +51,18 @@ const defaultDeps: TranslateClientDeps = {
   now: () => Date.now(),
 };
 
+/**
+ * The tenant a translate job is submitted under, with `internalBilling` STATED.
+ * `Tenant.internalBilling` is optional on the wire (an omitted field reads as
+ * customer-billed), so a caller could compile without it; this input type takes
+ * that option away, which is what the envelope guard
+ * (`tests/internalBillingStoryGate.test.tsx` AC 6) asks of every submitter.
+ */
+export type TranslateTenant = Tenant & { internalBilling: boolean };
+
 export interface RequestTranslationInput {
   /** Resolved by the caller (`resolveTenantOrg`) — the org that owns the project pays. */
-  tenant: Tenant;
+  tenant: TranslateTenant;
   actor: RequestActor;
   targetLanguage: Locale;
   fields: TranslateJobInput['fields'];

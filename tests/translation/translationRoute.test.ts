@@ -146,6 +146,35 @@ describe('POST /api/work-items/[id]/translate — who may press', () => {
   });
 });
 
+describe('POST /api/work-items/[id]/translate — a reader who cannot open the project', () => {
+  // Found by `tests/visitor/visitorWriteRefusal.integration.test.ts` (R3): the
+  // item read's browse gate throws `ProjectAccessDeniedError`, which the route
+  // let through as a 500. It is a 404 now — the no-existence-leak answer.
+  it('404s a Limited member of the workspace who was not added to the project', async () => {
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'Geheimer Titel' });
+    const limited = await usersService.createUser({
+      email: 'limited@example.com',
+      password: 'hunter2hunter2',
+      name: 'Limited',
+    });
+    await adminDb.workspaceMembership.create({
+      data: {
+        userId: limited.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        accessScope: 'limited',
+      },
+    });
+    ctxRef.current = { userId: limited.id, workspaceId: fx.workspaceId };
+    const res = await post(item.id);
+    expect(res.status).toBe(404);
+    const body = await res.text();
+    expect(body).toContain('PROJECT_ACCESS_DENIED');
+    expect(body).not.toContain('Geheimer Titel');
+    expect(door).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/work-items/[id]/translate — the language is the session’s, never the request’s', () => {
   it('a body and a query naming another language, user and organisation change nothing', async () => {
     const item = await createTestWorkItem(fx, { kind: 'task', title: 'Den Export bauen' });

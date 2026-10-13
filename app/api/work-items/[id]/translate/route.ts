@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { workItemTranslationService } from '@/lib/services/workItemTranslationService';
+import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
@@ -22,7 +23,9 @@ import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 // 200 → TranslateResponseDTO. A `no_credit`, `failed` or `timeout` field is an
 //       ordinary 200 entry beside `ready` ones: other fields of the same press
 //       may have succeeded.
-// 401 → no session · 404 → no such item, or one the reader cannot open.
+// 401 → no session · 404 → no such item, or one the reader cannot open (a
+//       browse refusal is a 404, indistinguishable from a missing item — no
+//       existence leak) · 403 → an access refusal of another kind.
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -45,6 +48,14 @@ export async function POST(
     if (gated) return gated;
     if (err instanceof WorkItemNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    // The item read's browse gate (`projectAccessService.assertCanBrowse`):
+    // without this arm a reader who cannot open the project got a 500.
+    if (err instanceof ProjectAccessDeniedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message },
+        { status: err.kind === 'browse' ? 404 : 403 },
+      );
     }
     throw err;
   }

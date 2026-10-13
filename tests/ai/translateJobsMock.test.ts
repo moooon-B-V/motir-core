@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MockAgent, setGlobalDispatcher } from 'undici';
 import { db } from '@/lib/db';
-import type { Tenant } from '@/lib/ai/types';
+import type { TranslateTenant } from '@/lib/ai/translateClient';
 import type { AiJobsFixture, TranslateJobOutcome } from '@/lib/test-ai-jobs-mock';
 
 // The in-repo motir-ai mock's `translate` arm (Story MOTIR-7735 · MOTIR-8119),
@@ -43,7 +43,7 @@ const { getJob, submitJob } = await import('@/lib/ai/motirAiClient');
 
 // An org with no row: its switches evaluate as "no organization", which the
 // submit's kill-switch check lets through — nothing here is about the flags.
-const tenant: Tenant = {
+const tenant: TranslateTenant = {
   organizationId: 'org-translate-mock-none',
   isMeta: false,
   internalBilling: false,

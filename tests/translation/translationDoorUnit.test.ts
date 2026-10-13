@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { RequestTranslationInput } from '@/lib/ai/translateClient';
+import type { RequestTranslationInput, TranslateTenant } from '@/lib/ai/translateClient';
 import type { TranslateResult } from '@/lib/ai/translate';
-import type { Tenant } from '@/lib/ai/types';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import {
@@ -18,7 +17,7 @@ import { fieldLockKey } from '@/lib/services/translationSingleFlight';
 // store, the access gate, the tenant) is `tests/integration/translation/translationDoor.test.ts`.
 
 const ctx = { userId: 'u1', workspaceId: 'w1' };
-const tenant: Tenant = {
+const tenant: TranslateTenant = {
   organizationId: 'org-1',
   isMeta: false,
   internalBilling: false,

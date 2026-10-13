@@ -1,7 +1,6 @@
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { TranslatedField } from '@/lib/ai/translate';
-import { requestTranslation } from '@/lib/ai/translateClient';
-import type { Tenant } from '@/lib/ai/types';
+import { requestTranslation, type TranslateTenant } from '@/lib/ai/translateClient';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import type { TranslateResponseDTO } from '@/lib/dto/workItemTranslation';
@@ -60,7 +59,7 @@ export interface TranslationDoorDeps {
   store: Pick<typeof workItemTranslationStoreService, 'getKept' | 'keep'>;
   requestTranslation: typeof requestTranslation;
   withFieldLocks: typeof withFieldLocks;
-  resolveTenant: (ctx: ServiceContext, projectId: string) => Promise<Tenant>;
+  resolveTenant: (ctx: ServiceContext, projectId: string) => Promise<TranslateTenant>;
 }
 
 /** The item and its to-dos, through the same browse-gated reads every item surface uses. */
@@ -71,7 +70,7 @@ async function loadSubject(workItemId: string, ctx: ServiceContext) {
 }
 
 /** The payer: the organisation that owns the item's project — never anything from the request. */
-async function resolveTenant(ctx: ServiceContext, projectId: string): Promise<Tenant> {
+async function resolveTenant(ctx: ServiceContext, projectId: string): Promise<TranslateTenant> {
   const project = await readProject(projectId, ctx);
   if (!project || project.workspaceId !== ctx.workspaceId) {
     throw new WorkItemNotFoundError(projectId);
@@ -152,7 +151,7 @@ interface PressScope {
   item: WorkItemDto;
   targetLanguage: Locale;
   ctx: ServiceContext;
-  tenant: Tenant;
+  tenant: TranslateTenant;
   deps: TranslationDoorDeps;
 }
 
