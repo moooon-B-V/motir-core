@@ -579,7 +579,7 @@ test.describe('A plan change mid-period: upgrade now, downgrade at the period en
     onMax({ pendingDowngrade: { planKey: 'standard', effectiveDate: PERIOD_END } });
     await openBilling(page, seed);
     await openPlans(page);
-    await expect(page.getByTestId('plan-pending-downgrade')).toBeVisible();
+    await expect(card(page, MAX_X2.name).getByTestId('plan-pending-downgrade')).toBeVisible();
     setOrgBillingState(seed.organizationId, onPlan(MAX_X2, before + UPGRADE.extraCredits));
     await openBilling(page, seed);
     await openPlans(page);
