@@ -4,6 +4,7 @@ import {
   CHECKOUT_PRICE_LOOKUP_KEYS,
   INCLUDED_TRACKER_SEATS_PER_AI_PLAN,
   isAllowedCheckoutQuantity,
+  isKnownCheckoutPrice,
   maxMonthlyPlanCredits,
 } from '@/lib/billing/catalog';
 
@@ -138,5 +139,129 @@ describe('isAllowedCheckoutQuantity', () => {
     for (const key of ['tracker_monthly', 'tracker_annual']) {
       expect([1, 2, 5].map((q) => isAllowedCheckoutQuantity(key, q))).toEqual([true, false, false]);
     }
+  });
+});
+
+// MOTIR-8392 — the story's catalog gate: the rest of the figures and the guard's
+// full truth table, pinned as literals so any drift fails here.
+describe('the catalog gate (MOTIR-8392)', () => {
+  const PAID = ['standard', 'pro', 'max', 'max_x2'] as const;
+  const AI_KEYS = PAID.flatMap((k) => [`${k}_pool_monthly`, `${k}_pool_annual`]);
+
+  it('has exactly three top-level members and no plan-count field', () => {
+    expect(Object.keys(BILLING_CATALOG).sort()).toEqual(['aiPlans', 'creditTopup', 'seatPlan']);
+  });
+
+  it('prices every paid plan on both cadences, under _pool_monthly / _pool_annual keys', () => {
+    for (const key of PAID) {
+      const prices = plan(key).prices!;
+      expect(Object.keys(prices).sort()).toEqual(['annual', 'monthly']);
+      expect(prices.monthly.priceLookupKey).toBe(`${key}_pool_monthly`);
+      expect(prices.annual.priceLookupKey).toBe(`${key}_pool_annual`);
+    }
+  });
+
+  it('carries no Enterprise trace on any entry: no key, label or contact-sales field', () => {
+    const text = JSON.stringify(BILLING_CATALOG).toLowerCase();
+    expect(text).not.toContain('enterprise');
+    expect(text).not.toContain('contact');
+  });
+
+  it('exposes no cost or margin figure anywhere', () => {
+    const keys: string[] = [];
+    const walk = (v: unknown) => {
+      if (v && typeof v === 'object') {
+        for (const [k, child] of Object.entries(v)) {
+          keys.push(k);
+          walk(child);
+        }
+      }
+    };
+    walk(BILLING_CATALOG);
+    for (const banned of ['cost', 'margin', 'unitCost', 'multiples', 'quantity', 'perSeat']) {
+      expect(keys).not.toContain(banned);
+    }
+  });
+
+  it('states the included seat once: a non-negative integer, equal on every paid plan', () => {
+    for (const entry of BILLING_CATALOG.aiPlans) {
+      expect(Number.isInteger(entry.includedTrackerSeats)).toBe(true);
+      expect(entry.includedTrackerSeats).toBeGreaterThanOrEqual(0);
+    }
+    for (const key of PAID) {
+      expect(plan(key).includedTrackerSeats).toBe(INCLUDED_TRACKER_SEATS_PER_AI_PLAN);
+    }
+  });
+
+  it('keeps the seat plan apart from the AI plans', () => {
+    const seat = BILLING_CATALOG.seatPlan as unknown as Record<string, unknown>;
+    expect(seat['allotment']).toBeUndefined();
+    expect(seat['includedTrackerSeats']).toBeUndefined();
+    const aiKeys = BILLING_CATALOG.aiPlans.flatMap((p) =>
+      p.prices ? [p.prices.monthly.priceLookupKey, p.prices.annual.priceLookupKey] : [],
+    );
+    expect(aiKeys.filter((k) => k.startsWith('tracker_'))).toEqual([]);
+  });
+
+  it('maxMonthlyPlanCredits is the largest monthly pool across the entries', () => {
+    const pools = BILLING_CATALOG.aiPlans
+      .filter((p) => p.allotment?.cadence === 'monthly')
+      .map((p) => p.allotment!.credits);
+    expect(maxMonthlyPlanCredits()).toBe(Math.max(...pools));
+  });
+
+  it('prices a top-up credit at $0.005, bundles at $5 / $25 / $50', () => {
+    const t = BILLING_CATALOG.creditTopup;
+    expect(t.unitAmountUsd / t.unitCredits).toBeCloseTo(0.005, 6);
+    expect(t.bundleUnits.map((u) => u * t.unitAmountUsd)).toEqual([5, 25, 50]);
+  });
+
+  it('pins the credit price: Max and Max ×2 match per cadence, top-up is 1.5× annual', () => {
+    const perAnnual = (key: string) =>
+      plan(key).prices!.annual.amountUsd / (12 * plan(key).allotment!.credits);
+    const perMonthly = (key: string) =>
+      plan(key).prices!.monthly.amountUsd / plan(key).allotment!.credits;
+    const topup =
+      BILLING_CATALOG.creditTopup.unitAmountUsd / BILLING_CATALOG.creditTopup.unitCredits;
+    expect(perAnnual('max')).toBeCloseTo(0.00333, 5);
+    expect(perAnnual('max_x2')).toBeCloseTo(0.00333, 5);
+    expect(perMonthly('max')).toBeCloseTo(0.005, 6);
+    expect(perMonthly('max_x2')).toBeCloseTo(0.005, 6);
+    expect(topup).toBeCloseTo(perMonthly('max'), 6);
+    expect(topup / perAnnual('max')).toBeCloseTo(1.5, 5);
+  });
+
+  it.each(AI_KEYS)('never admits %s above or below 1', (key) => {
+    expect(isAllowedCheckoutQuantity(key, 1)).toBe(true);
+    for (const q of [2, 3, 0, -1, 1.5, Number.NaN]) {
+      expect(isAllowedCheckoutQuantity(key, q)).toBe(false);
+    }
+  });
+
+  it('refuses an unlisted key above 1, and the top-up off its bundles', () => {
+    expect(isAllowedCheckoutQuantity('not_a_price', 2)).toBe(false);
+    expect(isAllowedCheckoutQuantity('credit_topup', 2)).toBe(false);
+    expect(isAllowedCheckoutQuantity('credit_topup', 20)).toBe(false);
+  });
+
+  it('reads the bundle rule from the data, while the plan rule stays 1', () => {
+    const original = BILLING_CATALOG.creditTopup;
+    BILLING_CATALOG.creditTopup = { ...original, bundleUnits: [1, 3] };
+    try {
+      expect(isAllowedCheckoutQuantity('credit_topup', 3)).toBe(true);
+      expect(isAllowedCheckoutQuantity('credit_topup', 5)).toBe(false);
+      expect(isAllowedCheckoutQuantity('max_x2_pool_annual', 3)).toBe(false);
+    } finally {
+      BILLING_CATALOG.creditTopup = original;
+    }
+  });
+
+  it('knows every listed key and no other', () => {
+    expect(isKnownCheckoutPrice('max_x2_pool_monthly')).toBe(true);
+    expect(isKnownCheckoutPrice('enterprise_pool_annual')).toBe(false);
+  });
+
+  it('takes no organisation input: the guard is (key, quantity) only', () => {
+    expect(isAllowedCheckoutQuantity.length).toBe(2);
   });
 });
