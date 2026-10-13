@@ -8147,17 +8147,6 @@
           "body3": "확정한 내용은 계획의 요구사항에 기록되고, 계획은 거기서 시작합니다."
         },
         "hint": "다음 메시지부터 질문이 시작됩니다."
-      },
-      "question": {
-        "label": "질문 중 · 질문 {n}",
-        "recommended": "추천",
-        "recommendedName": "{label} (추천)",
-        "somethingElse": "다른 답…",
-        "skip": "건너뛰기",
-        "youDecide": "알아서 결정",
-        "stop": "질문 그만하기",
-        "ownWordsPlaceholder": "직접 답하기…",
-        "composerPlaceholder": "또는 직접 답을 입력하세요…"
       }
     }
   },
@@ -14209,5 +14198,50 @@
       "unavailable": "사용할 수 없는 작업 항목",
       "unavailableTitle": "이 작업 항목은 삭제되었거나 볼 수 없습니다."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "질문 중 · 질문 {n}",
+      "recommended": "추천",
+      "recommendedName": "{label} (추천)",
+      "somethingElse": "다른 답…",
+      "skip": "건너뛰기",
+      "youDecide": "알아서 결정",
+      "stop": "질문 그만하기",
+      "ownWordsPlaceholder": "직접 답하기…",
+      "composerPlaceholder": "또는 직접 답을 입력하세요…",
+      "because": "“{answer}”을(를) 선택했으므로…",
+      "yourThread": "내 주제",
+      "youSaid": "내가 한 말: “{words}”"
+    },
+    "markers": {
+      "opening": "질문 공세가 켜져 있습니다. 계획 전에 한 번에 하나씩 묻습니다. 답을 고르거나, 건너뛰거나, 언제든 멈추세요.",
+      "skipped": "건너뜀: 이 부분은 플래너가 가정합니다.",
+      "completed": "물어볼 것은 다 물었습니다.",
+      "nothingToAsk": "물어볼 것이 없습니다. 계획하기에 충분히 명확합니다. 지금 계획을 작성합니다.",
+      "stopped": "질문을 멈췄습니다.",
+      "stoppedNoAnswer": "답하기 전에 질문을 멈췄습니다. 아무것도 기록되지 않았습니다."
+    },
+    "summary": {
+      "title": "확정한 내용",
+      "counts": "{answers, plural, other {답변 #개}} · {assumptions, plural, other {플래너 가정 #개}}",
+      "groups": {
+        "behaviour": "동작",
+        "scopeEdge": "범위 경계",
+        "constraints": "제약",
+        "acceptance": "수락",
+        "assumptions": "가정"
+      },
+      "youAnswered": "내 답변",
+      "plannersAssumption": "플래너의 가정",
+      "writing": "답변을 계획의 요구사항과 <item></item>에 기록하는 중…",
+      "writingPlanOnly": "답변을 계획의 요구사항에 기록하는 중…",
+      "written": "계획의 요구사항과 <item></item>에 기록했습니다.",
+      "writtenPlanOnly": "계획의 요구사항에 기록했습니다.",
+      "failed": "답변이 기록되지 않았습니다. 답변은 여기에 그대로 있습니다.",
+      "copy": "답변 복사"
+    },
+    "error": "질문이 도착하지 않았습니다. 지금까지의 답변은 유지됩니다. 다시 시도하세요.",
+    "retry": "다시 시도"
   }
 }

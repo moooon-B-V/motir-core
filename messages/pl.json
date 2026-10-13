@@ -8153,17 +8153,6 @@
           "body3": "To, co ustalisz, trafia do wymagania planu i od tego zaczyna się planowanie."
         },
         "hint": "Twoja następna wiadomość rozpocznie przepytywanie."
-      },
-      "question": {
-        "label": "pytanie · pytanie {n}",
-        "recommended": "Zalecana",
-        "recommendedName": "{label} (zalecana)",
-        "somethingElse": "Coś innego…",
-        "skip": "Pomiń",
-        "youDecide": "Ty zdecyduj",
-        "stop": "Zakończ przepytywanie",
-        "ownWordsPlaceholder": "Odpowiedz własnymi słowami…",
-        "composerPlaceholder": "Albo wpisz własną odpowiedź…"
       }
     }
   },
@@ -14215,5 +14204,50 @@
       "unavailable": "Niedostępny element roboczy",
       "unavailableTitle": "Ten element roboczy został usunięty lub nie masz do niego dostępu."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "pytanie · pytanie {n}",
+      "recommended": "Zalecana",
+      "recommendedName": "{label} (zalecana)",
+      "somethingElse": "Coś innego…",
+      "skip": "Pomiń",
+      "youDecide": "Ty zdecyduj",
+      "stop": "Zakończ przepytywanie",
+      "ownWordsPlaceholder": "Odpowiedz własnymi słowami…",
+      "composerPlaceholder": "Albo wpisz własną odpowiedź…",
+      "because": "Ponieważ wybrano „{answer}”…",
+      "yourThread": "Twój wątek",
+      "youSaid": "Powiedziano: „{words}”"
+    },
+    "markers": {
+      "opening": "Przepytaj mnie jest włączone: po jednym pytaniu przed planowaniem. Wybierz odpowiedź, pomiń ją albo przerwij w dowolnej chwili.",
+      "skipped": "Pominięto: planista przyjmie tu założenie.",
+      "completed": "To wszystko, o co musiałem zapytać.",
+      "nothingToAsk": "Nie mam pytań: to wystarczająco jasne, by planować. Teraz piszę plan.",
+      "stopped": "Przerwano przepytywanie.",
+      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią. Nic nie zostało zapisane."
+    },
+    "summary": {
+      "title": "Co ustalono",
+      "counts": "{answers, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}} · {assumptions, plural, one {# założenie planisty} few {# założenia planisty} many {# założeń planisty} other {# założenia planisty}}",
+      "groups": {
+        "behaviour": "Zachowanie",
+        "scopeEdge": "Granica zakresu",
+        "constraints": "Ograniczenia",
+        "acceptance": "Akceptacja",
+        "assumptions": "Założenia"
+      },
+      "youAnswered": "Twoja odpowiedź",
+      "plannersAssumption": "Założenie planisty",
+      "writing": "Zapisywanie odpowiedzi w wymaganiu planu i w <item></item>…",
+      "writingPlanOnly": "Zapisywanie odpowiedzi w wymaganiu planu…",
+      "written": "Zapisano w wymaganiu planu i w <item></item>.",
+      "writtenPlanOnly": "Zapisano w wymaganiu planu.",
+      "failed": "Odpowiedzi nie zostały zapisane. Nadal są tutaj.",
+      "copy": "Kopiuj odpowiedzi"
+    },
+    "error": "To pytanie nie dotarło. Dotychczasowe odpowiedzi są zachowane — spróbuj ponownie.",
+    "retry": "Spróbuj ponownie"
   }
 }

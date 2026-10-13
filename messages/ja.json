@@ -8153,17 +8153,6 @@
           "body3": "決まった内容は計画の要件に書き込まれ、計画はそこから始まります。"
         },
         "hint": "次のメッセージで質問が始まります。"
-      },
-      "question": {
-        "label": "質問中 · 質問 {n}",
-        "recommended": "推奨",
-        "recommendedName": "{label}（推奨）",
-        "somethingElse": "別の回答…",
-        "skip": "スキップ",
-        "youDecide": "おまかせ",
-        "stop": "質問をやめる",
-        "ownWordsPlaceholder": "自分の言葉で回答…",
-        "composerPlaceholder": "または自分の回答を入力…"
       }
     }
   },
@@ -14215,5 +14204,50 @@
       "unavailable": "利用できない作業項目",
       "unavailableTitle": "この作業項目は削除されたか、あなたには表示されません。"
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "質問中 · 質問 {n}",
+      "recommended": "推奨",
+      "recommendedName": "{label}（推奨）",
+      "somethingElse": "別の回答…",
+      "skip": "スキップ",
+      "youDecide": "おまかせ",
+      "stop": "質問をやめる",
+      "ownWordsPlaceholder": "自分の言葉で回答…",
+      "composerPlaceholder": "または自分の回答を入力…",
+      "because": "「{answer}」を選んだので…",
+      "yourThread": "あなたの話題",
+      "youSaid": "あなたの発言：「{words}」"
+    },
+    "markers": {
+      "opening": "質問攻めがオンです。計画の前に一度に一つずつ質問します。回答を選ぶ、スキップする、いつでもやめる、のいずれもできます。",
+      "skipped": "スキップしました。この点はプランナーが仮定します。",
+      "completed": "聞くべきことはすべて聞きました。",
+      "nothingToAsk": "聞くことはありません。計画できるだけ明確です。今から計画を書きます。",
+      "stopped": "質問を止めました。",
+      "stoppedNoAnswer": "回答する前に質問を止めました。何も書き込まれていません。"
+    },
+    "summary": {
+      "title": "決まったこと",
+      "counts": "{answers, plural, other {回答 # 件}} · {assumptions, plural, other {プランナーの仮定 # 件}}",
+      "groups": {
+        "behaviour": "動作",
+        "scopeEdge": "スコープの境界",
+        "constraints": "制約",
+        "acceptance": "受け入れ",
+        "assumptions": "仮定"
+      },
+      "youAnswered": "あなたの回答",
+      "plannersAssumption": "プランナーの仮定",
+      "writing": "回答を計画の要件と <item></item> に書き込んでいます…",
+      "writingPlanOnly": "回答を計画の要件に書き込んでいます…",
+      "written": "計画の要件と <item></item> に書き込みました。",
+      "writtenPlanOnly": "計画の要件に書き込みました。",
+      "failed": "回答は書き込まれませんでした。回答はここに残っています。",
+      "copy": "回答をコピー"
+    },
+    "error": "その質問は届きませんでした。これまでの回答は保持されています。もう一度お試しください。",
+    "retry": "再試行"
   }
 }

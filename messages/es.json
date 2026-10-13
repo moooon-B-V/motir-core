@@ -8156,17 +8156,6 @@
           "body3": "Lo que decidas se escribe en el requisito del plan, y la planificación parte de ahí."
         },
         "hint": "Tu próximo mensaje inicia las preguntas."
-      },
-      "question": {
-        "label": "preguntando · pregunta {n}",
-        "recommended": "Recomendada",
-        "recommendedName": "{label} (recomendada)",
-        "somethingElse": "Otra cosa…",
-        "skip": "Omitir",
-        "youDecide": "Decide tú",
-        "stop": "Dejar de preguntar",
-        "ownWordsPlaceholder": "Responde con tus propias palabras…",
-        "composerPlaceholder": "O escribe tu propia respuesta…"
       }
     }
   },
@@ -14218,5 +14207,50 @@
       "unavailable": "Elemento de trabajo no disponible",
       "unavailableTitle": "Este elemento de trabajo se eliminó o no puedes verlo."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "preguntando · pregunta {n}",
+      "recommended": "Recomendada",
+      "recommendedName": "{label} (recomendada)",
+      "somethingElse": "Otra cosa…",
+      "skip": "Omitir",
+      "youDecide": "Decide tú",
+      "stop": "Dejar de preguntar",
+      "ownWordsPlaceholder": "Responde con tus propias palabras…",
+      "composerPlaceholder": "O escribe tu propia respuesta…",
+      "because": "Como elegiste «{answer}»…",
+      "yourThread": "Tu tema",
+      "youSaid": "Dijiste: «{words}»"
+    },
+    "markers": {
+      "opening": "Interrógame está activado: una pregunta cada vez antes de planificar. Elige una respuesta, omítela o detente cuando quieras.",
+      "skipped": "Omitida: el planificador asumirá esta.",
+      "completed": "Eso es todo lo que necesitaba preguntar.",
+      "nothingToAsk": "No tengo nada que preguntar: esto está lo bastante claro para planificar. Ahora escribo el plan.",
+      "stopped": "Detuviste las preguntas.",
+      "stoppedNoAnswer": "Detuviste las preguntas antes de responder ninguna. No se escribió nada."
+    },
+    "summary": {
+      "title": "Lo que decidiste",
+      "counts": "{answers, plural, one {# respuesta} other {# respuestas}} · {assumptions, plural, one {# suposición del planificador} other {# suposiciones del planificador}}",
+      "groups": {
+        "behaviour": "Comportamiento",
+        "scopeEdge": "Límite del alcance",
+        "constraints": "Restricciones",
+        "acceptance": "Aceptación",
+        "assumptions": "Suposiciones"
+      },
+      "youAnswered": "Tu respuesta",
+      "plannersAssumption": "Suposición del planificador",
+      "writing": "Escribiendo tus respuestas en el requisito del plan y en <item></item>…",
+      "writingPlanOnly": "Escribiendo tus respuestas en el requisito del plan…",
+      "written": "Escrito en el requisito del plan y en <item></item>.",
+      "writtenPlanOnly": "Escrito en el requisito del plan.",
+      "failed": "Tus respuestas no se escribieron. Siguen aquí.",
+      "copy": "Copiar respuestas"
+    },
+    "error": "Esa pregunta no llegó. Tus respuestas hasta ahora se conservan: inténtalo de nuevo.",
+    "retry": "Reintentar"
   }
 }

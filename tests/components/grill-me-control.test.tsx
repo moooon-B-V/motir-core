@@ -253,7 +253,7 @@ describe('Grill me — opt-in only', () => {
     expect(client.openSharpen).not.toHaveBeenCalled();
     expect(client.sharpenAct).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('grill-question')).toBeNull();
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
   });
 
   it('a run starting with it off opens no session', async () => {
@@ -284,10 +284,10 @@ describe('Grill me — the route', () => {
     expect(client.openSharpen).toHaveBeenCalledTimes(1);
     expect(client.openSharpen.mock.calls[0]![0]).toEqual({ planId: 'plan-1' });
     expect(client.settleSharpen).toHaveBeenCalledWith('sh1', 'sj1', expect.anything());
-    const question = await screen.findByTestId('grill-question');
+    const question = await screen.findByTestId('sharpen-question');
     expect(question.textContent).toContain('Who can use a shared preset?');
     expect(question.textContent).toContain('asking · question 1');
-    expect(screen.getByTestId('grill-reading-r1').getAttribute('aria-label')).toBe(
+    expect(screen.getByTestId('sharpen-reading-r1').getAttribute('aria-label')).toBe(
       'Everyone in the project (recommended)',
     );
     // The control stays, without the "next message" hint, while it grills.
@@ -296,11 +296,11 @@ describe('Grill me — the route', () => {
 
   it('sends each act as exactly one act, disables the rest while it is in flight, and keeps Stop', async () => {
     await grilling();
-    await screen.findByTestId('grill-question');
+    await screen.findByTestId('sharpen-question');
     let release!: (v: unknown) => void;
     client.sharpenAct.mockReturnValueOnce(new Promise((r) => (release = r)));
     await act(async () => {
-      fireEvent.click(screen.getByTestId('grill-reading-r1'));
+      fireEvent.click(screen.getByTestId('sharpen-reading-r1'));
     });
     expect(client.sharpenAct).toHaveBeenCalledTimes(1);
     expect(client.sharpenAct.mock.calls[0]!.slice(0, 3)).toEqual([
@@ -308,11 +308,11 @@ describe('Grill me — the route', () => {
       'answer',
       { readingId: 'r1' },
     ]);
-    expect((screen.getByTestId('grill-reading-r2') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('grill-skip') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('grill-you-decide') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('grill-stop') as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(screen.getByTestId('grill-skip'));
+    expect((screen.getByTestId('sharpen-reading-r2') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('sharpen-skip') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('sharpen-you-decide') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('sharpen-stop') as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByTestId('sharpen-skip'));
     expect(client.sharpenAct).toHaveBeenCalledTimes(1);
     await act(async () => {
       release({ outcome: 'sharpening', jobId: null, turnId: 'st2', session: sharpen() });
@@ -321,7 +321,7 @@ describe('Grill me — the route', () => {
 
   it('a typed message while the question waits is an own-words answer, not a turn', async () => {
     await grilling();
-    await screen.findByTestId('grill-question');
+    await screen.findByTestId('sharpen-question');
     client.sharpenAct.mockResolvedValueOnce({
       outcome: 'sharpening',
       jobId: null,
@@ -343,7 +343,7 @@ describe('Grill me — the route', () => {
 
   it('switching it off while it grills is Stop grilling', async () => {
     await grilling();
-    await screen.findByTestId('grill-question');
+    await screen.findByTestId('sharpen-question');
     client.sharpenAct.mockResolvedValueOnce({
       outcome: 'sharpening',
       jobId: null,
@@ -358,11 +358,11 @@ describe('Grill me — the route', () => {
 
   it('the hand-off hides the interview and the control, and discards nothing', async () => {
     const view = await grilling();
-    await screen.findByTestId('grill-question');
+    await screen.findByTestId('sharpen-question');
     await act(async () => {
       view.rerender(rail({ ...PLANNING, session: session('s1', [userTurn(1, 'Presets')]) }));
     });
-    expect(screen.queryByTestId('grill-question')).toBeNull();
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
     expect(screen.queryByTestId('grill-me-control')).toBeNull();
     expect(client.sharpenAct).not.toHaveBeenCalled();
   });

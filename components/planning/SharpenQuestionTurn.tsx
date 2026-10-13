@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { PenLine, Square } from 'lucide-react';
+import { Code, GitBranch, PenLine, Square } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Bubble } from '@/components/planning/PlanChangeRail';
@@ -17,7 +17,7 @@ import type { SharpenAction, SharpenQuestion } from '@/lib/ai/types';
 // decide · Stop grilling. Every act is ONE act; all of them are disabled while one
 // is in flight, except Stop grilling, which is always reachable.
 
-export interface GrillQuestionTurnProps {
+export interface SharpenQuestionTurnProps {
   question: SharpenQuestion;
   /** 1-based — "asking · question N". */
   number: number;
@@ -30,7 +30,7 @@ export interface GrillQuestionTurnProps {
   onSomethingElse: () => void;
 }
 
-export function GrillQuestionTurn({
+export function SharpenQuestionTurn({
   question,
   number,
   pending,
@@ -38,17 +38,32 @@ export function GrillQuestionTurn({
   onAct,
   onStop,
   onSomethingElse,
-}: GrillQuestionTurnProps) {
-  const t = useTranslations('planningWorkspace.grill.question');
+}: SharpenQuestionTurnProps) {
+  const t = useTranslations('sharpen.question');
 
   return (
-    <div className="flex flex-col gap-2" data-testid="grill-question">
+    <div className="flex flex-col gap-2" data-testid="sharpen-question">
       <Bubble
         role="assistant"
         tone="asking"
         label={t('label', { n: number })}
         {...(anchorId ? { anchorId } : {})}
       >
+        {question.because ? (
+          <p className="mb-1 flex items-center gap-1 text-xs text-(--el-text-secondary)">
+            <GitBranch className="size-3.5" aria-hidden />
+            {t('because', { answer: question.because })}
+          </p>
+        ) : null}
+        {question.topic === 'technical_thread' ? (
+          <p className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-(--el-text-secondary)">
+            <span className="inline-flex items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-sky) px-(--spacing-chip-x) py-(--spacing-chip-y) font-semibold text-(--el-text-strong)">
+              <Code className="size-3" aria-hidden />
+              {t('yourThread')}
+            </span>
+            {question.quote ? <span>{t('youSaid', { words: question.quote })}</span> : null}
+          </p>
+        ) : null}
         <p className="text-(--el-text)">{question.text}</p>
         <ul className="mt-2 flex flex-col gap-1">
           {question.readings.map((reading) => (
@@ -66,14 +81,14 @@ export function GrillQuestionTurn({
           ))}
         </ul>
       </Bubble>
-      <div className="flex flex-col gap-1.5 pl-9" data-testid="grill-replies">
+      <div className="flex flex-col gap-1.5 pl-9" data-testid="sharpen-replies">
         <div className="flex flex-wrap gap-1.5">
           {question.readings.map((reading) => (
             <Button
               key={reading.id}
               variant={reading.recommended ? 'primary' : 'secondary'}
               size="sm"
-              data-testid={`grill-reading-${reading.id}`}
+              data-testid={`sharpen-reading-${reading.id}`}
               aria-label={
                 reading.recommended ? t('recommendedName', { label: reading.label }) : reading.label
               }
@@ -88,7 +103,7 @@ export function GrillQuestionTurn({
           <Button
             variant="secondary"
             size="sm"
-            data-testid="grill-something-else"
+            data-testid="sharpen-something-else"
             leftIcon={<PenLine className="size-4" aria-hidden />}
             disabled={pending}
             onClick={onSomethingElse}
@@ -98,7 +113,7 @@ export function GrillQuestionTurn({
           <Button
             variant="ghost"
             size="sm"
-            data-testid="grill-skip"
+            data-testid="sharpen-skip"
             disabled={pending}
             onClick={() => onAct('skip')}
           >
@@ -107,7 +122,7 @@ export function GrillQuestionTurn({
           <Button
             variant="ghost"
             size="sm"
-            data-testid="grill-you-decide"
+            data-testid="sharpen-you-decide"
             disabled={pending}
             onClick={() => onAct('you_decide')}
           >
@@ -116,7 +131,7 @@ export function GrillQuestionTurn({
           <Button
             variant="ghost"
             size="sm"
-            data-testid="grill-stop"
+            data-testid="sharpen-stop"
             leftIcon={<Square className="size-4" aria-hidden />}
             onClick={onStop}
           >

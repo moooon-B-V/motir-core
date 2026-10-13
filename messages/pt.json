@@ -8156,17 +8156,6 @@
           "body3": "O que você definir é escrito no requisito do plano, e o planejamento começa a partir disso."
         },
         "hint": "Sua próxima mensagem inicia as perguntas."
-      },
-      "question": {
-        "label": "perguntando · pergunta {n}",
-        "recommended": "Recomendada",
-        "recommendedName": "{label} (recomendada)",
-        "somethingElse": "Outra coisa…",
-        "skip": "Pular",
-        "youDecide": "Você decide",
-        "stop": "Parar as perguntas",
-        "ownWordsPlaceholder": "Responda com suas próprias palavras…",
-        "composerPlaceholder": "Ou digite sua própria resposta…"
       }
     }
   },
@@ -14218,5 +14207,50 @@
       "unavailable": "Item de trabalho indisponível",
       "unavailableTitle": "Este item de trabalho foi excluído, ou você não pode vê-lo."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "perguntando · pergunta {n}",
+      "recommended": "Recomendada",
+      "recommendedName": "{label} (recomendada)",
+      "somethingElse": "Outra coisa…",
+      "skip": "Pular",
+      "youDecide": "Você decide",
+      "stop": "Parar as perguntas",
+      "ownWordsPlaceholder": "Responda com suas próprias palavras…",
+      "composerPlaceholder": "Ou digite sua própria resposta…",
+      "because": "Como você escolheu “{answer}”…",
+      "yourThread": "Seu tema",
+      "youSaid": "Você disse: “{words}”"
+    },
+    "markers": {
+      "opening": "Me questione está ativado: uma pergunta por vez antes de planejar. Escolha uma resposta, pule ou pare quando quiser.",
+      "skipped": "Pulada: o planejador vai assumir esta.",
+      "completed": "Isso é tudo o que eu precisava perguntar.",
+      "nothingToAsk": "Não tenho nada a perguntar: isso está claro o bastante para planejar. Vou escrever o plano agora.",
+      "stopped": "Você parou as perguntas.",
+      "stoppedNoAnswer": "Você parou as perguntas antes de qualquer resposta. Nada foi escrito."
+    },
+    "summary": {
+      "title": "O que você definiu",
+      "counts": "{answers, plural, one {# resposta} other {# respostas}} · {assumptions, plural, one {# suposição do planejador} other {# suposições do planejador}}",
+      "groups": {
+        "behaviour": "Comportamento",
+        "scopeEdge": "Limite do escopo",
+        "constraints": "Restrições",
+        "acceptance": "Aceitação",
+        "assumptions": "Suposições"
+      },
+      "youAnswered": "Sua resposta",
+      "plannersAssumption": "Suposição do planejador",
+      "writing": "Escrevendo suas respostas no requisito do plano e em <item></item>…",
+      "writingPlanOnly": "Escrevendo suas respostas no requisito do plano…",
+      "written": "Escrito no requisito do plano e em <item></item>.",
+      "writtenPlanOnly": "Escrito no requisito do plano.",
+      "failed": "Suas respostas não foram escritas. Elas continuam aqui.",
+      "copy": "Copiar respostas"
+    },
+    "error": "Essa pergunta não chegou. Suas respostas até agora foram mantidas — tente de novo.",
+    "retry": "Tentar de novo"
   }
 }

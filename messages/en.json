@@ -8150,17 +8150,6 @@
           "body3": "What you settle is written into the plan's requirement, and planning starts from it."
         },
         "hint": "Your next message starts the grilling."
-      },
-      "question": {
-        "label": "asking · question {n}",
-        "recommended": "Recommended",
-        "recommendedName": "{label} (recommended)",
-        "somethingElse": "Something else…",
-        "skip": "Skip",
-        "youDecide": "You decide",
-        "stop": "Stop grilling",
-        "ownWordsPlaceholder": "Answer in your own words…",
-        "composerPlaceholder": "Or type your own answer…"
       }
     }
   },
@@ -14212,5 +14201,50 @@
       "unavailable": "Unavailable work item",
       "unavailableTitle": "This work item was deleted, or you can’t see it."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "asking · question {n}",
+      "recommended": "Recommended",
+      "recommendedName": "{label} (recommended)",
+      "somethingElse": "Something else…",
+      "skip": "Skip",
+      "youDecide": "You decide",
+      "stop": "Stop grilling",
+      "ownWordsPlaceholder": "Answer in your own words…",
+      "composerPlaceholder": "Or type your own answer…",
+      "because": "Because you chose “{answer}”…",
+      "yourThread": "Your thread",
+      "youSaid": "You said: “{words}”"
+    },
+    "markers": {
+      "opening": "Grill me is on — one question at a time before planning. Pick an answer, skip it, or stop whenever you like.",
+      "skipped": "Skipped — the planner will assume this one.",
+      "completed": "That's everything I needed to ask.",
+      "nothingToAsk": "I have nothing to ask — this is clear enough to plan. I'm writing the plan now.",
+      "stopped": "You stopped the grilling.",
+      "stoppedNoAnswer": "You stopped the grilling before any answer. Nothing was written."
+    },
+    "summary": {
+      "title": "What you settled",
+      "counts": "{answers, plural, one {# answer} other {# answers}} · {assumptions, plural, one {# planner's assumption} other {# planner's assumptions}}",
+      "groups": {
+        "behaviour": "Behaviour",
+        "scopeEdge": "Scope edge",
+        "constraints": "Constraints",
+        "acceptance": "Acceptance",
+        "assumptions": "Assumptions"
+      },
+      "youAnswered": "You answered",
+      "plannersAssumption": "Planner's assumption",
+      "writing": "Writing your answers to the plan's requirement and to <item></item>…",
+      "writingPlanOnly": "Writing your answers to the plan's requirement…",
+      "written": "Written to the plan's requirement and to <item></item>.",
+      "writtenPlanOnly": "Written to the plan's requirement.",
+      "failed": "Your answers weren't written. They are still here.",
+      "copy": "Copy answers"
+    },
+    "error": "That question didn't arrive. Your answers so far are kept — try again.",
+    "retry": "Try again"
   }
 }

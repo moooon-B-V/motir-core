@@ -8156,17 +8156,6 @@
           "body3": "Ce que vous arrêtez est écrit dans l’exigence du plan, et la planification part de là."
         },
         "hint": "Votre prochain message lance les questions."
-      },
-      "question": {
-        "label": "question · question {n}",
-        "recommended": "Recommandée",
-        "recommendedName": "{label} (recommandée)",
-        "somethingElse": "Autre chose…",
-        "skip": "Passer",
-        "youDecide": "À vous de décider",
-        "stop": "Arrêter les questions",
-        "ownWordsPlaceholder": "Répondez avec vos propres mots…",
-        "composerPlaceholder": "Ou saisissez votre propre réponse…"
       }
     }
   },
@@ -14218,5 +14207,50 @@
       "unavailable": "Élément de travail indisponible",
       "unavailableTitle": "Cet élément de travail a été supprimé, ou vous ne pouvez pas le voir."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "question · question {n}",
+      "recommended": "Recommandée",
+      "recommendedName": "{label} (recommandée)",
+      "somethingElse": "Autre chose…",
+      "skip": "Passer",
+      "youDecide": "À vous de décider",
+      "stop": "Arrêter les questions",
+      "ownWordsPlaceholder": "Répondez avec vos propres mots…",
+      "composerPlaceholder": "Ou saisissez votre propre réponse…",
+      "because": "Parce que vous avez choisi « {answer} »…",
+      "yourThread": "Votre sujet",
+      "youSaid": "Vous avez dit : « {words} »"
+    },
+    "markers": {
+      "opening": "Cuisine-moi est activé : une question à la fois avant de planifier. Choisissez une réponse, passez-la ou arrêtez quand vous voulez.",
+      "skipped": "Passée : le planificateur fera une hypothèse sur ce point.",
+      "completed": "Je n’ai plus de question à vous poser.",
+      "nothingToAsk": "Je n’ai aucune question : c’est assez clair pour planifier. J’écris le plan maintenant.",
+      "stopped": "Vous avez arrêté les questions.",
+      "stoppedNoAnswer": "Vous avez arrêté les questions avant toute réponse. Rien n’a été écrit."
+    },
+    "summary": {
+      "title": "Ce que vous avez arrêté",
+      "counts": "{answers, plural, one {# réponse} other {# réponses}} · {assumptions, plural, one {# hypothèse du planificateur} other {# hypothèses du planificateur}}",
+      "groups": {
+        "behaviour": "Comportement",
+        "scopeEdge": "Limite du périmètre",
+        "constraints": "Contraintes",
+        "acceptance": "Acceptation",
+        "assumptions": "Hypothèses"
+      },
+      "youAnswered": "Votre réponse",
+      "plannersAssumption": "Hypothèse du planificateur",
+      "writing": "Écriture de vos réponses dans l’exigence du plan et dans <item></item>…",
+      "writingPlanOnly": "Écriture de vos réponses dans l’exigence du plan…",
+      "written": "Écrit dans l’exigence du plan et dans <item></item>.",
+      "writtenPlanOnly": "Écrit dans l’exigence du plan.",
+      "failed": "Vos réponses n’ont pas été écrites. Elles sont toujours ici.",
+      "copy": "Copier les réponses"
+    },
+    "error": "Cette question n’est pas arrivée. Vos réponses jusqu’ici sont conservées : réessayez.",
+    "retry": "Réessayer"
   }
 }

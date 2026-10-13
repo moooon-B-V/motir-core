@@ -32,7 +32,7 @@ import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { GrillMeControl } from '@/components/planning/GrillMeControl';
-import { GrillQuestionTurn } from '@/components/planning/GrillQuestionTurn';
+import { SharpenThread } from '@/components/planning/SharpenThread';
 import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
 import { useGrillSession } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
@@ -681,7 +681,7 @@ export function PlanChangeRail({
         </div>
       </div>
     ) : null;
-  const tGrill = useTranslations('planningWorkspace.grill.question');
+  const tGrill = useTranslations('sharpen.question');
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
     : grillQuestion
@@ -1050,16 +1050,17 @@ export function PlanChangeRail({
             planning, the planner says only what is true — it is working out the
             ask and may still have a question. Keyed, like the hand-off it gives way
             to at `target_settled`; a question ends the run before either is due. */}
-        {/* THE GRILLING QUESTION (MOTIR-8447): drawn where the conversation phase
-            draws a planner question, carrying the pending-question anchor when the
-            run itself is not waiting on one. Gone at the hand-off. */}
-        {grillQuestion ? (
-          <GrillQuestionTurn
-            question={grillQuestion}
-            number={
-              (grill.session?.settled.length ?? 0) + (grill.session?.assumptions.length ?? 0) + 1
-            }
+        {/* THE GRILLING (MOTIR-8447 routes it, MOTIR-8177 draws it): the session's
+            turns on the rail's own surfaces, its pending question carrying the
+            pending-question anchor when the run itself is not waiting on one. Gone
+            at the hand-off — except an ENDED session's summary, which stays above
+            the hand-off (design G5). */}
+        {grill.session && (conversing || (writing && grill.session.status === 'ended')) ? (
+          <SharpenThread
+            session={grill.session}
             pending={grill.pending}
+            error={grill.error}
+            cardKey={state.session?.targetKeys[0] ?? null}
             {...(question ? {} : { anchorId: PENDING_QUESTION_ID })}
             onAct={(action, opts) => {
               setGrillOwnWords(false);
@@ -1070,6 +1071,7 @@ export function PlanChangeRail({
               setGrillOwnWords(true);
               railRef.current?.querySelector('textarea')?.focus();
             }}
+            onRetry={grill.retry}
           />
         ) : null}
         {conversing ? (
