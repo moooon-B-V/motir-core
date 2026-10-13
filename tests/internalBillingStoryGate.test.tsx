@@ -35,6 +35,7 @@ const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<unknown>>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgUsage: (q: unknown) => getOrgUsageMock(q),
   getOrgSubscription: (q: unknown) => getOrgSubscriptionMock(q),
+  getPendingPlanChange: async () => ({ pendingDowngrade: null }),
   createCheckoutSession: vi.fn(),
   createPortalSession: vi.fn(),
   setSeatQuantity: vi.fn(),

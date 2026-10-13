@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
-import type { BillingCatalog } from '@/lib/billing/catalog';
+import type { BillingCadence, BillingCatalog } from '@/lib/billing/catalog';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 import type { SearchSpendDTO } from '@/lib/dto/aiUsage';
 
@@ -70,6 +70,12 @@ export interface MotirAiBillingDTO {
   balance: number;
   /** The Stripe AI-subscription lifecycle (status + renewal); `status: null` = none. */
   subscription: MotirAiSubscriptionDTO;
+  /**
+   * The downgrade the live plan has scheduled for its period end (MOTIR-8399), or
+   * `null` — none scheduled, no live paid plan, or the read did not answer (the
+   * cards then show no pending state; the dialogs' previews still report it).
+   */
+  pendingDowngrade: PendingPlanChangeDTO | null;
 }
 
 /**
@@ -186,6 +192,83 @@ export interface BillingSessionDTO {
  * ONE AI plan and a change of plan goes through the upgrade path. Both are 200s.
  */
 export type BillingCheckoutDTO = { url: string } | { existingPlan: { livePriceLookupKey: string } };
+
+// ── Changing the AI plan mid-period (Story MOTIR-8387 · MOTIR-8399) ─────────
+//
+// Every figure the plan-change dialogs show is one of these fields — motir-ai's
+// previews and confirms passed through — so no amount, date or count is composed
+// in the browser. Amounts are integer cents of `currency`; dates are ISO-8601.
+
+/** A lower plan scheduled for the period end. */
+export interface PendingPlanChangeDTO {
+  planKey: string;
+  effectiveDate: string;
+}
+
+/** A cadence change a plan change would make — never one today (the cadence is kept). */
+export type PlanChangeCadenceChangeDTO = { from: BillingCadence; to: BillingCadence } | null;
+
+/** What an upgrade costs now and grants (`POST …/billing/upgrade/preview`). */
+export interface UpgradePreviewDTO {
+  /** Unix seconds — sent back unchanged with the confirm. */
+  prorationDate: number;
+  fromPlan: string;
+  toPlan: string;
+  cadence: BillingCadence;
+  cadenceChange: PlanChangeCadenceChangeDTO;
+  amountDueCents: number;
+  currency: string;
+  periodEnd: string;
+  /** Whole days left in the billing period, which the amount covers. */
+  billingDaysLeft: number;
+  /** Whole days left in the monthly credit window, which the extra credits cover. */
+  daysLeft: number;
+  creditWindowEnd: string;
+  extraCredits: number;
+  extraIndexAllowance: number | null;
+  fromPool: number;
+  fullPool: number;
+  fullAllowance: number | null;
+  toPriceCents: number;
+  pendingDowngrade: PendingPlanChangeDTO | null;
+}
+
+/** What an upgrade did (`POST …/billing/upgrade`). */
+export interface UpgradeResultDTO {
+  status: 'upgraded';
+  fromPlan: string;
+  toPlan: string;
+  extraCredits: number;
+  extraIndexAllowance: number | null;
+  /** The downgrade the upgrade cancelled, or `null`. */
+  clearedPending: PendingPlanChangeDTO | null;
+}
+
+/** What a downgrade at the period end would do (`POST …/billing/downgrade/preview`). */
+export interface DowngradePreviewDTO {
+  fromPlan: string;
+  toPlan: string;
+  cadence: BillingCadence;
+  cadenceChange: PlanChangeCadenceChangeDTO;
+  effectiveDate: string;
+  fromPool: number;
+  fullPool: number;
+  fullAllowance: number | null;
+  toPriceCents: number;
+  currency: string;
+  pendingDowngrade: PendingPlanChangeDTO | null;
+}
+
+/** What scheduling a downgrade did (`POST …/billing/downgrade`). */
+export type DowngradeResultDTO =
+  | {
+      status: 'scheduled';
+      fromPlan: string;
+      toPlan: string;
+      effectiveDate: string;
+      replacedPending: PendingPlanChangeDTO | null;
+    }
+  | { status: 'cleared'; fromPlan: string; toPlan: string; clearedPending: PendingPlanChangeDTO };
 
 /**
  * The members-page SEAT summary (Story 8.1.14, design/org-admin

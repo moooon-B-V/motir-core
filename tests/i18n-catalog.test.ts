@@ -205,6 +205,8 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
     'orgAdmin.seat.pastDueNote': 'payment card — the seat-plan charge failed',
     'billing.pastDue.banner': 'payment card — the AI-plan charge failed',
     'onboarding.landing.heroHint': 'payment card — "no credit card"',
+    'billing.plans.upgrade.footnote': 'payment card — the upgrade charges the card on file',
+    'billing.plans.upgrade.refusedPayment': 'payment card — the upgrade charge was declined',
     'platformAdmin.monitoring.subtitle': 'UI panel — the six monitoring tiles, each linking out',
     'platformAdmin.tenant.fleet.confirm.reasonHint':
       'UI panel — the tenant page’s Fleet card, which shows the last stop’s reason',
