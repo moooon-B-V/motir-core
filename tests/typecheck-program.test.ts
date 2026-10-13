@@ -94,6 +94,7 @@ const REQUIRED_TSCONFIGS = [
   'tsconfig.base.json',
   'tsconfig.app.json',
   'tsconfig.tests.json',
+  'tsconfig.tests-platform.json',
   'tsconfig.components.json',
   'tsconfig.e2e.json',
   'tsconfig.scripts.json',
@@ -140,6 +141,46 @@ export const missingFromSolution = (
   );
   return compositeProjects.filter((p) => !referenced.has(p));
 };
+
+/**
+ * The `tests/<dir>` directories a config names by a per-directory glob — the
+ * platform project's `include` (`tests/<dir>/**\/*.ts`) and the tests
+ * project's matching `exclude` (`tests/<dir>/**`). Exported so the mutation
+ * case can drive it.
+ */
+export const areaDirectories = (globs: unknown, shape: 'include' | 'exclude'): string[] => {
+  const pattern =
+    shape === 'include' ? /^tests\/([^/*]+)\/\*\*\/\*\.tsx?$/ : /^tests\/([^/*]+)\/\*\*$/;
+  return [
+    ...new Set(
+      asStrings(globs)
+        .map((g) => pattern.exec(g)?.[1])
+        .filter((d): d is string => d !== undefined),
+    ),
+  ].sort();
+};
+
+/**
+ * Directories the two lists disagree on — empty when they agree. `elsewhere` is
+ * every directory some OTHER project includes (`tests/components` is
+ * `tsconfig.components.json`'s), which the tests project may exclude without the
+ * platform project claiming it.
+ */
+export const areaDrift = (
+  platformInclude: string[],
+  testsExclude: string[],
+  elsewhere: string[] = [],
+): string[] => [
+  ...platformInclude
+    .filter((d) => !testsExclude.includes(d))
+    .map(
+      (d) =>
+        `tests/${d} is in tsconfig.tests-platform.json but not excluded from tsconfig.tests.json`,
+    ),
+  ...testsExclude
+    .filter((d) => !platformInclude.includes(d) && !elsewhere.includes(d))
+    .map((d) => `tests/${d} is excluded from tsconfig.tests.json but in no project`),
+];
 
 /** The heap bump this story reverses, wherever it hides in a script. */
 export const carriesHeapBump = (script: string): boolean => /max-old-space-size/.test(script);
@@ -216,6 +257,52 @@ describe('the type-check is a solution of project references (MOTIR-4293)', () =
       isOneProgram({ include: ['app/**/*.ts', 'lib/**/*.tsx'], exclude: ['tests', 'scripts'] })
         .oneProgram,
     ).toBe(false);
+  });
+
+  it('splits the tests BY AREA: every platform directory leaves the tests project, and only those (MOTIR-8353)', () => {
+    // A directory in BOTH projects is emitted and checked twice; a directory the
+    // tests project excludes and the platform project never includes is not
+    // type-checked at all, silently and greenly. Moving an area between the two
+    // is meant to be a two-line change, so the two lines are held to each other.
+    const platform = areaDirectories(
+      configs.get('tsconfig.tests-platform.json')!.include,
+      'include',
+    );
+    const excluded = areaDirectories(configs.get('tsconfig.tests.json')!.exclude, 'exclude');
+    const elsewhere = [...configs]
+      .filter(([name]) => name !== 'tsconfig.tests-platform.json')
+      .flatMap(([, config]) => areaDirectories(config.include, 'include'));
+    expect(platform.length, 'the platform project names no area').toBeGreaterThan(0);
+    expect(areaDrift(platform, excluded, elsewhere)).toEqual([]);
+    // The arrow runs one way: the platform project imports the shared helpers
+    // through a reference, and nothing references the platform project back.
+    const refs = (configs.get('tsconfig.tests-platform.json')!.references ?? []) as {
+      path?: string;
+    }[];
+    expect(refs.map((r) => r.path)).toContain('./tsconfig.tests.json');
+    for (const [name, config] of configs) {
+      const back = ((config.references ?? []) as { path?: string }[]).map((r) => r.path);
+      if (name !== 'tsconfig.solution.json') {
+        expect(back, `${name} must not reference the platform project`).not.toContain(
+          './tsconfig.tests-platform.json',
+        );
+      }
+    }
+  });
+
+  it('BITES on an area listed on one side only', () => {
+    expect(
+      areaDrift(
+        areaDirectories(
+          ['tests/github/**/*.ts', 'tests/github/**/*.tsx', 'tests/mcp/**/*.ts'],
+          'include',
+        ),
+        areaDirectories(['tests/github/**', 'tests/jobs/**', 'tests/e2e/**/*.spec.ts'], 'exclude'),
+      ),
+    ).toEqual([
+      'tests/mcp is in tsconfig.tests-platform.json but not excluded from tsconfig.tests.json',
+      'tests/jobs is excluded from tsconfig.tests.json but in no project',
+    ]);
   });
 
   it('references EVERY composite project from the solution file', () => {

@@ -133,6 +133,14 @@ describe('an unexpected failure', () => {
     await expect(listGET(get(''))).rejects.toThrow('cap reached');
     spy.mockRestore();
   });
+
+  it('propagates from the tags read as a 500 — only a lost connection is a 503', async () => {
+    const spy = vi
+      .spyOn(ideasPublicService, 'listTags')
+      .mockRejectedValueOnce(new Error('db down'));
+    await expect(tagsGET(get('/tags'))).rejects.toThrow('db down');
+    spy.mockRestore();
+  });
 });
 
 describe('posture', () => {

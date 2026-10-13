@@ -776,6 +776,13 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
         description: 'A `category` or `kind` outside the closed set. `INVALID_IDEA_FILTER`.',
         schema: publicErrorSchema,
       },
+      {
+        status: 503,
+        description:
+          'The database connection was lost on the read and on its one retry. ' +
+          '`IDEAS_UNAVAILABLE`, with `Retry-After`; never cached.',
+        schema: publicErrorSchema,
+      },
     ],
   },
   {
@@ -788,7 +795,15 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
       'tag filter. Fully anonymous; cacheable like the list.',
     parameters: [],
     response: publicIdeaTagsSchema,
-    errors: [],
+    errors: [
+      {
+        status: 503,
+        description:
+          'The database connection was lost on the read and on its one retry. ' +
+          '`IDEAS_UNAVAILABLE`, with `Retry-After`; never cached.',
+        schema: publicErrorSchema,
+      },
+    ],
   },
   {
     method: 'GET',
@@ -814,6 +829,13 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
         status: 404,
         description:
           'No ACTIVE idea carries this slug. `IDEA_NOT_FOUND`; a retired slug is indistinguishable.',
+        schema: publicErrorSchema,
+      },
+      {
+        status: 503,
+        description:
+          'The database connection was lost on the read and on its one retry. ' +
+          '`IDEAS_UNAVAILABLE`, with `Retry-After`; never cached.',
         schema: publicErrorSchema,
       },
     ],

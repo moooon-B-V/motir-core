@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ChevronLeft, FileQuestion } from 'lucide-react';
 import { DirectionDocView } from '@/components/onboarding/DirectionDocView';
+import { useTierLabel } from '@/components/onboarding/useTierLabel';
 import {
-  TIER_META,
   type DirectionDocKind,
   type DirectionDocView as DirectionDocModel,
   type FeatureCatalogView,
@@ -47,7 +47,7 @@ export function DirectionDocFullPage({
 }: DirectionDocFullPageProps) {
   const router = useRouter();
   const t = useTranslations('roadmap.directionDoc');
-  const meta = TIER_META[tier];
+  const label = useTierLabel()(tier);
   const basePath = origin === 'onboarding' ? '/onboarding/direction' : '/direction';
   const backClassName =
     'inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)';
@@ -75,7 +75,7 @@ export function DirectionDocFullPage({
           <span className="text-(--el-text-faint)" aria-hidden="true">
             ›
           </span>
-          <span className="font-semibold text-(--el-text)">{meta.label}</span>
+          <span className="font-semibold text-(--el-text)">{label}</span>
         </nav>
       </div>
 
@@ -95,9 +95,7 @@ export function DirectionDocFullPage({
         ) : (
           <div className="mx-auto flex max-w-[45rem] flex-col items-center gap-2 py-16 text-center">
             <FileQuestion className="size-7 text-(--el-text-faint)" aria-hidden="true" />
-            <p className="text-sm font-semibold text-(--el-text)">
-              {t('emptyTitle', { label: meta.label })}
-            </p>
+            <p className="text-sm font-semibold text-(--el-text)">{t('emptyTitle', { label })}</p>
             <p className="max-w-[24rem] text-sm text-(--el-text-secondary)">{t('emptyBody')}</p>
           </div>
         )}

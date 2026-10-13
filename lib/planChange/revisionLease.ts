@@ -131,6 +131,31 @@ export function revisionLeaseOf(
 }
 
 /**
+ * WHICH JOB HOLDS THE LEASE, or `null` when nothing holds it or the holder is not a
+ * job (Bug MOTIR-8352). A hosted revision's acquire records its motir-ai job on the
+ * `revision_started` row's diff (`{ jobId }`); an MCP `hold_plan_revision` holder
+ * records none. So a conversation can tell ITS OWN running revision — the one its
+ * `lastJobId` names — from somebody else's, by the lease rather than by the plan's
+ * `sourceJobId`, which an MCP hold leaves pointing at the walk that wrote the plan.
+ *
+ * Same rows and same order contract as {@link revisionLeaseOf}, whose verdict on
+ * whether the lease is held this follows exactly.
+ */
+export function revisionLeaseJobId(rows: readonly RevisionLeaseRow[], now: Date): string | null {
+  if (!revisionLeaseOf(rows, now)) return null;
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    if (rows[i]!.changeKind !== REVISION_STARTED_KIND) continue;
+    const diff = rows[i]!.diff;
+    const jobId =
+      typeof diff === 'object' && diff !== null
+        ? (diff as Record<string, unknown>)['jobId']
+        : undefined;
+    return typeof jobId === 'string' && jobId.length > 0 ? jobId : null;
+  }
+  return null;
+}
+
+/**
  * The `diff` key a `revision_started` row carries when its acquire RE-OPENED the
  * plan (Bug MOTIR-8208): the status the plan held before the revision moved it to
  * `generating`, and so the status the revision's end gives back.

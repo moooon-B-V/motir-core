@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Forfait actuel",
       "ctaTrialUsed": "Essai utilisé",
       "footer": "La facturation annuelle (l'option par défaut de Stripe) est affichée — passez à Mensuelle ci-dessus pour comparer. Les taxes sont appliquées automatiquement lors du paiement. Les crédits sont une allocation d'utilisation interne ; le prix affiché correspond au prix du forfait IA, facturé par Stripe à l'organisation {org}. Vos sièges Motir sont facturés séparément — gérez-les depuis l'écran du forfait Motir.",
-      "seatIncluded": "+ 1 siège Motir · éléments de travail illimités",
+      "seatIncluded": "+ {count, plural, one {# siège Motir} other {# sièges Motir}} · éléments de travail illimités",
       "seatNone": "Aucun siège Motir · plafond de 250 éléments",
       "seatCustom": "Sièges Motir inclus (sur mesure)",
       "customPool": "Pool de crédits sur mesure",
@@ -6423,6 +6423,14 @@
           "features": [
             "De la marge pour un travail d'agent soutenu",
             "Le débit nécessaire à une équipe très active"
+          ]
+        },
+        "max_x2": {
+          "useCase": "Planification détaillée, plus un travail d'agent au double du volume de Max.",
+          "prev": "Max",
+          "features": [
+            "Le double de la réserve mensuelle de crédits de Max",
+            "De la place pour plusieurs agents en parallèle"
           ]
         },
         "enterprise": {
@@ -6646,6 +6654,31 @@
       "docs": "Documentation",
       "logIn": "Se connecter",
       "signUp": "S'inscrire"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Comprendre votre projet",
+          "kicker": "Ce que vous créez et pour qui"
+        },
+        "vision": {
+          "label": "Ce que nous allons créer",
+          "kicker": "Les contours de la v1"
+        },
+        "feasibility": {
+          "label": "Cela vaut-il la peine d'être créé ?",
+          "kicker": "Un retour à la réalité"
+        },
+        "validation": {
+          "label": "Les gens le voudront-ils ?",
+          "kicker": "Le marché"
+        }
+      },
+      "optional": "facultatif",
+      "readHint": "<b>Lecture seule.</b> Quelque chose cloche ? Dites-le simplement à Motir dans le chat : il réécrit le document pour vous. Rien n'est encore figé.",
+      "openQuestions": "Questions ouvertes",
+      "crossLinksLabel": "Autres parties de votre orientation",
+      "related": "Voir aussi"
     },
     "landing": {
       "badge": "Projet vibe",

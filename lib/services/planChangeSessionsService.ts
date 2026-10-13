@@ -61,9 +61,10 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
 import { planRevisionsService } from '@/lib/services/planRevisionsService';
 import { plansService } from '@/lib/services/plansService';
 import { planDriftService } from '@/lib/services/planDriftService';
-import { PlanNotFoundError } from '@/lib/plans/errors';
+import { PlanNotFoundError, PlanRevisionInFlightError } from '@/lib/plans/errors';
+import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
 import { classifyFailedWaitingTurn } from '@/lib/planChange/failedWaitingTurn';
-import { isReopenedByRevision } from '@/lib/planChange/revisionLease';
+import { isReopenedByRevision, revisionLeaseJobId } from '@/lib/planChange/revisionLease';
 import {
   classifySessionTurn,
   type SessionTurnPlanStatus,
@@ -84,6 +85,8 @@ import {
   PlanSessionPlanDecidedError,
   PlanSessionPlanStaleError,
   PlanAgainNotAvailableError,
+  PlanChangeJobNotRunningError,
+  PlanChangeMailboxJobMismatchError,
   type StalePlanFinishedCard,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
@@ -915,6 +918,111 @@ async function reviseWithinSession(
 ): Promise<PlanChangeSubmitResultDto> {
   const { jobId } = await aiPlanEditsService.submitSessionRevision(planId, intent, pctx);
   return bindRevisionTurn(session, pctx, { jobId, planId }, intent, opts);
+}
+
+/**
+ * REVISE the waiting plan — or, when THIS conversation's own revision is still
+ * running on it, QUEUE the turn for that revision (Bug MOTIR-8352).
+ *
+ * A rail that is streaming the revision sends a turn to the job's mailbox and
+ * never reaches the submit. A rail that is NOT streaming it — after a reload, in
+ * another tab, an MCP caller of `submit_plan_session` — has no job in hand, so its
+ * send arrives here, and the revision's lease refused it `PLAN_REVISION_IN_FLIGHT`:
+ * the person's correction was lost while the run that should read it was still
+ * working. Now the refusal stands only when the hold is somebody else's (another
+ * session's job, an MCP `hold_plan_revision` holder): the lease's job is this
+ * session's `lastJobId` and it is still running ⇒ the newest user turn goes into
+ * its mailbox, and the answer is that RUNNING job, so the caller streams the
+ * revision its turn now rides on rather than a second one.
+ *
+ * The mailbox key is derived from the turn (`queued-revision:<turnId>`), so a
+ * retried submit queues the sentence once.
+ */
+async function reviseOrQueueWithinSession(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  planId: string,
+  intent: string,
+  turns: ReadonlyArray<Pick<PlanChangeTurn, 'id' | 'role' | 'body' | 'jobId' | 'seq'>>,
+  opts: { clearFailure?: boolean } = {},
+): Promise<PlanChangeSubmitResultDto> {
+  try {
+    return await reviseWithinSession(session, pctx, planId, intent, opts);
+  } catch (err) {
+    if (!(err instanceof PlanRevisionInFlightError)) throw err;
+    const queued = await queueForRunningRevision(session, pctx, planId, turns);
+    if (!queued) throw err;
+    return queued;
+  }
+}
+
+/**
+ * The newest user turn, queued on the session's RUNNING revision of `planId` — or
+ * null when the revision holding the plan is not this session's, has nothing new
+ * to carry, or has ended in the meantime (the caller then keeps its refusal).
+ */
+async function queueForRunningRevision(
+  session: PlanChangeSession,
+  pctx: ProjectContext,
+  planId: string,
+  turns: ReadonlyArray<Pick<PlanChangeTurn, 'id' | 'role' | 'body' | 'jobId' | 'seq'>>,
+): Promise<PlanChangeSubmitResultDto | null> {
+  const jobId = session.lastJobId;
+  if (!jobId) return null;
+  // The job the lease names (a hosted acquire records it); a hold whose job is not
+  // this session's last submission — or that has no job at all, an MCP holder — is
+  // somebody else's revision.
+  const holder = await withWorkspaceServiceContext(pctx.workspaceId, async (tx) =>
+    revisionLeaseJobId(await planRevisionRepository.listByPlan(planId, tx), new Date()),
+  );
+  if (holder !== jobId) return null;
+  const turn = latestTurnAfterSubmission(turns, jobId);
+  if (!turn) return null;
+  try {
+    await planChangeMailboxService.attachTurn(
+      {
+        jobId,
+        sessionId: session.id,
+        body: turn.body,
+        idempotencyKey: `queued-revision:${turn.id}`,
+        disposition: 'fold',
+      },
+      pctx,
+    );
+  } catch (err) {
+    // The revision finished (or the thread moved on) between the refusal and the
+    // queue: there is no run left to read it, so the caller's refusal is the answer.
+    if (err instanceof PlanChangeJobNotRunningError) return null;
+    if (err instanceof PlanChangeMailboxJobMismatchError) return null;
+    throw err;
+  }
+  const fresh = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+    planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx),
+  );
+  if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+  return { jobId, planId, session: await toDto(fresh, pctx) };
+}
+
+/**
+ * The newest `user` turn written AFTER the `system` marker that submitted `jobId`
+ * — the turn this send carries. Null when there is none: everything the person
+ * typed before that marker is already in the revision's intent.
+ */
+export function latestTurnAfterSubmission<
+  T extends Pick<PlanChangeTurn, 'role' | 'body' | 'jobId' | 'seq'>,
+>(turns: readonly T[], jobId: string): T | null {
+  const ordered = [...turns].sort((a, b) => a.seq - b.seq);
+  let markerSeq = -1;
+  for (const t of ordered) {
+    if (t.role === 'system' && t.jobId === jobId) markerSeq = t.seq;
+  }
+  if (markerSeq < 0) return null;
+  for (let i = ordered.length - 1; i >= 0; i -= 1) {
+    const t = ordered[i]!;
+    if (t.seq <= markerSeq) return null;
+    if (t.role === 'user' && t.body.trim().length > 0) return t;
+  }
+  return null;
 }
 
 /**
@@ -2616,7 +2724,9 @@ export const planChangeSessionsService = {
       planAgainOf: opts.planAgainOf,
     });
     if (turn.kind === 'revise') {
-      return reviseWithinSession(session, pctx, turn.planId, intent, { clearFailure });
+      return reviseOrQueueWithinSession(session, pctx, turn.planId, intent, turns, {
+        clearFailure,
+      });
     }
     if (turn.kind === 'stale') throw await staleOutcome(turn.planId, pctx);
     if (turn.kind === 'plan_again_refused') {
@@ -2632,7 +2742,9 @@ export const planChangeSessionsService = {
     if (turn.kind === 'plan_again') {
       const claimed = await claimPlanAgain(session, pctx, turn.stalePlanId);
       if (claimed.kind === 'revise') {
-        return reviseWithinSession(session, pctx, claimed.planId, intent, { clearFailure });
+        return reviseOrQueueWithinSession(session, pctx, claimed.planId, intent, turns, {
+          clearFailure,
+        });
       }
       claim = claimed;
     }

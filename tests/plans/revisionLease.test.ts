@@ -3,6 +3,7 @@ import {
   PLAN_REVISION_LEASE_MS,
   REVISION_ENDED_KIND,
   REVISION_STARTED_KIND,
+  revisionLeaseJobId,
   revisionLeaseOf,
   type RevisionLeaseRow,
 } from '@/lib/planChange/revisionLease';
@@ -97,5 +98,37 @@ describe('revisionLeaseOf', () => {
   it('reports WHEN it expires, measured from the latest row', () => {
     const lease = revisionLeaseOf([row(REVISION_STARTED_KIND, 0), row('edited', 5000)], at(6000));
     expect(lease!.expiresAt.getTime()).toBe(at(5000).getTime() + PLAN_REVISION_LEASE_MS);
+  });
+});
+
+// Bug MOTIR-8352 — which JOB holds the lease, so a conversation can queue a turn
+// for its own running revision and still refuse somebody else's hold.
+describe('revisionLeaseJobId', () => {
+  it('names the job the open start recorded', () => {
+    const rows = [
+      row('planned', 0),
+      row(REVISION_STARTED_KIND, 1000, { diff: { jobId: 'job-2' } }),
+    ];
+    expect(revisionLeaseJobId(rows, at(2000))).toBe('job-2');
+  });
+
+  it('is null for a hold with no job — an MCP holder', () => {
+    const rows = [row(REVISION_STARTED_KIND, 0, { diff: { reopenedFrom: 'planned' } })];
+    expect(revisionLeaseJobId(rows, at(1000))).toBeNull();
+    expect(revisionLeaseJobId([row(REVISION_STARTED_KIND, 0)], at(1000))).toBeNull();
+  });
+
+  it('is null once the lease is released or lapsed, whatever the start recorded', () => {
+    const started = row(REVISION_STARTED_KIND, 0, { diff: { jobId: 'job-2' } });
+    expect(revisionLeaseJobId([started, row(REVISION_ENDED_KIND, 10)], at(20))).toBeNull();
+    expect(revisionLeaseJobId([started], at(PLAN_REVISION_LEASE_MS))).toBeNull();
+  });
+
+  it('reads the LATEST start — a lapsed revision taken again by another job', () => {
+    const rows = [
+      row(REVISION_STARTED_KIND, 0, { diff: { jobId: 'job-1' } }),
+      row(REVISION_STARTED_KIND, PLAN_REVISION_LEASE_MS + 10, { diff: { jobId: 'job-3' } }),
+    ];
+    expect(revisionLeaseJobId(rows, at(PLAN_REVISION_LEASE_MS + 20))).toBe('job-3');
   });
 });

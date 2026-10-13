@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
-import { InvalidIdeaFilterError } from '@/lib/ideas/errors';
-import { PUBLIC_IDEAS_CACHE_CONTROL } from '@/lib/ideas/publicCache';
+import { IdeasUnavailableError, InvalidIdeaFilterError } from '@/lib/ideas/errors';
+import {
+  PUBLIC_IDEAS_CACHE_CONTROL,
+  PUBLIC_IDEAS_RETRY_AFTER_SECONDS,
+} from '@/lib/ideas/publicCache';
 import { resolvePublicIdeaLocale } from '@/lib/ideas/publicLocale';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 import { ideasPublicService } from '@/lib/services/ideasPublicService';
@@ -19,6 +22,10 @@ import { ideasPublicService } from '@/lib/services/ideasPublicService';
 // `?locale=` (MOTIR-7775) is read from the QUERY ONLY — never `Accept-Language`
 // or a cookie — so the locale is part of the URL and every cache keys on it
 // with no `Vary`. An unsupported value is answered in English.
+//
+// A database connection that drops on the read AND on its one retry is
+// `IdeasUnavailableError`, answered as a handled 503 with `Retry-After`
+// (MOTIR-8350) — never the raw `pg` error escaping as an unhandled 500.
 
 export async function GET(req: Request): Promise<NextResponse> {
   const absent = publicSurfaceUnavailable();
@@ -39,6 +46,12 @@ export async function GET(req: Request): Promise<NextResponse> {
   } catch (err) {
     if (err instanceof InvalidIdeaFilterError) {
       return NextResponse.json({ code: err.code }, { status: 400 });
+    }
+    if (err instanceof IdeasUnavailableError) {
+      return NextResponse.json(
+        { code: err.code },
+        { status: 503, headers: { 'Retry-After': String(PUBLIC_IDEAS_RETRY_AFTER_SECONDS) } },
+      );
     }
     // Anything else — including `IdeaListCapExceededError`, the loud failure the
     // read service throws the day the store outgrows an unpaginated read — is a

@@ -6390,7 +6390,7 @@
       "ctaCurrent": "現在のプラン",
       "ctaTrialUsed": "トライアル使用済み",
       "footer": "年払い(Stripe のデフォルト)の料金を表示しています。比較するには上で「月払い」に切り替えてください。税金はチェックアウト時に自動で適用されます。クレジットは内部的な利用枠であり、表示価格は AI プランの料金で、Stripe から {org} 組織に請求されます。Motir のシートは別途請求されます。Motir プランの画面で管理してください。",
-      "seatIncluded": "+ Motir シート 1 つ · 作業項目数の上限なし",
+      "seatIncluded": "+ Motir シート {count, plural, other {# つ}} · 作業項目数の上限なし",
       "seatNone": "Motir シートなし · 項目数の上限 250",
       "seatCustom": "Motir シート込み(カスタム)",
       "customPool": "カスタムのクレジットプール",
@@ -6421,6 +6421,14 @@
           "useCase": "詳細な計画と、大量のエージェント作業に。",
           "prev": "Pro",
           "features": ["継続的なエージェント作業にも十分な余裕", "忙しいチームにも対応できる処理量"]
+        },
+        "max_x2": {
+          "useCase": "詳細な計画と、Max の 2 倍のエージェント作業に。",
+          "prev": "Max",
+          "features": [
+            "Max の 2 倍の月間クレジットプール",
+            "複数のエージェントを同時に動かせる余裕"
+          ]
         },
         "enterprise": {
           "useCase": "カスタムの利用量と、組織の管理機能。",
@@ -6643,6 +6651,31 @@
       "docs": "ドキュメント",
       "logIn": "ログイン",
       "signUp": "新規登録"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "プロジェクトを理解する",
+          "kicker": "何を、誰のために作るのか"
+        },
+        "vision": {
+          "label": "作るもの",
+          "kicker": "v1 の形"
+        },
+        "feasibility": {
+          "label": "作る価値はありますか?",
+          "kicker": "現実的な検証"
+        },
+        "validation": {
+          "label": "求められていますか?",
+          "kicker": "市場"
+        }
+      },
+      "optional": "オプション",
+      "readHint": "<b>閲覧のみ。</b>気になる点があれば、チャットで Motir に伝えてください。Motir が内容を書き直します。まだ何も確定していません。",
+      "openQuestions": "未解決の質問",
+      "crossLinksLabel": "方向性のほかの部分",
+      "related": "関連"
     },
     "landing": {
       "badge": "Vibe プロジェクト",

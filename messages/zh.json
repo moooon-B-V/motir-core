@@ -6390,7 +6390,7 @@
       "ctaCurrent": "当前套餐",
       "ctaTrialUsed": "试用已用",
       "footer": "当前显示按年计费（Stripe 默认）—— 可在上方切换到按月对比。结账时自动计税。额度是内部用量配额；所示价格为 AI 套餐费用，由 Stripe 向 {org} 组织收取。你的 Motir 席位单独计费 —— 请在 Motir 套餐页面管理。",
-      "seatIncluded": "+ 1 个 Motir 席位 · 工作项不受上限",
+      "seatIncluded": "+ {count, plural, other {# 个 Motir 席位}} · 工作项不受上限",
       "seatNone": "无 Motir 席位 · 250 个工作项上限",
       "seatCustom": "包含 Motir 席位（定制）",
       "customPool": "定制额度池",
@@ -6414,6 +6414,11 @@
           "useCase": "详细规划，外加大量智能体工作。",
           "prev": "Pro",
           "features": ["充足的持续智能体工作余量", "满足繁忙团队的吞吐"]
+        },
+        "max_x2": {
+          "useCase": "详细规划，外加两倍于 Max 的智能体工作。",
+          "prev": "Max",
+          "features": ["两倍于 Max 的每月额度池", "可同时运行多个智能体的余量"]
         },
         "enterprise": {
           "useCase": "定制用量，外加组织管控。",
@@ -6636,6 +6641,31 @@
       "docs": "文档",
       "logIn": "登录",
       "signUp": "注册"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "理解你的项目",
+          "kicker": "你在做什么、为谁而做"
+        },
+        "vision": {
+          "label": "我们要做什么",
+          "kicker": "v1 的形态"
+        },
+        "feasibility": {
+          "label": "值得做吗？",
+          "kicker": "现实检验"
+        },
+        "validation": {
+          "label": "会有人想要它吗？",
+          "kicker": "市场"
+        }
+      },
+      "optional": "可选",
+      "readHint": "<b>只读。</b>有哪里不对？在聊天中告诉 Motir 即可，它会为你重写这份文档。目前还没有任何内容被锁定。",
+      "openQuestions": "待解答的疑问",
+      "crossLinksLabel": "方向的其他部分",
+      "related": "相关"
     },
     "landing": {
       "badge": "氛围项目",

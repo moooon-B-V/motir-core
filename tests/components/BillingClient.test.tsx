@@ -88,6 +88,19 @@ function activeStandard(): BillingStatusDTO {
   };
 }
 
+// An org with no live AI plan — the only state whose plan cards offer a checkout
+// (MOTIR-8394: an org holds ONE AI plan; a plan holder goes through the upgrade path).
+function freeOrg(): BillingStatusDTO {
+  return {
+    ...activeStandard(),
+    motirAi: {
+      tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
+      balance: 185,
+      subscription: { status: null, currentPeriodEnd: null, priceId: null, planTier: null },
+    },
+  };
+}
+
 function renderClient() {
   return render(
     <ToastProvider>
@@ -315,7 +328,7 @@ describe('BillingClient', () => {
   it('change-plan → Pro Checkout redirect, and the cadence toggle reprices', async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (typeof url === 'string' && url.endsWith('/billing')) {
-        return new Response(JSON.stringify(activeStandard()), { status: 200 });
+        return new Response(JSON.stringify(freeOrg()), { status: 200 });
       }
       // The Enterprise card's open-request read (MOTIR-7607) — none open.
       if (typeof url === 'string' && url.endsWith('/billing/enterprise-request')) {
@@ -333,7 +346,7 @@ describe('BillingClient', () => {
     await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
 
     // Enter the AI plans screen.
-    fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose a Motir AI plan' }));
     await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
 
     // Annual is the default cadence → Pro shows its per-month equivalent ($600/12).
@@ -426,15 +439,15 @@ describe('BillingClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
     await waitFor(() => expect(screen.getByText('Top up credits')).toBeTruthy());
 
-    // 1× is the default — pick the 10× bundle ($10 × 10 = $100 for 10,000).
+    // 1× is the default — pick the 10× bundle ($5 × 10 = $50 for 10,000).
     fireEvent.click(screen.getByRole('button', { name: /10,000 credits/ }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Buy 10,000 credits/ })).toBeTruthy(),
     );
 
-    // The label PROMISES 10,000 credits for $100 — the POST must carry the same
-    // order, or Stripe charges $10 for 1,000 (the bug this test reproduces).
-    fireEvent.click(screen.getByRole('button', { name: /Buy 10,000 credits — \$100/ }));
+    // The label PROMISES 10,000 credits for $50 — the POST must carry the same
+    // order, or Stripe charges $5 for 1,000 (the bug this test reproduces).
+    fireEvent.click(screen.getByRole('button', { name: /Buy 10,000 credits — \$50/ }));
     await waitFor(() =>
       expect(hrefSetter).toHaveBeenCalledWith('https://stripe.test/checkout/topup'),
     );
@@ -469,7 +482,7 @@ describe('BillingClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
     await waitFor(() => expect(screen.getByText('Top up credits')).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: /Buy 1,000 credits — \$10/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Buy 1,000 credits — \$5/ }));
     await waitFor(() =>
       expect(hrefSetter).toHaveBeenCalledWith('https://stripe.test/checkout/topup1'),
     );

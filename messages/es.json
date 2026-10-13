@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Plan actual",
       "ctaTrialUsed": "Prueba usada",
       "footer": "Se muestra la facturación anual (la opción predeterminada de Stripe): cambia a Mensual arriba para comparar. Los impuestos se aplican automáticamente al pagar. Los créditos son una asignación de uso interna; el precio mostrado es la cuota del plan de IA, que Stripe factura a la organización {org}. Tus puestos de Motir se facturan aparte: gestiónalos en la pantalla del plan de Motir.",
-      "seatIncluded": "+ 1 puesto de Motir · elementos de trabajo sin límite",
+      "seatIncluded": "+ {count, plural, one {# puesto de Motir} other {# puestos de Motir}} · elementos de trabajo sin límite",
       "seatNone": "Sin puesto de Motir · límite de 250 elementos",
       "seatCustom": "Puestos de Motir incluidos (personalizado)",
       "customPool": "Fondo de créditos personalizado",
@@ -6423,6 +6423,14 @@
           "features": [
             "Margen para un trabajo continuo del agente",
             "Capacidad para un equipo con mucha actividad"
+          ]
+        },
+        "max_x2": {
+          "useCase": "Planificación detallada, más trabajo del agente al doble del volumen de Max.",
+          "prev": "Max",
+          "features": [
+            "El doble del fondo mensual de créditos de Max",
+            "Margen para varios agentes a la vez"
           ]
         },
         "enterprise": {
@@ -6646,6 +6654,31 @@
       "docs": "Documentación",
       "logIn": "Iniciar sesión",
       "signUp": "Registrarse"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Entender tu proyecto",
+          "kicker": "Qué estás construyendo y para quién"
+        },
+        "vision": {
+          "label": "Qué vamos a construir",
+          "kicker": "La forma de la v1"
+        },
+        "feasibility": {
+          "label": "¿Vale la pena construirlo?",
+          "kicker": "Una comprobación de la realidad"
+        },
+        "validation": {
+          "label": "¿Lo querrá la gente?",
+          "kicker": "El mercado"
+        }
+      },
+      "optional": "opcional",
+      "readHint": "<b>Solo lectura.</b> ¿Algo no cuadra? Díselo a Motir en el chat y reescribirá el documento por ti. Aún no hay nada cerrado.",
+      "openQuestions": "Preguntas abiertas",
+      "crossLinksLabel": "Otras partes de tu dirección",
+      "related": "Relacionado"
     },
     "landing": {
       "badge": "Proyecto vibe",

@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Aktueller Plan",
       "ctaTrialUsed": "Testphase genutzt",
       "footer": "Angezeigt wird die jährliche Abrechnung (der Stripe-Standard) – wechseln Sie oben zu „Monatlich“, um zu vergleichen. Steuern werden beim Bezahlen automatisch berechnet. Credits sind ein internes Nutzungskontingent; der angezeigte Preis ist die Gebühr für den AI-Plan, die Stripe der Organisation {org} in Rechnung stellt. Ihre Motir-Plätze werden separat abgerechnet – verwalten Sie sie auf der Seite für den Motir-Plan.",
-      "seatIncluded": "+ 1 Motir-Platz · Arbeitselemente unbegrenzt",
+      "seatIncluded": "+ {count, plural, one {# Motir-Platz} other {# Motir-Plätze}} · Arbeitselemente unbegrenzt",
       "seatNone": "Kein Motir-Platz · Obergrenze von 250 Elementen",
       "seatCustom": "Motir-Plätze inklusive (individuell)",
       "customPool": "Individueller Guthabenpool",
@@ -6423,6 +6423,14 @@
           "features": [
             "Reserven für dauerhafte Agentenarbeit",
             "Durchsatz für ein ausgelastetes Team"
+          ]
+        },
+        "max_x2": {
+          "useCase": "Detaillierte Planung plus Agentenarbeit im doppelten Max-Umfang.",
+          "prev": "Max",
+          "features": [
+            "Doppelter monatlicher Credit-Pool von Max",
+            "Raum für mehrere gleichzeitig laufende Agenten"
           ]
         },
         "enterprise": {
@@ -6646,6 +6654,31 @@
       "docs": "Dokumentation",
       "logIn": "Anmelden",
       "signUp": "Registrieren"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Ihr Projekt verstehen",
+          "kicker": "Was Sie bauen und für wen"
+        },
+        "vision": {
+          "label": "Was wir bauen",
+          "kicker": "Die Form von v1"
+        },
+        "feasibility": {
+          "label": "Lohnt es sich, das zu bauen?",
+          "kicker": "Ein Realitätscheck"
+        },
+        "validation": {
+          "label": "Wollen die Leute das?",
+          "kicker": "Der Markt"
+        }
+      },
+      "optional": "optional",
+      "readHint": "<b>Nur lesen.</b> Stimmt etwas nicht? Sagen Sie es Motir einfach im Chat – Motir schreibt die Zusammenfassung für Sie neu. Noch ist nichts festgelegt.",
+      "openQuestions": "Offene Fragen",
+      "crossLinksLabel": "Weitere Teile Ihrer Ausrichtung",
+      "related": "Verwandt"
     },
     "landing": {
       "badge": "Vibe-Projekt",

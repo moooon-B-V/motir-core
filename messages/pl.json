@@ -6390,7 +6390,7 @@
       "ctaCurrent": "Bieżący plan",
       "ctaTrialUsed": "Okres próbny wykorzystany",
       "footer": "Pokazane są ceny przy rozliczeniu rocznym (domyślnym w Stripe) — przełącz powyżej na Miesięcznie, aby porównać. Podatek jest naliczany automatycznie przy płatności. Kredyty to wewnętrzny przydział użycia; podana cena to opłata za plan AI, którą Stripe nalicza organizacji {org}. Stanowiska Motir są rozliczane osobno — zarządzaj nimi na ekranie planu Motir.",
-      "seatIncluded": "+ 1 stanowisko Motir · bez limitu elementów roboczych",
+      "seatIncluded": "+ {count, plural, one {# stanowisko Motir} few {# stanowiska Motir} many {# stanowisk Motir} other {# stanowiska Motir}} · bez limitu elementów roboczych",
       "seatNone": "Bez stanowiska Motir · limit 250 elementów",
       "seatCustom": "Stanowiska Motir w cenie (indywidualnie)",
       "customPool": "Indywidualna pula kredytów",
@@ -6421,6 +6421,14 @@
           "useCase": "Szczegółowe planowanie i intensywna praca agenta.",
           "prev": "Pro",
           "features": ["Zapas na ciągłą pracę agentów", "Przepustowość dla zapracowanego zespołu"]
+        },
+        "max_x2": {
+          "useCase": "Szczegółowe planowanie i praca agentów w podwójnej skali Max.",
+          "prev": "Max",
+          "features": [
+            "Dwukrotność miesięcznej puli kredytów Max",
+            "Miejsce na kilku agentów działających jednocześnie"
+          ]
         },
         "enterprise": {
           "useCase": "Indywidualny wolumen i kontrola na poziomie organizacji.",
@@ -6643,6 +6651,31 @@
       "docs": "Dokumentacja",
       "logIn": "Zaloguj się",
       "signUp": "Zarejestruj się"
+    },
+    "directionDoc": {
+      "tiers": {
+        "discovery": {
+          "label": "Poznajemy Twój projekt",
+          "kicker": "Co budujesz i dla kogo"
+        },
+        "vision": {
+          "label": "Co zbudujemy",
+          "kicker": "Kształt wersji v1"
+        },
+        "feasibility": {
+          "label": "Czy warto to budować?",
+          "kicker": "Zderzenie z rzeczywistością"
+        },
+        "validation": {
+          "label": "Czy ludzie będą tego chcieli?",
+          "kicker": "Rynek"
+        }
+      },
+      "optional": "opcjonalne",
+      "readHint": "<b>Tylko do odczytu.</b> Coś się nie zgadza? Po prostu powiedz o tym Motir na czacie – przepisze dokument za Ciebie. Nic nie jest jeszcze przesądzone.",
+      "openQuestions": "Otwarte pytania",
+      "crossLinksLabel": "Inne części Twojego kierunku",
+      "related": "Powiązane"
     },
     "landing": {
       "badge": "Projekt na luzie",

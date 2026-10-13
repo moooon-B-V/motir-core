@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { PublicIdeaTagListDto } from '@/lib/dto/ideas';
-import { PUBLIC_IDEAS_CACHE_CONTROL } from '@/lib/ideas/publicCache';
+import { IdeasUnavailableError } from '@/lib/ideas/errors';
+import {
+  PUBLIC_IDEAS_CACHE_CONTROL,
+  PUBLIC_IDEAS_RETRY_AFTER_SECONDS,
+} from '@/lib/ideas/publicCache';
 import { resolvePublicIdeaLocale } from '@/lib/ideas/publicLocale';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 import { ideasPublicService } from '@/lib/services/ideasPublicService';
@@ -9,13 +13,24 @@ import { ideasPublicService } from '@/lib/services/ideasPublicService';
 // by at least one ACTIVE idea, with that count: the facet behind motir.co's tag
 // filter. Anonymous (no session call), cacheable, pure transport. `?locale=`
 // from the query only (MOTIR-7775); an unsupported value is answered in English.
+// A lost database connection is a handled 503 with `Retry-After` (MOTIR-8350).
 
 export async function GET(req: Request): Promise<NextResponse> {
   const absent = publicSurfaceUnavailable();
   if (absent) return absent;
 
   const locale = resolvePublicIdeaLocale(new URL(req.url).searchParams.get('locale'));
-  const tags = await ideasPublicService.listTags(locale);
-  const body: PublicIdeaTagListDto = { tags, locale };
-  return NextResponse.json(body, { headers: { 'Cache-Control': PUBLIC_IDEAS_CACHE_CONTROL } });
+  try {
+    const tags = await ideasPublicService.listTags(locale);
+    const body: PublicIdeaTagListDto = { tags, locale };
+    return NextResponse.json(body, { headers: { 'Cache-Control': PUBLIC_IDEAS_CACHE_CONTROL } });
+  } catch (err) {
+    if (err instanceof IdeasUnavailableError) {
+      return NextResponse.json(
+        { code: err.code },
+        { status: 503, headers: { 'Retry-After': String(PUBLIC_IDEAS_RETRY_AFTER_SECONDS) } },
+      );
+    }
+    throw err;
+  }
 }
