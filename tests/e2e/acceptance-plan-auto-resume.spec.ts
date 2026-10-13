@@ -96,13 +96,25 @@ const planSubmits = (): SubmittedJob[] =>
   (readJobsFixture().submitted ?? []).filter((s) => s.kind === 'plan' && !s.refused);
 const submitOf = (id: string) => planSubmits().find((s) => s.jobId === id);
 
-/** Lose job `n`'s machine with job `n + 1` queued HELD, and read back the automatic submit. */
+/**
+ * Lose job `n`'s machine with job `n + 1` queued HELD, read back the automatic submit, and wait
+ * for the BIND to commit.
+ *
+ * The submit being recorded is not the resume being done: `planSessionResumeService` submits
+ * FIRST and binds SECOND, so the mock records the submit before the bind transaction re-points
+ * `plan.sourceJobId`, clears the session's failure and counts the auto-resume. A single read
+ * straight after the submit can still see the old job (MOTIR-8409). The re-point commits in that
+ * same transaction, so once it reads the new job every row the chapters read is settled.
+ */
 async function loseMachine(n: number, planId: string): Promise<void> {
   setPlanOutcome(n + 1, HELD);
   setPlanOutcome(n, LOST);
   await expect
     .poll(() => submitOf(jobId(n + 1))?.resume ?? null, { timeout: 8 * POLL_MS })
     .toEqual({ planId, fromJobId: jobId(n) });
+  await expect
+    .poll(async () => (await planRowOf(planId)).sourceJobId, { timeout: 8 * POLL_MS })
+    .toBe(jobId(n + 1));
 }
 
 /** Append proposals to a job's plan through the door motir-ai uses. */
