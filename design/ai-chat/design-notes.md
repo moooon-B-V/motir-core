@@ -6063,3 +6063,271 @@ The warm pass narrows to the primary button and small marks (the step dot, spinn
 ### Revision 6 (2026-10-12) — how this canvas is reached
 
 This board is the discovery canvas for a person who starts from an idea. It is not the migrate wizard's "A few questions", which is now a step of the wizard page (`design/onboarding-migrate/design-notes.md` § _Revision 6_, Panels 6a–6d). The new Panel 0 draws the door: the migrate wizard's bar link **Start from an idea instead** → `/onboarding/discovery`, with its focus ring; the entrance's Start reaches it too. Panel 1's note no longer lists the wizard's Decision and Resume, which now advance in place.
+
+---
+
+## ⭐ Motir at work — the drafted card breathes, and one Motir mark in the rail breathes with it (MOTIR-8414, 2026-10-14)
+
+**Design system, identified first.** Read `package.json` (depends on `@motir/design-system`,
+`workspace:*`) and `app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`). Both hold,
+so the verdict is **(a) ON MOTIR DESIGN**, package **v0.14.0** (`packages/design-system/package.json`).
+The project's axes are per person (`app/layout.tsx` stamps the reader's `data-style` / `data-palette`
+/ `data-type`; a signed-out reader gets none), so the board renders at the package defaults
+(`warm-editorial` · `motir` · `motir`), which is what a Visitor sees. The package exports
+`@motir/design-system/mock`, and the board is built with its `renderMock`. Every part on this surface
+is product-local, so the board composes those parts' **real emitted markup**:
+
+| part                                                                  | kind                    | reason                                                               |
+| --------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------- |
+| `PlanProposalViews` → `PlanReviewCanvas` → `PlanningCanvas` cue layer | product-local component | the planning canvas and its one cue layer                            |
+| `PlanProgressLineView` (the pane header's marker and line)            | product-local component | the plan's progress line, cited and not changed                      |
+| `PlanChangeRail` (header, narration block, composer)                  | product-local component | the planning rail                                                    |
+| `BrandMark` (`@motir/brand`, re-exported by `components/brand`)       | brand package part      | the mark this section moves; `@motir/brand` is not the design system |
+
+Nothing is proposed for `@motir/design-system`: the breath is a canvas rule beside the shipped cue,
+and the mark's breath is a rule on a product-local wrapper.
+
+**Amends, on the record:** `design/ai-planning/design-notes.md` **Part XXVI §26.6** (_"It does NOT
+loop"_) and **§26.8** rows **C2**, **C8** and **C10**, for the drafting cue only (details below), and
+`planning-workspace.mock.html` (the overlay, MOTIR-4726) by adding one element to its rail header.
+Neither mock is edited. Story **MOTIR-8413**; **MOTIR-8415** supplies the state, **MOTIR-8416** builds
+the card's motion and **MOTIR-8417** the mark's.
+
+**Asset:** [`planning-workspace--at-work.mock.html`](./planning-workspace--at-work.mock.html), a
+**delta** holding only the panels that change.
+
+| Panel | What it shows                                                                                            |
+| ----- | -------------------------------------------------------------------------------------------------------- |
+| 1     | The overlay at work: the canvas pane, its unchanged progress line, the rail with the ONE added mark      |
+| 2     | The breath, frame by frame (opacity 1 · ≈0.78 · 0.55, then live) — the card's ring and the mark's glyph  |
+| 3     | Every state, card and mark (the table below, drawn row by row)                                           |
+| 4     | Several cards named at once, each breathing on its own, with the shipped off-level count                 |
+| 5     | A cued card that deepens: the accent outline inside the breathing ring                                   |
+| 6     | The leaving form, for a step that moves on and for a plan that stops being `generating`                  |
+| 7     | An exiting node — no cue                                                                                 |
+| 8     | Panel 3 again under `prefers-reduced-motion: reduce`                                                     |
+| 9–11  | Panels 1, 3 and 8 in dark (a nested `data-theme="dark" data-appearance-scope` frame, so the tokens flip) |
+
+### Rendered before drawn
+
+Every canvas pane and the rail are the emitted markup of `PlanProposalViews` and `PlanChangeRail` at
+motir-core `9b538d7d5`, captured with `tests/helpers/renderWithIntl` → `container.innerHTML` (en), one
+capture per progress state (starting, working with one and with several steps, writing, stalled,
+failing, resuming, off-level, settled). The delta is applied to those captures and to nothing else:
+one attribute on the shipped node box, one wrapped `BrandMark` in the rail header, and the rules
+below. Two board-only liberties, both labelled in the stylesheet: the canvas world is offset and
+scaled to 0.9 (the shipped canvas fits itself to the pane in a browser, which a static capture cannot
+measure), and panel 8 switches animations off to stand for the media query. What the render showed:
+
+- **Today the cue VANISHES on a stall.** `readPlanProgress` returns `liveSteps: []` when the plan is
+  stalled, so the shipped canvas drops every cue the moment the 15-minute threshold passes (the
+  stalled capture has no `data-cue`). This section changes that (the stalled row below).
+- **The rail header carries no mark.** It is a status dot, the `planningWorkspace.railLabel` word
+  (_Motir AI_) and the mode pill. The marks in the rail are the 13 px inverted glyphs inside each
+  assistant message's avatar disc, one per message.
+- **`PlanProgressState` has FIVE values on `main`, not four.** MOTIR-8309 added `resuming`
+  (`lib/plans/planProgress.ts`, Part XXVII). The table below covers it; MOTIR-8415's precedence
+  needs the same row.
+- **The cue's design of record is reachable.** The card was written when `Part XXV §25.6–25.8` in
+  `design/ai-planning/design-notes.md` resolved to the approve-progress design and
+  `plan-review--live-progress.mock.html` was missing. MOTIR-8299 has since landed the cue's design as
+  **Part XXVI**, with that mock, and the shipped comment in `app/globals.css` cites Part XXVI. No
+  dangling citation was reproduced, so no bug was filed for it.
+
+### The number of this section
+
+`design/ai-chat/design-notes.md` has **no numbered Parts**: its sections are `## ⭐ <title> (KEY,
+date)` headings, and its index is those headings. So this section takes no number, and its address is
+its heading. Checked on 2026-10-14 against the file's headings (`grep -n "^## " design-notes.md`: no
+heading names _at work_) and against the area's published results (`list_designs { projectKey:
+"MOTIR", pathPrefix: "design/ai-chat/planning-workspace" }`: 18 results, none holding an `--at-work`
+mock or a section of this title).
+
+### The States table — total, card and mark
+
+The CARD answers _which_ card Motir is writing; the MARK answers _that_ Motir is at work. Both read
+one datum, MOTIR-8415's at-work state over the shipped reading.
+
+| state (where it comes from)                                                                       | the card — the cue layer on the node box                                                                                                                                         | the Motir mark — rail header                            | reduced motion                                                    |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------- |
+| `starting` — a settle step, nothing proposed (`readPlanProgress`)                                 | no card is cued (none exists to name); nothing moves                                                                                                                             | **breathes**                                            | no cue; the mark is the static glyph                              |
+| `working`, one live step naming a card                                                            | that card's ring **breathes**, its chip holds still; every other card on the level is still                                                                                      | **breathes**                                            | the static dotted ring + chip on that card; the static glyph      |
+| `working`, several live steps                                                                     | each named card's ring breathes **on its own** — its breath starts when its own cue arrives; nothing synchronises them and nothing staggers them                                 | **breathes** — ONE instance                             | each named card holds the static ring + chip; one static glyph    |
+| `working`, a step on a level the reader is not viewing                                            | the named card breathes wherever the one layer renders it; on the viewed level the shipped arrivals slot says _{count} being drafted in {identifier} · Go there_                 | **breathes**                                            | the static cue where rendered; the slot's words; the static glyph |
+| `writing` — proposals exist, no live step                                                         | no card is cued; nothing moves                                                                                                                                                   | **breathes**                                            | no cue; the static glyph                                          |
+| `stalled` — quiet past `PLAN_STALLED_AFTER_MS` (15 min)                                           | the card the snapshot's steps last named keeps the **static** ring + chip — no motion, and it does not vanish                                                                    | **static** — the shipped glyph at full opacity          | the same static ring + chip; the static glyph                     |
+| `reconnecting` — the poll is `failing` (three failed reads)                                       | the card the held step names keeps the **static** ring + chip (the last snapshot stands)                                                                                         | **static**                                              | the same; the static glyph                                        |
+| `resuming` — Motir resumed the plan by itself and the new job has not yet spoken                  | no card is cued (the resume drops the lost machine's steps); nothing moves                                                                                                       | **static** — nothing has been reported since the resume | no cue; the static glyph                                          |
+| `settled` — the plan left `generating` (planned, approved, declined, or its producer judged dead) | every cue **LEAVES**: ring and chip fade out, then the card is its shipped box                                                                                                   | **static**, until the overlay hands over                | the cue is removed at the next paint; the static glyph            |
+| a cue whose step moves on or clears (while still `generating`)                                    | that cue **LEAVES** the same way; a new card's cue arrives by the shipped C1                                                                                                     | unchanged by this event — the state decides             | removed at the next paint                                         |
+| a cued card that DEEPENS                                                                          | both: the deepen's 2 px accent outline (offset 2 px) inside the breathing ring (offset 7 px); the **deepen is the fresher signal** (news, solid) and does not restart the breath | —                                                       | §23.5's static deepen inside the static ring                      |
+| an exiting node (a proposal withdrawn)                                                            | no cue — a withdrawn target is dropped from the steps, so the shipped layer adds none and this delta adds none                                                                   | —                                                       | no cue                                                            |
+
+**Why stalled and reconnecting HOLD and do not leave.** A person must still see which card was being
+written when the producer went quiet, and both states can recover. A static ring and chip state a
+fact; only motion claims liveness, and motion is what stops. **Why `resuming` does not move the mark,
+when `starting` does:** `starting` follows a request a person just made; `resuming` follows a lost
+machine, and until the new job reports anything the honest form is still. The progress line's
+_Resuming_ words (Part XXVII) carry the state.
+
+### The motion — one property, the shipped tokens
+
+| element              | animates              | from → to                      | duration                                                                   | easing                     | stops when                                                                                  |
+| -------------------- | --------------------- | ------------------------------ | -------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
+| the cue's **ring**   | `opacity` only        | 1 → 0.55, `infinite alternate` | `calc(var(--transition-slow) * 6)`, after a `var(--transition-slow)` delay | `var(--canvas-ease-enter)` | the at-work state is not `starting` · `working` · `writing`, or the card is no longer named |
+| the cue's **chip**   | nothing               | —                              | —                                                                          | —                          | — (its word stays readable)                                                                 |
+| the cue **leaving**  | ring + chip `opacity` | → 0, then removed              | `var(--transition-duration)`                                               | `var(--canvas-ease-exit)`  | it is a one-shot (`canvas-fade-out`, §26.8 C2's tokens)                                     |
+| the **mark's glyph** | `opacity` only        | 1 → 0.55, `infinite alternate` | `calc(var(--transition-slow) * 6)`                                         | `var(--canvas-ease-enter)` | the at-work state is not `starting` · `working` · `writing`                                 |
+
+Nothing else moves: not the card, not the node box (a transform there would desync the edges, which
+the canvas routes from node rects), not the edges, not any Part VI op treatment. No rotation and no
+scale on the mark: the product's rotation idiom is `Spinner`, and a turning wordmark reads as loading.
+
+**The duration, corrected by looking.** The card proposed the bare `var(--transition-slow)`. That is
+250 ms (160 ms under one style), so a full breath would take half a second: on the board it reads as a
+flicker, a two-per-second alarm rather than work in progress. Six of the same token (1.5 s each way,
+a 3 s breath) reads as breathing at real size. It is the SHIPPED token, multiplied, so it still follows
+a `[data-style]` that re-paces the canvas; no duration and no easing is added to the vocabulary. The
+55 % floor was kept: on the board it is visible against the card's emphasis ring without making the
+dotted ring disappear.
+
+**The rules, as they will stand beside the shipped cue in `app/globals.css`:**
+
+```css
+@keyframes canvas-cue-breathe {
+  to {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .canvas-node--drafting[data-cue-motion='at-work'] > .canvas-cue-ring {
+    animation:
+      canvas-cue-ring-enter var(--transition-slow) var(--canvas-ease-enter) both,
+      canvas-cue-breathe calc(var(--transition-slow) * 6) var(--canvas-ease-enter)
+        var(--transition-slow) infinite alternate;
+  }
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-ring,
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
+    animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  .plan-at-work-mark[data-at-work='true'] > .brand-glyph {
+    animation: canvas-cue-breathe calc(var(--transition-slow) * 6) var(--canvas-ease-enter) infinite
+      alternate;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-ring,
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
+    display: none;
+  }
+}
+```
+
+So the motion lives on the shipped cue's own ring and chip, switched by ONE attribute on the shipped
+node box — `data-cue-motion="at-work"` while the card is named and Motir is at work, `"leaving"` for
+the exit, absent for the static form. There is no second cue layer. The LAYING cue keeps its shipped
+treatment: no rule above names `.canvas-node--laying`.
+
+### Where the mark sits
+
+**ONE instance, in the rail header** (`PlanChangeRail`'s `<aside>`, the first row: `flex items-center
+gap-2 border-b border-(--el-border-soft) px-4 py-3`), **between the header's status dot and its
+_Motir AI_ label**. The header carries no mark today, so the instance is ADDED there; no existing mark
+moves, and the avatar glyphs stay still. The markup:
+
+```tsx
+<span className="plan-at-work-mark inline-flex shrink-0" data-at-work={atWork} aria-hidden="true">
+  <BrandMark variant="mark" size={14} />
+</span>
+```
+
+Not per narration group (several live steps would multiply it) and not on the canvas pane (its header
+slot is the progress line's). Its two neighbours are drawn in panel 1 and are NOT touched: the
+narration block with its _Hide planner notes (n)_ control (MOTIR-8060) below it, and the progress
+line's marker (_Being written_, MOTIR-7820) in the canvas pane header, which is not this mark.
+
+### Token roles
+
+| element        | colour                                                                                           | shape                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| cue ring       | `--el-status-in-progress` (shipped, unchanged)                                                   | `calc(var(--radius-card) + 7px)`, 2 px dotted (shipped) |
+| cue chip       | `--el-card` fill, `--el-status-in-progress` border + glyph, `--el-text-secondary` word (shipped) | `--radius-badge`, `--spacing-chip-x/y` (shipped)        |
+| the mark       | `--el-accent-on-surface` (`brand.css`'s `.brand-glyph`, unchanged)                               | 14 px glyph box                                         |
+| deepen outline | `--el-accent-on-surface` (shipped)                                                               | 2 px solid, offset 2 px (shipped)                       |
+| motion         | `--transition-slow`, `--transition-duration`, `--canvas-ease-enter`, `--canvas-ease-exit`        | —                                                       |
+
+No raw colour, no new token, no new easing.
+
+### Accessibility
+
+- **The mark stays decorative.** The wrapper is `aria-hidden`, `BrandMark`'s glyph is already
+  `aria-hidden`, and it emits no label. The rail's name stays its `aria-label` (_Motir AI_).
+- **The cue's chip stays the accessible description** (`role="img"`, _Being drafted now_, tied to the
+  box by `aria-describedby`), at every state in which the cue is drawn, moving or not.
+- **The rail's one polite live region is untouched**, and so is the progress line's `role="status"`
+  marker. Nothing here announces anything.
+- **Motion is opt-in**: every animation sits behind `prefers-reduced-motion: no-preference`, and the
+  static form is the default. The breath changes opacity slowly and never flashes (well under the
+  WCAG 2.3.1 three-per-second bound).
+
+### Copy — a decision: no string is added
+
+The words already ship and are cited, not duplicated: the chip's `planReview.cue.drafting`
+(_Drafting_ / 起草中) and its name `planReview.cue.draftingName` (_Being drafted now_ / 正在起草); the
+marker's `planReview.liveWriting` / `liveStalled` and the line's reconnecting and resuming words
+(MOTIR-7820, MOTIR-8309); the rail label `planningWorkspace.railLabel`. The mark carries no text. So
+the story's en + zh criterion holds with no new key.
+
+### GIVES / TAKES
+
+- **MOTIR-8413** (the story) — neither; the container.
+- **MOTIR-8415** (the at-work state) — **GIVES** the state this section draws. **TAKES** the
+  `resuming` row (`atWork` false, `steps` empty) beside its four listed values, so its
+  `Record<PlanAtWorkState, boolean>` is total over the five shipped values plus `settled` and
+  `reconnecting`.
+- **MOTIR-8416** (the card's motion) — **TAKES** the card column, the motion table, the rules above,
+  the `data-cue-motion` attribute, the leaving form, and the stalled hold: under `stalled` the static
+  cue names the card the snapshot's steps last named, which `readPlanProgress` no longer hands over in
+  `liveSteps`, so the hold is read from the held snapshot, never re-derived.
+- **MOTIR-8417** (the mark) — **TAKES** the mark column, the placement and markup above, and the
+  accessibility rules.
+- **MOTIR-8418** (the coverage and integration gate) — **TAKES** the guards' subjects: one cue layer
+  (one attribute, no second element), the four motion tokens and two easings as the only vocabulary,
+  no raw colour, no new dependency, no new copy key.
+- **MOTIR-8419** (the E2E) — **TAKES** the observable hooks: `data-cue-motion` on `[data-node-id]`,
+  `data-testid="plan-at-work-mark"` with `data-at-work`, and the states to walk.
+- **MOTIR-7820 / MOTIR-7821 / MOTIR-7830** — **GIVE** the cue, the progress line and its marker, the
+  off-level wording; this section amends Part XXVI §26.6 and §26.8 C2 / C8 / C10 for the drafting cue
+  and changes no word.
+- **MOTIR-8060** (the narration) and **MOTIR-7974** (the rail's lines) — **GIVE** the rail this sits
+  in; neither changes.
+- **MOTIR-6297 / MOTIR-6294 / MOTIR-6300** — **GIVE** the canvas motion, its tokens and its opt-in;
+  untouched.
+- **MOTIR-6158** — whether a card ARRIVES with motion stays its own.
+- **MOTIR-6155** (List | Canvas), **MOTIR-6248** (the resizable split), **MOTIR-5246** (approve
+  progress) — neither.
+- **MOTIR-8128** — **GIVES** the dead-producer judgement on the same 15 minutes: `stalled` while a
+  snapshot is still handed over, `settled` once it is not.
+
+### Part XXVI, amended for the drafting cue
+
+- **§26.6 "It does NOT loop" → it breathes while Motir is at work.** Reason 2 (a loop runs on the
+  client's clock) is answered by the gate: the breath runs only while MOTIR-8415 says Motir is at
+  work, and stops on stall, on a failing poll and on resume. Reason 3 (the deepen is the motion) is
+  kept by making the breath slow and opacity-only, and the deepen the fresher signal. Reason 4
+  (reduced motion needs no second design) still holds: the static form is the shipped one.
+- **§26.8 C2** (a cue leaves on `--transition-duration` / exit) was specified and never shipped; it is
+  now drawn and specified as the `leaving` form.
+- **§26.8 C8** (cues leave on stall) → the cue **holds its static form** on stall.
+- **§26.8 C10** (hand-over: cues gone in one frame) → the drafting cue **leaves by C2**; everything
+  else in C10 is unchanged.
+
+### What this section does not draw
+
+- Any motion for the LAYING cue or the crumb chip; the progress line, its marker dot and its words;
+  the narration block, its control and the per-call lines; the arrival, exit, glide, edge and deepen
+  motion; the counts; the mark's other homes (onboarding, landing, the AI callout orb, the avatar
+  discs).
+- Any implementation: no component, hook or stylesheet is changed by this card.
+- A cue in the List view (still none, §26.18).
+- A new door: the overlay is opened exactly as `planning-workspace.mock.html` draws.
