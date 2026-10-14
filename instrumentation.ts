@@ -133,6 +133,25 @@ export async function register() {
 
   if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
 
+  // A production build with `MOTIR_RATE_LIMIT_STORE=memory` refuses to start
+  // (MOTIR-8614): per-process counters on a multi-machine fleet are a limit of
+  // `limit × machines`. The guard's module imports nothing, so this opens no
+  // database pool; see its header.
+  //
+  // ⚠️ It EXITS rather than throws. Measured on `next start` and on the
+  // standalone `node server.js` (Next 16.3.6): an error thrown from `register()`
+  // is logged as "Failed to prepare server" and the process KEEPS LISTENING,
+  // answering every request with an error — a machine that looks up to a health
+  // probe's TCP check and serves nothing. Exiting non-zero is what makes the
+  // deploy fail at the release instead.
+  const { assertRateLimitStoreAllowed } = await import('@/lib/rateLimit/storeGuard');
+  try {
+    assertRateLimitStoreAllowed();
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
+
   // Per-response `close` listener ceiling (MOTIR-8171): the framework stack puts
   // 8–9 on an ordinary response, so a couple more tip it over Node's 10. See the
   // module for the measurement and why this is not a leak.

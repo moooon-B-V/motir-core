@@ -422,6 +422,24 @@ with no file or reading behind it is an assumption wearing a measurement's cloth
 | **Sticky sessions so one token lands on one machine**    | Makes correctness depend on the proxy's routing, and dies the moment a machine restarts mid-window. Solves the symptom by constraining the deployment                                                                                    |
 | **Two stores — Postgres for `/api/v1`, Redis for 8.5.9** | Exactly the divergent-limiter failure MOTIR-1165 was written to prevent. One store, one interface, whichever card lands second reuses the first's                                                                                        |
 
+### Amendment — 2026-10-14: `memory` is refused in a production build (MOTIR-8614)
+
+The escape hatch above named `memory` as an option for a single-instance self-host. **That option is withdrawn.**
+
+**What changed.** A production build (`NODE_ENV=production`) with `MOTIR_RATE_LIMIT_STORE=memory` now refuses to start. The check compares the value trimmed and case-insensitively, as `resolveRateLimitBackend()` does. `instrumentation.ts` calls `assertRateLimitStoreAllowed()` (`lib/rateLimit/storeGuard.ts`) once at server boot, and it throws `MemoryRateLimitStoreRefusedError`, naming the variable and the fix.
+
+**Why.**
+
+- Production runs more than one `app` machine.
+- The `memory` store is a per-process `Map`, so one stray value makes every limit `limit × machines` while every response header still claims the limit holds.
+- Since MOTIR-8613 the same store also backs Better-Auth's own buckets, so sign-in and password reset are split per machine too.
+- A process cannot know how many machines it shares a fleet with. `NODE_ENV` is the one signal every deployment carries.
+- The check refuses to start rather than log an error, because nothing reads such a log and fails the deploy, whereas a machine that does not come up already fails the deploy's health check.
+
+**What it means for a self-hoster.** A single-instance self-host uses `postgres`, which is the default wherever `DATABASE_URL` is set. There is no override. Tests and development (`NODE_ENV` not `production`) keep `memory`.
+
+**The guard deliberately does not cover the unset-and-no-`DATABASE_URL` default**, which also resolves to `memory`. Such a process throws `DATABASE_URL is not set` from `lib/db.ts` the first time a repository loads, so it cannot serve a limited request anyway.
+
 ---
 
 ## §7 — Q6 and Q7: the counter table is NOT tenant-scoped, and one card owns the seam

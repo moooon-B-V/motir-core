@@ -4,7 +4,9 @@ import { auth } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 const { createUser, verifyPassword } = usersService;
 import { adminDb } from './helpers/adminDb';
-import { truncateAuthTables, truncateJobRuns } from './helpers/db';
+import { truncateAuthTables, truncateJobRuns, truncateRateLimitCounters } from './helpers/db';
+import { pinSharedRateLimitStoreDeadline } from './helpers/rateLimitStore';
+import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import {
   captureConsoleEmails,
   captureEmailEvents,
@@ -62,7 +64,9 @@ afterAll(async () => {
 describe('forget-password (auth.api.requestPasswordReset)', () => {
   let captured: ReturnType<typeof captureEmailEvents>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await truncateRateLimitCounters();
+    pinSharedRateLimitStoreDeadline();
     captured = captureEmailEvents();
   });
 
@@ -140,7 +144,9 @@ describe('forget-password (auth.api.requestPasswordReset)', () => {
 describe('reset-password (auth.api.resetPassword)', () => {
   let captured: ReturnType<typeof captureEmailEvents>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await truncateRateLimitCounters();
+    pinSharedRateLimitStoreDeadline();
     captured = captureEmailEvents();
   });
 
@@ -237,11 +243,13 @@ describe('rate limit on /request-password-reset', () => {
   // every request in the loop shares the same key, so the 4th one trips
   // the configured 3/hour limit.
   //
-  // Better-Auth's in-memory rate-limit storage is process-wide, so other
-  // test files in this suite that touch /request-password-reset would
-  // share state with this one. They don't (auth.api.* direct calls bypass
-  // the limiter entirely, as the limiter requires a Request). If that
-  // changes, this test should pin a unique x-forwarded-for IP per case.
+  // Better-Auth counts in the shared `rate_limit_counter` table now
+  // (MOTIR-8613, `lib/rateLimit/betterAuthStorage.ts`), so the bucket outlives
+  // this process: it is truncated per case, or a re-run inside the hour would
+  // start with the last run's three spent. The shared store's deadline is
+  // pinned for the same reason every refusal through it is (MOTIR-3067): at the
+  // production 250 ms a slow increment fails OPEN and the 4th is served.
+  // (auth.api.* direct calls still bypass the limiter, as it requires a Request.)
   //
   // captureEmailEvents is installed so the inngest.send the hook fires per
   // allowed request resolves in-process (no dev server) — and we assert the
@@ -249,12 +257,15 @@ describe('rate limit on /request-password-reset', () => {
   // enqueued nothing.
   let captured: ReturnType<typeof captureEmailEvents>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await truncateRateLimitCounters();
+    pinSharedRateLimitStoreDeadline();
     captured = captureEmailEvents();
   });
 
   afterEach(() => {
     captured.restore();
+    __resetSharedRateLimitStoreForTest();
   });
 
   async function postForgetPassword(email: string): Promise<Response> {

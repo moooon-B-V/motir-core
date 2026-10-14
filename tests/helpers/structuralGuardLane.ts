@@ -463,6 +463,12 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
     'wire. Its call-site walk over lib/ is DB-free and rides along; splitting it ' +
     'out would separate a presence check from the value check the file says in ' +
     'its own header cannot substitute for it.',
+  'tests/inProcessState/guards.test.ts':
+    'imports @/lib/db and ../helpers/adminDb — the story gate of MOTIR-8547 ' +
+    '(MOTIR-8619) pairs its inventory and file-walk guards with case 9, which ' +
+    'writes a moved row through the app client and reads it through a second ' +
+    'client of the same database. The walk and the write are one gate over one ' +
+    'list of moved rows, so they stay in one file.',
   'tests/integration/ai/planningSubmitCarriesOnboardingFlag.test.ts':
     'imports @/lib/db, ../../helpers/adminDb and ../../fixtures — it drives the ' +
     'migrate wizard through migrateOnboardingService against real Postgres (a ' +

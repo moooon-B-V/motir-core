@@ -5009,6 +5009,12 @@ export default defineConfig({
         // shape of the gap this card exists to close.
         'lib/rateLimit/mcpGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/rateLimit/fixedWindow.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8547 — Better-Auth's adapter onto the shared counter (MOTIR-8613)
+        // and the boot guard on the `memory` store (MOTIR-8614). Measured at
+        // 100 / 100 / 100 / 100 against their own specs plus the story gate
+        // (`tests/rateLimit/storyGate.test.ts`, MOTIR-8619).
+        'lib/rateLimit/betterAuthStorage.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/storeGuard.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-8548 · MOTIR-8607 — the per-workspace agent ceiling, the one NEW
         // module of the story's motir-core children. MEASURED on this branch against the
         // story's own specs (`tests/integration/rateLimit/agentRateLimitStoryGate.test.ts`
