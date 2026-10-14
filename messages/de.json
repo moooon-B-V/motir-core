@@ -9308,6 +9308,7 @@
         "model_unavailable": "der KI-Anbieter nicht verfügbar war",
         "token_expired": "die Verbindung zum KI-Anbieter abgelaufen ist",
         "prompt_too_large": "der Kontext des Plans für das Modell zu groß war",
+        "job_failed": "der Planungsauftrag fehlgeschlagen ist",
         "internal": "auf unserer Seite etwas schiefgelaufen ist"
       },
       "refusal": {

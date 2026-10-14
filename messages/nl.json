@@ -9305,6 +9305,7 @@
         "model_unavailable": "de AI-aanbieder niet beschikbaar was",
         "token_expired": "de verbinding met de AI-aanbieder verlopen was",
         "prompt_too_large": "de context van het plan te groot was voor het model",
+        "job_failed": "de planningstaak mislukt is",
         "internal": "er aan onze kant iets misging"
       },
       "refusal": {

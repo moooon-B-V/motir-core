@@ -9305,6 +9305,7 @@
         "model_unavailable": "dostawca AI był niedostępny",
         "token_expired": "połączenie z dostawcą AI wygasło",
         "prompt_too_large": "kontekst planu był zbyt duży dla modelu",
+        "job_failed": "zadanie planowania nie powiodło się",
         "internal": "po naszej stronie wystąpił problem"
       },
       "refusal": {

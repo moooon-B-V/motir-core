@@ -33,14 +33,14 @@ describe('stopPhraseKeyOf — where the walk stopped, in the progress line’s s
   });
 });
 
-describe('resumeReasonKeyOf — TOTAL over the six stored codes', () => {
+describe('resumeReasonKeyOf — TOTAL over the seven stored codes', () => {
   it('returns a key for each code, and every key has words in both locales', () => {
     for (const code of RESUME_REASON_CODES) {
       expect(resumeReasonKeyOf(code)).toBe(code);
       expect(en.workbench.planningSession.reason[code]).toBeTruthy();
       expect(zh.workbench.planningSession.reason[code]).toBeTruthy();
     }
-    expect(RESUME_REASON_CODES).toHaveLength(6);
+    expect(RESUME_REASON_CODES).toHaveLength(7);
   });
   it('an unknown or missing code reads as `internal`, never the raw code', () => {
     expect(resumeReasonKeyOf('quantum_flux')).toBe('internal');

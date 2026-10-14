@@ -7488,6 +7488,7 @@
   "workbench.planningSession.reason.model_unavailable": "the AI provider was unavailable",
   "workbench.planningSession.reason.token_expired": "its connection to the AI provider expired",
   "workbench.planningSession.reason.prompt_too_large": "the plan's context was too large for the model",
+  "workbench.planningSession.reason.job_failed": "the planning job failed",
   "workbench.planningSession.reason.internal": "something went wrong on our side",
   "workbench.planningSession.refusal.credits": "Your organization is out of Motir AI credits. Add credits, then resume.",
   "workbench.planningSession.refusal.notOwner": "Only the person who started this session or a project manager can resume it.",

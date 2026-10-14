@@ -9302,6 +9302,7 @@
         "model_unavailable": "the AI provider was unavailable",
         "token_expired": "its connection to the AI provider expired",
         "prompt_too_large": "the plan's context was too large for the model",
+        "job_failed": "the planning job failed",
         "internal": "something went wrong on our side"
       },
       "refusal": {

@@ -9305,6 +9305,7 @@
         "model_unavailable": "AIプロバイダーが利用できなかったため",
         "token_expired": "AIプロバイダーとの接続の有効期限が切れたため",
         "prompt_too_large": "プランのコンテキストがモデルの上限を超えたため",
+        "job_failed": "計画ジョブが失敗したため",
         "internal": "こちら側で問題が発生したため"
       },
       "refusal": {
