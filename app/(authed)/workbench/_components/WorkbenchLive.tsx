@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -15,6 +15,9 @@ import {
 // and the guard is right: it is the shape six separate repairs came from.
 import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
+import { LiveSignalProvider, routeLiveSources } from '@/lib/live/liveSignal';
+import { createWorkbenchStreamSource } from '@/lib/live/sources/workbenchStreamSource';
+import { planPollSource } from '@/lib/live/sources/planPollSource';
 
 // THE HOST THAT HOLDS THE STREAM (Story MOTIR-5238 · Subtask MOTIR-5242).
 //
@@ -92,6 +95,25 @@ function useRefreshOnNudge(nudge: number): void {
  *     probe is what it needs, and that probe reads the SIGNAL, never a refresh.
  */
 export function WorkbenchLive({ children }: { children: ReactNode }) {
+  // ⚠️ ONE SOURCE FOR THE SHELL'S LIFETIME (Story MOTIR-8539 · MOTIR-8572): it
+  // holds the one connection, opened while a subscriber is present. The plan
+  // topic routes to the poll's cadence, so a plan surface under the shell reads
+  // the same seam as one outside it.
+  const [stream] = useState(createWorkbenchStreamSource);
+  useEffect(() => () => stream.dispose(), [stream]);
+  const source = useMemo(
+    () => routeLiveSources({ workbench: stream, plan: planPollSource }),
+    [stream],
+  );
+  return (
+    <LiveSignalProvider source={source}>
+      <WorkbenchLiveHost>{children}</WorkbenchLiveHost>
+    </LiveSignalProvider>
+  );
+}
+
+/** The host's half under the provider: subscribes, refreshes on a nudge, hands the signal down. */
+function WorkbenchLiveHost({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const onWorkbench = pathname === WORKBENCH_PATH;

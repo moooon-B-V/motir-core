@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlanReview, fetchPlanReviewSince } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import { useLiveSignal, useLiveSignalSource, type LiveTopic } from '@/lib/live/liveSignal';
+import { POLL_MS } from '@/lib/live/sources/planPollSource';
 
 // THE generating-plan poll (Subtask MOTIR-6295) — the ONE place a `generating`
 // Plan is watched while it is being written. Lifted out of the two effects that
@@ -52,12 +54,19 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 // longer `generating`, when `planId` changes, or on unmount. A `null` planId is
 // "nothing to watch".
 //
+// ⚠️ THE CADENCE COMES THROUGH THE LIVE-SIGNAL SEAM (Story MOTIR-8539 · Subtask
+// MOTIR-8572). The interval is `lib/live/sources/planPollSource.ts`'s, and a tick
+// arrives as a `plan` signal from `useLiveSignal`; `refresh()` asks the source
+// to `trigger` a FORCED signal. Everything above this paragraph is the READ
+// POLICY and stays here, because it is not a transport: a different source
+// (a test's fake, the push story's) drives the same reads by the same rules.
+//
 // It draws NOTHING. Callers decide what a snapshot means: `onSnapshot` fires
 // with every applied response, in the same tick it lands, for callers whose own
 // state must move with it (the plan page's `review`, the reveal's `items`).
 
-/** The generating-plan poll cadence. */
-export const POLL_MS = 2500;
+/** The generating-plan poll cadence — owned by the seam's plan source, re-exported here. */
+export { POLL_MS };
 
 /** A read still out after this long is abandoned so the poll can read again (MOTIR-8102). */
 export const STALL_MS = 15_000;
@@ -90,6 +99,9 @@ export interface GeneratingPlanPoll {
   refresh: () => void;
 }
 
+/** A topic no subscription is ever made for (`enabled` is false whenever it is used). */
+const IDLE_TOPIC: LiveTopic = { kind: 'plan', planId: '' };
+
 interface Snapshot {
   planId: string;
   review: PlanReviewDto;
@@ -111,6 +123,8 @@ export function useGeneratingPlanPoll(
     onSnapshotRef.current = opts.onSnapshot;
   });
   const tickRef = useRef<((force?: boolean) => void) | null>(null);
+  // The plan a snapshot STOPPED (no longer `generating`): its cadence unsubscribes.
+  const [stoppedPlanId, setStoppedPlanId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!planId) return;
@@ -126,7 +140,6 @@ export function useGeneratingPlanPoll(
 
     const stop = () => {
       stopped = true;
-      clearInterval(handle);
       for (const ctrl of inFlight.keys()) ctrl.abort();
       inFlight.clear();
       if (tickRef.current === tick) tickRef.current = null;
@@ -175,7 +188,10 @@ export function useGeneratingPlanPoll(
           setSnapshot({ planId, review });
           setVersion((v) => v + 1);
           onSnapshotRef.current?.(review);
-          if (review.status !== 'generating') stop();
+          if (review.status !== 'generating') {
+            stop();
+            setStoppedPlanId(planId);
+          }
         })
         .catch(() => {
           // Best-effort — the last snapshot stands and the next tick retries. A
@@ -190,14 +206,27 @@ export function useGeneratingPlanPoll(
     };
 
     tickRef.current = tick;
-    const handle = setInterval(() => tick(), POLL_MS);
     if (immediate) tick();
     return stop;
   }, [planId, immediate]);
 
+  // The cadence, from the seam: each signal is "time to look", and a FORCED one
+  // is the explicit `refresh()` below. The tick decides whether looking reads.
+  const topic = useMemo<LiveTopic | null>(
+    () => (planId ? { kind: 'plan', planId } : null),
+    [planId],
+  );
+  useLiveSignal(topic ?? IDLE_TOPIC, (signal) => tickRef.current?.(signal.forced === true), {
+    enabled: topic !== null && stoppedPlanId !== planId,
+  });
+
+  const source = useLiveSignalSource();
   const refresh = useCallback(() => {
-    tickRef.current?.(true);
-  }, []);
+    if (!topic || !tickRef.current) return;
+    // A source that cannot be nudged still reads now: the read policy is ours.
+    if (source.trigger) source.trigger(topic);
+    else tickRef.current(true);
+  }, [source, topic]);
 
   const current = planId && snapshot && snapshot.planId === planId ? snapshot.review : null;
   return {
