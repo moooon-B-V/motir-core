@@ -6066,7 +6066,22 @@ This board is the discovery canvas for a person who starts from an idea. It is n
 
 ---
 
-## ⭐ Motir at work — the drafted card breathes, and one Motir mark in the rail breathes with it (MOTIR-8414, 2026-10-14)
+## ⭐ Motir at work — the drafted card turns warm orange, pops and breathes, and one Motir mark in the rail breathes with it (MOTIR-8414, 2026-10-14)
+
+**Revised after review (2026-10-14).** The first version breathed only the shipped dotted ring's
+opacity, in the in-progress blue. The design gate came back _Request changes_: _"use a different
+color on the card to make the drafting more obvious, use the warm orange in default motir style … and
+make the card popping and growing a bit with the color."_ So this version:
+
+- gives the drafted card its OWN colour — two new roles, **`--el-drafting`** (Motir: its warm orange,
+  the `--color-accent` that `--el-highlight` and `--el-progress-fill` already ride) and
+  **`--el-drafting-surface`** (Motir: the warmed peach wash). The card wears the wash, the ring turns
+  solid orange, and the chip takes the orange edge and icon. The at-work mark takes the same orange.
+- makes the card **pop and grow**: it pops on arrival (scale 1 → 1.06 → 1.02), then breathes between
+  1.02 and 1.04 with an orange glow on its ring.
+
+The colour is the static cue, so a reduced-motion reader, a stalled plan and a dropped read all still
+see which card is being written. Only the pop, the growth and the glow are motion.
 
 **Design system, identified first.** Read `package.json` (depends on `@motir/design-system`,
 `workspace:*`) and `app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`). Both hold,
@@ -6084,8 +6099,7 @@ is product-local, so the board composes those parts' **real emitted markup**:
 | `PlanChangeRail` (header, narration block, composer)                  | product-local component | the planning rail                                                    |
 | `BrandMark` (`@motir/brand`, re-exported by `components/brand`)       | brand package part      | the mark this section moves; `@motir/brand` is not the design system |
 
-Nothing is proposed for `@motir/design-system`: the breath is a canvas rule beside the shipped cue,
-and the mark's breath is a rule on a product-local wrapper.
+Two tokens are proposed for `@motir/design-system`'s `theme.css` Tier 3 (below). Everything else is a canvas rule beside the shipped cue, and the mark's breath is a rule on a product-local wrapper.
 
 **Amends, on the record:** `design/ai-planning/design-notes.md` **Part XXVI §26.6** (_"It does NOT
 loop"_) and **§26.8** rows **C2**, **C8** and **C10**, for the drafting cue only (details below), and
@@ -6096,17 +6110,17 @@ the card's motion and **MOTIR-8417** the mark's.
 **Asset:** [`planning-workspace--at-work.mock.html`](./planning-workspace--at-work.mock.html), a
 **delta** holding only the panels that change.
 
-| Panel | What it shows                                                                                            |
-| ----- | -------------------------------------------------------------------------------------------------------- |
-| 1     | The overlay at work: the canvas pane, its unchanged progress line, the rail with the ONE added mark      |
-| 2     | The breath, frame by frame (opacity 1 · ≈0.78 · 0.55, then live) — the card's ring and the mark's glyph  |
-| 3     | Every state, card and mark (the table below, drawn row by row)                                           |
-| 4     | Several cards named at once, each breathing on its own, with the shipped off-level count                 |
-| 5     | A cued card that deepens: the accent outline inside the breathing ring                                   |
-| 6     | The leaving form, for a step that moves on and for a plan that stops being `generating`                  |
-| 7     | An exiting node — no cue                                                                                 |
-| 8     | Panel 3 again under `prefers-reduced-motion: reduce`                                                     |
-| 9–11  | Panels 1, 3 and 8 in dark (a nested `data-theme="dark" data-appearance-scope` frame, so the tokens flip) |
+| Panel | What it shows                                                                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------- |
+| 1     | The overlay at work: the canvas pane, its unchanged progress line, the rail with the ONE added mark        |
+| 2     | The pop and the breath, frame by frame (rest · 1.06 · 1.04 + glow · 1.02, then live), and the mark's glyph |
+| 3     | Every state, card and mark (the table below, drawn row by row)                                             |
+| 4     | Several cards named at once, each orange and breathing on its own, with the shipped off-level count        |
+| 5     | A cued card that deepens: the accent outline inside the orange ring                                        |
+| 6     | The leaving form, for a step that moves on and for a plan that stops being `generating`                    |
+| 7     | An exiting node — no cue                                                                                   |
+| 8     | Panel 3 again under `prefers-reduced-motion: reduce`                                                       |
+| 9–11  | Panels 1, 3 and 8 in dark (a nested `data-theme="dark" data-appearance-scope` frame, so the tokens flip)   |
 
 ### Rendered before drawn
 
@@ -6114,8 +6128,8 @@ Every canvas pane and the rail are the emitted markup of `PlanProposalViews` and
 motir-core `9b538d7d5`, captured with `tests/helpers/renderWithIntl` → `container.innerHTML` (en), one
 capture per progress state (starting, working with one and with several steps, writing, stalled,
 failing, resuming, off-level, settled). The delta is applied to those captures and to nothing else:
-one attribute on the shipped node box, one wrapped `BrandMark` in the rail header, and the rules
-below. Two board-only liberties, both labelled in the stylesheet: the canvas world is offset and
+one attribute on the shipped node box, one wrapped `BrandMark` in the rail header, two tokens and
+the rules below. Two board-only liberties, both labelled in the stylesheet: the canvas world is offset and
 scaled to 0.9 (the shipped canvas fits itself to the pane in a browser, which a static capture cannot
 measure), and panel 8 switches animations off to stand for the media query. What the render showed:
 
@@ -6148,71 +6162,179 @@ mock or a section of this title).
 The CARD answers _which_ card Motir is writing; the MARK answers _that_ Motir is at work. Both read
 one datum, MOTIR-8415's at-work state over the shipped reading.
 
-| state (where it comes from)                                                                       | the card — the cue layer on the node box                                                                                                                                         | the Motir mark — rail header                            | reduced motion                                                    |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------- |
-| `starting` — a settle step, nothing proposed (`readPlanProgress`)                                 | no card is cued (none exists to name); nothing moves                                                                                                                             | **breathes**                                            | no cue; the mark is the static glyph                              |
-| `working`, one live step naming a card                                                            | that card's ring **breathes**, its chip holds still; every other card on the level is still                                                                                      | **breathes**                                            | the static dotted ring + chip on that card; the static glyph      |
-| `working`, several live steps                                                                     | each named card's ring breathes **on its own** — its breath starts when its own cue arrives; nothing synchronises them and nothing staggers them                                 | **breathes** — ONE instance                             | each named card holds the static ring + chip; one static glyph    |
-| `working`, a step on a level the reader is not viewing                                            | the named card breathes wherever the one layer renders it; on the viewed level the shipped arrivals slot says _{count} being drafted in {identifier} · Go there_                 | **breathes**                                            | the static cue where rendered; the slot's words; the static glyph |
-| `writing` — proposals exist, no live step                                                         | no card is cued; nothing moves                                                                                                                                                   | **breathes**                                            | no cue; the static glyph                                          |
-| `stalled` — quiet past `PLAN_STALLED_AFTER_MS` (15 min)                                           | the card the snapshot's steps last named keeps the **static** ring + chip — no motion, and it does not vanish                                                                    | **static** — the shipped glyph at full opacity          | the same static ring + chip; the static glyph                     |
-| `reconnecting` — the poll is `failing` (three failed reads)                                       | the card the held step names keeps the **static** ring + chip (the last snapshot stands)                                                                                         | **static**                                              | the same; the static glyph                                        |
-| `resuming` — Motir resumed the plan by itself and the new job has not yet spoken                  | no card is cued (the resume drops the lost machine's steps); nothing moves                                                                                                       | **static** — nothing has been reported since the resume | no cue; the static glyph                                          |
-| `settled` — the plan left `generating` (planned, approved, declined, or its producer judged dead) | every cue **LEAVES**: ring and chip fade out, then the card is its shipped box                                                                                                   | **static**, until the overlay hands over                | the cue is removed at the next paint; the static glyph            |
-| a cue whose step moves on or clears (while still `generating`)                                    | that cue **LEAVES** the same way; a new card's cue arrives by the shipped C1                                                                                                     | unchanged by this event — the state decides             | removed at the next paint                                         |
-| a cued card that DEEPENS                                                                          | both: the deepen's 2 px accent outline (offset 2 px) inside the breathing ring (offset 7 px); the **deepen is the fresher signal** (news, solid) and does not restart the breath | —                                                       | §23.5's static deepen inside the static ring                      |
-| an exiting node (a proposal withdrawn)                                                            | no cue — a withdrawn target is dropped from the steps, so the shipped layer adds none and this delta adds none                                                                   | —                                                       | no cue                                                            |
+| state (where it comes from)                                                                       | the card — the cue layer on the node box                                                                                                                                                     | the Motir mark — rail header                            | reduced motion                                                            |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `starting` — a settle step, nothing proposed (`readPlanProgress`)                                 | no card is cued (none exists to name); nothing moves                                                                                                                                         | **breathes**                                            | no cue; the mark is the static glyph                                      |
+| `working`, one live step naming a card                                                            | that card turns **orange**, **pops** and **breathes** (grows, ring glows); every other card on the level is still                                                                            | **breathes**                                            | the orange static cue on that card, at rest size; the orange glyph, still |
+| `working`, several live steps                                                                     | each named card is orange and breathes **on its own** — its pop and breath start when its own cue arrives; nothing synchronises them and nothing staggers them                               | **breathes** — ONE instance                             | each named card holds the orange static cue; one orange glyph, still      |
+| `working`, a step on a level the reader is not viewing                                            | the named card is orange and breathes wherever the one layer renders it; on the viewed level the shipped arrivals slot says _{count} being drafted in {identifier} · Go there_               | **breathes**                                            | the static cue where rendered; the slot's words; the static glyph         |
+| `writing` — proposals exist, no live step                                                         | no card is cued; nothing moves                                                                                                                                                               | **breathes**                                            | no cue; the static glyph                                                  |
+| `stalled` — quiet past `PLAN_STALLED_AFTER_MS` (15 min)                                           | the card the snapshot's steps last named keeps the **orange static** cue at rest size — no pop, no growth, no glow, and it does not vanish                                                   | **static** — the shipped glyph at full opacity          | the same orange static cue; the static glyph                              |
+| `reconnecting` — the poll is `failing` (three failed reads)                                       | the card the held step names keeps the **orange static** cue at rest size (the last snapshot stands)                                                                                         | **static**                                              | the same; the static glyph                                                |
+| `resuming` — Motir resumed the plan by itself and the new job has not yet spoken                  | no card is cued (the resume drops the lost machine's steps); nothing moves                                                                                                                   | **static** — nothing has been reported since the resume | no cue; the static glyph                                                  |
+| `settled` — the plan left `generating` (planned, approved, declined, or its producer judged dead) | every cue **LEAVES**: ring and chip fade out, the wash fades off and the box settles to scale 1, then the card is its shipped box with its own op fill                                       | **static**, until the overlay hands over                | the cue is removed at the next paint; the static glyph                    |
+| a cue whose step moves on or clears (while still `generating`)                                    | that cue **LEAVES** the same way; a new card's cue arrives by the shipped C1                                                                                                                 | unchanged by this event — the state decides             | removed at the next paint                                                 |
+| a cued card that DEEPENS                                                                          | both: the deepen's 2 px accent outline (offset 2 px) inside the orange ring (offset 7 px), growing with the box; the **deepen is the fresher signal** (news) and does not restart the breath | —                                                       | §23.5's static deepen inside the orange static ring                       |
+| an exiting node (a proposal withdrawn)                                                            | no cue — a withdrawn target is dropped from the steps, so the shipped layer adds none and this delta adds none                                                                               | —                                                       | no cue                                                                    |
 
 **Why stalled and reconnecting HOLD and do not leave.** A person must still see which card was being
-written when the producer went quiet, and both states can recover. A static ring and chip state a
-fact; only motion claims liveness, and motion is what stops. **Why `resuming` does not move the mark,
+written when the producer went quiet, and both states can recover. The orange cue at rest size states a
+fact; only the pop, the growth and the glow claim liveness, and they are what stop. **Why `resuming` does not move the mark,
 when `starting` does:** `starting` follows a request a person just made; `resuming` follows a lost
 machine, and until the new job reports anything the honest form is still. The progress line's
 _Resuming_ words (Part XXVII) carry the state.
 
-### The motion — one property, the shipped tokens
+### The colour — the static cue, two new roles
 
-| element              | animates              | from → to                      | duration                                                                   | easing                     | stops when                                                                                  |
-| -------------------- | --------------------- | ------------------------------ | -------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
-| the cue's **ring**   | `opacity` only        | 1 → 0.55, `infinite alternate` | `calc(var(--transition-slow) * 6)`, after a `var(--transition-slow)` delay | `var(--canvas-ease-enter)` | the at-work state is not `starting` · `working` · `writing`, or the card is no longer named |
-| the cue's **chip**   | nothing               | —                              | —                                                                          | —                          | — (its word stays readable)                                                                 |
-| the cue **leaving**  | ring + chip `opacity` | → 0, then removed              | `var(--transition-duration)`                                               | `var(--canvas-ease-exit)`  | it is a one-shot (`canvas-fade-out`, §26.8 C2's tokens)                                     |
-| the **mark's glyph** | `opacity` only        | 1 → 0.55, `infinite alternate` | `calc(var(--transition-slow) * 6)`                                         | `var(--canvas-ease-enter)` | the at-work state is not `starting` · `working` · `writing`                                 |
+| element              | before (shipped)                                       | now                                                                               |
+| -------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| the drafted **card** | its op fill (an add card: `--el-tint-lavender`)        | `--el-drafting-surface`, painted as an inset shadow over the op fill              |
+| the cue's **ring**   | 2 px dotted `--el-status-in-progress`                  | 2 px **solid** `--el-drafting`                                                    |
+| the cue's **chip**   | `--el-card` fill, `--el-status-in-progress` edge + pen | `--el-drafting-surface` fill, `--el-drafting` edge + pen, `--el-text-strong` word |
+| the at-work **mark** | `--el-accent-on-surface`                               | `--el-drafting` while at work; the shipped ink otherwise                          |
 
-Nothing else moves: not the card, not the node box (a transform there would desync the edges, which
-the canvas routes from node rects), not the edges, not any Part VI op treatment. No rotation and no
-scale on the mark: the product's rotation idiom is `Spinner`, and a turning wordmark reads as loading.
+**The two tokens**, added to `theme.css` Tier 3 beside `--el-progress-fill`, and overridden per
+palette the same way:
+
+| token                   | base (every palette)           | `[data-palette='motir']` light / dark                               |
+| ----------------------- | ------------------------------ | ------------------------------------------------------------------- |
+| `--el-drafting`         | `var(--el-status-in-progress)` | `var(--color-accent)` — `#d66000` / `#fa5500`, the warm orange      |
+| `--el-drafting-surface` | `var(--el-tint-sky)`           | `var(--color-tint-peach)` — `#fde0c8` / `#36230f`, the warmed peach |
+
+So every other palette keeps today's in-progress hue and gets a matching wash, and Motir gets its
+warm orange (`docs/palettes/motir.md` § _Warm touches_). They are new ROLES rather than reuses of
+`--el-highlight` and `--el-tint-peach` so a palette can move the drafting colour without moving its
+decorative accent, the Epic type or its washes. The board declares them on its own appearance scopes
+with Motir's values.
+
+**Why the wash is an inset shadow.** It sits above the card's op fill and below its content, so no
+Part VI class is edited, and it can fade out on leave (a shadow animates; swapping a fill class does
+not). The op stays legible on a drafted card by its badge (_add_ · _change_ · …) and its border style.
+
+**Contrast, from the palette doc's values (the peach pairs computed from its hexes).** The orange ring and pen are graphics (3:1): ≥3.08:1
+on every light surface, ≥4.77:1 on every dark one. The card's `--el-text` title and the chip's
+`--el-text-strong` word stay above 13:1 on the peach; the card's `--el-text-secondary` key is about
+5.4:1 on the light peach and above 7:1 on the dark one.
+
+### The motion — on the node box, the shipped tokens
+
+| element              | animates                                                           | from → to                                    | duration                                                                   | easing                     | stops when                                                                                  |
+| -------------------- | ------------------------------------------------------------------ | -------------------------------------------- | -------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
+| the **node box**     | `scale` (the independent property)                                 | **pop** 1 → 1.06 → 1.02, once                | `var(--transition-slow)`                                                   | `var(--canvas-ease-enter)` | it is a one-shot, on arrival                                                                |
+| the **node box**     | `scale`                                                            | **breath** 1.02 → 1.04, `infinite alternate` | `calc(var(--transition-slow) * 6)`, after a `var(--transition-slow)` delay | `ease-in-out`              | the at-work state is not `starting` · `working` · `writing`, or the card is no longer named |
+| the cue's **ring**   | `box-shadow` (its orange glow)                                     | 0 → 4 px at 35 %, in phase with the breath   | `calc(var(--transition-slow) * 6)`, same delay                             | `ease-in-out`              | the same                                                                                    |
+| the cue's **chip**   | nothing of its own                                                 | it grows with the box                        | —                                                                          | —                          | — (its word stays readable)                                                                 |
+| the cue **leaving**  | box `scale` → 1; ring + chip `opacity` → 0; the wash → transparent | then removed                                 | `var(--transition-duration)`                                               | `var(--canvas-ease-exit)`  | it is a one-shot (§26.8 C2's tokens)                                                        |
+| the **mark's glyph** | `opacity`                                                          | 1 → 0.55, `infinite alternate`               | `calc(var(--transition-slow) * 6)`                                         | `ease-in-out`              | the at-work state is not `starting` · `working` · `writing`                                 |
+
+**Why `scale`, not `transform`.** The canvas routes its edges from node rects, and a transform on the
+box would move what they are measured from. The independent `scale` property composes with any
+transform the canvas sets, grows the box about its centre, and leaves `left` / `top`, the edges and
+every neighbour where they are; 4 % on a 280 px card is 11 px, inside the canvas's gaps. It is the
+first scale the cue uses after its arrival, so it is gated exactly as the rest of the motion.
 
 **The duration, corrected by looking.** The card proposed the bare `var(--transition-slow)`. That is
-250 ms (160 ms under one style), so a full breath would take half a second: on the board it reads as a
-flicker, a two-per-second alarm rather than work in progress. Six of the same token (1.5 s each way,
-a 3 s breath) reads as breathing at real size. It is the SHIPPED token, multiplied, so it still follows
-a `[data-style]` that re-paces the canvas; no duration and no easing is added to the vocabulary. The
-55 % floor was kept: on the board it is visible against the card's emphasis ring without making the
-dotted ring disappear.
+250 ms (160 ms under one style), so a full breath would take half a second and reads as a flicker.
+Six of the same token (1.5 s each way) reads as breathing at real size. The pop keeps the bare token,
+because an arrival should be quick. Both are the SHIPPED token, so they follow a `[data-style]` that
+re-paces the canvas. The breath's `ease-in-out` is the one easing added: a symmetric breath on the
+decelerating enter curve snaps at each turn. The pop keeps `--canvas-ease-enter`.
 
-**The rules, as they will stand beside the shipped cue in `app/globals.css`:**
+No rotation and no scale on the mark: the product's rotation idiom is `Spinner`, and a turning
+wordmark reads as loading.
+
+**The rules, as they will stand beside the shipped cue in `app/globals.css`** (the two tokens go in
+`theme.css`):
 
 ```css
+.canvas-node--drafting > .canvas-cue-ring {
+  border: 2px solid var(--el-drafting);
+}
+.canvas-node--drafting > .canvas-cue-chip {
+  border-color: var(--el-drafting);
+  background: var(--el-drafting-surface);
+  color: var(--el-text-strong);
+}
+.canvas-node--drafting > .canvas-cue-chip > svg {
+  color: var(--el-drafting);
+}
+.canvas-node--drafting [data-testid='plan-item-node'] {
+  box-shadow:
+    inset 0 0 0 100vmax var(--el-drafting-surface),
+    var(--shadow-card);
+}
+.plan-at-work-mark[data-at-work='true'] > .brand-glyph {
+  color: var(--el-drafting);
+}
+@keyframes canvas-cue-pop {
+  0% {
+    scale: 1;
+  }
+  60% {
+    scale: 1.06;
+  }
+  100% {
+    scale: 1.02;
+  }
+}
+@keyframes canvas-cue-grow {
+  from {
+    scale: 1.02;
+  }
+  to {
+    scale: 1.04;
+  }
+}
+@keyframes canvas-cue-glow {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-drafting) 0%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-drafting) 35%, transparent);
+  }
+}
+@keyframes canvas-cue-settle {
+  to {
+    scale: 1;
+  }
+}
+@keyframes canvas-cue-wash-out {
+  to {
+    box-shadow:
+      inset 0 0 0 100vmax color-mix(in srgb, var(--el-drafting-surface) 0%, transparent),
+      var(--shadow-card);
+  }
+}
 @keyframes canvas-cue-breathe {
   to {
     opacity: 0.55;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
+  .canvas-node--drafting[data-cue-motion='at-work'] {
+    animation:
+      canvas-cue-pop var(--transition-slow) var(--canvas-ease-enter) both,
+      canvas-cue-grow calc(var(--transition-slow) * 6) ease-in-out var(--transition-slow) infinite
+        alternate;
+  }
   .canvas-node--drafting[data-cue-motion='at-work'] > .canvas-cue-ring {
     animation:
       canvas-cue-ring-enter var(--transition-slow) var(--canvas-ease-enter) both,
-      canvas-cue-breathe calc(var(--transition-slow) * 6) var(--canvas-ease-enter)
-        var(--transition-slow) infinite alternate;
+      canvas-cue-glow calc(var(--transition-slow) * 6) ease-in-out var(--transition-slow) infinite
+        alternate;
+  }
+  .canvas-node--drafting[data-cue-motion='leaving'] {
+    animation: canvas-cue-settle var(--transition-duration) var(--canvas-ease-exit) forwards;
   }
   .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-ring,
   .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
     animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
   }
+  .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
+    animation: canvas-cue-wash-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
   .plan-at-work-mark[data-at-work='true'] > .brand-glyph {
-    animation: canvas-cue-breathe calc(var(--transition-slow) * 6) var(--canvas-ease-enter) infinite
-      alternate;
+    animation: canvas-cue-breathe calc(var(--transition-slow) * 6) ease-in-out infinite alternate;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -6220,11 +6342,14 @@ dotted ring disappear.
   .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
     display: none;
   }
+  .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
+    box-shadow: var(--shadow-card);
+  }
 }
 ```
 
-So the motion lives on the shipped cue's own ring and chip, switched by ONE attribute on the shipped
-node box — `data-cue-motion="at-work"` while the card is named and Motir is at work, `"leaving"` for
+So the colour lives on the shipped cue's own ring and chip and on the card, and the motion on the
+shipped node box, switched by ONE attribute on it — `data-cue-motion="at-work"` while the card is named and Motir is at work, `"leaving"` for
 the exit, absent for the static form. There is no second cue layer. The LAYING cue keeps its shipped
 treatment: no rule above names `.canvas-node--laying`.
 
@@ -6248,15 +6373,16 @@ line's marker (_Being written_, MOTIR-7820) in the canvas pane header, which is 
 
 ### Token roles
 
-| element        | colour                                                                                           | shape                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| cue ring       | `--el-status-in-progress` (shipped, unchanged)                                                   | `calc(var(--radius-card) + 7px)`, 2 px dotted (shipped) |
-| cue chip       | `--el-card` fill, `--el-status-in-progress` border + glyph, `--el-text-secondary` word (shipped) | `--radius-badge`, `--spacing-chip-x/y` (shipped)        |
-| the mark       | `--el-accent-on-surface` (`brand.css`'s `.brand-glyph`, unchanged)                               | 14 px glyph box                                         |
-| deepen outline | `--el-accent-on-surface` (shipped)                                                               | 2 px solid, offset 2 px (shipped)                       |
-| motion         | `--transition-slow`, `--transition-duration`, `--canvas-ease-enter`, `--canvas-ease-exit`        | —                                                       |
+| element        | colour                                                                                                   | shape                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| drafted card   | `--el-drafting-surface` wash over its op fill; its op badge, border and text unchanged                   | shipped                                          |
+| cue ring       | `--el-drafting`, 2 px solid; its glow a `color-mix` of `--el-drafting`                                   | `calc(var(--radius-card) + 7px)` (shipped)       |
+| cue chip       | `--el-drafting-surface` fill, `--el-drafting` border + glyph, `--el-text-strong` word                    | `--radius-badge`, `--spacing-chip-x/y` (shipped) |
+| the mark       | `--el-drafting` while at work; `--el-accent-on-surface` otherwise (`brand.css`'s `.brand-glyph`)         | 14 px glyph box                                  |
+| deepen outline | `--el-accent-on-surface` (shipped)                                                                       | 2 px solid, offset 2 px (shipped)                |
+| motion         | `--transition-slow`, `--transition-duration`, `--canvas-ease-enter`, `--canvas-ease-exit`, `ease-in-out` | —                                                |
 
-No raw colour, no new token, no new easing.
+No raw colour. Two new tokens, `--el-drafting` and `--el-drafting-surface`, and one easing keyword.
 
 ### Accessibility
 
@@ -6267,8 +6393,9 @@ No raw colour, no new token, no new easing.
 - **The rail's one polite live region is untouched**, and so is the progress line's `role="status"`
   marker. Nothing here announces anything.
 - **Motion is opt-in**: every animation sits behind `prefers-reduced-motion: no-preference`, and the
-  static form is the default. The breath changes opacity slowly and never flashes (well under the
-  WCAG 2.3.1 three-per-second bound).
+  static form is the default. The breath is slow (3 s a cycle) and never flashes (well under the
+  WCAG 2.3.1 three-per-second bound). The colour is not motion and is drawn under both settings,
+  so the cue never depends on movement to be seen.
 
 ### Copy — a decision: no string is added
 
@@ -6285,15 +6412,16 @@ the story's en + zh criterion holds with no new key.
   `resuming` row (`atWork` false, `steps` empty) beside its four listed values, so its
   `Record<PlanAtWorkState, boolean>` is total over the five shipped values plus `settled` and
   `reconnecting`.
-- **MOTIR-8416** (the card's motion) — **TAKES** the card column, the motion table, the rules above,
+- **MOTIR-8416** (the card's motion) — **TAKES** the two tokens (`theme.css`, base and Motir), the
+  card column, the colour and motion tables, the rules above,
   the `data-cue-motion` attribute, the leaving form, and the stalled hold: under `stalled` the static
   cue names the card the snapshot's steps last named, which `readPlanProgress` no longer hands over in
   `liveSteps`, so the hold is read from the held snapshot, never re-derived.
-- **MOTIR-8417** (the mark) — **TAKES** the mark column, the placement and markup above, and the
-  accessibility rules.
+- **MOTIR-8417** (the mark) — **TAKES** the mark column, its orange ink while at work, the
+  placement and markup above, and the accessibility rules.
 - **MOTIR-8418** (the coverage and integration gate) — **TAKES** the guards' subjects: one cue layer
-  (one attribute, no second element), the four motion tokens and two easings as the only vocabulary,
-  no raw colour, no new dependency, no new copy key.
+  (one attribute, no second element), the four motion tokens, two easings and `ease-in-out` as the
+  only vocabulary, the two new colour roles and no raw colour, no new dependency, no new copy key.
 - **MOTIR-8419** (the E2E) — **TAKES** the observable hooks: `data-cue-motion` on `[data-node-id]`,
   `data-testid="plan-at-work-mark"` with `data-at-work`, and the states to walk.
 - **MOTIR-7820 / MOTIR-7821 / MOTIR-7830** — **GIVE** the cue, the progress line and its marker, the
@@ -6314,11 +6442,13 @@ the story's en + zh criterion holds with no new key.
 - **§26.6 "It does NOT loop" → it breathes while Motir is at work.** Reason 2 (a loop runs on the
   client's clock) is answered by the gate: the breath runs only while MOTIR-8415 says Motir is at
   work, and stops on stall, on a failing poll and on resume. Reason 3 (the deepen is the motion) is
-  kept by making the breath slow and opacity-only, and the deepen the fresher signal. Reason 4
+  kept by making the breath slow and small (2 %), and the deepen the fresher signal. Reason 4
   (reduced motion needs no second design) still holds: the static form is the shipped one.
 - **§26.8 C2** (a cue leaves on `--transition-duration` / exit) was specified and never shipped; it is
   now drawn and specified as the `leaving` form.
-- **§26.8 C8** (cues leave on stall) → the cue **holds its static form** on stall.
+- **§26.8 C8** (cues leave on stall) → the cue **holds its orange static form** on stall.
+- **§26.6's colour** (the in-progress hue, dotted) → the drafting cue takes `--el-drafting`, solid,
+  and the card takes `--el-drafting-surface`. The LAYING cue keeps the shipped in-progress dotted form.
 - **§26.8 C10** (hand-over: cues gone in one frame) → the drafting cue **leaves by C2**; everything
   else in C10 is unchanged.
 

@@ -7904,7 +7904,7 @@ measures it before shipping and, if it fails, adds an `--el-cue` token rather th
 - Any pause, cancel, ETA or percentage (story scope).
 - A notification when a plan is proposed.
 
-**Amended for the drafting cue's motion (MOTIR-8414, 2026-10-14):** `design/ai-chat/design-notes.md` § _⭐ Motir at work — the drafted card breathes, and one Motir mark in the rail breathes with it_ (`design/ai-chat/planning-workspace--at-work.mock.html`) makes the drafting ring breathe while Motir is at work and amends §26.6 and §26.8 C2 / C8 / C10 for that cue; read the two together.
+**Amended for the drafting cue's colour and motion (MOTIR-8414, 2026-10-14):** `design/ai-chat/design-notes.md` § _⭐ Motir at work — the drafted card turns warm orange, pops and breathes, and one Motir mark in the rail breathes with it_ (`design/ai-chat/planning-workspace--at-work.mock.html`) gives the drafted card its own colour (`--el-drafting` / `--el-drafting-surface`, Motir's warm orange and peach), makes it pop and breathe while Motir is at work, and amends §26.6 and §26.8 C2 / C8 / C10 for that cue; read the two together.
 
 # Part XXVII — a plan RESUMED BY ITSELF after its machine was lost: the _Resuming_ state of the progress line, its tail, its popover, its rail line, and when it turns _Stalled_ (MOTIR-8306 · Story MOTIR-8301 — `plan-review--live-progress--resuming.mock.html`, DATED 2026-10-12)
 

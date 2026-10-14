@@ -14,12 +14,15 @@
   of design/ai-planning/plan-review--live-progress.mock.html (design-notes.md Part XXVI §26.6–26.8).
   Both are records and are NOT edited. Spec: design/ai-chat/design-notes.md § "Motir at work".
 
+  REVISED after review (gate sent back 2026-10-14): the drafted card takes Motir's warm orange and pops and grows.
+
   RENDERED BEFORE DRAWN. Every canvas pane and the rail are the real emitted markup of
   PlanProposalViews (→ PlanReviewCanvas → PlanningCanvas, PlanProgressLine) and PlanChangeRail at
   motir-core 9b538d7d5, captured with tests/helpers/renderWithIntl → container.innerHTML (en), one
   capture per progress state. The delta is ONE attribute on the shipped node box
   (data-cue-motion="at-work" | "leaving"), ONE wrapped BrandMark in the rail header
-  (.plan-at-work-mark[data-at-work]) and the rules in the "THE DELTA" block of the stylesheet.
+  (.plan-at-work-mark[data-at-work]), two new tokens (--el-drafting, --el-drafting-surface) and the
+  rules in the "THE DELTA" block of the stylesheet.
   Built with renderMock from @motir/design-system 0.14.0 at the package-default axes
   (warm-editorial / motir / motir). Fixture keys are ACME-n.
 -->
@@ -112,26 +115,104 @@
       .brand-inv .brand-glyph {
         color: var(--el-accent-text);
       }
-      /* ── THE DELTA (MOTIR-8414) — at work: the breath, and the leaving form ── */
+      /* ── THE DELTA (MOTIR-8414, revised after review) — the drafting colour, the pop, the breath, the leaving form ── */
+      /* Two NEW Tier-3 roles (MOTIR-8416 adds them to theme.css; Motir maps them to its warm orange and peach,
+   every other palette keeps today's in-progress hue and the sky wash). Declared on every appearance scope
+   so a nested dark scope resolves its own. */
+      :root,
+      [data-appearance-scope] {
+        --el-drafting: var(--el-highlight);
+        --el-drafting-surface: var(--el-tint-peach);
+      }
+      .canvas-node--drafting > .canvas-cue-ring {
+        border: 2px solid var(--el-drafting);
+      }
+      .canvas-node--drafting > .canvas-cue-chip {
+        border-color: var(--el-drafting);
+        background: var(--el-drafting-surface);
+        color: var(--el-text-strong);
+      }
+      .canvas-node--drafting > .canvas-cue-chip > svg {
+        color: var(--el-drafting);
+      }
+      .canvas-node--drafting [data-testid='plan-item-node'] {
+        box-shadow:
+          inset 0 0 0 100vmax var(--el-drafting-surface),
+          var(--shadow-card);
+      }
+      .plan-at-work-mark[data-at-work='true'] > .brand-glyph {
+        color: var(--el-drafting);
+      }
+      @keyframes canvas-cue-pop {
+        0% {
+          scale: 1;
+        }
+        60% {
+          scale: 1.06;
+        }
+        100% {
+          scale: 1.02;
+        }
+      }
+      @keyframes canvas-cue-grow {
+        from {
+          scale: 1.02;
+        }
+        to {
+          scale: 1.04;
+        }
+      }
+      @keyframes canvas-cue-glow {
+        from {
+          box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-drafting) 0%, transparent);
+        }
+        to {
+          box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-drafting) 35%, transparent);
+        }
+      }
+      @keyframes canvas-cue-settle {
+        to {
+          scale: 1;
+        }
+      }
+      @keyframes canvas-cue-wash-out {
+        to {
+          box-shadow:
+            inset 0 0 0 100vmax color-mix(in srgb, var(--el-drafting-surface) 0%, transparent),
+            var(--shadow-card);
+        }
+      }
       @keyframes canvas-cue-breathe {
         to {
           opacity: 0.55;
         }
       }
       @media (prefers-reduced-motion: no-preference) {
+        .canvas-node--drafting[data-cue-motion='at-work'] {
+          animation:
+            canvas-cue-pop var(--transition-slow) var(--canvas-ease-enter) both,
+            canvas-cue-grow calc(var(--transition-slow) * 6) ease-in-out var(--transition-slow)
+              infinite alternate;
+        }
         .canvas-node--drafting[data-cue-motion='at-work'] > .canvas-cue-ring {
           animation:
             canvas-cue-ring-enter var(--transition-slow) var(--canvas-ease-enter) both,
-            canvas-cue-breathe calc(var(--transition-slow) * 6) var(--canvas-ease-enter)
-              var(--transition-slow) infinite alternate;
+            canvas-cue-glow calc(var(--transition-slow) * 6) ease-in-out var(--transition-slow)
+              infinite alternate;
+        }
+        .canvas-node--drafting[data-cue-motion='leaving'] {
+          animation: canvas-cue-settle var(--transition-duration) var(--canvas-ease-exit) forwards;
         }
         .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-ring,
         .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
           animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
         }
+        .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
+          animation: canvas-cue-wash-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+        }
         .plan-at-work-mark[data-at-work='true'] > .brand-glyph {
-          animation: canvas-cue-breathe calc(var(--transition-slow) * 6) var(--canvas-ease-enter)
-            infinite alternate;
+          animation: canvas-cue-breathe calc(var(--transition-slow) * 6) ease-in-out infinite
+            alternate;
         }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -139,28 +220,67 @@
         .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
           display: none;
         }
+        .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
+          box-shadow: var(--shadow-card);
+        }
       }
 
       /* ── BOARD ONLY — sampled frames of a motion, and the reduced-motion emulation ── */
-      .board-frame-a .canvas-cue-ring,
       .board-frame-a .brand-glyph {
         animation: none;
         opacity: 1;
       }
-      .board-frame-b .canvas-cue-ring,
       .board-frame-b .brand-glyph {
         animation: none;
         opacity: 0.78;
       }
-      .board-frame-c .canvas-cue-ring,
       .board-frame-c .brand-glyph {
         animation: none;
         opacity: 0.55;
+      }
+      .board-frame-rest,
+      .board-frame-rest > .canvas-cue-ring {
+        animation: none;
+        scale: 1;
+      }
+      .board-frame-peak,
+      .board-frame-peak > .canvas-cue-ring {
+        animation: none;
+      }
+      .board-frame-peak {
+        scale: 1.06;
+      }
+      .board-frame-high,
+      .board-frame-high > .canvas-cue-ring {
+        animation: none;
+      }
+      .board-frame-high {
+        scale: 1.04;
+      }
+      .board-frame-high > .canvas-cue-ring {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-drafting) 35%, transparent);
+      }
+      .board-frame-low,
+      .board-frame-low > .canvas-cue-ring {
+        animation: none;
+      }
+      .board-frame-low {
+        scale: 1.02;
+      }
+      .board-frame-leave {
+        animation: none !important;
+        scale: 1.01;
       }
       .board-frame-leave > .canvas-cue-ring,
       .board-frame-leave > .canvas-cue-chip {
         animation: none !important;
         opacity: 0.5 !important;
+      }
+      .board-frame-leave [data-testid='plan-item-node'] {
+        animation: none !important;
+        box-shadow:
+          inset 0 0 0 100vmax color-mix(in srgb, var(--el-drafting-surface) 50%, transparent),
+          var(--shadow-card) !important;
       }
       .board-frame-exit {
         animation: none !important;
@@ -6569,24 +6689,25 @@
             </div>
             <p class="max-w-[56rem] text-[12.5px] leading-relaxed text-(--el-text-secondary)">
               Left: the canvas pane as shipped (PlanProposalViews → PlanReviewCanvas →
-              PlanningCanvas), one live author step naming “Proration rule”; its drafting cue now
-              breathes. Its pane header keeps the progress line and its marker (“Being written”,
-              MOTIR-7820) byte for byte. Right: PlanChangeRail as shipped, streaming, with the
-              planner’s narration block and its “Hide planner notes (2)” control (MOTIR-8060)
-              untouched. The ONE new element is the Motir mark in the rail header, between the
-              header’s dot and its “Motir AI” label: the header carries no mark today (the 13 px
-              glyphs inside the avatar discs are per message, and they stay still). The door into
-              this overlay is unchanged — planning-workspace.mock.html draws it.
+              PlanningCanvas), one live author step naming “Proration rule”: that card is now WARM
+              ORANGE (a peach wash on the card, a solid orange ring, an orange-edged chip) and it
+              pops forward and breathes. Its pane header keeps the progress line and its marker
+              (“Being written”, MOTIR-7820) byte for byte. Right: PlanChangeRail as shipped,
+              streaming, with the planner’s narration block and its “Hide planner notes (2)” control
+              (MOTIR-8060) untouched. The ONE new element is the Motir mark in the rail header,
+              between the header’s dot and its “Motir AI” label: the header carries no mark today
+              (the 13 px glyphs inside the avatar discs are per message, and they stay still). The
+              door into this overlay is unchanged — planning-workspace.mock.html draws it.
             </p>
           </div>
         </div>
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="2 · The breath — the card’s ring and the mark’s glyph, frame by frame"
+        aria-label="2 · The pop and the breath — the card and the mark’s glyph, frame by frame"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          2 · The breath — the card’s ring and the mark’s glyph, frame by frame
+          2 · The pop and the breath — the card and the mark’s glyph, frame by frame
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -6601,119 +6722,7 @@
                       data-cue="drafting"
                       aria-describedby="_r_e_-cue-pi_2"
                       tabindex="0"
-                      class="absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) canvas-node--drafting board-frame-a"
-                      style="left: 24px; top: 30px"
-                    >
-                      <div
-                        data-emphasised="true"
-                        class="relative rounded-(--radius-card) transition-opacity motion-reduce:transition-none ring-2 ring-(--el-accent-on-surface) ring-offset-2 ring-offset-(--el-surface-soft)"
-                      >
-                        <div
-                          data-op="add"
-                          data-testid="plan-item-node"
-                          style="width: 280px; height: 124px"
-                          class="relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 border-dashed border-(--el-accent) bg-(--el-tint-lavender) shadow-(--shadow-card)"
-                        >
-                          <div class="flex shrink-0 items-center gap-2">
-                            <span
-                              class="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold bg-(--el-surface) text-(--el-accent-on-surface) rounded-(--radius-badge)"
-                              ><svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="lucide lucide-plus size-3"
-                                aria-hidden="true"
-                              >
-                                <path d="M5 12h14"></path>
-                                <path d="M12 5v14"></path></svg
-                              >add</span
-                            >
-                            <div class="ml-auto flex items-center gap-1.5"></div>
-                          </div>
-                          <div class="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
-                            <span
-                              class="flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender)"
-                              aria-hidden="true"
-                              ><svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="lucide lucide-list-checks text-(--el-type-subtask) size-4"
-                                aria-hidden="true"
-                              >
-                                <path d="M13 5h8"></path>
-                                <path d="M13 12h8"></path>
-                                <path d="M13 19h8"></path>
-                                <path d="m3 17 2 2 4-4"></path>
-                                <path d="m3 7 2 2 4-4"></path></svg
-                            ></span>
-                            <div class="min-w-0 flex-1">
-                              <div class="flex items-center gap-2">
-                                <span class="font-mono text-xs text-(--el-text-secondary)"
-                                  >New</span
-                                >
-                              </div>
-                              <span
-                                data-node-title="true"
-                                class="mt-0.5 line-clamp-2 text-sm leading-snug font-semibold text-(--el-text)"
-                                >Proration rule</span
-                              >
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <span aria-hidden="true" class="canvas-cue-ring"></span
-                      ><span
-                        id="_r_e_-cue-pi_2"
-                        role="img"
-                        aria-label="Being drafted now"
-                        data-testid="canvas-cue-drafting"
-                        class="canvas-cue-chip"
-                        ><svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="lucide lucide-pen-line size-3"
-                          aria-hidden="true"
-                        >
-                          <path d="M13 21h8"></path>
-                          <path
-                            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-                          ></path></svg
-                        >Drafting</span
-                      >
-                    </div>
-                  </div>
-                </div>
-                <p class="font-mono text-[11px] text-(--el-text-secondary)">frame 0 · opacity 1</p>
-              </div>
-              <div class="flex flex-col gap-2">
-                <div class="relative shrink-0 overflow-visible" style="width: 330px; height: 190px">
-                  <div class="">
-                    <div
-                      data-node-id="pi_2"
-                      data-cue="drafting"
-                      aria-describedby="_r_e_-cue-pi_2"
-                      tabindex="0"
-                      class="absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) canvas-node--drafting board-frame-b"
+                      class="absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) canvas-node--drafting board-frame-rest"
                       style="left: 24px; top: 30px"
                     >
                       <div
@@ -6816,7 +6825,7 @@
                   </div>
                 </div>
                 <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                  frame ½ · opacity ≈ 0.78
+                  rest · scale 1 · the static orange cue
                 </p>
               </div>
               <div class="flex flex-col gap-2">
@@ -6827,7 +6836,7 @@
                       data-cue="drafting"
                       aria-describedby="_r_e_-cue-pi_2"
                       tabindex="0"
-                      class="absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) canvas-node--drafting board-frame-c"
+                      class="absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) canvas-node--drafting board-frame-peak"
                       style="left: 24px; top: 30px"
                     >
                       <div
@@ -6930,7 +6939,235 @@
                   </div>
                 </div>
                 <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                  frame 1 · opacity 0.55
+                  pop peak · scale 1.06
+                </p>
+              </div>
+              <div class="flex flex-col gap-2">
+                <div class="relative shrink-0 overflow-visible" style="width: 330px; height: 190px">
+                  <div class="">
+                    <div
+                      data-node-id="pi_2"
+                      data-cue="drafting"
+                      aria-describedby="_r_e_-cue-pi_2"
+                      tabindex="0"
+                      class="absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) canvas-node--drafting board-frame-high"
+                      style="left: 24px; top: 30px"
+                    >
+                      <div
+                        data-emphasised="true"
+                        class="relative rounded-(--radius-card) transition-opacity motion-reduce:transition-none ring-2 ring-(--el-accent-on-surface) ring-offset-2 ring-offset-(--el-surface-soft)"
+                      >
+                        <div
+                          data-op="add"
+                          data-testid="plan-item-node"
+                          style="width: 280px; height: 124px"
+                          class="relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 border-dashed border-(--el-accent) bg-(--el-tint-lavender) shadow-(--shadow-card)"
+                        >
+                          <div class="flex shrink-0 items-center gap-2">
+                            <span
+                              class="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold bg-(--el-surface) text-(--el-accent-on-surface) rounded-(--radius-badge)"
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-plus size-3"
+                                aria-hidden="true"
+                              >
+                                <path d="M5 12h14"></path>
+                                <path d="M12 5v14"></path></svg
+                              >add</span
+                            >
+                            <div class="ml-auto flex items-center gap-1.5"></div>
+                          </div>
+                          <div class="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
+                            <span
+                              class="flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender)"
+                              aria-hidden="true"
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-list-checks text-(--el-type-subtask) size-4"
+                                aria-hidden="true"
+                              >
+                                <path d="M13 5h8"></path>
+                                <path d="M13 12h8"></path>
+                                <path d="M13 19h8"></path>
+                                <path d="m3 17 2 2 4-4"></path>
+                                <path d="m3 7 2 2 4-4"></path></svg
+                            ></span>
+                            <div class="min-w-0 flex-1">
+                              <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs text-(--el-text-secondary)"
+                                  >New</span
+                                >
+                              </div>
+                              <span
+                                data-node-title="true"
+                                class="mt-0.5 line-clamp-2 text-sm leading-snug font-semibold text-(--el-text)"
+                                >Proration rule</span
+                              >
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <span aria-hidden="true" class="canvas-cue-ring"></span
+                      ><span
+                        id="_r_e_-cue-pi_2"
+                        role="img"
+                        aria-label="Being drafted now"
+                        data-testid="canvas-cue-drafting"
+                        class="canvas-cue-chip"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-pen-line size-3"
+                          aria-hidden="true"
+                        >
+                          <path d="M13 21h8"></path>
+                          <path
+                            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                          ></path></svg
+                        >Drafting</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <p class="font-mono text-[11px] text-(--el-text-secondary)">
+                  breath high · 1.04 · ring glow 4 px
+                </p>
+              </div>
+              <div class="flex flex-col gap-2">
+                <div class="relative shrink-0 overflow-visible" style="width: 330px; height: 190px">
+                  <div class="">
+                    <div
+                      data-node-id="pi_2"
+                      data-cue="drafting"
+                      aria-describedby="_r_e_-cue-pi_2"
+                      tabindex="0"
+                      class="absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) canvas-node--drafting board-frame-low"
+                      style="left: 24px; top: 30px"
+                    >
+                      <div
+                        data-emphasised="true"
+                        class="relative rounded-(--radius-card) transition-opacity motion-reduce:transition-none ring-2 ring-(--el-accent-on-surface) ring-offset-2 ring-offset-(--el-surface-soft)"
+                      >
+                        <div
+                          data-op="add"
+                          data-testid="plan-item-node"
+                          style="width: 280px; height: 124px"
+                          class="relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 border-dashed border-(--el-accent) bg-(--el-tint-lavender) shadow-(--shadow-card)"
+                        >
+                          <div class="flex shrink-0 items-center gap-2">
+                            <span
+                              class="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold bg-(--el-surface) text-(--el-accent-on-surface) rounded-(--radius-badge)"
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-plus size-3"
+                                aria-hidden="true"
+                              >
+                                <path d="M5 12h14"></path>
+                                <path d="M12 5v14"></path></svg
+                              >add</span
+                            >
+                            <div class="ml-auto flex items-center gap-1.5"></div>
+                          </div>
+                          <div class="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
+                            <span
+                              class="flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender)"
+                              aria-hidden="true"
+                              ><svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="lucide lucide-list-checks text-(--el-type-subtask) size-4"
+                                aria-hidden="true"
+                              >
+                                <path d="M13 5h8"></path>
+                                <path d="M13 12h8"></path>
+                                <path d="M13 19h8"></path>
+                                <path d="m3 17 2 2 4-4"></path>
+                                <path d="m3 7 2 2 4-4"></path></svg
+                            ></span>
+                            <div class="min-w-0 flex-1">
+                              <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs text-(--el-text-secondary)"
+                                  >New</span
+                                >
+                              </div>
+                              <span
+                                data-node-title="true"
+                                class="mt-0.5 line-clamp-2 text-sm leading-snug font-semibold text-(--el-text)"
+                                >Proration rule</span
+                              >
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <span aria-hidden="true" class="canvas-cue-ring"></span
+                      ><span
+                        id="_r_e_-cue-pi_2"
+                        role="img"
+                        aria-label="Being drafted now"
+                        data-testid="canvas-cue-drafting"
+                        class="canvas-cue-chip"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-pen-line size-3"
+                          aria-hidden="true"
+                        >
+                          <path d="M13 21h8"></path>
+                          <path
+                            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                          ></path></svg
+                        >Drafting</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <p class="font-mono text-[11px] text-(--el-text-secondary)">
+                  breath low · 1.02 · no glow
                 </p>
               </div>
               <div class="flex flex-col gap-2">
@@ -7045,15 +7282,20 @@
                   </div>
                 </div>
                 <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                  LIVE — the breath itself
+                  LIVE — the pop, then the breath
                 </p>
               </div>
             </div>
             <p class="max-w-[56rem] text-[12.5px] leading-relaxed text-(--el-text-secondary)">
-              Card: ONLY the ring animates — opacity 1 → 0.55, alternate, infinite; duration
-              calc(var(--transition-slow) × 6), easing var(--canvas-ease-enter), starting after the
-              shipped C1 arrival (delay var(--transition-slow)). The chip, the card, the box, its
-              position and its edges never move.
+              Card: the COLOUR is the static cue and is drawn in every motion setting — the card
+              takes --el-drafting-surface (the peach wash, painted as an inset shadow over its op
+              fill), the ring turns solid 2 px --el-drafting (the warm orange), and the chip takes
+              the orange edge and icon on the peach fill. The MOTION is on the node box: it POPS on
+              arrival (scale 1 → 1.06 → 1.02 over var(--transition-slow), var(--canvas-ease-enter)),
+              then BREATHES — scale 1.02 ↔ 1.04 with the ring’s orange glow 0 ↔ 4 px in phase — on
+              calc(var(--transition-slow) × 6), ease-in-out, alternate, infinite. It uses the
+              independent `scale` property from the box’s centre, so its position, its edges and its
+              neighbours never move.
             </p>
             <div class="flex flex-wrap items-start gap-6">
               <div class="flex flex-col gap-2">
@@ -7068,7 +7310,7 @@
                       ><span
                         class="plan-at-work-mark inline-flex shrink-0"
                         data-testid="plan-at-work-mark"
-                        data-at-work="false"
+                        data-at-work="true"
                         aria-hidden="true"
                         ><svg
                           viewBox="0 0 24 24"
@@ -7107,7 +7349,7 @@
                       ><span
                         class="plan-at-work-mark inline-flex shrink-0"
                         data-testid="plan-at-work-mark"
-                        data-at-work="false"
+                        data-at-work="true"
                         aria-hidden="true"
                         ><svg
                           viewBox="0 0 24 24"
@@ -7146,7 +7388,7 @@
                       ><span
                         class="plan-at-work-mark inline-flex shrink-0"
                         data-testid="plan-at-work-mark"
-                        data-at-work="false"
+                        data-at-work="true"
                         aria-hidden="true"
                         ><svg
                           viewBox="0 0 24 24"
@@ -7216,9 +7458,10 @@
               </div>
             </div>
             <p class="max-w-[56rem] text-[12.5px] leading-relaxed text-(--el-text-secondary)">
-              Mark: the SAME keyframes, duration and easing on the glyph (.plan-at-work-mark &gt;
-              .brand-glyph). No rotation, no scale. Its ink stays brand.css’s
-              --el-accent-on-surface.
+              Mark: while at work its glyph takes the SAME orange (--el-drafting), so the card and
+              the mark read as one signal, and it breathes in opacity 1 ↔ 0.55 on the same duration.
+              No rotation, no scale. When nothing is at work it is brand.css’s shipped
+              --el-accent-on-surface glyph, still.
             </p>
           </div>
         </div>
@@ -7389,7 +7632,9 @@
                       </div>
                     </div>
                   </div>
-                  <p class="font-mono text-[11px] text-(--el-text-secondary)">the glyph BREATHES</p>
+                  <p class="font-mono text-[11px] text-(--el-text-secondary)">
+                    the glyph is ORANGE and BREATHES
+                  </p>
                 </td>
                 <td class="p-2">
                   <div class="">
@@ -7574,7 +7819,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    the ring BREATHES · chip still
+                    the card turns ORANGE, pops, and breathes (grows 1.02 ↔ 1.04, the ring glows)
                   </p>
                 </td>
                 <td class="w-[17rem] p-2">
@@ -7617,7 +7862,9 @@
                       </div>
                     </div>
                   </div>
-                  <p class="font-mono text-[11px] text-(--el-text-secondary)">the glyph BREATHES</p>
+                  <p class="font-mono text-[11px] text-(--el-text-secondary)">
+                    the glyph is ORANGE and BREATHES
+                  </p>
                 </td>
                 <td class="p-2">
                   <div class="">
@@ -7919,7 +8166,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    EACH named ring breathes on its own · the rest still · ONE mark
+                    EACH named card is orange and breathes on its own · the rest still · ONE mark
                   </p>
                 </td>
                 <td class="w-[17rem] p-2">
@@ -7962,7 +8209,9 @@
                       </div>
                     </div>
                   </div>
-                  <p class="font-mono text-[11px] text-(--el-text-secondary)">the glyph BREATHES</p>
+                  <p class="font-mono text-[11px] text-(--el-text-secondary)">
+                    the glyph is ORANGE and BREATHES
+                  </p>
                 </td>
                 <td class="p-2">
                   <div class="">
@@ -8161,7 +8410,9 @@
                       </div>
                     </div>
                   </div>
-                  <p class="font-mono text-[11px] text-(--el-text-secondary)">the glyph BREATHES</p>
+                  <p class="font-mono text-[11px] text-(--el-text-secondary)">
+                    the glyph is ORANGE and BREATHES
+                  </p>
                 </td>
                 <td class="p-2">
                   <div class="">
@@ -8338,7 +8589,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    STATIC cue held on the last-named card
+                    the ORANGE cue held still, at rest size, on the last-named card
                   </p>
                 </td>
                 <td class="w-[17rem] p-2">
@@ -8382,7 +8633,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    the glyph holds its shipped form
+                    the glyph holds its shipped form and ink
                   </p>
                 </td>
                 <td class="p-2">
@@ -8563,7 +8814,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    STATIC cue — the held step
+                    the ORANGE cue held still, at rest size — the held step
                   </p>
                 </td>
                 <td class="w-[17rem] p-2">
@@ -8607,7 +8858,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    the glyph holds its shipped form
+                    the glyph holds its shipped form and ink
                   </p>
                 </td>
                 <td class="p-2">
@@ -8807,7 +9058,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    the glyph holds its shipped form
+                    the glyph holds its shipped form and ink
                   </p>
                 </td>
                 <td class="p-2">
@@ -8962,7 +9213,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    the cue has LEFT · the shipped box
+                    the cue has LEFT · the shipped box and its own op colour
                   </p>
                 </td>
                 <td class="w-[17rem] p-2">
@@ -9006,7 +9257,7 @@
                     </div>
                   </div>
                   <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                    the glyph holds its shipped form
+                    the glyph holds its shipped form and ink
                   </p>
                 </td>
                 <td class="p-2">
@@ -10059,21 +10310,22 @@
             </div>
             <p class="max-w-[56rem] text-[12.5px] leading-relaxed text-(--el-text-secondary)">
               Two live author steps on this level (Monthly schedule, Retry a failed charge) and one
-              on ACME-33’s level. Each named ring breathes from the moment its own cue arrived:
-              nothing synchronises the two and nothing staggers them (a stagger is the arrival
-              motion’s). “Proration rule” is not named and is still. The third step is off-level, so
-              the ONE arrivals slot says “1 being drafted in ACME-33 · Go there” (MOTIR-7830’s
-              wording, cited). The rail still carries ONE mark however many cards are named.
+              on ACME-33’s level. Each named card is orange, pops and breathes from the moment its
+              own cue arrived: nothing synchronises the two and nothing staggers them (a stagger is
+              the arrival motion’s). “Proration rule” is not named and is still. The third step is
+              off-level, so the ONE arrivals slot says “1 being drafted in ACME-33 · Go there”
+              (MOTIR-7830’s wording, cited). The rail still carries ONE mark however many cards are
+              named.
             </p>
           </div>
         </div>
       </section>
       <section
         class="flex flex-col gap-3"
-        aria-label="5 · A cued card that DEEPENS — the accent outline inside the breathing ring"
+        aria-label="5 · A cued card that DEEPENS — the accent outline inside the orange ring"
       >
         <h2 class="font-mono text-xs uppercase tracking-wide text-(--el-text-secondary)">
-          5 · A cued card that DEEPENS — the accent outline inside the breathing ring
+          5 · A cued card that DEEPENS — the accent outline inside the orange ring
         </h2>
         <div
           class="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)"
@@ -10316,8 +10568,9 @@
               §23.4) is the FRESHER signal: it is news (the fields just landed) and it is solid,
               while the dotted ring at 7 px is state. On an add card the outline lands on the
               emphasis ring the shipped card already draws, so what reads is its 600 ms hold and its
-              fade; the breath carries on outside it the whole time. Neither suppresses the other,
-              and the breath is not restarted by the deepen.
+              fade; the orange ring and the breath carry on outside it the whole time, and the
+              outline grows with the box. Neither suppresses the other, and the breath is not
+              restarted by the deepen.
             </p>
           </div>
         </div>
@@ -10559,7 +10812,7 @@
                   </div>
                 </div>
                 <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                  leaving · ½ (ring + chip opacity → 0)
+                  leaving · ½ (ring, chip and wash fading · scale → 1)
                 </p>
               </div>
               <div class="flex flex-col gap-2">
@@ -10650,12 +10903,13 @@
               </div>
             </div>
             <p class="max-w-[56rem] text-[12.5px] leading-relaxed text-(--el-text-secondary)">
-              Both triggers draw the same exit: ring AND chip fade out on var(--transition-duration)
-              with var(--canvas-ease-exit) (canvas-fade-out, Part XXVI §26.8 C2’s tokens), then the
-              cue is removed. (a) The step moves on or clears: C2, which Part XXVI specified and the
-              shipped layer never played. (b) The plan leaves generating (planned, approved,
-              declined, or its producer judged dead): the same C2 — this amends §26.8 C10’s “gone in
-              one frame” for the cue only. There is no “cued forever” form.
+              Both triggers draw the same exit: the ring AND chip fade out, the peach wash fades off
+              the card and the box settles back to scale 1, all on var(--transition-duration) with
+              var(--canvas-ease-exit) (Part XXVI §26.8 C2’s tokens), then the cue is removed and the
+              card wears its own op fill again. (a) The step moves on or clears: C2, which Part XXVI
+              specified and the shipped layer never played. (b) The plan leaves generating (planned,
+              approved, declined, or its producer judged dead): the same C2 — this amends §26.8
+              C10’s “gone in one frame” for the cue only. There is no “cued forever” form.
             </p>
           </div>
         </div>
@@ -10941,7 +11195,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -11127,7 +11381,8 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the ring BREATHES · chip still
+                        the card turns ORANGE, pops, and breathes (grows 1.02 ↔ 1.04, the ring
+                        glows)
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -11171,7 +11426,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -11474,7 +11729,8 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        EACH named ring breathes on its own · the rest still · ONE mark
+                        EACH named card is orange and breathes on its own · the rest still · ONE
+                        mark
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -11518,7 +11774,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -11719,7 +11975,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -11897,7 +12153,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        STATIC cue held on the last-named card
+                        the ORANGE cue held still, at rest size, on the last-named card
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -11941,7 +12197,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
@@ -12124,7 +12380,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        STATIC cue — the held step
+                        the ORANGE cue held still, at rest size — the held step
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -12168,7 +12424,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
@@ -12371,7 +12627,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
@@ -12526,7 +12782,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the cue has LEFT · the shipped box
+                        the cue has LEFT · the shipped box and its own op colour
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -12570,7 +12826,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
@@ -12585,10 +12841,11 @@
             </div>
             <p class="max-w-[56rem] text-[12.5px] leading-relaxed text-(--el-text-secondary)">
               Board emulation: this panel turns every animation off, as the delta’s rules do under
-              the media query. The cue is the shipped static dotted ring and chip, at full opacity,
-              wherever the motion table says “breathes”; the mark is its shipped glyph at full
-              opacity in every state. Leaving is removal at the next paint, no fade. The marker
-              words and the chip word are unchanged.
+              the media query. The cue is the ORANGE static form — the peach wash, the solid orange
+              ring, the orange-edged chip — at rest size and full opacity wherever the motion table
+              says “breathes”; nothing pops, grows or glows. The at-work mark keeps its orange ink,
+              still. Leaving is removal at the next paint, no fade. The marker words and the chip
+              word are unchanged.
             </p>
           </div>
         </div>
@@ -14165,7 +14422,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph BREATHES
+                      the glyph is ORANGE and BREATHES
                     </p>
                   </td>
                   <td class="p-2">
@@ -14351,7 +14608,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the ring BREATHES · chip still
+                      the card turns ORANGE, pops, and breathes (grows 1.02 ↔ 1.04, the ring glows)
                     </p>
                   </td>
                   <td class="w-[17rem] p-2">
@@ -14395,7 +14652,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph BREATHES
+                      the glyph is ORANGE and BREATHES
                     </p>
                   </td>
                   <td class="p-2">
@@ -14698,7 +14955,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      EACH named ring breathes on its own · the rest still · ONE mark
+                      EACH named card is orange and breathes on its own · the rest still · ONE mark
                     </p>
                   </td>
                   <td class="w-[17rem] p-2">
@@ -14742,7 +14999,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph BREATHES
+                      the glyph is ORANGE and BREATHES
                     </p>
                   </td>
                   <td class="p-2">
@@ -14943,7 +15200,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph BREATHES
+                      the glyph is ORANGE and BREATHES
                     </p>
                   </td>
                   <td class="p-2">
@@ -15121,7 +15378,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      STATIC cue held on the last-named card
+                      the ORANGE cue held still, at rest size, on the last-named card
                     </p>
                   </td>
                   <td class="w-[17rem] p-2">
@@ -15165,7 +15422,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph holds its shipped form
+                      the glyph holds its shipped form and ink
                     </p>
                   </td>
                   <td class="p-2">
@@ -15348,7 +15605,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      STATIC cue — the held step
+                      the ORANGE cue held still, at rest size — the held step
                     </p>
                   </td>
                   <td class="w-[17rem] p-2">
@@ -15392,7 +15649,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph holds its shipped form
+                      the glyph holds its shipped form and ink
                     </p>
                   </td>
                   <td class="p-2">
@@ -15592,7 +15849,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph holds its shipped form
+                      the glyph holds its shipped form and ink
                     </p>
                   </td>
                   <td class="p-2">
@@ -15747,7 +16004,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the cue has LEFT · the shipped box
+                      the cue has LEFT · the shipped box and its own op colour
                     </p>
                   </td>
                   <td class="w-[17rem] p-2">
@@ -15791,7 +16048,7 @@
                       </div>
                     </div>
                     <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                      the glyph holds its shipped form
+                      the glyph holds its shipped form and ink
                     </p>
                   </td>
                   <td class="p-2">
@@ -15982,7 +16239,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -16168,7 +16425,8 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the ring BREATHES · chip still
+                        the card turns ORANGE, pops, and breathes (grows 1.02 ↔ 1.04, the ring
+                        glows)
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -16212,7 +16470,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -16515,7 +16773,8 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        EACH named ring breathes on its own · the rest still · ONE mark
+                        EACH named card is orange and breathes on its own · the rest still · ONE
+                        mark
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -16559,7 +16818,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -16760,7 +17019,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph BREATHES
+                        the glyph is ORANGE and BREATHES
                       </p>
                     </td>
                     <td class="p-2">
@@ -16938,7 +17197,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        STATIC cue held on the last-named card
+                        the ORANGE cue held still, at rest size, on the last-named card
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -16982,7 +17241,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
@@ -17165,7 +17424,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        STATIC cue — the held step
+                        the ORANGE cue held still, at rest size — the held step
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -17209,7 +17468,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
@@ -17412,7 +17671,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
@@ -17567,7 +17826,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the cue has LEFT · the shipped box
+                        the cue has LEFT · the shipped box and its own op colour
                       </p>
                     </td>
                     <td class="w-[17rem] p-2">
@@ -17611,7 +17870,7 @@
                         </div>
                       </div>
                       <p class="font-mono text-[11px] text-(--el-text-secondary)">
-                        the glyph holds its shipped form
+                        the glyph holds its shipped form and ink
                       </p>
                     </td>
                     <td class="p-2">
