@@ -20,6 +20,7 @@ import { ApprovalsTab } from './_components/ApprovalsTab';
 import { PlanningTab } from './_components/PlanningTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 
 // `/workbench` — the signed-in landing surface (Story MOTIR-2649 · MOTIR-2653,
 // renamed and split by lifecycle in Story MOTIR-4777 · MOTIR-4782), per
@@ -199,11 +200,21 @@ function ListPending() {
   );
 }
 
-export default async function WorkbenchPage({
-  searchParams,
-}: {
+type WorkbenchPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+};
+
+/**
+ * Every transaction the page's own reads open is recorded as `workbench`
+ * (MOTIR-8553). The tabs that read inside their own `<Suspense>` render after
+ * this function returns, outside its async context, so `<ApprovalsTab>` and
+ * `<PlanningTab>` set the same label themselves.
+ */
+export default async function WorkbenchPage(props: WorkbenchPageProps) {
+  return withRequestLabel({ route: 'workbench' }, () => renderWorkbenchPage(props));
+}
+
+async function renderWorkbenchPage({ searchParams }: WorkbenchPageProps) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 

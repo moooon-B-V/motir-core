@@ -8210,6 +8210,19 @@
       "onlyStarterAnon": "Nur die Person, die dies gestartet hat, oder ein Projektmanager kann es fortsetzen.",
       "failureLine": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden · {when}",
       "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Löchere mich",
+        "helpName": "Was ist „Löchere mich“?",
+        "popover": {
+          "title": "Löchere mich",
+          "body1": "Bevor geplant wird, fragt Motir AI Sie nach dem, was Sie möchten, eine Frage nach der anderen: wie es funktionieren soll, welche anderen Wege es zum selben Ziel gibt und was passiert, wenn etwas schiefgeht.",
+          "body2": "Jede Frage bietet einige Antworten zur Auswahl, eine davon empfohlen. Überspringen Sie beliebige Fragen, lassen Sie den Planer entscheiden oder hören Sie jederzeit auf.",
+          "body3": "Was Sie festlegen, wird in die Anforderung des Plans geschrieben, und die Planung beginnt damit."
+        },
+        "hint": "Ihre nächste Nachricht startet die Befragung."
+      }
     }
   },
   "codeHealth": {
@@ -14260,6 +14273,51 @@
       "unavailable": "Nicht verfügbares Arbeitselement",
       "unavailableTitle": "Dieses Arbeitselement wurde gelöscht, oder Sie können es nicht sehen."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "Frage · Frage {n}",
+      "recommended": "Empfohlen",
+      "recommendedName": "{label} (empfohlen)",
+      "somethingElse": "Etwas anderes…",
+      "skip": "Überspringen",
+      "youDecide": "Sie entscheiden",
+      "stop": "Befragung beenden",
+      "ownWordsPlaceholder": "In eigenen Worten antworten…",
+      "composerPlaceholder": "Oder eigene Antwort eingeben…",
+      "because": "Weil Sie „{answer}“ gewählt haben…",
+      "yourThread": "Ihr Thema",
+      "youSaid": "Sie sagten: „{words}“"
+    },
+    "markers": {
+      "opening": "„Löchere mich“ ist an: eine Frage nach der anderen vor der Planung. Wählen Sie eine Antwort, überspringen Sie sie oder hören Sie jederzeit auf.",
+      "skipped": "Übersprungen – der Planer trifft hier eine Annahme.",
+      "completed": "Das war alles, was ich fragen musste.",
+      "nothingToAsk": "Ich habe nichts zu fragen – das ist klar genug für die Planung. Ich schreibe jetzt den Plan.",
+      "stopped": "Sie haben die Befragung beendet.",
+      "stoppedNoAnswer": "Sie haben die Befragung vor der ersten Antwort beendet. Es wurde nichts geschrieben."
+    },
+    "summary": {
+      "title": "Was Sie festgelegt haben",
+      "counts": "{answers, plural, one {# Antwort} other {# Antworten}} · {assumptions, plural, one {# Annahme des Planers} other {# Annahmen des Planers}}",
+      "groups": {
+        "behaviour": "Verhalten",
+        "scopeEdge": "Abgrenzung",
+        "constraints": "Einschränkungen",
+        "acceptance": "Abnahme",
+        "assumptions": "Annahmen"
+      },
+      "youAnswered": "Ihre Antwort",
+      "plannersAssumption": "Annahme des Planers",
+      "writing": "Ihre Antworten werden in die Anforderung des Plans und in <item></item> geschrieben…",
+      "writingPlanOnly": "Ihre Antworten werden in die Anforderung des Plans geschrieben…",
+      "written": "In die Anforderung des Plans und in <item></item> geschrieben.",
+      "writtenPlanOnly": "In die Anforderung des Plans geschrieben.",
+      "failed": "Ihre Antworten wurden nicht geschrieben. Sie sind weiterhin hier.",
+      "copy": "Antworten kopieren"
+    },
+    "error": "Diese Frage ist nicht angekommen. Ihre bisherigen Antworten bleiben erhalten – versuchen Sie es erneut.",
+    "retry": "Erneut versuchen"
   },
   "itemTranslation": {
     "groupLabel": "Übersetzung",

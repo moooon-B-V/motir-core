@@ -308,6 +308,39 @@ function poolTags(pools: readonly PoolOccupancy[]): Record<string, string> {
   };
 }
 
+/** The pool counters summed over every registered pool — the numeric twin of the
+ *  `tx.pool_*` tags, read by the transaction spans and measurements
+ *  (`./transactionSpan`, MOTIR-8550). Null when no pool is registered: nothing
+ *  was measured, which is not the same as an empty pool. */
+export interface PoolOccupancySum {
+  readonly total: number;
+  readonly idle: number;
+  readonly waiting: number;
+  readonly max: number;
+  /** How many pools were summed — one per Turbopack runtime (MOTIR-7073). */
+  readonly count: number;
+}
+
+export function poolOccupancySum(): PoolOccupancySum | null {
+  const pools = registeredPools();
+  if (pools.length === 0) return null;
+  const sum = (read: (pool: PoolOccupancy) => number) =>
+    pools.reduce((total, pool) => total + read(pool), 0);
+  return {
+    total: sum((pool) => pool.totalCount),
+    idle: sum((pool) => pool.idleCount),
+    waiting: sum((pool) => pool.waitingCount),
+    max: sum(poolMax),
+    count: pools.length,
+  };
+}
+
+/** Every registered pool still open — for the statement-span hook
+ *  (`./transactionSpan`), which instruments each pool's own `Client` class. */
+export function openTransactionStallPools(): readonly PoolOccupancy[] {
+  return registeredPools();
+}
+
 /**
  * The stall tags for a transaction-timeout `err`, or null when `err` is not one.
  * Values are strings (Sentry tags are); a number is whole ms / whole seconds.

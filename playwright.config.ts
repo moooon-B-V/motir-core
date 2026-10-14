@@ -206,7 +206,12 @@ export default defineConfig({
   // never boots them (they 404 without MOTIR_CLOUD, and turning it on globally
   // would break unrelated at-scale/menu specs). The self-host-ABSENT billing spec
   // (billing-selfhost) is off-cloud and DOES run in this lane.
-  testIgnore: ['**/billing-cloud.spec.ts', '**/cloud-*.spec.ts', '**/acceptance*.spec.ts'],
+  testIgnore: [
+    '**/billing-cloud.spec.ts',
+    '**/cloud-*.spec.ts',
+    '**/acceptance*.spec.ts',
+    '**/observability-*.spec.ts',
+  ],
   // MOTIR-2617 — bulk-leg membership comes from MEASURED per-spec cost, not from
   // Playwright's `--shard=i/5`. `E2E_SHARD=bulk-N` (set per matrix leg in
   // ci.yml) narrows this run to that leg's specs; the a11y / at-scale / billing
