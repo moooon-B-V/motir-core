@@ -12,9 +12,15 @@ import {
   createPortalSession,
   getOrgSubscription,
   getOrgUsage,
+  getPendingPlanChange,
+  previewPlanDowngrade,
+  previewPlanUpgrade,
+  schedulePlanDowngrade,
   setSeatQuantity,
+  upgradePlan,
   type SeatQuantityResult,
 } from '@/lib/ai/motirAiClient';
+import { MotirAiError, MotirAiPlanChangeRefusedError } from '@/lib/ai/errors';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { isPaidAiSubscriptionStatus } from '@/lib/services/aiPlanGateService';
 import {
@@ -23,11 +29,13 @@ import {
   INCLUDED_TRACKER_SEATS_PER_AI_PLAN,
   isAllowedCheckoutQuantity,
   isKnownCheckoutPrice,
+  isPlanChangeKey,
   type BillingCadence,
 } from '@/lib/billing/catalog';
 import {
   BillingForbiddenError,
   BillingNotAvailableError,
+  BillingPlanChangeRefusedError,
   InvalidBillingQuantityError,
   UnknownBillingPriceError,
 } from '@/lib/billing/errors';
@@ -38,8 +46,20 @@ import type {
   BillingCheckoutDTO,
   BillingSessionDTO,
   BillingStatusDTO,
+  DowngradePreviewDTO,
+  DowngradeResultDTO,
+  PendingPlanChangeDTO,
   SeatSummaryDTO,
+  UpgradePreviewDTO,
+  UpgradeResultDTO,
 } from '@/lib/dto/billing';
+import {
+  toDowngradePreviewDTO,
+  toDowngradeResultDTO,
+  toPendingPlanChangeDTO,
+  toUpgradePreviewDTO,
+  toUpgradeResultDTO,
+} from '@/lib/mappers/billingMappers';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 
 // A paid Motir AI plan = a live Stripe subscription that grants the monthly
@@ -322,6 +342,85 @@ export const billingService = {
     });
   },
 
+  // ── Changing the AI plan mid-period (Story MOTIR-8387 · MOTIR-8399) ──────
+  //
+  // An org holds ONE AI plan; a change of it goes up now (charged for the days
+  // left, the extra credits granted when the invoice is paid) or down at the
+  // period end (nothing charged, refunded or granted until then). motir-ai owns
+  // every figure and every rule; these methods gate the actor, refuse a key the
+  // catalog does not sell, and pass the answer through as a DTO. Previews are
+  // gated like the writes: they price a change only an owner or admin can make.
+
+  /** What an upgrade to `toPlanKey` costs now and grants. Writes nothing. */
+  async previewUpgrade(input: OrgActorInput & { toPlanKey: string }): Promise<UpgradePreviewDTO> {
+    await this.assertPlanChangeAllowed(input);
+    return toUpgradePreviewDTO(
+      await planChangeCall(() =>
+        previewPlanUpgrade({
+          coreOrganizationId: input.organizationId,
+          toPlanKey: input.toPlanKey,
+        }),
+      ),
+    );
+  },
+
+  /** Upgrade now, at the `prorationDate` the preview returned. */
+  async upgradePlan(
+    input: OrgActorInput & { toPlanKey: string; prorationDate: number },
+  ): Promise<UpgradeResultDTO> {
+    await this.assertPlanChangeAllowed(input);
+    return toUpgradeResultDTO(
+      await planChangeCall(() =>
+        upgradePlan({
+          coreOrganizationId: input.organizationId,
+          toPlanKey: input.toPlanKey,
+          prorationDate: input.prorationDate,
+        }),
+      ),
+    );
+  },
+
+  /** What a downgrade to `toPlanKey` at the period end would do. Writes nothing. */
+  async previewDowngrade(
+    input: OrgActorInput & { toPlanKey: string },
+  ): Promise<DowngradePreviewDTO> {
+    await this.assertPlanChangeAllowed(input);
+    return toDowngradePreviewDTO(
+      await planChangeCall(() =>
+        previewPlanDowngrade({
+          coreOrganizationId: input.organizationId,
+          toPlanKey: input.toPlanKey,
+        }),
+      ),
+    );
+  },
+
+  /** Schedule the move to `toPlanKey` for the period end. */
+  async scheduleDowngrade(
+    input: OrgActorInput & { toPlanKey: string },
+  ): Promise<DowngradeResultDTO> {
+    await this.assertPlanChangeAllowed(input);
+    return toDowngradeResultDTO(
+      await planChangeCall(() =>
+        schedulePlanDowngrade({
+          coreOrganizationId: input.organizationId,
+          toPlanKey: input.toPlanKey,
+        }),
+      ),
+    );
+  },
+
+  /** The billing gate, then the catalog: only a paid, recurring plan is a target. */
+  async assertPlanChangeAllowed(input: OrgActorInput & { toPlanKey: string }): Promise<void> {
+    await this.assertBillingManagerForMutation(input);
+    if (!isPlanChangeKey(input.toPlanKey)) {
+      throw new BillingPlanChangeRefusedError(
+        'unknown_plan',
+        `'${input.toPlanKey}' is not a plan a change of plan can move to.`,
+      );
+    }
+  },
+
   /**
    * Shared mutation gate: cloud-on + the actor holds the `manageBilling`
    * capability — the Owner or an Admin (ADR §7 as amended 2026-09-25 by
@@ -419,6 +518,38 @@ export const billingService = {
   },
 };
 
+// A motir-ai plan-change refusal becomes the billing domain's typed refusal, so
+// the route maps it by `reason`; every other boundary error passes through.
+async function planChangeCall<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (err instanceof MotirAiPlanChangeRefusedError) {
+      throw new BillingPlanChangeRefusedError(err.reason, err.message);
+    }
+    throw err;
+  }
+}
+
+// The pending downgrade the plan cards show (MOTIR-8399), read only for an org on
+// a live paid plan. It is the one read here that reaches Stripe live, so a
+// failure DEGRADES to `null` (no pill on the cards) instead of failing the whole
+// billing page: the dialogs' previews read the same schedule and still report it.
+async function readPendingDowngrade(
+  organizationId: string,
+  status: BillingStatusDTO['motirAi']['subscription']['status'],
+): Promise<PendingPlanChangeDTO | null> {
+  if (status !== 'active' && status !== 'trialing' && status !== 'past_due') return null;
+  try {
+    const { pendingDowngrade } = await getPendingPlanChange({ coreOrganizationId: organizationId });
+    return toPendingPlanChangeDTO(pendingDowngrade);
+  } catch (err) {
+    if (!(err instanceof MotirAiError)) throw err;
+    console.warn('[billing] pending plan change unavailable', { organizationId, code: err.code });
+    return null;
+  }
+}
+
 // Resolve the active workspace's organization id — RLS-aware (the workspace
 // policy admits the self-read under the non-bypass app role). Mirrors
 // aiChatService.resolveOrganizationId so the AI paywall reads the SAME org the
@@ -472,6 +603,7 @@ export async function assembleBillingStatus(
     getOrgSubscription({ coreOrganizationId: organizationId }),
     ciAllowanceService.getEntitlementState(organizationId, new Date()),
   ]);
+  const pendingDowngrade = await readPendingDowngrade(organizationId, subscription.status);
 
   return {
     organizationId: organizationId,
@@ -479,7 +611,7 @@ export async function assembleBillingStatus(
     isMeta: org?.isMeta ?? false,
     internalBilling: org?.internalBilling ?? false,
     motir: { scaledTrackerSubscription, aiIncludedSeat: org?.aiIncludedSeat ?? false },
-    motirAi: { tier: usage.tier, balance: usage.balance, subscription },
+    motirAi: { tier: usage.tier, balance: usage.balance, subscription, pendingDowngrade },
     ci,
     // The FOURTH billed line, off the SAME `getOrgUsage` read `motirAi` above
     // uses — no second request. `?? null` is load-bearing: an absent block is

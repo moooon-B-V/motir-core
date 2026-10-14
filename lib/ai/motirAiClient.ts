@@ -37,9 +37,15 @@ import {
   PlannerModelUnreachableError,
   AI_JOB_ABANDONED_PROBLEM_CODE,
   errorFromProblem,
+  planChangeRefusalOf,
   type JobView,
 } from './errors';
 import type {
+  RawDowngradePreview,
+  RawDowngradeResult,
+  RawPendingDowngrade,
+  RawUpgradePreview,
+  RawUpgradeResult,
   AdminCreditWriteInput,
   AdminCreditWriteResult,
   AdminLedgerQuery,
@@ -851,6 +857,76 @@ export async function createPortalSession(input: {
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return readSessionUrl(res);
+}
+
+// ── Changing the org's AI plan (motir-ai MOTIR-8396 / MOTIR-8398 / MOTIR-8399) ──
+//
+// The caller (billingService) has already gated the actor (an owner or admin) and
+// the cloud build. A refusal motir-ai answers with a reason the dialog draws
+// (`same_plan`, `payment_failed`, `preview_expired`, …) becomes a typed
+// MotirAiPlanChangeRefusedError carrying that reason; everything else maps through
+// the shared problem taxonomy.
+
+async function planChangePost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}${path}`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    throw planChangeRefusalOf(problem) ?? errorFromProblem(problem);
+  }
+  return (await res.json()) as T;
+}
+
+// POST /v1/stripe/upgrade/preview — what an upgrade costs now and grants. Writes nothing.
+export function previewPlanUpgrade(input: {
+  coreOrganizationId: string;
+  toPlanKey: string;
+}): Promise<RawUpgradePreview> {
+  return planChangePost('/v1/stripe/upgrade/preview', input);
+}
+
+// POST /v1/stripe/upgrade — upgrade now, at the `prorationDate` the preview returned.
+export function upgradePlan(input: {
+  coreOrganizationId: string;
+  toPlanKey: string;
+  prorationDate: number;
+}): Promise<RawUpgradeResult> {
+  return planChangePost('/v1/stripe/upgrade', input);
+}
+
+// POST /v1/stripe/downgrade/preview — what a downgrade at the period end would do.
+export function previewPlanDowngrade(input: {
+  coreOrganizationId: string;
+  toPlanKey: string;
+}): Promise<RawDowngradePreview> {
+  return planChangePost('/v1/stripe/downgrade/preview', input);
+}
+
+// POST /v1/stripe/downgrade — schedule the lower plan for the period end.
+export function schedulePlanDowngrade(input: {
+  coreOrganizationId: string;
+  toPlanKey: string;
+}): Promise<RawDowngradeResult> {
+  return planChangePost('/v1/stripe/downgrade', input);
+}
+
+// GET /v1/stripe/pending-plan-change — the downgrade the org's live plan has
+// scheduled, or `null`. Never a 404: no live plan is `null`.
+export async function getPendingPlanChange(
+  query: SubscriptionQuery,
+): Promise<{ pendingDowngrade: RawPendingDowngrade | null }> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ coreOrganizationId: query.coreOrganizationId });
+  const res = await aiFetch(`${url}/v1/stripe/pending-plan-change?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as { pendingDowngrade?: RawPendingDowngrade | null } | null;
+  return { pendingDowngrade: body?.pendingDowngrade ?? null };
 }
 
 // Both Stripe session endpoints return `{ url }` (contract §2.4); a 2xx body
