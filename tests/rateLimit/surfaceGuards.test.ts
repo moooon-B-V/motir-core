@@ -11,7 +11,11 @@ import {
 } from '@/lib/rateLimit/authGuard';
 import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 import { enforcePublicReadRateLimit } from '@/lib/rateLimit/publicReadGuard';
-import { enforceAiRateLimit, enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
+import {
+  enforceAiRateLimit,
+  enforceInternalServiceRateLimit,
+  enforceJobReadRateLimit,
+} from '@/lib/rateLimit/aiGuard';
 import {
   enforceMcpRateLimit,
   MCP_RATE_LIMITED_JSONRPC_CODE,
@@ -396,7 +400,10 @@ describe('the AI surface', () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
-    expect(await enforceAiRateLimit(ctx, 'ai:internal')).toBeNull();
+    // The job-token read-back door (per job since MOTIR-8604; a keyless token
+    // keeps the user bucket) is not the chat bucket.
+    expect(await enforceJobReadRateLimit({ ctx, jobKey: null })).toBeNull();
+    expect(await enforceJobReadRateLimit({ ctx, jobKey: 'job-a' })).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).not.toBeNull();
   });
 
@@ -498,9 +505,11 @@ describe('the tenant-LESS internal routes (service-bearer gated)', () => {
   it('does not share a bucket with the job-token internal calls', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
     expect(await enforceInternalServiceRateLimit(withBearer('secret-a'))).toBeNull();
-    // A job-token caller in the same scope keys on workspace+user, so its bucket
-    // is untouched by the credential one.
-    expect(await enforceAiRateLimit({ userId: 'u', workspaceId: 'w' }, 'ai:internal')).toBeNull();
+    // A job-token caller keys on its job (or, keyless, on workspace+user), so its
+    // bucket is untouched by the credential one.
+    const c = { userId: 'u', workspaceId: 'w' };
+    expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).toBeNull();
+    expect(await enforceJobReadRateLimit({ ctx: c, jobKey: 'job-a' })).toBeNull();
   });
 });
 
@@ -1130,10 +1139,14 @@ describe('the routes are actually WIRED to the guards', () => {
 });
 
 describe('a planning job’s job-token reads draw their own, larger budget (MOTIR-8423)', () => {
+  // Since MOTIR-8604 the door is `enforceJobReadRateLimit`; a keyless token is
+  // the pre-change `ai:internal` user bucket these cases pinned.
   it('ai:internal is NOT metered by the interactive MOTIR_AI_RATE_LIMIT', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
     const c = { userId: 'u-8423', workspaceId: 'w-8423' };
-    for (let i = 0; i < 5; i++) expect(await enforceAiRateLimit(c, 'ai:internal')).toBeNull();
+    for (let i = 0; i < 5; i++) {
+      expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).toBeNull();
+    }
   });
 
   it('and is still bounded by MOTIR_AI_INTERNAL_RATE_LIMIT', async () => {
@@ -1141,8 +1154,8 @@ describe('a planning job’s job-token reads draw their own, larger budget (MOTI
     try {
       await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
       const c = { userId: 'u-8423b', workspaceId: 'w-8423b' };
-      expect(await enforceAiRateLimit(c, 'ai:internal')).toBeNull();
-      expect(await enforceAiRateLimit(c, 'ai:internal')).not.toBeNull();
+      expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).toBeNull();
+      expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).not.toBeNull();
     } finally {
       delete process.env['MOTIR_AI_INTERNAL_RATE_LIMIT'];
     }

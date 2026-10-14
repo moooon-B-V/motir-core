@@ -3,6 +3,7 @@ import { presentedBearerToken } from '@/lib/api/v1/bearer';
 import { aiBudget, aiGenerateBudget, aiInternalBudget } from '@/lib/rateLimit/budgets';
 import { enforceRateLimit } from '@/lib/rateLimit/guard';
 import { rateLimitKey, type RateLimitScope } from '@/lib/rateLimit/keys';
+import { agentWorkspaceLimb } from '@/lib/rateLimit/workspaceCeiling';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // App-level limiting for the AI surfaces (Subtask 8.5.9 / MOTIR-1165).
@@ -15,12 +16,19 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // a phone could double their spend by changing networks. Cost accrues to a
 // WORKSPACE and is caused by a USER, so the key is both.
 //
-// Both surfaces reach the same key material from different credentials: the
-// browser surface reads it from the session + active project, and
-// `/api/internal/ai/*` reads it from the job token's claims (`sub`,
-// `workspaceId`). Neither ever needs the request's IP, which is also why nothing
-// here composes personal data into the key beyond the ids — hashed all the same,
+// The browser surface reads that key material from the session + active
+// project. Nothing here ever needs the request's IP, which is also why nothing
+// composes personal data into the key beyond the ids — hashed all the same,
 // since the counter table holds no plaintext identifiers at all.
+//
+// ── JOB READ-BACKS ARE VOLUME, KEYED PER JOB (MOTIR-8604) ────────────────────
+// `/api/internal/ai/*`'s job-token reads used to share this axis: one
+// `(workspace, user)` bucket for every planning job a person ran. They are not
+// money — a job's credits already stop the provider spend — they are VOLUME,
+// so `enforceJobReadRateLimit` below keys them per JOB (the token's `jobKey`)
+// and spends the workspace's shared agent ceiling beside it. A token minted
+// before the `jobKey` claim keeps the old user-keyed bucket. The money surfaces
+// keep user + workspace.
 
 /**
  * Limit one AI call for `ctx`. Returns a 429 to return instead of submitting the
@@ -42,13 +50,44 @@ export async function enforceAiRateLimit(
     {
       scope,
       key: rateLimitKey(scope, ctx.workspaceId, ctx.userId),
-      budget:
-        scope === 'ai:generate'
-          ? aiGenerateBudget()
-          : scope === 'ai:internal'
-            ? aiInternalBudget()
-            : aiBudget(),
+      budget: scope === 'ai:generate' ? aiGenerateBudget() : aiBudget(),
     },
+  ]);
+  return response;
+}
+
+/**
+ * Limit one job-token read-back (`/api/internal/ai/*`) — MOTIR-8604.
+ *
+ * Two limbs, spent together through `enforceRateLimit` (so a refusal carries the
+ * retryable contract `rateLimitedResponse` writes):
+ *
+ *   - the per-JOB limb: `ai:job` on the token's `jobKey`, at
+ *     `aiInternalBudget()`. ⚠️ A keyless token (minted before MOTIR-8599, or
+ *     whose claim was malformed) falls back to the pre-change
+ *     `ai:internal` `(workspace, user)` bucket at the same budget — never
+ *     unlimited, and never sharing a keyed job's bucket;
+ *   - the workspace's shared agent ceiling (`agentWorkspaceLimb`), the SAME
+ *     bucket MCP and `/api/v1` spend, so submitting more jobs buys no more of it.
+ */
+export async function enforceJobReadRateLimit(auth: {
+  ctx: ServiceContext;
+  jobKey: string | null;
+}): Promise<NextResponse | null> {
+  const { ctx, jobKey } = auth;
+  const { response } = await enforceRateLimit([
+    jobKey === null
+      ? {
+          scope: 'ai:internal',
+          key: rateLimitKey('ai:internal', ctx.workspaceId, ctx.userId),
+          budget: aiInternalBudget(),
+        }
+      : {
+          scope: 'ai:job',
+          key: rateLimitKey('ai:job', ctx.workspaceId, jobKey),
+          budget: aiInternalBudget(),
+        },
+    agentWorkspaceLimb(ctx.workspaceId),
   ]);
   return response;
 }

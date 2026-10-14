@@ -47,6 +47,10 @@ export type RateLimitScope =
   | 'ai:chat'
   | 'ai:generate'
   | 'ai:internal'
+  // The per-JOB volume bucket for job-token read-backs (MOTIR-8604, Story
+  // MOTIR-8548), keyed on the token's `jobKey`. A scope of its own so a job-key
+  // hash can never collide with an `ai:internal` user-key or service-bearer bucket.
+  | 'ai:job'
   | 'mcp:call'
   // The per-workspace agent-VOLUME ceiling (MOTIR-8601) — ONE bucket that every
   // agent-volume surface spends beside its per-agent limb (MCP, `/api/v1`, and

@@ -90,7 +90,20 @@ export const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 60_000;
  * loop — not meter a walk. One walk reads dozens of times a minute and one person
  * runs several at once (measured: 59, 132 and 86 reads in consecutive minutes), so
  * the 30/min interactive allowance failed a plan whose target read fell on the
- * wrong second. Keyed per (workspace, user) like the interactive scopes.
+ * wrong second.
+ *
+ * ⚠️ PER JOB since MOTIR-8604 (Story MOTIR-8548): `MOTIR_AI_INTERNAL_RATE_LIMIT`
+ * sizes ONE job's bucket (`ai:job`, keyed on the token's `jobKey`), so two jobs of
+ * one person each get it and a runaway job cannot drain its siblings. A token
+ * minted before the `jobKey` claim (MOTIR-8599) falls back to the old
+ * `(workspace, user)` bucket at this same budget. Every read-back also spends the
+ * workspace's shared agent ceiling (`DEFAULT_AGENT_WORKSPACE_RATE_LIMIT`).
+ *
+ * The arithmetic: 600/min = 10 reads/s per job, ~4.5× the highest measured
+ * minute (132). A MOTIR-7719 walk of ~64 required reads uses about a tenth of
+ * it. Fifty concurrent jobs of one workspace at their measured ~100/min fit
+ * inside the 12 000 ceiling with MCP traffic beside them. The story's sizing
+ * task confirms it.
  */
 export const DEFAULT_AI_INTERNAL_RATE_LIMIT = 600;
 export const DEFAULT_AI_INTERNAL_RATE_LIMIT_WINDOW_MS = 60_000;
