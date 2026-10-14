@@ -84,8 +84,6 @@ import {
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
 
-const STORY = 'MOTIR-8241';
-
 // ── Language ─────────────────────────────────────────────────────────────────
 
 type Lang = 'en' | 'zh';
@@ -314,7 +312,7 @@ for (const lang of LANGS) {
     beat,
     acceptanceStory,
   }) => {
-    acceptanceStory(STORY);
+    acceptanceStory('MOTIR-8241');
     await resetDatabase();
     const seed = await seedConnectJourney(`connect-trip-${lang}@e2e.motir.test`);
     const settings = watchForSettings(page);
@@ -416,7 +414,7 @@ for (const lang of LANGS) {
     beat,
     acceptanceStory,
   }) => {
-    acceptanceStory(STORY);
+    acceptanceStory('MOTIR-8241');
     await resetDatabase();
     const seed = await seedConnectJourney(`connect-already-${lang}@e2e.motir.test`);
     await seedConnectedRepos(seed.workspaceId);
@@ -462,7 +460,7 @@ for (const lang of LANGS) {
     beat,
     acceptanceStory,
   }) => {
-    acceptanceStory(STORY);
+    acceptanceStory('MOTIR-8241');
     await resetDatabase();
     const seed = await seedConnectJourney(`connect-norepos-${lang}@e2e.motir.test`);
     // An installation bound to the organisation with no repository it can use.
@@ -514,7 +512,7 @@ for (const lang of LANGS) {
     chapter,
     acceptanceStory,
   }) => {
-    acceptanceStory(STORY);
+    acceptanceStory('MOTIR-8241');
     await resetDatabase();
     const seed = await seedConnectJourney(`connect-outcomes-${lang}@e2e.motir.test`);
     const settings = watchForSettings(page);
