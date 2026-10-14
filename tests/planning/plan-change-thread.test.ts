@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { dispositionMarkerFor, pendingQuestion } from '@/lib/planning/planChangeThread';
+import {
+  dispositionMarkerFor,
+  latestTurnDeclined,
+  pendingQuestion,
+} from '@/lib/planning/planChangeThread';
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import type { PlanChangeTurnDto } from '@/lib/dto/planChange';
 
@@ -75,6 +79,32 @@ describe('pendingQuestion', () => {
     const first = asked();
     const second = asked();
     expect(pendingQuestion([first, turn('user'), second])).toBe(second);
+  });
+});
+
+describe('latestTurnDeclined', () => {
+  it('is true when the latest planner turn declined for an unreadable code graph', () => {
+    expect(
+      latestTurnDeclined([turn('user'), turn('assistant', { codeUnreadable: 'declined' })]),
+    ).toBe(true);
+  });
+
+  it('is false for an answered, a plain and an absent outage face', () => {
+    expect(
+      latestTurnDeclined([turn('user'), turn('assistant', { codeUnreadable: 'answered' })]),
+    ).toBe(false);
+    expect(latestTurnDeclined([turn('user'), reported()])).toBe(false);
+    expect(latestTurnDeclined([])).toBe(false);
+  });
+
+  it('ignores a declined turn that predates the latest user message', () => {
+    expect(
+      latestTurnDeclined([
+        turn('assistant', { codeUnreadable: 'declined' }),
+        turn('user'),
+        turn('system'),
+      ]),
+    ).toBe(false);
   });
 });
 
