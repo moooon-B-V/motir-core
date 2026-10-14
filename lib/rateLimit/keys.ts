@@ -48,6 +48,11 @@ export type RateLimitScope =
   | 'ai:generate'
   | 'ai:internal'
   | 'mcp:call'
+  // The per-workspace agent-VOLUME ceiling (MOTIR-8601) — ONE bucket that every
+  // agent-volume surface spends beside its per-agent limb (MCP, `/api/v1`, and
+  // the job read-backs). Deliberately not one per surface: per-surface ceilings
+  // would let one tenant spend the whole ceiling on MCP AND again on `/api/v1`.
+  | 'agent:workspace'
   | 'account:change-password'
   | 'account:set-password-link'
   | 'account:data-export'

@@ -5,6 +5,7 @@ import { verifyMcpToken } from '@/lib/mcp/auth';
 import { answerClientAbort } from '@/lib/mcp/clientAbort';
 import { answerMalformedBody } from '@/lib/mcp/malformedBody';
 import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
+import { tokenFingerprint } from '@/lib/api/v1/bearer';
 import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { PROTECTED_RESOURCE_METADATA_PATH } from '@/lib/oauth/config';
@@ -52,7 +53,8 @@ import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 // (`registerMcpTools(…, meterBillableTools)` → `lib/mcp/rateLimitGate.ts`), so
 // spend is metered per TOOL rather than per request. Both use the shared store
 // and the shipped guards; `lib/rateLimit/mcpGuard.ts` carries the key-axis
-// reasoning (user + workspace, like `/api/ai/*` — NOT the PAT fingerprint).
+// reasoning: VOLUME per presented credential plus a per-workspace ceiling
+// (MOTIR-8601), MONEY per user + workspace like `/api/ai/*`.
 
 export const runtime = 'nodejs';
 // Readiness + work-item state flip constantly; never serve a cached MCP body.
@@ -92,7 +94,12 @@ const parsedHandler = answerMalformedBody(baseHandler);
  * refused at it.
  */
 async function limitedHandler(req: Request): Promise<Response> {
-  const { refusal, headers } = await enforceMcpRateLimit(contextFromAuthInfo(req.auth));
+  // The credential is fingerprinted HERE and the plaintext goes no further.
+  const token = req.auth?.token;
+  const { refusal, headers } = await enforceMcpRateLimit(
+    contextFromAuthInfo(req.auth),
+    token ? tokenFingerprint(token) : null,
+  );
   if (refusal) return refusal;
   return stampRateLimitHeaders(await parsedHandler(req), headers);
 }

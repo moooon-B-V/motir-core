@@ -18,7 +18,10 @@ import {
   rateLimitHeaders,
   RateLimitExceededError,
   retryAfterSeconds,
+  type RateLimitDecision,
 } from '@/lib/api/v1/rateLimit';
+import { spendLimbs } from '@/lib/rateLimit/guard';
+import { agentWorkspaceLimb } from '@/lib/rateLimit/workspaceCeiling';
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). EVERY public endpoint composes this one helper, which is what
@@ -203,7 +206,18 @@ export function withV1Route<P = Record<string, never>>(
       //
       // The headers go into `responseHeaders`, which every exit path stamps,
       // so they survive a 429, a 403, a mapped error and a 500 alike.
-      const decision = await consumeRateLimit(tokenFingerprint(presentedToken));
+      //
+      // The per-token limb is joined by the workspace's shared agent-volume
+      // ceiling (MOTIR-8601), spent concurrently, so N tokens in one workspace
+      // no longer get N × the budget. Only an `ok` result spends it: a
+      // `forbidden` / `run_token_refused` result carries no `workspaceId`
+      // (`ApiTokenAuthResult`), so it spends the per-token limb alone, exactly
+      // as before. The headers report the TIGHTER limb; either refusal is a 429.
+      const [tokenDecision, ceilingDecision] = await Promise.all([
+        consumeRateLimit(tokenFingerprint(presentedToken)),
+        auth.ok ? spendLimbs([agentWorkspaceLimb(auth.workspaceId)]) : Promise.resolve(null),
+      ]);
+      const decision = refusingOrTighter(tokenDecision, ceilingDecision?.tightest ?? null);
       for (const [header, value] of Object.entries(rateLimitHeaders(decision))) {
         responseHeaders.set(header, value);
       }
@@ -265,6 +279,20 @@ export function withV1Route<P = Record<string, never>>(
       return stamp(NextResponse.json(INTERNAL_ERROR_BODY, { status: 500 }), responseHeaders);
     }
   };
+}
+
+/**
+ * The decision a v1 response reports: a refusing limb if either refused, else
+ * the one with fewer requests left.
+ */
+function refusingOrTighter(
+  token: RateLimitDecision,
+  ceiling: RateLimitDecision | null,
+): RateLimitDecision {
+  if (!ceiling) return token;
+  if (!token.allowed) return token;
+  if (!ceiling.allowed) return ceiling;
+  return ceiling.remaining < token.remaining ? ceiling : token;
 }
 
 /** Copy the accumulated headers onto whatever the exit path produced. */

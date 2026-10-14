@@ -1,8 +1,8 @@
 import { retryAfterSeconds, type RateLimitDecision } from '@/lib/api/v1/rateLimit';
 import { mcpBudget } from '@/lib/rateLimit/budgets';
-import { rateLimitResponseHeaders, RATE_LIMITED_CODE } from '@/lib/rateLimit/guard';
+import { rateLimitResponseHeaders, RATE_LIMITED_CODE, spendLimbs } from '@/lib/rateLimit/guard';
 import { rateLimitKey } from '@/lib/rateLimit/keys';
-import { consumeSharedRateLimit } from '@/lib/rateLimit/limiter';
+import { agentWorkspaceLimb } from '@/lib/rateLimit/workspaceCeiling';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The MCP TRANSPORT guard (MOTIR-2610) — the ceiling on `POST /api/mcp` itself.
@@ -38,6 +38,18 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // MOTIR-2597 put on a user's spend would then be a ceiling on their browser tab
 // only. Cost accrues to a workspace and is caused by a user; the key is both, on
 // both doors, or it is not a ceiling.
+//
+// ── AMENDED (MOTIR-8601, Story MOTIR-8548): VOLUME per agent, MONEY per person ─
+// The argument above is about the MONEY half, and it still holds: the generation
+// budget lives one layer in (`lib/mcp/rateLimitGate.ts` → `ai:generate`, keyed
+// on `(workspace, user)`) and is unchanged. Applied to the VOLUME half it
+// starved a person's concurrent agents of one shared 300/min. So `mcp:call` is
+// now keyed on the presented CREDENTIAL's fingerprint — one bucket per agent —
+// and every request ALSO spends the workspace's shared `agent:workspace`
+// ceiling (`lib/rateLimit/workspaceCeiling.ts`). Minting a credential adds a
+// per-agent bucket and no ceiling, so self-service minting still cannot buy past
+// what the workspace may spend; and a credential is only ever a fingerprint
+// here, never the plaintext.
 
 /** The JSON-RPC error code a transport-level refusal carries.
  *
@@ -115,19 +127,34 @@ export interface McpRateLimitVerdict {
 }
 
 /**
- * Spend one `mcp:call` for `ctx` and report the verdict.
+ * Spend one request for `ctx` and report the verdict: the per-AGENT `mcp:call`
+ * limb, keyed on `credentialFingerprint`, and the workspace's shared ceiling.
+ * Both are spent; whichever refuses shapes the 429, and the tighter limb's
+ * numbers ride the headers when both admit.
  *
  * Called AFTER `withMcpAuth` has resolved the actor, so an unauthenticated
  * request can never spend a real tenant's budget — the ordering `/api/v1` pins
  * for the same reason.
+ *
+ * `credentialFingerprint` is the `tokenFingerprint` of the presented bearer —
+ * never the plaintext. ⚠️ A `null` one (no token on the auth info) is NEVER
+ * unlimited: it falls back to the pre-MOTIR-8601 `(workspace, user)` key, so it
+ * shares one bucket with every other unidentified call of the same person.
  */
-export async function enforceMcpRateLimit(ctx: ServiceContext): Promise<McpRateLimitVerdict> {
-  const decision = await consumeSharedRateLimit(
-    rateLimitKey('mcp:call', ctx.workspaceId, ctx.userId),
-    mcpBudget(),
-  );
+export async function enforceMcpRateLimit(
+  ctx: ServiceContext,
+  credentialFingerprint: string | null,
+): Promise<McpRateLimitVerdict> {
+  const agentKey =
+    credentialFingerprint === null
+      ? rateLimitKey('mcp:call', ctx.workspaceId, ctx.userId)
+      : rateLimitKey('mcp:call', ctx.workspaceId, credentialFingerprint);
+  const { refused, tightest } = await spendLimbs([
+    { scope: 'mcp:call', key: agentKey, budget: mcpBudget() },
+    agentWorkspaceLimb(ctx.workspaceId),
+  ]);
   return {
-    refusal: decision.allowed ? null : mcpRateLimitedResponse(decision),
-    headers: rateLimitResponseHeaders(decision),
+    refusal: refused ? mcpRateLimitedResponse(refused) : null,
+    headers: rateLimitResponseHeaders(refused ?? tightest),
   };
 }

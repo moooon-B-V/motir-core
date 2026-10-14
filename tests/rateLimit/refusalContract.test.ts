@@ -65,8 +65,8 @@ const BUDGET_ENVS = [
 ] as const;
 
 async function mcpTransport(): Promise<Refusal> {
-  await enforceMcpRateLimit(ctx);
-  const { refusal } = await enforceMcpRateLimit(ctx);
+  await enforceMcpRateLimit(ctx, 'fp-contract');
+  const { refusal } = await enforceMcpRateLimit(ctx, 'fp-contract');
   expect(refusal).not.toBeNull();
   const body = (await refusal!.json()) as {
     error: { code: number; data: { code: string; retryAfterSeconds: unknown } };

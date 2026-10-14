@@ -160,15 +160,30 @@ function tightest(decisions: RateLimitDecision[]): RateLimitDecision {
  * two of them should not pay two sequential round trips for one request.
  */
 export async function enforceRateLimit(limbs: RateLimitLimb[]): Promise<RateLimitVerdict> {
-  const decisions = await Promise.all(
-    limbs.map((limb) => consumeSharedRateLimit(limb.key, limb.budget)),
-  );
-  const refused = decisions.find((d) => !d.allowed);
-  const worst = tightest(decisions);
+  const { refused, tightest: worst } = await spendLimbs(limbs);
   return {
     response: refused ? rateLimitedResponse(refused) : null,
     headers: rateLimitResponseHeaders(worst),
   };
+}
+
+/**
+ * Spend every limb CONCURRENTLY and return the raw decisions' verdict: the
+ * first refusing limb (or `null`) and the tightest limb, whose numbers the
+ * `X-RateLimit-*` headers report.
+ *
+ * Extracted from {@link enforceRateLimit} (MOTIR-8601) for the surfaces that
+ * shape their OWN refusal — the MCP transport's JSON-RPC 429 and `/api/v1`'s
+ * typed error — and so need the decisions rather than a `NextResponse`. Every
+ * limb is spent even when another refuses, for the reason the limb type states.
+ */
+export async function spendLimbs(
+  limbs: RateLimitLimb[],
+): Promise<{ refused: RateLimitDecision | null; tightest: RateLimitDecision }> {
+  const decisions = await Promise.all(
+    limbs.map((limb) => consumeSharedRateLimit(limb.key, limb.budget)),
+  );
+  return { refused: decisions.find((d) => !d.allowed) ?? null, tightest: tightest(decisions) };
 }
 
 /** Copy `headers` onto a response the handler produced, without replacing it. */
