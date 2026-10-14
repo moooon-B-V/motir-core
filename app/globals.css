@@ -506,6 +506,11 @@ body {
     inset 0 0 0 100vmax var(--el-drafting-surface),
     var(--shadow-card);
 }
+/* THE MARK AT WORK (MOTIR-8417) — the rail header's one `BrandMark` takes the
+   drafting ink while Motir is writing; its breath is gated below. */
+.plan-at-work-mark[data-at-work='true'] > .brand-glyph {
+  color: var(--el-drafting);
+}
 /* The MOTION — on the node box's independent `scale` (it composes with any
    transform, grows about the centre, and leaves `left`/`top` and the edges where
    they are): a POP on arrival, then a BREATH with the ring's glow in phase, while
@@ -550,6 +555,11 @@ body {
       var(--shadow-card);
   }
 }
+@keyframes canvas-cue-breathe {
+  to {
+    opacity: 0.55;
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
   .canvas-node--drafting[data-cue-motion='at-work'] {
     animation:
@@ -572,6 +582,9 @@ body {
   }
   .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
     animation: canvas-cue-wash-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  .plan-at-work-mark[data-at-work='true'] > .brand-glyph {
+    animation: canvas-cue-breathe calc(var(--transition-slow) * 6) ease-in-out infinite alternate;
   }
 }
 /* Under reduce nothing is retained (the canvas drops the cue at once); should a
