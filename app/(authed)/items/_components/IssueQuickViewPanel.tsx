@@ -24,7 +24,6 @@ import { DesignResultPanel } from '../[key]/_components/DesignResultPanel';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { TodoRowReadOnly } from '@/app/(authed)/items/[key]/_components/TodoListSection';
-import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
 import { Pill } from '@/components/ui/Pill';
@@ -85,6 +84,17 @@ import {
   QuickViewRailField,
 } from '@/components/workItems/QuickViewSurface';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { fieldRef } from '@/lib/translation/fieldRefs';
+import { TranslationProvider } from '../[key]/_components/translation/TranslationProvider';
+import { TranslateControl } from '../[key]/_components/translation/TranslateControl';
+import { FieldTranslationMark } from '../[key]/_components/translation/FieldTranslationMark';
+import {
+  TranslatableMarkdown,
+  TranslatableTitle,
+} from '../[key]/_components/translation/TranslatableFields';
+
+/** The fields the quick view draws, and so the only ones it offers and marks (D3). */
+const QUICK_VIEW_FIELDS = [fieldRef.title(), fieldRef.description()];
 
 /** The peek's own anchor for the header badge — distinct from the item page's,
  *  because the peek can open over an item page that has its own field. */
@@ -641,7 +651,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 m: proposal.settableRailFields.length,
               },
             );
-  return (
+  const peek = (
     // MOTIR-2593 — the peek provides its OWN estimation config, from the payload.
     // Only three pages mount `EstimationConfigProvider` and none of them wraps
     // this modal, so without this the composed `EstimateBadge` silently falls
@@ -786,13 +796,19 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
       <QuickViewBody>
         {/* Main — title + the FULL description (scrollable). */}
         <QuickViewMain>
-          <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
-            <WorkItemTitle
-              title={data.title}
-              projectIdentifier={data.projectIdentifier}
-              workItemRefs={data.workItemRefs}
-            />
-          </h2>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
+                <TranslatableTitle
+                  title={data.title}
+                  projectIdentifier={data.projectIdentifier}
+                  workItemRefs={data.workItemRefs}
+                />
+              </h2>
+              <FieldTranslationMark fieldRef={fieldRef.title()} field="title" />
+            </div>
+            <TranslateControl />
+          </div>
           {/* MOTIR-2050: the archived notice — the SAME banner the detail page
               renders (the shared ArchivedNotice), first in the main column under
               the title, where the detail page puts it relative to its own header.
@@ -846,11 +862,15 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               className="mt-4"
             />
           ) : null}
-          <span className="mt-6 mb-2 block text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+          <span className="mt-6 mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
             {t('description')}
+            <span className="font-normal tracking-normal normal-case">
+              <FieldTranslationMark fieldRef={fieldRef.description()} field="description" />
+            </span>
           </span>
           {data.descriptionMd ? (
-            <MarkdownView
+            <TranslatableMarkdown
+              fieldRef={fieldRef.description()}
               value={data.descriptionMd}
               aria-label={t('issueDescriptionAria')}
               workItemRefs={data.workItemRefs}
@@ -1692,5 +1712,19 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         </QuickViewRail>
       </QuickViewBody>
     </EstimationConfigProvider>
+  );
+  // THE QUICK VIEW'S TRANSLATION (MOTIR-8122; design MOTIR-8112 host differences
+  // 1–5): the same provider, bar and marks as the item page, from the offer this
+  // peek read carried. It draws only the title and the description, so it offers
+  // and marks only those (D3) — its press is the page's request and translates
+  // every differing field. No offer (a Visitor, a proposal, a failed read): the
+  // peek renders exactly as before. Bound to `peek` so the wrap re-indents nothing.
+  const translation = proposal ? null : (data.translation ?? null);
+  return translation ? (
+    <TranslationProvider itemId={data.id} translation={translation} fields={QUICK_VIEW_FIELDS}>
+      {peek}
+    </TranslationProvider>
+  ) : (
+    peek
   );
 }
