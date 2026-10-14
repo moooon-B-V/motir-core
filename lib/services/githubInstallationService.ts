@@ -5,6 +5,8 @@ import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { assertOrgMember } from '@/lib/services/organizationAccessService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import type { JobCodeContext } from '@/lib/ai/codeContext';
 import { githubInstallationOrgLinkRepository } from '@/lib/repositories/githubInstallationOrgLinkRepository';
 import {
   InstallationNotAccessibleError,
@@ -25,7 +27,13 @@ import {
   userInstallationsClient,
   type GithubUserInstallation,
 } from '@/lib/github/userInstallations';
-import { encodeInstallState } from '@/lib/github/installState';
+import {
+  encodeInstallState,
+  type InstallReturnContext,
+  type InstallState,
+} from '@/lib/github/installState';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { NotAMemberError } from '@/lib/workspaces/errors';
 import { githubAppInstallUrl } from '@/lib/github/appLinks';
 import type {
   GithubAccountForOrganizationDTO,
@@ -36,7 +44,7 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { getGitProvider } from '@/lib/git';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
-import type { GithubRepo, Prisma } from '@/generated/prisma/client';
+import type { GithubInstallation, GithubRepo, Prisma } from '@/generated/prisma/client';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import type { GitProviderId, InstallationToken, NormalizedRepo } from '@/lib/git/types';
 
@@ -53,6 +61,39 @@ import type { GitProviderId, InstallationToken, NormalizedRepo } from '@/lib/git
 //     escape the RLS policy admits);
 //   * the READ + token paths are tenant requests — they run under
 //     `withWorkspaceContext`, so the workspace RLS gate scopes them.
+
+/**
+ * THE ONE PLACE an App install link is minted (MOTIR-8471). Every surface that
+ * starts an install calls this, so what a link contains — the signed state, the
+ * App URL — cannot change on one surface and be missed on another. Null when
+ * the App slug is unset on this deployment.
+ */
+function mintInstallUrl(state: InstallState): string | null {
+  return githubAppInstallUrl(encodeInstallState(state));
+}
+
+/**
+ * The organisation's bound GitHub installation ROWS — the union of the rows
+ * stamped with it and its `github_installation_org_link` rows, de-duplicated,
+ * stamped first. Binds `app.organization_id` on `tx` so the org read arm
+ * answers. The one place the union is written (MOTIR-8472 · MOTIR-8480).
+ */
+async function boundInstallationRows(
+  organizationId: string,
+  tx: Prisma.TransactionClient,
+): Promise<GithubInstallation[]> {
+  await bindOrganizationContext(tx, organizationId);
+  const stamped = await githubInstallationRepository.listByOrganizationId(organizationId, tx);
+  const links = await githubInstallationOrgLinkRepository.listByOrganizationId(organizationId, tx);
+  const seen = new Set<string>();
+  const rows: GithubInstallation[] = [];
+  for (const installation of [...stamped, ...links.map((link) => link.installation)]) {
+    if (seen.has(installation.id)) continue;
+    seen.add(installation.id);
+    rows.push(installation);
+  }
+  return rows;
+}
 
 export const githubInstallationService = {
   /**
@@ -509,14 +550,40 @@ export const githubInstallationService = {
       ctx.workspaceIdHint,
       false,
     );
-    return githubAppInstallUrl(
-      encodeInstallState({
-        workspaceId,
-        userId: ctx.actorUserId,
-        organizationId: ctx.organizationId,
-        origin: 'organizationGit',
-      }),
-    );
+    return mintInstallUrl({
+      workspaceId,
+      userId: ctx.actorUserId,
+      organizationId: ctx.organizationId,
+      origin: 'organizationGit',
+    });
+  },
+
+  /**
+   * The signed install URL the onboarding Connect step starts from (Story
+   * MOTIR-8241 · MOTIR-8471): the state returns to `/onboarding/migrate` and
+   * carries the step's own query (`context`, already narrowed by
+   * `onboardingReturnContextFrom`). Null when the App is not configured.
+   *
+   * ⚠️ NO `organizationId`, deliberately. A state that names an organisation
+   * takes the callback's ORG branch, which authorises an organisation ADMIN and
+   * links an existing installation. Onboarding is first-time binding of the
+   * workspace the person is in, so the callback must take the workspace branch,
+   * whose predicate is membership — the same one asserted here, so a link is
+   * never minted for a workspace the callback would refuse.
+   */
+  async installUrlForOnboardingConnect(ctx: {
+    workspaceId: string;
+    actorUserId: string;
+    context?: InstallReturnContext;
+  }): Promise<string | null> {
+    const role = await workspacesService.getMemberRole(ctx.actorUserId, ctx.workspaceId);
+    if (!role) throw new NotAMemberError(ctx.actorUserId, ctx.workspaceId);
+    return mintInstallUrl({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.actorUserId,
+      origin: 'onboardingMigrateConnect',
+      ...(ctx.context ? { context: ctx.context } : {}),
+    });
   },
 
   /**
@@ -779,6 +846,172 @@ export const githubInstallationService = {
           dtos.push(toGithubInstallationDTO(installation, repos));
         }
         return dtos;
+      },
+    );
+  },
+
+  /**
+   * THE ORGANISATION'S BOUND GITHUB INSTALLATIONS — *is anything installed for
+   * this organisation?* (Story MOTIR-8241 · MOTIR-8472), at the ORGANISATION
+   * tier, inside the caller's transaction.
+   *
+   * ⚠️ A UNION OF TWO SOURCES, because the two binding write paths are distinct:
+   * `bindInstallationForWorkspace` stamps the installation row with the workspace's
+   * organisation, while `linkExistingInstallation` (the setup route's organisation
+   * branch) writes only a `github_installation_org_link` row. Reading either one
+   * alone misses a real bound organisation. De-duplicated by installation, in the
+   * same order {@link listOrganizationInstallations} renders.
+   *
+   * Motir's shared provisioning installation has a NULL organisation, so the
+   * stamped read (an equality on `organization_id`) never returns it: it can not
+   * make a customer organisation report "bound".
+   *
+   * The caller owns the transaction and must already have resolved
+   * `organizationId` from a trusted row (the actor's workspace, never request
+   * input); this binds `app.organization_id` so the org read arm answers.
+   */
+  async listBoundInstallationsForOrganization(ctx: {
+    organizationId: string;
+    tx: Prisma.TransactionClient;
+  }): Promise<Array<{ installationRef: string; accountLogin: string; accountType: string }>> {
+    const installations = await boundInstallationRows(ctx.organizationId, ctx.tx);
+    return installations.map((installation) => ({
+      installationRef: installation.installationId,
+      accountLogin: installation.accountLogin,
+      accountType: installation.accountType,
+    }));
+  },
+
+  /**
+   * THE ORGANISATION'S CONNECTED SET — *which repositories does this run's
+   * organisation have connected, whichever of its workspaces connected them?*
+   * (Story MOTIR-8241 · MOTIR-8480).
+   *
+   * The organisation-tier sibling of `resolveWorkspaceConnectedRepos`, composed
+   * rather than re-derived: the workspace's own grant plus the bound
+   * installations {@link listBoundInstallationsForOrganization} reads (both
+   * binding write paths),
+   * each expanded to THIS organisation's repositories on it
+   * (`listByInstallationAndOrg` — a shared account's other organisations'
+   * repositories are not this one's), de-duplicated by `owner/name`. `indexed`
+   * is joined from the SAME workspace-keyed ledger read the workspace reader
+   * uses, because the index the migrate wizard waits on is this workspace's.
+   *
+   * A DB read only — no GitHub round trip. The empty set is `undefined`, never
+   * `[]`, exactly as the workspace reader's contract. `organizationId` must come
+   * from a trusted row (the run's workspace), never from a request.
+   */
+  async resolveOrganizationConnectedRepos(ctx: {
+    userId: string;
+    workspaceId: string;
+    organizationId: string;
+  }): Promise<JobCodeContext | undefined> {
+    const rows = await this.listOrganizationRepoRows(ctx);
+    if (rows.length === 0) return undefined;
+    return {
+      repos: rows.map(({ repoRef, provider, defaultBranch, indexed }) => ({
+        provider,
+        repoRef,
+        defaultBranch,
+        indexed,
+      })),
+    };
+  },
+
+  /**
+   * The index target for one of the organisation's connected repositories:
+   * the provider installation it is reachable through, and its coordinates —
+   * what `system.code-graph-index` needs to give THIS workspace its own index of
+   * an organisation repository (MOTIR-8480). Null when the organisation has no
+   * such repository. Same read as {@link resolveOrganizationConnectedRepos}.
+   */
+  async resolveOrganizationIndexTarget(ctx: {
+    userId: string;
+    workspaceId: string;
+    organizationId: string;
+    repoRef: string;
+  }): Promise<{
+    installationRef: string;
+    repoOwner: string;
+    repoName: string;
+    defaultBranch: string;
+  } | null> {
+    const rows = await this.listOrganizationRepoRows(ctx);
+    const row = rows.find((r) => r.repoRef === ctx.repoRef);
+    if (!row) return null;
+    return {
+      installationRef: row.installationRef,
+      repoOwner: row.owner,
+      repoName: row.name,
+      defaultBranch: row.defaultBranch,
+    };
+  },
+
+  /** The one read behind the two methods above, in ONE workspace-bound
+   *  transaction: bound installations → this organisation's repositories on each
+   *  → de-duplicated by `owner/name`, in installation then repository order, with
+   *  the workspace's succeeded-index ledger joined. */
+  async listOrganizationRepoRows(ctx: {
+    userId: string;
+    workspaceId: string;
+    organizationId: string;
+  }): Promise<
+    Array<{
+      repoRef: string;
+      owner: string;
+      name: string;
+      provider: string;
+      defaultBranch: string;
+      installationRef: string;
+      indexed: boolean;
+    }>
+  > {
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // The workspace's OWN grant first, then the organisation's bound set. First
+        // so the run's first repository — the ref the gate records — is the one
+        // the workspace-tier read picked for the same world. Included at all so
+        // the result is a superset of that read by construction, even for a
+        // workspace grant whose row predates its organisation stamp.
+        const own = await githubInstallationRepository.findByWorkspaceId(ctx.workspaceId, tx);
+        const bound = await boundInstallationRows(ctx.organizationId, tx);
+        const installations = own
+          ? [own, ...bound.filter((installation) => installation.id !== own.id)]
+          : bound;
+        const seen = new Set<string>();
+        const repos: Array<{ repo: GithubRepo; installationRef: string }> = [];
+        for (const installation of installations) {
+          const rows = await githubRepoRepository.listByInstallationAndOrg(
+            installation.id,
+            ctx.organizationId,
+            tx,
+          );
+          for (const repo of rows) {
+            const ref = `${repo.owner}/${repo.name}`;
+            if (seen.has(ref)) continue;
+            seen.add(ref);
+            repos.push({ repo, installationRef: installation.installationId });
+          }
+        }
+        // One ledger read for the whole set, and only when there IS a set — the
+        // shape `resolveWorkspaceConnectedRepos` uses.
+        const indexedRefs =
+          repos.length === 0
+            ? []
+            : await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx);
+        return repos.map(({ repo, installationRef }) => {
+          const repoRef = `${repo.owner}/${repo.name}`;
+          return {
+            repoRef,
+            owner: repo.owner,
+            name: repo.name,
+            provider: repo.provider,
+            defaultBranch: repo.defaultBranch,
+            installationRef,
+            indexed: indexedRefs.includes(repoRef),
+          };
+        });
       },
     );
   },

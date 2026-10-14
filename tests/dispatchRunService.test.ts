@@ -182,6 +182,82 @@ describe('open — the SET arrives whole, at the one moment it exists', () => {
     expect(await adminDb.dispatchRunCard.count({ where: { dispatchRunId: first.run.id } })).toBe(1);
   });
 
+  it('APPENDS a re-open’s new cards as legs — `motir auto` grows its set one card at a time (MOTIR-8632)', async () => {
+    const [a, b] = await seedItems(2);
+    const base = {
+      projectKey: fixture.projectIdentifier,
+      command: 'auto' as const,
+      reportedBy: 'cli' as const,
+      idempotencyKey: 'run-auto-grows',
+    };
+
+    // `motir auto` opens with NO plan, then re-issues the open per card it reaches.
+    const opened = await dispatchRunService.open({ ...base, cards: [] }, fixture.ctx);
+    expect(opened.run.cards).toHaveLength(0);
+
+    const first = await dispatchRunService.open(
+      { ...base, cards: [{ key: a!, disposition: 'queued' }] },
+      fixture.ctx,
+    );
+    const second = await dispatchRunService.open(
+      { ...base, cards: [{ key: b!, disposition: 'skipped', skipReason: 'needs_human' }] },
+      fixture.ctx,
+    );
+    // A RETRY of a leg it already holds adds nothing.
+    const retried = await dispatchRunService.open(
+      { ...base, cards: [{ key: a!, disposition: 'queued' }] },
+      fixture.ctx,
+    );
+
+    for (const r of [first, second, retried]) {
+      expect(r.created).toBe(false);
+      expect(r.run.id).toBe(opened.run.id);
+    }
+    expect(first.run.cards.map((c) => c.key)).toEqual([a]);
+    expect(retried.run.cards.map((c) => [c.key, c.position, c.disposition])).toEqual([
+      [a, 0, 'queued'],
+      [b, 1, 'skipped'],
+    ]);
+    expect(await adminDb.dispatchRunCard.count({ where: { dispatchRunId: opened.run.id } })).toBe(
+      2,
+    );
+
+    // The appended leg is a leg like any other: an event naming it is accepted.
+    const appended = await dispatchRunService.appendEvents(
+      opened.run.id,
+      [{ kind: 'card_claimed', workItemKey: a!, disposition: 'running' }],
+      fixture.ctx,
+    );
+    expect(appended.cards.map((c) => [c.key, c.disposition])).toEqual([[a, 'running']]);
+  });
+
+  it('refuses a re-open naming a card outside the project, and appends nothing', async () => {
+    const [a] = await seedItems(1);
+    const base = {
+      projectKey: fixture.projectIdentifier,
+      command: 'auto' as const,
+      reportedBy: 'cli' as const,
+      idempotencyKey: 'run-auto-unknown',
+    };
+    const opened = await dispatchRunService.open({ ...base, cards: [] }, fixture.ctx);
+
+    await expect(
+      dispatchRunService.open(
+        {
+          ...base,
+          cards: [
+            { key: a!, disposition: 'queued' },
+            { key: `${fixture.projectIdentifier}-9999`, disposition: 'queued' },
+          ],
+        },
+        fixture.ctx,
+      ),
+    ).rejects.toBeInstanceOf(UnknownDispatchRunCardError);
+    expect(await adminDb.dispatchRunCard.count({ where: { dispatchRunId: opened.run.id } })).toBe(
+      0,
+    );
+  });
+
   it('surfaces a CONCURRENT duplicate as a typed error — a P2002 never escapes', async () => {
     const [a] = await seedItems(1);
     const input = {

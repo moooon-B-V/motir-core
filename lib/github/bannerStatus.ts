@@ -23,6 +23,10 @@ export const GITHUB_BANNER_STATUSES = [
   'install_forbidden',
   'install_provider_error',
   'install_error',
+  // A member of a GitHub organisation who is not one of its owners started the
+  // install: GitHub sends the request to an owner instead (`setup_action=request`)
+  // and nothing is installed until one approves. Nothing failed (MOTIR-8241).
+  'install_requested',
   // One GitHub account, many organisations (MOTIR-8220) — the setup round trip's
   // org branch: another organisation already uses the account, so this one must
   // choose its repositories; a repository it asked for belongs elsewhere; the
@@ -56,6 +60,7 @@ export const GITHUB_BANNER_TONE: Record<GithubBannerStatus, GithubBannerTone> = 
   install_forbidden: 'danger',
   install_provider_error: 'danger',
   install_expired: 'info',
+  install_requested: 'info',
   install_unbound: 'info',
   not_configured: 'info',
   select_repos: 'info',
@@ -70,6 +75,7 @@ export const GITHUB_BENIGN_BANNER_STATUSES = [
   'installed',
   'repos_updated',
   'install_expired',
+  'install_requested',
   'install_unbound',
   'not_configured',
   'select_repos',

@@ -413,6 +413,9 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `trackServerWork`. It opens no database; its scanner imports only
   // `typescript` and `node:*`.
   'tests/mcp/mcp-route-tracked-guard.test.ts',
+  // MOTIR-8418 — Story MOTIR-8413's at-work sweeps: static reads of its enumerated
+  // surface (`tests/helpers/atWorkStorySurface.ts`), no render and no database.
+  'tests/planning/atWorkSurfaceGuards.test.ts',
 ] as const;
 
 /**

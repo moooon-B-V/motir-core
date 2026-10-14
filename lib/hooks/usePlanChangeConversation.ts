@@ -45,7 +45,7 @@ import {
   type AskSettleResponse,
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
-import { pendingQuestion } from '@/lib/planning/planChangeThread';
+import { latestTurnDeclined, pendingQuestion } from '@/lib/planning/planChangeThread';
 import { isOpenUnclear, pauseOf, MAILBOX_POLL_MS } from '@/lib/planning/runPause';
 import { useRunPause } from '@/lib/hooks/useRunPause';
 import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
@@ -1779,12 +1779,14 @@ export function usePlanChangeConversation({
       // failed recording costs the narration, never the proposals, so it must
       // not take the run down with it.
       let asked = false;
+      let declined = false;
       try {
         const sessionId = stateRef.current.session?.id;
         if (!sessionId) throw new Error('no session to narrate into');
         const withTurn = await recordPlannerTurn(sessionId, jobId, anchor, controller.signal);
         if (!mountedRef.current) return;
         asked = pendingQuestion(withTurn.turns) !== null;
+        declined = latestTurnDeclined(withTurn.turns);
         setState((s) => ({ ...s, session: withTurn }));
       } catch {
         /* the run still happened; the thread simply carries no narration */
@@ -1832,7 +1834,10 @@ export function usePlanChangeConversation({
           // A job CANCELED under the rail — a Stop pressed elsewhere, the
           // abandoned-plan sweep — is the same outcome as a stop pressed here
           // (MOTIR-7985): `EMPTY` is only ever a run that SUCCEEDED with nothing.
-          errorCode: asked || s.stopping || canceled ? null : 'EMPTY',
+          // A turn DECLINED for an unreadable code graph writes no plan by design
+          // and the rail draws its own notice (MOTIR-8136): the fourth reason, and
+          // not an error either (MOTIR-8564).
+          errorCode: asked || declined || s.stopping || canceled ? null : 'EMPTY',
           // The interval closes HERE and only here: the stream has ended, so the
           // walk reached its boundary and read the flag. Until this moment the
           // bar says "stopping", which is the honest thing to say.

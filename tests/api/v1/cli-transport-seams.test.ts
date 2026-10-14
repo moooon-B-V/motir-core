@@ -491,6 +491,9 @@ describe('the error path, end to end from a real refusal', () => {
     vi.stubEnv('MOTIR_API_V1_RATE_LIMIT', '1');
     vi.stubEnv('MOTIR_API_V1_RATE_LIMIT_WINDOW_MS', String(ALIGNED_WINDOW_MS));
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+    // Since MOTIR-8602 the transport waits a 429 out and re-sends; a zero bound
+    // keeps this case the proof of the exhaustion path, where it throws at once.
+    vi.stubEnv('MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS', '0');
 
     const client = clientFor(caller);
     // The first call spends the whole budget; the second is refused by the real

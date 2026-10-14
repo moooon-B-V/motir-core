@@ -90,8 +90,14 @@ export function reasonCodeFromError(
       return 'out_of_credits';
     case 'MOTIR_AI_UNAUTHORIZED':
       return 'token_expired';
-    case 'MOTIR_AI_UNAVAILABLE':
+    // ⚠️ A JOB THAT FAILED IS NOT THE PROVIDER BEING DOWN (MOTIR-8569). motir-ai's
+    // terminal `ai_job_failed` means its handler ran and refused — a read-back from
+    // core it could not make, a precondition it would not plan past — and no model
+    // may ever have been called. Reading it as `model_unavailable` sent a person to
+    // wait on a healthy provider. `getJob` maps that problem to MotirAiJobFailedError.
     case 'MOTIR_AI_JOB_FAILED':
+      return 'job_failed';
+    case 'MOTIR_AI_UNAVAILABLE':
     case 'MOTIR_AI_BAD_REQUEST':
       return 'model_unavailable';
     default:

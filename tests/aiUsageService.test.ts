@@ -322,6 +322,52 @@ describe('aiUsageService.getUsage', () => {
     expect(absent.translation).toBeNull();
   });
 
+  it('marks hasUsage from translation spend alone at org scope, not at a drill level (MOTIR-8488)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+
+    // An org whose only spend is translation: motir-ai keeps it out of the AI
+    // figures and the run log, so neither of those can mark usage.
+    const translationOnly = rawResponse({
+      totalSpend: 0,
+      monthSpend: 0,
+      monthlyHistory: [],
+      perModel: [],
+      recentRuns: { runs: [], page: 1, pageSize: 10, total: 0 },
+      translation: { totalSpend: 3, monthSpend: 3 },
+    });
+
+    getOrgUsageMock.mockResolvedValue(translationOnly);
+    const org = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+    expect(org.scope).toBe('org');
+    expect(org.hasUsage).toBe(true);
+    expect(org.translation).toEqual({ totalSpend: 3, monthSpend: 3 });
+
+    // At a project drill the org-level translation figure is not the project's
+    // own usage, so the project keeps its empty state.
+    getOrgUsageMock.mockResolvedValue({ ...translationOnly, scope: 'project' });
+    const drilled = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+      scope: 'project',
+      workspaceId: workspace.id,
+      projectId: project.id,
+    });
+    expect(drilled.scope).toBe('project');
+    expect(drilled.hasUsage).toBe(false);
+
+    // No translation block at all (a rolling deploy) still reads as no usage.
+    getOrgUsageMock.mockResolvedValue({ ...translationOnly, translation: undefined });
+    const absent = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+    expect(absent.hasUsage).toBe(false);
+  });
+
   it('marks hasUsage from run count alone and tolerates an unresolved run project name', async () => {
     const { workspace, owner } = await createTestWorkspace();
     getOrgUsageMock.mockResolvedValue(

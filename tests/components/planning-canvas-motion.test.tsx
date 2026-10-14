@@ -572,8 +572,14 @@ describe('PlanningCanvas — the cue under REDUCED MOTION (MOTIR-7830)', () => {
   it('the animated rules sit inside `no-preference`, timed by the tokens; the static form outside', () => {
     expect(gated('canvas-cue-ring-enter')).toBe(true);
     const animations = [...css.matchAll(/animation:\s*canvas-cue-ring-enter[^;]*;/g)];
-    expect(animations).toHaveLength(1);
-    expect(animations[0]![0]).toMatch(/var\(--transition-slow\) var\(--canvas-ease-enter\)/);
+    // Two since MOTIR-8416: the shipped ring, and the at-work ring that adds the
+    // glow behind the same enter (design/ai-chat/design-notes.md § _Motir at work_).
+    expect(animations).toHaveLength(2);
+    for (const a of animations) {
+      expect(a[0]).toMatch(
+        /canvas-cue-ring-enter var\(--transition-slow\) var\(--canvas-ease-enter\)/,
+      );
+    }
     // The static ring: a dotted BORDER in the role token — never `outline`.
     const ring = /\.canvas-node--laying > \.canvas-cue-ring \{([^}]*)\}/.exec(css)?.[1] ?? '';
     expect(ring).toMatch(/border:\s*2px dotted var\(--el-status-in-progress\)/);

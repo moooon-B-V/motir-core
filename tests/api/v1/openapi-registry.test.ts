@@ -329,15 +329,19 @@ describe('the emitted document', () => {
     const responses = paths['/api/v1/work-items/{key}']?.['get']?.[
       'responses'
     ] as unknown as Record<string, { headers: Record<string, unknown> }>;
-    for (const status of ['200', '404', '429']) {
-      expect(Object.keys(responses[status]?.headers ?? {})).toEqual([
-        'X-Request-Id',
-        'X-Motir-Api-Version',
-        'X-RateLimit-Limit',
-        'X-RateLimit-Remaining',
-        'X-RateLimit-Reset',
-      ]);
+    const shared = [
+      'X-Request-Id',
+      'X-Motir-Api-Version',
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'X-RateLimit-Reset',
+    ];
+    for (const status of ['200', '404']) {
+      expect(Object.keys(responses[status]?.headers ?? {})).toEqual(shared);
     }
+    // The 429 carries the shared set PLUS `Retry-After` (MOTIR-8600) — on that
+    // status only.
+    expect(Object.keys(responses['429']?.headers ?? {})).toEqual([...shared, 'Retry-After']);
   });
 
   it('references the PLAIN envelope for a plain collection', () => {

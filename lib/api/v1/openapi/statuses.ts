@@ -71,7 +71,7 @@ export const V1_STATUS_DESCRIPTIONS: Record<V1Status, string> = {
   413: 'The uploaded file is larger than the per-file limit this organization’s plan allows. Note the SEPARATE platform ceiling on a direct upload, documented on the operation itself (docs/decisions/attachment-api-door.md §1).',
   415: 'The uploaded file’s media type is not on the allowlist. `text/html` is deliberately absent: the three layers that make HTML safe to serve belong to the design-result lifecycle and its own publisher (design-result.md §5a).',
   422: 'The request is malformed in a way the caller can fix: an invalid cursor, an out-of-range `limit`, a failed body validation.',
-  429: "The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills.",
+  429: "The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills.",
   500: 'An unexpected server fault. The body carries no `code`, no stack and no driver text.',
   503: 'A dependency this operation needs — the motir-ai planning service — could not be reached or is misconfigured. The request itself was fine; retrying later is the right response.',
 };

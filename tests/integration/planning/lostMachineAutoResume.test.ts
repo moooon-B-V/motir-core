@@ -4,7 +4,7 @@ import type { ProjectContext } from '@/lib/projects';
 import { buildScope } from '@/lib/planChange/scope';
 import { failureRecordFrom } from '@/lib/planChange/failureRecord';
 import { AUTO_RESUMES_PER_SESSION } from '@/lib/planChange/sessionWaitingState';
-import { errorFromProblem } from '@/lib/ai/errors';
+import { jobErrorFromProblem } from '@/lib/ai/errors';
 import type { Problem } from '@/lib/ai/types';
 import { PLAN_STALLED_AFTER_MS, readPlanProgress } from '@/lib/plans/planProgress';
 import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
@@ -198,7 +198,7 @@ const reasonFor = (problem: Problem) =>
     now: new Date(),
     walkStop: null,
     lastPosition: null,
-    error: errorFromProblem(problem),
+    error: jobErrorFromProblem(problem),
   }).failureReason;
 
 const toResumeIds = async () =>

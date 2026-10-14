@@ -33,14 +33,14 @@ describe('stopPhraseKeyOf — where the walk stopped, in the progress line’s s
   });
 });
 
-describe('resumeReasonKeyOf — TOTAL over the six stored codes', () => {
+describe('resumeReasonKeyOf — TOTAL over the seven stored codes', () => {
   it('returns a key for each code, and every key has words in both locales', () => {
     for (const code of RESUME_REASON_CODES) {
       expect(resumeReasonKeyOf(code)).toBe(code);
       expect(en.workbench.planningSession.reason[code]).toBeTruthy();
       expect(zh.workbench.planningSession.reason[code]).toBeTruthy();
     }
-    expect(RESUME_REASON_CODES).toHaveLength(6);
+    expect(RESUME_REASON_CODES).toHaveLength(7);
   });
   it('an unknown or missing code reads as `internal`, never the raw code', () => {
     expect(resumeReasonKeyOf('quantum_flux')).toBe('internal');
@@ -57,6 +57,10 @@ describe('resumeRefusalKeyOf — TOTAL over the resume route’s refusals', () =
     ['SESSION_NOT_FAILED', 409, 'notFailed'],
     ['NOT_SESSION_OWNER', 403, 'notOwner'],
     ['PLAN_NOT_RESUMABLE', 409, 'notResumable'],
+    // MOTIR-8570 — motir-ai REFUSED the resume (a 400 `validation_error`, which core's client
+    // raises as `MotirAiBadRequestError` and the route answers as a 502). Nothing was unreachable
+    // and nothing will change on a retry, so it reads as "can't be continued", not as an outage.
+    ['MOTIR_AI_BAD_REQUEST', 502, 'notResumable'],
     [OUT_OF_CREDITS_CODE, 402, 'credits'],
     [null, 402, 'credits'],
     ['SOMETHING_ELSE', 502, 'unavailable'],

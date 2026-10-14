@@ -7144,6 +7144,7 @@
       "repos_updated": "Dostęp do repozytoriów zaktualizowany. Motir czyta repozytoria wybrane na GitHubie — nie ma tu nic więcej do dokończenia.",
       "install_unbound": "Aplikacja Motir GitHub App została zainstalowana na GitHubie, ale nie z tego obszaru roboczego, więc nie jest z nim jeszcze połączona. Rozpocznij instalację stąd, aby ją połączyć.",
       "install_expired": "Link instalacyjny wygasł podczas wizyty na GitHubie. Nic się nie zepsuło — zacznij ponownie z Ustawień.",
+      "install_requested": "Prośba o instalację aplikacji Motir GitHub App czeka na właściciela konta GitHub. Nic nie poszło źle — zostanie podjęta, gdy tylko właściciel ją zatwierdzi.",
       "install_forbidden": "Nie należysz do obszaru roboczego, z którego rozpoczęto tę instalację, więc nic nie zostało połączone.",
       "install_provider_error": "Motir nie mógł połączyć się z GitHubem, aby dokończyć łączenie aplikacji. Spróbuj ponownie.",
       "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie.",
@@ -8641,8 +8642,8 @@
       "body": "Motir czyta repozytoria połączone w GitHubie i tworzy jedną mapę kodu dla całego projektu.",
       "gitlabNote": "Łączenie z GitLabem pojawi się wkrótce.",
       "checking": "Sprawdzanie połączonych repozytoriów…",
-      "missingTitle": "Brak połączonych repozytoriów",
-      "missingHint": "Połącz GitHuba w nowej karcie. Motir sam zauważy połączenie, więc nie musisz tu niczego potwierdzać.",
+      "missingTitle": "Łączysz GitHuba i od razu wracasz",
+      "missingHint": "GitHub otworzy się w nowej karcie na około minutę. Oto co się tam dzieje, a ten krok będzie czekać po powrocie.",
       "connectCta": "Połącz GitHuba",
       "newTab": "(otwiera się w nowym oknie)",
       "waitingTitle": "Czekanie na GitHuba",
@@ -8652,7 +8653,55 @@
       "detectedHint": "To repozytoria, które Motir może czytać. Indeksowanie zacznie się, gdy przejdziesz dalej.",
       "listLabel": "Połączone repozytoria",
       "continue": "Dalej",
-      "manage": "Zarządzaj repozytoriami w GitHubie"
+      "manage": "Zarządzaj repozytoriami w GitHubie",
+      "preflightAccount": "Wybierz konto GitHub, na którym zostanie zainstalowana aplikacja Motir GitHub App: własne konto albo organizację GitHub, do której należysz.",
+      "preflightRepositories": "Wybierz wszystkie repozytoria albo tylko te, które zaznaczysz. Możesz to później zmienić w GitHubie.",
+      "preflightAccess": "Zatwierdź dostęp, o który prosi aplikacja. Może ona czytać i zmieniać kod oraz pull requesty, a także czytać checki, wdrożenia, Issues, kolejki scalania, metadane i zdarzenia bezpieczeństwa.",
+      "preflightReturn": "GitHub od razu przekieruje z powrotem do tego kroku, który pokaże połączone repozytoria.",
+      "preflightCta": "Połącz GitHuba",
+      "ownerPendingTitle": "Czekanie na zatwierdzenie przez właściciela",
+      "ownerPendingHint": "Właściciel wybranego konta GitHub musi zatwierdzić aplikację Motir GitHub App. Prośba jest już u niego, nic się nie zepsuło i nic nie przepadło. Konfiguracja będzie kontynuowana, gdy tylko właściciel ją zatwierdzi.",
+      "alreadyConnectedTitle": "Ta organizacja jest już połączona",
+      "alreadyConnectedHint": "Motir już może czytać te repozytoria, więc nie ma nic do zainstalowania.",
+      "alreadyConnectedAddMore": "Dodaj repozytoria w GitHubie",
+      "noReposTitle": "GitHub jest połączony, ale żadne repozytorium nie jest",
+      "noReposHint": "Instalacja się zakończyła, ale ta organizacja nie ma jeszcze repozytorium, którego Motir mógłby użyć. Albo żadnego nie wybrano, albo wybranych nie można tu połączyć, na przykład dlatego, że należą już do innej organizacji.",
+      "cancelledTitle": "Instalacja nie została dokończona",
+      "cancelledHint": "Powrót nastąpił przed zakończeniem w GitHubie. Nic się nie zepsuło: nic nie zostało połączone i nic nie przepadło. Spróbuj ponownie, kiedy zechcesz.",
+      "tryAgainCta": "Spróbuj ponownie",
+      "changeReposCta": "Wybierz repozytoria w GitHubie",
+      "starting": "Otwieranie GitHuba…",
+      "ownerPendingOpenCta": "Otwórz GitHuba",
+      "readFailedTitle": "Motir nie mógł teraz sprawdzić połączenia",
+      "readFailedHint": "Nic, co zrobiono na GitHubie, nie przepadło. Ten krok sprawdzi ponownie po powrocie do tej karty albo od razu.",
+      "recheckCta": "Sprawdź ponownie",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Połączono",
+        "alreadyConnected": "Już połączono",
+        "chooseRepos": "Wybierz repozytoria",
+        "ownerPending": "Czekanie na właściciela",
+        "expired": "Link wygasł",
+        "notConnected": "Nie połączono"
+      },
+      "outcome": {
+        "install_expiredTitle": "Link GitHuba wygasł w trakcie pracy na GitHubie",
+        "install_expiredHint": "Nic się nie zepsuło i nic nie zostało połączone. Spróbuj ponownie z tego kroku.",
+        "install_forbiddenTitle": "Nie możesz połączyć tego obszaru roboczego",
+        "install_forbiddenHint": "Ta instalacja została rozpoczęta w obszarze roboczym, którego nie jesteś członkiem, więc nic nie zostało połączone. GitHuba może połączyć administrator tego obszaru roboczego.",
+        "install_provider_errorTitle": "Motir nie mógł dokończyć łączenia z GitHubem",
+        "install_provider_errorHint": "Nic nie zostało połączone. Spróbuj ponownie za chwilę.",
+        "install_errorTitle": "Motir nie mógł potwierdzić tej instalacji",
+        "install_errorHint": "Nie udało się zweryfikować linku powrotnego z GitHuba, więc nic nie zostało połączone. Spróbuj ponownie z tego kroku.",
+        "select_reposTitle": "Wybierz repozytoria dla tej organizacji",
+        "select_reposHint": "Inna organizacja już korzysta z tego konta GitHub, więc wybierz, których jego repozytoriów może używać ta organizacja.",
+        "repo_unavailableTitle": "Repozytorium jest już połączone gdzie indziej",
+        "repo_unavailableHint": "Jedno z wybranych repozytoriów należy już do innej organizacji, więc nie zostało tu dodane. Wybierz inne repozytoria w GitHubie.",
+        "installation_not_accessibleTitle": "Motir nie może samodzielnie powiązać tego konta GitHub",
+        "installation_not_accessibleHint": "Użytkownik GitHub, z którego korzystasz, nie widzi tej instalacji, więc nic nie zostało powiązane. Dostęp może nadać właściciel konta GitHub.",
+        "not_configuredTitle": "GitHub nie jest skonfigurowany w tym wdrożeniu",
+        "not_configuredHint": "To wdrożenie Motir nie ma jeszcze aplikacji GitHub App, więc nie można tu połączyć GitHuba. Osoba, która zarządza wdrożeniem, może to skonfigurować."
+      }
     },
     "index": {
       "eyebrow": "Krok 2 z 2 · Konfiguracja",
@@ -9221,7 +9270,8 @@
         "couldNot": "Nic nie zostało uruchomione i nic nie zostało naliczone. {repair}",
         "changes_requested": "Nic nie jest wznawiane. Najpierw zostanie poprawione {key}; jego następna wersja zapyta ponownie, a to uruchomienie nadal czeka.",
         "declined": "Nic nie jest wznawiane. Praca, którą by to odblokowało, wymaga nowego planu — zaplanuj ponownie {key} albo ustaw {head} na Do zrobienia, aby zacząć od nowa.",
-        "overturned": "Nic nie jest wznawiane. Zatwierdzenie już nie obowiązuje, więc uruchomienie czeka na nową decyzję w sprawie {key}."
+        "overturned": "Nic nie jest wznawiane. Zatwierdzenie już nie obowiązuje, więc uruchomienie czeka na nową decyzję w sprawie {key}.",
+        "reshaped": "Wznowienie uwzględni zmienioną historię."
       },
       "back": {
         "changes_requested": "{kind} odesłane · zmiany zażądane przez <b>{name}</b> — „{note}”",
@@ -9254,7 +9304,26 @@
         "repository_not_writable": "Połącz ponownie repozytorium w ustawieniach projektu, a potem naciśnij Kontynuuj.",
         "card_not_ready": "Usuń to, co blokuje {key}, lub przenieś go z powrotem do W toku, a potem naciśnij Kontynuuj."
       },
-      "copyAria": "Skopiuj polecenie wznowienia dla {key}"
+      "copyAria": "Skopiuj polecenie wznowienia dla {key}",
+      "member": {
+        "added": "Dodano po zatrzymaniu uruchomienia",
+        "rescoped": "Zmieniony zakres"
+      },
+      "fold": {
+        "added": "+{count} dodanych po zatrzymaniu uruchomienia"
+      },
+      "reshaped": {
+        "one": "Plan <plan>{title}</plan> <aside>(zatwierdzony <when></when>)</aside> zmienił tę historię po zatrzymaniu uruchomienia: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# plan zmienił} few {# plany zmieniły} many {# planów zmieniło} other {# planu zmieniło}}</b> tę historię od zatrzymania uruchomienia",
+        "planLine": "Plan <plan>{title}</plan> <aside>(zatwierdzony <when></when>)</aside>: {counts}",
+        "showPlans": "Pokaż plany",
+        "hidePlans": "Ukryj plany",
+        "added": "dodane: {n}",
+        "changed": "zmienione: {n}",
+        "removed": "usunięte: {n}",
+        "separator": ", ",
+        "label": "Plany, które zmieniły {key} po zatrzymaniu jego uruchomienia"
+      }
     },
     "planning": {
       "scope": "Twoje plany w <project>{name}</project>, które są nadal pisane. Plany, o które poprosili inni, są na <link>stronie Plany</link>.",
@@ -9305,6 +9374,7 @@
         "model_unavailable": "dostawca AI był niedostępny",
         "token_expired": "połączenie z dostawcą AI wygasło",
         "prompt_too_large": "kontekst planu był zbyt duży dla modelu",
+        "job_failed": "zadanie planowania nie powiodło się",
         "internal": "po naszej stronie wystąpił problem"
       },
       "refusal": {

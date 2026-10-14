@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getJob } from '@/lib/ai/motirAiClient';
-import { MotirAiOutOfCreditsError, MotirAiUnavailableError } from '@/lib/ai/errors';
+import {
+  MotirAiJobFailedError,
+  MotirAiOutOfCreditsError,
+  MotirAiUnavailableError,
+} from '@/lib/ai/errors';
 import { terminalStatusOf, walkPositionOf } from '@/lib/ai/jobStream';
 import {
   failureRecordFrom,
@@ -51,7 +55,7 @@ describe('reasonCodeFromError — total', () => {
     ['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits'],
     ['MOTIR_AI_UNAUTHORIZED', 'token_expired'],
     ['MOTIR_AI_UNAVAILABLE', 'model_unavailable'],
-    ['MOTIR_AI_JOB_FAILED', 'model_unavailable'],
+    ['MOTIR_AI_JOB_FAILED', 'job_failed'],
     ['MOTIR_AI_JOB_NOT_FOUND', 'internal'],
     ['SOMETHING_NEW', 'internal'],
   ])('%s → %s', (code, expected) => {
@@ -184,6 +188,38 @@ describe('failureRecordFrom', () => {
     expect(rec.failureReason).toBe('model_unavailable');
     // Exactly the detail any unavailable failure with this message is stored with.
     expect(rec.failureDetail).toBe(new MotirAiUnavailableError(detail).message);
+  });
+
+  it('records a job that FAILED as job_failed, never as motir-ai being unavailable (MOTIR-8569)', async () => {
+    // The production shape: the planning job ran and threw on a refused read-back.
+    // Before, getJob mapped it to MotirAiUnavailableError, so the session read
+    // "motir-ai is unavailable" for a job motir-ai had run to its end.
+    const detail =
+      'planning: the project\'s terminal statuses could not be read for MOTIR-8239: HTTP 401: terminal-statuses read-back failed: {"code":"UNAUTHENTICATED"} — refusing to plan without them';
+    process.env['MOTIR_AI_URL'] = 'https://ai.example.test';
+    process.env['MOTIR_AI_SERVICE_TOKEN'] = 'svc-token';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            jobId: 'job_1',
+            status: 'failed',
+            result: null,
+            error: { type: 't', title: 'Job failed', status: 500, code: 'ai_job_failed', detail },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+    const view = await getJob('job_1', 'pj_1');
+    vi.unstubAllGlobals();
+
+    const rec = failureRecordFrom({ ...base, walkStop: view.walkStop ?? null, error: view.error });
+
+    expect(rec.failureReason).toBe('job_failed');
+    expect(rec.failureDetail).not.toContain('motir-ai is unavailable');
+    expect(rec.failureDetail).toContain('HTTP 401');
   });
 });
 
@@ -318,21 +354,21 @@ describe('getJob parses walkStop tolerantly', () => {
     stub({ ...problem, walkStop: WALK_STOP });
     const view = await getJob('j', 'pj');
     expect(view.walkStop).toMatchObject({ reasonCode: 'rate_limited' });
-    expect(view.error).toBeInstanceOf(MotirAiUnavailableError);
+    expect(view.error).toBeInstanceOf(MotirAiJobFailedError);
   });
 
   it('reads null, with the same typed error, when walkStop is absent', async () => {
     stub(problem);
     const view = await getJob('j', 'pj');
     expect(view.walkStop).toBeNull();
-    expect(view.error).toBeInstanceOf(MotirAiUnavailableError);
+    expect(view.error).toBeInstanceOf(MotirAiJobFailedError);
   });
 
   it('reads null when walkStop has the wrong shape', async () => {
     stub({ ...problem, walkStop: { phase: 7, depth: 'deep' } });
     const view = await getJob('j', 'pj');
     expect(view.walkStop).toBeNull();
-    expect(view.error).toBeInstanceOf(MotirAiUnavailableError);
+    expect(view.error).toBeInstanceOf(MotirAiJobFailedError);
   });
 
   it('is null on a job with no error at all', async () => {

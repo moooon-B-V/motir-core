@@ -1,5 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { parseReturnSurfaceId, type GithubReturnSurfaceId } from './returnSurface';
+import {
+  INSTALL_RETURN_CONTEXT_KEYS,
+  INSTALL_RETURN_CONTEXT_MAX_LENGTH,
+  type InstallReturnContext,
+} from './installReturnContext';
+
+export type { InstallReturnContext } from './installReturnContext';
 
 // Signed, self-contained state carried through the GitHub App install round-trip
 // (MOTIR-1588). Unlike the OAuth identity flow — which stashes a CSRF nonce in an
@@ -31,6 +38,22 @@ function sign(payloadB64: string): string {
   return createHmac('sha256', signingKey()).update(`${CONTEXT}.${payloadB64}`).digest('base64url');
 }
 
+/** Shape-narrow an untrusted context: known keys, non-empty bounded strings.
+ *  Returns `undefined` when nothing survives, so an empty context is never
+ *  written and never decoded into an extra key. */
+function narrowContextShape(value: unknown): InstallReturnContext | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const out: InstallReturnContext = {};
+  for (const key of INSTALL_RETURN_CONTEXT_KEYS) {
+    const v = source[key];
+    if (typeof v === 'string' && v.length > 0 && v.length <= INSTALL_RETURN_CONTEXT_MAX_LENGTH) {
+      out[key] = v;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export interface InstallState {
   workspaceId: string;
   userId: string;
@@ -49,6 +72,11 @@ export interface InstallState {
    *  token minted before this field still decodes (to a state with none). Its
    *  presence routes the setup round trip through the per-organisation link. */
   organizationId?: string;
+  /** The address the install started from, beyond its surface id — see
+   *  {@link InstallReturnContext}. Payload key `c`, OMITTED when empty exactly
+   *  as `o` and `g` are, so a token minted without one is byte-identical to one
+   *  minted before the field existed and decodes with no `context` key. */
+  context?: InstallReturnContext;
 }
 
 /** Encode + sign a short-lived install-state token.
@@ -67,6 +95,7 @@ export function encodeInstallState(
     exp: number;
     o?: GithubReturnSurfaceId;
     g?: string;
+    c?: InstallReturnContext;
   } = {
     w: state.workspaceId,
     u: state.userId,
@@ -74,6 +103,8 @@ export function encodeInstallState(
   };
   if (state.origin) payload.o = state.origin;
   if (state.organizationId) payload.g = state.organizationId;
+  const context = narrowContextShape(state.context);
+  if (context) payload.c = context;
   const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${b64}.${sign(b64)}`;
 }
@@ -88,7 +119,21 @@ export type InstallStateRejection = 'malformed' | 'expired';
 
 export type InstallStateResult =
   | { ok: true; state: InstallState }
-  | { ok: false; reason: InstallStateRejection };
+  | { ok: false; reason: 'malformed' }
+  | {
+      ok: false;
+      reason: 'expired';
+      /** ⚠️ THE ONE THING AN EXPIRED STATE STILL DECIDES (MOTIR-8471): where
+       *  the person is returned to. The TTL exists so a leaked install link
+       *  cannot BIND an installation later — and the binding stays refused. It
+       *  is not a statement about where somebody may land: the signature
+       *  verified, the origin is a closed-map id and the context is narrowed,
+       *  so honouring them is what lets an install that outlived the TTL come
+       *  back to the step it started on, reported as expired. Each key is
+       *  present only when the payload carried a readable value. */
+      origin?: GithubReturnSurfaceId;
+      context?: InstallReturnContext;
+    };
 
 /** Verify + decode an install-state token, reporting WHY it was rejected.
  *  Constant-time signature compare. The checks are unchanged — this only names
@@ -107,7 +152,14 @@ export function decodeInstallStateResult(
   const b = Buffer.from(expectedSig);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return { ok: false, reason: 'malformed' };
 
-  let payload: { w?: unknown; u?: unknown; exp?: unknown; o?: unknown; g?: unknown };
+  let payload: {
+    w?: unknown;
+    u?: unknown;
+    exp?: unknown;
+    o?: unknown;
+    g?: unknown;
+    c?: unknown;
+  };
   try {
     payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8')) as typeof payload;
   } catch {
@@ -120,15 +172,25 @@ export function decodeInstallStateResult(
   ) {
     return { ok: false, reason: 'malformed' };
   }
-  // Only a token that VERIFIED can be called expired — an unsigned payload
-  // claiming a past `exp` must stay `malformed`, so the expiry banner (which
-  // says nothing is broken) is never reachable from an unauthenticated string.
-  if (payload.exp < nowSeconds) return { ok: false, reason: 'expired' };
   // The origin is NARROWED, not trusted. It arrived inside the signature, so it
   // is ours — but an id this build no longer registers (a surface that was
   // renamed or removed between minting and return) must decode to "no origin"
   // and fall back, never to a path this build cannot serve.
   const origin = parseReturnSurfaceId(typeof payload.o === 'string' ? payload.o : null);
+  // The context likewise: an unreadable value is DROPPED, never a rejection of
+  // the token — the signature already said the token is ours.
+  const context = narrowContextShape(payload.c);
+  // Only a token that VERIFIED can be called expired — an unsigned payload
+  // claiming a past `exp` must stay `malformed`, so the expiry banner (which
+  // says nothing is broken) is never reachable from an unauthenticated string.
+  if (payload.exp < nowSeconds) {
+    return {
+      ok: false,
+      reason: 'expired',
+      ...(origin ? { origin } : {}),
+      ...(context ? { context } : {}),
+    };
+  }
   return {
     ok: true,
     state: {
@@ -138,6 +200,7 @@ export function decodeInstallStateResult(
       ...(typeof payload.g === 'string' && payload.g.length > 0
         ? { organizationId: payload.g }
         : {}),
+      ...(context ? { context } : {}),
     },
   };
 }

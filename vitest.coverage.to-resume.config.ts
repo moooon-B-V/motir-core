@@ -33,6 +33,7 @@ export const MEASURED = [
   'lib/jobs/definitions/gateResume.ts',
   // MOTIR-7712 — the To resume tab's entry.
   'lib/services/resumeRunDetailService.ts',
+  'lib/services/resumeScopeService.ts',
   'app/*/workbench/_components/WorkbenchResumeLine.tsx',
   // MOTIR-7713 — the run section's marker.
   'app/*/items/*/_components/GatedRunMarker.tsx',
@@ -86,6 +87,9 @@ export default defineConfig({
       'tests/workbench/resumeState.test.ts',
       'tests/ready/claimContinueResume.test.ts',
       'tests/components/workbench-to-resume.test.tsx',
+      'tests/components/workbench-to-resume-reshaped.test.tsx',
+      'tests/integration/home/toResumeReshaped.test.ts',
+      'tests/workbench/resumeReshapePlans.test.ts',
       'tests/components/run-section-gated.test.tsx',
     ],
     coverage: {

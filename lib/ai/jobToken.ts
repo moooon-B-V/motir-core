@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 // The job-scoped read-back token (boundary contract §4b). motir-core mints it
 // at job submit and embeds it in the request envelope; motir-ai presents it on
@@ -11,12 +11,21 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // lib/savedFilters/subscriptionToken.ts; no new env key). Format
 // `<payload-b64url>.<sig-b64url>`, verified in constant time.
 //
-// NOTE (refines contract §4b): the token does NOT encode a jobId. motir-ai
-// mints the jobId at submit (it's in the 202 response), so it isn't known when
-// core mints the token a moment earlier. The token scopes the read-back to
-// user + workspace + project + a short TTL, which is the permission-critical
-// part; the contract card for 7.1.5 specifies exactly "user + project + a short
-// TTL".
+// NOTE (refines contract §4b): the token does NOT encode motir-ai's jobId.
+// motir-ai mints the jobId at submit (it's in the 202 response), so it isn't
+// known when core mints the token a moment earlier. The token scopes the
+// read-back to user + workspace + project + a short TTL, which is the
+// permission-critical part; the contract card for 7.1.5 specifies exactly
+// "user + project + a short TTL".
+//
+// AMENDED (MOTIR-8599): the token now ALSO carries `jobKey` — an opaque random
+// id core mints itself, beside the token, at submission. It is NOT motir-ai's
+// jobId and nothing looks a job up by it: it is a rate-limit BUCKET key, so a
+// job's read-backs can be metered per job instead of per person (MOTIR-8604).
+// Minting our own avoids reordering the submit (token first, id second) across
+// two repositories. A refresh carries it over unchanged, so one key names one
+// job for its whole life; a token minted before this shipped has none, and the
+// limiter falls back to the user key for it.
 
 // ⚠️ THIS IS A LIFETIME FOR ONE STRETCH OF WORK, NOT FOR A WHOLE JOB
 // (MOTIR-3288). The comment here used to read "expires with the job", and that
@@ -38,6 +47,8 @@ export interface JobTokenClaims {
   projectId: string;
   iat: number; // issued-at (epoch seconds)
   exp: number; // expiry (epoch seconds)
+  /** The per-job rate-limit key (MOTIR-8599). Optional: a pre-change token has none. */
+  jobKey?: string;
 }
 
 export interface MintJobTokenInput {
@@ -45,6 +56,8 @@ export interface MintJobTokenInput {
   workspaceId: string;
   projectId: string;
   ttlSeconds?: number;
+  /** Carry an existing job's key (a refresh). Omitted, a fresh one is minted. */
+  jobKey?: string;
 }
 
 function secret(): string {
@@ -67,7 +80,13 @@ export function mintJobToken(input: MintJobTokenInput): string {
     projectId: input.projectId,
     iat,
     exp: iat + (input.ttlSeconds ?? DEFAULT_TTL_SECONDS),
+    jobKey: input.jobKey ?? randomUUID(),
   };
+  return signClaims(claims);
+}
+
+/** Sign an exact claim set — `mintJobToken`'s tail, shared with the claimless refresh. */
+function signClaims(claims: JobTokenClaims): string {
   const payloadB64 = Buffer.from(JSON.stringify(claims)).toString('base64url');
   return `${payloadB64}.${sign(payloadB64)}`;
 }
@@ -129,10 +148,25 @@ export function inspectJobToken(token: string): JobTokenVerdict {
  * an expired token cannot be revived.
  */
 export function refreshJobToken(claims: JobTokenClaims, ttlSeconds?: number): string {
+  // ⚠️ The `jobKey` is CARRIED, never minted here (MOTIR-8599). A key minted on
+  // refresh would split one job into two rate-limit buckets across a renewal.
+  // A pre-change token has none and refreshes without one: the new token stays
+  // a pure function of the presented one, as the refresh route requires.
+  if (typeof claims.jobKey !== 'string' || claims.jobKey === '') {
+    const iat = Math.floor(Date.now() / 1000);
+    return signClaims({
+      sub: claims.sub,
+      workspaceId: claims.workspaceId,
+      projectId: claims.projectId,
+      iat,
+      exp: iat + (ttlSeconds ?? DEFAULT_TTL_SECONDS),
+    });
+  }
   return mintJobToken({
     userId: claims.sub,
     workspaceId: claims.workspaceId,
     projectId: claims.projectId,
+    jobKey: claims.jobKey,
     ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
   });
 }

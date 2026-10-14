@@ -27,6 +27,9 @@ export interface ApiV1ErrorBody {
   /** `MARKED_CARD_CANNOT_REOPEN` (MOTIR-6673): the marked card, its mark and the
    *  refused target (null for a refused child write) — `markedCardCannotReopenSchema`. */
   mark?: { key: string; obsolescence: string; toStatusKey: string | null };
+  /** `RATE_LIMIT_EXCEEDED` (MOTIR-8600): whole seconds to wait before retrying —
+   *  the same number as the `Retry-After` header. */
+  retryAfterSeconds?: number;
 }
 
 /**
@@ -651,6 +654,20 @@ function hasStringCode(err: unknown): err is { code: string; message: string } {
 }
 
 /**
+ * The rate-limit refusal's numeric retry field (MOTIR-8600). Detected by CODE
+ * plus a numeric field rather than by class, so this module keeps importing no
+ * domain class it did not already import (`RateLimitExceededError` lives in
+ * `rateLimit.ts`, which imports THIS file).
+ */
+function retryAfterPayload(err: ApiV1Error): Pick<ApiV1ErrorBody, 'retryAfterSeconds'> {
+  if (err.code !== 'RATE_LIMIT_EXCEEDED') return {};
+  const seconds = (err as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+  return typeof seconds === 'number' && Number.isFinite(seconds)
+    ? { retryAfterSeconds: seconds }
+    : {};
+}
+
+/**
  * Classify a thrown value into the v1 envelope.
  *
  * Returns `undefined` for anything unrecognised — a raw `Error`, a Prisma
@@ -662,7 +679,10 @@ export function classifyApiV1Error(
   err: unknown,
 ): { status: number; body: ApiV1ErrorBody } | undefined {
   if (err instanceof ApiV1Error) {
-    return { status: err.status, body: { code: err.code, error: err.message } };
+    return {
+      status: err.status,
+      body: { code: err.code, error: err.message, ...retryAfterPayload(err) },
+    };
   }
   if (hasStringCode(err)) {
     const status = DOMAIN_ERROR_STATUS[err.code];
