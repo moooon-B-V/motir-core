@@ -8,6 +8,7 @@ import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunHeldGateRepository } from '@/lib/repositories/dispatchRunHeldGateRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ladderKeysFrom, RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
@@ -48,7 +49,7 @@ export const NOTHING_TO_RESUME: ResumeStateValue = { resumeState: null, resumeRu
 /**
  * What the card's To resume answer is NOW, read inside `tx` without writing it.
  * `null` state for a card outside the `in_progress` status CATEGORY, archived, or already
- * delivered (Implemented / In Review / Approved).
+ * delivered (Implemented / In Review / Approved with an open pull request).
  */
 export async function deriveResumeState(
   item: {
@@ -68,15 +69,19 @@ export async function deriveResumeState(
     return NOTHING_TO_RESUME;
   }
   // ⚠️ DELIVERED IS NOT PARKED (MOTIR-8611). Implemented / In Review / Approved share the
-  // `in_progress` CATEGORY, but a card there has its pull request open and CI decides from
+  // `in_progress` CATEGORY, but a card there WITH AN OPEN PULL REQUEST is CI's to move from
   // here — the continue claim answers it `use_fix` before it ever reads the gated run. So a
   // gated run left behind the card (the work landed some other way: a later build, a hand
   // move) is no longer something to resume, and listing it offers a resume the claim refuses.
+  // The open delivery is half the test: a design card's own publish walks it to In Review
+  // with NO pull request (`moveToReviewWhenUndelivered`), and that card still waits on its
+  // gate.
   const rank = rankOfStatus(item.status, statuses, ladderKeysFrom(statuses));
   if (
-    rank === RUNG_RANK.implemented ||
-    rank === RUNG_RANK.in_review ||
-    rank === RUNG_RANK.approved
+    (rank === RUNG_RANK.implemented ||
+      rank === RUNG_RANK.in_review ||
+      rank === RUNG_RANK.approved) &&
+    (await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) > 0
   ) {
     return NOTHING_TO_RESUME;
   }

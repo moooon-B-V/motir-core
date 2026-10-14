@@ -9,6 +9,7 @@ import { shaFor } from '../helpers/commitShaFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { homePageItems } from '../helpers/homePage';
+import { connectRepairRepo, deliveredPr } from '../helpers/repairFixtures';
 
 // TO RESUME (Story MOTIR-7701 · MOTIR-7707) — `WorkItem.resumeState`, against a real
 // Postgres: the derivation's every case, each trigger that moves it, and the Workbench
@@ -195,12 +196,23 @@ describe('the derivation — one answer per case', () => {
     expect(await recompute(code.id)).toEqual({ resumeState: null, resumeRunId: null });
   });
 
-  it('a card at Implemented / In Review / Approved is delivered, not waiting (MOTIR-8611)', async () => {
+  it('a card at Implemented / In Review / Approved with an open pull request is delivered, not waiting (MOTIR-8611)', async () => {
+    const repo = await connectRepairRepo(fx, 'motir-core');
     for (const status of ['implemented', 'in_review', 'approved']) {
       const { code } = await gatedStory();
+      await deliveredPr(fx, code.id, repo, { headRef: `subtask/${code.identifier}` });
       await adminDb.workItem.update({ where: { id: code.id }, data: { status } });
       expect(await recompute(code.id)).toEqual({ resumeState: null, resumeRunId: null });
     }
+  });
+
+  it('a card at In Review with NO open pull request still waits — a design publish walks there by itself (MOTIR-8611)', async () => {
+    const { code, runId } = await gatedStory();
+    await adminDb.workItem.update({ where: { id: code.id }, data: { status: 'in_review' } });
+    expect(await recompute(code.id)).toEqual({
+      resumeState: 'waiting_on_gate',
+      resumeRunId: runId,
+    });
   });
 
   it('an archived card is not waiting', async () => {
@@ -269,6 +281,9 @@ describe('the triggers — each moves the column in the writer’s own flow', ()
 
   it('delivering the card (In Progress → Implemented) takes it off To resume (MOTIR-8611)', async () => {
     const { code } = await gatedStory();
+    await deliveredPr(fx, code.id, await connectRepairRepo(fx, 'motir-core'), {
+      headRef: `subtask/${code.identifier}`,
+    });
     expect((await stateOf(code.id)).resumeState).toBe('waiting_on_gate');
     await workItemsService.updateStatus(code.id, 'implemented', fx.ctx);
     expect((await stateOf(code.id)).resumeState).toBeNull();
