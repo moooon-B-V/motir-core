@@ -84,6 +84,18 @@ export const DEFAULT_AI_RATE_LIMIT = 30;
 export const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
+ * The JOB-TOKEN read-backs a running planning job makes (`/api/internal/ai/*`,
+ * MOTIR-8423). The money is spent at motir-ai's model provider, which a job's
+ * credits already stop (MOTIR-7719), so this ceiling only has to bound a runaway
+ * loop — not meter a walk. One walk reads dozens of times a minute and one person
+ * runs several at once (measured: 59, 132 and 86 reads in consecutive minutes), so
+ * the 30/min interactive allowance failed a plan whose target read fell on the
+ * wrong second. Keyed per (workspace, user) like the interactive scopes.
+ */
+export const DEFAULT_AI_INTERNAL_RATE_LIMIT = 600;
+export const DEFAULT_AI_INTERNAL_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
  * GENERATION: the same money, a much bigger unit of it (MOTIR-2597).
  *
  * A chat turn is one sentence in and one reply out. A plan generation, a story
@@ -234,6 +246,16 @@ export function aiBudget(): RateLimitBudget {
     'MOTIR_AI_RATE_LIMIT_WINDOW_MS',
     DEFAULT_AI_RATE_LIMIT,
     DEFAULT_AI_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** The job-token read-backs of a running planning job — see `DEFAULT_AI_INTERNAL_RATE_LIMIT`. */
+export function aiInternalBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_AI_INTERNAL_RATE_LIMIT',
+    'MOTIR_AI_INTERNAL_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_AI_INTERNAL_RATE_LIMIT,
+    DEFAULT_AI_INTERNAL_RATE_LIMIT_WINDOW_MS,
   );
 }
 
