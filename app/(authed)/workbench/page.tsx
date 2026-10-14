@@ -7,10 +7,7 @@ import type { ReactNode } from 'react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { HOME_FINISHED_WINDOW_DAYS, HOME_PAGE_SIZE, homeService } from '@/lib/services/homeService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { workflowsService } from '@/lib/services/workflowsService';
-import type { HomeActorContext } from '@/lib/services/homeService';
-import type { HomePageDto } from '@/lib/dto/home';
+import { isWorkItemTab, workbenchWindowService } from '@/lib/services/workbenchWindowService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
@@ -73,49 +70,6 @@ const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
   approvals: 'tabs.toApprove',
   planning: 'tabs.planning',
 };
-
-/**
- * The ONE read this render needs, chosen by tab.
- *
- * Four tabs each have their own service method — the partition is the READ's
- * (MOTIR-4781), not a filter applied to a shared list here.
- *
- * ⚠️ THE FIFTH IS NOT HERE, and its absence is the point (MOTIR-4794). To
- * approve reads `approvalGatesService.listAwaitingMe`, whose rows are GATES
- * rather than work items — a different DTO, a different list — and it does that
- * read inside `<ApprovalsTab>` rather than in this function, so the page can
- * mount a `<Suspense>` between its gate and that content. Window 2 of
- * `design/shell/design-notes.md`'s navigation-pending grammar: *"an in-page
- * `<Suspense>` placed AFTER the page's gate"*. Calling it here would put the
- * await back in the page's own `Promise.all`, where nothing can suspend around
- * it.
- */
-function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promise<HomePageDto> {
-  switch (tab) {
-    case 'todo':
-      return homeService.listToDo(ctx, { page });
-    case 'in-progress':
-      return homeService.listInProgress(ctx, { page });
-    case 'to-fix':
-      return homeService.listToFix(ctx, { page });
-    case 'to-resume':
-      return homeService.listToResume(ctx, { page });
-    case 'finished':
-      return homeService.listRecentlyFinished(ctx, { page });
-    case 'watching':
-      return homeService.listWatching(ctx, { page });
-    case 'approvals':
-      // Read by `<ApprovalsTab>` instead — see the note above. This arm is
-      // unreachable: the render branches on the tab before calling this.
-      return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
-    case 'planning':
-      // Read by `<PlanningTab>`, for the same reason and in the same shape
-      // (MOTIR-7831): its rows are PLANS, not work items — a different DTO and a
-      // different list — and it awaits inside its own component so a `<Suspense>`
-      // can sit between the page's gate and it. Unreachable, like the arm above.
-      return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
-  }
-}
 
 /**
  * An empty tab's drawn state — glyph, copy, and an action only where one helps.
@@ -313,22 +267,19 @@ export default async function WorkbenchPage({
   // does for Approvals.
   const isPlanning = tab === 'planning';
 
-  const [window, counts, members, workflow] = await Promise.all([
-    // The Approvals tab's rows are read inside `<ApprovalsTab>` so a boundary
-    // can sit around them; this window stays empty for it and is not rendered.
-    isApprovals || isPlanning
-      ? Promise.resolve<HomePageDto>({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE })
-      : readTab(tab, ctx, page),
-    homeService.tabCounts(ctx),
-    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
-    // ONE workflow, for the one project the page reads. This surface used to
-    // resolve a workflow PER PROJECT ON THE PAGE, because two projects can spell
-    // the same lifecycle differently — rent it was paying on a boundary it
-    // should not have crossed. Narrowing to the active project retires it.
-    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
-  ]);
+  // ⚠️ ONE PAIRING (Story MOTIR-8539 · MOTIR-8573): a work-item tab's window and
+  // the strip's counts come from `workbenchWindowService.read`, the same call
+  // `GET /api/workbench/window` answers from, so the first paint and a client
+  // re-read cannot be paired differently. To approve and Planning read their
+  // rows inside their own `<Suspense>` below (MOTIR-4794), so here they need
+  // the counts alone.
+  const read = isWorkItemTab(tab) ? await workbenchWindowService.read(ctx, { tab, page }) : null;
+  const counts = read ? read.counts : await workbenchWindowService.readCounts(ctx);
+  const window = read?.window.kind === 'workItems' ? read.window : null;
 
-  const rows = toWorkbenchRowViews(window.items, workflow, members, tab === 'watching');
+  const rows = window
+    ? toWorkbenchRowViews(window.page.items, window.workflow, window.members, tab === 'watching')
+    : [];
 
   return (
     <div data-testid={WORKBENCH_TESTID} className="flex flex-col gap-6">
@@ -409,10 +360,14 @@ export default async function WorkbenchPage({
             rows={rows}
             label={t(TAB_LABEL_KEY[tab])}
             tab={tab}
-            pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
+            pagination={{
+              total: window?.page.total ?? 0,
+              page: window?.page.page ?? 1,
+              pageSize: window?.page.pageSize ?? HOME_PAGE_SIZE,
+            }}
             empty={<EmptyTab tab={tab} />}
             viewerId={ctx.userId}
-            planningSessions={tab === 'to-resume' ? (window.planningSessions ?? []) : []}
+            planningSessions={tab === 'to-resume' ? (window?.page.planningSessions ?? []) : []}
           />
         )}
       </div>
