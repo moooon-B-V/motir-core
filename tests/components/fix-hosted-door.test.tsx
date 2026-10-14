@@ -19,6 +19,8 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 // the route's own answer (`POST /api/work-items/{key}/hosted-runs`, `mode: 'fix'`).
 
 const refresh = vi.fn();
+/** The window re-read the Workbench list is handed (MOTIR-8574). */
+const reread = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), refresh }),
   usePathname: () => '/items/ACME-12',
@@ -85,6 +87,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   refresh.mockReset();
+  reread.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -761,6 +764,7 @@ function renderRows(rows: HomeWorkItemRowDto[], zh = false) {
       pagination={{ total: rows.length, page: 1, pageSize: 25 }}
       empty={<p>Nothing to fix</p>}
       viewerId="usr_me"
+      reread={reread}
     />,
     zh ? { locale: 'zh', messages: zhMessages } : {},
   );
@@ -792,7 +796,9 @@ describe('the Workbench To fix row', () => {
     await pressFix(fixLine('ACME-14'));
     expect(starts().map((s) => s.url)).toEqual(['/api/work-items/ACME-14/hosted-runs']);
     expect(starts()[0]!.body.mode).toBe('fix');
-    expect(refresh).toHaveBeenCalled();
+    // The list re-reads its window (MOTIR-8574) — never the route.
+    expect(reread).toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('refused — the door’s warning notice in the row’s notice slot names the holder', async () => {

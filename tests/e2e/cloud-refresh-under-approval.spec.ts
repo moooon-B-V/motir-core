@@ -56,14 +56,15 @@ import en from '@/messages/en.json';
 // approval seed does not carry, and every assertion here is about the
 // Workbench's watermark, which the work-item writes already move.
 //
-// ── WHAT INVERTS THIS ───────────────────────────────────────────────────────
+// ── WHAT INVERTED IT ────────────────────────────────────────────────────────
 //
-// The assertions marked DEFECT below encode today's behaviour so this spec is
-// green against `main` and RECORDS the cause. MOTIR-8574 (the Workbench
-// applier) inverts case (i) to zero, and the story E2E (MOTIR-8580) asserts
-// zero across every surface with the counter this spec exports
-// (`_helpers/refresh-counter.ts`). MOTIR-8577 inverts (ii) only if it ever
-// reproduces; it does not today.
+// MOTIR-8574 (the Workbench applier) removed the host's refresh, so cases (i)
+// and (iii) now assert ZERO RSC refetches: a nudge on the Workbench is one read
+// of `GET /api/workbench/window`, applied in place. The table above stays as the
+// record of what `main` did before. The story E2E (MOTIR-8580) asserts zero
+// across every surface with the counter this spec exports
+// (`_helpers/refresh-counter.ts`). Case (ii) never reproduced, so MOTIR-8577
+// has no item-page refresh to remove.
 //
 // ⚠️ THE COUNTS COME FROM THE NETWORK LOG, never from component state. See the
 // counter's header for what each number counts and what it deliberately does
@@ -174,7 +175,7 @@ test.describe('a write by another actor under an open approval', () => {
     return counts;
   }
 
-  test('(i) approval open over /workbench — CONFIRMED: every nudge re-fetches the page under it', async ({
+  test('(i) approval open over /workbench — the nudge is applied in place, nothing re-fetches (MOTIR-8574)', async ({
     page,
     baseURL,
   }, testInfo) => {
@@ -196,11 +197,10 @@ test.describe('a write by another actor under an open approval', () => {
 
     expect(writes).toBeGreaterThanOrEqual(BURST);
     expect(counts.streamNudges).toBeGreaterThan(0);
-    // DEFECT — MOTIR-8574 inverts this to `toBe(0)`: the Workbench host's
-    // `useRefreshOnNudge` refreshes the route on every nudge, approval or not.
-    expect(counts.rscRefetches).toBeGreaterThan(0);
-    // The coordinator coalesces, so never more refetches than nudges.
-    expect(counts.rscRefetches).toBeLessThanOrEqual(counts.streamNudges);
+    // INVERTED by MOTIR-8574: on main this was one RSC refetch per nudge (the
+    // finding above). The Workbench now re-reads its own window, so the page
+    // under the approval is never re-fetched.
+    expect(counts.rscRefetches).toBe(0);
     expect(counts.documentLoads).toBe(0);
     // The approval is still open over the same document.
     await expect(dialog).toBeVisible();
@@ -237,7 +237,7 @@ test.describe('a write by another actor under an open approval', () => {
     await client.close();
   });
 
-  test('(iii) control — /workbench with nothing open refreshes per nudge (MOTIR-5242 today)', async ({
+  test('(iii) control — /workbench with nothing open applies nudges in place (MOTIR-8574)', async ({
     page,
     baseURL,
   }, testInfo) => {
@@ -257,8 +257,8 @@ test.describe('a write by another actor under an open approval', () => {
     );
 
     expect(counts.streamNudges).toBeGreaterThan(0);
-    // DEFECT for the story, intended for MOTIR-5242 — MOTIR-8574 removes it.
-    expect(counts.rscRefetches).toBeGreaterThan(0);
+    // INVERTED by MOTIR-8574 (it was MOTIR-5242's intended refresh per nudge).
+    expect(counts.rscRefetches).toBe(0);
     expect(counts.documentLoads).toBe(0);
     await client.close();
   });

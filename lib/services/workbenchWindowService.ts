@@ -7,7 +7,11 @@ import {
   workbenchPlanningService,
 } from '@/lib/services/workbenchPlanningService';
 import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
-import type { WorkbenchWindowContentDto, WorkbenchWindowDto } from '@/lib/dto/workbench';
+import type {
+  WorkbenchWindowContentDto,
+  WorkbenchWindowDto,
+  WorkbenchWorkItemWindowDto,
+} from '@/lib/dto/workbench';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
 
 // ONE WORKBENCH READ (Story MOTIR-8539 · Subtask MOTIR-8573) — the active tab's
@@ -86,6 +90,21 @@ export const workbenchWindowService = {
     }
     const [window, counts] = await Promise.all([readListTab(tab, ctx), homeService.tabCounts(ctx)]);
     return { tab, window, counts, readAt };
+  },
+
+  /**
+   * What the page's first paint needs, in ONE wave: a work-item tab's window with
+   * the counts, or — on To approve and Planning, whose rows are read inside their
+   * own `<Suspense>` (MOTIR-4794) — the counts alone. One call, so the page keeps
+   * the single read wave `tests/navigation/loading-boundary-guard.test.ts` holds it to.
+   */
+  async readFirstPaint(
+    ctx: HomeActorContext,
+    { tab, page }: { tab: WorkbenchTab; page: number },
+  ): Promise<{ counts: HomeTabCountsDto; window: WorkbenchWorkItemWindowDto | null }> {
+    if (!isWorkItemTab(tab)) return { counts: await this.readCounts(ctx), window: null };
+    const read = await this.read(ctx, { tab, page });
+    return { counts: read.counts, window: read.window.kind === 'workItems' ? read.window : null };
   },
 
   /**

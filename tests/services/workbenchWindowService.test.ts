@@ -61,6 +61,18 @@ describe('workbenchWindowService.read', () => {
     expect(read.counts.planning).toBe(read.window.page.total);
   });
 
+  it('`readFirstPaint` is the window with its counts, or the counts alone off the work-item tabs', async () => {
+    const work = await workbenchWindowService.readFirstPaint(actor(), { tab: 'todo', page: 1 });
+    expect(work.window?.kind).toBe('workItems');
+    expect(work.counts).toEqual(await homeService.tabCounts(actor()));
+    const approvals = await workbenchWindowService.readFirstPaint(actor(), {
+      tab: 'approvals',
+      page: 1,
+    });
+    expect(approvals.window).toBeNull();
+    expect(approvals.counts).toEqual(await homeService.tabCounts(actor()));
+  });
+
   it('`readCounts` is the strip counts alone', async () => {
     expect(await workbenchWindowService.readCounts(actor())).toEqual(
       await homeService.tabCounts(actor()),
@@ -79,8 +91,12 @@ describe('ONE pairing in the codebase', () => {
   it('the page renders its work-item tabs from the service the route answers from', () => {
     const page = code('app/(authed)/workbench/page.tsx');
     const route = code('app/api/workbench/window/route.ts');
-    expect(page).toContain('workbenchWindowService.read(');
+    expect(page).toContain('workbenchWindowService.readFirstPaint(');
     expect(route).toContain('workbenchWindowService.read(');
+    // …and the first paint is `read` itself for a work-item tab.
+    expect(code('lib/services/workbenchWindowService.ts')).toMatch(
+      /readFirstPaint\([\s\S]*?await this\.read\(ctx, \{ tab, page \}\)/,
+    );
     // No second pairing in the page: no list read of its own, and `tabCounts`
     // only on the landing redirect (a tab-less request that renders nothing).
     expect(page).not.toMatch(/homeService\.list[A-Z]/);
