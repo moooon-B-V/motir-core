@@ -8,6 +8,13 @@ import { adminDb } from './helpers/adminDb';
 import { renderWithIntl } from './helpers/renderWithIntl';
 import enMessages from '@/messages/en.json';
 
+// The translation tile (MOTIR-7735) shares two strings with the search tile — its
+// unavailable dash reads "Unavailable" and it is tagged "Whole organization" too —
+// so every search assertion below is about the elements OUTSIDE that tile.
+function outsideTranslation(els: HTMLElement[]): HTMLElement[] {
+  return els.filter((el) => !el.closest('[data-usage-translation]'));
+}
+
 // THE STORY TEST GATE for motir-core (MOTIR-4559), above the three code cards'
 // own units. It does NOT re-derive them — each ships its own floor — and exists
 // for the space BETWEEN them, which no per-card suite can reach.
@@ -252,12 +259,14 @@ describe('unavailable is not zero — walked layer by layer', () => {
     // the zero treatment.
     renderWithDto(<OrgUsageClient orgId={workspace.organizationId} orgName="Acme" />, usageAbsent);
     await waitFor(() => expect(screen.getByText(sum.balance)).toBeTruthy());
-    expect(screen.getAllByLabelText(sum.searchUnavailableValue).length).toBe(2);
+    expect(outsideTranslation(screen.getAllByLabelText(sum.searchUnavailableValue)).length).toBe(2);
     cleanup();
 
     renderWithDto(<OrgUsageClient orgId={workspace.organizationId} orgName="Acme" />, usageZero);
     await waitFor(() => expect(screen.getByText(sum.balance)).toBeTruthy());
-    expect(screen.queryByLabelText(sum.searchUnavailableValue)).toBeNull();
+    expect(outsideTranslation(screen.queryAllByLabelText(sum.searchUnavailableValue))).toHaveLength(
+      0,
+    );
     cleanup();
 
     // LAYER 4b — the rendered BILLED LINE.
@@ -345,7 +354,7 @@ describe('the member narrowing, against a population that is genuinely smaller',
     // The org-level tag is present and says so — the figure is not hidden from a
     // member, it is LABELLED, which is the asset's decision. What they cannot do
     // is mistake it for their project's.
-    expect(screen.getByText(sum.scopeOrg)).toBeTruthy();
+    expect(outsideTranslation(screen.getAllByText(sum.scopeOrg))).toHaveLength(1);
     expect(screen.queryByText('Not theirs')).toBeNull();
   });
 });

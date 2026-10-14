@@ -50,6 +50,21 @@ export interface SearchSpendDTO {
   monthSpend: number;
 }
 
+/**
+ * TRANSLATION spend (Story MOTIR-7735 · MOTIR-8117) — what the organisation spent
+ * translating work items, this month and all time. Kept OUT of the AI figures
+ * by motir-ai, so it is its own line and never part of `totalSpend`.
+ *
+ * The same rules as {@link SearchSpendDTO}: the figure is ORG-LEVEL and does NOT
+ * narrow with the drill (a translation is bought by the organisation, not by a
+ * run), and `null` means UNAVAILABLE — the boundary did not report the block —
+ * while `0` means nothing was spent. Render them differently.
+ */
+export interface TranslationSpendDTO {
+  totalSpend: number;
+  monthSpend: number;
+}
+
 /** One run's search spend, keyed by the same `jobId` `UsageRunDTO` carries. */
 export interface SearchRunDTO {
   jobId: string;
@@ -151,6 +166,8 @@ export interface OrgUsageDTO {
    */
   search: SearchSpendDTO | null;
   searchRuns: SearchRunsDTO | null;
+  /** Translation spend — org-level; `null` is UNAVAILABLE, never zero (MOTIR-8117). */
+  translation: TranslationSpendDTO | null;
   // True once the scope has any recorded usage — drives the empty state.
   //
   // ⚠️ Search spend is deliberately NOT part of this. It is org-level, so folding

@@ -5,6 +5,7 @@
 // receives.
 
 import type { GuideContext } from '@/lib/ai/guideWorkItem';
+import type { TranslateJobInput } from '@/lib/ai/translate';
 
 export const ENVELOPE_VERSION = 'v1' as const;
 
@@ -113,6 +114,14 @@ export const JOB_KINDS = [
   // itself writes the settled answers back through `PUT
   // /api/internal/ai/plan-sharpening`. Mirror of the closed motir-ai enum.
   'sharpen_turn',
+  // `translate` (Story MOTIR-7735 — MOTIR-8116 handler / MOTIR-8119 client) — a
+  // reader's on-demand Translate press: core sends ONE target language and the
+  // field texts that need it as `context.translate` (`requestTranslation`,
+  // lib/ai/translateClient.ts), and motir-ai answers one text per `fieldRef` as
+  // the typed `translations` result, priced in the `translation` lane. It writes
+  // nothing; core keeps the answer (the translation door). Mirror of the closed
+  // motir-ai enum (the open-core boundary).
+  'translate',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -414,6 +423,12 @@ export interface JobContextBag {
   // producer ↔ MOTIR-8176 consumer) — the wire shape motir-ai's `parseSharpenInput`
   // reads. Built from the session's STORED state, never from a client body.
   sharpen?: SharpenJobContext;
+  // The ONE translation batch a `translate` job takes (Story MOTIR-7735 ·
+  // MOTIR-8119 producer ↔ MOTIR-8116 consumer) — the reader's target language and
+  // the `{ fieldRef, text }` fields to translate into it, in the order the answer
+  // comes back. Built by `requestTranslation` (lib/ai/translateClient.ts), whose
+  // `TranslateJobInput` (lib/ai/translate.ts) is the wire shape.
+  translate?: TranslateJobInput;
   // The work-item context a `generate_explanation` job (8.8.11) drafts an
   // explanation FROM — the title / description / type / parent the "Draft with
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
@@ -681,6 +696,11 @@ export interface ResultEnvelope {
   // MOTIR-8176) — that kind only. Typed `unknown` for the same reason: untrusted
   // model output, read only through `parseSharpenTurn` (lib/ai/sharpenTurn.ts).
   sharpenTurn?: unknown;
+  // The translated texts a `translate` job produced (Story MOTIR-7735 ·
+  // MOTIR-8116) — that kind only, one `{ fieldRef, text }` per field sent. Typed
+  // `unknown` for the same reason as `authoredBug`: untrusted model output, read
+  // only through `parseTranslations` (lib/ai/translate.ts).
+  translations?: unknown;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
@@ -839,6 +859,20 @@ export interface RawUsageResponse {
    */
   agentMachine?: RawUsageAgentSpend;
   agentStorage?: RawUsageAgentSpend;
+  /**
+   * Translation spend (Story MOTIR-7735 · motir-ai MOTIR-8126) — org-level like
+   * `search`, this month and all time, and EXCLUDED by motir-ai from every AI
+   * figure above (`totalSpend`, `monthSpend`, `monthlyHistory`, the per-model
+   * breakdown and the run log's credits). Optional for the same ROLLING-DEPLOY
+   * reason as `search`: `undefined` means UNAVAILABLE, never zero.
+   */
+  translation?: RawUsageTranslationSpend;
+}
+
+/** `GET /v1/usage` — the organisation's translation spend (MOTIR-8126). */
+export interface RawUsageTranslationSpend {
+  totalSpend: number;
+  monthSpend: number;
 }
 
 /** `GET /v1/usage` — one agent charge kind's org-level spend (MOTIR-6915). */

@@ -134,6 +134,26 @@ export interface GuideJobOutcome {
 }
 
 /**
+ * What the next `translate` job should do (Story MOTIR-7735 · MOTIR-8119) — the
+ * shapes of {@link GuideJobOutcome} and {@link AuthorBugJobOutcome} together: a
+ * submit the fixture may refuse out of credits, then a job that settles
+ * `succeeded`, `failed` (motir-ai's `ai_job_failed`) or stays `running` for as
+ * long as the entry says so — the hung job the door's deadline turns into
+ * `timeout`.
+ */
+export interface TranslateJobOutcome {
+  submit?: 'accepted' | 'out_of_credits';
+  status?: 'succeeded' | 'failed' | 'running';
+  /**
+   * The job's `translations` result unit, as given. Absent on a success ⇒ the
+   * mock ECHOES the submitted fields as `[<targetLanguage>] <text>`, one per
+   * `fieldRef` in the order sent, so a spec need not know the door's field refs
+   * to see a translation land.
+   */
+  translations?: unknown;
+}
+
+/**
  * A PLANNING run's outcome (Story MOTIR-7630 · MOTIR-7645). Absent ⇒ the run
  * progresses and closes as a plain success, which is every spec before this one.
  * `failed` sends the terminal `status: failed` frame motir-ai sends for a run
@@ -234,6 +254,9 @@ export interface SubmittedJob {
   /** A `plan` submit's `context.planId` — set on a REVISION of that plan, absent
    *  on a run that starts a plan of its own. */
   planId?: string;
+  /** A `translate` submit's `context.translate` (MOTIR-8119) — what was sent, and
+   *  what the default success echoes back. */
+  translate?: { targetLanguage: string; fields: { fieldRef: string; text: string }[] };
 }
 
 export interface AiJobsFixture {
@@ -267,6 +290,9 @@ export interface AiJobsFixture {
   /** The `guide_work_item` outcomes, CONSUMED IN ORDER — one per submit attempt,
    *  the last repeating (MOTIR-7468). */
   guide?: GuideJobOutcome[];
+  /** The `translate` outcomes, CONSUMED IN ORDER — one per submit attempt, the
+   *  last repeating (MOTIR-8119). */
+  translate?: TranslateJobOutcome[];
   /** The `plan` run outcomes, CONSUMED IN ORDER — one per planning submit that
    *  is not a routing run, the last repeating (MOTIR-7645). */
   plan?: PlanJobOutcome[];
@@ -313,6 +339,7 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
     const token = kind === 'plan' && !refused ? readBackTokenOf(rawBody) : null;
     const resume = kind === 'plan' && !refused ? resumeOf(rawBody) : null;
     const snapshot = submitContext(rawBody);
+    const translate = kind === 'translate' ? translateContextOf(rawBody) : null;
     const entry: SubmittedJob = {
       kind,
       hasCode: submitCarriesCode(rawBody),
@@ -322,6 +349,7 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
       ...(snapshot.runPlanId !== undefined ? { runPlanId: snapshot.runPlanId } : {}),
       ...(snapshot.runReadable !== undefined ? { runReadable: snapshot.runReadable } : {}),
       ...(kind === 'plan' && snapshot.planId !== undefined ? { planId: snapshot.planId } : {}),
+      ...(translate ? { translate } : {}),
     };
     f.submitted = [...(f.submitted ?? []), entry];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
@@ -414,6 +442,68 @@ function guideOutcomeAt(n: number): GuideJobOutcome {
   const queue = readFixture().guide ?? [];
   if (queue.length === 0) return {};
   return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** The translate outcome for the `n`-th `translate` submit attempt, the last repeating. */
+function translateOutcomeAt(n: number): TranslateJobOutcome {
+  const queue = readFixture().translate ?? [];
+  if (queue.length === 0) return {};
+  return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/**
+ * How many `translate` jobs motir-ai would have BILLED (MOTIR-8459): accepted
+ * submits whose outcome at their own ordinal settles `succeeded`. A refused,
+ * `failed` or still-`running` submit counts zero. Exported so the billing mock's
+ * derived translation block follows this queue's rule rather than a copy of it.
+ */
+export function succeededTranslateJobCount(): number {
+  const translateSubmits = (readFixture().submitted ?? []).filter((s) => s.kind === 'translate');
+  return translateSubmits.filter(
+    (s, i) => !s.refused && (translateOutcomeAt(i).status ?? 'succeeded') === 'succeeded',
+  ).length;
+}
+
+/** The `context.translate` a submit body carried, or null. */
+function translateContextOf(rawBody: string): SubmittedJob['translate'] | null {
+  try {
+    const unit = (JSON.parse(rawBody) as { context?: { translate?: unknown } }).context?.translate;
+    if (typeof unit !== 'object' || unit === null) return null;
+    const { targetLanguage, fields } = unit as { targetLanguage?: unknown; fields?: unknown };
+    if (typeof targetLanguage !== 'string' || !Array.isArray(fields)) return null;
+    return { targetLanguage, fields: fields as { fieldRef: string; text: string }[] };
+  } catch {
+    return null;
+  }
+}
+
+/** The settled `GET /v1/jobs/:id` body of the `index`-th `translate` job. */
+function translateJobBody(id: string, index: number): Record<string, unknown> {
+  const outcome = translateOutcomeAt(index);
+  const status = outcome.status ?? 'succeeded';
+  if (status === 'running') return { status, result: null };
+  if (status === 'failed') {
+    return {
+      status,
+      result: null,
+      error: {
+        type: 'about:blank',
+        title: 'AI job failed',
+        status: 502,
+        code: 'ai_job_failed',
+        detail: 'The fixture declared this translate job failed.',
+      },
+    };
+  }
+  const sent = (readFixture().submitted ?? []).find((s) => s.jobId === id)?.translate;
+  const translations =
+    outcome.translations !== undefined
+      ? outcome.translations
+      : (sent?.fields ?? []).map((f) => ({
+          fieldRef: f.fieldRef,
+          text: `[${sent!.targetLanguage}] ${f.text}`,
+        }));
+  return { status, result: { translations } };
 }
 
 /** The outcome for the `n`-th planning run, with the last entry repeating. */
@@ -544,7 +634,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
         (kind === 'debug_bug' &&
           debugBugOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits') ||
         (kind === 'guide_work_item' &&
-          guideOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits')
+          guideOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits') ||
+        (kind === 'translate' &&
+          translateOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits')
       ) {
         recordSubmit(kind, rawBody, true);
         const problem: Record<string, unknown> = {
@@ -673,6 +765,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                 },
         };
         return { statusCode: 200, data, responseOptions: json };
+      }
+      if (kind === 'translate') {
+        return { statusCode: 200, data: translateJobBody(id, index), responseOptions: json };
       }
       if (kind === 'author_bug') {
         const author = authorBugOutcomeAt(index);

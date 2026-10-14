@@ -407,6 +407,12 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
       'disclosure verb on a To resume gate line — opens the approval overlay; the line names the gate kind, not a type',
     'issueViews.provenanceSourceManual':
       'provenance ORIGIN chip on the item detail rail — framed by FieldCard label "Planning"/"Implementation"',
+    // The machine-translation VERB (Story MOTIR-7735 · MOTIR-8122; design MOTIR-8112) —
+    // a different part of speech from the `translate` TYPE (localisation WORK), as
+    // the clipboard `copy` entries are from `copy`. It is the one button in the
+    // bar labelled "Translation" under the title, with "into {language}" beside it.
+    'itemTranslation.translate':
+      'button verb in the item translation bar — "Translate" + "into {language}" beside it',
 
     // The approval frame's BAND-1 KIND for a decision gate (MOTIR-5678; design
     // `design/github` §27). The same sense as the type — it names the DECISION card's
@@ -442,6 +448,13 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     'auth.twoFactor.verify': 'button verb — submits the 2FA code',
     'settings.publicAddress.domains.addModal.verify': 'button verb — checks the domain DNS record',
     'roadmap.canvas.origin.validate': 'button verb — validates the canvas origin',
+    // `翻译` is the `translate` TYPE noun and also the machine-translation verb and
+    // its group's name (MOTIR-8122): the bar under the item title, read as one
+    // control beside "译为{language}".
+    'itemTranslation.translate':
+      'button verb in the item translation bar — translates this item, beside its target language',
+    'itemTranslation.groupLabel':
+      'the translation bar’s accessible group name — names the control, not a work item type',
     // The en twins above, same reasons.
     'codeHealth.convention.defaultRepo': 'repo fallback name on Code health',
     'onboarding.generation.designLabel': 'field label in the onboarding baseline card',
