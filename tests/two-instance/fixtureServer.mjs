@@ -59,7 +59,9 @@ const server = createServer(async (req, res) => {
     }
     return send(res, 404, { error: 'not found' });
   } catch (err) {
-    return send(res, 500, { error: String(err) });
+    // The error goes to the harness's captured stderr, never into the response.
+    process.stderr.write(`fixture error: ${String(err)}\n`);
+    return send(res, 500, { error: 'internal error' });
   }
 });
 
