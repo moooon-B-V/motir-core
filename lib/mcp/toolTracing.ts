@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as Sentry from '@sentry/nextjs';
+import { registerKnownMcpTool, withRequestLabel } from '@/lib/monitoring/requestLabel';
 import { sentryIsInitialised } from '@/lib/monitoring/transactionSpan';
 import type { McpRequestExtra } from './context';
 
@@ -91,8 +92,12 @@ function nameTheRoot(tool: string): void {
 /** Run one tool call inside its named span. */
 export async function traceMcpToolCall(
   tool: string,
-  call: () => CallToolResult | Promise<CallToolResult>,
+  untracedCall: () => CallToolResult | Promise<CallToolResult>,
 ): Promise<CallToolResult> {
+  // The every-request recorder's label (MOTIR-8553) is set HERE rather than by a
+  // second wrapper: this is already the per-tool seam, and it runs whether or not
+  // Sentry is initialised.
+  const call = () => withRequestLabel({ route: 'mcp', tool }, untracedCall);
   if (!sentryIsInitialised()) return currentTool.run(tool, call);
   // Named BEFORE the tool span opens: with no request span, the tool span is the
   // root, and it already carries the tool's name.
@@ -138,6 +143,9 @@ export function tracedServer(server: McpServer): McpServer {
       const register = value as (...registerArgs: unknown[]) => unknown;
       return (...registerArgs: unknown[]) => {
         const tool = String(registerArgs[0]);
+        // The recorder's tool label allow-list: a name the registry never
+        // registered is recorded as `other` (MOTIR-8553).
+        registerKnownMcpTool(tool);
         const callback = registerArgs[registerArgs.length - 1] as McpToolCallback;
         const traced: McpToolCallback = (args, extra) =>
           traceMcpToolCall(tool, () => callback(args, extra));

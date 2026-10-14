@@ -120,6 +120,33 @@ kill_timeout = "90s"
   # it wrong is silent: Next's standalone server binds the CONTAINER HOSTNAME by
   # default, the process reports "✓ Ready", and nothing outside can reach it.
   # Verified the hard way during the spike (MOTIR-2383).
+  # The private Prometheus port for every request's transaction wait and hold
+  # (MOTIR-8553, `lib/monitoring/metricsServer.ts`). Unset ⇒ no port is opened,
+  # which is the self-host and local default; [[metrics]] below is its scrape.
+  MONITORING_METRICS_PORT = "9091"
+
+# Fly's managed Prometheus scrapes this port every 15 s (MOTIR-8553). Queries:
+# `docs/monitoring/request-db-timing.md`.
+#
+# ⚠️ IT IS NOT PUBLIC. The port is not in [http_service], so Fly's proxy routes
+# no outside traffic to it; only Fly's scraper reaches it, over the private
+# network.
+#
+# ⚠️ THIS FILE CLAIMS THE SCRAPE, IT DOES NOT PROVE IT (this file's own rule):
+# reading back from Fly's Prometheus that `app` machines are scraped is the
+# read-back task under MOTIR-8537, not this line.
+#
+# Cost: Fly's metrics docs (https://docs.fly.io/monitoring/metrics, read
+# 2026-10-14) say "There's currently no additional charge for the managed
+# Prometheus and Grafana", with ~15 days of retention, a 16 MB cap on the
+# endpoint's response, and a warning that very high-cardinality custom metrics
+# may be dropped. Cardinality here is bounded by code: four routes plus
+# `unlabelled`, the registered MCP tool names plus `other`, and the closed
+# context/outcome/attempt sets.
+[[metrics]]
+  port      = 9091
+  path      = "/metrics"
+  processes = ["app"]
 
 [http_service]
   internal_port        = 8080

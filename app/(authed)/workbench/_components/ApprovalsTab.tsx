@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import { Inbox } from 'lucide-react';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 import type { HomeActorContext } from '@/lib/services/homeService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ApprovalsList } from './ApprovalsList';
@@ -41,7 +42,11 @@ async function NothingWaiting() {
 export async function ApprovalsTab({ ctx }: { ctx: HomeActorContext }) {
   const t = await getTranslations('workbench');
   // THE WHOLE SET, no page (MOTIR-5998) — bounded by the service's ceiling.
-  const queue = await approvalGatesService.listAwaitingMe(ctx);
+  // Labelled here, not by the page: this renders inside a `<Suspense>` after the
+  // page function has returned, outside its label (MOTIR-8553).
+  const queue = await withRequestLabel({ route: 'workbench' }, () =>
+    approvalGatesService.listAwaitingMe(ctx),
+  );
 
   // ⚠️ THE LIST IS MOUNTED EVEN WHEN IT IS EMPTY, and the empty state is handed
   // to it (Story MOTIR-5238 · MOTIR-5245). Returning `<NothingWaiting />`
