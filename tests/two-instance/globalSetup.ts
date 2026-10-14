@@ -12,6 +12,12 @@ import { addressOf, startInstances, type PairAddress } from './harness';
 // developer shell that exports either cannot quietly turn the lane's limits
 // into per-process ones (or off) — which is the defect it exists to catch.
 
+/** The budgets both servers start with; the limit cases read them from here. */
+export const TWO_INSTANCE_BUDGETS = {
+  mcp: { limit: 6, windowMs: 60_000 },
+  apiV1: { limit: 5, windowMs: 60_000 },
+} as const;
+
 declare module 'vitest' {
   export interface ProvidedContext {
     twoInstanceApp: PairAddress;
@@ -27,6 +33,13 @@ export function appEnv(): NodeJS.ProcessEnv {
     E2E_PROD_HARNESS: '1',
     EMAIL_PROVIDER: 'file',
     EMAIL_OUTBOX_PATH: process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/motir-two-instance-emails.jsonl',
+    // The budgets `limits.spec.ts` (MOTIR-8617) spends across the pair — small
+    // enough to exhaust in a handful of calls, on the shipped 60 s window so a
+    // case can buy a guaranteed slice of it (`TWO_INSTANCE_BUDGETS`).
+    MOTIR_MCP_RATE_LIMIT: String(TWO_INSTANCE_BUDGETS.mcp.limit),
+    MOTIR_MCP_RATE_LIMIT_WINDOW_MS: String(TWO_INSTANCE_BUDGETS.mcp.windowMs),
+    MOTIR_API_V1_RATE_LIMIT: String(TWO_INSTANCE_BUDGETS.apiV1.limit),
+    MOTIR_API_V1_RATE_LIMIT_WINDOW_MS: String(TWO_INSTANCE_BUDGETS.apiV1.windowMs),
   };
   delete env['E2E_DISABLE_RATE_LIMIT'];
   delete env['MOTIR_RATE_LIMIT_STORE'];
