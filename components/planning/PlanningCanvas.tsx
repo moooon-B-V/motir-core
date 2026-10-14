@@ -647,6 +647,9 @@ export function PlanningCanvas({
     dropExitNode,
   );
   useTimedEntries(motion ? exitEdges.map((x) => [x.key, x] as const) : [], exitMs, dropExitEdge);
+  // A LEAVING cue (MOTIR-8416) goes on its ring's fade end, or after the same
+  // duration + slack if that never fires — independent of `motion`, like the cue.
+  useTimedEntries(Object.entries(cueTrack.leaving), exitMs, dropLeavingCue);
   // The outline: held, then faded (motion) or simply removed (reduced motion, §23.5).
   useTimedEntries(
     motion ? Object.entries(mo.marks) : [],

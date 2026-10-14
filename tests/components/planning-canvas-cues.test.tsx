@@ -6,8 +6,9 @@
 // independent of `motion`, it composes with the motion marks, and an absent map
 // leaves the DOM byte for byte as it was.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import { DEFAULT_DURATIONS, EXIT_FALLBACK_SLACK_MS } from '@/lib/planning/canvasMotion';
 import {
   PlanningCanvas,
   type CanvasEdge,
@@ -202,6 +203,30 @@ describe('PlanningCanvas — the at-work cue', () => {
     expect(box('a').hasAttribute('data-cue')).toBe(false);
     expect(box('a').hasAttribute('data-cue-motion')).toBe(false);
     expect(box('a').querySelector('.canvas-cue-chip')).toBeNull();
+  });
+
+  // MOTIR-8418 — the drop is idempotent: a second fade end landing before the
+  // re-render (both dispatched in one act) finds nothing left to drop.
+  it('two fade ends in one batch drop the cue once and change nothing else', () => {
+    const update = mount([A, B], new Map([['a', MOVING]]));
+    update([A, B], new Map([['b', MOVING]]));
+    const r = ring('a');
+    act(() => {
+      fireEvent.animationEnd(r, { animationName: 'canvas-fade-out' });
+      fireEvent.animationEnd(r, { animationName: 'canvas-fade-out' });
+    });
+    expect(box('a').hasAttribute('data-cue')).toBe(false);
+    expect(box('b').getAttribute('data-cue-motion')).toBe('at-work');
+  });
+
+  it('a leaving cue whose fade end never fires is dropped after the fade duration', () => {
+    const update = mount([A, B], new Map([['a', MOVING]]));
+    update([A, B], null);
+    expect(box('a').getAttribute('data-cue-motion')).toBe('leaving');
+    act(() => {
+      vi.advanceTimersByTime(EXIT_FALLBACK_SLACK_MS + DEFAULT_DURATIONS.base);
+    });
+    expect(box('a').hasAttribute('data-cue')).toBe(false);
   });
 
   it('a cue that comes back while leaving is live again, not leaving', () => {
