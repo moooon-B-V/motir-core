@@ -37,6 +37,7 @@ import {
   PlannerModelUnreachableError,
   AI_JOB_ABANDONED_PROBLEM_CODE,
   errorFromProblem,
+  jobErrorFromProblem,
   planChangeRefusalOf,
   type JobView,
 } from './errors';
@@ -388,7 +389,7 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
     jobId: body.jobId,
     status: body.status,
     result: body.result ?? null,
-    error: body.error ? errorFromProblem(body.error) : null,
+    error: body.error ? jobErrorFromProblem(body.error) : null,
     walkStop: parseJobWalkStop(body.error?.walkStop),
     // Read from the RAW problem: once mapped, an abandoned job's error is the same
     // `MotirAiUnavailableError` an outage produces (MOTIR-8304).

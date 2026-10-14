@@ -16,6 +16,7 @@ import {
   MotirAiConfigError,
   MotirAiBadRequestError,
   MotirAiUnavailableError,
+  MotirAiJobFailedError,
   MotirAiJobNotFoundError,
 } from '@/lib/ai/errors';
 
@@ -222,7 +223,10 @@ describe('getJob', () => {
     );
     const view = await getJob('job_1', 'pj_1');
     expect(view.status).toBe('failed');
-    expect(view.error).toBeInstanceOf(MotirAiUnavailableError);
+    // A job's terminal `ai_job_failed` is the handler refusing, not motir-ai being
+    // down (MOTIR-8569) — so the view carries the job-failed class, unprefixed.
+    expect(view.error).toBeInstanceOf(MotirAiJobFailedError);
+    expect(view.error?.message).toBe('motir-ai job failed: boom');
   });
 
   it('throws MotirAiJobNotFoundError on a 404', async () => {
@@ -259,14 +263,14 @@ describe('getJob — the lost-machine fact (MOTIR-8304)', () => {
   });
 
   it.each([
-    ['ai_job_failed', 500],
-    ['rate_limited', 429],
-    ['internal_error', 500],
-  ])('a %s failure is not a lost machine, and its code is unchanged', async (code, status) => {
+    ['ai_job_failed', 500, 'MOTIR_AI_JOB_FAILED'],
+    ['rate_limited', 429, 'MOTIR_AI_UNAVAILABLE'],
+    ['internal_error', 500, 'MOTIR_AI_UNAVAILABLE'],
+  ])('a %s failure is not a lost machine, and maps to %s', async (code, status, mapped) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failedWith(code, status)));
     const view = await getJob('job_1', 'pj_1');
     expect(view.lostMachine).toBe(false);
-    expect(view.error?.code).toBe('MOTIR_AI_UNAVAILABLE');
+    expect(view.error?.code).toBe(mapped);
   });
 
   it('a running job is not a lost machine', async () => {

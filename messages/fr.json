@@ -9377,6 +9377,7 @@
         "model_unavailable": "le fournisseur d’IA était indisponible",
         "token_expired": "la connexion au fournisseur d’IA a expiré",
         "prompt_too_large": "le contexte du plan était trop volumineux pour le modèle",
+        "job_failed": "la tâche de planification a échoué",
         "internal": "un problème est survenu de notre côté"
       },
       "refusal": {
