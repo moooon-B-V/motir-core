@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
@@ -27,6 +27,7 @@ import {
   PlanRequestError,
 } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import { mergePlanReview } from '@/lib/planning/mergePlanReview';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 import {
   isSettledRow,
@@ -147,14 +148,23 @@ export function PlanDetail({
 
   const planId = initialReview.id;
 
+  // ⚠️ ONE APPLIER FOR EVERY SNAPSHOT THIS ISLAND FILES (Story MOTIR-8539 ·
+  // MOTIR-8575): its own `refetch`, the revision poll that goes through it, and the
+  // generating poll. Each is MERGED into the held review by identity, so a read that
+  // changed nothing hands the plan tree the same `items` and the same `version`, and
+  // a changed proposal is the only node that re-renders.
+  const heldReview = useRef(review);
+  const applySnapshot = useCallback((fresh: PlanReviewDto): PlanReviewDto => {
+    const merged = mergePlanReview(heldReview.current, fresh);
+    heldReview.current = merged.review;
+    setReview(merged.review);
+    if (merged.itemsChanged) setVersion((v) => v + 1);
+    return merged.review;
+  }, []);
+
   const refetch = useCallback(
-    async (signal?: AbortSignal) => {
-      const fresh = await fetchPlanReview(planId, signal);
-      setReview(fresh);
-      setVersion((v) => v + 1);
-      return fresh;
-    },
-    [planId],
+    async (signal?: AbortSignal) => applySnapshot(await fetchPlanReview(planId, signal)),
+    [planId, applySnapshot],
   );
 
   // ⚠️ POLL WHILE A REVISION HOLDS THE PLAN, and re-run the SERVER read when it
@@ -198,8 +208,7 @@ export function PlanDetail({
     {
       immediate: false,
       onSnapshot: (fresh) => {
-        setReview(fresh);
-        setVersion((v) => v + 1);
+        applySnapshot(fresh);
       },
     },
   );

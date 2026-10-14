@@ -70,7 +70,9 @@ afterEach(() => {
 
 describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
   it('reads immediately, then once per interval', async () => {
-    fetchReview.mockResolvedValue(generating());
+    // The second read CHANGES the plan: since MOTIR-8575 an identical snapshot is
+    // not applied and does not bump `version`.
+    fetchReview.mockResolvedValueOnce(generating()).mockResolvedValue(generating([A, B]));
     const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
     await flush();
 
@@ -317,7 +319,8 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
   });
 
   it('`refresh` reads out of cadence, and is a no-op while nothing is polled', async () => {
-    fetchReview.mockResolvedValue(generating());
+    // The out-of-cadence read changes the plan, so it is applied (MOTIR-8575).
+    fetchReview.mockResolvedValueOnce(generating()).mockResolvedValue(generating([A, B]));
     const { result, rerender, unmount } = renderHook(
       ({ id }: { id: string | null }) => useGeneratingPlanPoll(id),
       { initialProps: { id: null as string | null } },
@@ -439,5 +442,62 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
       expect(result.current.failing).toBe(false);
       unmount();
     });
+  });
+
+  describe('a snapshot is MERGED by identity (MOTIR-8575)', () => {
+    it('an identical full answer bumps nothing and fires no `onSnapshot`', async () => {
+      const onSnapshot = vi.fn();
+      fetchReview.mockImplementation(async () => generating([A, B]));
+      const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1', { onSnapshot }));
+      await flush();
+      expect(result.current.version).toBe(1);
+      expect(onSnapshot).toHaveBeenCalledTimes(1);
+      const items = result.current.review!.items;
+
+      await tick();
+      expect(fetchReview).toHaveBeenCalledTimes(2);
+      expect(result.current.version).toBe(1);
+      expect(onSnapshot).toHaveBeenCalledTimes(1);
+      expect(result.current.review!.items).toBe(items);
+      unmount();
+    });
+
+    it('one changed proposal bumps `version` once and keeps every other proposal object', async () => {
+      const onSnapshot = vi.fn();
+      fetchReview
+        .mockImplementationOnce(async () => generating([A, B]))
+        .mockImplementation(async () => generating([A, { ...B, title: 'B, renamed' }]));
+      const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1', { onSnapshot }));
+      await flush();
+      const [heldA] = result.current.review!.items;
+
+      await tick();
+      expect(result.current.version).toBe(2);
+      expect(onSnapshot).toHaveBeenCalledTimes(2);
+      const [review, change] = onSnapshot.mock.calls[1]!;
+      expect(review.items[0]).toBe(heldA);
+      expect(review.items[1].title).toBe('B, renamed');
+      expect([...change.changedItemIds]).toEqual(['b']);
+      expect(change.itemsChanged).toBe(true);
+      unmount();
+    });
+
+    it.each(['planned', 'approved', 'declined'] as const)(
+      'a `%s` snapshot merges the same way, is applied, and stops the poll',
+      async (status) => {
+        fetchReview
+          .mockImplementationOnce(async () => generating([A, B]))
+          .mockImplementation(async () => planReview([A, B], { status }));
+        const { result, unmount } = renderHook(() => useGeneratingPlanPoll('plan_1'));
+        await flush();
+        const items = result.current.review!.items;
+        await tick();
+        expect(result.current.review?.status).toBe(status);
+        expect(result.current.review!.items).toBe(items);
+        await tick();
+        expect(fetchReview).toHaveBeenCalledTimes(2);
+        unmount();
+      },
+    );
   });
 });

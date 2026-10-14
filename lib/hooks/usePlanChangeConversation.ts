@@ -10,6 +10,7 @@ import type {
   PlanTargetHeldByDto,
 } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import { mergePlanReview } from '@/lib/planning/mergePlanReview';
 import type { PlanNarrationDto, PlanNarrationReadDto } from '@/lib/dto/plans';
 import {
   liveNarrationSessions,
@@ -914,6 +915,16 @@ export function sessionAwaitsResume(session: PlanChangeSessionDto | null | undef
 export const SESSION_END_REREAD_MS = 400;
 const SESSION_END_REREADS = 3;
 
+/**
+ * A review read filed into the one held, MERGED by identity when it is the same
+ * plan (Story MOTIR-8539 · MOTIR-8575): an unchanged proposal keeps its object, and
+ * a read that changed nothing keeps the held review itself. A different plan is
+ * taken whole.
+ */
+export function fileReview(held: PlanReviewDto | null, next: PlanReviewDto): PlanReviewDto {
+  return held && held.id === next.id ? mergePlanReview(held, next).review : next;
+}
+
 export function usePlanChangeConversation({
   onApproved,
   anchorId = null,
@@ -1088,12 +1099,16 @@ export function usePlanChangeConversation({
       liveReview: null,
       // Exactly what the mount path does with a pending proposal; a run still
       // streaming keeps its phase, and its own settle re-enters the gate.
-      ...(pending ? { review: pending, phase: s.phase === 'idle' ? 'review' : s.phase } : {}),
+      ...(pending
+        ? { review: fileReview(s.review, pending), phase: s.phase === 'idle' ? 'review' : s.phase }
+        : {}),
     }));
   };
 
   const { failing: liveFailing, review: polledReview } = useGeneratingPlanPoll(livePlanId, {
-    onSnapshot: (snap) => {
+    // The snapshot arrives MERGED (MOTIR-8575): a proposal that did not change keeps
+    // its object, and the live pane's version moves only when the proposals did.
+    onSnapshot: (snap, change) => {
       if (!livePlanId || !mountedRef.current) return;
       // A named session's open ends HERE, in the same update as this snapshot:
       // the skeleton hands straight to the live pane (or to the no-plan state).
@@ -1104,7 +1119,7 @@ export function usePlanChangeConversation({
           ...s,
           ...endOpening(s, settles),
           liveReview: snap,
-          liveVersion: s.liveVersion + 1,
+          liveVersion: change.itemsChanged ? s.liveVersion + 1 : s.liveVersion,
         }));
         return;
       }
@@ -1341,7 +1356,7 @@ export function usePlanChangeConversation({
             }
             return;
           }
-          setState((s) => ({ ...s, phase: 'review', review: pending }));
+          setState((s) => ({ ...s, phase: 'review', review: fileReview(s.review, pending) }));
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') return;
           if (!mountedRef.current) return;
@@ -1481,7 +1496,12 @@ export function usePlanChangeConversation({
     }
     if (!mountedRef.current) return;
     if (pending) {
-      setState((s) => ({ ...s, review: pending, decided: null, phase: 'review' }));
+      setState((s) => ({
+        ...s,
+        review: fileReview(s.review, pending),
+        decided: null,
+        phase: 'review',
+      }));
     } else {
       setLivePlanId(planId);
     }
@@ -1799,7 +1819,7 @@ export function usePlanChangeConversation({
         setState((s) => ({
           ...s,
           phase: 'review',
-          review: pending,
+          review: fileReview(s.review, pending),
           liveReview: null,
           progress: null,
           errorCode: null,
@@ -2385,7 +2405,7 @@ export function usePlanChangeConversation({
             // The plan is no longer waiting, whatever the re-read could say: the
             // slot gives way to the decided session's read-only line.
             session: read ?? (s.session ? { ...s.session, pendingPlanId: null } : s.session),
-            review: review ?? s.review,
+            review: review ? fileReview(s.review, review) : s.review,
             decided:
               status === 'approved' ? 'accepted' : status === 'declined' ? 'declined' : s.decided,
             planId: null,
@@ -2967,7 +2987,7 @@ export function usePlanChangeConversation({
     try {
       const fresh = await fetchPlanReview(planId);
       if (!mountedRef.current) return;
-      setState((s) => (s.planId === planId ? { ...s, review: fresh } : s));
+      setState((s) => (s.planId === planId ? { ...s, review: fileReview(s.review, fresh) } : s));
     } catch {
       /* keep the review in hand */
     }
@@ -3173,7 +3193,7 @@ export function usePlanChangeConversation({
           if (!mountedRef.current || controller.signal.aborted) return;
           setState((s) =>
             s.planId === planId && s.phase === 'review' && s.decided === null
-              ? { ...s, review: fresh }
+              ? { ...s, review: fileReview(s.review, fresh) }
               : s,
           );
         } catch {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlanReview, fetchPlanReviewSince } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import { mergePlanReview } from '@/lib/planning/mergePlanReview';
 import { useLiveSignal, useLiveSignalSource, type LiveTopic } from '@/lib/live/liveSignal';
 import { POLL_MS } from '@/lib/live/sources/planPollSource';
 
@@ -20,10 +21,16 @@ import { POLL_MS } from '@/lib/live/sources/planPollSource';
 //
 // ⚠️ SNAPSHOT SEMANTICS. `PlanItem` carries no `updatedAt`, and the plan's
 // `lastActivityAt` (MOTIR-7822) says only WHEN something last happened, not WHAT —
-// so there is no delta to merge, and each response REPLACES the review whole
-// (its `lastActivityAt` and `inFlightSteps` included). A proposal withdrawn
-// between two ticks disappears on the next one and cannot come back from a
-// cache. Responses are applied in ISSUE order: a monotonic sequence drops any
+// so there is no delta on the wire, and each response is the WHOLE truth (its
+// `lastActivityAt` and `inFlightSteps` included). A proposal withdrawn between two
+// ticks disappears on the next one and cannot come back from a cache.
+//
+// ⚠️ AND IT IS MERGED BY IDENTITY, NOT FILED WHOLE (Story MOTIR-8539 ·
+// MOTIR-8575). `mergePlanReview` keeps every previous object the new snapshot
+// equals, so an unchanged proposal keeps its object and its rendered node. An
+// answer that changes NOTHING is not applied at all — no `version`, no
+// `onSnapshot` — and `version` moves only when the proposals did, so the plan tree
+// is handed no new props for a read that moved nothing it draws. Responses are applied in ISSUE order: a monotonic sequence drops any
 // response older than the last one applied, so a slow early read can never
 // overwrite a later snapshot. A failed or aborted tick keeps the last snapshot
 // and simply retries on the next.
@@ -81,15 +88,23 @@ export interface GeneratingPlanPollOptions {
   /** Read once immediately, before the first interval (default `true`). The plan
    *  page seeds from the server read, so it waits a full interval, as it always has. */
   immediate?: boolean;
-  /** Called with every APPLIED snapshot (a stale or failed read never reaches it). */
-  onSnapshot?: (review: PlanReviewDto) => void;
+  /**
+   * Called with every APPLIED snapshot that changed something (a stale, failed or
+   * identical read never reaches it), MERGED into the previous one — so a consumer
+   * that stores it keeps the kept references. The second argument says whether the
+   * proposals moved, and which (MOTIR-8575).
+   */
+  onSnapshot?: (
+    review: PlanReviewDto,
+    change: { itemsChanged: boolean; changedItemIds: ReadonlySet<string> },
+  ) => void;
 }
 
 export interface GeneratingPlanPoll {
   /** The latest applied snapshot of the plan being polled, or `null` before the
    *  first one (and whenever `planId` is `null`). */
   review: PlanReviewDto | null;
-  /** Bumped on every applied snapshot. */
+  /** Bumped on every applied snapshot whose proposals changed (MOTIR-8575). */
   version: number;
   /** `true` after {@link FAILING_AFTER} consecutive failed reads; `false` again on
    *  the next success. The last good snapshot is kept throughout. */
@@ -135,6 +150,8 @@ export function useGeneratingPlanPoll(
     // The version of the last FULL snapshot applied, and how many unchanged answers followed it.
     let heldVersion: string | null = null;
     let unchangedRun = 0;
+    // The snapshot held for THIS plan — what the next full answer merges into.
+    let held: PlanReviewDto | null = null;
     // Each read's controller, with when it started: a tick skips while one is out.
     const inFlight = new Map<AbortController, number>();
 
@@ -182,12 +199,19 @@ export function useGeneratingPlanPoll(
             unchangedRun += 1;
             return;
           }
-          const review = answer;
-          heldVersion = review.reviewVersion ?? null;
+          heldVersion = answer.reviewVersion ?? null;
           unchangedRun = 0;
-          setSnapshot({ planId, review });
-          setVersion((v) => v + 1);
-          onSnapshotRef.current?.(review);
+          const merged = mergePlanReview(held, answer);
+          const review = merged.review;
+          if (review !== held) {
+            held = review;
+            setSnapshot({ planId, review });
+            if (merged.itemsChanged) setVersion((v) => v + 1);
+            onSnapshotRef.current?.(review, {
+              itemsChanged: merged.itemsChanged,
+              changedItemIds: merged.changedItemIds,
+            });
+          }
           if (review.status !== 'generating') {
             stop();
             setStoppedPlanId(planId);

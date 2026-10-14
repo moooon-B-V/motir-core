@@ -102,7 +102,7 @@ export function LiveSignalProvider({
   children,
 }: {
   source: LiveSignalSource;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return createElement(LiveSignalContext.Provider, { value: source }, children);
 }
