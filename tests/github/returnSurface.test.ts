@@ -5,7 +5,13 @@ import {
   DEFAULT_RETURN_PATH,
   parseReturnSurfaceId,
   resolveReturnPath,
+  githubReturnLocation,
 } from '@/lib/github/returnSurface';
+import { INSTALL_RETURN_CONTEXT_KEYS } from '@/lib/github/installReturnContext';
+import {
+  HANDOFF_PARAM_NAMES,
+  onboardingReturnContextParams,
+} from '@/lib/planning/onboardingHandoff';
 import { decodeInstallState, encodeInstallState } from '@/lib/github/installState';
 
 // Story MOTIR-4669 · MOTIR-4676 — WHERE A GIT CONNECT FLOW RETURNS TO.
@@ -60,6 +66,20 @@ describe('the surface registry', () => {
     expect(GITHUB_RETURN_SURFACES.workspaceGithub).toBe('/settings/workspace/github');
     expect(GITHUB_RETURN_SURFACES.workspaceGitlab).toBe('/settings/workspace/gitlab');
     expect(parseReturnSurfaceId('workspaceGithub')).toBe('workspaceGithub');
+  });
+
+  it('registers the onboarding Connect step (MOTIR-8471), and changes nothing else', () => {
+    expect(GITHUB_RETURN_SURFACES.onboardingMigrateConnect).toBe('/onboarding/migrate');
+    expect(resolveReturnPath('onboardingMigrateConnect')).toBe('/onboarding/migrate');
+    expect({ ...GITHUB_RETURN_SURFACES }).toStrictEqual({
+      workspaceGithub: '/settings/workspace/github',
+      workspaceGitlab: '/settings/workspace/gitlab',
+      projectRepositories: '/settings/project/repositories',
+      organizationGit: '/settings/organization/git',
+      accountGit: '/settings/account/git',
+      onboardingMigrateConnect: '/onboarding/migrate',
+    });
+    expect(DEFAULT_RETURN_PATH).toBe(GITHUB_RETURN_SURFACES.organizationGit);
   });
 });
 
@@ -194,3 +214,45 @@ function signPayload(payload: Record<string, unknown>): string {
     .digest('base64url');
   return `${b64}.${sig}`;
 }
+
+// Story MOTIR-8241 · MOTIR-8471 — THE RETURN CONTEXT rides beside the origin
+// and comes back onto a `Location` header. Its narrowing (nothing that does not
+// read back through its destination's reader is carried) is owned by
+// `lib/planning/onboardingHandoff.ts` and asserted in
+// `tests/planning/onboardingInstallReturnContext.test.ts`, inside the
+// onboarding-routing coverage lane that holds that module's floor. What is
+// asserted here is the half this module owns: the carried keys ARE the
+// hand-off's, and the address is the one the person left from plus the outcome.
+describe('the return context and the return address', () => {
+  it('the hand-off names and the carried keys are the same five', () => {
+    expect([...INSTALL_RETURN_CONTEXT_KEYS].sort()).toEqual(
+      Object.values(HANDOFF_PARAM_NAMES).sort(),
+    );
+  });
+
+  it('an unreadable carried value never reaches the address', () => {
+    expect(
+      githubReturnLocation('/onboarding/migrate', 'installed', {
+        context: onboardingReturnContextParams({
+          via: 'https://evil.example',
+          backKind: '//evil.example',
+        }),
+      }),
+    ).toBe('/onboarding/migrate?github=installed');
+  });
+
+  it('githubReturnLocation appends the outcome AFTER the carried address', () => {
+    expect(
+      githubReturnLocation('/onboarding/migrate', 'installed', {
+        context: [
+          ['via', 'onboard_existing_project'],
+          ['backKind', 'roadmap'],
+        ],
+      }),
+    ).toBe('/onboarding/migrate?via=onboard_existing_project&backKind=roadmap&github=installed');
+    // With nothing carried it is the shape the setup handler always produced.
+    expect(
+      githubReturnLocation(DEFAULT_RETURN_PATH, 'select_repos', { installationId: '4 2' }),
+    ).toBe(`${DEFAULT_RETURN_PATH}?github=select_repos&installation_id=4%202`);
+  });
+});

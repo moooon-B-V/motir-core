@@ -8,7 +8,10 @@ import {
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
-import { randomToken } from '../helpers/random';
+import { randomInt, randomToken } from '../helpers/random';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
 
 // THE ONBOARDING SUBSTRATE READ (Story MOTIR-4753 · MOTIR-4756), against a REAL
 // Postgres (the motir-core convention) — every signal it composes is a genuine
@@ -225,6 +228,134 @@ describe('readOnboardingSubstrate', () => {
         repositoryConnected: true,
         repositoryIndexed: true,
       });
+    });
+  });
+
+  describe('the ORGANISATION tier (MOTIR-8481) — the same set the migrate gate opens on', () => {
+    beforeEach(async () => {
+      // A provisioning installation has no workspace, so the cascade misses it.
+      await adminDb.githubInstallation.deleteMany({});
+    });
+
+    /** An organisation whose repository was connected from a SIBLING workspace,
+     *  and a project in the OTHER workspace — the run the gate lets through. */
+    async function seedSiblingConnected(label: string) {
+      const user = await usersService.createUser({
+        email: `substrate-${label}-${randomInt(1000, 9999)}@example.com`,
+        password: 'hunter2hunter2',
+        name: label,
+      });
+      const { workspace: sibling } = await workspacesService.createWorkspace({
+        name: `${label} sibling`,
+        ownerUserId: user.id,
+      });
+      // The free tier caps an organisation at one workspace; a second needs a plan.
+      await adminDb.organization.update({
+        where: { id: sibling.organizationId },
+        data: { scaledTrackerSubscription: { status: 'active', seats: 5 } },
+      });
+      const { workspace } = await workspacesService.createWorkspace({
+        name: `${label} here`,
+        ownerUserId: user.id,
+        organizationId: sibling.organizationId,
+      });
+      const project = await projectsService.createProject({
+        workspaceId: workspace.id,
+        actorUserId: user.id,
+        name: label,
+        identifier: `Q${randomInt(100, 1000)}`,
+      });
+      const rand = randomToken(6);
+      const installation = await adminDb.githubInstallation.create({
+        data: {
+          installationId: `inst-${rand}`,
+          workspaceId: sibling.id,
+          organizationId: sibling.organizationId,
+          accountLogin: `${label}-account`,
+          accountType: 'Organization',
+        },
+      });
+      const name = `${label}-web`;
+      await adminDb.githubRepo.create({
+        data: {
+          installationId: installation.id,
+          workspaceId: sibling.id,
+          organizationId: sibling.organizationId,
+          repoId: `repo-${rand}`,
+          owner: 'acme',
+          name,
+          defaultBranch: 'main',
+          archived: false,
+        },
+      });
+      return {
+        ref: `acme/${name}`,
+        projectId: project.id,
+        ctx: { userId: user.id, workspaceId: workspace.id },
+        siblingWorkspaceId: sibling.id,
+      };
+    }
+
+    async function seedIndexIn(workspaceId: string, repoRef: string) {
+      await adminDb.jobRun.create({
+        data: {
+          workspaceId,
+          functionId: 'system.code-graph-index',
+          eventName: 'system.code-graph-index',
+          eventId: `evt-${randomToken()}`,
+          lane: 'engine',
+          attempt: 0,
+          status: 'succeeded',
+          finishedAt: new Date(),
+          output: { indexed: true, repoRef, projectsIndexed: 1 },
+        },
+      });
+    }
+
+    it('names a repository connected from a SIBLING workspace, with THIS workspace’s index state', async () => {
+      const world = await seedSiblingConnected('sib');
+      const before = await readOnboardingSubstrate(world.projectId, world.ctx);
+      expect(before.repositories).toEqual([{ ref: world.ref, indexed: false }]);
+      expect(before.repositoryConnected).toBe(true);
+      expect(before.repositoryIndexed).toBe(false);
+
+      // The SIBLING's index is not this workspace's — the ledger is per workspace.
+      await seedIndexIn(world.siblingWorkspaceId, world.ref);
+      expect((await readOnboardingSubstrate(world.projectId, world.ctx)).repositoryIndexed).toBe(
+        false,
+      );
+      await seedIndexIn(world.ctx.workspaceId, world.ref);
+      const after = await readOnboardingSubstrate(world.projectId, world.ctx);
+      expect(after.repositories).toEqual([{ ref: world.ref, indexed: true }]);
+      expect(after.repositoryIndexed).toBe(true);
+    });
+
+    it('stays empty with nothing connected anywhere — and with only the provisioning row', async () => {
+      const fx = await makeWorkItemFixture();
+      await adminDb.githubInstallation.create({
+        data: {
+          installationId: `inst-${randomToken(6)}`,
+          workspaceId: null,
+          organizationId: null,
+          accountLogin: 'motir-provisioning',
+          accountType: 'Organization',
+        },
+      });
+      const substrate = await read(fx);
+      expect(substrate.repositories).toEqual([]);
+      expect(substrate.repositoryConnected).toBe(false);
+      expect(substrate.repositoryIndexed).toBe(false);
+    });
+
+    it('never lists another organisation’s repositories', async () => {
+      const a = await seedSiblingConnected('alpha');
+      const b = await seedSiblingConnected('bravo');
+      expect(
+        (await readOnboardingSubstrate(a.projectId, a.ctx)).repositories.map((r) => r.ref),
+      ).toEqual([a.ref]);
+      expect(
+        (await readOnboardingSubstrate(b.projectId, b.ctx)).repositories.map((r) => r.ref),
+      ).toEqual([b.ref]);
     });
   });
 });

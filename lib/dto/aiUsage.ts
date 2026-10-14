@@ -173,6 +173,11 @@ export interface OrgUsageDTO {
   // ⚠️ Search spend is deliberately NOT part of this. It is org-level, so folding
   // it in would make a project with no usage of its own report `hasUsage: true`
   // because the ORG once ran a search — the empty state would then never appear
-  // at a drill level for any org that has ever searched.
+  // at a drill level for any org that has ever searched. (A search is spent
+  // inside a planning run, so an org with search spend already has a run.)
+  //
+  // Translation spend IS part of it, at org scope only (MOTIR-8488): a
+  // translation has no run, so an org whose only spend is translation would
+  // otherwise read "No usage yet" with its Translation line hidden.
   hasUsage: boolean;
 }

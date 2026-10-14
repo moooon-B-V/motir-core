@@ -52,6 +52,14 @@ export const GITHUB_RETURN_SURFACES = {
   /** Settings → Account → Git accounts — the member's own credential.
    *  ⚠️ Same note: the route lands in MOTIR-4682. */
   accountGit: '/settings/account/git',
+  /** Onboarding → migrate wizard → the Connect step (Story MOTIR-8241 ·
+   *  MOTIR-8471). The App install starts from the step itself
+   *  (`GET /api/github/install/start`) and comes back to it. The step's own
+   *  query — the plan-window return address and the kept steps (MOTIR-4770) —
+   *  rides inside the signed install state beside this id and is re-appended on
+   *  the way back (`lib/planning/onboardingHandoff.ts`), so the id stays a bare
+   *  path like every other entry. */
+  onboardingMigrateConnect: '/onboarding/migrate',
 } as const;
 
 export type GithubReturnSurfaceId = keyof typeof GITHUB_RETURN_SURFACES;
@@ -94,4 +102,28 @@ export function parseReturnSurfaceId(
 export function resolveReturnPath(value: string | null | undefined): string {
   const id = parseReturnSurfaceId(value);
   return id ? GITHUB_RETURN_SURFACES[id] : DEFAULT_RETURN_PATH;
+}
+
+/**
+ * The in-app address a connect flow lands on: `path`, then the carried return
+ * context (already narrowed by its owner — `onboardingReturnContextParams`),
+ * then `github=<status>`, then `installation_id` where one travels.
+ *
+ * The context goes FIRST so the address is the one the person left from with
+ * the outcome appended. With no context the result is exactly
+ * `<path>?github=<status>[&installation_id=<id>]` — the shape the setup handler
+ * has always produced.
+ */
+export function githubReturnLocation(
+  path: string,
+  status: string,
+  options: { context?: readonly (readonly [string, string])[]; installationId?: string } = {},
+): string {
+  const carried = options.context?.length
+    ? `${new URLSearchParams(options.context.map(([k, v]) => [k, v])).toString()}&`
+    : '';
+  const extra = options.installationId
+    ? `&installation_id=${encodeURIComponent(options.installationId)}`
+    : '';
+  return `${path}?${carried}github=${encodeURIComponent(status)}${extra}`;
 }

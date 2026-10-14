@@ -57,6 +57,10 @@ describe('resumeRefusalKeyOf — TOTAL over the resume route’s refusals', () =
     ['SESSION_NOT_FAILED', 409, 'notFailed'],
     ['NOT_SESSION_OWNER', 403, 'notOwner'],
     ['PLAN_NOT_RESUMABLE', 409, 'notResumable'],
+    // MOTIR-8570 — motir-ai REFUSED the resume (a 400 `validation_error`, which core's client
+    // raises as `MotirAiBadRequestError` and the route answers as a 502). Nothing was unreachable
+    // and nothing will change on a retry, so it reads as "can't be continued", not as an outage.
+    ['MOTIR_AI_BAD_REQUEST', 502, 'notResumable'],
     [OUT_OF_CREDITS_CODE, 402, 'credits'],
     [null, 402, 'credits'],
     ['SOMETHING_ELSE', 502, 'unavailable'],

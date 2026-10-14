@@ -123,19 +123,39 @@ async function openStream(req: Request): Promise<Response> {
   // read this one actually makes.
   const first = await workbenchWatermarkService.read(actor, since);
 
+  // ⚠️ A READER WHO LEFT WHILE THE GATE OR THE FIRST READ WAS IN FLIGHT gets
+  // no loop at all (MOTIR-8568). Nothing is listening, and the loop below would
+  // have nothing to end it but this same signal.
+  if (req.signal.aborted) return new Response(null, { status: 204 });
+
   const encoder = new TextEncoder();
-  // Set by `cancel()` when the browser drops the connection. Hoisted out of
-  // `start` so the poll loop can SEE it — without this the loop keeps waking
-  // every second for a reader who has gone, and here there is no terminal state
-  // to end it instead.
+  // ⚠️ TWO SIGNALS SAY THE READER HAS GONE, AND EITHER ONE STOPS THE LOOP
+  // (MOTIR-8568). `cancel()` fires when the stream is cancelled — once the
+  // response is being piped. The REQUEST's abort signal fires when the
+  // connection closes, which is the only one of the two that fires for a reader
+  // who left BEFORE the handler returned this Response: Next never starts
+  // piping a response whose connection already closed, so nothing ever cancels
+  // the stream, and the loop used to re-read the database every second for as
+  // long as the process lived. Measured on a built server: a reader leaving 50ms
+  // after the request went out was still being polled once a second 38s later.
   let cancelled = false;
+  const gone = (): boolean => cancelled || req.signal.aborted;
+  // Wakes a loop that is asleep between polls, so a departure does not wait out
+  // the interval.
+  let wake: (() => void) | null = null;
+  const onAbort = (): void => wake?.();
+  req.signal.addEventListener('abort', onAbort, { once: true });
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let cursor = first.cursor;
-      let closed = false;
       let lastWrite = Date.now();
 
+      // A write after the reader left is dropped rather than thrown: the
+      // controller of a cancelled stream rejects `enqueue`, and the departure is
+      // the most ordinary event in this stream's life.
       const write = (frame: string): void => {
+        if (gone()) return;
         controller.enqueue(encoder.encode(frame));
         lastWrite = Date.now();
       };
@@ -145,6 +165,17 @@ async function openStream(req: Request): Promise<Response> {
         write(formatFrame(WORKBENCH_STREAM_FRAME, { moved: reading.moved, cursor }));
       };
 
+      const sleep = (ms: number): Promise<void> =>
+        new Promise((resolve) => {
+          const timer = setTimeout(done, ms);
+          function done(): void {
+            clearTimeout(timer);
+            wake = null;
+            resolve();
+          }
+          wake = done;
+        });
+
       try {
         // ⚠️ THE OPENING FRAME IS WRITTEN EVEN WHEN NOTHING MOVED, and that is
         // what makes a reconnect work at all: it is how a client LEARNS the
@@ -153,9 +184,9 @@ async function openStream(req: Request): Promise<Response> {
         // reconnect that has missed nothing asks the client to do nothing.
         emit(first);
 
-        while (!closed && !cancelled) {
-          await new Promise((resolve) => setTimeout(resolve, WORKBENCH_STREAM_POLL_MS));
-          if (closed || cancelled) break;
+        while (!gone()) {
+          await sleep(WORKBENCH_STREAM_POLL_MS);
+          if (gone()) break;
           const reading = await workbenchWatermarkService.read(actor, cursor);
           // A frame ONLY when something moved. A quiet Workbench costs a
           // heartbeat every fifteen seconds and nothing else.
@@ -169,11 +200,9 @@ async function openStream(req: Request): Promise<Response> {
         // Headers are already sent, so a mid-stream failure can only surface as
         // a terminal `error` frame — the shipped route's contract, unchanged.
         const message = err instanceof Error ? err.message : 'stream failed';
-        controller.enqueue(
-          encoder.encode(formatFrame('error', { code: 'INTERNAL_ERROR', message })),
-        );
+        write(formatFrame('error', { code: 'INTERNAL_ERROR', message }));
       } finally {
-        closed = true;
+        req.signal.removeEventListener('abort', onAbort);
         // A controller whose stream was CANCELLED is already closed; closing it
         // again throws, and a throw here would be an unhandled rejection on a
         // disconnect — the most ordinary event in this stream's life, since a
@@ -183,6 +212,7 @@ async function openStream(req: Request): Promise<Response> {
     },
     cancel() {
       cancelled = true;
+      wake?.();
     },
   });
 
