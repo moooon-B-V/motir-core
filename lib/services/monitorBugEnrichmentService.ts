@@ -150,7 +150,9 @@ export const monitorBugEnrichmentService = {
       link: await monitorIssueRepository.findByWorkItemId(connectionId, item.id, tx),
       connection: await monitorConnectionRepository.findById(connectionId, tx),
     }));
-    // The ordering window: the reconciler's link commits just after the create.
+    // The ordering window. Since MOTIR-8512 the reconciler writes the link in
+    // the create's own transaction and the created event follows that commit,
+    // so this should not happen; it stays a retryable throw rather than a skip.
     if (!link) {
       if (!connection) return { dispatched: false, reason: 'no-monitor-link' };
       throw new MonitorLinkNotYetVisibleError(connectionId, item.id);

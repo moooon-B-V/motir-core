@@ -161,6 +161,7 @@ import { classifyRevision } from '@/lib/plans/approvedShapeChange';
 import {
   PLAN_REVISION_LEASE_MS,
   REVISION_RENEWED_KIND,
+  revisionLeaseJobId,
   revisionLeaseOf,
   REVISION_STARTED_KIND,
   REVISION_ENDED_KIND,
@@ -8058,8 +8059,18 @@ export const plansService = {
   /**
    * RENEW a held revision lease — one `revision_renewed` row, under the same lock
    * (Bug MOTIR-7988). The lease's window runs from the latest trail row, so the
-   * heartbeat keeps the plan held while an MCP-driven revision is between two real
-   * writes; a hosted revision is one motir-ai job and never calls this.
+   * heartbeat keeps the plan held while a revision is between two real writes.
+   * Both kinds of holder call it: an MCP-driven revision (`hold_plan_revision
+   * renew`), and a hosted one, whose motir-ai worker renews on a timer for as long
+   * as the job runs (Bug MOTIR-8523, through {@link aiGenerationService}'s
+   * `renewRevisionLeaseForJob`). A hosted revision's conversation and author
+   * sessions can run past the window without writing the trail, so without it the
+   * lease lapsed mid-job and the plan read `planned` with a live Approve.
+   *
+   * ⚠️ `opts.jobId` RENEWS ONLY THAT JOB'S LEASE. A job renews the lease its own
+   * acquire took (the `revision_started` row's `jobId`), never one an MCP holder or
+   * a later revision took on the same plan: a lease held by anybody else answers
+   * `renewed: false` and writes nothing, exactly as a lapsed one does.
    *
    * ⚠️ IT NEVER TAKES A LEASE THAT IS NOT HELD. A lapsed lease means the plan was
    * decidable for a moment and a person may already be reading it as a question,
@@ -8072,6 +8083,7 @@ export const plansService = {
     planId: string,
     ctx: ServiceContext,
     actor: PlanRevisionAgentActor,
+    opts: { jobId?: string } = {},
   ): Promise<{ planId: string; renewed: boolean; expiresAt: Date | null }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -8086,11 +8098,13 @@ export const plansService = {
         if (!locked) throw new PlanNotFoundError(planId);
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
         if (!fresh) throw new PlanNotFoundError(planId);
-        const held = revisionLeaseOf(
-          await planRevisionRepository.listByPlan(planId, tx),
-          new Date(),
-        );
+        const rows = await planRevisionRepository.listByPlan(planId, tx);
+        const now = new Date();
+        const held = revisionLeaseOf(rows, now);
         if (!held) return { planId, renewed: false, expiresAt: null };
+        if (opts.jobId !== undefined && revisionLeaseJobId(rows, now) !== opts.jobId) {
+          return { planId, renewed: false, expiresAt: null };
+        }
         const at = new Date();
         await planRevisionsService.recordRevision(
           {

@@ -1777,6 +1777,19 @@ async function reconcileDecisionGate(
   return (await workItemRepository.findById(item.id, tx)) ?? item;
 }
 
+/** What a caller may add to {@link workItemsService.createWorkItem} beyond the item. */
+export interface CreateWorkItemOptions {
+  /**
+   * A write of the CALLER's own that must commit with the new item or not at all
+   * (MOTIR-8512). It runs inside the create's transaction, after the item, its
+   * links and its gates are written and before the commit, so a throw rolls the
+   * whole create back — no item, no event. The post-commit events still fire only
+   * after it returns. The monitor reconciler is the caller: it points its
+   * `monitor_issue` row at the bug here, so a bug never exists without its link.
+   */
+  inTransaction?: (created: WorkItemDto, tx: Prisma.TransactionClient) => Promise<void>;
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -1787,7 +1800,11 @@ export const workItemsService = {
    * kind-legal parent. The work item's workspaceId is the project's — the
    * authoritative tenant of the row.
    */
-  async createWorkItem(input: CreateWorkItemInput, ctx: ServiceContext): Promise<WorkItemDto> {
+  async createWorkItem(
+    input: CreateWorkItemInput,
+    ctx: ServiceContext,
+    options: CreateWorkItemOptions = {},
+  ): Promise<WorkItemDto> {
     assertWorkItemLanguages(input);
     // MOTIR-2569: the OPENING read is context-bound (`readProject`), and the
     // cross-workspace 404 is made EXPLICIT here rather than left to
@@ -2368,7 +2385,11 @@ export const workItemsService = {
         ? await reconcileDecisionGate(choiceBorn, ctx, tx)
         : choiceBorn;
 
-      return { dto: toWorkItemDto(born), revisionId };
+      const bornDto = toWorkItemDto(born);
+      // The caller's own write, joined to THIS transaction (MOTIR-8512): it
+      // commits with the item or rolls it back.
+      if (options.inTransaction) await options.inTransaction(bornDto, tx);
+      return { dto: bornDto, revisionId };
     });
 
     // Post-commit, never inside the tx — a rollback must not have notified
