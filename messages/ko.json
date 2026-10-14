@@ -9197,7 +9197,8 @@
         "couldNot": "아무것도 시작되지 않았고 요금도 청구되지 않았습니다. {repair}",
         "changes_requested": "재개되지 않습니다. {key}을(를) 먼저 다시 작업해야 하며, 다음 버전에서 다시 승인을 요청합니다. 그동안 이 실행은 계속 기다립니다.",
         "declined": "재개되지 않습니다. 이 승인으로 풀릴 작업에는 새 계획이 필요합니다 — {key}을(를) 다시 계획하거나, {head}을(를) 할 일로 설정하여 처음부터 시작하세요.",
-        "overturned": "재개되지 않습니다. 승인이 더 이상 유효하지 않으므로 실행은 {key}에 대한 새 결정을 기다립니다."
+        "overturned": "재개되지 않습니다. 승인이 더 이상 유효하지 않으므로 실행은 {key}에 대한 새 결정을 기다립니다.",
+        "reshaped": "재개하면 변경된 스토리를 이어받습니다."
       },
       "back": {
         "changes_requested": "{kind} 반려됨 · <b>{name}</b> 님이 변경 요청 — “{note}”",
@@ -9230,7 +9231,26 @@
         "repository_not_writable": "프로젝트 설정에서 저장소를 다시 연결한 다음 이어서 하기를 누르세요.",
         "card_not_ready": "{key}을(를) 차단하는 요인을 해결하거나 다시 진행 중으로 옮긴 다음 이어서 하기를 누르세요."
       },
-      "copyAria": "{key}의 재개 명령 복사"
+      "copyAria": "{key}의 재개 명령 복사",
+      "member": {
+        "added": "실행 중지 후 추가됨",
+        "rescoped": "범위 변경됨"
+      },
+      "fold": {
+        "added": "실행 중지 후 {count}개 추가됨"
+      },
+      "reshaped": {
+        "one": "계획 <plan>{title}</plan> <aside>(<when></when> 승인)</aside>이(가) 실행 중지 후 이 스토리를 변경했습니다: <b>{counts}</b>",
+        "many": "실행 중지 후 <b>{count, plural, other {#개 계획}}</b>이 이 스토리를 변경했습니다",
+        "planLine": "계획 <plan>{title}</plan> <aside>(<when></when> 승인)</aside>: {counts}",
+        "showPlans": "계획 보기",
+        "hidePlans": "계획 숨기기",
+        "added": "{n}개 추가",
+        "changed": "{n}개 변경",
+        "removed": "{n}개 제거",
+        "separator": ", ",
+        "label": "실행 중지 후 {key}을(를) 변경한 계획"
+      }
     },
     "planning": {
       "scope": "<project>{name}</project>에서 내가 요청했고 아직 작성 중인 계획입니다. 다른 사람이 요청한 계획은 <link>계획 페이지</link>에 있습니다.",

@@ -175,6 +175,29 @@ function useHeldMembers(members: WorkbenchRowView[]): {
   };
 }
 
+/**
+ * A To resume member's change since the run stopped (Bug MOTIR-8458; § 39.2): *Added
+ * since the run stopped* is the neutral chip, *Re-scoped* the lavender tint the entry uses
+ * nowhere else. Text inside the member's row, never its own tab stop; the title truncates
+ * first and the chip never does.
+ */
+function ResumeChangeChip({ change }: { change: 'added' | 'rescoped' }) {
+  const t = useTranslations('workbench');
+  return (
+    <span
+      data-resume-change={change}
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-(--radius-badge) border px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] leading-[1.3] font-medium whitespace-nowrap',
+        change === 'added'
+          ? 'border-(--el-chip-border) bg-(--el-chip-bg) text-(--el-text-secondary)'
+          : 'border-transparent bg-(--el-tint-lavender) text-(--el-text-strong)',
+      )}
+    >
+      {change === 'added' ? t('toResume.member.added') : t('toResume.member.rescoped')}
+    </span>
+  );
+}
+
 function EntryMembers({
   head,
   members,
@@ -196,6 +219,8 @@ function EntryMembers({
   if (rows.length === 0) return null;
   const folded = rows.length - MEMBERS_SHOWN;
   const shown = open || folded <= 0 ? rows : rows.slice(0, MEMBERS_SHOWN);
+  // § 39.2: what the fold hides that the run never touched, beside the button.
+  const foldedAdded = rows.slice(MEMBERS_SHOWN).filter((m) => m.resumeChange === 'added').length;
   return (
     <>
       <ul
@@ -219,7 +244,7 @@ function EntryMembers({
                 aria-label={`${m.identifier} ${m.title}`}
                 className="absolute inset-0 rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               />
-              <span className="flex min-w-0 items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2 max-md:flex-wrap max-md:gap-y-0.5">
                 <IssueTypeIcon type={m.kind} className="h-3.5 w-3.5 shrink-0" />
                 <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
                   {m.identifier}
@@ -232,6 +257,7 @@ function EntryMembers({
                 >
                   {m.title}
                 </span>
+                {m.resumeChange ? <ResumeChangeChip change={m.resumeChange} /> : null}
               </span>
               <span className="hidden min-w-0 items-center md:flex">
                 <span className="truncate text-xs text-(--el-text-secondary)">
@@ -268,6 +294,14 @@ function EntryMembers({
           >
             {open ? t('toFix.entry.showFewer') : t('toFix.entry.showMore', { count: folded })}
           </button>
+          {!open && foldedAdded > 0 ? (
+            <span
+              data-testid={`workbench-fix-members-added-${head.identifier}`}
+              className="ml-2.5 text-xs text-(--el-text-secondary)"
+            >
+              {t('toResume.fold.added', { count: foldedAdded })}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </>

@@ -1,9 +1,20 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { CircleCheck, CircleEllipsis, CirclePause, CircleSlash, Clock, Undo2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  CircleCheck,
+  CircleEllipsis,
+  CirclePause,
+  CircleSlash,
+  Clock,
+  Sparkles,
+  Undo2,
+} from 'lucide-react';
 import { relativeLabel, RepairRunLink } from '@/components/github/RepairFixPart';
 import {
   ContinueHostedAnswer,
@@ -14,9 +25,11 @@ import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { cn } from '@/lib/utils/cn';
 import { FixCommand } from './WorkbenchFixLine';
+import type { ResumeReshapePlanDto } from '@/lib/dto/home';
 import type { WorkbenchResumeGateView, WorkbenchResumeView } from './workbenchRows';
 
 // THE TO RESUME ENTRY'S LINES (Story MOTIR-7701 · MOTIR-7712), built to
@@ -296,6 +309,7 @@ export function WorkbenchResumeLine({
   const waiting = resume.gates.filter((g) => g.state === 'awaiting');
   const refused = resume.gates.find((g) => SENT_BACK.has(g.state)) ?? null;
   const attempt = resume.attempt;
+  const reshaped = resume.reshapedBy ?? [];
   const youName = (id: string | null, name: string | null) =>
     id !== null && id === viewerId ? t('toResume.you') : (name ?? t('toResume.someone'));
 
@@ -462,15 +476,117 @@ export function WorkbenchResumeLine({
         ) : null}
       </div>
       <GateList headKey={itemKey} gates={resume.gates} viewerId={viewerId} when={when} />
+      {reshaped.length > 0 ? (
+        <ReshapedBanner itemKey={itemKey} plans={reshaped} when={when} />
+      ) : null}
       {next ? (
         <p
           data-testid={`workbench-resume-next-${itemKey}`}
           className="m-0 pl-6 text-xs leading-normal text-(--el-text-secondary)"
         >
           {next}
+          {reshaped.length > 0 ? <> {t('toResume.next.reshaped')}</> : null}
         </p>
       ) : null}
     </>
+  );
+}
+
+/** `{counts}` (§ 39.3): the non-zero clauses, joined — a zero clause is left out. */
+export function reshapeCountsText(t: Translate, plan: ResumeReshapePlanDto): string {
+  const clauses: string[] = [];
+  if (plan.added > 0) clauses.push(t('toResume.reshaped.added', { n: plan.added }));
+  if (plan.changed > 0) clauses.push(t('toResume.reshaped.changed', { n: plan.changed }));
+  if (plan.removed > 0) clauses.push(t('toResume.reshaped.removed', { n: plan.removed }));
+  return clauses.join(t('toResume.reshaped.separator'));
+}
+
+/**
+ * THE RE-SHAPED BANNER (Bug MOTIR-8458; `design-notes.md` § 39.3): under the gate list,
+ * above the next-step line, it names each plan approved after the run stopped that
+ * re-shaped the story. One plan reads as a sentence; two or more fold behind *Show
+ * plans*. Raised over the entry's stretched link like the gate lines, so each plan link
+ * is its own target. No plan → no banner (the caller draws nothing).
+ */
+function ReshapedBanner({
+  itemKey,
+  plans,
+  when,
+}: {
+  itemKey: string;
+  plans: ResumeReshapePlanDto[];
+  when: (iso: string) => () => ReactNode;
+}) {
+  const t = useTranslations('workbench');
+  const tPlan = useTranslations('planReview');
+  const routes = useReaderRoutes();
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const planLink = (plan: ResumeReshapePlanDto) =>
+    function ReshapePlanLink() {
+      return (
+        <Link
+          href={routes.plan(plan.planId)}
+          className="font-medium text-(--el-link) no-underline hover:underline focus-visible:rounded-(--radius-control) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--focus-ring-color)"
+        >
+          {plan.title ?? tPlan('untitledPlan')}
+        </Link>
+      );
+    };
+  const aside = (chunks: ReactNode) => <span className="text-(--el-text-secondary)">{chunks}</span>;
+  const counts = (chunks: ReactNode) => <b className="font-semibold">{chunks}</b>;
+  const line = (plan: ResumeReshapePlanDto, key: 'one' | 'planLine') =>
+    t.rich(`toResume.reshaped.${key}`, {
+      title: plan.title ?? tPlan('untitledPlan'),
+      counts: reshapeCountsText(t, plan),
+      plan: planLink(plan),
+      aside,
+      when: when(plan.approvedAt),
+      b: counts,
+    });
+  const first = plans[0];
+  /* v8 ignore next -- the caller draws no banner without a plan */
+  if (!first) return null;
+  return (
+    <div className="relative z-10 pl-6" data-testid={`workbench-resume-reshaped-${itemKey}`}>
+      <div
+        role="group"
+        aria-label={t('toResume.reshaped.label', { key: itemKey })}
+        className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-normal text-(--el-text)"
+      >
+        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" aria-hidden />
+        <div className="flex min-w-0 flex-col gap-1">
+          {plans.length === 1 ? (
+            <p className="m-0">{line(first, 'one')}</p>
+          ) : (
+            <>
+              <p className="m-0">
+                {t.rich('toResume.reshaped.many', { count: plans.length, b: counts })}
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={listId}
+                  onClick={() => setOpen((o) => !o)}
+                  className="ml-1.5 inline-flex items-center gap-0.5 border-0 bg-transparent p-0 text-xs font-medium text-(--el-link) hover:underline focus-visible:rounded-(--radius-control) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--focus-ring-color)"
+                >
+                  {open ? t('toResume.reshaped.hidePlans') : t('toResume.reshaped.showPlans')}
+                  {open ? (
+                    <ChevronUp className="h-3 w-3" aria-hidden />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" aria-hidden />
+                  )}
+                </button>
+              </p>
+              <ul id={listId} hidden={!open} className="m-0 flex list-none flex-col gap-0.5 p-0">
+                {plans.map((plan) => (
+                  <li key={plan.planId}>{line(plan, 'planLine')}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

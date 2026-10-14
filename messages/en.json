@@ -9200,7 +9200,8 @@
         "couldNot": "Nothing was booted and nothing was charged. {repair}",
         "changes_requested": "Nothing resumes. {key} is reworked first; its next version asks again, and this run keeps waiting.",
         "declined": "Nothing resumes. The work this would have released needs a new plan — re-plan {key}, or set {head} to To Do to start over.",
-        "overturned": "Nothing resumes. The approval no longer stands, so the run waits for a new decision on {key}."
+        "overturned": "Nothing resumes. The approval no longer stands, so the run waits for a new decision on {key}.",
+        "reshaped": "Resume will carry the re-shaped story."
       },
       "back": {
         "changes_requested": "{kind} sent back · changes requested by <b>{name}</b> — “{note}”",
@@ -9233,7 +9234,26 @@
         "repository_not_writable": "Reconnect the repository in the project's settings, then press Continue.",
         "card_not_ready": "Clear what blocks {key} or move it back to In Progress, then press Continue."
       },
-      "copyAria": "Copy the resume command for {key}"
+      "copyAria": "Copy the resume command for {key}",
+      "member": {
+        "added": "Added since the run stopped",
+        "rescoped": "Re-scoped"
+      },
+      "fold": {
+        "added": "+{count} added since the run stopped"
+      },
+      "reshaped": {
+        "one": "Plan <plan>{title}</plan> <aside>(approved <when></when>)</aside> re-shaped this story after the run stopped: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# plan} other {# plans}}</b> re-shaped this story since the run stopped",
+        "planLine": "Plan <plan>{title}</plan> <aside>(approved <when></when>)</aside>: {counts}",
+        "showPlans": "Show plans",
+        "hidePlans": "Hide plans",
+        "added": "{n} added",
+        "changed": "{n} changed",
+        "removed": "{n} removed",
+        "separator": ", ",
+        "label": "Plans that re-shaped {key} after its run stopped"
+      }
     },
     "planning": {
       "scope": "Plans you asked for in <project>{name}</project> that are still being written. Plans others asked for are on the <link>Plans page</link>.",
