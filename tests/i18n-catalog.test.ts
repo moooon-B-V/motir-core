@@ -212,8 +212,6 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — the tenant page’s Fleet card, which shows the last stop’s reason',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — the tenant page’s Fleet card, whose counts were re-read',
-    'billing.contactSales.sent.body':
-      'UI panel — the Enterprise plan card, which shows the open request (MOTIR-7607)',
   },
   zh: {
     'platformAdmin.monitoring.subtitle':
@@ -222,8 +220,6 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
-    'billing.contactSales.sent.body':
-      'UI panel — Enterprise 卡片 is the plan card on Billing & plans, not a work item',
   },
 };
 
@@ -610,7 +606,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
   zh: {
     'email.enterpriseRequestReceived.noNeeds':
       'question — an optional question on the Enterprise contact form, not a work item',
-    'billing.contactSales.sent.body': 'UI panel — the Enterprise plan card on the billing page',
     'device.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'planReview.actionError': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'errors.serverError.pageBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
@@ -864,26 +859,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'email.enterpriseRequestReceived.openRequest':
       "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.sentChip':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.subtitle':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.facts.heading':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.send':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.refused.open.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.refused.open.action':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.refused.network.body':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.sent.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.sent.body':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.request.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'platformAdmin.users.log.action.enterprise_request.transition':
       "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'platformAdmin.enterpriseRequests.subtitle':
@@ -981,8 +956,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
   },
   it: {
-    'billing.contactSales.refused.open.body': 'browser tab — "from another tab"',
-    'billing.contactSales.refused.open.bodyNoDate': 'browser tab — "from another tab"',
     'settings.publicAddress.subdomain.open': 'browser tab — "open in a new tab"',
     'workbench.group.count': 'UI tab — a Workbench tab, "on this tab" (MOTIR-8016)',
     'workbench.group.context': 'UI tab — a Workbench tab, "not on this tab" (MOTIR-8016)',

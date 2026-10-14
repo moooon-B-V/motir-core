@@ -6380,7 +6380,6 @@
       "chooseSub": "按组织的每月额度池，与席位分开计费。任何组织都可购买 —— 无需付费的 Motir 席位套餐。Pro 是推荐的锚定套餐。",
       "current": "当前",
       "recommended": "推荐",
-      "trialUsed": "试用已用",
       "creditsAllotment": "{n} 额度 / 月",
       "creditsAllotmentOneTime": "{n} 额度 · 一次性",
       "ladder": {
@@ -6391,13 +6390,9 @@
       "annualSub": "按年计费 · ${yr} / 年",
       "annualSave": "每年省 ${n}",
       "monthlySub": "${yr} / 年 · 改按年再省 ${n}",
-      "freePrice": "免费",
-      "customPrice": "定制",
-      "once": "一次性",
       "ctaChoose": "选择 {plan}",
       "ctaUpgrade": "升级到 {plan}",
       "ctaCurrent": "当前套餐",
-      "ctaTrialUsed": "试用已用",
       "upgrade": {
         "cta": "升级到 {plan}",
         "disabledReason": "仅所有者和管理员可更改套餐",
@@ -6461,35 +6456,34 @@
       },
       "footer": "当前显示按年计费（Stripe 默认）—— 可在上方切换到按月对比。结账时自动计税。额度是内部用量配额；所示价格为 AI 套餐费用，由 Stripe 向 {org} 组织收取。你的 Motir 席位单独计费 —— 请在 Motir 套餐页面管理。",
       "seatIncluded": "+ {count, plural, other {# 个 Motir 席位}} · 工作项不受上限",
-      "seatNone": "无 Motir 席位 · 250 个工作项上限",
-      "seatCustom": "包含 Motir 席位（定制）",
-      "customPool": "定制额度池",
       "everythingIn": "包含 {prev} 的全部，另加",
       "tiers": {
-        "free": {
-          "useCase": "试用 Motir AI。",
-          "features": ["每种智能体各体验一次"],
-          "featuresOff": ["不按月刷新 · 无加购"]
-        },
         "standard": {
-          "useCase": "详细规划，外加少量智能体额度。",
-          "features": ["详细规划整个项目", "额度按月刷新 · 可加购", "可尝试智能体任务"]
+          "useCase": "用 Motir AI 规划器规划你的项目。",
+          "features": ["详细规划整个项目", "额度每月刷新 · 随时加购"]
         },
         "pro": {
-          "useCase": "详细规划，外加真正的智能体工作。",
+          "useCase": "Standard 的全部，外加更强的规划模型。",
           "prev": "Standard",
-          "features": ["用智能体处理真实任务", "需要时随时加购"]
+          "features": ["启用更强的规划模型", "按工作类型切换规划模型"]
         },
         "max": {
-          "useCase": "为忙碌的团队详细规划，并留有智能体工作的余量。",
+          "useCase": "Pro 的全部，外加把规划好的工作交给智能体的余量。",
           "prev": "Pro",
-          "features": ["充足的持续智能体工作余量", "满足繁忙团队的吞吐"]
+          "features": ["留有余量，自动把规划好的工作派给智能体"]
         },
         "max_x2": {
-          "useCase": "详细规划，外加两倍于 Max 的智能体工作。",
+          "useCase": "Max 的两倍用量。",
           "prev": "Max",
-          "features": ["两倍于 Max 的每月额度池", "可同时运行多个智能体的余量"]
+          "features": ["两倍于 Max 的每月额度池"]
         }
+      },
+      "trial": {
+        "pill": "免费试用",
+        "pillUsed": "免费试用已用完",
+        "left": "剩余 {left} / {n} 试用额度 · 一次性。",
+        "spent": "{n} 试用额度已全部用完。",
+        "pickPlan": "请选择按月的 Motir AI 套餐以继续规划。"
       }
     },
     "topup": {
@@ -6568,120 +6562,6 @@
     "internalBilling": {
       "badge": "内部计费",
       "note": "该组织与客户完全一样计费，随后被补偿——下方每个数字都是真实的，余额净额为零。"
-    },
-    "contactSales": {
-      "contact": "联系销售",
-      "sentChip": "已发送请求 · {date}",
-      "memberReason": "只有 {org} 的所有者和管理员可以联系销售。",
-      "title": "联系销售 —— Enterprise",
-      "subtitle": "告诉我们你希望 Motir 运行什么。平台团队会阅读每一条请求，并直接回复你。",
-      "facts": {
-        "heading": "随请求一并发送",
-        "organization": "组织",
-        "requestedBy": "发起人",
-        "currentPlan": "当前套餐",
-        "repositories": "已连接的仓库"
-      },
-      "optionalNote": "除备注外，以下各项均为选填。",
-      "fields": {
-        "cardsPerDay": "每天大约多少个工作项",
-        "cardsPerDayPlaceholder": "例如 40",
-        "parallelAgents": "并行智能体数量",
-        "parallelAgentsPlaceholder": "例如 8",
-        "agentPath": "使用哪些智能体",
-        "autonomy": "希望如何运行？",
-        "startWhen": "打算何时开始？",
-        "teamSize": "团队规模",
-        "choose": "请选择…",
-        "contact": "最佳联系方式",
-        "contactHelp": "你的账户邮箱。如需由他人接收回复，可修改。",
-        "note": "备注",
-        "required": "必填",
-        "notePlaceholder": "你希望 Motir 为团队做什么？关于仓库、安全或时间安排，有什么需要我们了解的。"
-      },
-      "agentPath": {
-        "hosted": {
-          "label": "Motir 托管的智能体",
-          "hint": "运行在 Motir 的模型上。"
-        },
-        "own": {
-          "label": "我们自己的智能体",
-          "hint": "Claude Code、Codex 或其他智能体，使用我们自己的凭据，运行在 Motir 云中。"
-        },
-        "both": {
-          "label": "两者都用",
-          "hint": "各用一部分。"
-        }
-      },
-      "autonomy": {
-        "autonomous_lead": {
-          "label": "全天候自主运行",
-          "hint": "自主负责人：Motir 负责规划、运行与修复，团队在审批关口做决定。"
-        },
-        "volume_only": {
-          "label": "由我们发起的大量运行",
-          "hint": "每次运行由团队发起。"
-        },
-        "unsure": {
-          "label": "还不确定",
-          "hint": ""
-        }
-      },
-      "startWhen": {
-        "now": "现在",
-        "within_month": "一个月内",
-        "within_quarter": "一个季度内",
-        "exploring": "只是了解一下"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "cancel": "取消",
-      "send": "发送请求",
-      "sending": "正在发送…",
-      "close": "关闭",
-      "done": "完成",
-      "errors": {
-        "note": "请填写备注——告诉我们你希望 Motir 为团队做什么。",
-        "number": "请输入不小于 1 的整数。"
-      },
-      "refused": {
-        "open": {
-          "title": "你的组织已有一条未关闭的请求。",
-          "body": "它于 {date} 从另一个标签页或由另一位管理员发送。本次没有发送新的请求。",
-          "bodyNoDate": "它由另一个标签页或另一位管理员发送。本次没有发送新的请求。",
-          "action": "查看该请求"
-        },
-        "forbidden": {
-          "title": "你无法为 {org} 联系销售。",
-          "body": "只有所有者和管理员可以。自本页加载后你的角色可能已变更——请联系组织管理员。"
-        },
-        "network": {
-          "title": "无法连接 Motir。",
-          "body": "没有发送任何内容。请检查网络后重新发送——你填写的内容已保留。"
-        }
-      },
-      "sent": {
-        "title": "请求已发送",
-        "body": "平台团队会回复至 <b>{contact}</b>。在请求关闭前，Enterprise 卡片会显示该请求，而不是“联系销售”。"
-      },
-      "request": {
-        "title": "你的 Enterprise 请求",
-        "subtitle": "{name} 于 {date} 发送。",
-        "subtitleNoName": "于 {date} 发送。",
-        "state": "状态",
-        "asked": "你告诉我们的",
-        "unset": "未填写",
-        "reply": "平台团队会回复至 <b>{contact}</b>。如需补充，请直接回复他们的邮件。",
-        "status": {
-          "received": "已收到",
-          "in_conversation": "沟通中",
-          "offer_sent": "已发报价"
-        }
-      }
     }
   },
   "draftWithAi": {

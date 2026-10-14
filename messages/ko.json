@@ -6380,7 +6380,6 @@
       "chooseSub": "좌석과 별도로 청구되는 조직 단위 월간 크레딧 풀입니다. 모든 조직이 구매할 수 있으며 유료 Motir 좌석 요금제가 필요하지 않습니다. Pro를 기준 요금제로 권장합니다.",
       "current": "현재",
       "recommended": "권장",
-      "trialUsed": "체험 사용함",
       "creditsAllotment": "월 {n} 크레딧",
       "creditsAllotmentOneTime": "{n} 크레딧 · 1회성",
       "ladder": {
@@ -6391,13 +6390,9 @@
       "annualSub": "연간 청구 · 연 ${yr}",
       "annualSave": "연 ${n} 절약",
       "monthlySub": "연 ${yr} · 연간 결제 시 ${n} 절약",
-      "freePrice": "무료",
-      "customPrice": "맞춤",
-      "once": "1회",
       "ctaChoose": "{plan} 선택",
       "ctaUpgrade": "{plan}(으)로 업그레이드",
       "ctaCurrent": "현재 요금제",
-      "ctaTrialUsed": "체험 사용함",
       "upgrade": {
         "cta": "{plan}(으)로 업그레이드",
         "disabledReason": "소유자와 관리자만 요금제를 변경할 수 있습니다",
@@ -6461,39 +6456,34 @@
       },
       "footer": "연간 결제(Stripe 기본값) 기준으로 표시됩니다. 비교하려면 위에서 월간으로 전환하세요. 세금은 결제 시 자동으로 적용됩니다. 크레딧은 내부 사용 할당량이며, 표시된 가격은 Stripe가 {org} 조직에 청구하는 AI 요금제 요금입니다. Motir 좌석은 별도로 청구되며 Motir 요금제 화면에서 관리합니다.",
       "seatIncluded": "+ Motir 좌석 {count, plural, other {#개}} · 작업 항목 무제한",
-      "seatNone": "Motir 좌석 없음 · 항목 250개 한도",
-      "seatCustom": "Motir 좌석 포함(맞춤)",
-      "customPool": "맞춤 크레딧 풀",
       "everythingIn": "{prev}의 모든 기능에 더해",
       "tiers": {
-        "free": {
-          "useCase": "Motir AI를 체험해 봅니다.",
-          "features": ["모든 에이전트를 한 번 맛보기"],
-          "featuresOff": ["월간 갱신 없음 · 충전 불가"]
-        },
         "standard": {
-          "useCase": "상세한 계획과 에이전트 맛보기.",
-          "features": [
-            "프로젝트 전체를 상세하게 계획",
-            "매월 크레딧 갱신 · 사용량 기반 충전",
-            "에이전트 작업을 시험해 볼 여유"
-          ]
+          "useCase": "Motir AI 플래너로 프로젝트를 계획하세요.",
+          "features": ["프로젝트 전체를 상세하게 계획", "크레딧 매월 갱신 · 언제든 충전"]
         },
         "pro": {
-          "useCase": "상세한 계획과 실제 에이전트 작업.",
+          "useCase": "Standard에 더해, 계획용 더 강력한 모델.",
           "prev": "Standard",
-          "features": ["실제 작업에 코딩 에이전트 실행", "많은 실행이 필요할 때 언제든 충전"]
+          "features": ["계획에 더 강력한 모델 사용", "작업 유형별로 계획 모델 전환"]
         },
         "max": {
-          "useCase": "바쁜 팀을 위한 상세한 계획과 에이전트 작업을 위한 여유.",
+          "useCase": "Pro에 더해, 계획된 작업을 에이전트에 넘길 여유.",
           "prev": "Pro",
-          "features": ["지속적인 에이전트 작업을 위한 여유", "바쁜 팀을 위한 처리량"]
+          "features": ["계획된 작업을 에이전트에 자동으로 배정할 여유"]
         },
         "max_x2": {
-          "useCase": "상세한 계획과 Max의 두 배 규모 에이전트 작업.",
+          "useCase": "Max의 두 배 용량.",
           "prev": "Max",
-          "features": ["Max의 두 배인 월간 크레딧 풀", "여러 에이전트를 동시에 실행할 여유"]
+          "features": ["Max의 두 배인 월간 크레딧 풀"]
         }
+      },
+      "trial": {
+        "pill": "무료 체험",
+        "pillUsed": "무료 체험 사용됨",
+        "left": "체험 크레딧 {n}개 중 {left}개 남음 · 1회 한정.",
+        "spent": "체험 크레딧 {n}개를 모두 사용했습니다.",
+        "pickPlan": "계속 계획하려면 월간 Motir AI 플랜을 선택하세요."
       }
     },
     "topup": {
@@ -6572,120 +6562,6 @@
     "internalBilling": {
       "badge": "내부 결제",
       "note": "이 조직은 고객과 똑같이 청구된 후 전액 보전됩니다. 아래 모든 수치는 실제 값이며 잔액은 0으로 상계됩니다."
-    },
-    "contactSales": {
-      "contact": "영업팀 문의",
-      "sentChip": "요청 보냄 · {date}",
-      "memberReason": "{org}의 소유자와 관리자만 영업팀에 문의할 수 있습니다.",
-      "title": "영업팀 문의 — Enterprise",
-      "subtitle": "Motir로 무엇을 실행하고 싶은지 알려 주세요. 플랫폼 직원이 모든 요청을 읽고 직접 답장합니다.",
-      "facts": {
-        "heading": "요청과 함께 전송되는 정보",
-        "organization": "조직",
-        "requestedBy": "요청자",
-        "currentPlan": "현재 요금제",
-        "repositories": "연결된 저장소"
-      },
-      "optionalNote": "메모를 제외한 아래 항목은 모두 선택 사항입니다.",
-      "fields": {
-        "cardsPerDay": "하루 작업 항목 수(대략)",
-        "cardsPerDayPlaceholder": "예: 40",
-        "parallelAgents": "병렬 에이전트 수",
-        "parallelAgentsPlaceholder": "예: 8",
-        "agentPath": "사용할 에이전트",
-        "autonomy": "어떻게 실행하시겠습니까?",
-        "startWhen": "언제 시작하시겠습니까?",
-        "teamSize": "팀 규모",
-        "choose": "선택…",
-        "contact": "선호하는 연락처",
-        "contactHelp": "계정 이메일입니다. 다른 사람이 답장을 받아야 한다면 변경하세요.",
-        "note": "메모",
-        "required": "필수",
-        "notePlaceholder": "Motir가 팀을 위해 무엇을 하기를 원하십니까? 저장소, 보안, 일정에 관해 알아야 할 내용이 있으면 적어 주세요."
-      },
-      "agentPath": {
-        "hosted": {
-          "label": "Motir 호스팅 에이전트",
-          "hint": "Motir의 모델로 실행합니다."
-        },
-        "own": {
-          "label": "자체 에이전트",
-          "hint": "Claude Code, Codex 또는 다른 에이전트를 자체 자격 증명으로 Motir 클라우드에서 실행합니다."
-        },
-        "both": {
-          "label": "둘 다",
-          "hint": "두 가지를 함께 사용합니다."
-        }
-      },
-      "autonomy": {
-        "autonomous_lead": {
-          "label": "24시간, 자율적으로",
-          "hint": "자율 리드: Motir가 계획하고 실행하고 수정하며, 팀은 승인 게이트에서 결정합니다."
-        },
-        "volume_only": {
-          "label": "직접 시작하는 대량의 실행",
-          "hint": "각 실행은 팀이 시작합니다."
-        },
-        "unsure": {
-          "label": "아직 모름",
-          "hint": ""
-        }
-      },
-      "startWhen": {
-        "now": "지금",
-        "within_month": "한 달 이내",
-        "within_quarter": "분기 이내",
-        "exploring": "알아보는 중"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "cancel": "취소",
-      "send": "요청 보내기",
-      "sending": "보내는 중…",
-      "close": "닫기",
-      "done": "완료",
-      "errors": {
-        "note": "메모를 추가하세요. Motir가 팀을 위해 무엇을 하기를 원하는지 알려 주세요.",
-        "number": "1 이상의 정수를 입력하세요."
-      },
-      "refused": {
-        "open": {
-          "title": "조직에 이미 진행 중인 요청이 있습니다.",
-          "body": "{date}에 다른 탭이나 다른 관리자가 보낸 요청입니다. 새로 보낸 것은 없습니다.",
-          "bodyNoDate": "다른 탭이나 다른 관리자가 보낸 요청입니다. 새로 보낸 것은 없습니다.",
-          "action": "요청 보기"
-        },
-        "forbidden": {
-          "title": "{org}에 대해 영업팀에 문의할 수 없습니다.",
-          "body": "소유자와 관리자만 문의할 수 있습니다. 이 페이지를 불러온 후 역할이 변경되었을 수 있습니다. 조직 관리자에게 문의하세요."
-        },
-        "network": {
-          "title": "Motir에 연결할 수 없습니다.",
-          "body": "아무것도 전송되지 않았습니다. 연결을 확인하고 다시 보내세요. 작성한 내용은 유지됩니다."
-        }
-      },
-      "sent": {
-        "title": "요청을 보냈습니다",
-        "body": "플랫폼 직원이 <b>{contact}</b>(으)로 답장합니다. 요청이 종료될 때까지 Enterprise 요금제 영역에는 영업팀 문의 대신 이 요청이 표시됩니다."
-      },
-      "request": {
-        "title": "Enterprise 요청",
-        "subtitle": "{date}에 {name} 님이 보냄.",
-        "subtitleNoName": "{date}에 보냄.",
-        "state": "상태",
-        "asked": "알려 주신 내용",
-        "unset": "응답 없음",
-        "reply": "플랫폼 직원이 <b>{contact}</b>(으)로 답장합니다. 추가할 내용이 있으면 해당 이메일에 답장하세요.",
-        "status": {
-          "received": "접수됨",
-          "in_conversation": "논의 중",
-          "offer_sent": "오퍼 발송됨"
-        }
-      }
     }
   },
   "draftWithAi": {

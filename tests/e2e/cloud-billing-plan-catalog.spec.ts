@@ -1,5 +1,5 @@
 import type { Locator, Page, Request, Response } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { signIn, SHELL_PASSWORD } from './_helpers/shell-session';
 import {
   addOrgMember,
@@ -19,8 +19,16 @@ import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
 // THE PLAN CATALOG: POOLS, MAX ×2 AND THE INCLUDED SEAT (Story MOTIR-8379 ·
-// MOTIR-8393) — the owner's walk through Billing & plans → Motir AI, and the
-// story's acceptance receipt.
+// MOTIR-8393) — the owner's walk through Billing & plans → Motir AI.
+//
+// ── PROMOTED OUT OF THE ACCEPTANCE LANE (MOTIR-7598) ──────────────────────────
+// This was MOTIR-8379's receipt (`acceptance-billing-max-x2.spec.ts`). Story
+// MOTIR-7594 took the Free card off the row (Free is the one-time trial grant,
+// said in a strip above the cards, not a plan to choose), so the receipt's
+// "every catalog plan is a card" no longer describes the product. Its receipt
+// stays as recorded; the walk now runs on every PR in the cloud lane as a
+// regression test, every assertion kept, the card-row ones restated as the
+// PAID set. See docs/acceptance-lane-triage.md.
 //
 // ── WHAT THIS LANE CAN AND CANNOT PROVE ───────────────────────────────────────
 // motir-ai is the lane's E2E_TEST_BILLING boundary mock, and Stripe is a stubbed
@@ -151,14 +159,14 @@ const textWithoutSeatLine = (target: Locator): Promise<string> =>
 
 const PER_HEAD = /seat|user|member|per head|per person/i;
 
-/** The included-seat line on every paid card, and none on Free. */
+/** The included-seat line on every paid card — and no Free card at all. */
 async function expectIncludedSeats(page: Page, seatMessage: string, locale = 'en'): Promise<void> {
   for (const plan of PAID) {
     await expect(card(page, plan.name).getByTestId('plan-included-seat')).toHaveText(
       format(seatMessage, { count: plan.includedTrackerSeats }, locale),
     );
   }
-  await expect(card(page, entry('free').name).getByTestId('plan-included-seat')).toHaveCount(0);
+  await expect(card(page, entry('free').name)).toHaveCount(0);
 }
 
 /** Press a card's checkout and answer the body motir-core sent. */
@@ -214,7 +222,7 @@ test.describe('The plan catalog: pools, Max ×2 and the included seat', () => {
         );
         await openPlans(page, copy.ai.choosePlan);
         await setCadence(page, copy.plans.annual);
-        await expect(cardNames(page)).toHaveText(BILLING_CATALOG.aiPlans.map((p) => p.name));
+        await expect(cardNames(page)).toHaveText(PAID.map((p) => p.name));
         for (const plan of PAID) {
           await expect(card(page, plan.name)).toContainText(
             format(copy.plans.creditsAllotment, { n: n(plan.allotment!.credits) }),
@@ -361,7 +369,7 @@ test.describe('The plan catalog: pools, Max ×2 and the included seat', () => {
       await page.goto(billingPath);
       expect((await read).status()).toBe(200);
       await openPlans(page, zh.billing.ai.changePlan, zh.billing.plans.title);
-      await expect(cardNames(page)).toHaveText(BILLING_CATALOG.aiPlans.map((p) => p.name));
+      await expect(cardNames(page)).toHaveText(PAID.map((p) => p.name));
       await expect(card(page, MAX_X2.name)).toContainText(
         format(zh.billing.plans.creditsAllotment, { n: n(MAX_X2.allotment!.credits) }),
       );

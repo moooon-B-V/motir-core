@@ -6380,7 +6380,6 @@
       "chooseSub": "Un fondo mensual de créditos a nivel de organización, facturado aparte de los puestos. Cualquier organización puede comprarlo: no hace falta un plan de puestos de Motir de pago. Pro es la opción de referencia recomendada.",
       "current": "Actual",
       "recommended": "Recomendado",
-      "trialUsed": "Prueba usada",
       "creditsAllotment": "{n} créditos / mes",
       "creditsAllotmentOneTime": "{n} créditos · pago único",
       "ladder": {
@@ -6391,13 +6390,9 @@
       "annualSub": "facturado anualmente · ${yr} / año",
       "annualSave": "Ahorra ${n}/año",
       "monthlySub": "${yr} / año · Ahorra ${n} con el plan anual",
-      "freePrice": "Gratis",
-      "customPrice": "Personalizado",
-      "once": "una vez",
       "ctaChoose": "Elegir {plan}",
       "ctaUpgrade": "Mejorar a {plan}",
       "ctaCurrent": "Plan actual",
-      "ctaTrialUsed": "Prueba usada",
       "upgrade": {
         "cta": "Mejorar a {plan}",
         "disabledReason": "Solo los propietarios y administradores pueden cambiar el plan",
@@ -6461,48 +6456,40 @@
       },
       "footer": "Se muestra la facturación anual (la opción predeterminada de Stripe): cambia a Mensual arriba para comparar. Los impuestos se aplican automáticamente al pagar. Los créditos son una asignación de uso interna; el precio mostrado es la cuota del plan de IA, que Stripe factura a la organización {org}. Tus puestos de Motir se facturan aparte: gestiónalos en la pantalla del plan de Motir.",
       "seatIncluded": "+ {count, plural, one {# puesto de Motir} other {# puestos de Motir}} · elementos de trabajo sin límite",
-      "seatNone": "Sin puesto de Motir · límite de 250 elementos",
-      "seatCustom": "Puestos de Motir incluidos (personalizado)",
-      "customPool": "Fondo de créditos personalizado",
       "everythingIn": "Todo lo de {prev}, más",
       "tiers": {
-        "free": {
-          "useCase": "Para probar Motir AI.",
-          "features": ["Una muestra única de cada agente"],
-          "featuresOff": ["Sin renovación mensual · sin recargas"]
-        },
         "standard": {
-          "useCase": "Planificación detallada, más una muestra del agente.",
+          "useCase": "Planifica tus proyectos con el planificador de Motir AI.",
           "features": [
             "Planifica todo el proyecto, en detalle",
-            "Los créditos se renuevan cada mes · recargas medidas",
-            "Margen para probar tareas del agente"
+            "Los créditos se renuevan cada mes · recarga cuando quieras"
           ]
         },
         "pro": {
-          "useCase": "Planificación detallada, más trabajo real del agente.",
+          "useCase": "Standard, más modelos más potentes para planificar.",
           "prev": "Standard",
           "features": [
-            "Ejecuta el agente de código en tareas reales",
-            "Recarga cuando quieras para ejecuciones más pesadas"
+            "Modelos más potentes habilitados para planificar",
+            "Cambia el modelo de planificación según el tipo de trabajo"
           ]
         },
         "max": {
-          "useCase": "Planificación detallada para un equipo con mucha actividad, más margen para el trabajo del agente.",
+          "useCase": "Pro, más margen para pasar el trabajo planificado al agente.",
           "prev": "Pro",
-          "features": [
-            "Margen para un trabajo continuo del agente",
-            "Capacidad para un equipo con mucha actividad"
-          ]
+          "features": ["Margen para enviar automáticamente el trabajo planificado al agente"]
         },
         "max_x2": {
-          "useCase": "Planificación detallada, más trabajo del agente al doble del volumen de Max.",
+          "useCase": "Max, con el doble de volumen.",
           "prev": "Max",
-          "features": [
-            "El doble del fondo mensual de créditos de Max",
-            "Margen para varios agentes a la vez"
-          ]
+          "features": ["El doble del fondo mensual de créditos de Max"]
         }
+      },
+      "trial": {
+        "pill": "Prueba gratuita",
+        "pillUsed": "Prueba gratuita usada",
+        "left": "Quedan {left} de {n} créditos de prueba · únicos.",
+        "spent": "Se han gastado los {n} créditos de prueba.",
+        "pickPlan": "Elige un plan mensual de Motir AI para seguir planificando."
       }
     },
     "topup": {
@@ -6581,120 +6568,6 @@
     "internalBilling": {
       "badge": "Facturación interna",
       "note": "A esta organización se le cobra exactamente como a un cliente y luego se le compensa: todas las cifras de abajo son reales y el saldo neto es cero."
-    },
-    "contactSales": {
-      "contact": "Contactar con ventas",
-      "sentChip": "Solicitud enviada · {date}",
-      "memberReason": "Solo los propietarios y administradores de {org} pueden contactar con ventas.",
-      "title": "Contactar con ventas: Enterprise",
-      "subtitle": "Cuéntanos qué quieres que haga Motir. El personal de la plataforma lee cada solicitud y te responde directamente.",
-      "facts": {
-        "heading": "Se envía con tu solicitud",
-        "organization": "Organización",
-        "requestedBy": "Solicitado por",
-        "currentPlan": "Plan actual",
-        "repositories": "Repositorios conectados"
-      },
-      "optionalNote": "Todo lo que sigue es opcional, salvo la nota.",
-      "fields": {
-        "cardsPerDay": "Elementos de trabajo al día, aproximadamente",
-        "cardsPerDayPlaceholder": "p. ej., 40",
-        "parallelAgents": "Agentes en paralelo",
-        "parallelAgentsPlaceholder": "p. ej., 8",
-        "agentPath": "Qué agentes",
-        "autonomy": "¿Cómo debería funcionar?",
-        "startWhen": "¿Cuándo empezarías?",
-        "teamSize": "Tamaño del equipo",
-        "choose": "Elegir…",
-        "contact": "La mejor forma de contactarte",
-        "contactHelp": "El correo de tu cuenta. Cámbialo si otra persona debe recibir la respuesta.",
-        "note": "Nota",
-        "required": "Obligatorio",
-        "notePlaceholder": "¿Qué debería hacer Motir por tu equipo? Cualquier cosa que debamos saber sobre tus repositorios, la seguridad o los plazos."
-      },
-      "agentPath": {
-        "hosted": {
-          "label": "Los agentes alojados de Motir",
-          "hint": "Se ejecutan con los modelos de Motir."
-        },
-        "own": {
-          "label": "Nuestros propios agentes",
-          "hint": "Claude Code, Codex u otro agente con nuestra propia credencial, en la nube de Motir."
-        },
-        "both": {
-          "label": "Ambos",
-          "hint": "Un poco de cada."
-        }
-      },
-      "autonomy": {
-        "autonomous_lead": {
-          "label": "Día y noche, por sí solo",
-          "hint": "El líder autónomo: Motir planifica, ejecuta y repara, y tu equipo decide en los puntos de aprobación."
-        },
-        "volume_only": {
-          "label": "Un gran volumen de ejecuciones que iniciamos nosotros",
-          "hint": "Tu equipo inicia cada ejecución."
-        },
-        "unsure": {
-          "label": "Aún no lo sé",
-          "hint": ""
-        }
-      },
-      "startWhen": {
-        "now": "Ahora",
-        "within_month": "En un mes",
-        "within_quarter": "En un trimestre",
-        "exploring": "Solo explorando"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "cancel": "Cancelar",
-      "send": "Enviar solicitud",
-      "sending": "Enviando…",
-      "close": "Cerrar",
-      "done": "Hecho",
-      "errors": {
-        "note": "Añade una nota: cuéntanos qué quieres que Motir haga por tu equipo.",
-        "number": "Introduce un número entero igual o mayor que 1."
-      },
-      "refused": {
-        "open": {
-          "title": "Tu organización ya tiene una solicitud abierta.",
-          "body": "Se envió el {date}, desde otra pestaña o por otro administrador. No se ha enviado nada nuevo.",
-          "bodyNoDate": "Se envió desde otra pestaña o por otro administrador. No se ha enviado nada nuevo.",
-          "action": "Ver la solicitud"
-        },
-        "forbidden": {
-          "title": "No puedes contactar con ventas en nombre de {org}.",
-          "body": "Solo pueden hacerlo los propietarios y administradores. Puede que tu rol haya cambiado desde que se cargó esta página: pregunta a un administrador de la organización."
-        },
-        "network": {
-          "title": "No se pudo conectar con Motir.",
-          "body": "No se ha enviado nada. Comprueba tu conexión y vuelve a enviarla: lo que escribiste se conserva."
-        }
-      },
-      "sent": {
-        "title": "Solicitud enviada",
-        "body": "El personal de la plataforma responderá a <b>{contact}</b>. Hasta que se cierre la solicitud, el plan Enterprise la muestra en lugar de “Contactar con ventas”."
-      },
-      "request": {
-        "title": "Tu solicitud Enterprise",
-        "subtitle": "Enviada el {date} por {name}.",
-        "subtitleNoName": "Enviada el {date}.",
-        "state": "Estado",
-        "asked": "Lo que nos contaste",
-        "unset": "Sin indicar",
-        "reply": "El personal de la plataforma responde a <b>{contact}</b>. Para añadir algo, responde a su correo.",
-        "status": {
-          "received": "Recibida",
-          "in_conversation": "En conversación",
-          "offer_sent": "Oferta enviada"
-        }
-      }
     }
   },
   "draftWithAi": {
