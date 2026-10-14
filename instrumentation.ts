@@ -51,6 +51,10 @@
 //     stream RELAY is browser-visible, so a `page.route` stub would have to fake
 //     the answer — and an answer the browser faked was never written, which is
 //     precisely what MOTIR-1823's reload step has to prove.
+//   - E2E_TEST_SHARPEN=1 → lib/test-sharpen-mock claims the `sharpen_turn` jobs
+//     on that same seam (installed BEFORE the jobs seam, which accepts any kind)
+//     and answers a Sharpen session from a scripted control file, making core's
+//     write-back call itself when a session ends (MOTIR-8180).
 //
 //   - E2E_TEST_CODE_GRAPH=1 → lib/test-code-graph-mock intercepts the INDEX
 //     WRITER's two boundaries: motir-ai's POST /v1/code-graph/run-credential and
@@ -135,6 +139,16 @@ export async function register() {
   const { installResponseCloseListenerLimit } =
     await import('@/lib/http/responseCloseListenerLimit');
   installResponseCloseListenerLimit();
+
+  // Every transaction's wait and hold, per route and MCP tool, sampled or not
+  // (MOTIR-8553), served on the private metrics port when
+  // `MONITORING_METRICS_PORT` is set. Node only: `prom-client` and `node:http`
+  // must never reach the Edge bundle, which is why both imports sit below the
+  // runtime gate.
+  const { registerRequestDbTimingListener } = await import('@/lib/monitoring/requestDbTiming');
+  registerRequestDbTimingListener();
+  const { startMetricsServer } = await import('@/lib/monitoring/metricsServer');
+  startMetricsServer();
 
   // Every E2E seam, from the ONE table the job worker installs from too
   // (`lib/test-mock-seams.ts`, MOTIR-5837). Dynamic, like every import below the

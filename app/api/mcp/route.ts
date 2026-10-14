@@ -9,6 +9,7 @@ import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { PROTECTED_RESOURCE_METADATA_PATH } from '@/lib/oauth/config';
 import { OrganizationSuspendedError } from '@/lib/organizations/errors';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 
 // The Motir MCP server (Story 7.8 · Subtask 7.8.4) — one streamable-HTTP
 // endpoint exposing the PM core to AI agents and the CLI (7.9), all of which
@@ -147,4 +148,13 @@ async function handler(req: Request): Promise<Response> {
   return res;
 }
 
-export { handler as GET, handler as POST, handler as DELETE };
+/**
+ * Every transaction of an MCP request is recorded as `route="mcp"` (MOTIR-8553):
+ * the token verify and session resolution here with no tool, and each tool
+ * call's own work under its tool, which the registry's per-tool wrapper sets.
+ */
+async function labelledHandler(req: Request): Promise<Response> {
+  return withRequestLabel({ route: 'mcp' }, () => handler(req));
+}
+
+export { labelledHandler as GET, labelledHandler as POST, labelledHandler as DELETE };

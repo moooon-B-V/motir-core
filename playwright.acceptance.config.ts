@@ -134,6 +134,11 @@ const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-billin
 // writing this file — re-read on every request, so it can change between turns.
 const MOTIR_AI_JOBS_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-ai-jobs-fixture.json');
 process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
+// The SHARPEN seam's control file (MOTIR-1101 · MOTIR-8179): the Grill me receipt
+// writes each session's script here and the server's fake appends the submits and
+// write-backs — the same seam, and the same shape, the cloud lane carries.
+const MOTIR_AI_SHARPEN_CONTROL_PATH = path.resolve('/tmp/motir-acceptance-sharpen-control.json');
+process.env['MOTIR_AI_SHARPEN_CONTROL_PATH'] ??= MOTIR_AI_SHARPEN_CONTROL_PATH;
 process.env['MOTIR_CLOUD'] ??= 'true';
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
 // The operator console's platform usage reads (Story MOTIR-727 · MOTIR-735,
@@ -521,6 +526,11 @@ export default defineConfig({
           'out',
           'e2e-platform-lessons-fixture.json',
         ),
+        // The Sharpen seam (MOTIR-1101 · MOTIR-8179) — installed BEFORE the jobs seam
+        // by `lib/test-mock-seams.ts`. An ending turn makes core's REAL write-back,
+        // `PUT /api/internal/ai/plan-sharpening`, under `CORE_CALLBACK_SECRET` below.
+        E2E_TEST_SHARPEN: '1',
+        MOTIR_AI_SHARPEN_CONTROL_PATH,
         E2E_TEST_AI_JOBS: '1',
         MOTIR_AI_JOBS_FIXTURE_PATH,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',

@@ -12,6 +12,11 @@
 // lives in `./serverInit` instead, which no Next config touches. Keep this
 // module free of anything but `process.env` reads.
 //
+// The one import is RELATIVE and imports nothing itself: the host's identity
+// (MOTIR-8549's `instance.*` tags) is read through `lib/deployment/identity.ts`,
+// the one file the CI-fleet boundary guard lets name the host's variables.
+import { hostInstanceId, hostProcessGroup, hostRegion } from '../deployment/identity';
+//
 // Subtask 8.5.6 / MOTIR-1162. The provisioned values and which of the two homes
 // each belongs in are recorded on MOTIR-1161; this file is the code side of
 // that split, and the split is the whole reason the file exists:
@@ -132,14 +137,89 @@ export function clientMonitoringEnvironment(): string {
 }
 
 /**
- * The share of transactions sampled for performance tracing.
+ * The share of the WEB SERVER's and EDGE runtime's transactions sampled for
+ * performance tracing — a per-deployment RUNTIME setting, `SENTRY_TRACES_SAMPLE_RATE`
+ * (MOTIR-8549), read when the process boots exactly as `SENTRY_ENVIRONMENT` is.
  *
- * Zero, deliberately: this card buys ERROR monitoring, and performance tracing
- * on a pre-launch app with no traffic baseline is cost with nothing to compare
- * it against. Raising it is a decision with a bill attached, so it is a
- * constant with a comment rather than a silent default.
+ * It was a compiled `0` until MOTIR-8537, with the note "raising it is a
+ * decision with a bill attached". It is still that decision; what changed is
+ * WHERE it is made. A constant could only be raised for every deployment of an
+ * image at once, and a staging load test needs a rate production must not pay
+ * for. So it is a Fly runtime secret, set per app
+ * (`flyctl secrets set -a <app> SENTRY_TRACES_SAMPLE_RATE=…`).
+ *
+ * **Unset ⇒ 0, which is the behaviour before this setting existed.** Nothing
+ * traces until a deployment opts in. A value that is not a finite number in
+ * `[0, 1]` (`"abc"`, `"1.5"`, `"-0.1"`) is also 0, with one warning naming the
+ * variable: a typo must neither fail the boot nor silently trace 100%.
+ *
+ * ⚠️ ONLY THE WEB SERVER AND THE EDGE READ IT. A Fly secret is visible to every
+ * process group of the app, the job worker and the terminal relay included, so
+ * `serverSentryInitOptions` (`./serverInit`) passes an explicit 0 unless its
+ * caller opts in with `{ traces: true }` — and only `sentry.server.config.ts`
+ * does. The browser has its own constant, `BROWSER_TRACES_SAMPLE_RATE`.
+ *
+ * ## The cost model — how to choose a value
+ *
+ *     monthly spans ≈ (app requests per month) × rate × (spans per traced request)
+ *     monthly cost  ≈ spans beyond the Sentry plan's included span quota
+ *                     × the plan's per-span overage price
+ *
+ * None of the three inputs is known until it is measured, and none is invented
+ * here:
+ *
+ * - **app requests per month** — Fly's metrics for the `app` process group;
+ * - **spans per traced request** — one staging trace of a hot route, now that
+ *   every interactive transaction and its SQL statements are spans (MOTIR-8550)
+ *   — a `/workbench` render is one request span plus several transaction spans,
+ *   each with its statements beneath it;
+ * - **the quota and the per-span price** — the Sentry organisation's billing page.
+ *
+ * Production's chosen value and the cost computed for it are recorded on the
+ * manual card that sets it (the production trace-rate task under MOTIR-8536),
+ * not here: a number in a comment goes stale the day the traffic changes.
  */
-export const MONITORING_TRACES_SAMPLE_RATE = 0;
+export function serverTracesSampleRate(): number {
+  const raw = process.env['SENTRY_TRACES_SAMPLE_RATE']?.trim();
+  if (!raw) return 0;
+  const rate = Number(raw);
+  if (Number.isFinite(rate) && rate >= 0 && rate <= 1) return rate;
+  console.warn(
+    `[monitoring] SENTRY_TRACES_SAMPLE_RATE=${JSON.stringify(raw)} is not a number between 0 and 1 — tracing stays off (0)`,
+  );
+  return 0;
+}
+
+/**
+ * The BROWSER's trace sample rate: 0, and a constant. A `NEXT_PUBLIC_*` value is
+ * compiled into the bundle, so a runtime secret can never reach it, and browser
+ * performance tracing is outside MOTIR-8537's scope.
+ */
+export const BROWSER_TRACES_SAMPLE_RATE = 0;
+
+/**
+ * Which INSTANCE an event came from — the Fly machine, its process group and its
+ * region — as Sentry tags under `instance.*` (MOTIR-8549). Set on the init's
+ * `initialScope`, so they reach transaction events as well as errors (a
+ * transaction never passes through `beforeSend`).
+ *
+ * Fly injects all three at runtime. A variable that is unset or empty is
+ * OMITTED rather than tagged `""`, so locally and on a self-hosted build the
+ * answer is `{}`. The `instance.*` prefix keeps them apart from the `tx.*` keys
+ * `tagTransactionStall` writes.
+ */
+export function monitoringInstanceTags(): Record<string, string> {
+  const tags: Record<string, string> = {};
+  // Read through the one file allowed to name the host's variables
+  // (`tests/ciFleet/orchestratorPortBoundary.test.ts`).
+  const machine = hostInstanceId();
+  const processGroup = hostProcessGroup();
+  const region = hostRegion();
+  if (machine) tags['instance.machine'] = machine;
+  if (processGroup) tags['instance.process_group'] = processGroup;
+  if (region) tags['instance.region'] = region;
+  return tags;
+}
 
 function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();

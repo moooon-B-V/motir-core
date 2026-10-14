@@ -35,6 +35,10 @@ function clearMonitoringEnv(): void {
     'SENTRY_ENVIRONMENT',
     'NEXT_PUBLIC_SENTRY_DSN',
     'NEXT_PUBLIC_SENTRY_ENVIRONMENT',
+    'SENTRY_TRACES_SAMPLE_RATE',
+    'FLY_MACHINE_ID',
+    'FLY_PROCESS_GROUP',
+    'FLY_REGION',
   ]) {
     vi.stubEnv(name, '');
   }
@@ -97,6 +101,92 @@ describe('the SERVER and EDGE runtimes read the RUNTIME environment', () => {
       // distinguishing two deployments of the SAME image (MOTIR-1161 §4).
       expect(options['environment']).toBe('staging');
       expect(typeof options['beforeSend']).toBe('function');
+    },
+  );
+});
+
+// ── THE TRACE RATE IS A PER-DEPLOYMENT SETTING (MOTIR-8549) ────────────────
+//
+// It was a compiled 0. It is now `SENTRY_TRACES_SAMPLE_RATE`, read at boot by the
+// server and the edge only; unset, empty or nonsense is still 0, the browser is
+// still 0, and none of it can make a DSN-less build call `init`.
+describe('the SERVER and EDGE trace at the deployment rate (MOTIR-8549)', () => {
+  const DSN = 'https://key@o1.ingest.us.sentry.io/2';
+
+  it.each(['@/sentry.server.config', '@/sentry.edge.config'])(
+    '%s passes SENTRY_TRACES_SAMPLE_RATE through when it is in [0, 1]',
+    async (modulePath) => {
+      vi.stubEnv('SENTRY_DSN', DSN);
+      vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', '0.25');
+      await import(modulePath);
+      const options = init.mock.calls[0]![0] as Record<string, unknown>;
+      expect(options['tracesSampleRate']).toBe(0.25);
+    },
+  );
+
+  it.each([
+    ['@/sentry.server.config', ''],
+    ['@/sentry.server.config', 'abc'],
+    ['@/sentry.server.config', '2'],
+    ['@/sentry.server.config', '-1'],
+    ['@/sentry.edge.config', ''],
+    ['@/sentry.edge.config', 'abc'],
+    ['@/sentry.edge.config', '2'],
+    ['@/sentry.edge.config', '-1'],
+  ])('%s falls back to 0 for %j', async (modulePath, value) => {
+    vi.stubEnv('SENTRY_DSN', DSN);
+    vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', value);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await import(modulePath);
+    const options = init.mock.calls[0]![0] as Record<string, unknown>;
+    expect(options['tracesSampleRate']).toBe(0);
+    warn.mockRestore();
+  });
+
+  it('the CLIENT stays at 0 whatever the runtime rate says', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', DSN);
+    vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', '1');
+    await import('@/instrumentation-client');
+    const options = init.mock.calls[0]![0] as Record<string, unknown>;
+    expect(options['tracesSampleRate']).toBe(0);
+  });
+
+  it.each(['@/sentry.server.config', '@/sentry.edge.config'])(
+    '%s tags every event with its Fly instance',
+    async (modulePath) => {
+      vi.stubEnv('SENTRY_DSN', DSN);
+      vi.stubEnv('FLY_MACHINE_ID', '148e21ea7e5389');
+      vi.stubEnv('FLY_PROCESS_GROUP', 'app');
+      vi.stubEnv('FLY_REGION', 'ams');
+      await import(modulePath);
+      const options = init.mock.calls[0]![0] as { initialScope?: { tags?: unknown } };
+      expect(options.initialScope?.tags).toEqual({
+        'instance.machine': '148e21ea7e5389',
+        'instance.process_group': 'app',
+        'instance.region': 'ams',
+      });
+    },
+  );
+
+  it.each(['@/sentry.server.config', '@/sentry.edge.config'])(
+    '%s carries NO instance tag when Fly set none — never an empty string',
+    async (modulePath) => {
+      vi.stubEnv('SENTRY_DSN', DSN);
+      await import(modulePath);
+      const options = init.mock.calls[0]![0] as { initialScope?: { tags?: unknown } };
+      expect(options.initialScope?.tags).toEqual({});
+    },
+  );
+
+  it.each(['@/sentry.server.config', '@/sentry.edge.config', '@/instrumentation-client'])(
+    '%s still never calls init without a DSN, whatever the rate and the Fly tags say',
+    async (modulePath) => {
+      vi.stubEnv('SENTRY_TRACES_SAMPLE_RATE', '1');
+      vi.stubEnv('FLY_MACHINE_ID', '148e21ea7e5389');
+      vi.stubEnv('FLY_PROCESS_GROUP', 'app');
+      vi.stubEnv('FLY_REGION', 'ams');
+      await import(modulePath);
+      expect(init).not.toHaveBeenCalled();
     },
   );
 });

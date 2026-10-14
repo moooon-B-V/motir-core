@@ -3164,6 +3164,22 @@ export default defineConfig({
         'components/onboarding/OnboardingTopBar.tsx',
         'app/**/onboarding/how-it-works/page.tsx',
         'app/**/onboarding/direction/\\[tier\\]/page.tsx',
+        // ── Story MOTIR-8537 · the observability path (MOTIR-8556) ──
+        // Every module the story's five code cards added, plus the two monitoring
+        // modules they changed that had no entry. Pinned in `thresholds` below at
+        // the level the existing `lib/monitoring/*` entries carry (branches /
+        // functions / lines 90, read at e855430). `scripts/pg-top-statements.ts`
+        // is the CLI entry and stays out, as `generate-mcp-tool-schemas.ts` does
+        // beside its gated `generateMcpToolSchemas.ts`.
+        'lib/monitoring/config.ts',
+        'lib/monitoring/serverInit.ts',
+        'lib/monitoring/transactionSpan.ts',
+        'lib/monitoring/requestLabel.ts',
+        'lib/monitoring/requestDbTiming.ts',
+        'lib/monitoring/metricsServer.ts',
+        'lib/mcp/toolTracing.ts',
+        'scripts/pgTopStatements.ts',
+        'scripts/pgTopStatementsQuery.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -7192,6 +7208,16 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-8537 · MOTIR-8556 — see `include` above.
+        'lib/monitoring/config.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/serverInit.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/transactionSpan.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/requestLabel.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/requestDbTiming.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/metricsServer.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/toolTracing.ts': { branches: 90, functions: 90, lines: 90 },
+        'scripts/pgTopStatements.ts': { branches: 90, functions: 90, lines: 90 },
+        'scripts/pgTopStatementsQuery.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-8238 · MOTIR-8256 — measured above (`include`), pinned at the floor.
         'components/onboarding/layout/OnboardingBrandBar.tsx': {
           lines: 90,

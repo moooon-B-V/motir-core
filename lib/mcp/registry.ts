@@ -160,6 +160,7 @@ import {
   registerWorkItemRun,
 } from './tools/workItemRun';
 import { heartbeatingServer } from './runHeartbeat';
+import { tracedServer } from './toolTracing';
 
 // The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5 / 7.8.6 /
 // 7.8.10 / 7.8.11 / 7.8.13 / 7.8.14 / 2.8.5) — the single place that assembles
@@ -336,7 +337,16 @@ export function registerMcpTools(
   // The RUN HEARTBEAT (MOTIR-7451) wraps every callback the gates let through, so
   // each handled call refreshes the caller's open agent-reported runs AFTER it
   // answers — and never fails it (`runHeartbeat.ts`).
-  const beating = heartbeatingServer(strict, resolveContext);
+  //
+  // The TOOL TRACE (MOTIR-8551) goes between them: every call runs inside a span
+  // named `tools/call <tool>` and the request's root is renamed for the tool. It
+  // is the INNERMOST callback wrapper, which makes it the OUTERMOST at call time
+  // (each wrapper registers the callback the next one wraps, so the one nearest
+  // the real server runs first) — the span therefore covers the scope gate, the
+  // rate-limit gate, the tool body and the run heartbeat, whose `SELECT` shows
+  // as the call's last transaction (`toolTracing.ts`).
+  const traced = tracedServer(strict);
+  const beating = heartbeatingServer(traced, resolveContext);
   // Two wrappers, and the ORDER is the policy: the permission gate runs first,
   // so a call the token was never granted is refused BEFORE it can consume any
   // of the request budget MOTIR-2610 added. Metering a refused call would let an

@@ -495,6 +495,22 @@ describe('fly.toml — the deployment configuration', () => {
     // machine out of rotation for ever.
     expect(existsSync(join(root, 'app/api/health/ready/route.ts'))).toBe(true);
   });
+
+  it('declares a private metrics scrape for the app group, off the public port (MOTIR-8553)', () => {
+    const block = /^\s*\[\[metrics\]\]\s*$([\s\S]*?)(?=^\s*\[|(?![\s\S]))/m.exec(flyToml);
+    expect(block, 'fly.toml must declare a [[metrics]] entry').not.toBeNull();
+    const body = block?.[1] ?? '';
+    const port = /^\s*port\s*=\s*(\d+)/m.exec(body)?.[1];
+    expect(port).toBeDefined();
+    expect(/^\s*path\s*=\s*"([^"]*)"/m.exec(body)?.[1]).toBe('/metrics');
+    expect(/^\s*processes\s*=\s*\[\s*"app"\s*\]/m.test(body)).toBe(true);
+
+    const internalPort = /^\s*internal_port\s*=\s*(\d+)/m.exec(flyToml)?.[1];
+    expect(internalPort).toBeDefined();
+    expect(port).not.toBe(internalPort);
+    // The app opens the port only when told which one — the same number.
+    expect(flyToml).toMatch(new RegExp(`^\\s*MONITORING_METRICS_PORT\\s*=\\s*"${port}"`, 'm'));
+  });
 });
 
 describe('scripts/release-migrate.mjs — the release entrypoint', () => {

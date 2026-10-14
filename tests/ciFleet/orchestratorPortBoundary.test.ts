@@ -131,8 +131,9 @@ const FLY_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
  *    The rule's REACH is nevertheless all of `lib/`, deliberately and correctly
  *    — a boundary guard narrowed to the directory it protects is one you evade
  *    by moving a file. So the answer is a REGISTERED exception in the shape the
- *    first one takes: one file, one narrow tell naming the three variables it
- *    was argued for, and the provider knowledge concentrated where a second
+ *    first one takes: one file, one narrow tell naming the four variables it
+ *    was argued for (the fourth, `FLY_PROCESS_GROUP`, for the monitoring
+ *    `instance.*` tags of MOTIR-8549, which read the host through this file), and the provider knowledge concentrated where a second
  *    deployment target is one more branch.
  *
  *    The tell deliberately does NOT match `FLY_*` in general. A future
@@ -160,7 +161,7 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
   },
   {
     file: join('lib', 'deployment', 'identity.ts'),
-    tell: /\bFLY_(APP_NAME|REGION|MACHINE_ID)\b/,
+    tell: /\bFLY_(APP_NAME|REGION|MACHINE_ID|PROCESS_GROUP)\b/,
     why: "answers where the WEB PROCESS runs, for the console's hosting card — not the fleet's port",
   },
   {

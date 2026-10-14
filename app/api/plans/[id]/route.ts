@@ -7,6 +7,7 @@ import { planReviewService } from '@/lib/services/planReviewService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 
 // GET /api/plans/[id] — the plan-detail REVIEW model (Subtask 7.4.5 / MOTIR-847):
 // the plan + its proposed items (op-enriched with live targets), per-item
@@ -64,9 +65,12 @@ export async function GET(
   req: Request,
   route: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  return memberThenVisitor(
-    req,
-    () => memberGET(req, route),
-    (ctx) => serve(req, route, ctx),
+  // Every transaction this read opens is recorded as `plan_get` (MOTIR-8553).
+  return withRequestLabel({ route: 'plan_get' }, () =>
+    memberThenVisitor(
+      req,
+      () => memberGET(req, route),
+      (ctx) => serve(req, route, ctx),
+    ),
   );
 }

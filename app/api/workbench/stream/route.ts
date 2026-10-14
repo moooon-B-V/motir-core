@@ -3,6 +3,7 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 import { projectsService } from '@/lib/services/projectsService';
 import { workbenchWatermarkService } from '@/lib/services/workbenchWatermarkService';
 import type { WorkbenchWatermarkDto } from '@/lib/dto/workbench';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 
 // GET /api/workbench/stream (Story MOTIR-5238 · MOTIR-5241) — the Workbench's
 // LIVE TAIL, as Server-Sent Events.
@@ -85,6 +86,13 @@ export interface WorkbenchStreamFrame {
 }
 
 export async function GET(req: Request): Promise<Response> {
+  // The label covers the whole response lifetime: `ReadableStream`'s `start`
+  // runs inside it, so every poll's watermark read is recorded as
+  // `workbench_stream` (MOTIR-8553).
+  return withRequestLabel({ route: 'workbench_stream' }, () => openStream(req));
+}
+
+async function openStream(req: Request): Promise<Response> {
   // ⚠️ THE GATE RUNS BEFORE ANYTHING IS WRITTEN. A session, 2FA-hold or
   // tenancy refusal is a real HTTP status with a JSON body, so no frame is ever
   // written to a reader who may not see the data — the shipped route's ordering,
