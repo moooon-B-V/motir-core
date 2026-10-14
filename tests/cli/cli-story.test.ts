@@ -1445,6 +1445,21 @@ describe('motir auto — the session-branch run', () => {
     expect(stateB.sessionBranch).toBe(branch);
     expect(invocations[1]?.stdin).toContain(`Integrate the commit into ${branch}`);
 
+    // THE RUN RECORDS ITS LEGS (MOTIR-8632). `auto` opens with an empty set and
+    // re-opens per card; each re-open must append the card as a leg, or every
+    // per-card event 422s and the run page shows a run with no cards.
+    const runs = await adminDb.dispatchRun.findMany({
+      where: { command: 'auto', projectId: fx.projectId },
+      include: { cards: { orderBy: { position: 'asc' } } },
+    });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.cards.map((leg) => [leg.workItemId, leg.position])).toEqual([
+      [a.id, 0],
+      [b.id, 1],
+    ]);
+    // The loop's per-card events landed on those legs rather than being refused.
+    expect(runs[0]!.cards.every((leg) => leg.disposition !== 'queued')).toBe(true);
+
     // ONE pull request for the one repo the run touched.
     const prs = gh.pullRequests();
     expect(prs).toHaveLength(1);
