@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AuthError,
   CliError,
@@ -14,7 +14,18 @@ import {
   ResponseShapeError,
   PermissionError,
 } from '../src/errors.js';
-import { describeField, isVersionBehind, V1Transport } from '../src/transport.js';
+import {
+  DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS,
+  describeField,
+  isVersionBehind,
+  rateLimitMaxWaitFromEnv,
+  readRetryAfterSeconds,
+  V1Transport,
+  type V1TransportOptions,
+} from '../src/transport.js';
+// @ts-expect-error — the sandbox stub is a plain `.mjs` with no types (see sandboxStub.test.ts);
+// its claim fixture is the body a real claim answers.
+import { __fixtures } from '../sandbox/smoke/stub-server.mjs';
 import { CLIENT_VERSION_HEADER } from '../src/transport.js';
 import { CLI_VERSION } from '../src/version.js';
 import { GENERATED_AGAINST } from '../src/api/index.js';
@@ -116,7 +127,7 @@ afterEach(async () => {
   await stub.stop();
 });
 
-function transport(overrides: { now?: () => Date } = {}): V1Transport {
+function transport(overrides: Partial<V1TransportOptions> = {}): V1Transport {
   return new V1Transport({ serverUrl: stub.url, token: 'motir_pat_test', ...overrides });
 }
 
@@ -330,21 +341,27 @@ describe('the status map', () => {
       headers: { 'x-ratelimit-reset': String(resetAt) },
     });
 
-    const error = await transport({ now: () => new Date(Date.UTC(2026, 7, 5, 12, 0, 0)) })
+    // `rateLimitMaxWaitSeconds: 0` — the transport may not wait at all, so the
+    // refusal surfaces as it did before MOTIR-8602 taught it to wait.
+    const error = await transport({
+      now: () => new Date(Date.UTC(2026, 7, 5, 12, 0, 0)),
+      rateLimitMaxWaitSeconds: 0,
+    })
       .request('getProject', { path: { projectKey: 'MOTIR' } })
       .catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(RateLimitError);
     expect((error as CliError).message).toContain('refills at');
-    // v1 sends NO `Retry-After` by design; the relative hint is derived from the
-    // absolute instant rather than read off a header that does not exist.
+    // The relative hint is derived from the absolute reset instant.
     expect((error as CliError).hint).toBe('Retry in 30 seconds.');
+    expect((error as CliError).message).not.toContain('gave up');
+    expect(stub.received).toHaveLength(1);
   });
 
   it('429 with NO reset header still produces a usable error', async () => {
     stub.queue({ status: 429, body: { code: 'RATE_LIMITED', error: 'Too many requests.' } });
 
-    const error = await transport()
+    const error = await transport({ rateLimitMaxWaitSeconds: 0 })
       .request('getProject', { path: { projectKey: 'MOTIR' } })
       .catch((err: unknown) => err);
 
@@ -694,5 +711,225 @@ describe('the CLI reports its version on a dedicated field (MOTIR-4974)', () => 
       'utf8',
     );
     expect(serverSource).toContain(`CLIENT_VERSION_HEADER = '${CLIENT_VERSION_HEADER}'`);
+  });
+});
+
+// ── MOTIR-8602: a 429 is a pause, not a failure ─────────────────────────────
+
+/** An injected `sleep` that records each wait and resolves at once. */
+function recordingSleep(): { sleep: (ms: number) => Promise<void>; waits: number[] } {
+  const waits: number[] = [];
+  return { waits, sleep: (ms) => (waits.push(ms), Promise.resolve()) };
+}
+
+const REFUSAL = (retryAfterSeconds: unknown) => ({
+  status: 429,
+  body: { code: 'RATE_LIMIT_EXCEEDED', error: 'Too many requests.', retryAfterSeconds },
+});
+
+describe('a 429 is waited out and the same request re-sent (MOTIR-8602)', () => {
+  it('waits the named seconds, re-sends the identical request and returns the 200 body', async () => {
+    stub.queue(REFUSAL(7), { status: 200, body: PROJECT });
+    const { sleep, waits } = recordingSleep();
+
+    const project = await transport({ sleep, onRateLimitWait: () => {} }).request('getProject', {
+      path: { projectKey: 'MOTIR' },
+    });
+
+    expect(project).toEqual(PROJECT);
+    expect(stub.received).toHaveLength(2);
+    const [first, second] = stub.received;
+    expect(second?.method).toBe(first?.method);
+    expect(second?.url).toBe(first?.url);
+    expect(second?.authorization).toBe(first?.authorization);
+    expect(second?.body).toBe(first?.body);
+    expect(waits).toHaveLength(1);
+    expect(waits[0]).toBeGreaterThanOrEqual(7000);
+    expect(waits[0]).toBeLessThan(8000);
+  });
+
+  it('re-sends a request BODY unchanged', async () => {
+    stub.queue(REFUSAL(1), {
+      status: 400,
+      body: { code: 'VALIDATION_ERROR', error: 'nope' },
+    });
+    const { sleep } = recordingSleep();
+    await transport({ sleep, onRateLimitWait: () => {} })
+      .request('transitionWorkItem', { path: { key: 'MOTIR-1' }, body: { status: 'done' } })
+      .catch(() => undefined);
+    expect(stub.received).toHaveLength(2);
+    expect(stub.received[1]?.body).toBe(stub.received[0]?.body);
+    expect(JSON.parse(stub.received[1]?.body ?? '{}')).toEqual({ status: 'done' });
+  });
+
+  it('announces each wait with the notice fields', async () => {
+    stub.queue(REFUSAL(3), REFUSAL(4), { status: 200, body: PROJECT });
+    const { sleep } = recordingSleep();
+    const notices: unknown[] = [];
+
+    await transport({
+      sleep,
+      onRateLimitWait: (n) => notices.push(n),
+      rateLimitMaxWaitSeconds: 60,
+    }).request('getProject', { path: { projectKey: 'MOTIR' } });
+
+    expect(notices).toEqual([
+      {
+        operationId: 'getProject',
+        waitSeconds: 3,
+        attempt: 1,
+        waitedSeconds: 0,
+        maxWaitSeconds: 60,
+      },
+      {
+        operationId: 'getProject',
+        waitSeconds: 4,
+        attempt: 2,
+        waitedSeconds: 3,
+        maxWaitSeconds: 60,
+      },
+    ]);
+  });
+
+  it('writes the default notice to STDERR and nothing to stdout', async () => {
+    stub.queue(REFUSAL(5), { status: 200, body: PROJECT });
+    const { sleep } = recordingSleep();
+    const out: string[] = [];
+    const err: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      out.push(String(chunk));
+      return true;
+    });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      err.push(String(chunk));
+      return true;
+    });
+    try {
+      await transport({ sleep, rateLimitMaxWaitSeconds: 300 }).request('getProject', {
+        path: { projectKey: 'MOTIR' },
+      });
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+    expect(out).toEqual([]);
+    expect(err).toEqual([
+      `Rate limited by ${stub.url}; waiting 5s before retrying getProject (attempt 1, 0s of 300s used).\n`,
+    ]);
+  });
+
+  it('gives up with a RateLimitError naming the wait once the bounded total runs out', async () => {
+    stub.fallback = REFUSAL(7);
+    const { sleep, waits } = recordingSleep();
+
+    const error = await transport({ sleep, onRateLimitWait: () => {}, rateLimitMaxWaitSeconds: 20 })
+      .request('getProject', { path: { projectKey: 'MOTIR' } })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(RateLimitError);
+    expect(error).not.toBeInstanceOf(ResponseShapeError);
+    expect(error).not.toBeInstanceOf(NotFoundError);
+    expect((error as CliError).exitCode).toBe(1);
+    expect((error as CliError).message).toContain('gave up after waiting 14 seconds');
+    expect(waits).toHaveLength(2);
+    expect(stub.received).toHaveLength(3);
+  });
+
+  it.each([500, 503])('a %i is sent once and mapped as before — never retried', async (status) => {
+    stub.queue({ status, body: { error: 'Something went wrong.' } });
+    const { sleep, waits } = recordingSleep();
+    const error = await transport({ sleep })
+      .request('getProject', { path: { projectKey: 'MOTIR' } })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(CliError);
+    expect((error as CliError).message).toContain(`The Motir server failed (${status})`);
+    expect(stub.received).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
+  it('a fetch that rejects is attempted once — never retried', async () => {
+    let calls = 0;
+    const { sleep, waits } = recordingSleep();
+    const error = await transport({
+      sleep,
+      fetchImpl: () => {
+        calls += 1;
+        return Promise.reject(new Error('socket hang up'));
+      },
+    })
+      .request('getProject', { path: { projectKey: 'MOTIR' } })
+      .catch((e: unknown) => e);
+    expect((error as CliError).message).toContain('Could not reach');
+    expect(calls).toBe(1);
+    expect(waits).toEqual([]);
+  });
+
+  it.each([
+    ['claimed', 'RETRY-1'],
+    ['mine', 'RETRY-2'],
+  ])('a refused claim retried once answers %s — the claim logic ran once', async (outcome, key) => {
+    const fixtures = __fixtures as { claim: (key: string) => Record<string, unknown> };
+    const claimed = fixtures.claim(key);
+    stub.queue(REFUSAL(2), { status: 200, body: { ...claimed, outcome } });
+    const { sleep } = recordingSleep();
+
+    const result = await transport({ sleep, onRateLimitWait: () => {} }).request('claimWorkItem', {
+      path: { key },
+    });
+
+    expect(result.outcome).toBe(outcome);
+    expect(stub.received.map((r) => `${r.method} ${r.url}`)).toEqual([
+      `POST /api/v1/work-items/${key}/claim`,
+      `POST /api/v1/work-items/${key}/claim`,
+    ]);
+  });
+});
+
+describe('readRetryAfterSeconds (MOTIR-8602)', () => {
+  const NOW = new Date(Date.UTC(2026, 9, 14, 12, 0, 0));
+  const nowSeconds = NOW.getTime() / 1000;
+  const res = (headers: Record<string, string>) => new Response(null, { status: 429, headers });
+
+  it.each([
+    ['the body field first', res({ 'retry-after': '30' }), { retryAfterSeconds: 7 }, 7],
+    ['Retry-After when the body has none', res({ 'retry-after': '30' }), {}, 30],
+    [
+      'a string body field is ignored',
+      res({ 'retry-after': '12' }),
+      { retryAfterSeconds: '7' },
+      12,
+    ],
+    ['a Retry-After of 0 is floored to 1', res({ 'retry-after': '0' }), {}, 1],
+    ['x-ratelimit-reset minus now', res({ 'x-ratelimit-reset': String(nowSeconds + 25) }), {}, 25],
+    ['the default when nothing is usable', res({ 'retry-after': 'soon' }), undefined, 10],
+    ['never the error sentence', res({}), { error: 'Too many requests. Retry in 42 seconds.' }, 10],
+  ])('%s', (_label, response, body, expected) => {
+    expect(readRetryAfterSeconds(response, body, NOW)).toBe(expected);
+  });
+});
+
+describe('the bounded total (MOTIR-8602)', () => {
+  it('reads MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS, falling back to 300 on nonsense', () => {
+    expect(rateLimitMaxWaitFromEnv({ MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS: '5' })).toBe(5);
+    expect(rateLimitMaxWaitFromEnv({ MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS: 'lots' })).toBe(300);
+    expect(rateLimitMaxWaitFromEnv({ MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS: '-1' })).toBe(300);
+    expect(rateLimitMaxWaitFromEnv({})).toBe(DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS);
+  });
+
+  it('caps the waiting at the env value when none is passed', async () => {
+    const before = process.env['MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS'];
+    process.env['MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS'] = '5';
+    try {
+      stub.fallback = REFUSAL(3);
+      const { sleep, waits } = recordingSleep();
+      const error = await transport({ sleep, onRateLimitWait: () => {} })
+        .request('getProject', { path: { projectKey: 'MOTIR' } })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(RateLimitError);
+      expect(waits).toHaveLength(1);
+    } finally {
+      if (before === undefined) delete process.env['MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS'];
+      else process.env['MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS'] = before;
+    }
   });
 });
