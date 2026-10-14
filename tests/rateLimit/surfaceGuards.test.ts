@@ -1051,3 +1051,23 @@ describe('the routes are actually WIRED to the guards', () => {
     for (const tool of MCP_BILLABLE_TOOLS) expect(declaredEverywhere).toContain(tool);
   });
 });
+
+describe('a planning job’s job-token reads draw their own, larger budget (MOTIR-8423)', () => {
+  it('ai:internal is NOT metered by the interactive MOTIR_AI_RATE_LIMIT', async () => {
+    process.env['MOTIR_AI_RATE_LIMIT'] = '1';
+    const c = { userId: 'u-8423', workspaceId: 'w-8423' };
+    for (let i = 0; i < 5; i++) expect(await enforceAiRateLimit(c, 'ai:internal')).toBeNull();
+  });
+
+  it('and is still bounded by MOTIR_AI_INTERNAL_RATE_LIMIT', async () => {
+    process.env['MOTIR_AI_INTERNAL_RATE_LIMIT'] = '1';
+    try {
+      await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+      const c = { userId: 'u-8423b', workspaceId: 'w-8423b' };
+      expect(await enforceAiRateLimit(c, 'ai:internal')).toBeNull();
+      expect(await enforceAiRateLimit(c, 'ai:internal')).not.toBeNull();
+    } finally {
+      delete process.env['MOTIR_AI_INTERNAL_RATE_LIMIT'];
+    }
+  });
+});
