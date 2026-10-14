@@ -8652,6 +8652,20 @@
       "cancelledHint": "Je kwam terug voordat je op GitHub klaar was. Er is niets misgegaan: er is niets gekoppeld en er gaat niets verloren. Probeer het opnieuw wanneer je zover bent.",
       "tryAgainCta": "Opnieuw proberen",
       "changeReposCta": "Repository's kiezen op GitHub",
+      "starting": "GitHub wordt geopend…",
+      "ownerPendingOpenCta": "GitHub openen",
+      "readFailedTitle": "Motir kon de koppeling nu niet controleren",
+      "readFailedHint": "Niets wat je op GitHub hebt gedaan gaat verloren. Deze stap controleert opnieuw als je terugkomt naar dit tabblad, of nu meteen.",
+      "recheckCta": "Opnieuw controleren",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Gekoppeld",
+        "alreadyConnected": "Al gekoppeld",
+        "chooseRepos": "Repository's kiezen",
+        "ownerPending": "Wachten op een eigenaar",
+        "expired": "Link verlopen",
+        "notConnected": "Niet gekoppeld"
+      },
       "outcome": {
         "install_expiredTitle": "De GitHub-link is verlopen terwijl je daar was",
         "install_expiredHint": "Er is niets misgegaan en er is niets gekoppeld. Probeer het opnieuw vanuit deze stap.",
@@ -8666,7 +8680,9 @@
         "repo_unavailableTitle": "Een repository is al ergens anders gekoppeld",
         "repo_unavailableHint": "Een van de gekozen repository's hoort al bij een andere organisatie en is daarom hier niet toegevoegd. Kies andere repository's op GitHub.",
         "installation_not_accessibleTitle": "Motir kan dat GitHub-account niet voor je koppelen",
-        "installation_not_accessibleHint": "Je GitHub-gebruiker kan deze installatie niet zien, dus er is niets gekoppeld. Een eigenaar van het GitHub-account kan je toegang geven."
+        "installation_not_accessibleHint": "Je GitHub-gebruiker kan deze installatie niet zien, dus er is niets gekoppeld. Een eigenaar van het GitHub-account kan je toegang geven.",
+        "not_configuredTitle": "GitHub is niet ingesteld op deze installatie",
+        "not_configuredHint": "Deze Motir-installatie heeft nog geen GitHub-app, dus GitHub kan hier niet worden gekoppeld. Wie de installatie beheert, kan dit instellen."
       }
     },
     "index": {

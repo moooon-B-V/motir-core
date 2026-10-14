@@ -8655,6 +8655,20 @@
       "cancelledHint": "Sei tornato prima di finire su GitHub. Non è andato storto nulla: non è stato collegato nulla e non si è perso nulla. Riprova quando vuoi.",
       "tryAgainCta": "Riprova",
       "changeReposCta": "Scegli i repository su GitHub",
+      "starting": "Apertura di GitHub…",
+      "ownerPendingOpenCta": "Apri GitHub",
+      "readFailedTitle": "Motir non è riuscito a verificare il collegamento in questo momento",
+      "readFailedHint": "Niente di ciò che hai fatto su GitHub va perso. Questo passaggio ricontrolla quando torni a questa tab, oppure subito.",
+      "recheckCta": "Ricontrolla",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Collegato",
+        "alreadyConnected": "Già collegato",
+        "chooseRepos": "Scegli i repository",
+        "ownerPending": "In attesa di un proprietario",
+        "expired": "Link scaduto",
+        "notConnected": "Non collegato"
+      },
       "outcome": {
         "install_expiredTitle": "Il link di GitHub è scaduto mentre eri lì",
         "install_expiredHint": "Non è andato storto nulla e non è stato collegato nulla. Riprova da questo passaggio.",
@@ -8669,7 +8683,9 @@
         "repo_unavailableTitle": "Un repository è già collegato altrove",
         "repo_unavailableHint": "Uno dei repository scelti appartiene già a un’altra organizzazione, quindi non è stato aggiunto qui. Scegli altri repository su GitHub.",
         "installation_not_accessibleTitle": "Motir non può collegare quell’account GitHub per te",
-        "installation_not_accessibleHint": "Il tuo utente GitHub non vede questa installazione, quindi non è stato collegato nulla. Un proprietario dell’account GitHub può darti l’accesso."
+        "installation_not_accessibleHint": "Il tuo utente GitHub non vede questa installazione, quindi non è stato collegato nulla. Un proprietario dell’account GitHub può darti l’accesso.",
+        "not_configuredTitle": "GitHub non è configurato in questa installazione",
+        "not_configuredHint": "Questa installazione di Motir non ha ancora una GitHub App, quindi GitHub non può essere collegato da qui. Chi gestisce l’installazione può configurarla."
       }
     },
     "index": {

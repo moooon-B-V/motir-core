@@ -8655,6 +8655,20 @@
       "cancelledHint": "Você voltou antes de concluir no GitHub. Nada deu errado: nada foi conectado e nada foi perdido. Tente de novo quando quiser.",
       "tryAgainCta": "Tentar de novo",
       "changeReposCta": "Escolher repositórios no GitHub",
+      "starting": "Abrindo o GitHub…",
+      "ownerPendingOpenCta": "Abrir o GitHub",
+      "readFailedTitle": "O Motir não conseguiu verificar a conexão agora",
+      "readFailedHint": "Nada do que você fez no GitHub se perdeu. Esta etapa verifica de novo quando você voltar a esta aba, ou agora mesmo.",
+      "recheckCta": "Verificar de novo",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Conectado",
+        "alreadyConnected": "Já conectado",
+        "chooseRepos": "Escolher repositórios",
+        "ownerPending": "Aguardando um proprietário",
+        "expired": "Link expirado",
+        "notConnected": "Não conectado"
+      },
       "outcome": {
         "install_expiredTitle": "O link do GitHub expirou enquanto você estava lá",
         "install_expiredHint": "Nada deu errado, e nada foi conectado. Tente de novo a partir desta etapa.",
@@ -8669,7 +8683,9 @@
         "repo_unavailableTitle": "Um repositório já está conectado em outro lugar",
         "repo_unavailableHint": "Um dos repositórios escolhidos já pertence a outra organização, então não foi adicionado aqui. Escolha outros repositórios no GitHub.",
         "installation_not_accessibleTitle": "O Motir não pode vincular essa conta do GitHub para você",
-        "installation_not_accessibleHint": "Seu usuário do GitHub não consegue ver esta instalação, então nada foi vinculado. Um proprietário da conta do GitHub pode dar acesso a você."
+        "installation_not_accessibleHint": "Seu usuário do GitHub não consegue ver esta instalação, então nada foi vinculado. Um proprietário da conta do GitHub pode dar acesso a você.",
+        "not_configuredTitle": "O GitHub não está configurado nesta implantação",
+        "not_configuredHint": "Esta implantação do Motir ainda não tem um GitHub App, então não é possível conectar o GitHub aqui. Quem administra a implantação pode configurá-lo."
       }
     },
     "index": {

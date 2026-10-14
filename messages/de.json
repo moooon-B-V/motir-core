@@ -8655,6 +8655,20 @@
       "cancelledHint": "Sie sind zurückgekommen, bevor Sie auf GitHub fertig waren. Nichts ist schiefgegangen: Es wurde nichts verbunden und nichts geht verloren. Versuchen Sie es erneut, wenn Sie bereit sind.",
       "tryAgainCta": "Erneut versuchen",
       "changeReposCta": "Repositorys auf GitHub auswählen",
+      "starting": "GitHub wird geöffnet…",
+      "ownerPendingOpenCta": "GitHub öffnen",
+      "readFailedTitle": "Motir konnte die Verbindung gerade nicht prüfen",
+      "readFailedHint": "Nichts, was Sie auf GitHub getan haben, geht verloren. Dieser Schritt prüft erneut, wenn Sie zu diesem Tab zurückkehren, oder jetzt sofort.",
+      "recheckCta": "Erneut prüfen",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Verbunden",
+        "alreadyConnected": "Bereits verbunden",
+        "chooseRepos": "Repositorys auswählen",
+        "ownerPending": "Warten auf einen Inhaber",
+        "expired": "Link abgelaufen",
+        "notConnected": "Nicht verbunden"
+      },
       "outcome": {
         "install_expiredTitle": "Der GitHub-Link ist abgelaufen, während Sie dort waren",
         "install_expiredHint": "Nichts ist schiefgegangen, und es wurde nichts verbunden. Versuchen Sie es von diesem Schritt aus erneut.",
@@ -8669,7 +8683,9 @@
         "repo_unavailableTitle": "Ein Repository ist bereits anderswo verbunden",
         "repo_unavailableHint": "Eines der ausgewählten Repositorys gehört bereits zu einer anderen Organisation und wurde deshalb hier nicht hinzugefügt. Wählen Sie auf GitHub andere Repositorys aus.",
         "installation_not_accessibleTitle": "Motir kann dieses GitHub-Konto nicht für Sie verknüpfen",
-        "installation_not_accessibleHint": "Ihr GitHub-Benutzer kann diese Installation nicht sehen, daher wurde nichts verknüpft. Ein Inhaber des GitHub-Kontos kann Ihnen Zugriff geben."
+        "installation_not_accessibleHint": "Ihr GitHub-Benutzer kann diese Installation nicht sehen, daher wurde nichts verknüpft. Ein Inhaber des GitHub-Kontos kann Ihnen Zugriff geben.",
+        "not_configuredTitle": "GitHub ist in dieser Bereitstellung nicht eingerichtet",
+        "not_configuredHint": "Diese Motir-Bereitstellung hat noch keine GitHub App, daher lässt sich GitHub hier nicht verbinden. Wer diese Bereitstellung betreibt, kann sie einrichten."
       }
     },
     "index": {

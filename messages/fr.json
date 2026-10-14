@@ -8655,6 +8655,20 @@
       "cancelledHint": "Vous êtes revenu avant d'avoir terminé sur GitHub. Rien ne s'est mal passé : rien n'a été connecté et rien n'est perdu. Réessayez quand vous le souhaitez.",
       "tryAgainCta": "Réessayer",
       "changeReposCta": "Choisir les dépôts sur GitHub",
+      "starting": "Ouverture de GitHub…",
+      "ownerPendingOpenCta": "Ouvrir GitHub",
+      "readFailedTitle": "Motir n'a pas pu vérifier la connexion pour l'instant",
+      "readFailedHint": "Rien de ce que vous avez fait sur GitHub n'est perdu. Cette étape vérifie à nouveau quand vous revenez sur cet onglet, ou tout de suite.",
+      "recheckCta": "Vérifier à nouveau",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Connecté",
+        "alreadyConnected": "Déjà connecté",
+        "chooseRepos": "Choisir les dépôts",
+        "ownerPending": "En attente d'un propriétaire",
+        "expired": "Lien expiré",
+        "notConnected": "Non connecté"
+      },
       "outcome": {
         "install_expiredTitle": "Le lien GitHub a expiré pendant que vous y étiez",
         "install_expiredHint": "Rien ne s'est mal passé, et rien n'a été connecté. Réessayez depuis cette étape.",
@@ -8669,7 +8683,9 @@
         "repo_unavailableTitle": "Un dépôt est déjà connecté ailleurs",
         "repo_unavailableHint": "L'un des dépôts choisis appartient déjà à une autre organisation, il n'a donc pas été ajouté ici. Choisissez d'autres dépôts sur GitHub.",
         "installation_not_accessibleTitle": "Motir ne peut pas associer ce compte GitHub pour vous",
-        "installation_not_accessibleHint": "Votre utilisateur GitHub ne voit pas cette installation : rien n'a donc été associé. Un propriétaire du compte GitHub peut vous donner accès."
+        "installation_not_accessibleHint": "Votre utilisateur GitHub ne voit pas cette installation : rien n'a donc été associé. Un propriétaire du compte GitHub peut vous donner accès.",
+        "not_configuredTitle": "GitHub n'est pas configuré sur ce déploiement",
+        "not_configuredHint": "Ce déploiement de Motir n'a pas encore d'application GitHub, donc GitHub ne peut pas être connecté ici. La personne qui gère ce déploiement peut la configurer."
       }
     },
     "index": {

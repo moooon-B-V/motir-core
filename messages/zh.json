@@ -8642,6 +8642,20 @@
       "cancelledHint": "你在 GitHub 上完成之前就回来了。并未出错：没有连接任何内容，也没有丢失任何内容。准备好后随时重试。",
       "tryAgainCta": "重试",
       "changeReposCta": "在 GitHub 上选择仓库",
+      "starting": "正在打开 GitHub……",
+      "ownerPendingOpenCta": "打开 GitHub",
+      "readFailedTitle": "Motir 暂时无法检查连接",
+      "readFailedHint": "你在 GitHub 上做的一切都不会丢失。回到这个标签页时，此步骤会再次检查，你也可以现在检查。",
+      "recheckCta": "再次检查",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "已连接",
+        "alreadyConnected": "已经连接",
+        "chooseRepos": "选择仓库",
+        "ownerPending": "等待所有者",
+        "expired": "链接已过期",
+        "notConnected": "未连接"
+      },
       "outcome": {
         "install_expiredTitle": "你停留在 GitHub 期间，链接已过期",
         "install_expiredHint": "并未出错，也没有连接任何内容。请从这一步重试。",
@@ -8656,7 +8670,9 @@
         "repo_unavailableTitle": "某个仓库已在别处连接",
         "repo_unavailableHint": "所选仓库中有一个已属于另一个组织，因此未在此添加。请在 GitHub 上选择其他仓库。",
         "installation_not_accessibleTitle": "Motir 无法为你关联该 GitHub 账号",
-        "installation_not_accessibleHint": "你的 GitHub 用户看不到此安装，因此没有关联任何内容。该 GitHub 账号的所有者可以为你开通访问权限。"
+        "installation_not_accessibleHint": "你的 GitHub 用户看不到此安装，因此没有关联任何内容。该 GitHub 账号的所有者可以为你开通访问权限。",
+        "not_configuredTitle": "此部署尚未设置 GitHub",
+        "not_configuredHint": "此 Motir 部署还没有 GitHub App，所以无法在这里连接 GitHub。运行此部署的人可以完成设置。"
       }
     },
     "index": {

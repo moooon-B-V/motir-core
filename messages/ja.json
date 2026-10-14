@@ -8652,6 +8652,20 @@
       "cancelledHint": "GitHub での操作を終える前に戻ってきました。問題は発生していません。何も接続されておらず、失われたものもありません。準備ができたらもう一度お試しください。",
       "tryAgainCta": "もう一度試す",
       "changeReposCta": "GitHub でリポジトリを選択",
+      "starting": "GitHub を開いています…",
+      "ownerPendingOpenCta": "GitHub を開く",
+      "readFailedTitle": "Motir は今、接続を確認できませんでした",
+      "readFailedHint": "GitHub で行った操作は失われていません。このタブに戻ったときに、このステップがもう一度確認します。今すぐ確認することもできます。",
+      "recheckCta": "もう一度確認",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "接続済み",
+        "alreadyConnected": "すでに接続済み",
+        "chooseRepos": "リポジトリを選択",
+        "ownerPending": "オーナーを待っています",
+        "expired": "リンクの期限切れ",
+        "notConnected": "未接続"
+      },
       "outcome": {
         "install_expiredTitle": "GitHub での操作中にリンクの有効期限が切れました",
         "install_expiredHint": "問題は発生しておらず、何も接続されていません。このステップからもう一度お試しください。",
@@ -8666,7 +8680,9 @@
         "repo_unavailableTitle": "リポジトリがすでに別の場所で接続されています",
         "repo_unavailableHint": "選択したリポジトリの 1 つがすでに別の組織に属しているため、ここには追加されませんでした。GitHub で別のリポジトリを選択してください。",
         "installation_not_accessibleTitle": "Motir はその GitHub アカウントをリンクできません",
-        "installation_not_accessibleHint": "あなたの GitHub ユーザーからこのインストールが見えないため、何もリンクされていません。GitHub アカウントのオーナーがアクセス権を付与できます。"
+        "installation_not_accessibleHint": "あなたの GitHub ユーザーからこのインストールが見えないため、何もリンクされていません。GitHub アカウントのオーナーがアクセス権を付与できます。",
+        "not_configuredTitle": "このデプロイでは GitHub が設定されていません",
+        "not_configuredHint": "この Motir のデプロイにはまだ GitHub App がないため、ここから GitHub を接続できません。デプロイの運用者が設定できます。"
       }
     },
     "index": {

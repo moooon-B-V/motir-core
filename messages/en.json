@@ -8649,6 +8649,20 @@
       "cancelledHint": "You came back before finishing on GitHub. Nothing went wrong: nothing was connected and nothing is lost. Try again whenever you're ready.",
       "tryAgainCta": "Try again",
       "changeReposCta": "Choose repositories on GitHub",
+      "starting": "Opening GitHub…",
+      "ownerPendingOpenCta": "Open GitHub",
+      "readFailedTitle": "Motir couldn't check the connection just now",
+      "readFailedHint": "Nothing you did on GitHub is lost. This step checks again when you come back to this tab, or now.",
+      "recheckCta": "Check again",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Connected",
+        "alreadyConnected": "Already connected",
+        "chooseRepos": "Choose repositories",
+        "ownerPending": "Waiting on an owner",
+        "expired": "Link expired",
+        "notConnected": "Not connected"
+      },
       "outcome": {
         "install_expiredTitle": "The GitHub link expired while you were there",
         "install_expiredHint": "Nothing went wrong, and nothing was connected. Try again from this step.",
@@ -8663,7 +8677,9 @@
         "repo_unavailableTitle": "A repository is already connected elsewhere",
         "repo_unavailableHint": "One of the chosen repositories already belongs to another organisation, so it wasn't added here. Choose other repositories on GitHub.",
         "installation_not_accessibleTitle": "Motir can't link that GitHub account for you",
-        "installation_not_accessibleHint": "Your GitHub user can't see this installation, so nothing was linked. An owner of the GitHub account can give you access."
+        "installation_not_accessibleHint": "Your GitHub user can't see this installation, so nothing was linked. An owner of the GitHub account can give you access.",
+        "not_configuredTitle": "GitHub isn't set up on this deployment",
+        "not_configuredHint": "This Motir deployment has no GitHub App yet, so GitHub can't be connected from here. Whoever runs the deployment can set it up."
       }
     },
     "index": {
