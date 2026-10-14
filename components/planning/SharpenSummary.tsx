@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Bot, Check, Copy } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { GrillingBranch, SettledAnswer, SharpenAssumption } from '@/lib/ai/types';
 import type { SharpenSessionDto } from '@/lib/dto/sharpen';
 
@@ -46,6 +47,7 @@ function answersText(settled: SettledAnswer[], assumptions: SharpenAssumption[])
 
 export function SharpenSummary({ session, cardKey }: SharpenSummaryProps) {
   const t = useTranslations('sharpen.summary');
+  const routes = useReaderRoutes();
   const { settled, assumptions } = session;
   if (settled.length === 0 && assumptions.length === 0) return null;
 
@@ -57,7 +59,7 @@ export function SharpenSummary({ session, cardKey }: SharpenSummaryProps) {
   const writeBack = session.writeBack;
   const card = cardKey ? (
     <Link
-      href={`/items/${encodeURIComponent(cardKey)}`}
+      href={routes.item(cardKey)}
       className="font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       {cardKey}
