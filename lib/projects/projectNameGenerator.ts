@@ -1,6 +1,12 @@
 // The generated name a workspace's first project is seeded with
-// (Story MOTIR-8239 · Subtask MOTIR-8526) — "Quiet Harbor" rather than a copy
-// of the workspace's name.
+// (Story MOTIR-8239 · Subtask MOTIR-8526) — "quiet-harbor-4821" rather than a
+// copy of the workspace's name.
+//
+// ⚠️ IT IS MEANT TO LOOK RANDOM. Lowercase, hyphenated, with a four-digit
+// number on the end: the shape says "a placeholder somebody drew for you", so
+// the person goes to project settings and renames it (Mo's design refusal on
+// MOTIR-8532, format chosen 2026-10-14). The name is deliberately NOT shown on
+// the onboarding entrance.
 //
 // ⚠️ PURE, AND IMPORT-FREE ON PURPOSE. Two curated lists and one draw, nothing
 // else: no Prisma client, no message catalog, no locale. A service, a script
@@ -24,7 +30,7 @@
 //
 // Every ADJECTIVE is at least five letters long. The identifier is the first
 // five A–Z characters of the whole name, so a five-letter-or-longer adjective
-// makes the key the adjective's own opening ("Quiet Harbor" → QUIET) rather
+// makes the key the adjective's own opening ("quiet-harbor-4821" → QUIET) rather
 // than a fragment spliced across the two words — and the wider the spread of
 // adjective openings, the more often a collision re-draw lands on a free key.
 
@@ -303,32 +309,35 @@ export const PROJECT_NAME_NOUNS: readonly string[] = [
   'zephyr',
 ];
 
+/** The four-digit number's range: 1000–9999, so it always reads as four digits. */
+export const PROJECT_NAME_NUMBER_MIN = 1000;
+export const PROJECT_NAME_NUMBER_MAX = 9999;
+
 /**
- * Draw one adjective and one noun and return them Title-Cased and joined by a
- * single space — `Quiet Harbor`.
+ * Draw one adjective, one noun and one four-digit number and return them
+ * lowercase and joined by hyphens — `quiet-harbor-4821`.
  *
  * `random` is the ONLY source of randomness (the repository's shipped pattern,
- * `retryBackoffMs` in `lib/jobs/engine/worker.ts`), read exactly twice per call:
- * adjective first, noun second. So a pinned source pins the pair, which is
- * what the seeding's collision and exhaustion tests rely on.
+ * `retryBackoffMs` in `lib/jobs/engine/worker.ts`), read exactly three times
+ * per call: adjective, noun, number. So a pinned source pins the name, which
+ * is what the seeding's collision and exhaustion tests rely on.
  *
- * Each index is clamped to its list: `Math.random` never returns 1, but an
+ * Each index is clamped to its range: `Math.random` never returns 1, but an
  * injected source may, and `Math.floor(1 * length)` would index past the end
  * and yield `undefined` on a path that must not fail.
  */
 export function generateProjectName(random: () => number = Math.random): string {
   const adjective = pick(PROJECT_NAME_ADJECTIVES, random());
   const noun = pick(PROJECT_NAME_NOUNS, random());
-  return `${titleCase(adjective)} ${titleCase(noun)}`;
+  const span = PROJECT_NAME_NUMBER_MAX - PROJECT_NAME_NUMBER_MIN + 1;
+  const number = PROJECT_NAME_NUMBER_MIN + clampIndex(random(), span);
+  return `${adjective}-${noun}-${number}`;
 }
 
 function pick(list: readonly string[], r: number): string {
-  const index = Math.min(list.length - 1, Math.max(0, Math.floor(r * list.length)));
-  return list[index]!;
+  return list[clampIndex(r, list.length)]!;
 }
 
-// Plain `toUpperCase`, never the locale-sensitive `toLocaleUpperCase`, so the
-// name is character-identical in every app language.
-function titleCase(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
+function clampIndex(r: number, length: number): number {
+  return Math.min(length - 1, Math.max(0, Math.floor(r * length)));
 }

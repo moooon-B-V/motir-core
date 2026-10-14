@@ -463,8 +463,8 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
       const seeded = await projectsService.getActiveProject(owner.id, workspace.id);
       const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
       expect(row.lastActiveProjectId).toBe(seeded!.id);
-      // A generated adjective-noun name (MOTIR-8239), not the workspace's.
-      expect(seeded!.name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+      // A generated, random-looking name (MOTIR-8239), not the workspace's.
+      expect(seeded!.name).toMatch(/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/);
       expect(seeded!.name).not.toBe('Empty');
     });
 

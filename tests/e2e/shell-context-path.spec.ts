@@ -183,10 +183,10 @@ test.describe('the shell’s context path', () => {
     await expect(bar(page).getByRole('button', { name: 'Create your first project' })).toHaveCount(
       0,
     );
-    // A generated adjective-noun name, which is what `ensureDefaultProject`
+    // A generated, random-looking name, which is what `ensureDefaultProject`
     // draws (MOTIR-8239) — not the workspace's.
     const seededSwitcher = bar(page).getByRole('button', { name: 'Switch project' });
-    await expect(seededSwitcher).toContainText(/[A-Z][a-z]+ [A-Z][a-z]+/);
+    await expect(seededSwitcher).toContainText(/[a-z]+-[a-z]+-[1-9][0-9]{3}/);
     await expect(seededSwitcher).not.toContainText('Empty');
   });
 

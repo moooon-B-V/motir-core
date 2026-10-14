@@ -18,13 +18,13 @@ import { truncateAuthTables } from '../helpers/db';
 
 // Story MOTIR-8239 · Subtask MOTIR-8528 — the seeding's collision ladder.
 //
-// `ensureDefaultProject` names the project it seeds with a drawn adjective-noun
-// pair and derives the identifier and slug from it. When that candidate is
-// taken it climbs three rungs: (1) a FRESH draw, so the name, the key and the
-// slug keep describing the same words; (2) once the draws are spent, the last
-// drawn pair with the shipped numeric identifier suffix and random slug
-// suffix, recorded as one structured warning; (3) `IdentifierCollisionError`
-// only when that suffixed candidate is held as well.
+// `ensureDefaultProject` names the project it seeds with a drawn
+// `adjective-noun-dddd` name and derives the identifier and slug from it. When
+// that candidate is taken it climbs three rungs: (1) a FRESH draw, so the name,
+// the key and the slug keep describing the same words; (2) once the draws are
+// spent, the last drawn name with the shipped numeric identifier suffix and
+// random slug suffix, recorded as one structured warning; (3)
+// `IdentifierCollisionError` only when that suffixed candidate is held as well.
 //
 // ⚠️ The DRAW is pinned by mocking the generator module — the production
 // signature of `ensureDefaultProject` carries no test-only parameter. Every
@@ -111,10 +111,10 @@ async function liveProjectsIn(workspaceId: string) {
 }
 
 describe('rung 1 — a colliding draw is redrawn', () => {
-  it('a drawn identifier held by an archived project yields the SECOND pair, unsuffixed', async () => {
+  it('a drawn identifier held by an archived project yields the SECOND draw, unsuffixed', async () => {
     const { owner, workspace } = await emptyWorkspace();
     await plantArchived(owner, workspace.id, 'Planted', 'QUIET');
-    pinDraws('Quiet Harbor', 'Amber Comet');
+    pinDraws('quiet-harbor-4821', 'amber-comet-1307');
 
     const seeded = await projectsService.ensureDefaultProject({
       workspaceId: workspace.id,
@@ -122,12 +122,12 @@ describe('rung 1 — a colliding draw is redrawn', () => {
     });
 
     expect(generateProjectName).toHaveBeenCalledTimes(2);
-    expect(seeded!.name).toBe('Amber Comet');
-    expect(seeded!.identifier).toBe(deriveIdentifierBase('Amber Comet'));
-    expect(seeded!.slug).toBe(slugify('Amber Comet'));
+    expect(seeded!.name).toBe('amber-comet-1307');
+    expect(seeded!.identifier).toBe(deriveIdentifierBase('amber-comet-1307'));
+    expect(seeded!.slug).toBe(slugify('amber-comet-1307'));
     expect(seeded!.identifier).toBe('AMBER');
-    expect(seeded!.slug).toBe('amber-comet');
-    // Nothing of the first pair reaches the created project.
+    expect(seeded!.slug).toBe('amber-comet-1307');
+    // Nothing of the first draw reaches the created project.
     expect(seeded!.name).not.toMatch(/quiet|harbor/i);
     expect(seeded!.slug).not.toMatch(/quiet|harbor/);
     expect(seedingWarnings()).toHaveLength(0);
@@ -158,22 +158,22 @@ describe('rung 1 — a colliding draw is redrawn', () => {
         where: { workspaceId: workspace.id, identifier: 'QUIET' },
       }),
     ).toBe(1);
-    pinDraws('Quiet Harbor', 'Amber Comet');
+    pinDraws('quiet-harbor-4821', 'amber-comet-1307');
 
     const seeded = await projectsService.ensureDefaultProject({
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });
 
-    expect(seeded!.name).toBe('Amber Comet');
+    expect(seeded!.name).toBe('amber-comet-1307');
     expect(seeded!.identifier).toBe('AMBER');
-    expect(seeded!.slug).toBe('amber-comet');
+    expect(seeded!.slug).toBe('amber-comet-1307');
     expect(seedingWarnings()).toHaveLength(0);
   });
 
   it('a usable first draw is taken as drawn, with no warning', async () => {
     const { owner, workspace } = await emptyWorkspace();
-    pinDraws('Quiet Harbor');
+    pinDraws('quiet-harbor-4821');
 
     const seeded = await projectsService.ensureDefaultProject({
       workspaceId: workspace.id,
@@ -181,19 +181,19 @@ describe('rung 1 — a colliding draw is redrawn', () => {
     });
 
     expect(generateProjectName).toHaveBeenCalledTimes(1);
-    expect(seeded!.name).toBe('Quiet Harbor');
+    expect(seeded!.name).toBe('quiet-harbor-4821');
     expect(seeded!.identifier).toBe('QUIET');
-    expect(seeded!.slug).toBe('quiet-harbor');
+    expect(seeded!.slug).toBe('quiet-harbor-4821');
     expect(seedingWarnings()).toHaveLength(0);
   });
 });
 
 describe('rung 2 — the draws are spent', () => {
-  it('completes on the last drawn pair with the shipped suffixes and ONE warning', async () => {
+  it('completes on the last drawn name with the shipped suffixes and ONE warning', async () => {
     const { owner, workspace } = await emptyWorkspace();
     await plantArchived(owner, workspace.id, 'Planted', 'QUIET');
-    // Every draw is the same pair, so every fresh draw collides.
-    pinDraws('Quiet Harbor');
+    // Every draw is the same name, so every fresh draw collides.
+    pinDraws('quiet-harbor-4821');
 
     const seeded = await projectsService.ensureDefaultProject({
       workspaceId: workspace.id,
@@ -203,12 +203,12 @@ describe('rung 2 — the draws are spent', () => {
     expect(seeded).not.toBeNull();
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: seeded!.id } });
     expect(row.workspaceId).toBe(workspace.id);
-    expect(seeded!.name).toBe('Quiet Harbor');
+    expect(seeded!.name).toBe('quiet-harbor-4821');
     // The shipped numeric suffix on the drawn base: distinct from the held key.
     expect(seeded!.identifier).toMatch(/^QUIE\d$/);
     expect(seeded!.identifier).not.toBe('QUIET');
     // The shipped random slug suffix on the drawn slug.
-    expect(seeded!.slug).toMatch(/^quiet-harbor-[a-z0-9]+$/);
+    expect(seeded!.slug).toMatch(/^quiet-harbor-4821-[a-z0-9]+$/);
     expect(await liveProjectsIn(workspace.id)).toHaveLength(1);
 
     const warnings = seedingWarnings();
@@ -216,7 +216,7 @@ describe('rung 2 — the draws are spent', () => {
     const [, payload] = warnings[0]!;
     expect(payload).toMatchObject({
       workspaceId: workspace.id,
-      name: 'Quiet Harbor',
+      name: 'quiet-harbor-4821',
       identifier: seeded!.identifier,
     });
   });
@@ -227,7 +227,7 @@ describe('rung 3 — every candidate the loop knows is held', () => {
     const { owner, workspace } = await emptyWorkspace();
     await plantArchived(owner, workspace.id, 'Planted', 'QUIET');
     await plantArchived(owner, workspace.id, 'Planted again', 'QUIE1');
-    pinDraws('Quiet Harbor');
+    pinDraws('quiet-harbor-4821');
 
     const rejection = projectsService.ensureDefaultProject({
       workspaceId: workspace.id,
@@ -244,15 +244,15 @@ describe('rung 3 — every candidate the loop knows is held', () => {
 describe('createProject — a person-named project is never redrawn', () => {
   it('keeps the name the caller passed when its identifier and slug are taken', async () => {
     const { owner, workspace } = await emptyWorkspace();
-    await plantArchived(owner, workspace.id, 'Quiet Harbor', 'QUIET');
+    await plantArchived(owner, workspace.id, 'quiet-harbor-4821', 'QUIET');
 
     const created = await projectsService.createProject({
       workspaceId: workspace.id,
       actorUserId: owner.id,
-      name: 'Quiet Harbor',
+      name: 'quiet-harbor-4821',
     });
 
-    expect(created.name).toBe('Quiet Harbor');
+    expect(created.name).toBe('quiet-harbor-4821');
     expect(created.identifier).not.toBe('QUIET');
     expect(created.identifier).toMatch(/^QUIE\d$/);
     expect(generateProjectName).not.toHaveBeenCalled();

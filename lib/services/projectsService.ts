@@ -593,15 +593,15 @@ export const projectsService = {
    * A taken candidate — a unique violation or a reserved retired key, which
    * the loop cannot tell apart and does not need to — advances it:
    *
-   *   1. a FRESH draw, for every attempt but the last, with that pair's name,
+   *   1. a FRESH draw, for every attempt but the last, with that draw's name,
    *      identifier and slug derived together — so the name, the key and the
    *      address keep describing the same words. A suffixed key would make the
    *      key disagree with the name the person reads.
-   *   2. once the draws are spent, the LAST drawn pair with the shipped
+   *   2. once the draws are spent, the LAST drawn name with the shipped
    *      numeric identifier suffix and random slug suffix. The seeding still
    *      COMPLETES — an exhausted draw is a degraded success, never an error —
    *      and it is recorded as ONE structured `console.warn` naming the
-   *      workspace and the pair, so it is a fact somebody can find.
+   *      workspace and the name, so it is a fact somebody can find.
    *   3. `IdentifierCollisionError`, only when that suffixed candidate is held
    *      as well — no candidate the loop knows is free.
    *
@@ -614,14 +614,15 @@ export const projectsService = {
   }): Promise<ProjectDTO | null> {
     await projectsService.assertMembership(input.actorUserId, input.workspaceId);
 
-    // The default project carries a GENERATED adjective-noun name — "Quiet
-    // Harbor" (Story MOTIR-8239). Not the workspace's name (a project named
-    // after the workspace that holds it reads as a duplicate, and a second
-    // project then needs a name the first one took), not the user's (a second
-    // workspace's default would carry the first one's owner) and not
-    // "Untitled" (which reads as a placeholder nobody chose). It is drawn ONCE
-    // per seeding, before the retry loop, and the identifier and slug are
-    // derived from the drawn name, so all three handles agree.
+    // The default project carries a GENERATED, deliberately random-looking
+    // name — "quiet-harbor-4821" (Story MOTIR-8239) — so the person can see it
+    // is a placeholder and renames it in project settings. Not the workspace's
+    // name (a project named after the workspace that holds it reads as a
+    // duplicate, and a second project then needs a name the first one took),
+    // and not the user's (a second workspace's default would carry the first
+    // one's owner). It is drawn ONCE per seeding, before the retry loop, and
+    // the identifier and slug are derived from the drawn name, so all three
+    // handles agree.
     //
     // ⚠️ The workspace read is KEPT although its name is no longer used: it is
     // the existence-and-membership probe that turns a vanished workspace into
@@ -637,7 +638,7 @@ export const projectsService = {
       (tx) => workspaceRepository.findByIdInTx(input.workspaceId, tx),
     );
     if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
-    // The pair this attempt inserts. Re-drawn on a collision (rung 1), so it is
+    // The name this attempt inserts. Re-drawn on a collision (rung 1), so it is
     // a per-attempt local rather than the first draw's.
     let name = generateProjectName();
     let identifier = deriveIdentifierBase(name);
@@ -703,12 +704,12 @@ export const projectsService = {
       } catch (err) {
         if (isUniqueViolation(err) || err instanceof ReservedIdentifierSentinel) {
           if (attempt + 1 < RETRY_ATTEMPTS - 1) {
-            // Rung 1 — a fresh pair, all three handles derived from it.
+            // Rung 1 — a fresh draw, all three handles derived from it.
             name = generateProjectName();
             identifier = deriveIdentifierBase(name);
             slug = slugify(name);
           } else {
-            // Rung 2 — the draws are spent: the last drawn pair with the
+            // Rung 2 — the draws are spent: the last drawn name with the
             // shipped suffixes. Should this candidate be held too, the loop
             // ends and rung 3 throws below.
             identifier = identifierWithSuffix(deriveIdentifierBase(name), 1);

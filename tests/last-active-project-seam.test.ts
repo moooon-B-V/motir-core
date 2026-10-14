@@ -202,9 +202,9 @@ describe('8.8.29 — last-active project seam (write actions ↔ read resolver)'
     // …and it is the NEW workspace's own project, not the seed workspace's.
     const seeded = await projectsService.getActiveProject(user.id, created.id);
     expect(pointer).toBe(seeded!.id);
-    // MOTIR-8239 — the seeded project carries a generated adjective-noun
+    // MOTIR-8239 — the seeded project carries a generated, random-looking
     // name, not the new workspace's.
-    expect(seeded!.name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+    expect(seeded!.name).toMatch(/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/);
     expect(seeded!.name).not.toBe('Fresh');
   });
 

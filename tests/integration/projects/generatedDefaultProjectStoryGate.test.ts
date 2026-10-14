@@ -10,18 +10,19 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
-// The STORY GATE for "a new sign-up's first project gets a generated
-// adjective-noun name" — Story MOTIR-8239 · Subtask MOTIR-8530.
+// The STORY GATE for "a new sign-up's first project gets a generated,
+// random-looking name" (`quiet-harbor-4821`) — Story MOTIR-8239 · Subtask
+// MOTIR-8530.
 //
 // The assembled contract at the service tier, on a real Postgres: the NAME the
 // seeding draws on each of the three zero-project doors, the identifier and
 // slug that AGREE with it, the draw-once guards, a project a person names, and
 // a rename that changes the name and nothing else.
 //
-// ⚠️ NO RANDOMNESS IS PINNED. The name is asserted structurally — two
-// Title-Cased words, the first from the committed adjective list and the
-// second from the committed noun list — and the handles by AGREEMENT with the
-// drawn name, so this suite holds for whatever pair a run draws. The collision
+// ⚠️ NO RANDOMNESS IS PINNED. The name is asserted structurally — lowercase
+// `adjective-noun-dddd`, the words from the committed lists and the number
+// four digits — and the handles by AGREEMENT with the drawn name, so this
+// suite holds for whatever name a run draws. The collision
 // ladder, which does need a pinned draw, is tests/projects/
 // defaultProjectNameCollision.test.ts.
 //
@@ -44,27 +45,24 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** Assert `name` is a generated pair drawn from the committed lists. */
-function expectGeneratedPair(name: string) {
-  expect(name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
-  const [adjective, noun] = name.split(' ') as [string, string];
-  expect(PROJECT_NAME_ADJECTIVES).toContain(adjective.toLowerCase());
-  expect(PROJECT_NAME_NOUNS).toContain(noun.toLowerCase());
+/** Assert `name` is a generated name drawn from the committed lists. */
+function expectGeneratedName(name: string) {
+  expect(name).toMatch(/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/);
+  const [adjective, noun] = name.split('-') as [string, string, string];
+  expect(PROJECT_NAME_ADJECTIVES).toContain(adjective);
+  expect(PROJECT_NAME_NOUNS).toContain(noun);
 }
 
 /**
  * Assert the identifier and slug AGREE with the drawn name: the identifier is
- * a 3–5 character prefix of the name's letters (padded with X only when the
- * letters run short), and the slug is the two words lowercased and joined by
- * `-`. Agreement, not a copy of the derivation.
+ * the adjective's first five letters upper-cased (every adjective is five
+ * letters or more), and the slug is the name itself — already lowercase and
+ * hyphenated. Agreement, not a copy of the derivation.
  */
 function expectHandlesAgree(project: { name: string; identifier: string; slug: string }) {
-  const letters = project.name.replace(/\s/g, '').toUpperCase();
-  expect(project.identifier).toMatch(/^[A-Z0-9]{3,5}$/);
-  const unpadded = project.identifier.replace(/X+$/, '');
-  expect(letters.startsWith(project.identifier) || letters === unpadded).toBe(true);
-  expect(project.identifier.length).toBe(Math.min(5, Math.max(3, letters.length)));
-  expect(project.slug).toBe(project.name.toLowerCase().split(' ').join('-'));
+  const [adjective] = project.name.split('-') as [string];
+  expect(project.identifier).toBe(adjective.slice(0, 5).toUpperCase());
+  expect(project.slug).toBe(project.name);
 }
 
 async function ownerWithWorkspace(email: string) {
@@ -106,7 +104,7 @@ describe('door 1 — registration', () => {
     });
     expect(pinned.activeProjectId).toBe(active!.id);
 
-    expectGeneratedPair(active!.name);
+    expectGeneratedName(active!.name);
     expect(active!.name).not.toBe(workspace.name);
     expectHandlesAgree(active!);
   });
@@ -123,7 +121,7 @@ describe('door 2 — a workspace created later', () => {
     const active = await projectsService.getActiveProject(user.id, side.id);
 
     expect(await projectsIn(side.id)).toHaveLength(1);
-    expectGeneratedPair(active!.name);
+    expectGeneratedName(active!.name);
     expectHandlesAgree(active!);
     const sideRow = await adminDb.workspace.findUniqueOrThrow({ where: { id: side.id } });
     expect(sideRow.name).toBe('Side project');
@@ -146,7 +144,7 @@ describe('door 3 — archiving the last project', () => {
     const reseeded = await projectsService.getActiveProject(user.id, workspace.id);
 
     expect(reseeded!.id).not.toBe(first!.id);
-    expectGeneratedPair(reseeded!.name);
+    expectGeneratedName(reseeded!.name);
     expect(reseeded!.name).not.toBe(workspace.name);
     expectHandlesAgree(reseeded!);
     const archived = await adminDb.project.findUniqueOrThrow({ where: { id: first!.id } });
@@ -188,7 +186,7 @@ describe('idempotency — the draw is per workspace, never per call', () => {
   });
 
   it('four workspaces seeded in one run draw at least two distinct names', async () => {
-    // Not a two-name inequality: two draws may match once in about ten thousand.
+    // Not a two-name inequality: two draws may match, if very rarely.
     const { user } = await ownerWithWorkspace('gate-distinct@example.com');
     const names: string[] = [];
     for (let i = 0; i < 4; i += 1) {
@@ -200,7 +198,7 @@ describe('idempotency — the draw is per workspace, never per call', () => {
         workspaceId: workspace.id,
         actorUserId: user.id,
       });
-      expectGeneratedPair(seeded!.name);
+      expectGeneratedName(seeded!.name);
       names.push(seeded!.name);
     }
     expect(new Set(names).size).toBeGreaterThanOrEqual(2);

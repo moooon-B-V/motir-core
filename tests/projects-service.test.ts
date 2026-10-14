@@ -974,9 +974,9 @@ describe('getActiveProject — resolution, archived surfacing (#29.2), recovery 
     expect(resolved).not.toBeNull();
     expect(resolved!.id).not.toBe(only.id);
     expect(resolved!.archivedAt).toBeNull();
-    // A generated adjective-noun name, which is what `ensureDefaultProject`
+    // A generated, random-looking name, which is what `ensureDefaultProject`
     // draws (MOTIR-8239) — not the workspace's.
-    expect(resolved!.name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+    expect(resolved!.name).toMatch(/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/);
     expect(resolved!.name).not.toBe('Acme');
   });
 });
