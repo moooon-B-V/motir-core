@@ -30,11 +30,13 @@ vi.mock('@/components/planning/PlanReviewCanvas', () => ({
     ariaLabel,
     live,
     liveSteps,
+    movingSteps,
   }: {
     outcome: string | null;
     ariaLabel: string;
     live?: boolean;
     liveSteps?: readonly { targetNodeId: string | null }[] | null;
+    movingSteps?: readonly { targetNodeId: string | null }[] | null;
   }) => (
     <div
       data-testid="plan-review-canvas"
@@ -42,6 +44,8 @@ vi.mock('@/components/planning/PlanReviewCanvas', () => ({
       data-live={String(live ?? false)}
       // What the cue layer is handed (MOTIR-7830): the live steps' targets.
       data-cue-targets={(liveSteps ?? []).map((st) => st.targetNodeId ?? '-').join(',')}
+      // …and which of them may MOVE (MOTIR-8416): `readPlanAtWork`'s steps.
+      data-moving-targets={(movingSteps ?? []).map((st) => st.targetNodeId ?? '-').join(',')}
       aria-label={ariaLabel}
     />
   ),
@@ -346,15 +350,22 @@ describe('PlanProposalViews — the canvas cues read the one clock', () => {
     expect(targets()).toBe('pi_1');
   });
 
-  it('past PLAN_STALLED_AFTER_MS with no new snapshot every cue leaves', () => {
+  // The STALLED HOLD (Story MOTIR-8413 · MOTIR-8416; `design/ai-chat/design-notes.md`
+  // § _Motir at work_, the States table) replaced "every cue leaves": the card last
+  // being written keeps its cue, static — it stops MOVING but does not vanish.
+  it('past PLAN_STALLED_AFTER_MS with no new snapshot the last cue HOLDS, still', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
     vi.setSystemTime(T0);
     mount({ progress });
     expect(targets()).toBe('pi_1');
+    const moving = () =>
+      screen.getByTestId('plan-review-canvas').getAttribute('data-moving-targets');
+    expect(moving()).toBe('pi_1');
     act(() => {
       vi.advanceTimersByTime(PLAN_STALLED_AFTER_MS);
     });
-    expect(targets()).toBe('');
+    expect(targets()).toBe('pi_1');
+    expect(moving()).toBe('');
     expect(screen.getByTestId('plan-live-state').textContent).toBe('Stalled');
   });
 

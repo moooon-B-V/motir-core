@@ -483,3 +483,105 @@ body {
     animation: canvas-fade-in var(--transition-slow) var(--canvas-ease-enter) both;
   }
 }
+/* AT WORK (Story MOTIR-8413 · MOTIR-8416; design `design/ai-chat/design-notes.md`
+   § _Motir at work_, `planning-workspace--at-work.mock.html`). The DRAFTING cue takes
+   its own colour — `--el-drafting` (Motir's warm orange) on the ring, the chip's
+   edge and its pen, and the `--el-drafting-surface` wash on the card, painted as an
+   inset shadow OVER the op fill so no Part VI class is touched and the wash can fade.
+   The colour is the static form and is drawn under reduced motion too. The LAYING
+   cue keeps its shipped in-progress dotted form. */
+.canvas-node--drafting > .canvas-cue-ring {
+  border: 2px solid var(--el-drafting);
+}
+.canvas-node--drafting > .canvas-cue-chip {
+  border-color: var(--el-drafting);
+  background: var(--el-drafting-surface);
+  color: var(--el-text-strong);
+}
+.canvas-node--drafting > .canvas-cue-chip > svg {
+  color: var(--el-drafting);
+}
+.canvas-node--drafting [data-testid='plan-item-node'] {
+  box-shadow:
+    inset 0 0 0 100vmax var(--el-drafting-surface),
+    var(--shadow-card);
+}
+/* The MOTION — on the node box's independent `scale` (it composes with any
+   transform, grows about the centre, and leaves `left`/`top` and the edges where
+   they are): a POP on arrival, then a BREATH with the ring's glow in phase, while
+   `data-cue-motion="at-work"`. `"leaving"` settles the box, fades the ring and the
+   chip and lifts the wash on §26.8 C2's tokens; the canvas then drops the cue. */
+@keyframes canvas-cue-pop {
+  0% {
+    scale: 1;
+  }
+  60% {
+    scale: 1.06;
+  }
+  100% {
+    scale: 1.02;
+  }
+}
+@keyframes canvas-cue-grow {
+  from {
+    scale: 1.02;
+  }
+  to {
+    scale: 1.04;
+  }
+}
+@keyframes canvas-cue-glow {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-drafting) 0%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-drafting) 35%, transparent);
+  }
+}
+@keyframes canvas-cue-settle {
+  to {
+    scale: 1;
+  }
+}
+@keyframes canvas-cue-wash-out {
+  to {
+    box-shadow:
+      inset 0 0 0 100vmax color-mix(in srgb, var(--el-drafting-surface) 0%, transparent),
+      var(--shadow-card);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .canvas-node--drafting[data-cue-motion='at-work'] {
+    animation:
+      canvas-cue-pop var(--transition-slow) var(--canvas-ease-enter) both,
+      canvas-cue-grow calc(var(--transition-slow) * 6) ease-in-out var(--transition-slow) infinite
+        alternate;
+  }
+  .canvas-node--drafting[data-cue-motion='at-work'] > .canvas-cue-ring {
+    animation:
+      canvas-cue-ring-enter var(--transition-slow) var(--canvas-ease-enter) both,
+      canvas-cue-glow calc(var(--transition-slow) * 6) ease-in-out var(--transition-slow) infinite
+        alternate;
+  }
+  .canvas-node--drafting[data-cue-motion='leaving'] {
+    animation: canvas-cue-settle var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-ring,
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
+    animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
+    animation: canvas-cue-wash-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+}
+/* Under reduce nothing is retained (the canvas drops the cue at once); should a
+   leaving frame ever paint, it shows no cue rather than a static one. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-ring,
+  .canvas-node--drafting[data-cue-motion='leaving'] > .canvas-cue-chip {
+    display: none;
+  }
+  .canvas-node--drafting[data-cue-motion='leaving'] [data-testid='plan-item-node'] {
+    box-shadow: var(--shadow-card);
+  }
+}

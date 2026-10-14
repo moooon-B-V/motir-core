@@ -162,6 +162,14 @@ export interface PlanReviewCanvasProps {
    * page draws them too. Absent / `null` → no cue, and the canvas is unchanged.
    */
   liveSteps?: readonly PlanProgressStep[] | null;
+  /**
+   * The steps that may MOVE a card (Story MOTIR-8413 · MOTIR-8416) —
+   * `readPlanAtWork(...).steps`, empty whenever Motir is not at work (a dropped
+   * read, a stall, a resume, a settled plan). A DRAFTING cue whose node one of
+   * them names is marked `moving`; a laying cue never moves. Presence stays
+   * `liveSteps`'s: this only says which drawn cues move.
+   */
+  movingSteps?: readonly PlanProgressStep[] | null;
 }
 
 export function PlanReviewCanvas({
@@ -179,6 +187,7 @@ export function PlanReviewCanvas({
   live = false,
   offerPlanElsewhere = false,
   liveSteps = null,
+  movingSteps = null,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -563,6 +572,13 @@ export function PlanReviewCanvas({
     () => (liveSteps ? inFlightCues(items, liveSteps, proposedWord) : null),
     [items, liveSteps, proposedWord],
   );
+  const moving = useMemo(
+    () =>
+      movingSteps && movingSteps.length > 0
+        ? inFlightCues(items, movingSteps, proposedWord).cues
+        : null,
+    [items, movingSteps, proposedWord],
+  );
   const nodeCues = useMemo<ReadonlyMap<string, NodeCue> | null>(() => {
     if (!cueState) return null;
     const out = new Map<string, NodeCue>();
@@ -570,12 +586,17 @@ export function PlanReviewCanvas({
       out.set(
         nodeId,
         kind === 'drafting'
-          ? { kind, label: tCue('draftingName'), text: tCue('drafting') }
+          ? {
+              kind,
+              label: tCue('draftingName'),
+              text: tCue('drafting'),
+              ...(moving?.get(nodeId) === 'drafting' ? { moving: true } : {}),
+            }
           : { kind, label: tCue('layingName'), text: tCue('laying') },
       );
     }
     return out;
-  }, [cueState, tCue]);
+  }, [cueState, moving, tCue]);
 
   // ── A CHANGE TO THE LEVEL ITSELF (bug MOTIR-6223; design MOTIR-6241) ───────
   // `mergePlanLevel` frames the nodes ON a level, and the level the reader stands

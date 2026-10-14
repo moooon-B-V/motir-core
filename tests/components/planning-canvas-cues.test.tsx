@@ -6,13 +6,14 @@
 // independent of `motion`, it composes with the motion marks, and an absent map
 // leaves the DOM byte for byte as it was.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import {
   PlanningCanvas,
   type CanvasEdge,
   type CanvasNode,
   type NodeCue,
+  leavingCuesOf,
 } from '@/components/planning/PlanningCanvas';
 
 beforeEach(() => {
@@ -160,5 +161,103 @@ describe('PlanningCanvas — the cue layer', () => {
     expect(html(null)).toBe(absent);
     expect(html(new Map())).toBe(absent);
     expect(absent).not.toMatch(/data-cue|canvas-cue|aria-describedby/);
+  });
+});
+
+// AT WORK (Story MOTIR-8413 · MOTIR-8416; `design/ai-chat/design-notes.md`
+// § _Motir at work_): the moving marker, and the leaving form that outlives it.
+describe('PlanningCanvas — the at-work cue', () => {
+  const MOVING: NodeCue = { ...DRAFT, moving: true };
+  const ring = (id: string) => box(id).querySelector<HTMLElement>('.canvas-cue-ring')!;
+
+  it('marks a MOVING drafting cue at-work, and a still one not at all', () => {
+    mount(
+      [A, B],
+      new Map([
+        ['a', MOVING],
+        ['b', DRAFT],
+      ]),
+    );
+    expect(box('a').getAttribute('data-cue-motion')).toBe('at-work');
+    expect(box('b').hasAttribute('data-cue-motion')).toBe(false);
+    expect(box('b').getAttribute('data-cue')).toBe('drafting');
+  });
+
+  it('a laying cue never moves, whatever its flag says', () => {
+    mount([A, B], new Map([['b', { ...LAY, moving: true }]]));
+    expect(box('b').getAttribute('data-cue')).toBe('laying');
+    expect(box('b').hasAttribute('data-cue-motion')).toBe(false);
+  });
+
+  it('a moving cue the map drops is RETAINED leaving, then dropped when its ring fades', () => {
+    const update = mount([A, B], new Map([['a', MOVING]]));
+    update([A, B], new Map([['b', MOVING]]));
+    expect(box('a').getAttribute('data-cue-motion')).toBe('leaving');
+    expect(box('a').getAttribute('data-cue')).toBe('drafting');
+    expect(box('b').getAttribute('data-cue-motion')).toBe('at-work');
+    // Another animation's end changes nothing.
+    fireEvent.animationEnd(ring('a'), { animationName: 'canvas-cue-glow' });
+    expect(box('a').getAttribute('data-cue-motion')).toBe('leaving');
+    fireEvent.animationEnd(ring('a'), { animationName: 'canvas-fade-out' });
+    expect(box('a').hasAttribute('data-cue')).toBe(false);
+    expect(box('a').hasAttribute('data-cue-motion')).toBe(false);
+    expect(box('a').querySelector('.canvas-cue-chip')).toBeNull();
+  });
+
+  it('a cue that comes back while leaving is live again, not leaving', () => {
+    const update = mount([A, B], new Map([['a', MOVING]]));
+    update([A, B], null);
+    expect(box('a').getAttribute('data-cue-motion')).toBe('leaving');
+    update([A, B], new Map([['a', MOVING]]));
+    expect(box('a').getAttribute('data-cue-motion')).toBe('at-work');
+  });
+
+  it('an EXITING node keeps no leaving cue', () => {
+    const update = mount([A, B, C], new Map([['c', MOVING]]), true);
+    update([A, B], null);
+    expect(box('c').getAttribute('data-motion')).toBe('exit');
+    expect(box('c').hasAttribute('data-cue')).toBe(false);
+  });
+
+  it('under reduced motion nothing is retained: the cue goes at once', () => {
+    vi.mocked(window.matchMedia).mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes('reduce'),
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    );
+    const update = mount([A, B], new Map([['a', MOVING]]));
+    update([A, B], null);
+    expect(box('a').hasAttribute('data-cue')).toBe(false);
+    expect(box('a').hasAttribute('data-cue-motion')).toBe(false);
+  });
+});
+
+describe('leavingCuesOf', () => {
+  const MOVING: NodeCue = { ...DRAFT, moving: true };
+  const all = () => true;
+  it('keeps only moving drafting cues the next map drops, while drawn', () => {
+    const prev = new Map<string, NodeCue>([
+      ['a', MOVING],
+      ['b', DRAFT],
+      ['c', { ...LAY, moving: true }],
+      ['d', MOVING],
+    ]);
+    const next = new Map<string, NodeCue>([['d', MOVING]]);
+    expect(Object.keys(leavingCuesOf(prev, next, {}, all))).toEqual(['a']);
+    expect(leavingCuesOf(prev, next, {}, (id) => id !== 'a')).toEqual({});
+  });
+  it('carries held cues forward until the map names them again or they are undrawn', () => {
+    const held = { a: MOVING, b: MOVING };
+    const next = new Map<string, NodeCue>([['a', MOVING]]);
+    expect(Object.keys(leavingCuesOf(null, next, held, (id) => id !== 'x'))).toEqual(['b']);
+    expect(leavingCuesOf(null, null, held, () => false)).toEqual({});
   });
 });
