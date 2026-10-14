@@ -146,7 +146,19 @@ type ConnectState =
   | 'owner_pending'
   | 'failed';
 
-const stateBox = (page: Page, state: ConnectState) => page.getByTestId(`connect-state-${state}`);
+const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The connect step's own region, named by its heading in either language. Every
+ *  test id below is read inside it, never page-rooted: React can keep an outgoing
+ *  copy of the step mounted while the new one streams, and the accessibility tree
+ *  is what excludes that copy. */
+const STEP_NAME = new RegExp(
+  `^(${LANGS.map((lang) => escapeRe(words(lang).connect.heading)).join('|')})$`,
+);
+const connectStep = (page: Page) => page.getByRole('region', { name: STEP_NAME });
+
+const stateBox = (page: Page, state: ConnectState) =>
+  connectStep(page).getByTestId(`connect-state-${state}`);
 
 const isConnectRead = (url: string) => /\/api\/onboarding\/migrate\/[^/]+\/connect-state/.test(url);
 const isAdvance = (url: string, method: string) =>
@@ -275,7 +287,7 @@ async function expectRunSurvives(page: Page, runId: string, lang: Lang): Promise
 /** Continue, through the shipped advance, onto the Index step. */
 async function continueToIndex(page: Page, lang: Lang): Promise<void> {
   const advanced = page.waitForResponse((r) => isAdvance(r.url(), r.request().method()));
-  await page.getByTestId('connect-continue').click();
+  await connectStep(page).getByTestId('connect-continue').click();
   expect((await advanced).status()).toBe(200);
   await expect(page.getByRole('heading', { name: words(lang).indexHeading })).toBeVisible();
 }
@@ -326,13 +338,13 @@ for (const lang of LANGS) {
       await expectCopy(preflight, lang, (copy) => copy.preflightAccess);
       await expectCopy(box.getByTestId('connect-start'), lang, (copy) => copy.preflightCta);
       // Nothing is connected, so nothing claims to advance.
-      await expect(page.getByTestId('connect-continue')).toHaveCount(0);
+      await expect(connectStep(page).getByTestId('connect-continue')).toHaveCount(0);
       await expect(page.getByRole('button', { name: c.continue, exact: true })).toHaveCount(0);
       await beat();
     });
 
     await chapter(label("Connect GitHub leaves for the App's own install page"), async () => {
-      await leaveForGithub(page, page.getByTestId('connect-start'), () =>
+      await leaveForGithub(page, connectStep(page).getByTestId('connect-start'), () =>
         expectWaiting(page, lang),
       );
     });
@@ -374,7 +386,7 @@ for (const lang of LANGS) {
         await expect(list.getByRole('listitem')).toHaveCount(E2E_MULTI_ORG_REPOS.length);
         await expect(list).toContainText(`${E2E_MULTI_ORG_ACCOUNT.login}/`);
         for (const repo of E2E_MULTI_ORG_REPOS) await expect(list).toContainText(repo.name);
-        await expect(page.getByTestId('connect-start')).toHaveCount(0);
+        await expect(connectStep(page).getByTestId('connect-start')).toHaveCount(0);
       },
     );
 
@@ -427,8 +439,8 @@ for (const lang of LANGS) {
       await expect(list.getByRole('listitem')).toHaveCount(E2E_INDEX_REPOS.length);
       for (const repo of E2E_INDEX_REPOS) await expect(list).toContainText(repo.name);
       // The install is not the primary action; Continue is.
-      await expect(page.getByTestId('connect-start')).toHaveCount(0);
-      await expect(page.getByTestId('connect-continue')).toBeVisible();
+      await expect(connectStep(page).getByTestId('connect-start')).toHaveCount(0);
+      await expect(connectStep(page).getByTestId('connect-continue')).toBeVisible();
       await beat();
     });
 
@@ -473,7 +485,7 @@ for (const lang of LANGS) {
       expect(href.host).toBe('github.com');
       expect(href.pathname).toContain(`/installations/`);
       expect(href.pathname).toContain(E2E_INDEX_ACCOUNT.login);
-      await expect(page.getByTestId('connect-continue')).toHaveCount(0);
+      await expect(connectStep(page).getByTestId('connect-continue')).toHaveCount(0);
       await beat();
     });
 
@@ -492,7 +504,7 @@ for (const lang of LANGS) {
         const list = box.getByRole('list', { name: c.listLabel });
         await expect(list.getByRole('listitem')).toHaveCount(1);
         await expect(list).toContainText(E2E_INDEX_REPOS[0].name);
-        await expect(page.getByTestId('connect-continue')).toBeVisible();
+        await expect(connectStep(page).getByTestId('connect-continue')).toBeVisible();
       },
     );
   });
@@ -511,7 +523,7 @@ for (const lang of LANGS) {
     await chapter(label('An organisation owner has to approve the install'), async () => {
       await openConnectStep(page);
       await expectLanguage(page, lang);
-      const leg = await leaveForGithub(page, page.getByTestId('connect-start'));
+      const leg = await leaveForGithub(page, connectStep(page).getByTestId('connect-start'));
       // The runner signs with the server's secret; the expired case relies on it.
       expect(
         decodeInstallStateResult(leg.state).ok,
@@ -523,7 +535,7 @@ for (const lang of LANGS) {
       await expectCopy(box, lang, (copy) => copy.ownerPendingTitle);
       await expectCopy(box, lang, (copy) => copy.pill.ownerPending);
       // Neither the step nor the run says it is done.
-      await expect(page.getByTestId('connect-continue')).toHaveCount(0);
+      await expect(connectStep(page).getByTestId('connect-continue')).toHaveCount(0);
       const run = await readRun(page.request, runId);
       expect(run.step).toBe('connect');
       expect(run.connectedRepoRef).toBeNull();
@@ -537,7 +549,7 @@ for (const lang of LANGS) {
     await chapter(
       label("GitHub's side cannot be completed: try again, from this step"),
       async () => {
-        const leg = await leaveForGithub(page, page.getByTestId('connect-start'));
+        const leg = await leaveForGithub(page, connectStep(page).getByTestId('connect-start'));
         await returnFromGithub(page, {
           installation_id: UNREADABLE_INSTALLATION_ID,
           setup_action: 'install',
@@ -547,7 +559,7 @@ for (const lang of LANGS) {
         await expect(box).toBeVisible();
         await expectCopy(box, lang, (copy) => copy.outcome.install_provider_errorTitle);
         await expectCopy(box.getByTestId('connect-start'), lang, (copy) => copy.tryAgainCta);
-        await expect(page.getByTestId('connect-continue')).toHaveCount(0);
+        await expect(connectStep(page).getByTestId('connect-continue')).toHaveCount(0);
       },
     );
 

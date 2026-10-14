@@ -23,7 +23,7 @@
 // installation token, both answered by the lane's `E2E_TEST_GITHUB_ACCOUNTS`
 // seam. A user-token row would be state nothing on this path reads.
 
-import { db } from './db-reset';
+import { adminDb } from './db-reset';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -66,7 +66,7 @@ export async function seedConnectJourney(email: string): Promise<ConnectJourneyS
     workspaceId: workspace.id,
     actorUserId: owner.id,
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });

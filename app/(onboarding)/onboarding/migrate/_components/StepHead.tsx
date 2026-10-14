@@ -3,10 +3,12 @@
 // own module so the panels that outgrew `MigrateWizard.tsx` (`ConnectPanel`)
 // draw the same head without importing the wizard back.
 export function StepHead({
+  id,
   eyebrow,
   heading,
   body,
 }: {
+  id?: string;
   eyebrow: string;
   heading: string;
   body: string;
@@ -17,7 +19,10 @@ export function StepHead({
         <span className="size-2 flex-none rounded-full bg-(--el-highlight)" aria-hidden />
         {eyebrow}
       </p>
-      <h2 className="m-0 font-serif text-[28px] leading-[0.98] font-bold tracking-[-0.03em] text-balance text-(--el-text) md:text-[34px]">
+      <h2
+        id={id}
+        className="m-0 font-serif text-[28px] leading-[0.98] font-bold tracking-[-0.03em] text-balance text-(--el-text) md:text-[34px]"
+      >
         {heading}
       </h2>
       <p className="m-0 mt-1 max-w-[60ch] text-[15px] leading-normal text-(--el-text-secondary) md:text-[16px]">

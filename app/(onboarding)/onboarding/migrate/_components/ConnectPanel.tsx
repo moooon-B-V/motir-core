@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -397,10 +397,13 @@ export function ConnectPanel({
   const account = read?.installation.accounts[0];
   const manageUrl = manageUrlFor(account);
   const repos = read?.repositories ?? [];
+  const headingId = useId();
 
+  // A region named by the step's own heading, so the step is one landmark a
+  // reader (and a test) can address without reaching past it into the page.
   return (
-    <div>
-      <StepHead eyebrow={t('eyebrow')} heading={t('heading')} body={t('body')} />
+    <section aria-labelledby={headingId}>
+      <StepHead id={headingId} eyebrow={t('eyebrow')} heading={t('heading')} body={t('body')} />
       <Card>
         <div
           data-testid={`connect-state-${state}`}
@@ -446,7 +449,7 @@ export function ConnectPanel({
           </span>
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }
 
