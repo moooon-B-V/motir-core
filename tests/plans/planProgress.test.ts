@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PLAN_AT_WORK_MOVES,
   PLAN_STALLED_AFTER_MS,
   PLAN_STEP_PHRASE_MESSAGE_KEY,
   buildPlanProgressSnapshot,
   countAuthored,
   progressRowOfAdd,
+  readPlanAtWork,
   readPlanProgress,
   requireExplanationFor,
   serverNow,
   type PlanProgressAddRow,
+  type PlanProgressReading,
   type PlanProgressSnapshot,
 } from '@/lib/plans/planProgress';
 import type { PlanStepDto } from '@/lib/dto/plans';
@@ -415,5 +418,108 @@ describe('serverNow — the client ticks in server time', () => {
 
   it('never runs backwards when the client clock steps back after receipt', () => {
     expect(serverNow(at(0), T0 + 10_000, T0 + 5_000)).toBe(T0);
+  });
+});
+
+// Story MOTIR-8413 · MOTIR-8415 — the AT-WORK state the drafted card and the Motir mark read
+// (design `design/ai-chat/design-notes.md` § "Motir at work"). One case per precedence row.
+describe('readPlanAtWork — whether Motir is at work, and which cards may move', () => {
+  const authoring = build({
+    steps: [step({ sessionKey: 'a', kind: 'author', targetRef: 'planItem:pi_1' })],
+    addRows: [row({ id: 'pi_1' })],
+  }).steps;
+  const reading = (over: Partial<PlanProgressReading>): PlanProgressReading => ({
+    ...readPlanProgress(snap({ proposed: 1 }), T0),
+    ...over,
+  });
+  const ROWS: [PlanProgressReading['state'], boolean][] = [
+    ['starting', true],
+    ['working', true],
+    ['writing', true],
+    ['stalled', false],
+    ['resuming', false],
+  ];
+
+  for (const [state, moves] of ROWS) {
+    it(`${state} — at work: ${moves}, and failing always reads reconnecting`, () => {
+      const liveSteps = state === 'working' ? authoring : [];
+      const r = reading({ state, liveSteps });
+      expect(readPlanAtWork(r)).toEqual({ state, atWork: moves, steps: moves ? liveSteps : [] });
+      expect(readPlanAtWork(r, { failing: true })).toEqual({
+        state: 'reconnecting',
+        atWork: false,
+        steps: [],
+      });
+    });
+  }
+
+  it('a null reading is settled, failing or not', () => {
+    expect(readPlanAtWork(null)).toEqual({ state: 'settled', atWork: false, steps: [] });
+    expect(readPlanAtWork(null, { failing: true })).toEqual({
+      state: 'reconnecting',
+      atWork: false,
+      steps: [],
+    });
+  });
+
+  it('a dropped read stops the motion and leaves the held steps on the reading', () => {
+    const r = reading({ state: 'working', liveSteps: authoring });
+    const before = structuredClone(r);
+    const out = readPlanAtWork(r, { failing: true });
+    expect(out).toEqual({ state: 'reconnecting', atWork: false, steps: [] });
+    expect(r).toEqual(before);
+    expect(r.liveSteps).toHaveLength(1);
+  });
+
+  it('the stall boundary is the shipped one — `=` still moves, `+1 ms` does not', () => {
+    const s = snap({ steps: authoring, proposed: 1 });
+    const at = readPlanAtWork(readPlanProgress(s, T0 + PLAN_STALLED_AFTER_MS));
+    expect(at.state).toBe('working');
+    expect(at.atWork).toBe(true);
+    const past = readPlanAtWork(readPlanProgress(s, T0 + PLAN_STALLED_AFTER_MS + 1));
+    expect(past).toEqual({ state: 'stalled', atWork: false, steps: [] });
+  });
+
+  it('steps are exactly the live steps, same members and order, while at work', () => {
+    const two = build({
+      steps: [
+        step({ sessionKey: 'b', kind: 'author', targetRef: 'planItem:pi_2', startedAt: at(1) }),
+        step({ sessionKey: 'a', kind: 'author', targetRef: 'planItem:pi_1', startedAt: at(0) }),
+      ],
+      addRows: [row({ id: 'pi_1' }), row({ id: 'pi_2' })],
+    }).steps;
+    const r = readPlanProgress(snap({ steps: two, proposed: 2 }), T0 + 10);
+    const out = readPlanAtWork(r);
+    expect(out.steps).toEqual(r.liveSteps);
+    expect(out.steps).not.toBe(r.liveSteps);
+  });
+
+  it('starting is at work with no step to move', () => {
+    const out = readPlanAtWork(readPlanProgress(snap({ proposed: 0 }), T0));
+    expect(out).toEqual({ state: 'starting', atWork: true, steps: [] });
+  });
+
+  it('is pure — equal arguments, equal answers', () => {
+    const r = reading({ state: 'working', liveSteps: authoring });
+    expect(readPlanAtWork(r)).toEqual(readPlanAtWork(r));
+    expect(readPlanAtWork(r, { failing: false })).toEqual(readPlanAtWork(r));
+  });
+
+  it('the moves record is total and true exactly for starting, working and writing', () => {
+    expect(
+      Object.entries(PLAN_AT_WORK_MOVES)
+        .filter(([, m]) => m)
+        .map(([s]) => s)
+        .sort(),
+    ).toEqual(['starting', 'working', 'writing']);
+    expect(Object.keys(PLAN_AT_WORK_MOVES).sort()).toEqual([
+      'reconnecting',
+      'resuming',
+      'settled',
+      'stalled',
+      'starting',
+      'working',
+      'writing',
+    ]);
   });
 });
