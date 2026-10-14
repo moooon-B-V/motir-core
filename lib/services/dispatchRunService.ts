@@ -920,6 +920,93 @@ async function appendEventsWithin(
   };
 }
 
+/**
+ * APPEND the cards a RE-OPEN names that the run does not hold yet (MOTIR-8632).
+ *
+ * `motir auto` holds no plan: it opens its run with an empty set and re-issues
+ * the open, on the same `idempotencyKey`, for each card it reaches. Returning the
+ * run untouched on that idempotent hit wrote no leg for an `auto` run at all, and
+ * every per-card event it then sent was refused as naming a card the run does not
+ * own. So the hit appends the new cards here, after the legs already there, in
+ * the open's own transaction.
+ *
+ * A retry that names only cards the run already holds appends nothing and takes
+ * no lock, which keeps the plain retry of a whole-set open as cheap as before. A
+ * card outside the project refuses the whole re-open, as a first open does. A
+ * run that has already ENDED keeps the set it ended with: a re-open after the
+ * close returns the run as it is.
+ */
+async function appendLegsWithin(
+  runId: string,
+  projectId: string,
+  cards: OpenDispatchRunInput['cards'],
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (cards.length === 0) return;
+  const held = new Set(
+    (await dispatchRunCardRepository.listByRun(runId, tx)).map((leg) => leg.workItemKey),
+  );
+  const wanted = new Map<string, OpenDispatchRunInput['cards'][number]>();
+  for (const card of cards) {
+    const key = card.key.trim().toUpperCase();
+    if (!held.has(key) && !wanted.has(key)) wanted.set(key, card);
+  }
+  if (wanted.size === 0) return;
+
+  const items = await workItemRepository.findByIdentifiers(projectId, [...wanted.keys()], tx);
+  const byKey = new Map(items.map((i) => [i.identifier, i]));
+  for (const key of wanted.keys()) {
+    if (!byKey.has(key)) throw new UnknownDispatchRunCardError(key);
+  }
+
+  // Cards, then the run — the order `lockCoveredCards` documents, so an append
+  // racing a close or a continue claim cannot deadlock against it.
+  const ids = [...new Set(items.map((i) => i.id))].sort();
+  await workItemRepository.lockByIds(ids, tx);
+  const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+  if (!locked || locked.status !== 'running') return;
+
+  // Re-read under the run's lock: a concurrent re-open may have appended the same
+  // card, or taken the next position, since the unlocked read above.
+  const legs = await dispatchRunCardRepository.listByRun(runId, tx);
+  const heldIds = new Set(legs.map((leg) => leg.workItemId));
+  let position = legs.reduce((max, leg) => Math.max(max, leg.position), -1);
+  const rows: Parameters<typeof dispatchRunCardRepository.createMany>[0] = [];
+  const added: { workItemId: string; card: OpenDispatchRunInput['cards'][number] }[] = [];
+  for (const [key, card] of wanted) {
+    const item = byKey.get(key)!;
+    if (heldIds.has(item.id)) continue;
+    heldIds.add(item.id);
+    position += 1;
+    rows.push({
+      workspaceId: ctx.workspaceId,
+      dispatchRunId: runId,
+      workItemId: item.id,
+      workItemKey: key,
+      position,
+      disposition: card.disposition,
+      ...(card.skipReason !== undefined ? { skipReason: card.skipReason } : {}),
+    });
+    added.push({ workItemId: item.id, card });
+  }
+  if (rows.length === 0) return;
+
+  await dispatchRunCardRepository.createMany(rows, tx);
+  for (const { workItemId, card } of added) {
+    if (raisesManualWork(card.disposition, card.skipReason)) {
+      await manualWorkGateService.raise(
+        workItemId,
+        { createdById: locked.createdById },
+        ctx.workspaceId,
+        tx,
+      );
+    }
+  }
+  // The appended card is now covered by a running run, as an opened one is.
+  await recomputeCovered({ scope: null, legs: added.map((a) => a.workItemId).sort() }, tx);
+}
+
 export const dispatchRunService = {
   /**
    * OPEN a run WITH ITS SET.
@@ -932,7 +1019,8 @@ export const dispatchRunService = {
    * and would lose the skipped cards entirely, which exist nowhere else at all.
    *
    * IDEMPOTENT on `idempotencyKey`: the read runs first and a repeat returns the
-   * EXISTING run with `created: false`. The unique index is the arbiter of the
+   * EXISTING run with `created: false`, after appending any card it names that
+   * the run does not hold yet (`appendLegsWithin` — `motir auto`'s legs). The unique index is the arbiter of the
    * narrow race between that read and the insert, and a `P2002` is translated
    * rather than allowed to escape.
    */
@@ -974,6 +1062,7 @@ export const dispatchRunService = {
         tx,
       );
       if (existing) {
+        await appendLegsWithin(existing.id, projectId, input.cards, ctx, tx);
         const withCards = await dispatchRunRepository.findByIdWithCards(existing.id, tx);
         /* v8 ignore next -- the row was just read inside this transaction */
         if (!withCards) throw new DispatchRunNotFoundError(existing.id);
