@@ -1071,6 +1071,12 @@ exception found six months later by someone comparing lanes is a bug report. If 
 window is ever wanted instead, that is its own decision and it needs the window's
 number and where the number came from.
 
+**Since MOTIR-8540 the horizon is 30 days, not forever.** The daily
+`system.job-queue-retention` pass deletes `succeeded` queue rows older than
+`JOB_QUEUE_RETENTION_MS`, and a deleted row no longer holds its key. Why that is
+safe for every key in use, and the rule for a dedup that must outlive the
+window, is `docs/decisions/job-queue-foundation.md` §17.
+
 **A DLQ replay is not affected on either lane.** `lib/jobs/dlq.ts` re-shapes the
 key to `{original}:replay:{dlqId}` before re-emitting, on the Inngest arm AND the
 engine arm. The engine arm had nothing to be dropped by until dedup existed;
