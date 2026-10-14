@@ -269,8 +269,9 @@ export default async function WorkbenchPage({
   // the strip's counts come from `workbenchWindowService.read`, the same call
   // `GET /api/workbench/window` answers from, so the first paint and a client
   // re-read cannot be paired differently. To approve and Planning read their
-  // rows inside their own `<Suspense>` below (MOTIR-4794), so here they need
-  // the counts alone.
+  // first paint inside their own `<Suspense>` below (MOTIR-4794), so here they
+  // need the counts alone; after it, their rows ride the same client re-read as
+  // the strip (MOTIR-8581).
   const { counts, window } = await workbenchWindowService.readFirstPaint(ctx, { tab, page });
 
   const rows = window

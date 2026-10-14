@@ -14,7 +14,7 @@ import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
 //   · a read that ANSWERS but not 200 — a dropped read like a rejected one;
 //   · an outcome read that finds the plan STILL generating — the row is dropped quietly;
 //   · a row held across two polls — its outcome is read ONCE, not per poll;
-//   · a failure that lands after a newer read was applied — it says nothing;
+//   · a tick behind a read still out — no second read until it settles;
 //   · a `visibilitychange` to HIDDEN — no read;
 //   · leaving the tab with a read in flight — the read is aborted;
 // `PlanningRow`'s title door (a plain click opens the target's quick view), and
@@ -36,6 +36,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 
 const { PlanningList } = await import('../../app/(authed)/workbench/_components/PlanningList');
+const { TabWindowHarness, planningWindowAnswer } = await import('../helpers/workbenchTabWindow');
 const { planningOutcomeOf } =
   await import('../../app/(authed)/workbench/_components/planningOutcome');
 const { PLANNING_TAB_CEILING } = await import('@/lib/services/workbenchPlanningService');
@@ -73,19 +74,25 @@ function page(items: WorkbenchPlanningRowDto[], total = items.length): Workbench
 }
 
 function mount(seed: WorkbenchPlanningPageDto) {
+  // Under the Workbench's one read (MOTIR-8581): a poll tick is its `reread()`.
   return renderWithIntl(
-    <PlanningList
-      seed={seed}
-      projectName="Acme Web"
-      label="Planning"
-      empty={<p>No plans being written</p>}
-    />,
+    <TabWindowHarness tab="planning">
+      <PlanningList
+        seed={seed}
+        projectName="Acme Web"
+        label="Planning"
+        empty={<p>No plans being written</p>}
+      />
+    </TabWindowHarness>,
     { locale: 'en', messages: en },
   );
 }
 
 const json = (body: unknown, status = 200) =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as unknown as Response;
+
+/** The Planning read's answer — the one window read, carrying `body` as its page. */
+const planning = (body: WorkbenchPlanningPageDto) => json(planningWindowAnswer(body));
 
 async function poll(times = 1) {
   for (let i = 0; i < times; i += 1) {
@@ -129,7 +136,7 @@ describe('PlanningList — the poll’s remaining arms', () => {
     const fetchMock = vi.fn(async (input: string) =>
       String(input) === '/api/plans/p1'
         ? json({ status: 'generating', decisionReason: null })
-        : json(page([row('p2')], 1)),
+        : planning(page([row('p2')], 1)),
     );
     vi.stubGlobal('fetch', fetchMock);
     mount(page([row('p1'), row('p2')], 2));
@@ -155,7 +162,7 @@ describe('PlanningList — the poll’s remaining arms', () => {
       vi.fn(async (input: string) => {
         if (String(input) === '/api/plans/p1') return slow;
         polls += 1;
-        return json(polls === 1 ? page([row('p2')], 1) : page([row('p1'), row('p2')], 2));
+        return planning(polls === 1 ? page([row('p2')], 1) : page([row('p1'), row('p2')], 2));
       }),
     );
     mount(page([row('p1'), row('p2')], 2));
@@ -168,34 +175,35 @@ describe('PlanningList — the poll’s remaining arms', () => {
     expect(screen.getByTestId('planning-row-p1')).toBeTruthy();
   });
 
-  it('a failure that lands AFTER a newer read was applied says nothing about now', async () => {
+  it('a tick behind a read still out starts no second read; one follows once it settles', async () => {
     let fail: ((err: Error) => void) | null = null;
     const slow = new Promise<never>((_, reject) => {
       fail = reject;
     });
     let call = 0;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        call += 1;
-        if (call === 1) return slow;
-        return json(page([row('p1')], 1));
-      }),
-    );
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      if (call === 1) return slow;
+      return planning(page([row('p1')], 1));
+    });
+    vi.stubGlobal('fetch', fetchMock);
     mount(page([row('p1')], 1));
 
     await poll(); // read 1, still in flight
-    await poll(); // read 2, applied
+    await poll(); // behind it: no second read (MOTIR-8102's rule, the window hook's)
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     await act(async () => {
       fail?.(new Error('offline'));
     });
     await act(async () => {});
-    await poll(2); // two more successes — a counted stale failure would make three
+    // The pending tick reads once the first settles, and a success clears the run.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await poll(2);
     expect(screen.getByTestId('plan-progress-compact').textContent).not.toContain('Reconnecting');
   });
 
   it('a `visibilitychange` to HIDDEN starts no read', async () => {
-    const fetchMock = vi.fn(async () => json(page([row('p1')], 1)));
+    const fetchMock = vi.fn(async () => planning(page([row('p1')], 1)));
     vi.stubGlobal('fetch', fetchMock);
     mount(page([row('p1')], 1));
 
@@ -227,7 +235,7 @@ describe('PlanningList — the poll’s remaining arms', () => {
     expect(signal?.aborted).toBe(true);
 
     await act(async () => {
-      resolve?.(json(page([row('p1'), row('p2')], 2)));
+      resolve?.(planning(page([row('p1'), row('p2')], 2)));
     });
     expect(refresh).not.toHaveBeenCalled();
   });

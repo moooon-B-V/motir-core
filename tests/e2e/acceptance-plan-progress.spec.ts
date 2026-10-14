@@ -81,13 +81,13 @@ import en from '@/messages/en.json';
 //
 // THE LIVE READS ARE NEVER INTERCEPTED. The canvas, the progress line and the
 // tab row all read the real `GET /api/plans/[id]` poll and the real Workbench
-// Planning read (`GET /api/workbench/planning` and the tab's server render).
+// Planning read (`GET /api/workbench/window?tab=planning` and the tab's server render).
 //
 // ── Determinism, and the pace ───────────────────────────────────────────────
 // After a door call the spec waits for the next `GET /api/plans/[id]` response
 // whose BODY carries that step in `inFlightSteps` (armed before the call), and
 // only then asserts the DOM. For the tab it waits on the Workbench read: the
-// tab's server render on a navigation, or a `GET /api/workbench/planning` poll
+// tab's server render on a navigation, or a `GET /api/workbench/window` poll
 // response whose body carries the change. Stalled waits for a poll response
 // observed AFTER the backdate. Nothing sleeps to wait for state; the receipt's
 // holds (`beat()`, `chapter()`'s own) are pacing for a viewer only — remove
@@ -277,7 +277,11 @@ function planPolled(
  *  the runner does not load); three of them is the budget for the next read. */
 const WORKBENCH_READ_BUDGET_MS = 35_000;
 
-/** The NEXT `GET /api/workbench/planning` response whose body satisfies `until`. */
+/**
+ * The NEXT Planning read whose page satisfies `until`. The tab's poll asks the
+ * Workbench's one read, `GET /api/workbench/window?tab=planning`, whose window
+ * carries the page (Story MOTIR-8539 · MOTIR-8581).
+ */
 function workbenchPolled(
   page: Page,
   until: (body: WorkbenchPlanningPageDto) => boolean,
@@ -285,9 +289,15 @@ function workbenchPolled(
   return page.waitForResponse(
     async (r) => {
       if (r.request().method() !== 'GET' || !r.ok()) return false;
-      if (new URL(r.url()).pathname !== '/api/workbench/planning') return false;
+      const url = new URL(r.url());
+      if (url.pathname !== '/api/workbench/window') return false;
+      if (url.searchParams.get('tab') !== 'planning') return false;
       try {
-        return until((await r.json()) as WorkbenchPlanningPageDto);
+        const body = (await r.json()) as {
+          window: { kind: string; page?: WorkbenchPlanningPageDto };
+        };
+        if (body.window.kind !== 'planning' || !body.window.page) return false;
+        return until(body.window.page);
       } catch {
         return false;
       }

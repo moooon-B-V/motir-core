@@ -29,7 +29,10 @@ import type { WorkbenchTab } from '@/lib/workbench/tab';
 //   · AN ABORT per read, on unmount and on a change of tab or page; an answer for
 //     a view the reader has left, or older than one already applied, is DROPPED.
 //   · A FAILED read keeps the last state and draws nothing. Transport trouble is
-//     the *Reconnecting…* chip's, unchanged; the next signal reads again.
+//     the *Reconnecting…* chip's, unchanged; the next signal reads again. The run
+//     of consecutive failures is counted (`failures`), because the Planning tab's
+//     rows report a dropped read after three (§ 36.7) — it is the one tab whose
+//     cadence is a poll rather than the stream (MOTIR-8581).
 //
 // ⚠️ AN EQUAL ANSWER IS NO UPDATE. `merge` returns the previous value for what
 // did not change (rows by identity, `mergeRowsByIdentity`), and when nothing
@@ -57,6 +60,8 @@ export interface WorkbenchWindow<T> {
   counts: HomeTabCountsDto;
   /** Re-read now — what a verb that moved a row calls (Continue, a fix, Approve). */
   reread: () => void;
+  /** Consecutive reads that failed; `0` again on the next success. */
+  failures: number;
 }
 
 interface State<T> {
@@ -106,6 +111,8 @@ export function useWorkbenchWindow<T>(options: WorkbenchWindowOptions<T>): Workb
     viewRef.current = { tab, page, view };
   });
 
+  const [failures, setFailures] = useState(0);
+
   const reader = useRef({
     inFlight: null as AbortController | null,
     pending: false,
@@ -129,6 +136,7 @@ export function useWorkbenchWindow<T>(options: WorkbenchWindowOptions<T>): Workb
         if (ctrl.signal.aborted || seq <= r.applied || viewRef.current.view !== forView) return;
         if (answer.tab !== forTab) return;
         r.applied = seq;
+        setFailures(0);
         setState((prev) => {
           if (prev.view !== forView) return prev;
           const next = fns.current.fromWindow(answer);
@@ -139,7 +147,10 @@ export function useWorkbenchWindow<T>(options: WorkbenchWindowOptions<T>): Workb
         });
       })
       .catch(() => {
-        // Best-effort: the last state stands, and the next signal reads again.
+        // Best-effort: the last state stands, and the next signal reads again. An
+        // abort is not a failure, and nor is one older than an applied success.
+        if (ctrl.signal.aborted || seq <= r.applied) return;
+        setFailures((n) => n + 1);
       })
       .finally(() => {
         if (r.inFlight !== ctrl) return;
@@ -163,5 +174,5 @@ export function useWorkbenchWindow<T>(options: WorkbenchWindowOptions<T>): Workb
 
   useLiveSignal({ kind: 'workbench' }, read);
 
-  return { content: current.content, counts: current.counts, reread: read };
+  return { content: current.content, counts: current.counts, reread: read, failures };
 }

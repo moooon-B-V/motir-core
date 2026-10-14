@@ -11,6 +11,11 @@ import { WorkbenchReconnecting } from './WorkbenchLive';
 import { WorkbenchTabStrip, type WorkbenchTabStripMessage } from './WorkbenchTabs';
 import { toWorkbenchRowViews, type WorkbenchRowView } from './workbenchRows';
 import { useWorkbenchWindow } from './useWorkbenchWindow';
+import {
+  WorkbenchTabWindowContext,
+  type WorkbenchTabWindowDto,
+  type WorkbenchTabWindowValue,
+} from './useTabWindowContent';
 
 // THE WORKBENCH'S LIVE VIEW (Story MOTIR-8539 · Subtask MOTIR-8574) — the strip,
 // the window caption and the list, drawn from `useWorkbenchWindow`'s state rather
@@ -21,10 +26,11 @@ import { useWorkbenchWindow } from './useWorkbenchWindow';
 // counts through `workbenchWindowService.read` and hands them in as the seed; this
 // component only takes over once a signal arrives.
 //
-// ⚠️ TO APPROVE AND PLANNING KEEP THEIR SERVER BODIES here (they go live in
-// MOTIR-8575): the page passes them as `children`, and the strip above them still
-// takes its counts from this state, so the numbers move with every nudge on those
-// tabs too.
+// ⚠️ TO APPROVE AND PLANNING KEEP THEIR SERVER-SEEDED BODIES, and are live too
+// (MOTIR-8581). The page passes them as `children` — each reads its first paint
+// inside its own `<Suspense>`, unchanged — and this view publishes the window the
+// SAME read answered for them through `WorkbenchTabWindowContext`, so their rows
+// and the strip's counts move in one update (`useTabWindowContent`).
 
 /** A work-item tab's window, as the list draws it. */
 export interface WorkbenchWorkItemContent {
@@ -75,6 +81,40 @@ export function mergeWorkItemContent(
   return { rows, pagination, planningSessions };
 }
 
+/** What the view holds: a work-item tab's list, or the last To approve / Planning window. */
+interface WorkbenchViewContent {
+  items: WorkbenchWorkItemContent;
+  tabWindow: WorkbenchTabWindowDto | null;
+}
+
+/** The work-item part of an answer for To approve or Planning: none, so it keeps what is held. */
+const EMPTY_CONTENT: WorkbenchWorkItemContent = {
+  rows: [],
+  pagination: { total: 0, page: 1, pageSize: 0 },
+  planningSessions: [],
+};
+
+function viewContentOf(read: WorkbenchWindowDto): WorkbenchViewContent | null {
+  if (read.window.kind === 'workItems') {
+    const items = workItemContentOf(read);
+    return items === null ? null : { items, tabWindow: null };
+  }
+  return { items: EMPTY_CONTENT, tabWindow: read.window };
+}
+
+/** `next` over `prev`, part by part — a part `next` does not carry keeps `prev`'s. */
+function mergeViewContent(
+  prev: WorkbenchViewContent,
+  next: WorkbenchViewContent,
+): WorkbenchViewContent {
+  const items =
+    next.items === EMPTY_CONTENT ? prev.items : mergeWorkItemContent(prev.items, next.items);
+  const tabWindow =
+    next.tabWindow === null ? prev.tabWindow : keepIfEqual(prev.tabWindow, next.tabWindow);
+  if (items === prev.items && tabWindow === prev.tabWindow) return prev;
+  return { items, tabWindow };
+}
+
 /** A window answer as this view draws it — `null` for To approve and Planning. */
 export function workItemContentOf(read: WorkbenchWindowDto): WorkbenchWorkItemContent | null {
   if (read.window.kind !== 'workItems') return null;
@@ -112,23 +152,27 @@ export function WorkbenchLiveView({
   caption?: ReactNode;
   empty: ReactNode;
   viewerId: string;
-  /** To approve's or Planning's server body, drawn under the live strip. */
+  /** To approve's or Planning's server-seeded body, live through the tab-window context. */
   children?: ReactNode;
 }) {
   const t = useTranslations('workbench');
   const translate = useCallback((key: WorkbenchTabStripMessage) => t(key), [t]);
-  const content = useMemo<WorkbenchWorkItemContent>(
-    () => ({ rows, pagination, planningSessions }),
+  const content = useMemo<WorkbenchViewContent>(
+    () => ({ items: { rows, pagination, planningSessions }, tabWindow: null }),
     [rows, pagination, planningSessions],
   );
-  const live = useWorkbenchWindow<WorkbenchWorkItemContent>({
+  const live = useWorkbenchWindow<WorkbenchViewContent>({
     tab,
     page,
     content,
     counts,
-    fromWindow: workItemContentOf,
-    merge: mergeWorkItemContent,
+    fromWindow: viewContentOf,
+    merge: mergeViewContent,
   });
+  const tabWindow = useMemo<WorkbenchTabWindowValue>(
+    () => ({ window: live.content.tabWindow, reread: live.reread, failures: live.failures }),
+    [live.content.tabWindow, live.reread, live.failures],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -142,17 +186,19 @@ export function WorkbenchLiveView({
       {caption}
       {listsWorkItems(tab) ? (
         <WorkbenchList
-          rows={live.content.rows}
+          rows={live.content.items.rows}
           label={label}
           tab={tab}
-          pagination={live.content.pagination}
+          pagination={live.content.items.pagination}
           empty={empty}
           viewerId={viewerId}
-          planningSessions={live.content.planningSessions}
+          planningSessions={live.content.items.planningSessions}
           reread={live.reread}
         />
       ) : (
-        children
+        <WorkbenchTabWindowContext.Provider value={tabWindow}>
+          {children}
+        </WorkbenchTabWindowContext.Provider>
       )}
     </div>
   );

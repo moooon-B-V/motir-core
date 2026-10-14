@@ -21,6 +21,10 @@ import { PlanningEmptyAction } from './PlanningEmptyAction';
 // the WRONG instrument and not merely a different one: a route boundary can flush
 // the response head before the page's gate has run, which is why this repo has none.
 //
+// ⚠️ THIS READ IS THE FIRST PAINT ONLY (Story MOTIR-8539 · MOTIR-8581). After it,
+// the list's rows come from the Workbench's one window read — the same response
+// that sets the strip's counts — so nothing here is re-run to update them.
+//
 // ⚠️ PAGE 1 ONLY, AT THE CEILING (§ 36.10). The tab has no pager, so there is no
 // `page` to honour: it reads the newest {@link PLANNING_TAB_CEILING} rows and lets
 // `total` say when the set is larger. The read stays offset-paged underneath, so
