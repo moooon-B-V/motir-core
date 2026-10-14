@@ -160,6 +160,21 @@ export class MonitorBinderUnavailableError extends Error {
 }
 
 /**
+ * The issue's link moved between the reconciler's decision to file and the
+ * filing transaction's lock (Bug MOTIR-8512): another reconciler filed for the
+ * same issue first. Thrown from INSIDE the create's transaction, so the bug this
+ * reconciler was about to file rolls back with it; the reconciler then decides
+ * again against the row as it now stands. It never leaves the service.
+ */
+export class MonitorFilingRaceError extends Error {
+  readonly code = 'MONITOR_FILING_RACE' as const;
+  constructor(readonly externalIssueId: string) {
+    super(`Issue ${externalIssueId} was filed by another reconciler first.`);
+    this.name = 'MonitorFilingRaceError';
+  }
+}
+
+/**
  * A minimum level that is not one of the vocabulary's members (Story MOTIR-4929
  * · Subtask MOTIR-5579). `null` — every level — is always valid; anything else
  * must be one of `lib/monitors/levels.ts`'s `MONITOR_LEVELS`.
@@ -261,15 +276,17 @@ export class MonitorIssueLinkNotFoundError extends Error {
  * bug the monitor reconciler FILED — its `work-item/created` event carries the
  * binding's provenance — and no `monitor_issue` row points at it yet.
  *
- * ⚠️ THIS IS THE ORDERING WINDOW, AND IT IS THROWN SO IT IS RETRIED. The
- * reconciler's create commits its own transaction, and emits its event, before
- * the outer transaction that links the row commits. So a fast consumer can see
- * the bug before the link. Throwing hands the wait to the job's idempotent retry
- * budget, which is measured in seconds; returning a value here would skip the
- * enrichment for good. A link that NEVER appears — the reconciler's outer
- * transaction rolled back after its create committed, the one window it accepts —
- * exhausts the budget and dead-letters, which is loud rather than silent. The bug
- * itself is untouched either way.
+ * ⚠️ THIS SHOULD NOT HAPPEN ANY MORE, AND IT IS STILL THROWN SO IT IS RETRIED.
+ * Before Bug MOTIR-8512 the reconciler's create committed, and emitted its event,
+ * before the outer transaction that linked the row committed, so a fast consumer
+ * saw the bug before the link (Bug MOTIR-8489 is that window reaching Sentry).
+ * Since MOTIR-8512 the reconciler writes the link inside the create's own
+ * transaction and `work-item/created` is emitted after that commit, so the event
+ * can no longer precede the link. The throw stays as a safety net: handing the
+ * wait to the job's idempotent retry budget is still better than returning a
+ * value, which would skip the enrichment for good. If it fires and exhausts the
+ * budget now, that is a regression in the reconciler's ordering, not an expected
+ * window. The bug itself is untouched either way.
  */
 export class MonitorLinkNotYetVisibleError extends Error {
   readonly code = 'MONITOR_LINK_NOT_YET_VISIBLE' as const;

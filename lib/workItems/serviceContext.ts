@@ -71,13 +71,13 @@ export interface ServiceContext {
    * filed it, and the create's post-commit `work-item/created` event stamps it as
    * `viaMonitorConnectionId`.
    *
-   * ⚠️ IT EXISTS TO CLOSE A RACE, not to label a card. The reconciler's create
-   * commits its OWN transaction — and so emits its event — before the OUTER
-   * transaction that points the `monitor_issue` row at the new bug commits. A
-   * consumer that asks "does a link point at this item?" can therefore observe a
-   * committed bug with no link yet. The stamp says the link IS coming, so that
-   * consumer retries instead of concluding "not a monitor bug" for good. Absent on
-   * every other write.
+   * It was added to close a race: the reconciler's create used to commit — and
+   * emit its event — before the transaction that pointed the `monitor_issue` row
+   * at the new bug, so a consumer could observe a committed bug with no link yet,
+   * and the stamp told it to retry. Since Bug MOTIR-8512 the link is written
+   * inside the create's own transaction, so the event never precedes it; the
+   * stamp still names the binding that filed the bug. Absent on every other
+   * write.
    */
   viaMonitorConnectionId?: string;
 }

@@ -1,6 +1,6 @@
 import type { NextResponse } from 'next/server';
 import { presentedBearerToken } from '@/lib/api/v1/bearer';
-import { aiBudget, aiGenerateBudget } from '@/lib/rateLimit/budgets';
+import { aiBudget, aiGenerateBudget, aiInternalBudget } from '@/lib/rateLimit/budgets';
 import { enforceRateLimit } from '@/lib/rateLimit/guard';
 import { rateLimitKey, type RateLimitScope } from '@/lib/rateLimit/keys';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -42,7 +42,12 @@ export async function enforceAiRateLimit(
     {
       scope,
       key: rateLimitKey(scope, ctx.workspaceId, ctx.userId),
-      budget: scope === 'ai:generate' ? aiGenerateBudget() : aiBudget(),
+      budget:
+        scope === 'ai:generate'
+          ? aiGenerateBudget()
+          : scope === 'ai:internal'
+            ? aiInternalBudget()
+            : aiBudget(),
     },
   ]);
   return response;

@@ -10,6 +10,10 @@ import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { ContentSectionCard } from './ContentSectionCard';
+import { fieldRef } from '@/lib/translation/fieldRefs';
+import { FieldTranslationMark } from './translation/FieldTranslationMark';
+import { TranslatableMarkdown } from './translation/TranslatableFields';
+import { useFieldTranslation } from './translation/TranslationProvider';
 import {
   addTodoAction,
   deleteTodoAction,
@@ -387,6 +391,9 @@ function TodoRow({
   const t = useTranslations('workItemTodos');
   const tpa = useTranslations('projectAccess');
   const notesId = useId();
+  // The checkbox takes its name from the row's text, so in the translated view it
+  // names the translated text (MOTIR-8122; design § Where each field's mark sits).
+  const label = useFieldTranslation(fieldRef.todoText(row.id)).text ?? row.text;
 
   if (isEditing) {
     return (
@@ -412,7 +419,7 @@ function TodoRow({
         <Checkbox
           checked={row.done}
           onChange={onToggle}
-          label={row.text}
+          label={label}
           disabled={pending}
           stateLabels={{ checked: t('done'), unchecked: t('notDone') }}
           className="mt-0.5"
@@ -426,7 +433,7 @@ function TodoRow({
             <Checkbox
               checked={row.done}
               onChange={onToggle}
-              label={row.text}
+              label={label}
               disabled
               stateLabels={{ checked: t('done'), unchecked: t('notDone') }}
             />
@@ -452,6 +459,7 @@ function TodoRow({
         ) : (
           <TodoRowBody
             row={row}
+            todoId={row.id}
             isExpanded={isExpanded}
             onToggleExpanded={onToggleExpanded}
             notesId={notesId}
@@ -519,16 +527,25 @@ export interface TodoRowContent {
 
 export function TodoRowBody({
   row,
+  todoId,
   isExpanded,
   onToggleExpanded,
   notesId,
 }: {
   row: TodoRowContent;
+  /**
+   * The step's id, on a REAL card's row (MOTIR-8122): its text and notes then take
+   * part in on-demand translation. A proposal's row has none, and translates nothing.
+   */
+  todoId?: string;
   isExpanded: boolean;
   onToggleExpanded: () => void;
   notesId: string;
 }) {
   const t = useTranslations('workItemTodos');
+  const textRef = todoId ? fieldRef.todoText(todoId) : null;
+  const notesRef = todoId ? fieldRef.todoNotes(todoId) : null;
+  const text = useFieldTranslation(textRef).text ?? row.text;
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -541,9 +558,10 @@ export function TodoRowBody({
               : 'text-[13.5px] text-(--el-text)'
           }
         >
-          {row.text}
+          {text}
         </span>
         <ExecutorMark executor={row.executor} />
+        {textRef ? <FieldTranslationMark fieldRef={textRef} field="todo" /> : null}
       </div>
 
       {/* The INSTRUCTIONS disclosure — rendered ONLY when the row has
@@ -552,22 +570,31 @@ export function TodoRowBody({
           It stays INTERACTIVE in the read face: expanding notes is a read. */}
       {row.notesMd ? (
         <>
-          <button
-            type="button"
-            onClick={onToggleExpanded}
-            aria-expanded={isExpanded}
-            aria-controls={notesId}
-            className="mt-1 inline-flex items-center gap-1 rounded-(--radius-control) font-sans text-[11.5px] text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-          >
-            <span aria-hidden>{isExpanded ? '▾' : '▸'}</span>
-            {isExpanded ? t('notesHide') : t('notesShow')}
-          </button>
+          {/* The notes' translation mark sits beside the disclosure, so it shows
+              whether the notes are open or closed (MOTIR-8122). */}
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleExpanded}
+              aria-expanded={isExpanded}
+              aria-controls={notesId}
+              className="inline-flex items-center gap-1 rounded-(--radius-control) font-sans text-[11.5px] text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              <span aria-hidden>{isExpanded ? '▾' : '▸'}</span>
+              {isExpanded ? t('notesHide') : t('notesShow')}
+            </button>
+            {notesRef ? <FieldTranslationMark fieldRef={notesRef} field="instructions" /> : null}
+          </div>
           {isExpanded ? (
             <div
               id={notesId}
               className="mt-1.5 border-l-2 border-(--el-border-strong) pl-3 text-[12.5px] text-(--el-text-secondary)"
             >
-              <MarkdownView value={row.notesMd} />
+              {notesRef ? (
+                <TranslatableMarkdown fieldRef={notesRef} value={row.notesMd} />
+              ) : (
+                <MarkdownView value={row.notesMd} />
+              )}
             </div>
           ) : null}
         </>
