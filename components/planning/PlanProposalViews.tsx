@@ -13,7 +13,11 @@ import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
 import { PlanProgressLineView } from '@/components/planning/PlanProgressLine';
 import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
-import type { PlanProgressSnapshot } from '@/lib/plans/planProgress';
+import {
+  readPlanAtWork,
+  type PlanProgressSnapshot,
+  type PlanProgressStep,
+} from '@/lib/plans/planProgress';
 
 // The plan page's List | Canvas pane, as ONE component two hosts mount
 // (Subtask MOTIR-6185 · Story MOTIR-6155).
@@ -173,6 +177,24 @@ export function PlanProposalViews({
   // THE ONE CLOCK (MOTIR-7829): read once here, so the line and anything else
   // this pane draws from the steps read the same instant.
   const progressReading = usePlanProgressReading(progress, { failing: progressFailing });
+  // AT WORK (MOTIR-8416): the one at-work answer over that same reading — which
+  // cards may MOVE. Presence still rides the held `liveSteps`, so a dropped read
+  // keeps the cue drawn while its motion stops.
+  const atWork = readPlanAtWork(progressReading, { failing: progressFailing });
+  // THE STALLED HOLD (design § _Motir at work_, the States table): a stall empties
+  // `liveSteps`, but the card the planner was last writing keeps its cue, still.
+  // Held from the last reading that named a step; released when the plan settles.
+  const [heldSteps, setHeldSteps] = useState<readonly PlanProgressStep[] | null>(null);
+  const nextHeld = !progressReading
+    ? null
+    : progressReading.state === 'stalled'
+      ? heldSteps
+      : progressReading.liveSteps.length > 0
+        ? progressReading.liveSteps
+        : null;
+  if (nextHeld !== heldSteps && stepsKey(nextHeld) !== stepsKey(heldSteps)) setHeldSteps(nextHeld);
+  const presenceSteps =
+    progressReading?.state === 'stalled' ? heldSteps : (progressReading?.liveSteps ?? null);
   const showingList = view === 'list';
   const announcement = useBatchAnnouncement(items, live);
   const canvas = (
@@ -193,7 +215,8 @@ export function PlanProposalViews({
       // THE CUES (MOTIR-7830) — the line's own clock's live steps, so the words
       // and the canvas stop naming a step at the same instant. A dropped read
       // holds them because the hook does. The List gets no cue (§26.18).
-      liveSteps={progressReading?.liveSteps ?? null}
+      liveSteps={presenceSteps}
+      movingSteps={atWork.steps}
     />
   );
   // THE DISCARDED BAND (§23.12) — the band idiom (`--el-surface-soft` +
@@ -340,4 +363,11 @@ function useBatchAnnouncement(
     });
   }
   return live ? state.said : null;
+}
+
+/** A step list's identity — a reading recomputes its arrays on every tick. */
+function stepsKey(steps: readonly PlanProgressStep[] | null): string {
+  return steps
+    ? steps.map((x) => `${x.sessionKey}|${x.kind}|${x.targetNodeId}|${x.startedAt}`).join(',')
+    : '';
 }

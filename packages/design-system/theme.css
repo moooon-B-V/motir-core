@@ -3366,6 +3366,11 @@
      (The planning node's done/total meter is NOT this role: it means DONE and
      stays --el-success.) */
   --el-progress-fill: var(--color-primary-fill);
+  /* THE DRAFTING CUE (MOTIR-8414 · MOTIR-8416) — the card Motir is writing right now:
+     its ring, chip edge and pen (`--el-drafting`) and the wash on the card
+     (`--el-drafting-surface`). Base keeps the in-progress hue; Motir warms it. */
+  --el-drafting: var(--el-status-in-progress);
+  --el-drafting-surface: var(--el-tint-sky);
   /* The WARM primary CTA (MOTIR-8251 Revision 5 · built by MOTIR-8254) — the
      onboarding screens' one warm element: the palette's decorative highlight as
      the FILL, ink as the LABEL. The label is dark in BOTH themes, because white
@@ -4311,6 +4316,10 @@
   --el-editor-focus: var(--color-accent);
   --el-priority-high: var(--color-warning);
   --el-progress-fill: var(--color-primary-fill);
+  /* MOTIR-8416 — carried here because `motir` OVERRIDES both (the warm orange
+     drafting cue); a scoped amethyst tile keeps the base's in-progress hue. */
+  --el-drafting: var(--el-status-in-progress);
+  --el-drafting-surface: var(--el-tint-sky);
   --el-sidebar-item-bg-hover: #eeede9;
   /* MOTIR-5139 — carried here because `evergreen` OVERRIDES it. A token this
      block omits leaks from the ANCESTOR into a scoped `motir` tile, so an
@@ -4715,6 +4724,9 @@
   --el-showcase-decision: var(--color-accent);
   /* progress bars take the warm accent instead of the ink CTA fill */
   --el-progress-fill: var(--color-accent);
+  /* the drafting cue takes the warm accent and the peach wash (MOTIR-8414) */
+  --el-drafting: var(--color-accent);
+  --el-drafting-surface: var(--color-tint-peach);
   /* the editor's focus border / rings stay the blue focus hue — the accent they
      borrowed is decorative-only here now */
   --el-editor-focus: var(--color-primary);
@@ -4809,6 +4821,8 @@
   --el-showcase-highlight: #ffd02f; /* see the light block */
   --el-showcase-decision: var(--color-accent);
   --el-progress-fill: var(--color-accent);
+  --el-drafting: var(--color-accent);
+  --el-drafting-surface: var(--color-tint-peach);
   --el-editor-focus: var(--color-primary);
 }
 
