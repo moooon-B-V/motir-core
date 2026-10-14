@@ -166,6 +166,9 @@ process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/billing-cloud.spec.ts', '**/cloud-*.spec.ts'],
+  // The observability lane (MOTIR-8557) needs a server with Sentry on, which this
+  // one is not; its prefix never matches here, and this says so.
+  testIgnore: ['**/observability-*.spec.ts'],
   // MOTIR-921: resolve `server-only` to an empty stub for the RUNNER only (see
   // tsconfig.node.json). A spec that seeds through a service reaching
   // lib/ai/motirAiClient otherwise dies at import, before collection. Same

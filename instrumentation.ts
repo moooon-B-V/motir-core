@@ -140,6 +140,16 @@ export async function register() {
     await import('@/lib/http/responseCloseListenerLimit');
   installResponseCloseListenerLimit();
 
+  // Every transaction's wait and hold, per route and MCP tool, sampled or not
+  // (MOTIR-8553), served on the private metrics port when
+  // `MONITORING_METRICS_PORT` is set. Node only: `prom-client` and `node:http`
+  // must never reach the Edge bundle, which is why both imports sit below the
+  // runtime gate.
+  const { registerRequestDbTimingListener } = await import('@/lib/monitoring/requestDbTiming');
+  registerRequestDbTimingListener();
+  const { startMetricsServer } = await import('@/lib/monitoring/metricsServer');
+  startMetricsServer();
+
   // Every E2E seam, from the ONE table the job worker installs from too
   // (`lib/test-mock-seams.ts`, MOTIR-5837). Dynamic, like every import below the
   // runtime gate, so the Edge bundle never analyses the mocks.

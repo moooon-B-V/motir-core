@@ -25,7 +25,9 @@ import { startTransactionStallMonitor } from '@/lib/monitoring/transactionStall'
 // builder is not the shared helper the gate test's header declines — that one is
 // about the EDGE runtime, which resolves `@sentry/nextjs` to a different build
 // and genuinely cannot share this.
-const options = serverSentryInitOptions();
+// The ONE Node caller that opts in to performance tracing (MOTIR-8549): the
+// worker and the relay share the builder and stay at 0.
+const options = serverSentryInitOptions({ traces: true });
 // The event-loop reading a transaction-timeout report carries (MOTIR-6701)
 // starts under the same gate: a build with no DSN measures nothing.
 if (options) {
