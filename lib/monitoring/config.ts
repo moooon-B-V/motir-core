@@ -12,6 +12,11 @@
 // lives in `./serverInit` instead, which no Next config touches. Keep this
 // module free of anything but `process.env` reads.
 //
+// The one import is RELATIVE and imports nothing itself: the host's identity
+// (MOTIR-8549's `instance.*` tags) is read through `lib/deployment/identity.ts`,
+// the one file the CI-fleet boundary guard lets name the host's variables.
+import { hostInstanceId, hostProcessGroup, hostRegion } from '../deployment/identity';
+//
 // Subtask 8.5.6 / MOTIR-1162. The provisioned values and which of the two homes
 // each belongs in are recorded on MOTIR-1161; this file is the code side of
 // that split, and the split is the whole reason the file exists:
@@ -205,9 +210,11 @@ export const BROWSER_TRACES_SAMPLE_RATE = 0;
  */
 export function monitoringInstanceTags(): Record<string, string> {
   const tags: Record<string, string> = {};
-  const machine = nonEmpty(process.env['FLY_MACHINE_ID']);
-  const processGroup = nonEmpty(process.env['FLY_PROCESS_GROUP']);
-  const region = nonEmpty(process.env['FLY_REGION']);
+  // Read through the one file allowed to name the host's variables
+  // (`tests/ciFleet/orchestratorPortBoundary.test.ts`).
+  const machine = hostInstanceId();
+  const processGroup = hostProcessGroup();
+  const region = hostRegion();
   if (machine) tags['instance.machine'] = machine;
   if (processGroup) tags['instance.process_group'] = processGroup;
   if (region) tags['instance.region'] = region;
