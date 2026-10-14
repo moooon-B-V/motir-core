@@ -42,6 +42,7 @@ const subscription: RawSubscriptionResponse = {
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgUsage: async () => usage,
   getOrgSubscription: async () => subscription,
+  getPendingPlanChange: async () => ({ pendingDowngrade: null }),
   createCheckoutSession: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_1' }),
   createPortalSession: async () => ({ url: 'https://billing.stripe.com/p/session/1' }),
   setSeatQuantity: async () => ({ applied: true, outcome: 'updated' }),
