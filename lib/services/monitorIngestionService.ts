@@ -1,9 +1,13 @@
-import type { MonitorIssue } from '@/generated/prisma/client';
+import type { MonitorIssue, Prisma, WorkItem } from '@/generated/prisma/client';
 import { getGitProvider } from '@/lib/git';
 import type { GitProviderId, ReleaseContainment } from '@/lib/git/types';
 import { getMonitorProvider } from '@/lib/monitors';
 import { isStillAsFiled } from '@/lib/monitors/asFiled';
-import { MonitorBinderUnavailableError, MonitorProviderCallError } from '@/lib/monitors/errors';
+import {
+  MonitorBinderUnavailableError,
+  MonitorFilingRaceError,
+  MonitorProviderCallError,
+} from '@/lib/monitors/errors';
 import { meetsMinimumLevel } from '@/lib/monitors/levels';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { MONITOR_ISSUES_PAGE_LIMIT } from '@/lib/monitors/provider';
@@ -16,6 +20,7 @@ import {
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
@@ -601,17 +606,279 @@ async function refreshAssigneesQuietly(
   }
 }
 
+/** How far {@link resolveDuplicateTarget} follows a `duplicates` chain. */
+const DUPLICATE_CHAIN_MAX_HOPS = 10;
+
+/**
+ * The LIVE card a done bug was closed as a duplicate of (Bug MOTIR-8512), or
+ * null when it duplicates nothing live. Follows `duplicates` out of each done
+ * card, so A → B → C reaches C when B is itself a done duplicate; a cycle or a
+ * chain past {@link DUPLICATE_CHAIN_MAX_HOPS} ends with null. Of several
+ * targets, a live one wins, then the first by id — the link table has no order
+ * of its own, and a re-point must not flip between polls.
+ */
+async function resolveDuplicateTarget(
+  doneBug: WorkItem,
+  doneKeys: ReadonlySet<string>,
+  tx: Prisma.TransactionClient,
+): Promise<WorkItem | null> {
+  const seen = new Set<string>([doneBug.id]);
+  let frontier = doneBug;
+  for (let hop = 0; hop < DUPLICATE_CHAIN_MAX_HOPS; hop += 1) {
+    const edges = await workItemLinkRepository.findByFromItem(frontier.id, 'duplicates', tx);
+    const targets: WorkItem[] = [];
+    for (const edge of [...edges].sort((a, b) => a.toId.localeCompare(b.toId))) {
+      if (seen.has(edge.toId)) continue;
+      const target = await workItemRepository.findById(edge.toId, tx);
+      if (target) targets.push(target);
+    }
+    const live = targets.find((target) => !doneKeys.has(target.status));
+    if (live) return live;
+    const next = targets[0];
+    if (!next) return null;
+    seen.add(next.id);
+    frontier = next;
+  }
+  return null;
+}
+
+/** What the deciding transaction concluded. */
+type ReconcileDecision =
+  | { kind: 'settled'; result: MonitorReconcileResult }
+  | {
+      kind: 'file';
+      /** The link as the decision saw it — the filing re-checks it under the lock. */
+      expected: { workItemId: string | null; identifier: string | null };
+      previous: PreviousBug | null;
+      folderId: string | null;
+    };
+
+/** One attempt of {@link monitorIngestionService.reconcileIssue}: decide, then file. */
+async function reconcileOnce(
+  connection: MonitorReconcileConnection,
+  issue: NormalizedMonitorIssue,
+  read: MonitorContextRead | null | undefined,
+  fixRelease: MonitorFixReleaseRead | null | undefined,
+): Promise<MonitorReconcileResult> {
+  const binderId = connection.boundByUserId;
+  if (!binderId) throw new MonitorBinderUnavailableError(connection.id, BINDER_MISSING);
+
+  const { projectId, workspaceId } = connection;
+  const ctx = { userId: binderId, workspaceId };
+  // Reference data, read before the lock: the project's own workflow decides
+  // what "done" means, so a team's custom terminal status counts.
+  const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
+  const doneKeys = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+
+  const contextRead = read ?? MONITOR_CONTEXT_SKIPPED;
+  const facts = factsOf(issue, contextRead);
+  const updated = (bug: WorkItem): ReconcileDecision => ({
+    kind: 'settled',
+    result: { outcome: 'updated', workItemId: bug.id, identifier: bug.identifier },
+  });
+
+  // ── DECIDE ──────────────────────────────────────────────────────────────────
+  // Short, and it FILES nothing: every write here is to a row that already
+  // points at a bug. A decision to file is carried out by the create below.
+  const decision = await withWorkspaceContext(
+    { ...ctx, projectId },
+    async (tx): Promise<ReconcileDecision> => {
+      const lockedId = await monitorIssueRepository.lockByExternalId(
+        connection.id,
+        issue.externalId,
+        tx,
+      );
+      const row: MonitorIssue | null = lockedId
+        ? await monitorIssueRepository.findById(lockedId, tx)
+        : null;
+
+      // The bug the row points at, if any. A DELETED bug cannot be found here:
+      // the FK is ON DELETE SET NULL, so deleting it cleared `workItemId` in the
+      // same statement — and it keeps `filedWorkItemIdentifier`, which is how
+      // "deleted" is told from "never filed" below.
+      const bug = row?.workItemId ? await workItemRepository.findById(row.workItemId, tx) : null;
+      if (row && bug && !doneKeys.has(bug.status)) {
+        await writeLinkFacts(row.id, facts, contextRead, tx);
+        return updated(bug);
+      }
+
+      // ── A DUPLICATE IS NOT A COMPLETION (Bug MOTIR-8512) ──────────────────────
+      // `cancelled` is in the done category, so a bug a person closed as a
+      // duplicate reads exactly like a fixed one — and every recurrence used to
+      // file again, re-arming each duplicate the person had consolidated. When
+      // the done bug `duplicates` a live card, the recurrence is THAT card's:
+      // the link moves to it (`repoint` clears the per-link sync record, so the
+      // resolve-back starts over for the card that now carries the issue) and
+      // nothing is filed. A chain that ends in a done card re-files below, as
+      // any completed bug does.
+      if (row && bug) {
+        const target = await resolveDuplicateTarget(bug, doneKeys, tx);
+        if (target) {
+          await monitorIssueRepository.repoint(row.id, target.id, target.identifier, tx);
+          await writeLinkFacts(row.id, facts, contextRead, tx);
+          return updated(target);
+        }
+      }
+
+      // ── THE LOOP GUARD (Story MOTIR-4931 · Subtask MOTIR-5704) ──────────────
+      // A done bug whose issue MOTIR ITSELF resolved, and which nobody has seen
+      // since, is already reconciled — not a recurrence. Two orderings reach
+      // this branch with no recurrence at all: a STALE PAGE (fetched while the
+      // issue was unresolved, reconciled after the bug completed and the resolve
+      // landed) and an IN-FLIGHT resolve (claimed `pending`, provider call not
+      // yet returned). Both carry a resolve attempt and a `lastSeenAt` at or
+      // before Motir's write, so both take `updated` — facts only, no work item
+      // written. The guard reads MOTIR-side state only: on a shared credential
+      // "we resolved it" and "they resolved it" are one identity to the
+      // provider, so the provider's actor cannot tell them apart.
+      //
+      // ⚠️ THE ONE WINDOW IT ACCEPTS: the provider's `lastSeen` and Motir's clock
+      // are different clocks. A regression whose ONLY event lands within the
+      // clock skew of Motir's resolve reads as settled until its next event, and
+      // that event then re-files normally.
+      //
+      // `updated` rather than a new outcome member, deliberately: it already
+      // means "facts only, no card", and a new member would thread through the
+      // poll summary and the room's poll line for no difference a person sees.
+      if (row && bug && row.resolveAttemptedAt !== null) {
+        const motirWrite = Math.max(
+          row.resolveAttemptedAt.getTime(),
+          row.resolvedByMotirAt?.getTime() ?? 0,
+        );
+        if (issue.lastSeenAt.getTime() <= motirWrite) {
+          await writeLinkFacts(row.id, facts, contextRead, tx);
+          return updated(bug);
+        }
+      }
+
+      // ── THE FIX-RELEASE GUARD (Bug MOTIR-8330) ──────────────────────────────
+      // A done bug whose fix the event's release does not carry has not been
+      // TESTED by that event: it is the old build still serving between the merge
+      // that completed the bug and the deploy that ships it. Facts only, no card —
+      // and the next event from a release that DOES carry the merge re-files
+      // normally, because this guard reads each visit's own release.
+      //
+      // It keys on the bug the row points at NOW, under the lock: an answer read
+      // for a bug the link no longer names (re-pointed, deleted) is not about this
+      // decision. A bug completed with no merge never gets an answer at all
+      // (`readFixReleaseQuietly` returns null), so it re-files as before.
+      if (row && bug && fixRelease?.workItemId === bug.id && fixRelease.containment === 'missing') {
+        await writeLinkFacts(row.id, facts, contextRead, tx);
+        return updated(bug);
+      }
+
+      const previous: PreviousBug | null = bug
+        ? { identifier: bug.identifier, workItemId: bug.id, reason: 'completed' }
+        : row?.filedWorkItemIdentifier
+          ? { identifier: row.filedWorkItemIdentifier, workItemId: null, reason: 'deleted' }
+          : null;
+
+      // Placement comes from the resolver and NOWHERE else (MOTIR-4927): its
+      // folder, or the project root when that is what the project chose.
+      const { folderId } = await bugDestinationService.resolve(projectId, tx);
+      return {
+        kind: 'file',
+        expected: {
+          workItemId: row?.workItemId ?? null,
+          identifier: row?.filedWorkItemIdentifier ?? null,
+        },
+        previous,
+        folderId,
+      };
+    },
+  );
+  if (decision.kind === 'settled') return decision.result;
+
+  // ── FILE — the bug and its link in ONE transaction ──────────────────────────
+  const { expected, previous, folderId } = decision;
+  let created;
+  try {
+    created = await workItemsService.createWorkItem(
+      {
+        projectId,
+        kind: 'bug',
+        title: monitorBugTitle(issue.title),
+        folderId,
+        descriptionMd: monitorBugBody(issue, connection.externalProjectSlug, previous),
+      },
+      // The provenance stamp the bug ENRICHMENT trigger reads (MOTIR-5849). The
+      // link now commits with the bug, so the event never precedes it; the stamp
+      // still says which binding filed it.
+      { ...ctx, viaMonitorConnectionId: connection.id },
+      {
+        inTransaction: async (bug, tx) => {
+          await monitorIssueRepository.insertIfAbsent(
+            {
+              connectionId: connection.id,
+              projectId,
+              workspaceId,
+              externalIssueId: issue.externalId,
+              ...facts,
+            },
+            tx,
+          );
+          const lockedId = await monitorIssueRepository.lockByExternalId(
+            connection.id,
+            issue.externalId,
+            tx,
+          );
+          const row = lockedId ? await monitorIssueRepository.findById(lockedId, tx) : null;
+          if (
+            !row ||
+            row.workItemId !== expected.workItemId ||
+            row.filedWorkItemIdentifier !== expected.identifier
+          ) {
+            throw new MonitorFilingRaceError(issue.externalId);
+          }
+          await writeLinkFacts(row.id, facts, contextRead, tx);
+          await monitorIssueRepository.markFiled(row.id, bug.id, bug.identifier, tx);
+        },
+      },
+    );
+  } catch (err) {
+    if (isBinderRefusal(err)) {
+      throw new MonitorBinderUnavailableError(connection.id, BINDER_CANNOT_FILE);
+    }
+    throw err;
+  }
+
+  const relatesTo = previous?.reason === 'completed' ? previous.workItemId : null;
+  if (relatesTo) {
+    // The body names the completed key, and a body that REFERENCES another
+    // item already gets a `relates_to` mention edge from the create path
+    // (Subtask 5.8.3). The explicit link is what makes the edge a property of
+    // this method rather than of the body's wording — so a duplicate is the
+    // edge already being there: success, exactly as `link_work_items` treats it.
+    try {
+      await workItemsService.linkWorkItems(
+        relationshipToLink('relates_to', created.id, relatesTo),
+        ctx,
+      );
+    } catch (err) {
+      if (!(err instanceof DuplicateLinkError)) throw err;
+    }
+  }
+
+  return {
+    outcome: previous ? 'refiled' : 'filed',
+    workItemId: created.id,
+    identifier: created.identifier,
+  };
+}
+
 export const monitorIngestionService = {
   /**
    * Bring Motir into agreement with ONE provider issue for ONE binding.
    *
-   * The `monitor_issue` row is CLAIMED and LOCKED first (insert-if-absent, then
-   * `SELECT … FOR UPDATE`), and exactly one outcome applies to its state:
+   * The `monitor_issue` row is LOCKED first (`SELECT … FOR UPDATE`, when it
+   * exists), and exactly one outcome applies to its state:
    *
    * | row state                                       | outcome                        |
    * |-------------------------------------------------|--------------------------------|
-   * | no bug ever filed                               | `filed`                        |
+   * | no bug ever filed (or no row yet)               | `filed`                        |
    * | bug live (not done-category; ARCHIVED counts)   | `updated` — facts only         |
+   * | bug done, and it `duplicates` a live card        | `updated` — the link MOVES to  |
+   * |   (following the chain, Bug MOTIR-8512)          |   that card                    |
    * | bug done, and MOTIR resolved the issue with no   | `updated` — facts only (the     |
    * |   sighting since (MOTIR-5704's loop guard)       |   loop guard)                   |
    * | bug done, and the event's release lacks the     | `updated` — facts only (the     |
@@ -622,7 +889,10 @@ export const monitorIngestionService = {
    * An ARCHIVED bug is live: a person chose to archive it, and filing again
    * would override that choice. A DONE one is never re-opened — the poll only
    * hands this method an issue seen after its watermark, so a done bug here is a
-   * recurrence after completion, and we plan forward.
+   * recurrence after completion, and we plan forward. A done bug that a person
+   * closed as a DUPLICATE was not completed, though: its work lives on in the card
+   * it duplicates, so the recurrence belongs to THAT card, and filing again would
+   * undo the person's consolidation one recurrence at a time.
    *
    * ⚠️ WHOSE NAME: the binder's, through `workItemsService.createWorkItem` with
    * the binder's context — every create guard (the edit gate, the reporter
@@ -631,26 +901,29 @@ export const monitorIngestionService = {
    * only in Motir's own META workspace (`lib/ai/serviceAuth.ts`
    * `resolveSystemPrincipal`) and so cannot file into a customer project. A
    * missing binder, or one the create refuses, is
-   * {@link MonitorBinderUnavailableError} and NOTHING is created — the claim is
-   * rolled back with it.
+   * {@link MonitorBinderUnavailableError} and NOTHING is written.
    *
-   * ⚠️ THE LOCK IS HELD ACROSS THE CREATE — the `filePlannerBug` pattern.
-   * `createWorkItem` owns its own transaction and takes no `tx`, so this OUTER
-   * transaction holds the `monitor_issue` row while the INNER one inserts the
-   * bug on disjoint rows. A second reconciler of the same issue blocks on the
-   * lock, then reads the row with `workItemId` set and takes `updated`: two
-   * concurrent reconciles of one new issue produce exactly `{filed, updated}`.
+   * ⚠️ THE BUG AND ITS LINK COMMIT TOGETHER (Bug MOTIR-8512). Deciding happens in
+   * one short transaction that files nothing; a decision to file then hands the
+   * create an in-transaction step that claims the row (insert-if-absent, then
+   * lock), checks the link is still what the decision saw, writes the facts and
+   * points the row at the new bug — inside the CREATE's own transaction. So a
+   * failed link rolls the bug back with it, and no committed bug ever lacks its
+   * link: there is no orphan for the next poll to duplicate. Before this, the
+   * create committed on its own while the link waited on an outer transaction
+   * that stayed open across it; when that outer transaction expired (P2028) the
+   * bug stood unlinked and every later poll filed another.
    *
-   * ⚠️ THE ONE WINDOW THIS ACCEPTS, and it is bounded: a crash after the inner
-   * create commits and before the outer transaction commits leaves an unlinked
-   * bug, and the next run files a second one. It is the same window
-   * `filePlannerBug` accepts for the same reason — closing it would need the
-   * create to join a caller's transaction, which it deliberately does not.
+   * ⚠️ THE RACE: two reconcilers of one issue can both decide to file. The first
+   * to take the row lock links its bug and commits; the second finds the link
+   * moved, throws {@link MonitorFilingRaceError} inside its create (rolling its
+   * bug back), and decides again — now reading the first one's live bug, so it
+   * takes `updated`. Two concurrent reconciles of one new issue produce exactly
+   * `{filed, updated}`.
    *
    * The `relates_to` edge on a re-file of a COMPLETED bug is written after the
-   * outer transaction commits: a failure there leaves a correctly linked row
-   * missing only its cross-reference, rather than an unmarked bug the next run
-   * would duplicate.
+   * filing commits: a failure there leaves a correctly linked row missing only
+   * its cross-reference, rather than an unmarked bug the next run would duplicate.
    */
   async reconcileIssue(
     connection: MonitorReconcileConnection,
@@ -672,182 +945,14 @@ export const monitorIngestionService = {
      */
     fixRelease?: MonitorFixReleaseRead | null,
   ): Promise<MonitorReconcileResult> {
-    const binderId = connection.boundByUserId;
-    if (!binderId) throw new MonitorBinderUnavailableError(connection.id, BINDER_MISSING);
-
-    const { projectId, workspaceId } = connection;
-    const ctx = { userId: binderId, workspaceId };
-    // Reference data, read before the lock: the project's own workflow decides
-    // what "done" means, so a team's custom terminal status counts.
-    const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
-    const doneKeys = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
-
-    const contextRead = read ?? MONITOR_CONTEXT_SKIPPED;
-    const facts = factsOf(issue, contextRead);
-
-    const settled = await withWorkspaceContext({ ...ctx, projectId }, async (tx) => {
-      await monitorIssueRepository.insertIfAbsent(
-        {
-          connectionId: connection.id,
-          projectId,
-          workspaceId,
-          externalIssueId: issue.externalId,
-          ...facts,
-        },
-        tx,
-      );
-      const lockedId = await monitorIssueRepository.lockByExternalId(
-        connection.id,
-        issue.externalId,
-        tx,
-      );
-      /* v8 ignore next 3 -- unreachable: the row was inserted (or already
-         present) in THIS transaction, under the same binding, so the lock finds
-         it. Asserted by `tests/monitors/monitor-issue-store.test.ts` › "two
-         simultaneous claims of one issue leave ONE row, and the loser reads the
-         winner’s". */
-      if (lockedId === null) {
-        throw new Error(`monitor_issue row for ${issue.externalId} vanished under its own lock`);
-      }
-      const row: MonitorIssue | null = await monitorIssueRepository.findById(lockedId, tx);
-      /* v8 ignore next 3 -- unreachable for the same reason: it was just locked. */
-      if (!row) {
-        throw new Error(`monitor_issue row for ${issue.externalId} vanished under its own lock`);
-      }
-
-      // The bug the row points at, if any. A DELETED bug cannot be found here:
-      // the FK is ON DELETE SET NULL, so deleting it cleared `workItemId` in the
-      // same statement — and it keeps `filedWorkItemIdentifier`, which is how
-      // "deleted" is told from "never filed" below.
-      const bug = row.workItemId ? await workItemRepository.findById(row.workItemId, tx) : null;
-      if (bug && !doneKeys.has(bug.status)) {
-        await writeLinkFacts(row.id, facts, contextRead, tx);
-        return {
-          outcome: 'updated' as const,
-          workItemId: bug.id,
-          identifier: bug.identifier,
-          relatesTo: null,
-        };
-      }
-      // ── THE LOOP GUARD (Story MOTIR-4931 · Subtask MOTIR-5704) ──────────────
-      // A done bug whose issue MOTIR ITSELF resolved, and which nobody has seen
-      // since, is already reconciled — not a recurrence. Two orderings reach
-      // this branch with no recurrence at all: a STALE PAGE (fetched while the
-      // issue was unresolved, reconciled after the bug completed and the resolve
-      // landed) and an IN-FLIGHT resolve (claimed `pending`, provider call not
-      // yet returned). Both carry a resolve attempt and a `lastSeenAt` at or
-      // before Motir's write, so both take `updated` — facts only, no work item
-      // written. The guard reads MOTIR-side state only: on a shared credential
-      // "we resolved it" and "they resolved it" are one identity to the
-      // provider, so the provider's actor cannot tell them apart.
-      //
-      // ⚠️ THE ONE WINDOW IT ACCEPTS: the provider's `lastSeen` and Motir's clock
-      // are different clocks. A regression whose ONLY event lands within the
-      // clock skew of Motir's resolve reads as settled until its next event, and
-      // that event then re-files normally.
-      //
-      // `updated` rather than a new outcome member, deliberately: it already
-      // means "facts only, no card", and a new member would thread through the
-      // poll summary and the room's poll line for no difference a person sees.
-      if (bug && row.resolveAttemptedAt !== null) {
-        const motirWrite = Math.max(
-          row.resolveAttemptedAt.getTime(),
-          row.resolvedByMotirAt?.getTime() ?? 0,
-        );
-        if (issue.lastSeenAt.getTime() <= motirWrite) {
-          await writeLinkFacts(row.id, facts, contextRead, tx);
-          return {
-            outcome: 'updated' as const,
-            workItemId: bug.id,
-            identifier: bug.identifier,
-            relatesTo: null,
-          };
-        }
-      }
-
-      // ── THE FIX-RELEASE GUARD (Bug MOTIR-8330) ──────────────────────────────
-      // A done bug whose fix the event's release does not carry has not been
-      // TESTED by that event: it is the old build still serving between the merge
-      // that completed the bug and the deploy that ships it. Facts only, no card —
-      // and the next event from a release that DOES carry the merge re-files
-      // normally, because this guard reads each visit's own release.
-      //
-      // It keys on the bug the row points at NOW, under the lock: an answer read
-      // for a bug the link no longer names (re-pointed, deleted) is not about this
-      // decision. A bug completed with no merge never gets an answer at all
-      // (`readFixReleaseQuietly` returns null), so it re-files as before.
-      if (bug && fixRelease?.workItemId === bug.id && fixRelease.containment === 'missing') {
-        await writeLinkFacts(row.id, facts, contextRead, tx);
-        return {
-          outcome: 'updated' as const,
-          workItemId: bug.id,
-          identifier: bug.identifier,
-          relatesTo: null,
-        };
-      }
-
-      const previous: PreviousBug | null = bug
-        ? { identifier: bug.identifier, workItemId: bug.id, reason: 'completed' }
-        : row.filedWorkItemIdentifier
-          ? { identifier: row.filedWorkItemIdentifier, workItemId: null, reason: 'deleted' }
-          : null;
-
-      // Placement comes from the resolver and NOWHERE else (MOTIR-4927): its
-      // folder, or the project root when that is what the project chose.
-      const { folderId } = await bugDestinationService.resolve(projectId, tx);
-      let created;
-      try {
-        created = await workItemsService.createWorkItem(
-          {
-            projectId,
-            kind: 'bug',
-            title: monitorBugTitle(issue.title),
-            folderId,
-            descriptionMd: monitorBugBody(issue, connection.externalProjectSlug, previous),
-          },
-          // The provenance stamp the bug ENRICHMENT trigger reads (MOTIR-5849):
-          // this create commits before the link below does, so the event must say
-          // the link is coming. It changes nothing about the create itself.
-          { ...ctx, viaMonitorConnectionId: connection.id },
-        );
-      } catch (err) {
-        if (isBinderRefusal(err)) {
-          throw new MonitorBinderUnavailableError(connection.id, BINDER_CANNOT_FILE);
-        }
-        throw err;
-      }
-
-      await writeLinkFacts(row.id, facts, contextRead, tx);
-      await monitorIssueRepository.markFiled(row.id, created.id, created.identifier, tx);
-      return {
-        outcome: previous ? ('refiled' as const) : ('filed' as const),
-        workItemId: created.id,
-        identifier: created.identifier,
-        relatesTo: previous?.reason === 'completed' ? previous.workItemId : null,
-      };
-    });
-
-    if (settled.relatesTo) {
-      // The body names the completed key, and a body that REFERENCES another
-      // item already gets a `relates_to` mention edge from the create path
-      // (Subtask 5.8.3). The explicit link is what makes the edge a property of
-      // this method rather than of the body's wording — so a duplicate is the
-      // edge already being there: success, exactly as `link_work_items` treats it.
-      try {
-        await workItemsService.linkWorkItems(
-          relationshipToLink('relates_to', settled.workItemId, settled.relatesTo),
-          ctx,
-        );
-      } catch (err) {
-        if (!(err instanceof DuplicateLinkError)) throw err;
-      }
+    try {
+      return await reconcileOnce(connection, issue, read, fixRelease);
+    } catch (err) {
+      if (!(err instanceof MonitorFilingRaceError)) throw err;
+      // Another reconciler filed first; decide again against its link. Once:
+      // a second loss in a row is not a race this method can settle.
+      return reconcileOnce(connection, issue, read, fixRelease);
     }
-
-    return {
-      outcome: settled.outcome,
-      workItemId: settled.workItemId,
-      identifier: settled.identifier,
-    };
   },
 
   /**
