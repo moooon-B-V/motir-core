@@ -169,6 +169,7 @@ import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/compon
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
+import { workItemTranslationReadService } from '@/lib/services/workItemTranslationReadService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   toWorkItemDto,
@@ -7033,7 +7034,16 @@ export const workItemsService = {
       folderPath,
       designEvidence,
     );
-    return { ...view, pageRefs, heldTransitions, planHold, mergeMembers };
+    // The reader's TRANSLATION offer (Story MOTIR-7735 · MOTIR-8122; design
+    // MOTIR-8112, host difference 5): the quick view fetches its data here rather
+    // than from the item page's server render, so the offer rides this read.
+    // Built from the item's own fields — the peek shows no to-dos, and it offers
+    // only for the title and description it draws (design D3). A failing read is
+    // no offer, never a failed peek. A Visitor's peek carries none.
+    const translation = await workItemTranslationReadService
+      .getReaderTranslation({ workItem: detail.item, todos: [], readerLocale: locale, ctx })
+      .catch(() => null);
+    return { ...view, pageRefs, heldTransitions, planHold, mergeMembers, translation };
   },
 
   /**

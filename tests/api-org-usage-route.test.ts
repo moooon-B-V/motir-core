@@ -54,6 +54,7 @@ function rawResponse(over: Partial<RawUsageResponse> = {}): RawUsageResponse {
       attributedSpend: 31,
       unattributedSpend: 9,
     },
+    translation: { totalSpend: 360, monthSpend: 45 },
     ...over,
   };
 }
@@ -204,6 +205,22 @@ describe('GET /api/organizations/[orgId]/usage', () => {
     // ask. The DTO's `null` is what makes "unavailable" legible on the wire.
     expect(body.search).toBeNull();
     expect(body.searchRuns).toBeNull();
+  });
+
+  it('200 — serializes the TRANSLATION block, and null when absent (MOTIR-8117)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    signInAs(owner);
+
+    getOrgUsageMock.mockResolvedValue(rawResponse());
+    const a = usageReq(workspace.organizationId, '?scope=org');
+    const body = (await (await GET(a.req, a.ctx)).json()) as { translation: unknown };
+    expect(body.translation).toEqual({ totalSpend: 360, monthSpend: 45 });
+
+    getOrgUsageMock.mockResolvedValue(rawResponse({ translation: undefined }));
+    const b = usageReq(workspace.organizationId, '?scope=org');
+    const absent = (await (await GET(b.req, b.ctx)).json()) as { translation: unknown };
+    expect(absent.translation).toBeNull();
   });
 
   it('404 (no-leak) for a non-member — the route MAPS OrganizationNotFoundError', async () => {

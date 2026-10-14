@@ -1501,6 +1501,9 @@ model Organization {
   /// Who changed `contentLanguage`, from what, to what and when — written only
   /// by `organizationContentLanguageService` (MOTIR-8094). Cascade.
   contentLanguageChanges OrganizationContentLanguageChange[]
+  /// Kept work-item translations (Story MOTIR-7735 · MOTIR-8114), shared
+  /// across the organisation. Cascade.
+  workItemTranslations   WorkItemTranslation[]
 
   @@map("organization")
 }
@@ -1615,6 +1618,9 @@ model Workspace {
   // the `comments` shape — a direct child of `work_item` carries its own
   // `workspace_id` because RLS does not traverse foreign keys.
   workItemTodos               WorkItemTodo[]
+  // Kept work-item translations (Story MOTIR-7735 · MOTIR-8114) — tenanted on
+  // the ROW for the same reason as `workItemTodos`.
+  workItemTranslations        WorkItemTranslation[]
   labels                      Label[]
   components                  Component[]
   customFieldDefinitions      CustomFieldDefinition[]
@@ -3251,6 +3257,9 @@ model WorkItem {
   // steps of its work, each one operation. Cascade with the card, exactly as
   // `comments` does: a deleted card's steps are not a fact about anything.
   todos                    WorkItemTodo[]
+  /// Kept translations of this card's fields (Story MOTIR-7735 · MOTIR-8114).
+  /// Cascade: a deleted card's translations are not a fact about anything.
+  translations             WorkItemTranslation[]
   /// The LEGS naming this card across every run that worked it (Story
   /// MOTIR-1789). `SetNull` on the leg, not cascade: a run's history outlives a
   /// deleted card, and the leg still says which key it was.
@@ -5986,6 +5995,50 @@ model WorkItemTodo {
   @@index([workItemId, position])
   @@index([workspaceId])
   @@map("work_item_todo")
+}
+
+/// One KEPT translation of one work content FIELD (Story MOTIR-7735 ·
+/// MOTIR-8114): per field, per revision of that field's text, per target
+/// language. Shared across the organisation — the key holds no reader, so two
+/// readers in one language read one row.
+///
+/// ⚠️ STALENESS IS A PROPERTY OF THE LOOKUP. `sourceHash` is `sha256` (hex) of
+/// the field's text when it was translated, and every read supplies the
+/// field's CURRENT text: a row for older text never matches, so it is never
+/// served, and no edit path has to hook anything. Superseded rows are removed
+/// when a fresh translation of the same field and language is kept, and by the
+/// work item's cascade. The table holds no copy of the source text.
+///
+/// `fieldRef` is built only by `lib/translation/fieldRevision.ts`: `title`,
+/// `description`, `explanation`, `todo:<todoId>:text`, `todo:<todoId>:notes`.
+/// A to-do's rows go with the CARD, not the to-do: a deleted to-do's rows are
+/// unreachable (no field asks for that ref) until the card is deleted.
+///
+/// Tenanted on the row: `workspace_id` for the `app.workspace_id` arm every
+/// work-item read binds, `organization_id` for the org arm — RLS does not
+/// traverse foreign keys.
+model WorkItemTranslation {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  workspaceId    String   @map("workspace_id")
+  workItemId     String   @map("work_item_id")
+  fieldRef       String   @map("field_ref")
+  sourceHash     String   @map("source_hash")
+  /// A `lib/i18n/locales.ts` code, validated in code (`isLocale`).
+  targetLanguage String   @map("target_language")
+  translatedText String   @map("translated_text") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem     WorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, fieldRef, sourceHash, targetLanguage])
+  /// The per-item read: every kept field of one card in one language.
+  @@index([workItemId, targetLanguage])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@map("work_item_translation")
 }
 
 /// A project-scoped label (Story 5.4 · Subtask 5.4.1) — the folksonomy row.
