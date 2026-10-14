@@ -413,6 +413,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `trackServerWork`. It opens no database; its scanner imports only
   // `typescript` and `node:*`.
   'tests/mcp/mcp-route-tracked-guard.test.ts',
+  // ── tests/architecture/ — no route refresh on a live path (MOTIR-8578) ─────
+  // Walks the static import graph from the Workbench, approval and planning
+  // live-update roots (~540 files) and parses each through the compiler API. It
+  // opens no database; its scanner imports only `typescript` and `node:*`.
+  'tests/architecture/no-refresh-on-live-paths.test.ts',
 ] as const;
 
 /**
