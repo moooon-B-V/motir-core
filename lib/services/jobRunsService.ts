@@ -151,6 +151,15 @@ export const JOB_QUEUE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 /** `job_queue` rows deleted per batch by the queue retention pass. Each batch is its own transaction. */
 export const JOB_QUEUE_PURGE_BATCH_SIZE = 1000;
 
+/**
+ * Batches per queue retention pass, in EACH of its two phases. Capped like
+ * `JOB_RUN_PURGE_MAX_BATCHES`: 100 batches is 100 000 `job_queue` rows a day,
+ * well above what the scheduled jobs write, so steady state keeps up and the
+ * first backlog (~266k succeeded rows) drains over a few daily ticks rather than
+ * in one long pass.
+ */
+export const JOB_QUEUE_PURGE_MAX_BATCHES = 100;
+
 export const jobRunsService = {
   /**
    * Insert the `running` row at job start; returns the persisted DTO, or `null`

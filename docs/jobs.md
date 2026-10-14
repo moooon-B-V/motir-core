@@ -1169,7 +1169,7 @@ correction is worth stating rather than deleting.
 ### The registered schedules
 
 This is every id `jobSchedules()` (`lib/jobs/schedules.ts`) returns, with its cron —
-31 jobs. The cron is the definition's; a reason for the time a job runs lives in
+32 jobs. The cron is the definition's; a reason for the time a job runs lives in
 its own header in `lib/jobs/definitions/`, not here.
 
 **The cadence rule.** A `system.*` job that fires more than once an hour fires on
@@ -1224,6 +1224,7 @@ cluster bought nothing. The why is
 | `system.code-graph-offboard-sweep`       | `0 5 * * *`  |
 | `system.data-export-expiry-sweep`        | `30 5 * * *` |
 | `system.job-run-reap`                    | `0 6 * * *`  |
+| `system.job-queue-retention`             | `15 6 * * *` |
 | `system.dispatch-run-sweep`              | `30 6 * * *` |
 | `system.dlq-standing-depth-sweep`        | `0 7 * * *`  |
 | `system.organization-retention-purge`    | `30 7 * * *` |

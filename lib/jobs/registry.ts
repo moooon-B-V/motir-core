@@ -60,6 +60,7 @@ import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { codeGraphDriftSweep } from './definitions/codeGraphDriftSweep';
 import { codeGraphIndexCatchUp } from './definitions/codeGraphIndexCatchUp';
 import { jobRunReap } from './definitions/jobRunReap';
+import { jobQueueRetention } from './definitions/jobQueueRetention';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
@@ -160,6 +161,7 @@ export const jobDefinitions = [
   codeGraphDriftSweep,
   codeGraphIndexCatchUp,
   jobRunReap,
+  jobQueueRetention,
   dataExportBuild,
   dataExportExpirySweep,
   dispatchRunSweep,
