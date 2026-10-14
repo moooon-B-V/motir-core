@@ -54,6 +54,12 @@ export class JobRateLimitedError extends Error {
 export interface JobRequestAuth {
   ctx: ServiceContext;
   projectId: string;
+  /**
+   * The token's per-job rate-limit key (MOTIR-8599), or `null` for a token
+   * minted without one (or whose claim is not a non-empty string — a malformed
+   * field is never trusted as a bucket key).
+   */
+  jobKey: string | null;
 }
 
 // Verify both credentials and return the acting ServiceContext + the token's
@@ -106,6 +112,7 @@ export function authenticateJobRequest(req: Request): JobRequestAuth {
   return {
     ctx: { userId: claims.sub, workspaceId: claims.workspaceId },
     projectId: claims.projectId,
+    jobKey: typeof claims.jobKey === 'string' && claims.jobKey !== '' ? claims.jobKey : null,
   };
 }
 

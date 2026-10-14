@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import { inspectJobToken, mintJobToken, refreshJobToken, verifyJobToken } from '@/lib/ai/jobToken';
 
@@ -133,5 +134,56 @@ describe('job-scoped read-back token', () => {
       expect(renewed).not.toBeNull();
       expect(renewed!.sub).toBe('user_1');
     });
+  });
+});
+
+// ── MOTIR-8599 ──────────────────────────────────────────────────────────────
+// The token carries a per-job rate-limit key, so a job's read-backs can be
+// metered per JOB rather than per person (MOTIR-8604). One key names one job for
+// its whole life: minted at submit, carried across every refresh.
+
+/** Sign an arbitrary payload the way the server does — a pre-change token. */
+function signRaw(payload: Record<string, unknown>): string {
+  const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = createHmac('sha256', process.env['BETTER_AUTH_SECRET']!)
+    .update(b64)
+    .digest('base64url');
+  return `${b64}.${sig}`;
+}
+
+describe('the per-job rate-limit key (MOTIR-8599)', () => {
+  it('a mint carries a non-empty jobKey, and the token still verifies', () => {
+    const claims = verifyJobToken(mintJobToken(input))!;
+    expect(typeof claims.jobKey).toBe('string');
+    expect(claims.jobKey).not.toBe('');
+  });
+
+  it('two mints for the same person and project carry DIFFERENT keys', () => {
+    const a = verifyJobToken(mintJobToken(input))!;
+    const b = verifyJobToken(mintJobToken(input))!;
+    expect(a.jobKey).not.toBe(b.jobKey);
+  });
+
+  it('a refresh carries the key over unchanged — it never mints one', () => {
+    const original = verifyJobToken(mintJobToken({ ...input, ttlSeconds: 1 }))!;
+    const renewed = verifyJobToken(refreshJobToken(original))!;
+    expect(renewed.jobKey).toBe(original.jobKey);
+    // And again: one key for the whole life of the job.
+    expect(verifyJobToken(refreshJobToken(renewed))!.jobKey).toBe(original.jobKey);
+  });
+
+  it('a pre-change token (no key) refreshes into a token that still has none', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const legacy = verifyJobToken(
+      signRaw({ sub: 'user_1', workspaceId: 'ws_1', projectId: 'pj_1', iat: now, exp: now + 60 }),
+    )!;
+    expect(legacy).not.toBeNull();
+    expect(legacy).not.toHaveProperty('jobKey');
+
+    const renewed = verifyJobToken(refreshJobToken(legacy))!;
+    expect(renewed).not.toBeNull();
+    expect(renewed).not.toHaveProperty('jobKey');
+    expect(renewed.exp - renewed.iat).toBe(15 * 60);
+    expect(renewed.sub).toBe('user_1');
   });
 });
