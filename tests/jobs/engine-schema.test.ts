@@ -714,7 +714,7 @@ describe('the job engine tables — referential cascades', () => {
 });
 
 describe('the claim index actually serves the claim query', () => {
-  it('the pending/due claim is planned as an index scan on (state, run_at), with no sort', async () => {
+  it('the pending/due claim is planned as an ordered index scan on run_at, with no sort', async () => {
     const fx = await makeFixture();
     // Enough rows that the planner has a reason to prefer the index; a seq scan
     // over three rows would be correct and would prove nothing.
@@ -749,7 +749,15 @@ describe('the claim index actually serves the claim query', () => {
     // The index earns its place two ways, and both matter: it locates the due
     // rows, AND it supplies the ordering, so the claim never sorts the queue to
     // take ten rows off the front.
-    expect(text).toContain('job_queue_state_run_at_idx');
+    //
+    // Either index serves it. Since MOTIR-8519 the hand-written PARTIAL
+    // `job_queue_pending_run_at_idx` on `(run_at) WHERE state = 'pending'` exists
+    // (the one the runtime role can use under FORCE RLS), and as the owner the
+    // planner picks it over the composite too, because it is smaller. Which one
+    // it picks is a cost decision; that it is an ordered index scan is the
+    // contract. The runtime-role plans are asserted in
+    // `tests/jobs/job-queue-rls-index.test.ts`.
+    expect(text).toMatch(/Index Scan using job_queue_(state|pending)_run_at_idx\b/);
     expect(text).not.toMatch(/\bSort\b/);
   });
 });

@@ -205,6 +205,24 @@ vi.mock('@/lib/services/workItemTodosService', () => ({
     listTodos: deferred('todoList', { items: [], progress: { done: 0, total: 0 } }, 'tierTwo'),
   },
 }));
+// The reader's TRANSLATION OFFER (Story MOTIR-7735 · MOTIR-8121) — built from the
+// locale and the to-do list the group already reads, so it adds no read of its
+// own to the gate and no serial await to the page.
+const TRANSLATION_OFFER = {
+  targetLanguage: 'en',
+  anyNeedsTranslation: true,
+  fields: { title: { needsTranslation: true, kept: false, sourceLanguage: 'de', revision: 'r0' } },
+};
+const READER_TRANSLATION = { offer: TRANSLATION_OFFER, canAddCredits: false };
+const getReaderTranslation = vi.fn(async (_input: unknown) => {
+  started.push('translationOffer');
+  return READER_TRANSLATION as unknown;
+});
+vi.mock('@/lib/services/workItemTranslationReadService', () => ({
+  workItemTranslationReadService: {
+    getReaderTranslation: (input: unknown) => getReaderTranslation(input),
+  },
+}));
 vi.mock('@/lib/services/commentsService', () => ({
   commentsService: { listComments: deferred('comments', null, 'late') },
 }));
@@ -894,5 +912,52 @@ describe('the Pages section’s capability is threaded from the page (MOTIR-7575
     const { sections, fallbacks } = await lowerHalf(['work_item:edit']);
     expect(sections[0]!.canViewPages).toBe(false);
     expect(fallbacks[0]!.withPages).toBe(false);
+  });
+});
+
+describe('the translation offer reaches the view (MOTIR-8121 · MOTIR-8122)', () => {
+  const findAll = (node: unknown, type: unknown, out: Record<string, unknown>[] = []) => {
+    if (Array.isArray(node)) {
+      for (const n of node) findAll(n, type, out);
+    } else if (node && typeof node === 'object' && '$$typeof' in node) {
+      const el = node as unknown as { type: unknown; props: Record<string, unknown> };
+      if (el.type === type) out.push(el.props);
+      for (const value of Object.values(el.props ?? {})) findAll(value, type, out);
+    }
+    return out;
+  };
+
+  const renderOffer = async () => {
+    const { TranslationProvider } =
+      await import('@/app/(authed)/items/[key]/_components/translation/TranslationProvider');
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set(['work_item:edit']));
+    releaseAll();
+    return findAll(await callPage(), TranslationProvider);
+  };
+
+  beforeEach(() => getReaderTranslation.mockClear());
+
+  it('hands a signed-in reader the offer built for their locale and the card’s to-dos', async () => {
+    const providers = await renderOffer();
+    expect(providers).toHaveLength(1);
+    expect(providers[0]!.translation).toEqual(READER_TRANSLATION);
+    expect(providers[0]!.itemId).toBe('i1');
+    expect(getReaderTranslation).toHaveBeenCalledTimes(1);
+    const input = getReaderTranslation.mock.calls[0]![0] as {
+      readerLocale: string;
+      todos: unknown[];
+      workItem: { id: string };
+    };
+    expect(input.readerLocale).toBe('en');
+    expect(input.todos).toEqual([]);
+    expect(input.workItem.id).toBe('i1');
+  });
+
+  it('a failing offer read degrades to NO offer — no provider; it does not reject the page', async () => {
+    getReaderTranslation.mockRejectedValueOnce(new Error('store down'));
+    expect(await renderOffer()).toHaveLength(0);
   });
 });

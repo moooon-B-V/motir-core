@@ -8,6 +8,7 @@ import { compile } from 'tailwindcss';
 import { DEFAULT_STYLE_ID, isStyleId, defaultTypeForStyle } from '../theme/styles';
 import { DEFAULT_PALETTE_ID, isPaletteId } from '../theme/palettes';
 import { isTypeId } from '../theme/typography';
+import { pruneUnmatchedRules } from './pruneUnmatchedRules';
 
 // renderMock — the package's OWN parts rendered into ONE self-contained
 // `.mock.html` (MOTIR-6961).
@@ -147,7 +148,12 @@ async function compileCss(markup: string): Promise<string> {
   // exactly the file this package ships, whatever the caller's resolution.
   const input = `@import 'tailwindcss';\n${themeCss}`;
   const compiler = await compile(input, { base, loadStylesheet });
-  return compiler.build(extractClassCandidates(markup));
+  const candidates = extractClassCandidates(markup);
+  // Tailwind writes a utility only for a candidate, but copies every plain rule
+  // of `theme.css` through whole — so a component's own rule (the StyleVignette
+  // canvas) would land in a mock that never renders that component. Drop the
+  // rules this markup cannot match (MOTIR-8565).
+  return pruneUnmatchedRules(compiler.build(candidates), candidates);
 }
 
 function escapeHtml(value: string): string {

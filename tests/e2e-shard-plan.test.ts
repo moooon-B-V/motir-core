@@ -49,9 +49,15 @@ const runnableSpecs = readdirSync(E2E_DIR)
   .filter((f) => f.endsWith('.spec.ts'))
   .filter(
     (f) =>
-      // The three lanes the main config testIgnore's: the receipt lane, the
-      // cloud-on regression lane (MOTIR-2849) and its original billing member.
-      !(f.startsWith('acceptance') || f.startsWith('cloud-') || f === 'billing-cloud.spec.ts'),
+      // The lanes the main config testIgnore's: the receipt lane, the cloud-on
+      // regression lane (MOTIR-2849) and its original billing member, and the
+      // observability lane (MOTIR-8557).
+      !(
+        f.startsWith('acceptance') ||
+        f.startsWith('cloud-') ||
+        f === 'billing-cloud.spec.ts' ||
+        f.startsWith('observability-')
+      ),
   )
   .sort();
 
@@ -88,6 +94,7 @@ describe('E2E bulk-leg shard plan (MOTIR-2617)', () => {
       '**/billing-cloud.spec.ts',
       '**/cloud-*.spec.ts',
       '**/acceptance*.spec.ts',
+      '**/observability-*.spec.ts',
     ]);
   });
 

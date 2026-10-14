@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} tegoed niet toegewezen aan een Run",
       "searchUnavailable": "Zoekcijfers zijn momenteel niet beschikbaar. Je zoekopdrachten worden nog steeds in rekening gebracht — dit betreft de weergave, niet de facturering.",
       "searchUnavailableValue": "Niet beschikbaar",
+      "translationThisMonth": "Besteding aan vertalen, deze maand",
+      "translationAllTime": "{n} tegoed in totaal",
+      "translationNone": "Nog niets aan vertalen besteed",
+      "translationUnavailable": "Vertaalcijfers zijn momenteel niet beschikbaar. Dit betreft de weergave, niet de facturering.",
+      "translationUnavailableValue": "Niet beschikbaar",
       "scopeFollows": "Volgt dit bereik",
       "scopeOrg": "Hele organisatie",
       "internalBilling": "Interne facturering"
@@ -8202,6 +8207,19 @@
       "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten.",
       "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd · {when}",
       "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Ondervraag me",
+        "helpName": "Wat is Ondervraag me?",
+        "popover": {
+          "title": "Ondervraag me",
+          "body1": "Voordat er gepland wordt, vraagt Motir AI je wat je wilt, één vraag tegelijk: hoe het moet werken, de andere manieren om hetzelfde te doen en wat er gebeurt als er iets misgaat.",
+          "body2": "Elke vraag heeft een paar antwoorden om uit te kiezen, waarvan één aanbevolen. Sla er een over, laat de planner beslissen of stop wanneer je wilt.",
+          "body3": "Wat je vastlegt, wordt in de vereiste van het plan geschreven, en de planning begint daarmee."
+        },
+        "hint": "Je volgende bericht start het ondervragen."
+      }
     }
   },
   "codeHealth": {
@@ -14272,5 +14290,88 @@
       "unavailable": "Niet-beschikbaar werkitem",
       "unavailableTitle": "Dit werkitem is verwijderd, of je kunt het niet zien."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "vraag · vraag {n}",
+      "recommended": "Aanbevolen",
+      "recommendedName": "{label} (aanbevolen)",
+      "somethingElse": "Iets anders…",
+      "skip": "Overslaan",
+      "youDecide": "Jij beslist",
+      "stop": "Stoppen met vragen",
+      "ownWordsPlaceholder": "Antwoord in je eigen woorden…",
+      "composerPlaceholder": "Of typ je eigen antwoord…",
+      "because": "Omdat je „{answer}” koos…",
+      "yourThread": "Jouw onderwerp",
+      "youSaid": "Je zei: „{words}”"
+    },
+    "markers": {
+      "opening": "Ondervraag me staat aan: één vraag tegelijk vóór het plannen. Kies een antwoord, sla het over of stop wanneer je wilt.",
+      "skipped": "Overgeslagen: de planner neemt hier iets aan.",
+      "completed": "Dat is alles wat ik moest vragen.",
+      "nothingToAsk": "Ik heb niets te vragen: dit is duidelijk genoeg om te plannen. Ik schrijf nu het plan.",
+      "stopped": "Je hebt het ondervragen gestopt.",
+      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven."
+    },
+    "summary": {
+      "title": "Wat je hebt vastgelegd",
+      "counts": "{answers, plural, one {# antwoord} other {# antwoorden}} · {assumptions, plural, one {# aanname van de planner} other {# aannames van de planner}}",
+      "groups": {
+        "behaviour": "Gedrag",
+        "scopeEdge": "Afbakening",
+        "constraints": "Beperkingen",
+        "acceptance": "Acceptatie",
+        "assumptions": "Aannames"
+      },
+      "youAnswered": "Jouw antwoord",
+      "plannersAssumption": "Aanname van de planner",
+      "writing": "Je antwoorden worden in de vereiste van het plan en in <item></item> geschreven…",
+      "writingPlanOnly": "Je antwoorden worden in de vereiste van het plan geschreven…",
+      "written": "Geschreven in de vereiste van het plan en in <item></item>.",
+      "writtenPlanOnly": "Geschreven in de vereiste van het plan.",
+      "failed": "Je antwoorden zijn niet geschreven. Ze staan hier nog.",
+      "copy": "Antwoorden kopiëren"
+    },
+    "error": "Die vraag is niet aangekomen. Je antwoorden tot nu toe blijven bewaard: probeer het opnieuw.",
+    "retry": "Opnieuw proberen"
+  },
+  "itemTranslation": {
+    "groupLabel": "Vertaling",
+    "translate": "Vertalen",
+    "translating": "Bezig met vertalen…",
+    "showOriginal": "Origineel tonen",
+    "showTranslation": "Vertaling tonen",
+    "retry": "Opnieuw proberen",
+    "hintInto": "naar het {language}",
+    "hintTranslated": "Vertaald naar het {language}",
+    "hintShowingOriginal": "Het origineel wordt getoond",
+    "hintPartial": "Vertaald naar het {language} · {n, plural, one {# veld kon niet worden vertaald} other {# velden konden niet worden vertaald}}",
+    "failedItem": "Dit werkitem kon niet worden vertaald. Er is niets in rekening gebracht.",
+    "noCredits": "Vertalen vereist AI-tegoed. Er is niets in rekening gebracht.",
+    "noCreditsMember": "Een eigenaar of beheerder van de organisatie kan het toevoegen.",
+    "addCredits": "Tegoed toevoegen",
+    "markTranslatedFrom": "Vertaald uit het {language}",
+    "markTranslated": "Vertaald",
+    "markTranslating": "Bezig met vertalen…",
+    "markEdited": "Bewerkt · bezig met vertalen…",
+    "markFailed": "Niet vertaald. Er is niets in rekening gebracht.",
+    "markPrefix": "{field}: ",
+    "fieldTitle": "Titel",
+    "fieldDescription": "Beschrijving",
+    "fieldExplanation": "Toelichting",
+    "fieldTodo": "Taak",
+    "fieldInstructions": "Instructies",
+    "retryTitle": "Vertalen van de titel opnieuw proberen",
+    "retryDescription": "Vertalen van de beschrijving opnieuw proberen",
+    "retryExplanation": "Vertalen van de toelichting opnieuw proberen",
+    "retryTodo": "Vertalen van de taak opnieuw proberen",
+    "retryInstructions": "Vertalen van de instructies opnieuw proberen",
+    "liveTranslating": "Bezig met vertalen naar het {language}…",
+    "liveTranslated": "Vertaald naar het {language}.",
+    "liveShowingOriginal": "Het origineel wordt getoond.",
+    "liveFailedCount": "{n, plural, one {# veld kon niet worden vertaald.} other {# velden konden niet worden vertaald.}}",
+    "liveNoCredits": "Vertalen vereist AI-tegoed.",
+    "liveEdited": "{field} is bewerkt en opnieuw vertaald."
   }
 }

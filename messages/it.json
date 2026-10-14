@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} crediti non attribuiti a un’esecuzione",
       "searchUnavailable": "I dati sulle ricerche non sono disponibili al momento. Le tue ricerche vengono comunque addebitate: a mancare è la visualizzazione, non la fatturazione.",
       "searchUnavailableValue": "Non disponibile",
+      "translationThisMonth": "Spesa per le traduzioni, questo mese",
+      "translationAllTime": "{n} crediti in totale",
+      "translationNone": "Ancora nessuna spesa per le traduzioni",
+      "translationUnavailable": "I dati sulle traduzioni non sono disponibili al momento. A mancare è la visualizzazione, non la fatturazione.",
+      "translationUnavailableValue": "Non disponibile",
       "scopeFollows": "Segue questo ambito",
       "scopeOrg": "Intera organizzazione",
       "internalBilling": "Fatturazione interna"
@@ -8205,6 +8210,19 @@
       "onlyStarterAnon": "Solo la persona che l’ha avviato o un responsabile del progetto può riprenderlo.",
       "failureLine": "Non è stato possibile applicare la tua ultima modifica a questo piano · {when}",
       "failureLineAgain": "La tua ultima modifica non è stata applicata di nuovo · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Interrogami",
+        "helpName": "Che cos’è Interrogami?",
+        "popover": {
+          "title": "Interrogami",
+          "body1": "Prima di pianificare, Motir AI ti chiede cosa vuoi, una domanda alla volta: come dovrebbe funzionare, gli altri modi di fare la stessa cosa e cosa succede quando qualcosa va storto.",
+          "body2": "Ogni domanda ha alcune risposte tra cui scegliere, una consigliata. Salta quelle che vuoi, lascia decidere al pianificatore o fermati quando vuoi.",
+          "body3": "Ciò che stabilisci viene scritto nel requisito del piano, e la pianificazione parte da lì."
+        },
+        "hint": "Il tuo prossimo messaggio avvia le domande."
+      }
     }
   },
   "codeHealth": {
@@ -14275,5 +14293,88 @@
       "unavailable": "Elemento di lavoro non disponibile",
       "unavailableTitle": "Questo elemento di lavoro è stato eliminato, oppure non puoi vederlo."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "domanda · domanda {n}",
+      "recommended": "Consigliata",
+      "recommendedName": "{label} (consigliata)",
+      "somethingElse": "Altro…",
+      "skip": "Salta",
+      "youDecide": "Decidi tu",
+      "stop": "Interrompi le domande",
+      "ownWordsPlaceholder": "Rispondi con parole tue…",
+      "composerPlaceholder": "Oppure scrivi la tua risposta…",
+      "because": "Poiché hai scelto «{answer}»…",
+      "yourThread": "Il tuo argomento",
+      "youSaid": "Hai detto: «{words}»"
+    },
+    "markers": {
+      "opening": "Interrogami è attivo: una domanda alla volta prima di pianificare. Scegli una risposta, saltala o fermati quando vuoi.",
+      "skipped": "Saltata: il pianificatore farà un’ipotesi su questa.",
+      "completed": "È tutto quello che dovevo chiedere.",
+      "nothingToAsk": "Non ho niente da chiedere: è abbastanza chiaro per pianificare. Ora scrivo il piano.",
+      "stopped": "Hai interrotto le domande.",
+      "stoppedNoAnswer": "Hai interrotto le domande prima di qualsiasi risposta. Non è stato scritto nulla."
+    },
+    "summary": {
+      "title": "Ciò che hai stabilito",
+      "counts": "{answers, plural, one {# risposta} other {# risposte}} · {assumptions, plural, one {# ipotesi del pianificatore} other {# ipotesi del pianificatore}}",
+      "groups": {
+        "behaviour": "Comportamento",
+        "scopeEdge": "Limite dell’ambito",
+        "constraints": "Vincoli",
+        "acceptance": "Accettazione",
+        "assumptions": "Ipotesi"
+      },
+      "youAnswered": "La tua risposta",
+      "plannersAssumption": "Ipotesi del pianificatore",
+      "writing": "Scrittura delle risposte nel requisito del piano e in <item></item>…",
+      "writingPlanOnly": "Scrittura delle risposte nel requisito del piano…",
+      "written": "Scritto nel requisito del piano e in <item></item>.",
+      "writtenPlanOnly": "Scritto nel requisito del piano.",
+      "failed": "Le tue risposte non sono state scritte. Sono ancora qui.",
+      "copy": "Copia le risposte"
+    },
+    "error": "Quella domanda non è arrivata. Le risposte date finora sono conservate: riprova.",
+    "retry": "Riprova"
+  },
+  "itemTranslation": {
+    "groupLabel": "Traduzione",
+    "translate": "Traduci",
+    "translating": "Traduzione in corso…",
+    "showOriginal": "Mostra originale",
+    "showTranslation": "Mostra traduzione",
+    "retry": "Riprova",
+    "hintInto": "in {language}",
+    "hintTranslated": "Tradotto in {language}",
+    "hintShowingOriginal": "Visualizzazione dell’originale",
+    "hintPartial": "Tradotto in {language} · {n, plural, one {# campo non è stato tradotto} other {# campi non sono stati tradotti}}",
+    "failedItem": "Impossibile tradurre questo elemento di lavoro. Non è stato addebitato nulla.",
+    "noCredits": "La traduzione richiede crediti AI. Non è stato addebitato nulla.",
+    "noCreditsMember": "Un proprietario o amministratore dell’organizzazione può aggiungerli.",
+    "addCredits": "Aggiungi crediti",
+    "markTranslatedFrom": "Tradotto da {language}",
+    "markTranslated": "Tradotto",
+    "markTranslating": "Traduzione in corso…",
+    "markEdited": "Modificato · traduzione in corso…",
+    "markFailed": "Non tradotto. Non è stato addebitato nulla.",
+    "markPrefix": "{field}: ",
+    "fieldTitle": "Titolo",
+    "fieldDescription": "Descrizione",
+    "fieldExplanation": "Spiegazione",
+    "fieldTodo": "Cosa da fare",
+    "fieldInstructions": "Istruzioni",
+    "retryTitle": "Riprova a tradurre il titolo",
+    "retryDescription": "Riprova a tradurre la descrizione",
+    "retryExplanation": "Riprova a tradurre la spiegazione",
+    "retryTodo": "Riprova a tradurre la cosa da fare",
+    "retryInstructions": "Riprova a tradurre le istruzioni",
+    "liveTranslating": "Traduzione in {language} in corso…",
+    "liveTranslated": "Tradotto in {language}.",
+    "liveShowingOriginal": "Visualizzazione dell’originale.",
+    "liveFailedCount": "{n, plural, one {# campo non è stato tradotto.} other {# campi non sono stati tradotti.}}",
+    "liveNoCredits": "La traduzione richiede crediti AI.",
+    "liveEdited": "{field} è stato modificato e tradotto di nuovo."
   }
 }

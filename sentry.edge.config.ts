@@ -10,9 +10,10 @@
 // the Fly runtime secret, not the build-time browser copy. Unset ⇒ no init.
 import * as Sentry from '@sentry/nextjs';
 import {
-  MONITORING_TRACES_SAMPLE_RATE,
+  monitoringInstanceTags,
   serverMonitoringEnvironment,
   serverSentryDsn,
+  serverTracesSampleRate,
 } from '@/lib/monitoring/config';
 import { dropExpectedDomainErrors } from '@/lib/monitoring/expectedDomainErrors';
 
@@ -22,7 +23,9 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: serverMonitoringEnvironment(),
-    tracesSampleRate: MONITORING_TRACES_SAMPLE_RATE,
+    // The deployment's runtime rate, as the Node server reads it (MOTIR-8549).
+    tracesSampleRate: serverTracesSampleRate(),
+    initialScope: { tags: monitoringInstanceTags() },
     beforeSend: dropExpectedDomainErrors,
     sendDefaultPii: false,
   });

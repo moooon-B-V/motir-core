@@ -87,8 +87,10 @@ export const jobQueueRepository = {
    *      the statement always meant.
    *
    * The `ORDER BY run_at` is what makes the queue fair (oldest due first) and is
-   * served by `job_queue_state_run_at_idx` with no sort — asserted by an EXPLAIN
-   * in `tests/jobs/engine-schema.test.ts`.
+   * served by an index on `run_at` with no sort — the partial
+   * `job_queue_pending_run_at_idx` under the runtime role (MOTIR-8519), asserted
+   * by EXPLAINs in `tests/jobs/engine-schema.test.ts` and
+   * `tests/jobs/job-queue-rls-index.test.ts`.
    *
    * ⚠️ A SERIAL TEST CANNOT SEE THE DEFECT THIS PREVENTS. Two sequential claims
    * never collide; the race needs genuine concurrency against a warm pool, which

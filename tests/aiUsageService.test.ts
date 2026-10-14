@@ -35,6 +35,7 @@ function rawResponse(over: Partial<RawUsageResponse> = {}): RawUsageResponse {
     ],
     perModel: [{ model: 'claude-opus-4-8', inputTokens: 1000, outputTokens: 200, credits: 5180 }],
     recentRuns: { runs: [], page: 1, pageSize: 10, total: 0 },
+    translation: { totalSpend: 360, monthSpend: 45 },
     ...over,
   };
 }
@@ -295,6 +296,30 @@ describe('aiUsageService.getUsage', () => {
     // Nothing to fetch → the boundary is never called (no misleading zero-cost
     // round-trip).
     expect(getOrgUsageMock).not.toHaveBeenCalled();
+    // Zero is the true answer here (MOTIR-8117), never "unavailable".
+    expect(res.translation).toEqual({ totalSpend: 0, monthSpend: 0 });
+  });
+
+  it('carries the translation block verbatim, and null when the boundary omits it (MOTIR-8117)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+
+    getOrgUsageMock.mockResolvedValue(rawResponse());
+    const reported = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+    expect(reported.translation).toEqual({ totalSpend: 360, monthSpend: 45 });
+    // Kept apart from the AI figures: the boundary's own numbers pass through.
+    expect(reported.totalSpend).toBe(147520);
+    expect(reported.monthSpend).toBe(7520);
+
+    getOrgUsageMock.mockResolvedValue(rawResponse({ translation: undefined }));
+    const absent = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+    expect(absent.translation).toBeNull();
   });
 
   it('marks hasUsage from run count alone and tolerates an unresolved run project name', async () => {

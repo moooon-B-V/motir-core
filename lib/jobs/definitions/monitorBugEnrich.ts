@@ -22,9 +22,10 @@ import type { WorkItemCreatedData } from '../types';
 //
 // `retryPolicy: 'idempotent'` (5 attempts): the dispatch runs in its own function
 // AFTER the create committed, so a failure is retried and can never fail or block
-// the filing. A transient motir-ai outage is worth the budget, and so is the
-// ordering window in which the reconciler's link has not committed yet
-// (`MonitorLinkNotYetVisibleError`). An exhausted budget dead-letters; the bug is
+// the filing. A transient motir-ai outage is worth the budget. A missing link
+// (`MonitorLinkNotYetVisibleError`) is retried too, but since MOTIR-8512 the link
+// commits with the bug and before the event, so a retry spent on it means the
+// reconciler's ordering regressed. An exhausted budget dead-letters; the bug is
 // unaffected either way.
 
 /**

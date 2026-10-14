@@ -49,13 +49,16 @@ export async function withOrgContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
   // Retried once on a P2028 raised before `fn` starts, as in `withWorkspaceContext`.
-  return retryOnceBeforeBody((bodyStarted) =>
-    db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
-      await tx.$executeRaw`SELECT set_config('app.organization_id', ${ctx.organizationId}, true)`;
-      bodyStarted();
-      return fn(tx);
-    }),
+  return retryOnceBeforeBody(
+    (bodyStarted, settled) =>
+      settled(
+        db.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+          await tx.$executeRaw`SELECT set_config('app.organization_id', ${ctx.organizationId}, true)`;
+          return bodyStarted(() => fn(tx));
+        }),
+      ),
+    'org',
   );
 }
 
@@ -84,12 +87,15 @@ export async function withOrgServiceWriteContext<T>(
   organizationId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return retryOnceBeforeBody((bodyStarted) =>
-    db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
-      bodyStarted();
-      return fn(tx);
-    }),
+  return retryOnceBeforeBody(
+    (bodyStarted, settled) =>
+      settled(
+        db.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
+          return bodyStarted(() => fn(tx));
+        }),
+      ),
+    'org_service_write',
   );
 }
 

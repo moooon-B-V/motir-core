@@ -15,6 +15,8 @@ export function dropConsoleBreadcrumbs(breadcrumb: Breadcrumb): Breadcrumb | nul
 
 /** The relay's `Sentry.init` options, or null when monitoring is off. */
 export function relaySentryInitOptions() {
+  // Untraced on purpose: it does not opt in to tracing, so the rate is 0 whatever the
+  // app-wide SENTRY_TRACES_SAMPLE_RATE says — MOTIR-8537 owns that choice.
   const options = serverSentryInitOptions();
   if (!options) return null;
   return { ...options, beforeBreadcrumb: dropConsoleBreadcrumbs };

@@ -783,6 +783,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // target is a PLAN id rather than a work-item key, which changes nothing
     // about what it costs: it dispatches a model job.
     'app/api/ai/revise/route.ts',
+    // The SHARPEN door (Task MOTIR-1101 · MOTIR-8181): open, answer, skip,
+    // you-decide and stop each submit a `sharpen_turn` model job.
+    'app/api/ai/sharpen/route.ts',
     // A change forwarded after the walk finished becomes ONE revision job, so it
     // spends provider money like the revise door it reuses (MOTIR-7997).
     'app/api/ai/plan-change/session/late-changes/route.ts',
@@ -835,6 +838,10 @@ describe('the routes are actually WIRED to the guards', () => {
     // The revision stream RELAYS a job already paid for at its submit door —
     // the same reason every other `[jobId]/stream` in this list is here.
     'app/api/ai/revise/[jobId]/stream/route.ts',
+    // Sharpen's session READ and its settle (MOTIR-8181): a database read, and a
+    // job read back and stored — the guide settle precedent exactly.
+    'app/api/ai/sharpen/[sessionId]/route.ts',
+    'app/api/ai/sharpen/settle/route.ts',
   ];
 
   async function aiRoutes(): Promise<string[]> {
@@ -1049,5 +1056,25 @@ describe('the routes are actually WIRED to the guards', () => {
       [...readFileSync(file, 'utf8').matchAll(/_TOOL_NAME = '([a-z_]+)'/g)].map((m) => m[1]),
     );
     for (const tool of MCP_BILLABLE_TOOLS) expect(declaredEverywhere).toContain(tool);
+  });
+});
+
+describe('a planning job’s job-token reads draw their own, larger budget (MOTIR-8423)', () => {
+  it('ai:internal is NOT metered by the interactive MOTIR_AI_RATE_LIMIT', async () => {
+    process.env['MOTIR_AI_RATE_LIMIT'] = '1';
+    const c = { userId: 'u-8423', workspaceId: 'w-8423' };
+    for (let i = 0; i < 5; i++) expect(await enforceAiRateLimit(c, 'ai:internal')).toBeNull();
+  });
+
+  it('and is still bounded by MOTIR_AI_INTERNAL_RATE_LIMIT', async () => {
+    process.env['MOTIR_AI_INTERNAL_RATE_LIMIT'] = '1';
+    try {
+      await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+      const c = { userId: 'u-8423b', workspaceId: 'w-8423b' };
+      expect(await enforceAiRateLimit(c, 'ai:internal')).toBeNull();
+      expect(await enforceAiRateLimit(c, 'ai:internal')).not.toBeNull();
+    } finally {
+      delete process.env['MOTIR_AI_INTERNAL_RATE_LIMIT'];
+    }
   });
 });

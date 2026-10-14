@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} 积分未归属到任何运行",
       "searchUnavailable": "暂时无法获取搜索数据。你的搜索仍在正常计费——这是显示问题，不是计费问题。",
       "searchUnavailableValue": "暂无数据",
+      "translationThisMonth": "本月翻译花费",
+      "translationAllTime": "累计 {n} 积分",
+      "translationNone": "尚未产生翻译花费",
+      "translationUnavailable": "暂时无法获取翻译数据。受影响的只是显示，计费不受影响。",
+      "translationUnavailableValue": "暂无数据",
       "scopeFollows": "随当前范围变化",
       "scopeOrg": "整个组织",
       "internalBilling": "内部计费"
@@ -8192,6 +8197,19 @@
       "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
       "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
       "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "追问我",
+        "helpName": "什么是追问我？",
+        "popover": {
+          "title": "追问我",
+          "body1": "开始规划前，Motir AI 会一次只问一件事，问清楚你想要的东西：它应该怎样运作、做同一件事的其他方式，以及出错时会发生什么。",
+          "body2": "每一问都有几个可选答案，其中一个是推荐答案。可以跳过任意一问、让规划者决定，或随时停止。",
+          "body3": "你确定下来的内容会写入计划的需求，规划从这里开始。"
+        },
+        "hint": "你的下一条消息会开始追问。"
+      }
     }
   },
   "codeHealth": {
@@ -14262,5 +14280,88 @@
       "unavailable": "不可用的工作项",
       "unavailableTitle": "该工作项已删除，或你无权查看。"
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "提问 · 第 {n} 问",
+      "recommended": "推荐",
+      "recommendedName": "{label}（推荐）",
+      "somethingElse": "其他答案…",
+      "skip": "跳过",
+      "youDecide": "你来决定",
+      "stop": "停止追问",
+      "ownWordsPlaceholder": "用自己的话回答…",
+      "composerPlaceholder": "或者输入你自己的答案…",
+      "because": "因为你选择了“{answer}”…",
+      "yourThread": "你的话题",
+      "youSaid": "你说过：“{words}”"
+    },
+    "markers": {
+      "opening": "追问我已开启：规划前一次只问一件事。选择一个答案、跳过，或随时停止。",
+      "skipped": "已跳过：规划者会自行假设这一点。",
+      "completed": "我需要问的都问完了。",
+      "nothingToAsk": "没有需要问的：这已经足够清楚，可以规划了。我现在开始写计划。",
+      "stopped": "你停止了追问。",
+      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。"
+    },
+    "summary": {
+      "title": "你确定的内容",
+      "counts": "{answers, plural, other {# 个回答}} · {assumptions, plural, other {# 个规划者假设}}",
+      "groups": {
+        "behaviour": "行为",
+        "scopeEdge": "范围边界",
+        "constraints": "约束",
+        "acceptance": "验收",
+        "assumptions": "假设"
+      },
+      "youAnswered": "你的回答",
+      "plannersAssumption": "规划者的假设",
+      "writing": "正在把你的回答写入计划的需求和 <item></item>…",
+      "writingPlanOnly": "正在把你的回答写入计划的需求…",
+      "written": "已写入计划的需求和 <item></item>。",
+      "writtenPlanOnly": "已写入计划的需求。",
+      "failed": "你的回答没有写入。它们仍保留在这里。",
+      "copy": "复制回答"
+    },
+    "error": "这一问没有送达。你目前的回答都已保留，请重试。",
+    "retry": "重试"
+  },
+  "itemTranslation": {
+    "groupLabel": "翻译",
+    "translate": "翻译",
+    "translating": "正在翻译…",
+    "showOriginal": "显示原文",
+    "showTranslation": "显示译文",
+    "retry": "重试",
+    "hintInto": "译为{language}",
+    "hintTranslated": "已译为{language}",
+    "hintShowingOriginal": "正在显示原文",
+    "hintPartial": "已译为{language} · {n, plural, other {# 个字段无法翻译}}",
+    "failedItem": "无法翻译此工作项。未产生任何费用。",
+    "noCredits": "翻译需要 AI 额度。未产生任何费用。",
+    "noCreditsMember": "组织所有者或管理员可以补充额度。",
+    "addCredits": "补充额度",
+    "markTranslatedFrom": "译自{language}",
+    "markTranslated": "已翻译",
+    "markTranslating": "正在翻译…",
+    "markEdited": "已编辑 · 正在翻译…",
+    "markFailed": "未翻译。未产生任何费用。",
+    "markPrefix": "{field}：",
+    "fieldTitle": "标题",
+    "fieldDescription": "描述",
+    "fieldExplanation": "说明",
+    "fieldTodo": "待办",
+    "fieldInstructions": "操作说明",
+    "retryTitle": "重试翻译标题",
+    "retryDescription": "重试翻译描述",
+    "retryExplanation": "重试翻译说明",
+    "retryTodo": "重试翻译待办",
+    "retryInstructions": "重试翻译操作说明",
+    "liveTranslating": "正在译为{language}…",
+    "liveTranslated": "已译为{language}。",
+    "liveShowingOriginal": "正在显示原文。",
+    "liveFailedCount": "{n, plural, other {# 个字段无法翻译。}}",
+    "liveNoCredits": "翻译需要 AI 额度。",
+    "liveEdited": "{field}已编辑并重新翻译。"
   }
 }
