@@ -7,6 +7,7 @@ import {
   PLANNING_TAB_CEILING,
   workbenchPlanningService,
 } from '@/lib/services/workbenchPlanningService';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 import { PlanningList } from './PlanningList';
 import { PlanningEmptyAction } from './PlanningEmptyAction';
 
@@ -36,10 +37,14 @@ export async function PlanningTab({
   projectName: string;
 }) {
   const t = await getTranslations('workbench');
-  const page = await workbenchPlanningService.listMyPlansBeingWritten(ctx, {
-    page: 1,
-    limit: PLANNING_TAB_CEILING,
-  });
+  // Labelled here, not by the page: this renders inside a `<Suspense>` after the
+  // page function has returned, outside its label (MOTIR-8553).
+  const page = await withRequestLabel({ route: 'workbench' }, () =>
+    workbenchPlanningService.listMyPlansBeingWritten(ctx, {
+      page: 1,
+      limit: PLANNING_TAB_CEILING,
+    }),
+  );
 
   return (
     <PlanningList

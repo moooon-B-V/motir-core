@@ -8208,6 +8208,19 @@
       "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten.",
       "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd · {when}",
       "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Ondervraag me",
+        "helpName": "Wat is Ondervraag me?",
+        "popover": {
+          "title": "Ondervraag me",
+          "body1": "Voordat er gepland wordt, vraagt Motir AI je wat je wilt, één vraag tegelijk: hoe het moet werken, de andere manieren om hetzelfde te doen en wat er gebeurt als er iets misgaat.",
+          "body2": "Elke vraag heeft een paar antwoorden om uit te kiezen, waarvan één aanbevolen. Sla er een over, laat de planner beslissen of stop wanneer je wilt.",
+          "body3": "Wat je vastlegt, wordt in de vereiste van het plan geschreven, en de planning begint daarmee."
+        },
+        "hint": "Je volgende bericht start het ondervragen."
+      }
     }
   },
   "codeHealth": {
@@ -14306,6 +14319,51 @@
       "unavailable": "Niet-beschikbaar werkitem",
       "unavailableTitle": "Dit werkitem is verwijderd, of je kunt het niet zien."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "vraag · vraag {n}",
+      "recommended": "Aanbevolen",
+      "recommendedName": "{label} (aanbevolen)",
+      "somethingElse": "Iets anders…",
+      "skip": "Overslaan",
+      "youDecide": "Jij beslist",
+      "stop": "Stoppen met vragen",
+      "ownWordsPlaceholder": "Antwoord in je eigen woorden…",
+      "composerPlaceholder": "Of typ je eigen antwoord…",
+      "because": "Omdat je „{answer}” koos…",
+      "yourThread": "Jouw onderwerp",
+      "youSaid": "Je zei: „{words}”"
+    },
+    "markers": {
+      "opening": "Ondervraag me staat aan: één vraag tegelijk vóór het plannen. Kies een antwoord, sla het over of stop wanneer je wilt.",
+      "skipped": "Overgeslagen: de planner neemt hier iets aan.",
+      "completed": "Dat is alles wat ik moest vragen.",
+      "nothingToAsk": "Ik heb niets te vragen: dit is duidelijk genoeg om te plannen. Ik schrijf nu het plan.",
+      "stopped": "Je hebt het ondervragen gestopt.",
+      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven."
+    },
+    "summary": {
+      "title": "Wat je hebt vastgelegd",
+      "counts": "{answers, plural, one {# antwoord} other {# antwoorden}} · {assumptions, plural, one {# aanname van de planner} other {# aannames van de planner}}",
+      "groups": {
+        "behaviour": "Gedrag",
+        "scopeEdge": "Afbakening",
+        "constraints": "Beperkingen",
+        "acceptance": "Acceptatie",
+        "assumptions": "Aannames"
+      },
+      "youAnswered": "Jouw antwoord",
+      "plannersAssumption": "Aanname van de planner",
+      "writing": "Je antwoorden worden in de vereiste van het plan en in <item></item> geschreven…",
+      "writingPlanOnly": "Je antwoorden worden in de vereiste van het plan geschreven…",
+      "written": "Geschreven in de vereiste van het plan en in <item></item>.",
+      "writtenPlanOnly": "Geschreven in de vereiste van het plan.",
+      "failed": "Je antwoorden zijn niet geschreven. Ze staan hier nog.",
+      "copy": "Antwoorden kopiëren"
+    },
+    "error": "Die vraag is niet aangekomen. Je antwoorden tot nu toe blijven bewaard: probeer het opnieuw.",
+    "retry": "Opnieuw proberen"
   },
   "itemTranslation": {
     "groupLabel": "Vertaling",

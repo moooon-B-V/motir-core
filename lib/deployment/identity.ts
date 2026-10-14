@@ -19,8 +19,10 @@
  * has to live SOMEWHERE, and the choice is between one named file and three raw
  * `process.env['FLY_*']` reads scattered through a service. This is that file:
  * it is registered as the guard's second `ALLOWED` entry, scoped to one path and
- * to the three variable names below, so a fourth `FLY_*` read here still fails
- * the guard rather than riding in on the exception.
+ * to the four variable names below, so a fifth `FLY_*` read here still fails
+ * the guard rather than riding in on the exception. (The fourth,
+ * `FLY_PROCESS_GROUP`, joined for the monitoring tags of MOTIR-8549: which
+ * process group answered is the same question as which machine did.)
  *
  * ---------------------------------------------------------------------------
  * ⚠️ IT IS A DIFFERENT KIND OF EXCEPTION FROM THE FIRST, AND SAYING SO MATTERS
@@ -103,7 +105,7 @@ export function deploymentIdentity(): DeploymentIdentity {
   return {
     provider: 'fly',
     app,
-    region: nonEmpty(process.env['FLY_REGION']) ?? null,
+    region: hostRegion() ?? null,
     instanceId: hostInstanceId() ?? null,
     dashboardUrl: `https://fly.io/apps/${app}`,
   };
@@ -121,6 +123,24 @@ export function hostInstanceId(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string | undefined {
   return nonEmpty(env['FLY_MACHINE_ID']);
+}
+
+/**
+ * THIS PROCESS'S REGION and PROCESS GROUP on its host, or `undefined` when the
+ * host injects none. Read for the `instance.*` tags every Sentry event carries
+ * (MOTIR-8549, `lib/monitoring/config.ts`), which must not name the provider's
+ * variables themselves.
+ */
+export function hostRegion(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
+  return nonEmpty(env['FLY_REGION']);
+}
+
+export function hostProcessGroup(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
+  return nonEmpty(env['FLY_PROCESS_GROUP']);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
