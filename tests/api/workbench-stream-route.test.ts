@@ -337,6 +337,60 @@ describe('A DISCONNECT STOPS THE POLL — the only thing that ever ends this str
   });
 });
 
+// ⚠️ THE REQUEST'S ABORT SIGNAL IS THE OTHER WAY A READER LEAVES (MOTIR-8568).
+// A reader who leaves BEFORE the handler returned its Response is never
+// cancelled: the server does not start piping a response whose connection has
+// already closed, so `cancel()` never runs, and the only thing that knows the
+// reader has gone is `req.signal`. These drive the route the way that departure
+// reaches it — the signal aborts and the body is NEVER cancelled.
+describe('A DEPARTURE THE STREAM IS NEVER TOLD ABOUT STILL STOPS THE POLL', () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('stops polling when the request aborts, with the body left uncancelled', async () => {
+    const spy = vi.spyOn(workbenchWatermarkService, 'read');
+    const leave = new AbortController();
+
+    const res = await GET(new Request(`${BASE}/api/workbench/stream`, { signal: leave.signal }));
+    const reader = res.body!.getReader();
+    await reader.read(); // the opening frame
+    await sleep(WORKBENCH_STREAM_POLL_MS * 2);
+    expect(spy.mock.calls.length).toBeGreaterThan(1);
+
+    leave.abort();
+
+    // The same drain-then-hold measurement as the `cancel()` case above, for the
+    // same two reasons. Before MOTIR-8568 this count climbed by one a second for
+    // as long as the process lived.
+    await sleep(WORKBENCH_STREAM_POLL_MS * 2);
+    const settled = spy.mock.calls.length;
+    await sleep(WORKBENCH_STREAM_POLL_MS * 3);
+    expect(spy.mock.calls.length).toBe(settled);
+
+    // And the stream ENDS rather than hanging open with nobody writing to it.
+    let done = false;
+    while (!done) ({ done } = await reader.read());
+  });
+
+  it('opens no stream at all for a reader who left while the first read was in flight', async () => {
+    const leave = new AbortController();
+    const actual = workbenchWatermarkService.read.bind(workbenchWatermarkService);
+    const spy = vi
+      .spyOn(workbenchWatermarkService, 'read')
+      .mockImplementation(async (...args: Parameters<typeof actual>) => {
+        const reading = await actual(...args);
+        leave.abort();
+        return reading;
+      });
+
+    const res = await GET(new Request(`${BASE}/api/workbench/stream`, { signal: leave.signal }));
+    expect(res.status).toBe(204);
+    expect(res.body).toBeNull();
+
+    await sleep(WORKBENCH_STREAM_POLL_MS * 3);
+    expect(spy.mock.calls.length).toBe(1);
+  });
+});
+
 describe('A MID-STREAM FAILURE is a terminal `error` FRAME, never a status', () => {
   it('writes the frame the shipped contract specifies once the headers have gone', async () => {
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
