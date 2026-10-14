@@ -1,7 +1,8 @@
 import {
-  MONITORING_TRACES_SAMPLE_RATE,
+  monitoringInstanceTags,
   serverMonitoringEnvironment,
   serverSentryDsn,
+  serverTracesSampleRate,
 } from './config';
 import { dropClientDisconnectAborts } from './clientDisconnect';
 import { dropExpectedDomainErrors } from './expectedDomainErrors';
@@ -52,11 +53,20 @@ export function serverBeforeSend(
  *  Returning null rather than an object with an empty DSN is what preserves the
  *  self-host contract: a build with no DSN must not call `init` at all, so it
  *  installs no integrations, patches no globals and opens no transport. The
- *  caller's `if` is the gate. */
-export function serverSentryInitOptions(): {
+ *  caller's `if` is the gate.
+ *
+ *  `traces: true` is how a caller OPTS IN to performance tracing at the
+ *  deployment's `SENTRY_TRACES_SAMPLE_RATE` (MOTIR-8549). Only the web server
+ *  does. Everyone else gets an explicit `0` — never an omitted key, because an
+ *  omitted `tracesSampleRate` lets the Node SDK read `SENTRY_TRACES_SAMPLE_RATE`
+ *  itself, and a Fly secret reaches every process group of the app: the job
+ *  worker and the terminal relay would start tracing the day production's rate
+ *  is set. */
+export function serverSentryInitOptions(opts?: { traces?: boolean }): {
   dsn: string;
   environment: string | undefined;
   tracesSampleRate: number;
+  initialScope: { tags: Record<string, string> };
   beforeSend: typeof serverBeforeSend;
   sendDefaultPii: false;
 } | null {
@@ -65,7 +75,10 @@ export function serverSentryInitOptions(): {
   return {
     dsn,
     environment: serverMonitoringEnvironment(),
-    tracesSampleRate: MONITORING_TRACES_SAMPLE_RATE,
+    tracesSampleRate: opts?.traces === true ? serverTracesSampleRate() : 0,
+    // Which machine, process group and region sent the event — on the scope so
+    // a transaction carries it too, not only an error (MOTIR-8549).
+    initialScope: { tags: monitoringInstanceTags() },
     // Expected typed domain 4xx are the product refusing on purpose, not
     // faults — see the module this comes from for why the discriminator is the
     // shipped status map and not an error-shape heuristic.
