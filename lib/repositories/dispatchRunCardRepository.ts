@@ -82,7 +82,6 @@ export const dispatchRunCardRepository = {
     dispatchRunIds: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<{ dispatchRunId: string; workItemId: string | null }[]> {
-    if (dispatchRunIds.length === 0) return [];
     return tx.dispatchRunCard.findMany({
       where: { dispatchRunId: { in: [...dispatchRunIds] } },
       select: { dispatchRunId: true, workItemId: true },
