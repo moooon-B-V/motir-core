@@ -56,11 +56,11 @@ test('@smoke the account is already IN a project — the shell proves it', async
   await page.goto(AUTHED_LANDING_PATH);
   await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
-  // The switcher, not a create-first door — and the project is named for its
-  // workspace, which is what `ensureDefaultProject` chooses.
+  // The switcher, not a create-first door — and the project carries the
+  // generated adjective-noun name `ensureDefaultProject` draws (MOTIR-8239).
   const switcher = page.getByRole('button', { name: 'Switch project' });
   await expect(switcher).toBeVisible();
-  await expect(switcher).toContainText('Workspace');
+  await expect(switcher).toContainText(/[A-Z][a-z]+ [A-Z][a-z]+/);
   await expect(page.getByRole('button', { name: 'Create your first project' })).toHaveCount(0);
 });
 

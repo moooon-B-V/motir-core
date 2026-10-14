@@ -183,8 +183,11 @@ test.describe('the shell’s context path', () => {
     await expect(bar(page).getByRole('button', { name: 'Create your first project' })).toHaveCount(
       0,
     );
-    // Named for its workspace, which is what `ensureDefaultProject` chooses.
-    await expect(bar(page).getByRole('button', { name: 'Switch project' })).toContainText('Empty');
+    // A generated adjective-noun name, which is what `ensureDefaultProject`
+    // draws (MOTIR-8239) — not the workspace's.
+    const seededSwitcher = bar(page).getByRole('button', { name: 'Switch project' });
+    await expect(seededSwitcher).toContainText(/[A-Z][a-z]+ [A-Z][a-z]+/);
+    await expect(seededSwitcher).not.toContainText('Empty');
   });
 
   // ── 7 · the ARCHIVED tier — covered at the component level, on purpose ────

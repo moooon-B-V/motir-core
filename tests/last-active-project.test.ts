@@ -463,7 +463,9 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
       const seeded = await projectsService.getActiveProject(owner.id, workspace.id);
       const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
       expect(row.lastActiveProjectId).toBe(seeded!.id);
-      expect(seeded!.name).toBe('Empty');
+      // A generated adjective-noun name (MOTIR-8239), not the workspace's.
+      expect(seeded!.name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+      expect(seeded!.name).not.toBe('Empty');
     });
 
     it('never throws and leaves the pointer intact for a workspace the user cannot access', async () => {

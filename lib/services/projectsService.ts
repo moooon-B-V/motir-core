@@ -58,6 +58,7 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { generateProjectName } from '@/lib/projects/projectNameGenerator';
 
 // Projects service — business logic for the Project entity. Owns all
 // $transaction calls, the membership gate, identifier/slug derivation +
@@ -132,7 +133,7 @@ function normalizePublicTags(raw: string[]): string[] {
   return tags;
 }
 
-function deriveIdentifierBase(name: string): string {
+export function deriveIdentifierBase(name: string): string {
   const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (cleaned.length === 0) return IDENTIFIER_FALLBACK;
   const base = cleaned.slice(0, IDENTIFIER_MAX_LENGTH);
@@ -175,7 +176,7 @@ function identifierWithSuffix(base: string, suffix: number): string {
   return `${base.slice(0, keep)}${suffixStr}`;
 }
 
-function slugify(name: string): string {
+export function slugify(name: string): string {
   const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -594,9 +595,18 @@ export const projectsService = {
   }): Promise<ProjectDTO | null> {
     await projectsService.assertMembership(input.actorUserId, input.workspaceId);
 
-    // The default project is named for its WORKSPACE. Not for the user (a
-    // second workspace's default would carry the first one's owner) and not
-    // "Untitled" (which reads as a placeholder nobody chose).
+    // The default project carries a GENERATED adjective-noun name — "Quiet
+    // Harbor" (Story MOTIR-8239). Not the workspace's name (a project named
+    // after the workspace that holds it reads as a duplicate, and a second
+    // project then needs a name the first one took), not the user's (a second
+    // workspace's default would carry the first one's owner) and not
+    // "Untitled" (which reads as a placeholder nobody chose). It is drawn ONCE
+    // per seeding, before the retry loop, and the identifier and slug are
+    // derived from the drawn name, so all three handles agree.
+    //
+    // ⚠️ The workspace read is KEPT although its name is no longer used: it is
+    // the existence-and-membership probe that turns a vanished workspace into
+    // a NotAMemberError before any write.
     //
     // ⚠️ Read BOUND. `workspace` is a tenant-root table with no public arm, so
     // an unbound `findById` compares the policy against NULL and answers null
@@ -608,7 +618,7 @@ export const projectsService = {
       (tx) => workspaceRepository.findByIdInTx(input.workspaceId, tx),
     );
     if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
-    const name = workspace.name.trim();
+    const name = generateProjectName();
     const identifierBase = deriveIdentifierBase(name);
     const slugBase = slugify(name);
 
