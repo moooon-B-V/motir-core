@@ -621,7 +621,12 @@ test.describe('the Workbench and an open approval, under a second actor', () => 
 const workspace = (page: Page) => page.getByRole('dialog', { name: /plan/i });
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => rail(page).getByRole('textbox');
-const proposalList = (page: Page) => page.getByTestId('plan-proposal-list');
+// ⚠️ THE VISIBLE COPY ONLY: a streamed or outgoing subtree is in the DOM but
+// hidden, so filtering on visibility is what keeps this to the live list. It
+// cannot go by role: with a card's peek open the list is hidden from the
+// accessibility tree, and the overlay and the plan page both host it.
+const proposalList = (page: Page) =>
+  page.locator('[data-testid="plan-proposal-list"]').filter({ visible: true });
 const listButton = (page: Page) =>
   workspace(page)
     .getByRole('group', { name: en.planReview.viewSwitchAria })
