@@ -70,6 +70,7 @@
     "test:coverage:plan-narration": "vitest run --config vitest.coverage.plan-narration.config.ts --coverage",
     "test:coverage:tool-call-narration": "vitest run --config vitest.coverage.tool-call-narration.config.ts --coverage",
     "test:guards": "vitest run --config vitest.guards.config.ts",
+    "test:two-instance": "vitest run --config vitest.two-instance.config.ts",
     "test:docs-guards": "vitest run --config vitest.docs.config.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
