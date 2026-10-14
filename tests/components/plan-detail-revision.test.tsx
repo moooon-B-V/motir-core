@@ -252,6 +252,36 @@ describe('⚠️ the ASYNC LANDING — each surface routed to its own mechanism'
     }
   });
 
+  it('a poll that finds it still running keeps the band; a failed one retries next tick', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.fetchPlanReview.mockResolvedValue(review({ revision: RUNNING }));
+      render({ revision: RUNNING });
+
+      // Still running: the band stays.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByTestId('plan-revision-running')).toBeTruthy();
+
+      // A dropped read changes nothing, and the poll keeps going.
+      mocks.fetchPlanReview.mockRejectedValueOnce(new Error('offline'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByTestId('plan-revision-running')).toBeTruthy();
+
+      mocks.fetchPlanReview.mockResolvedValue(review({ revision: null }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.queryByTestId('plan-revision-running')).toBeNull();
+      expect(mocks.refresh).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does NOT poll, and does NOT refresh, when no revision is running', async () => {
     vi.useFakeTimers();
     try {
