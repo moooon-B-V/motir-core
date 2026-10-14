@@ -8,7 +8,6 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  ArrowUpRight,
   BookOpenText,
   Check,
   CheckCircle2,
@@ -25,9 +24,10 @@ import {
   OnboardingHero,
   OnboardingWizardBar,
   OnboardingWorkBand,
-  WARM_CTA,
   WarmButton as Button,
 } from '@/components/onboarding/layout';
+import { ConnectPanel } from './ConnectPanel';
+import { StepHead } from './StepHead';
 import { DiscoveryChatBubble } from '@/components/onboarding/DiscoveryChatRail';
 import { setActiveProjectAction } from '@/app/(authed)/_project-actions';
 import { cn } from '@/lib/utils/cn';
@@ -60,7 +60,7 @@ import {
 //
 // A client island seeded from the Server Component's read of the state machine;
 // it drives step transitions through the migrate API routes (start / advance /
-// skip-import / index-status / plan) — NEVER the service layer directly (the
+// skip-import / connect-state / index-status / plan) — NEVER the service layer directly (the
 // 4-layer rule).
 //
 // Conventions (CLAUDE.md): ONLY `--el-*` colour + element-semantic shape tokens;
@@ -78,16 +78,8 @@ const STEP_RANK: Record<MigrateOnboardingStepDto, number> = {
   done: 7,
 };
 
-/** How often the Connect step re-reads the connection while it waits on the
- *  other tab (Revision 1, 2c). */
-const CONNECT_POLL_MS = 5000;
 /** How often the drafting status re-asks the machine whether the plan is ready. */
 const GENERATE_POLL_MS = 5000;
-
-/** The repositories the GitHub settings page connects — opened in a NEW tab, so
- *  this one stays on the wizard and notices the connection (Revision 1). The
- *  git connect surface is organisation-tier (Story MOTIR-4669 · MOTIR-4680). */
-const GIT_SETTINGS_HREF = '/settings/organization/git';
 
 export interface MigrateWizardProject {
   id: string;
@@ -551,23 +543,6 @@ function RailStep({
 
 // ── Panels ─────────────────────────────────────────────────────────────────
 
-function StepHead({ eyebrow, heading, body }: { eyebrow: string; heading: string; body: string }) {
-  return (
-    <div className="mb-6 grid gap-2">
-      <p className="m-0 flex items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.1em] text-(--el-text-secondary) uppercase">
-        <span className="size-2 flex-none rounded-full bg-(--el-highlight)" aria-hidden />
-        {eyebrow}
-      </p>
-      <h2 className="m-0 font-serif text-[28px] leading-[0.98] font-bold tracking-[-0.03em] text-balance text-(--el-text) md:text-[34px]">
-        {heading}
-      </h2>
-      <p className="m-0 mt-1 max-w-[60ch] text-[15px] leading-normal text-(--el-text-secondary) md:text-[16px]">
-        {body}
-      </p>
-    </div>
-  );
-}
-
 function PanelFoot({
   onBack,
   nextLabel,
@@ -704,222 +679,6 @@ function StartPanel({
           {t('start.ctaFor', { project: pickedRow.name })}
         </Button>
       </div>
-    </div>
-  );
-}
-
-type ConnectState = 'checking' | 'missing' | 'waiting' | 'connected';
-
-/**
- * Connect — DETECTS the connection by itself (Revision 1). It reads the
- * project's repositories on arrival, again whenever this tab regains focus, and
- * every few seconds while the person is connecting in the other tab. There is
- * no "I've connected my repos" button: Continue appears once there is
- * something to continue with.
- */
-function ConnectPanel({
-  runId,
-  onAdvance,
-  busy,
-}: {
-  /** Null while the run is still being started on arrival (Revision 3). */
-  runId: string | null;
-  onAdvance: () => Promise<RunResult>;
-  busy: boolean;
-}) {
-  const t = useTranslations('onboardingMigrate');
-  const [state, setState] = useState<ConnectState>('checking');
-  const [repos, setRepos] = useState<string[]>([]);
-  const waitingRef = useRef(false);
-  const inFlight = useRef(false);
-  const seq = useRef(0);
-
-  const read = useCallback(async () => {
-    if (!runId || inFlight.current) return;
-    inFlight.current = true;
-    const mine = ++seq.current;
-    try {
-      const res = await fetch(`/api/onboarding/migrate/${runId}/index-status`, {
-        cache: 'no-store',
-      });
-      if (!res.ok || mine !== seq.current) return;
-      const status = (await res.json()) as MigrateIndexStatusDto;
-      if (status.repos.length > 0) {
-        setRepos(status.repos.map((r) => r.repoRef));
-        setState('connected');
-      } else {
-        setRepos([]);
-        setState(waitingRef.current ? 'waiting' : 'missing');
-      }
-    } catch {
-      // a transient failure keeps the current state; the next trigger re-reads
-    } finally {
-      inFlight.current = false;
-    }
-  }, [runId]);
-
-  // Read on arrival, and again when this tab comes back into view.
-  useEffect(() => {
-    if (!runId) return;
-    // Deferred a tick so the first read lands from a callback, like every later
-    // one (react-hooks/set-state-in-effect).
-    const first = window.setTimeout(() => void read(), 0);
-    const onFocus = () => void read();
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void read();
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.clearTimeout(first);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [runId, read]);
-
-  // Poll ONLY while waiting on the other tab.
-  useEffect(() => {
-    if (state !== 'waiting') return;
-    const id = window.setInterval(() => void read(), CONNECT_POLL_MS);
-    return () => window.clearInterval(id);
-  }, [state, read]);
-
-  const openedSettings = () => {
-    waitingRef.current = true;
-    setState((s) => (s === 'connected' ? s : 'waiting'));
-  };
-
-  const onContinue = () => {
-    void onAdvance().then((r) => {
-      // The machine did not see the connection yet: read it again rather than
-      // leaving the person on a button that silently did nothing.
-      if (r.kind === 'conflict') void read();
-    });
-  };
-
-  return (
-    <div>
-      <StepHead
-        eyebrow={t('connect.eyebrow')}
-        heading={t('connect.heading')}
-        body={t('connect.body')}
-      />
-      <Card>
-        {state === 'checking' ? (
-          <div className="flex min-h-[148px] flex-col gap-3" aria-busy="true">
-            <p
-              role="status"
-              className="m-0 flex items-center gap-2.5 text-sm text-(--el-text-secondary)"
-            >
-              <span aria-hidden className="flex-none text-(--el-highlight)">
-                <Spinner size="sm" />
-              </span>
-              {t('connect.checking')}
-            </p>
-          </div>
-        ) : state === 'connected' ? (
-          <div className="flex flex-col gap-3">
-            <div role="status" className="grid gap-1">
-              <p className="m-0 flex items-center gap-2.5 text-sm font-semibold text-(--el-text)">
-                <CheckCircle2 className="size-4 flex-none text-(--el-success)" aria-hidden />
-                {t('connect.detected', { count: repos.length })}
-              </p>
-              <p className="m-0 max-w-[60ch] text-sm leading-normal text-(--el-text-secondary)">
-                {t('connect.detectedHint')}
-              </p>
-            </div>
-            <ul
-              aria-label={t('connect.listLabel')}
-              className="m-0 flex list-none flex-col gap-2 p-0"
-            >
-              {repos.map((ref) => {
-                const [owner, ...rest] = ref.split('/');
-                const name = rest.join('/') || ref;
-                return (
-                  <li
-                    key={ref}
-                    className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
-                  >
-                    <GitBranch
-                      className="size-4 flex-none text-(--el-text-secondary)"
-                      aria-hidden
-                    />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)">
-                      {rest.length > 0 ? (
-                        <span className="text-(--el-text-secondary)">{owner}/</span>
-                      ) : null}
-                      {name}
-                    </span>
-                    <Check className="size-4 flex-none text-(--el-success)" aria-hidden />
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ) : (
-          <div className="flex min-h-[148px] flex-col gap-3">
-            <div role="status" className="grid gap-1">
-              <p className="m-0 flex items-center gap-2.5 text-sm font-semibold text-(--el-text)">
-                {state === 'waiting' ? (
-                  <span aria-hidden className="flex-none text-(--el-highlight)">
-                    <Spinner size="sm" />
-                  </span>
-                ) : (
-                  <GitBranch className="size-4 flex-none text-(--el-text-secondary)" aria-hidden />
-                )}
-                {state === 'waiting' ? t('connect.waitingTitle') : t('connect.missingTitle')}
-              </p>
-              <p className="m-0 max-w-[60ch] text-sm leading-normal text-(--el-text-secondary)">
-                {state === 'waiting' ? t('connect.waitingHint') : t('connect.missingHint')}
-              </p>
-            </div>
-            <a
-              href={GIT_SETTINGS_HREF}
-              target="_blank"
-              rel="noopener"
-              onClick={openedSettings}
-              className={cn(
-                buttonVariants({
-                  variant: state === 'waiting' ? 'secondary' : 'primary',
-                  size: 'md',
-                }),
-                'w-fit gap-2',
-                state !== 'waiting' && WARM_CTA,
-              )}
-            >
-              <span>{state === 'waiting' ? t('connect.reopenCta') : t('connect.connectCta')}</span>
-              <ArrowUpRight className="size-4" aria-hidden />
-              <span className="sr-only"> {t('connect.newTab')}</span>
-            </a>
-            <p className="m-0 text-xs text-(--el-text-secondary)">{t('connect.gitlabNote')}</p>
-          </div>
-        )}
-      </Card>
-      {state === 'connected' ? (
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <a
-            href={GIT_SETTINGS_HREF}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-1.5 rounded-(--radius-control) text-sm text-(--el-text-secondary) underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
-          >
-            <span>{t('connect.manage')}</span>
-            <ArrowUpRight className="size-4" aria-hidden />
-            <span className="sr-only"> {t('connect.newTab')}</span>
-          </a>
-          <span className="ml-auto">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={onContinue}
-              loading={busy}
-              rightIcon={<ArrowRight className="size-4" />}
-            >
-              {t('connect.continue')}
-            </Button>
-          </span>
-        </div>
-      ) : null}
     </div>
   );
 }

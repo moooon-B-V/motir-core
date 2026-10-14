@@ -290,6 +290,29 @@ export async function stubMigrateRoutes(page: Page): Promise<MigrateStubs> {
       return;
     }
 
+    // GET .../connect-state — the Connect step's own read (MOTIR-8472): an
+    // installation bound to the organisation, with the three repositories connected.
+    if (method === 'GET' && url.includes('/connect-state')) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          organizationId: 'org-mig',
+          installation: {
+            bound: true,
+            accounts: [{ installationRef: '1', accountLogin: 'acme', accountType: 'Organization' }],
+          },
+          repositories: repos.map((r) => ({
+            provider: r.provider,
+            repoRef: r.repoRef,
+            defaultBranch: 'main',
+          })),
+          outcome: 'already_connected',
+          snapshot: 'stub-snapshot',
+        },
+      });
+      return;
+    }
+
     // GET .../:id — resume head read (the page's server-component read)
     if (method === 'GET' && url.match(/\/migrate\/[^/]+$/)) {
       await route.fulfill({ status: 200, json: makeRun({ step }) });

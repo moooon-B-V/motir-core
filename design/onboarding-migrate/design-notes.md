@@ -1467,3 +1467,316 @@ The importer's steps, the composer placeholder and Send keep their existing `imp
   contrast run across every palette.
 - **GIVES MOTIR-8257** a changed path: the migrate E2E no longer leaves the wizard for the importer
   or for discovery. **GIVES MOTIR-8258** the twelve keys above.
+
+## Revision 7 (2026-10-13) — the connect step's pre-flight and every state it can return in (MOTIR-8469)
+
+**Amends:** § _2026-10-12 — the vibe layout on the migrate wizard_ → **Revision 1** (§ _The four
+states (Panels 2a–2d…)_, § _The detection mechanism_, § _Slot → key (Revision 1)_) and that
+section's Panel 7 (the error alert, for the connect read only), as drawn in
+[`onboarding-migrate--vibe-layout.mock.html`](./onboarding-migrate--vibe-layout.mock.html) Panels
+2a–2d, 7 and 11. **Delta mock:**
+[`onboarding-migrate--connect-states.mock.html`](./onboarding-migrate--connect-states.mock.html). Story
+MOTIR-8241. Neither earlier mock is edited; where Revision 1 and this section disagree about the
+connect step, this section wins.
+
+**The card asked for three files: a re-exported `onboarding-migrate.png` and an edit of
+`onboarding-migrate.mock.html`.** Both are replaced by this delta mock under
+`docs/decisions/design-result.md` AMENDMENT 4 (`CLAUDE.md` § _Design assets_): a change to an
+existing design is a new `<surface>--<change>.mock.html` holding only the changed panels, there is
+no `.png` export any more, and an older mock is a record of its moment. The pack is therefore two
+files — this section and the delta mock — and the folder's basenames are untouched.
+
+**Design system — files read:** root `package.json` (`"@motir/design-system": "workspace:*"`),
+`app/globals.css` (line 13 `@import '@motir/design-system/theme.css'`),
+`packages/design-system/package.json` (**`0.14.0`**, exports `./mock`). **Verdict: ON MOTIR DESIGN —
+branch (a).** The mock is built with `renderMock` from the package's real `Card`, `Button`,
+`buttonVariants`, `Pill` and `Spinner`, axes `warm-editorial` · `motir` · `motir`, every frame a
+`[data-appearance-scope]` carrying `data-theme`. The specimen-only `.style-vignette` rules
+`theme.css` now carries are dropped from the inlined sheet (no mock carries them). Nothing is
+proposed for the package; `EmptyState` is not used (the step's empty state is the pre-flight, which
+is a list with an action, not an empty-state illustration).
+
+**Shipped reality read this run:** `app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx`
+(`ConnectPanel` l.720 — the `checking | waiting | missing | connected` union, `GIT_SETTINGS_HREF`,
+the focus / visibility re-read, `CONNECT_POLL_MS`, `Continue` only in `connected`),
+`components/onboarding/layout/WarmButton.tsx` (`WARM_CTA`), `lib/github/bannerStatus.ts`,
+`components/settings/GitConnectBanner.tsx` +
+`app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx` (`SettingsBanner`'s tone
+realisation), `app/api/github/setup/route.ts`, `lib/github/returnSurface.ts`, `lib/github/appLinks.ts`,
+`app/(authed)/settings/organization/git/page.tsx` (l.218–224, the account list's `manageUrl`),
+`messages/en.json` (`onboardingMigrate.connect.*`, `github.banner.*`), and MOTIR-8470's card.
+
+### Build note — the folder, listed in full before drawing
+
+```
+design/onboarding-migrate/
+  design-notes.md
+  onboarding-migrate--vibe-layout.mock.html
+  onboarding-migrate.mock.html
+  onboarding-migrate.png
+```
+
+Files that draw a connect-step panel: **`onboarding-migrate.mock.html`** (MOTIR-930's Panel 1 —
+the shipped-before-restyle connect, a record), **`onboarding-migrate.png`** (its export, a record),
+and **`onboarding-migrate--vibe-layout.mock.html`** (Panels 2a–2d, 7 drawn over 2b, and 11 narrow).
+Under AMENDMENT 4 none of them is amended in place; this delta mock is the amendment for all three.
+The connect card's GitHub grant rows are composed from `design/github/` (7.7.1), which this
+revision does not touch. No other file in the folder holds a connect panel.
+
+### Which numbering governs — the panel index
+
+The design of record numbers the connect step's panels **2a–2d** (Revision 1). The parent story's
+"Panel 1" is MOTIR-930's original numbering (§ _Panel 1 — Connect repos_, above), which no current
+board uses. **2a–2d governs.** The new panels continue it as **2e–2k**, so no existing id changes
+meaning. The mock's first board section ("Index") is the surface table, one row per panel.
+
+| card # | panel   | state                                   | vs. the record                                   | its one next action                                            |
+| ------ | ------- | --------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| 1      | 2a      | Checking                                | amended (also covers the run still starting)     | none — resolves itself                                         |
+| 2      | 2b      | Pre-flight (not connected — empty)      | **replaces** Revision 1's "Not connected yet"    | **Connect GitHub** (primary, warm)                             |
+| 3      | 2e      | Starting                                | new                                              | none — the browser is leaving                                  |
+| 4      | 2c      | Waiting for the round trip              | amended (reopens the install, not Settings)      | Open GitHub again (**secondary**)                              |
+| 5      | 2d      | Connected                               | amended (provider mark, GitHub manage target)    | **Continue** (primary) · Manage repositories on GitHub (quiet) |
+| 6      | 2f      | Already connected                       | new                                              | **Continue** (primary) · Add repositories on GitHub (quiet)    |
+| 7      | 2g-i/ii | No repositories selected                | new (two variants: nothing chosen · none usable) | **Choose repositories on GitHub** (primary)                    |
+| 8      | 2h      | Install cancelled                       | new                                              | **Connect GitHub** (primary) — the pre-flight's own control    |
+| 9      | 2i      | Waiting for a GitHub organisation owner | new                                              | none · Open GitHub (secondary)                                 |
+| 10     | 2j-1…4  | Something went wrong (the family)       | new                                              | **Connect GitHub** / **Try again** (primary)                   |
+| 11     | 2k      | Could not check                         | new — supersedes Panel 7 for the connect read    | Check again (secondary)                                        |
+
+Every panel is drawn in **light and dark** at 1280, as the work band only (rail + `StepHead` +
+card + foot): the bar and the compact hero are unchanged and are not redrawn. **The access path** is
+unchanged: the wizard's arrival on Connect, vibe-layout Panels 1a / 1b.
+
+### The union — a total set, mapped onto the shipped one
+
+The target union is the eleven values above and nothing else: `checking · preflight · starting ·
+waiting · connected · alreadyConnected · noRepos(noneChosen | noneUsable) · cancelled ·
+awaitingOwner · failed(outcome) · readFailed`. The shipped four map onto it as:
+
+| shipped     | splits into                                       | why                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checking`  | `checking`                                        | unchanged name; it now also stands while the run is still being started (`runId === null`).                                                                                                                                                                                                                                                                                                  |
+| `waiting`   | `waiting`, `starting`                             | `starting` is the few hundred ms between the press and the browser leaving, while the state is minted.                                                                                                                                                                                                                                                                                       |
+| `missing`   | `preflight`, `noRepos`, `cancelled`, `readFailed` | `missing` is drawn today for **nothing installed** AND **installed with nothing usable** (`repos.length === 0` cannot tell them apart). Their next actions are opposite — install vs. change the selection of an existing installation — so one state cannot carry both. `cancelled` is `missing` after a send; `readFailed` is what a swallowed read silently showed as the previous state. |
+| `connected` | `connected`, `alreadyConnected`                   | told apart by the client's sent-out flag: usable > 0 after a send is _connected_; usable > 0 on arrival is _already connected_ (no install is ever the primary there).                                                                                                                                                                                                                       |
+| —           | `awaitingOwner`, `failed(outcome)`                | no shipped value: the round trip never lands on this step today (its origin is always `organizationGit`).                                                                                                                                                                                                                                                                                    |
+
+### Tones — read from `lib/github/bannerStatus.ts` on 2026-10-13, not invented
+
+The step renders a tone as a **`Pill` `severity`** of the same name (`success` → `--el-tint-mint`,
+`info` → `--el-tint-sky`, `danger` → `--el-tint-rose`, each with `--el-text-strong`), carrying a
+glyph and a label, above the status line — **never colour alone**: every state also has its own
+glyph and its own title. States with no outcome draw no pill.
+
+| outcome / state                                   | status read                       | tone (`GITHUB_BANNER_TONE`)                                                                                                        | panel |
+| ------------------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| install bound, repositories usable                | `installed`                       | **success**                                                                                                                        | 2d    |
+| already connected on arrival                      | — (no round trip)                 | success — the same pair as 2d; nothing went wrong                                                                                  | 2f    |
+| bound, nothing usable                             | — (a read, not a status)          | **info**, read from `select_repos` (the outcome that also asks the person to choose); deliberately NOT `repo_unavailable`'s danger | 2g    |
+| owner approval requested                          | none yet (route says `installed`) | **info** — benign; MOTIR-8471 adds the status with this tone and lists it in `GITHUB_BENIGN_BANNER_STATUSES`                       | 2i    |
+| link expired                                      | `install_expired`                 | **info** (benign)                                                                                                                  | 2j-1  |
+| forbidden                                         | `install_forbidden`               | **danger**                                                                                                                         | 2j-2  |
+| provider error                                    | `install_provider_error`          | **danger**                                                                                                                         | 2j-3  |
+| tampered state · state for another user · generic | `install_error` (one status)      | **danger** — the route reports all three as one status, so one panel                                                               | 2j-4  |
+| cancelled                                         | none (GitHub sends nothing)       | **none** — a glyph and a plain line; the OAuth grant's `denied` is danger on Settings and this step does not inherit it            | 2h    |
+| could not check                                   | none (a read failure)             | **none** — benign: nothing the person did was lost                                                                                 | 2k    |
+
+**Benign-never-danger holds:** an expired link, an owner-approval request and a cancelled install
+are never drawn in the danger tint, and neither is "no repositories selected". **Not drawn, and
+why:** `install_unbound` and `repos_updated` arrive with no state, so they can only return to the
+default surface (Settings); `select_repos`, `repo_unavailable` and `installation_not_accessible`
+come from the organisation branch, which only a state naming an `organizationId` reaches — the
+already-installed-accounts story's flow, not this step's.
+
+### The pre-flight (2b; repeated under 2h)
+
+Three numbered rows in one `ol` (`aria-label` "What happens on GitHub"), each a 24 px numbered
+circle (`border --el-border`, `--el-text-secondary` digit, `rounded-full`), a 16 px glyph, a
+semibold title and a hint:
+
+1. **Choose the account** (`Building2`) — your personal account, or a GitHub organisation you belong to.
+2. **Choose the repositories** (`GitBranch`) — All repositories, or only the ones you select.
+3. **Approve the access** (`Shield`) — followed by the **access rows: slots, not copy.**
+
+**The access rows are bound to MOTIR-8470.** One row per permission the live Motir App requests,
+in the order GitHub's install screen lists them; the **row count is whatever MOTIR-8470's comment
+records** (the dated table in `docs/decisions/unlinked-pull-request-check.md` is not a source).
+Grammar: `{what Motir can do} — {on what}`, one plain-language line per permission, the level
+folded into the verb (reads / reads and changes). The mock draws three dashed slot rows
+(`access row 1`, `2`, `…n`) and **quotes no permission string**. Each row: `rounded-(--radius-control)`,
+`border border-dashed --el-border`, `px-(--spacing-control-x) py-1.5`, mono 12, `--el-text-secondary`,
+a `Check` glyph. The build renders them solid (`--el-border-soft`, sans 14, `--el-text`) once the
+copy exists; dashed is the mock's slot marker only.
+
+A last line sets up state 9 before it happens: "Not an owner of the organisation? GitHub asks one of
+its owners to approve instead, and this step waits for them."
+
+### Per element — colour + shape role
+
+| element                                                 | primitive                                       | colour role                                                               | shape / size                                                  |
+| ------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| card                                                    | `Card` (`data-surface="card"`)                  | `--el-card`, `--el-border`                                                | `--radius-card`, `--spacing-card-padding`                     |
+| tone chip                                               | `Pill severity={success\|info\|danger}`         | `--el-tint-mint` / `--el-tint-sky` / `--el-tint-rose`; `--el-text-strong` | `--radius-badge`, `--spacing-chip-x/y`; glyph 14 px           |
+| status title                                            | —                                               | `--el-text`, semibold                                                     | 14 px                                                         |
+| status hint · pre-flight hints                          | —                                               | `--el-text-secondary`                                                     | 14 px, `max-w-[60ch]`                                         |
+| state glyph (neutral states)                            | lucide, aria-hidden                             | `--el-text-secondary`                                                     | 16 px                                                         |
+| state glyph (success)                                   | `CheckCircle2`, aria-hidden                     | `--el-success`                                                            | 16 px                                                         |
+| state glyph (danger)                                    | `TriangleAlert`, aria-hidden                    | `--el-danger-on-surface`                                                  | 16 px                                                         |
+| spinner (2a, 2c, 2e)                                    | `Spinner sm`, aria-hidden wrapper               | `--el-highlight` (warm small mark, Revision 5)                            | `rounded-full`                                                |
+| primary (Connect GitHub, Continue, Choose, Try again)   | `buttonVariants primary md` + `WARM_CTA`        | `--el-cta-warm` / `--el-cta-warm-text`                                    | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`; `w-fit` |
+| primary loading (2e)                                    | `Button loading`                                | same pair; `Spinner` inside; `aria-busy`, disabled                        | as above                                                      |
+| secondary (Open GitHub again, Open GitHub, Check again) | `buttonVariants secondary md`                   | `--el-text` on transparent, `--el-button-border`                          | `--radius-btn`, `--height-btn-md`                             |
+| quiet GitHub link (manage · add more)                   | `<a>`, underlined                               | `--el-text-secondary`; focus outline `--el-accent-on-surface`             | `--radius-control` focus box                                  |
+| new-tab marker                                          | `ArrowUpRight` + sr-only "(opens in a new tab)" | inherits                                                                  | 16 px                                                         |
+| repo row                                                | `li`                                            | `--el-border-soft`; owner `--el-text-secondary`, name `--el-text`         | `--radius-control`, `--spacing-control-x`, py-2.5, mono 13    |
+| repo provider mark                                      | lucide `Github` + sr-only "GitHub"              | `--el-text-secondary`                                                     | 16 px                                                         |
+| repo tick                                               | `Check`, aria-hidden                            | `--el-success`                                                            | 16 px                                                         |
+| GitLab note                                             | —                                               | `--el-text-secondary`                                                     | 12 px                                                         |
+
+Every status block is one `role="status"` region, so each change is announced politely; 2a keeps
+`aria-busy`. No `--el-text-muted`, no `--el-text-faint`, no `--el-danger-text`, no raw colour.
+
+### The GitHub-side controls name the surface they open — no URL is typed
+
+| control                                                                                    | opens                                                                             | address, read from the code                                                                                                                               |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connect GitHub · Try again · Open GitHub again · Open GitHub (2i)                          | GitHub's install screen for the Motir App                                         | `githubAppInstallUrl(state)` (`lib/github/appLinks.ts`) with the step's own signed state                                                                  |
+| Manage repositories on GitHub · Add repositories on GitHub · Choose repositories on GitHub | the installation's settings page on GitHub (where the repository selection lives) | `githubInstallationManageUrl(installation)` — the builder Settings → Organisation → Git's account list uses for its own manage control (`page.tsx` l.224) |
+
+In the mock each `href` is a fragment naming its builder (`#githubAppInstallUrl(state)`,
+`#githubInstallationManageUrl(installation)`). The return to this step is MOTIR-8471's onboarding
+surface **id**; no control assumes a path.
+
+### Behaviour the board depicts (for MOTIR-8475)
+
+1. **One primary or none, per panel.** 2b/2h: Connect GitHub is the only way out of the
+   pre-flight. 2c and 2i have no primary (2i has nothing to press). 2k's retry is secondary.
+2. **The exit is the shipped one, unchanged:** Continue (2d, 2f) calls the existing advance
+   `connect → index`, which records the run's `connectedRepoRef`.
+3. **Re-read on return stays** (Revision 1's focus / `visibilitychange` read and the ~5 s poll in
+   2c); 2g re-reads on tab return only, because a selection change made on GitHub carries no state
+   back (MOTIR-3755).
+4. **Cancel is computed, not reported:** 2h = a read answering "not bound" after a send, compared
+   with the read taken before it.
+5. **2e opens the tab inside the click.** A popup blocker refuses a `window.open` after an `await`,
+   so the state must already be minted (mint it when 2b renders and re-mint on focus if it is near
+   its TTL), or the tab is opened blank in the click and navigated once the state arrives.
+
+### Slot → key (Revision 7, proposed — `messages/` is not edited here)
+
+All under `onboardingMigrate.connect.*` unless named.
+
+| slot                                   | key                                                           | status                         | English                                                                                                                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2a line                                | `checking`                                                    | unchanged                      | Checking for connected repositories…                                                                                                                                                                                         |
+| 2b status line                         | `missingTitle`                                                | unchanged                      | No repositories connected yet                                                                                                                                                                                                |
+| 2b intro                               | `preflightIntro`                                              | **NEW**                        | GitHub opens in a new tab and asks you three things. Then it sends you straight back to this step.                                                                                                                           |
+| 2b list `aria-label`                   | `preflightLabel`                                              | **NEW**                        | What happens on GitHub                                                                                                                                                                                                       |
+| 2b row 1 title · hint                  | `preflightAccount` · `preflightAccountHint`                   | **NEW**                        | Choose the account · Your personal account, or a GitHub organisation you belong to.                                                                                                                                          |
+| 2b row 2 title · hint                  | `preflightRepos` · `preflightReposHint`                       | **NEW**                        | Choose the repositories · All repositories, or only the ones you select. You can change this later on GitHub.                                                                                                                |
+| 2b row 3 title · hint                  | `preflightAccess` · `preflightAccessHint`                     | **NEW**                        | Approve the access · GitHub lists what the Motir app can read and change:                                                                                                                                                    |
+| 2b access rows                         | `preflightAccessRows.<permission>`                            | **NEW (slots)**                | one key per permission MOTIR-8470 records — written by MOTIR-8473 from that comment, never from this asset                                                                                                                   |
+| 2b access list `aria-label`            | `preflightAccessLabel`                                        | **NEW**                        | Access the Motir app asks for                                                                                                                                                                                                |
+| 2b owner line                          | `preflightOwnerNote`                                          | **NEW**                        | Not an owner of the organisation? GitHub asks one of its owners to approve instead, and this step waits for them.                                                                                                            |
+| 2b / 2h / 2j primary                   | `connectCta`                                                  | unchanged                      | Connect GitHub                                                                                                                                                                                                               |
+| 2e loading label                       | `starting`                                                    | **NEW**                        | Opening GitHub…                                                                                                                                                                                                              |
+| 2c title                               | `waitingTitle`                                                | unchanged                      | Waiting for GitHub                                                                                                                                                                                                           |
+| 2c hint                                | `waitingHint`                                                 | **CHANGED**                    | Finish on GitHub in the other tab. It sends you back to this step, and this tab checks again when you return.                                                                                                                |
+| 2c secondary                           | `reopenCta`                                                   | **CHANGED**                    | Open GitHub again                                                                                                                                                                                                            |
+| 2d pill                                | `pillConnected`                                               | **NEW**                        | Connected                                                                                                                                                                                                                    |
+| 2d line · hint · list label · Continue | `detected` · `detectedHint` · `listLabel` · `continue`        | unchanged                      | (as shipped)                                                                                                                                                                                                                 |
+| 2d quiet link                          | `manage`                                                      | unchanged text, **new target** | Manage repositories on GitHub                                                                                                                                                                                                |
+| repo provider sr-only                  | `providerGithub`                                              | **NEW**                        | GitHub                                                                                                                                                                                                                       |
+| 2f pill · title · hint                 | `pillAlready` · `alreadyTitle` · `alreadyHint`                | **NEW**                        | Already connected · This organisation is already connected · Motir can already read these {count, plural, one {# repository} other {# repositories}}, so there is nothing to install. Continue, or add more on GitHub.       |
+| 2f quiet link                          | `addMore`                                                     | **NEW**                        | Add repositories on GitHub                                                                                                                                                                                                   |
+| 2g pill · title                        | `pillChooseRepos` · `noReposTitle`                            | **NEW**                        | Choose repositories · GitHub is connected, but no repositories are                                                                                                                                                           |
+| 2g-i hint                              | `noReposNoneChosen`                                           | **NEW**                        | No repositories were chosen when the Motir app was installed. Choose at least one on GitHub, and this step picks it up when you come back.                                                                                   |
+| 2g-ii hint                             | `noReposUnusable`                                             | **NEW**                        | The repositories you chose can't be connected to this organisation; they may already belong to another one. Choose others on GitHub, and this step picks them up when you come back.                                         |
+| 2g primary                             | `chooseRepos`                                                 | **NEW**                        | Choose repositories on GitHub                                                                                                                                                                                                |
+| 2h title · hint                        | `cancelledTitle` · `cancelledHint`                            | **NEW**                        | The install didn't finish · Nothing was connected and nothing is lost. Start again whenever you're ready.                                                                                                                    |
+| 2i pill · title · hint                 | `pillOwner` · `ownerTitle` · `ownerHint`                      | **NEW**                        | Waiting on an owner · Waiting for a GitHub organisation owner · You asked an owner of the GitHub organisation to approve the Motir app. Onboarding picks it up as soon as they do, so you can leave this page and come back. |
+| 2i secondary                           | `ownerOpen`                                                   | **NEW**                        | Open GitHub                                                                                                                                                                                                                  |
+| 2j pills                               | `pillExpired` · `pillNotConnected`                            | **NEW**                        | Link expired · Not connected                                                                                                                                                                                                 |
+| 2j-1 title · hint                      | `outcome.install_expired.title` · `.hint`                     | **NEW**                        | The GitHub link expired while you were there · Nothing is broken. Start again from this step.                                                                                                                                |
+| 2j-2 title · hint                      | `outcome.install_forbidden.title` · `.hint`                   | **NEW**                        | This install was started from a workspace you're not in · Nothing was connected. Start again from this step, signed in as yourself.                                                                                          |
+| 2j-3 title · hint · primary            | `outcome.install_provider_error.title` · `.hint` · `tryAgain` | **NEW**                        | Motir couldn't reach GitHub to finish connecting · Nothing on GitHub was undone. Try again in a moment. · Try again                                                                                                          |
+| 2j-4 title · hint                      | `outcome.install_error.title` · `.hint`                       | **NEW**                        | Connecting GitHub didn't finish · Motir couldn't confirm this install came from this step, so nothing was connected. Start again from here.                                                                                  |
+| 2k title · hint · secondary            | `readFailedTitle` · `readFailedHint` · `recheck`              | **NEW**                        | Motir couldn't check the connection just now · Nothing you did on GitHub is lost. This step checks again when you come back to the tab, or now. · Check again                                                                |
+| sr-only after each new-tab control     | `newTab`                                                      | unchanged                      | (opens in a new tab)                                                                                                                                                                                                         |
+| GitLab note                            | `gitlabNote`                                                  | unchanged                      | GitLab connect is coming soon.                                                                                                                                                                                               |
+| —                                      | `missingHint`                                                 | **DELETE**                     | (replaced by `preflightIntro`)                                                                                                                                                                                               |
+| **settings banner** (not drawn)        | `github.banner.install_requested`                             | **NEW (slot only)**            | the owner-approval words on Settings → Organisation → Git; MOTIR-8473 writes them, MOTIR-8471 emits the status                                                                                                               |
+
+**Locale set:** every **NEW** and **CHANGED** row above, plus the banner slot, needs a `zh`
+twin (MOTIR-8474) and the nine other app languages (MOTIR-8479). Unchanged and DELETE rows need
+nothing new. Repository names (`acme/web`, `acme/api`, `acme/infra`) and counts are fixtures.
+
+### AA — the measured pairs (motir palette, resolved from `theme.css` + `globals.css` with `tests/theme/paletteCascade.ts`, WCAG 2.x)
+
+| ink → ground                                              | light   | dark    | needs |
+| --------------------------------------------------------- | ------- | ------- | ----- |
+| `--el-text` → `--el-card`                                 | 17.63:1 | 16.75:1 | 4.5   |
+| `--el-text-secondary` → `--el-card` / `--el-page-bg`      | 6.75:1  | 8.64:1  | 4.5   |
+| `--el-text-secondary` → `--el-surface` (rail current row) | 5.91:1  | 7.81:1  | 4.5   |
+| `--el-text-strong` → `--el-tint-mint` (success pill)      | 12.90:1 | 11.08:1 | 4.5   |
+| `--el-text-strong` → `--el-tint-sky` (info pill)          | 12.66:1 | 11.14:1 | 4.5   |
+| `--el-text-strong` → `--el-tint-rose` (danger pill)       | 12.35:1 | 11.30:1 | 4.5   |
+| `--el-text-strong` → `--el-tint-yellow` (rail chip)       | 13.70:1 | 10.14:1 | 4.5   |
+| `--el-cta-warm-text` → `--el-cta-warm` (primary)          | 4.65:1  | 5.89:1  | 4.5   |
+| `--el-success` → `--el-card` (glyph, tick)                | 4.97:1  | 7.62:1  | 3     |
+| `--el-danger-on-surface` → `--el-card` (glyph)            | 8.29:1  | 6.17:1  | 3     |
+| `--el-highlight` → `--el-card` (spinner, dot)             | 3.80:1  | 5.89:1  | 3     |
+| `--el-accent-on-surface` → `--el-card` (focus outline)    | 6.31:1  | 10.00:1 | 3     |
+
+Dark parity: every panel is drawn twice, the second frame carrying `data-theme="dark"` on its own
+`[data-appearance-scope]`; `tests/design-dark-parity.test.ts` computes the nested dark scope and is
+green on this mock, as are both ink arms (`design-ink-contrast`, `design-state-ink-contrast`).
+**Narrow (390)** is not redrawn: the step follows Panel 11's rule (rail above, one column); the
+pre-flight rows stack and the slot rows wrap.
+
+### Findings
+
+- **F1 — the shipped "Manage repositories on GitHub" link opens Motir's own Settings page**
+  (`GIT_SETTINGS_HREF`, `MigrateWizard.tsx` l.901), not GitHub. 2d points it at the installation's
+  page on GitHub, which needs the installation reference from MOTIR-8472.
+- **F2 — `setup_action=request` is reported as `installed`** (`app/api/github/setup/route.ts`
+  l.76–78), a success tone for an install that has not happened. 2i forbids it on this step and on
+  the Settings banner alike.
+- **F3 — nothing binds an owner-approved install to this organisation today.** The owner finishes
+  on GitHub in their own browser, without the member's signed state, so the setup URL sees an
+  install with no state (`install_unbound`). "Onboarding picks it up when they do" needs a producer
+  (MOTIR-8471 / MOTIR-8472); 2i draws the promise and names the gap.
+- **F4 — the read swallows its failures** (`catch {}` in `ConnectPanel.read`), so 2k has no
+  producer until MOTIR-8472 makes the failure reportable.
+- **F5 — the repo rows' `GitBranch` glyph becomes the provider mark** (`Github`, sr-only "GitHub"),
+  as the card asks; GitLab rows will take theirs when MOTIR-1470 lands.
+
+### GIVES / TAKES
+
+- **MOTIR-8475 (the connect step)** — **GIVES** panels 2a–2k, the eleven-value union above, each
+  state's one action, the tone-as-`Pill` rule and behaviour 1–5. **TAKES** the link to
+  `/settings/organization/git` from every connect state (both the primary and the manage link) and
+  `missingHint`. Bigger than sized: seven new panels, of which the pre-flight and the
+  failure family are the bulk — **re-estimate it** (not done here; see the run report).
+- **MOTIR-8473 (copy)** — **GIVES** the slot → key table above, the pre-flight's three lines, and
+  the `github.banner.install_requested` slot. **TAKES** `missingHint`.
+- **MOTIR-8474 (Chinese)** and **MOTIR-8479 (nine languages)** — **GIVE** the locale set: the NEW and
+  CHANGED rows plus the banner slot. Nothing taken.
+- **MOTIR-8472 (the connect step's read)** — **GIVES** the reads each state needs: installation
+  bound (y/n); usable-repository count; selected-repository count (2g-i vs 2g-ii); the installation
+  reference behind the manage / choose controls (account login, account type, installation id —
+  what `githubInstallationManageUrl` takes); and a **reportable read failure** (2k). States 6, 7
+  and 8 must be distinguishable from it; `repos.length > 0` alone is not enough. Nothing taken.
+- **MOTIR-8471 (the App-install round trip)** — **GIVES** the outcomes that must land on this step
+  (2i, 2j-1…4), the onboarding return-surface id, the rule that a `request` is never `installed`
+  (here and on Settings), the new status with the `info` tone (F2), and F3. Nothing taken.
+- **MOTIR-8470 (permissions verification)** — **TAKES** nothing and is given nothing to build; it
+  **supplies** the access rows' content and count. This asset quotes none.
+- **MOTIR-8476 (integration)** — **GIVES** the outcome list it exercises: `installed` → 2d,
+  `request` → 2i, `install_expired`, `install_forbidden`, `install_provider_error`, `install_error`
+  → 2j, each against the onboarding surface as well as Settings. Nothing taken.
+- **MOTIR-8477 (E2E)** — **GIVES** the acceptance walk: all eleven panels in English and Chinese,
+  including 2f, 2g, 2h, 2i, 2j and 2k, not the happy path alone. Nothing taken.
+- **MOTIR-8480 (exit gate)** and **MOTIR-8481 (substrate)** — 2f is the state their organisation-tier
+  gate makes reachable ("whichever of its workspaces connected them"); nothing given or taken.

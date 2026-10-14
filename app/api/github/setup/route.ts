@@ -1,12 +1,21 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { resolveTwoFactorHold } from '@/lib/auth/requireCompliantSession';
-import { decodeInstallStateResult } from '@/lib/github/installState';
+import {
+  decodeInstallStateResult,
+  type InstallReturnContext,
+  type InstallStateResult,
+} from '@/lib/github/installState';
 import type { GithubBannerStatus } from '@/lib/github/bannerStatus';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
-import { resolveReturnPath } from '@/lib/github/returnSurface';
+import {
+  githubReturnLocation,
+  resolveReturnPath,
+  type GithubReturnSurfaceId,
+} from '@/lib/github/returnSurface';
+import { onboardingReturnContextParams } from '@/lib/planning/onboardingHandoff';
 import {
   InstallationNotAccessibleError,
   InstallationNotLinkableError,
@@ -30,22 +39,50 @@ import {
 // account/repo fetch through the provider seam, and the persist all live in
 // `githubInstallationService.bindInstallationForWorkspace`.
 
-// WHERE THIS HANDLER RETURNS TO (MOTIR-4676). The install starts from a bare
-// github.com URL, so no cookie can carry the origin — it rides INSIDE the signed
-// install state, covered by the same HMAC as the workspace and the user, and is
-// narrowed back to a known surface id on decode. Every outcome BEFORE the state
-// has been read (and every one where it cannot be read) falls back to the
-// historical settings path, which is what the handler did for all of them.
+// WHERE THIS HANDLER RETURNS TO (MOTIR-4676 · MOTIR-8471). The install starts
+// from a bare github.com URL, so no cookie can carry the origin — it rides
+// INSIDE the signed install state, covered by the same HMAC as the workspace and
+// the user, and is narrowed back to a known surface id on decode. Beside it
+// rides the starting step's own query (`context`), re-narrowed by its owner and
+// re-appended, so the person lands on the address they left from plus
+// `github=<status>`.
+//
+// Every outcome reached once the state VERIFIES for the acting user returns
+// there — including an organisation-approval request, and including an
+// EXPIRED state, whose signature verified even though it may no longer bind.
+// Every outcome reached without one (no state, an unreadable state, another
+// user's state) falls back to `DEFAULT_RETURN_PATH`.
+interface ReturnTarget {
+  origin?: GithubReturnSurfaceId;
+  context?: InstallReturnContext;
+}
+
 function settingsRedirect(
   status: GithubBannerStatus,
-  origin?: string | null,
+  target?: ReturnTarget | null,
   installationId?: string,
 ): NextResponse {
   // `select_repos` names the installation, so the room opens its repo picker.
-  const extra = installationId ? `&installation_id=${encodeURIComponent(installationId)}` : '';
   return NextResponse.redirect(
-    `${resolveBaseUrlTrimmed()}${resolveReturnPath(origin ?? null)}?github=${status}${extra}`,
+    `${resolveBaseUrlTrimmed()}${githubReturnLocation(
+      resolveReturnPath(target?.origin ?? null),
+      status,
+      {
+        context: onboardingReturnContextParams(target?.context),
+        ...(installationId ? { installationId } : {}),
+      },
+    )}`,
   );
+}
+
+/** The return target a decoded state may name for THIS actor, or null. */
+function returnTargetOf(decoded: InstallStateResult, actorUserId: string): ReturnTarget | null {
+  if (decoded.ok) {
+    if (decoded.state.userId !== actorUserId) return null;
+    return { origin: decoded.state.origin, context: decoded.state.context };
+  }
+  if (decoded.reason === 'expired') return { origin: decoded.origin, context: decoded.context };
+  return null;
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -73,16 +110,25 @@ export async function GET(req: NextRequest): Promise<Response> {
   const setupAction = params.get('setup_action');
   const state = params.get('state');
 
-  // `request`/`deny` (org approval) and any non-install action carry nothing to
-  // bind — just show the current state rather than erroring.
+  // `request` (org approval) and any other non-install action carry nothing to
+  // bind, and nothing is bound. A `request` is its OWN outcome (MOTIR-8471):
+  // a member of a GitHub organisation who is not one of its owners started the
+  // install, GitHub sent the request to an owner, and nothing is installed until
+  // one approves — so `installed`, which this answered before, said the
+  // opposite of what happened. Its state (GitHub echoes it on a request too)
+  // still names where the person started, so they go back there.
   if (setupAction && setupAction !== 'install' && setupAction !== 'update') {
-    return settingsRedirect('installed');
+    const target = state ? returnTargetOf(decodeInstallStateResult(state), session.user.id) : null;
+    return settingsRedirect(
+      setupAction === 'request' ? 'install_requested' : 'install_unbound',
+      target,
+    );
   }
 
   // NO STATE AT ALL — the round trip did not START in Motir, so there was never
-  // a state to lose and nothing has failed (MOTIR-3755). `encodeInstallState` is
-  // called in exactly one place, the settings page's install link, so a request
-  // arriving without one came from github.com.
+  // a state to lose and nothing has failed (MOTIR-3755). A state is minted only
+  // by an install link Motir hands out, so a request arriving without one came
+  // from github.com.
   //
   // The overwhelmingly common case is editing the installation's REPOSITORY
   // SELECTION from the App's own settings on GitHub: it redirects here with
@@ -99,25 +145,28 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!state) {
     return settingsRedirect(setupAction === 'update' ? 'repos_updated' : 'install_unbound');
   }
-  if (!installationId) return settingsRedirect('install_error');
 
-  // The state is present, so it is verified exactly as before — this card
+  // The state is present, so it is verified exactly as before — MOTIR-3755
   // changed what a MISSING state means, never what a present one is trusted for.
   const decoded = decodeInstallStateResult(state);
+  const target = returnTargetOf(decoded, session.user.id);
   if (!decoded.ok) {
     // An EXPIRED state is not a failure either: the person started from Motir
     // and spent longer than the 10-minute TTL on GitHub's repository picker. Its
-    // remedy (start again from Settings) is the opposite of the tampered case's,
-    // so the two must not share a banner.
-    return settingsRedirect(decoded.reason === 'expired' ? 'install_expired' : 'install_error');
+    // remedy (start again) is the opposite of the tampered case's, so the two
+    // must not share a banner. Its target is honoured; the binding is not.
+    return settingsRedirect(
+      decoded.reason === 'expired' ? 'install_expired' : 'install_error',
+      target,
+    );
   }
   // A state minted for a different user — the acting session must be the one
-  // that started the install.
+  // that started the install. `target` is null here, so this falls back.
   if (decoded.state.userId !== session.user.id) return settingsRedirect('install_error');
+  if (!installationId) return settingsRedirect('install_error', target);
 
   // From here the state has VERIFIED, so its origin is ours and every remaining
-  // outcome returns the person to the surface they started from.
-  const origin = decoded.state.origin ?? null;
+  // outcome returns the person to the surface they started from (`target`).
 
   // THE ORGANISATION BRANCH (Story MOTIR-8216 · MOTIR-8220). A state that names
   // an organisation was minted by the Git room's "Install on another account",
@@ -143,17 +192,17 @@ export async function GET(req: NextRequest): Promise<Response> {
       const status = orgBranchOutcome(err);
       return settingsRedirect(
         status,
-        origin,
+        target,
         status === 'select_repos' ? installationId : undefined,
       );
     }
-    return settingsRedirect('installed', origin);
+    return settingsRedirect('installed', target);
   }
 
   // Authorize: the acting user must be a member of the target workspace — no
   // cross-workspace binding even with a validly-signed state.
   const role = await workspacesService.getMemberRole(session.user.id, decoded.state.workspaceId);
-  if (!role) return settingsRedirect('install_forbidden', origin);
+  if (!role) return settingsRedirect('install_forbidden', target);
 
   try {
     await githubInstallationService.bindInstallationForWorkspace({
@@ -164,14 +213,14 @@ export async function GET(req: NextRequest): Promise<Response> {
     // Another organisation already uses this account (MOTIR-8219): nothing was
     // written, and the person picks their repositories instead.
     if (err instanceof RepoSelectionRequiredError) {
-      return settingsRedirect('select_repos', origin, installationId);
+      return settingsRedirect('select_repos', target, installationId);
     }
     // Provider/config failure (e.g. GITHUB_APP_ID/PRIVATE_KEY unset) — surface a
     // clean banner, never a 500.
-    return settingsRedirect('install_provider_error', origin);
+    return settingsRedirect('install_provider_error', target);
   }
 
-  return settingsRedirect('installed', origin);
+  return settingsRedirect('installed', target);
 }
 
 /** Which banner an organisation-branch refusal returns to. */

@@ -102,6 +102,31 @@ describe('the APP INSTALL returns to the surface that started it', () => {
     expect(await returnPathFor()).toBe(DEFAULT_RETURN_PATH);
   });
 
+  it('started on the onboarding Connect step → returns THERE, with its own query (MOTIR-8471)', async () => {
+    const state = encodeInstallState({
+      workspaceId: 'ws_not_a_member_of',
+      userId: USER_ID,
+      origin: 'onboardingMigrateConnect',
+      context: {
+        via: 'onboard_existing_project',
+        steps: 'connect,index',
+        backKind: 'roadmap',
+      },
+    });
+    const res = await setupGET(
+      new NextRequest(
+        `http://localhost:3000/api/github/setup?installation_id=42&setup_action=install&state=${state}`,
+      ),
+    );
+    const { path, banner } = locationOf(res);
+    expect(path).toBe(GITHUB_RETURN_SURFACES.onboardingMigrateConnect);
+    expect(banner).toBe('install_forbidden');
+    const back = new URL(res.headers.get('location')!).searchParams;
+    expect(back.get('via')).toBe('onboard_existing_project');
+    expect(back.get('steps')).toBe('connect,index');
+    expect(back.get('backKind')).toBe('roadmap');
+  });
+
   it('an outcome reached BEFORE the state is read still falls back', async () => {
     // `setup_action=update` with no state never decodes anything, so there is no
     // origin to honour and the historical path is the only correct answer.
@@ -199,20 +224,56 @@ describe('the banner is ONE declaration, rendered by every returning surface', (
   // permanent redirect. The list is the set of surfaces a flow can RETURN to, and
   // the account pane (MOTIR-4682) joined it when the member's own credential moved
   // down; every one of them renders the same banner through the same declaration.
+  //
+  // ⚠️ AND A SURFACE MAY RENDER THE OUTCOME IN PLACE (MOTIR-8475). The onboarding
+  // Connect step (`/onboarding/migrate`, MOTIR-8471's surface) does not mount a
+  // banner: its design (`design/onboarding-migrate/` Revision 7) draws each
+  // outcome as a state of the step itself, with its tone as a `Pill`. So each
+  // entry names the PAGE a flow returns to and the file that RENDERS the outcome
+  // there, and the invariant is the same for both kinds: the tone comes from
+  // `GITHUB_BANNER_TONE`, imported from its one home, and the page never restates
+  // the map.
   const SURFACE_PAGES = [
-    'app/(authed)/settings/organization/git/page.tsx',
-    'app/(authed)/settings/project/repositories/page.tsx',
+    {
+      page: 'app/(authed)/settings/organization/git/page.tsx',
+      renderer: 'components/settings/GitConnectBanner.tsx',
+    },
+    {
+      page: 'app/(authed)/settings/project/repositories/page.tsx',
+      renderer: 'components/settings/GitConnectBanner.tsx',
+    },
+    {
+      page: 'app/(onboarding)/onboarding/migrate/page.tsx',
+      route: GITHUB_RETURN_SURFACES.onboardingMigrateConnect,
+      renderer: 'app/(onboarding)/onboarding/migrate/_components/ConnectPanel.tsx',
+    },
   ] as const;
 
-  it('every returning surface mounts the shared component', () => {
-    for (const page of SURFACE_PAGES) {
+  it('lists /onboarding/migrate among the returning surfaces (MOTIR-8475)', () => {
+    expect(SURFACE_PAGES.map((s) => ('route' in s ? s.route : null))).toContain(
+      '/onboarding/migrate',
+    );
+  });
+
+  it('every returning surface renders through the shared banner or the shared tone map', () => {
+    for (const { page, renderer } of SURFACE_PAGES) {
       const src = readFileSync(page, 'utf8');
-      expect(src, page).toContain('GitConnectBanner');
+      if (renderer.endsWith('GitConnectBanner.tsx')) {
+        expect(src, page).toContain('GitConnectBanner');
+      } else {
+        // The in-place renderer resolves the tone through the ONE declaration…
+        const rendererSrc = readFileSync(renderer, 'utf8');
+        expect(rendererSrc, renderer).toMatch(
+          /import\s*\{[^}]*\bGITHUB_BANNER_TONE\b[^}]*\}\s*from\s*'@\/lib\/github\/bannerStatus'/,
+        );
+        // …and does not keep a status → tone table of its own.
+        expect(rendererSrc, renderer).not.toMatch(/\binstall_\w+\s*:\s*'(success|danger|info)'/);
+      }
     }
   });
 
   it('no returning surface restates the status → tone map', () => {
-    for (const page of SURFACE_PAGES) {
+    for (const { page } of SURFACE_PAGES) {
       const src = readFileSync(page, 'utf8');
       expect(src, page).not.toContain('GITHUB_BANNER_TONE');
     }
