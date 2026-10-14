@@ -18,8 +18,10 @@ import {
   PlanRevisionInFlightError,
 } from '@/lib/plans/errors';
 
+import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
 import { plansService } from '@/lib/services/plansService';
 import type { PlanRevisionAgentActor } from '@/lib/services/planRevisionsService';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { PlanJobStateDto, PlanOriginDto, PlanOutcomeDto } from '@/lib/dto/plans';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -169,7 +171,7 @@ async function assertCanPlan(ctx: ProjectContext): Promise<void> {
  *
  * The caller adds what is SPECIFIC to its submit (an anchor set, a `planId`, a prompt).
  */
-async function buildPlanningJobContext(ctx: ProjectContext) {
+async function buildPlanningJobContext(ctx: ProjectContext, planId: string | null = null) {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
@@ -191,9 +193,16 @@ async function buildPlanningJobContext(ctx: ProjectContext) {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // The plan's SHARPENED requirement as the run's own (Task MOTIR-1101 · MOTIR-8450):
+  // a submit that writes an existing plan carries what a Grill me session settled on
+  // it as `requirement`, which satisfies PART 1 on the far side, so the run does not
+  // re-ask it. Read HERE so no plan-writing submit can forget it; absent when the
+  // plan carries none.
+  const requirement = planId ? await sharpenedRequirementOf(planId, ctx) : undefined;
   return {
     tenant: buildTenant(ctx, organizationId, isMeta, internalBilling),
     planningFields: {
+      ...(requirement ? { requirement } : {}),
       generateExplanations: ctx.project.aiGenerateExplanations,
       [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
       // Is this the project's FIRST plan (MOTIR-4736)?
@@ -204,12 +213,30 @@ async function buildPlanningJobContext(ctx: ProjectContext) {
   };
 }
 
+/** The plan's stored sharpened requirement, narrowed to its six fields. */
+async function sharpenedRequirementOf(
+  planId: string,
+  ctx: ProjectContext,
+): Promise<SubmittedRequirement | undefined> {
+  // One column, not `getPlan`: the caller already admitted the actor to this plan,
+  // and the read must not add a second load of the plan row ahead of the bind.
+  const stored = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planRepository.findSharpenedRequirementById(planId, ctx.workspaceId, tx),
+  );
+  return narrowSharpenedRequirement(stored ?? null);
+}
+
 async function submitPlanEditJob(
   context: JobContextBag,
   ctx: ProjectContext,
   opts: PlanEditSubmitOptions = {},
 ): Promise<PlanEditSubmitResult> {
-  const { tenant, planningFields } = await buildPlanningJobContext(ctx);
+  // A caller that supplies its own requirement keeps it; otherwise the plan it
+  // writes (when it names one) supplies the stored one.
+  const { tenant, planningFields } = await buildPlanningJobContext(
+    ctx,
+    context.requirement ? null : (context.planId ?? null),
+  );
   const { jobId } = await submitJob(
     // ONE planning kind (ADR `session-model.md` §6 step 2). Every planning submit
     // in the product sends this; motir-ai reads WHAT the run is about off the
@@ -534,7 +561,7 @@ export const aiPlanEditsService = {
     ctx: ProjectContext,
   ): Promise<{ jobId: string }> {
     await assertCanPlan(ctx);
-    const { tenant, planningFields } = await buildPlanningJobContext(ctx);
+    const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId);
     return submitJob(
       'plan',
       tenant,
@@ -596,7 +623,7 @@ async function dispatchRevision(
   // never gets the fields at all (MOTIR-4343, MOTIR-4736). Nothing to unwind on a failed
   // submit: the lease is taken BELOW, so a submit that never returned a job id has left the
   // plan exactly as it found it.
-  const { tenant, planningFields } = await buildPlanningJobContext(ctx);
+  const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId);
   const { jobId } = await submitJob(
     // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes this a REVISION
     // on the far side — `readerForPlan`'s first arm — so its silent loss would route every

@@ -139,6 +139,8 @@ async function installE2ESeams(): Promise<void> {
  * the worker is still starting is reported rather than lost.
  */
 function initMonitoring(): void {
+  // Untraced on purpose: it does not opt in to tracing, so the rate is 0 whatever the
+  // app-wide SENTRY_TRACES_SAMPLE_RATE says — MOTIR-8537 owns that choice.
   const options = serverSentryInitOptions();
   if (!options) return;
   Sentry.init(options);

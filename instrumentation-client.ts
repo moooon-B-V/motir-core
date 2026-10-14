@@ -19,9 +19,9 @@
 // `lib/monitoring/config.ts`'s header and the `Dockerfile`'s `ARG` block.
 import * as Sentry from '@sentry/nextjs';
 import {
+  BROWSER_TRACES_SAMPLE_RATE,
   clientMonitoringEnvironment,
   clientSentryDsn,
-  MONITORING_TRACES_SAMPLE_RATE,
 } from '@/lib/monitoring/config';
 import { dropOrphanedStreamingInstructions } from '@/lib/monitoring/orphanedStreamingInstruction';
 
@@ -31,7 +31,7 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: clientMonitoringEnvironment(),
-    tracesSampleRate: MONITORING_TRACES_SAMPLE_RATE,
+    tracesSampleRate: BROWSER_TRACES_SAMPLE_RATE,
     sendDefaultPii: false,
     // No session replay. It records the DOM, which on this product means work
     // item titles, comment bodies and customer names — a materially different
