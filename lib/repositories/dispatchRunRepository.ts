@@ -637,11 +637,11 @@ export const dispatchRunRepository = {
   async findScopesByIds(
     ids: readonly string[],
     tx: Prisma.TransactionClient,
-  ): Promise<{ id: string; scopeWorkItemId: string | null }[]> {
+  ): Promise<{ id: string; scopeWorkItemId: string | null; endedAt: Date | null }[]> {
     if (ids.length === 0) return [];
     return tx.dispatchRun.findMany({
       where: { id: { in: [...ids] } },
-      select: { id: true, scopeWorkItemId: true },
+      select: { id: true, scopeWorkItemId: true, endedAt: true },
     });
   },
 

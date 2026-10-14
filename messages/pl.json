@@ -9270,7 +9270,8 @@
         "couldNot": "Nic nie zostało uruchomione i nic nie zostało naliczone. {repair}",
         "changes_requested": "Nic nie jest wznawiane. Najpierw zostanie poprawione {key}; jego następna wersja zapyta ponownie, a to uruchomienie nadal czeka.",
         "declined": "Nic nie jest wznawiane. Praca, którą by to odblokowało, wymaga nowego planu — zaplanuj ponownie {key} albo ustaw {head} na Do zrobienia, aby zacząć od nowa.",
-        "overturned": "Nic nie jest wznawiane. Zatwierdzenie już nie obowiązuje, więc uruchomienie czeka na nową decyzję w sprawie {key}."
+        "overturned": "Nic nie jest wznawiane. Zatwierdzenie już nie obowiązuje, więc uruchomienie czeka na nową decyzję w sprawie {key}.",
+        "reshaped": "Wznowienie uwzględni zmienioną historię."
       },
       "back": {
         "changes_requested": "{kind} odesłane · zmiany zażądane przez <b>{name}</b> — „{note}”",
@@ -9303,7 +9304,26 @@
         "repository_not_writable": "Połącz ponownie repozytorium w ustawieniach projektu, a potem naciśnij Kontynuuj.",
         "card_not_ready": "Usuń to, co blokuje {key}, lub przenieś go z powrotem do W toku, a potem naciśnij Kontynuuj."
       },
-      "copyAria": "Skopiuj polecenie wznowienia dla {key}"
+      "copyAria": "Skopiuj polecenie wznowienia dla {key}",
+      "member": {
+        "added": "Dodano po zatrzymaniu uruchomienia",
+        "rescoped": "Zmieniony zakres"
+      },
+      "fold": {
+        "added": "+{count} dodanych po zatrzymaniu uruchomienia"
+      },
+      "reshaped": {
+        "one": "Plan <plan>{title}</plan> <aside>(zatwierdzony <when></when>)</aside> zmienił tę historię po zatrzymaniu uruchomienia: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# plan zmienił} few {# plany zmieniły} many {# planów zmieniło} other {# planu zmieniło}}</b> tę historię od zatrzymania uruchomienia",
+        "planLine": "Plan <plan>{title}</plan> <aside>(zatwierdzony <when></when>)</aside>: {counts}",
+        "showPlans": "Pokaż plany",
+        "hidePlans": "Ukryj plany",
+        "added": "dodane: {n}",
+        "changed": "zmienione: {n}",
+        "removed": "usunięte: {n}",
+        "separator": ", ",
+        "label": "Plany, które zmieniły {key} po zatrzymaniu jego uruchomienia"
+      }
     },
     "planning": {
       "scope": "Twoje plany w <project>{name}</project>, które są nadal pisane. Plany, o które poprosili inni, są na <link>stronie Plany</link>.",

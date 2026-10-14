@@ -3,6 +3,7 @@ import type {
   GateResumeAttemptDto,
   HomeWorkItemRowDto,
   ResumeGateDto,
+  ResumeReshapePlanDto,
   ResumeRunDto,
 } from '@/lib/dto/home';
 import type { StatusCategoryDto, WorkflowDto } from '@/lib/dto/workflows';
@@ -94,6 +95,12 @@ export interface WorkbenchRowView {
    */
   resume: WorkbenchResumeView | null;
   /**
+   * TO RESUME ONLY (MOTIR-8458; § 39.2): how a member of a gated scope run's entry moved
+   * since the run stopped — `'added'` for a card the run never touched, `'rescoped'` for
+   * one a later-approved plan changed. `null` on every other row.
+   */
+  resumeChange?: 'added' | 'rescoped' | null;
+  /**
    * TO DO, IN PROGRESS AND RECENTLY FINISHED ONLY (MOTIR-8016; § 36): this row heads a
    * group of the tab's items under a runnable container — `'member'` when the container is
    * itself on the tab, `'context'` when it is drawn only to name its members. `null` on a
@@ -116,6 +123,8 @@ export interface WorkbenchResumeView extends Omit<ResumeRunDto, 'gates'> {
   state: 'waiting_on_gate' | 'ready_to_resume';
   attempt: GateResumeAttemptDto | null;
   gates: WorkbenchResumeGateView[];
+  /** The plans approved after the run stopped that re-shaped its story (§ 39.3), oldest first. */
+  reshapedBy?: ResumeReshapePlanDto[];
 }
 
 /**
@@ -169,6 +178,7 @@ export function toWorkbenchRowViews(
         deciderName: nameOf(gate.deciderId),
         decidedByName: nameOf(gate.decidedById) ?? gate.decidedByLabel,
       })),
+      reshapedBy: row.resumeReshapedBy ?? [],
     };
   };
   const view = (row: HomeWorkItemRowDto, isMember: boolean): WorkbenchRowView => {
@@ -198,6 +208,7 @@ export function toWorkbenchRowViews(
       fixGroupKind: row.fixGroupKind,
       members: [...row.fixMembers, ...row.resumeMembers].map((m) => view(m, true)),
       resume: isMember ? null : resumeOf(row),
+      resumeChange: isMember ? (row.resumeChange ?? null) : null,
       groupHead: row.groupHead,
       // One level only: the service never nests a group inside a group.
       groupMembers: row.groupMembers.map((m) => view(m, false)),

@@ -37,6 +37,11 @@ import { toOpenRepairRuns } from '@/lib/mappers/repairRunMappers';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { gateResumeRepository } from '@/lib/repositories/gateResumeRepository';
 import { describeResumeRun } from '@/lib/services/resumeRunDetailService';
+import {
+  readResumeScopes,
+  type GatedRunScope,
+  type ResumeScopeDetail,
+} from '@/lib/services/resumeScopeService';
 import { resolveFixEntries, type FixEntry } from '@/lib/services/fixGroupService';
 import { fixGroupKeyOf } from '@/lib/workItems/fixReason';
 import { groupByContainer, isRunnableContainer } from '@/lib/workItems/readyFilter';
@@ -254,7 +259,11 @@ async function resumableRunOrder(
   projectIds: readonly string[],
   keyed: readonly { resumeRunId: string | null }[],
   tx: Prisma.TransactionClient,
-): Promise<{ order: string[]; scopeOf: Map<string, string | null> }> {
+): Promise<{
+  order: string[];
+  scopeOf: Map<string, string | null>;
+  runOf: Map<string, GatedRunScope>;
+}> {
   const all = orderedResumeRunIds(keyed);
   const scopes = await dispatchRunRepository.findScopesByIds(all, tx);
   const scopeOf = new Map(scopes.map((run) => [run.id, run.scopeWorkItemId]));
@@ -272,7 +281,7 @@ async function resumableRunOrder(
     const scopeId = scopeOf.get(runId) ?? null;
     return scopeId === null || waitsOn.get(scopeId) === runId;
   });
-  return { order, scopeOf };
+  return { order, scopeOf, runOf: new Map(scopes.map((run) => [run.id, run])) };
 }
 
 /**
@@ -284,14 +293,38 @@ function toResumeEntryDto(
   members: readonly HomeWorkItemRow[],
   scopeId: string | null,
   viewerId: string,
+  scope: ResumeScopeDetail | null = null,
 ): HomeWorkItemRowDto | null {
   const head = scopeId === null ? members[0] : members.find((m) => m.id === scopeId);
   if (!head) return null;
+  if (!scope) {
+    return {
+      ...toHomeWorkItemRowDto(head, viewerId),
+      resumeMembers: members
+        .filter((m) => m.id !== head.id)
+        .map((m) => toHomeWorkItemRowDto(m, viewerId)),
+    };
+  }
+  // A SCOPE RUN (MOTIR-8458; § 39): the members are what a continue would carry — the
+  // scope's live, not-finished children, in the tab's member order — then any card the
+  // run left waiting that is no longer one of them. Each says whether the run never
+  // touched it, or touched it and a later plan changed it.
+  const childIds = new Set(scope.children.map((c) => c.id));
+  const composed = [
+    ...scope.children,
+    ...members.filter((m) => m.id !== head.id && !childIds.has(m.id)),
+  ];
   return {
     ...toHomeWorkItemRowDto(head, viewerId),
-    resumeMembers: members
-      .filter((m) => m.id !== head.id)
-      .map((m) => toHomeWorkItemRowDto(m, viewerId)),
+    resumeMembers: composed.map((m) => ({
+      ...toHomeWorkItemRowDto(m, viewerId),
+      resumeChange: !scope.touched.has(m.id)
+        ? 'added'
+        : scope.rescoped.has(m.id)
+          ? 'rescoped'
+          : null,
+    })),
+    resumeReshapedBy: scope.reshapedBy,
   };
 }
 
@@ -720,7 +753,12 @@ export const homeService = {
         tx,
       );
       const projectIds = projectScopes.map((scope) => scope.projectId);
-      const { order, scopeOf } = await resumableRunOrder(ctx.workspaceId, projectIds, keyed, tx);
+      const { order, scopeOf, runOf } = await resumableRunOrder(
+        ctx.workspaceId,
+        projectIds,
+        keyed,
+        tx,
+      );
       // THE READER'S PLANNING SESSIONS (Story MOTIR-7905 · MOTIR-7914 · MOTIR-7939) are the FIRST
       // segments of the one order, and the gated runs follow in their own order. THREE bands:
       //   1. the OPEN failed sessions (a failed walk, a failure beside a waiting plan), newest
@@ -772,6 +810,16 @@ export const homeService = {
         workItemRepository.findResumeMembers(ctx.workspaceId, projectIds, pageRuns, tx),
         gateResumeRepository.listByRunIds(pageRuns, tx),
       ]);
+      // What each gated SCOPE run would carry now, and what re-shaped it (MOTIR-8458).
+      const scopeDetail = await readResumeScopes(
+        ctx.workspaceId,
+        projectScopes,
+        pageRuns.flatMap((runId) => {
+          const run = runOf.get(runId);
+          return run ? [run] : [];
+        }),
+        tx,
+      );
       // Newest first, so the first attempt seen per run is the one the entry reads.
       const attemptOf = new Map<string, GateResumeAttemptDto>();
       for (const a of attempts) {
@@ -782,6 +830,7 @@ export const homeService = {
           members.filter((m) => m.resumeRunId === runId),
           scopeOf.get(runId) ?? null,
           ctx.userId,
+          scopeDetail.get(runId) ?? null,
         );
         return entry ? [{ runId, entry }] : [];
       });

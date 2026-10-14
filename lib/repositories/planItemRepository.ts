@@ -43,6 +43,15 @@ export type PlanHistoryItemRow = Pick<PlanItem, 'id' | 'op' | 'workItemId' | 'pa
   > & { decidedBy: { name: string } | null };
 };
 
+/**
+ * One row of {@link planItemRepository.findApprovedAfterTouching}: a proposal an
+ * APPROVED plan made against a card (or under a container), with that plan's display
+ * fields on the same row (MOTIR-8458).
+ */
+export type ApprovedPlanTouchRow = Pick<PlanItem, 'id' | 'op' | 'workItemId' | 'parentRef'> & {
+  plan: Pick<Plan, 'id' | 'title' | 'decidedAt'>;
+};
+
 // PlanItem repository — single Prisma operations on the `plan_item` table
 // (Story 7.21 · MOTIR-1336). Writes require `tx`; pure reads use the `db`
 // singleton. No business logic, no transactions, no DTO mapping.
@@ -221,6 +230,48 @@ export const planItemRepository = {
       },
       orderBy: [
         { plan: { createdAt: 'asc' } },
+        { planId: 'asc' },
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ],
+    });
+  },
+
+  /**
+   * Every proposal an APPROVED plan of these projects, decided strictly AFTER `after`,
+   * made against one of `workItemIds` (any op), or added under one of `parentIds`
+   * (MOTIR-8458) — what re-shaped a gated scope run's story since the run stopped.
+   * Ordered by the plan's decision, oldest first, then the row's own append order.
+   */
+  async findApprovedAfterTouching(
+    workspaceId: string,
+    projectIds: readonly string[],
+    workItemIds: readonly string[],
+    parentIds: readonly string[],
+    after: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<ApprovedPlanTouchRow[]> {
+    if (projectIds.length === 0 || (workItemIds.length === 0 && parentIds.length === 0)) {
+      return [];
+    }
+    return tx.planItem.findMany({
+      where: {
+        workspaceId,
+        plan: { projectId: { in: [...projectIds] }, status: 'approved', decidedAt: { gt: after } },
+        OR: [
+          { workItemId: { in: [...workItemIds] } },
+          { op: 'add', parentRef: { in: [...parentIds] } },
+        ],
+      },
+      select: {
+        id: true,
+        op: true,
+        workItemId: true,
+        parentRef: true,
+        plan: { select: { id: true, title: true, decidedAt: true } },
+      },
+      orderBy: [
+        { plan: { decidedAt: 'asc' } },
         { planId: 'asc' },
         { createdAt: 'asc' },
         { id: 'asc' },

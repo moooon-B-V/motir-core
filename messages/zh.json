@@ -9260,7 +9260,8 @@
         "couldNot": "没有启动任何机器，也没有产生任何费用。{repair}",
         "changes_requested": "不会继续。{key} 需先修改；新版本会再次请求审批，此运行继续等待。",
         "declined": "不会继续。该审批原本放行的工作需要重新规划——重新规划 {key}，或将 {head} 设为待办以重新开始。",
-        "overturned": "不会继续。该批准已不再有效，此运行将等待对 {key} 的新决定。"
+        "overturned": "不会继续。该批准已不再有效，此运行将等待对 {key} 的新决定。",
+        "reshaped": "继续时将带上调整后的故事。"
       },
       "back": {
         "changes_requested": "{kind}被退回 · <b>{name}</b> 要求修改 ——“{note}”",
@@ -9293,7 +9294,26 @@
         "repository_not_writable": "在项目设置中重新连接代码仓库后按“继续”。",
         "card_not_ready": "解除 {key} 的阻塞或将其移回进行中后按“继续”。"
       },
-      "copyAria": "复制 {key} 的继续命令"
+      "copyAria": "复制 {key} 的继续命令",
+      "member": {
+        "added": "运行停止后新增",
+        "rescoped": "范围已变更"
+      },
+      "fold": {
+        "added": "运行停止后新增 {count} 项"
+      },
+      "reshaped": {
+        "one": "计划 <plan>{title}</plan><aside>（<when></when>批准）</aside>在运行停止后调整了此故事：<b>{counts}</b>",
+        "many": "运行停止后，<b>{count, plural, other {# 个计划}}</b>调整了此故事",
+        "planLine": "计划 <plan>{title}</plan><aside>（<when></when>批准）</aside>：{counts}",
+        "showPlans": "显示计划",
+        "hidePlans": "收起计划",
+        "added": "新增 {n} 项",
+        "changed": "变更 {n} 项",
+        "removed": "移除 {n} 项",
+        "separator": "，",
+        "label": "运行停止后调整了 {key} 的计划"
+      }
     },
     "planning": {
       "scope": "你在 <project>{name}</project> 中发起、仍在编写的计划。其他人发起的计划请见<link>计划页</link>。",
