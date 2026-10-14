@@ -639,6 +639,24 @@ export const planRepository = {
   },
 
   /**
+   * The requirement a Sharpen session settled on this plan, and nothing else
+   * (Task MOTIR-1101 · MOTIR-8450) — what a plan-writing submit forwards as the
+   * run's own `requirement`. `undefined` when the plan is not in the workspace;
+   * `null` when it carries none. The service narrows the shape.
+   */
+  async findSharpenedRequirementById(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Prisma.JsonValue | undefined> {
+    const row = await tx.plan.findFirst({
+      where: { id, workspaceId },
+      select: { sharpenedRequirement: true },
+    });
+    return row ? row.sharpenedRequirement : undefined;
+  },
+
+  /**
    * Store the requirement a Sharpen session settled on this plan (Task MOTIR-1101 ·
    * MOTIR-8183) — a FULL replace, never a merge: the write-back always sends the
    * cumulative state. `null` clears it. The value is stored as given — the

@@ -21,6 +21,7 @@ import {
 import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
 import { plansService } from '@/lib/services/plansService';
 import type { PlanRevisionAgentActor } from '@/lib/services/planRevisionsService';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { PlanJobStateDto, PlanOriginDto, PlanOutcomeDto } from '@/lib/dto/plans';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -217,8 +218,12 @@ async function sharpenedRequirementOf(
   planId: string,
   ctx: ProjectContext,
 ): Promise<SubmittedRequirement | undefined> {
-  const plan = await plansService.getPlan(planId, ctx);
-  return narrowSharpenedRequirement(plan.sharpenedRequirement);
+  // One column, not `getPlan`: the caller already admitted the actor to this plan,
+  // and the read must not add a second load of the plan row ahead of the bind.
+  const stored = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planRepository.findSharpenedRequirementById(planId, ctx.workspaceId, tx),
+  );
+  return narrowSharpenedRequirement(stored ?? null);
 }
 
 async function submitPlanEditJob(
