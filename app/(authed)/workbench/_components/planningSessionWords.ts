@@ -91,6 +91,11 @@ export function resumeRefusalKeyOf(
     case 'NOT_SESSION_OWNER':
       return 'notOwner';
     case 'PLAN_NOT_RESUMABLE':
+    // motir-ai refused the resume at submit (`validation_error` → `MotirAiBadRequestError`, which
+    // the route answers as a 502): a job it cannot continue — a conversation that no longer
+    // reads, or nothing to re-ask. It answered; it was not unreachable, and a retry changes
+    // nothing, so it must not read as the outage `unavailable` says it was (MOTIR-8570).
+    case 'MOTIR_AI_BAD_REQUEST':
       return 'notResumable';
     default:
       return 'unavailable';
