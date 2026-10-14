@@ -47,6 +47,14 @@ export function serverBeforeSend(
   return kept ? tagTransactionStall(kept, hint) : null;
 }
 
+/** The SDK's own `pg` instrumentation, by the name `@sentry/node` registers it. */
+export const SENTRY_AUTO_POSTGRES_INTEGRATION = 'Postgres';
+
+/** The default integrations minus the `Postgres` auto-instrumentation. */
+export function withoutAutoPostgresSpans<I extends { name: string }>(defaults: I[]): I[] {
+  return defaults.filter((integration) => integration.name !== SENTRY_AUTO_POSTGRES_INTEGRATION);
+}
+
 /** The `Sentry.init` options a Node runtime should use, or null when monitoring
  *  is off.
  *
@@ -67,6 +75,7 @@ export function serverSentryInitOptions(opts?: { traces?: boolean }): {
   environment: string | undefined;
   tracesSampleRate: number;
   initialScope: { tags: Record<string, string> };
+  integrations: typeof withoutAutoPostgresSpans;
   beforeSend: typeof serverBeforeSend;
   sendDefaultPii: false;
 } | null {
@@ -79,6 +88,10 @@ export function serverSentryInitOptions(opts?: { traces?: boolean }): {
     // Which machine, process group and region sent the event — on the scope so
     // a transaction carries it too, not only an error (MOTIR-8549).
     initialScope: { tags: monitoringInstanceTags() },
+    // Statement spans come from the SDK's `Prisma` integration (MOTIR-8550,
+    // `./transactionSpan`). The `Postgres` one would draw every statement a
+    // second time from inside `pg`, which Next leaves unbundled, so it is removed.
+    integrations: withoutAutoPostgresSpans,
     // Expected typed domain 4xx are the product refusing on purpose, not
     // faults — see the module this comes from for why the discriminator is the
     // shipped status map and not an error-shape heuristic.

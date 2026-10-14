@@ -1,4 +1,9 @@
 import { transactionTimeoutHalf } from '@/lib/monitoring/transactionStall';
+import {
+  measureTransactionAttempt,
+  type MeasuredAttempt,
+  type TransactionContextLabel,
+} from '@/lib/monitoring/transactionSpan';
 
 /**
  * Open a bound transaction, retrying it ONCE in a fresh transaction when Prisma
@@ -21,17 +26,29 @@ import { transactionTimeoutHalf } from '@/lib/monitoring/transactionStall';
  * and only the caller knows whether re-running it is safe. Any other error, and
  * a SECOND failure, propagate unchanged, so a genuinely exhausted pool still
  * surfaces.
+ *
+ * `context` names the helper that opened it, for the measurement. An attempt
+ * marks the end of its WAIT by calling `bodyStarted()` — or
+ * `bodyStarted(() => fn(tx))`, which also runs the body under the HOLD span —
+ * and wraps its `db.$transaction(...)` promise in `settled(...)` so the HOLD
+ * ends when the transaction does, not after any after-commit work.
  */
 export async function retryOnceBeforeBody<T>(
-  attempt: (bodyStarted: () => void) => Promise<T>,
+  attempt: MeasuredAttempt<T>,
+  context: TransactionContextLabel = 'unlabelled',
 ): Promise<T> {
+  // Every attempt is measured and, on a sampled request, traced — wait, hold and
+  // pool occupancy (MOTIR-8550, `@/lib/monitoring/transactionSpan`). The first
+  // attempt is recorded even when it is the one that gets retried, which is how
+  // a load test sees how often the retry fires. The retry rule is unchanged.
   let started = false;
+  const markStarted = () => {
+    started = true;
+  };
   try {
-    return await attempt(() => {
-      started = true;
-    });
+    return await measureTransactionAttempt(context, 1, attempt, markStarted);
   } catch (err) {
     if (started || transactionTimeoutHalf(err) === null) throw err;
-    return attempt(() => {});
+    return measureTransactionAttempt(context, 2, attempt, () => {});
   }
 }

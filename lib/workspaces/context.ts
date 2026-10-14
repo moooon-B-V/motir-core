@@ -115,22 +115,28 @@ export async function withWorkspaceContext<T>(
   // runs once this transaction has committed, and never when it rolled back.
   // A transaction that dies on P2028 before `fn` starts is retried once
   // (`./retryBeforeBody.ts`, MOTIR-8333); each attempt gets its own scope.
-  return retryOnceBeforeBody((bodyStarted) =>
-    withAfterCommitScope(() =>
-      db.$transaction(
-        async (tx) => {
-          await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
-          await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
-          // Always bind app.project_id (empty string when no project is active) so
-          // the work_item project-narrowing policy's `coalesce(...) = ''` branch
-          // fires cleanly — no ambiguity between "unset" and "deliberately empty".
-          await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
-          bodyStarted();
-          return fn(tx);
-        },
-        options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  // Each attempt is measured and traced (MOTIR-8550): `bodyStarted` ends the wait
+  // and runs `fn` under the hold span; `settled` ends the hold when the
+  // transaction does, before any after-commit work runs.
+  return retryOnceBeforeBody(
+    (bodyStarted, settled) =>
+      withAfterCommitScope(() =>
+        settled(
+          db.$transaction(
+            async (tx) => {
+              await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+              await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
+              // Always bind app.project_id (empty string when no project is active) so
+              // the work_item project-narrowing policy's `coalesce(...) = ''` branch
+              // fires cleanly — no ambiguity between "unset" and "deliberately empty".
+              await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
+              return bodyStarted(() => fn(tx));
+            },
+            options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+          ),
+        ),
       ),
-    ),
+    'workspace',
   );
 }
 
@@ -201,14 +207,17 @@ export async function withSystemContext<T>(
 ): Promise<T> {
   // The after-commit scope, as in `withWorkspaceContext` — the webhook and job paths
   // that re-raise gates open THIS context.
-  return retryOnceBeforeBody((bodyStarted) =>
-    withAfterCommitScope(() =>
-      db.$transaction(async (tx) => {
-        await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
-        bodyStarted();
-        return fn(tx);
-      }, options),
-    ),
+  return retryOnceBeforeBody(
+    (bodyStarted, settled) =>
+      withAfterCommitScope(() =>
+        settled(
+          db.$transaction(async (tx) => {
+            await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
+            return bodyStarted(() => fn(tx));
+          }, options),
+        ),
+      ),
+    'system',
   );
 }
 
@@ -378,17 +387,20 @@ export async function withWorkspaceServiceContext<T>(
   options?: TransactionBudget,
 ): Promise<T> {
   // The after-commit scope, as in `withWorkspaceContext`.
-  return retryOnceBeforeBody((bodyStarted) =>
-    withAfterCommitScope(() =>
-      db.$transaction(
-        async (tx) => {
-          await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
-          bodyStarted();
-          return fn(tx);
-        },
-        options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  return retryOnceBeforeBody(
+    (bodyStarted, settled) =>
+      withAfterCommitScope(() =>
+        settled(
+          db.$transaction(
+            async (tx) => {
+              await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+              return bodyStarted(() => fn(tx));
+            },
+            options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+          ),
+        ),
       ),
-    ),
+    'workspace_service',
   );
 }
 
@@ -415,12 +427,15 @@ export async function withBootstrapSlugContext<T>(
   slug: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return retryOnceBeforeBody((bodyStarted) =>
-    db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.bootstrap_slug', ${slug}, true)`;
-      bodyStarted();
-      return fn(tx);
-    }),
+  return retryOnceBeforeBody(
+    (bodyStarted, settled) =>
+      settled(
+        db.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.bootstrap_slug', ${slug}, true)`;
+          return bodyStarted(() => fn(tx));
+        }),
+      ),
+    'bootstrap_slug',
   );
 }
 
@@ -522,14 +537,17 @@ export async function withUserContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options?: TransactionBudget,
 ): Promise<T> {
-  return retryOnceBeforeBody((bodyStarted) =>
-    db.$transaction(
-      async (tx) => {
-        await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
-        bodyStarted();
-        return fn(tx);
-      },
-      options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
-    ),
+  return retryOnceBeforeBody(
+    (bodyStarted, settled) =>
+      settled(
+        db.$transaction(
+          async (tx) => {
+            await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
+            return bodyStarted(() => fn(tx));
+          },
+          options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+        ),
+      ),
+    'user',
   );
 }
