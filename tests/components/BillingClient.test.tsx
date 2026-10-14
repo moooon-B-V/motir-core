@@ -76,6 +76,7 @@ function activeStandard(): BillingStatusDTO {
     motirAi: {
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
       balance: 1420,
+      pendingDowngrade: null,
       subscription: {
         status: 'active',
         currentPeriodEnd: '2026-07-01T00:00:00.000Z',
@@ -96,6 +97,7 @@ function freeOrg(): BillingStatusDTO {
     motirAi: {
       tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
       balance: 185,
+      pendingDowngrade: null,
       subscription: { status: null, currentPeriodEnd: null, priceId: null, planTier: null },
     },
   };
@@ -219,6 +221,7 @@ describe('BillingClient', () => {
       motirAi: {
         tier: null,
         balance: 0,
+        pendingDowngrade: null,
         subscription: {
           status: null,
           currentPeriodEnd: null,
@@ -557,6 +560,7 @@ describe('BillingClient', () => {
       motirAi: {
         tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
         balance: 185,
+        pendingDowngrade: null,
         subscription: { status: null, currentPeriodEnd: null, priceId: null, planTier: null },
       },
     });
@@ -575,6 +579,7 @@ describe('BillingClient', () => {
       motirAi: {
         tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
         balance: 185,
+        pendingDowngrade: null,
         subscription: {
           status: 'canceled',
           currentPeriodEnd: null,

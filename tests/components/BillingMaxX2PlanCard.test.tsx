@@ -44,6 +44,7 @@ function status(over: Partial<BillingStatusDTO> = {}): BillingStatusDTO {
     motirAi: {
       tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
       balance: 185,
+      pendingDowngrade: null,
       subscription: { status: null, currentPeriodEnd: null, priceId: null, planTier: null },
     },
     ci: CI,
@@ -58,6 +59,7 @@ function onPlan(key: string, name: string, priceId: string): Partial<BillingStat
     motirAi: {
       tier: planTier,
       balance: 1000,
+      pendingDowngrade: null,
       subscription: {
         status: 'active',
         currentPeriodEnd: '2027-01-01T00:00:00.000Z',
@@ -184,10 +186,12 @@ describe('the Max ×2 plan card', () => {
 });
 
 describe('an org that already holds a live AI plan', () => {
-  it('sees no checkout button on any plan card', async () => {
+  it('sees no checkout button on any plan card, only the plan-change controls', async () => {
     await openPlans(status(onPlan('standard', 'Standard', 'standard_pool_annual')));
     await screen.findByText('Motir AI — plans & subscription');
-    expect(screen.queryByRole('button', { name: /^(Choose|Upgrade to) / })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Choose / })).toBeNull();
+    // MOTIR-8399: the upgrade path now owns the slot the checkout left.
+    expect(within(card('Pro')).getByRole('button', { name: 'Upgrade to Pro' })).toBeTruthy();
   });
 
   it('on Max ×2, sees the Max ×2 card as its current plan', async () => {
@@ -195,6 +199,7 @@ describe('an org that already holds a live AI plan', () => {
     await screen.findByText('Motir AI — plans & subscription');
     expect(within(card('Max ×2')).getByRole('button', { name: 'Current plan' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^(Choose|Upgrade to) / })).toBeNull();
+    expect(within(card('Max')).getByRole('button', { name: 'Downgrade to Max' })).toBeTruthy();
   });
 });
 

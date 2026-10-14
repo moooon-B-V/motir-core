@@ -22,6 +22,7 @@ function status(
     motirAi: {
       tier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 15000 },
       balance: 1200,
+      pendingDowngrade: null,
       subscription: {
         status: 'active',
         currentPeriodEnd: '2026-10-15T00:00:00.000Z',
@@ -85,6 +86,7 @@ describe('buildOrgBill', () => {
         motirAi: {
           tier: { key: 'pro', name: 'Pro', monthlyCreditAllotment: 15000 },
           balance: 0,
+          pendingDowngrade: null,
           subscription: {
             status: 'active',
             currentPeriodEnd: null,
@@ -112,6 +114,7 @@ describe('buildOrgBill', () => {
         motirAi: {
           tier: { key: 'free', name: 'Free', monthlyCreditAllotment: 300 },
           balance: 300,
+          pendingDowngrade: null,
           subscription: { status: null, currentPeriodEnd: null, priceId: null, planTier: null },
         },
       }),
