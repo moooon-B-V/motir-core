@@ -1,5 +1,12 @@
 import { createInProcessRateLimitStore, type RateLimitStore } from '@/lib/api/v1/rateLimit';
 import { createPostgresRateLimitStore } from '@/lib/rateLimit/postgresStore';
+import { RATE_LIMIT_STORE_ENV } from '@/lib/rateLimit/storeGuard';
+
+export {
+  RATE_LIMIT_STORE_ENV,
+  assertRateLimitStoreAllowed,
+  MemoryRateLimitStoreRefusedError,
+} from '@/lib/rateLimit/storeGuard';
 
 // WHICH store backs every limiter in this deployment (Subtask 8.5.9 /
 // MOTIR-1165) — resolved once, from the environment, and pinned in
@@ -16,8 +23,10 @@ import { createPostgresRateLimitStore } from '@/lib/rateLimit/postgresStore';
 // There is no vendor env to leave unset: the store is the application's own
 // database, so a self-hoster gets the shared limiter for free wherever
 // `DATABASE_URL` is set. The escape hatch is `MOTIR_RATE_LIMIT_STORE=memory`, for
-// a single-instance install that would rather not write (where per-process and
-// shared are the same thing anyway) and for tests. Budgets stay separately
+// tests and development only: since MOTIR-8614 a production build REFUSES TO
+// START with it (`assertRateLimitStoreAllowed`, `lib/rateLimit/storeGuard.ts`,
+// called from `instrumentation.ts`), because production runs more than one
+// machine and a process cannot know how many. Budgets stay separately
 // env-configurable (`lib/rateLimit/budgets.ts`); sharing the store is not
 // sharing the ceiling.
 //
@@ -32,9 +41,6 @@ import { createPostgresRateLimitStore } from '@/lib/rateLimit/postgresStore';
 
 /** The store backends this build accepts. */
 export type RateLimitBackend = 'postgres' | 'memory';
-
-/** The env var that selects the backend. */
-export const RATE_LIMIT_STORE_ENV = 'MOTIR_RATE_LIMIT_STORE';
 
 const ACCEPTED_BACKENDS: readonly RateLimitBackend[] = ['postgres', 'memory'];
 
