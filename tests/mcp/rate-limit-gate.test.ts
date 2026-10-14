@@ -190,6 +190,11 @@ describe('the billable-tool gate, wired into a real server', () => {
     expect(second.isError).toBe(true);
     expect(textOf(second.content)).toContain(RATE_LIMITED_CODE);
     expect(textOf(second.content)).toContain('expand_item');
+    // The seconds ride a field too, as a number (MOTIR-8600).
+    const structured = second.structuredContent as { code: string; retryAfterSeconds: number };
+    expect(structured.code).toBe(RATE_LIMITED_CODE);
+    expect(Number.isInteger(structured.retryAfterSeconds)).toBe(true);
+    expect(structured.retryAfterSeconds).toBeGreaterThanOrEqual(1);
     await client.close();
   });
 

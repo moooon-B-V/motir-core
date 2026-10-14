@@ -26,6 +26,37 @@ import type { RateLimitScope } from '@/lib/rateLimit/keys';
 /** The code a rate-limited app-level response carries. */
 export const RATE_LIMITED_CODE = 'RATE_LIMITED';
 
+// ── THE RETRYABLE REFUSAL CONTRACT (MOTIR-8600) ─────────────────────────────
+// Every rate-limit refusal an agent can meet carries a whole-number
+// `retryAfterSeconds` in a field a client reads WITHOUT parsing a sentence, and
+// every HTTP refusal also sends `Retry-After` with the same number. The number
+// always comes from `retryAfterSeconds(decision)` (floored at 1); no surface
+// recomputes it. The four surfaces, and where each carries it:
+//
+//   - MCP transport 429 (`mcpRateLimitedResponse`, `lib/rateLimit/mcpGuard.ts`):
+//     `error.data = { code: 'RATE_LIMITED', retryAfterSeconds, … }`.
+//   - A billable MCP tool's `isError` result (`billableToolDenial`,
+//     `lib/mcp/rateLimitGate.ts`): `structuredContent = { code: 'RATE_LIMITED',
+//     retryAfterSeconds }`.
+//   - An app-level 429, the job-token routes included (`rateLimitedResponse`,
+//     below): `{ code: 'RATE_LIMITED', error, retryAfterSeconds }`.
+//   - `/api/v1` 429 (`withV1Route`): `{ code: 'RATE_LIMIT_EXCEEDED', error,
+//     retryAfterSeconds }`. v1 KEEPS its published code — changing a v1 `code`
+//     is breaking under `public-api-conventions.md` §8, and the field and header
+//     are the additive halves §8 permits (ADR §6, 2026-10-14 amendment).
+//
+// The prose sentences stay for the person watching; nothing may parse them.
+// The upload throttle (`RateLimitError`, `lib/blob/errors.ts`) is deliberately
+// outside this contract: it carries `RATE_LIMITED` and no seconds, so a client
+// treats a `RATE_LIMITED` without `retryAfterSeconds` as retryable after its own
+// default.
+
+/** The machine-read half of every app-level rate-limit refusal (MOTIR-8600). */
+export interface RateLimitRefusalFields {
+  code: typeof RATE_LIMITED_CODE;
+  retryAfterSeconds: number;
+}
+
 /**
  * Paths that are NEVER rate-limited, however they are reached.
  *
@@ -63,18 +94,34 @@ export function rateLimitResponseHeaders(decision: RateLimitDecision): Record<st
   return headers;
 }
 
-/** The 429 itself — `{ code, error }` + `Retry-After` + `X-RateLimit-*`. */
+/**
+ * The 429 itself — `{ code, error, retryAfterSeconds }` + `Retry-After` +
+ * `X-RateLimit-*`. The body's `retryAfterSeconds` and the `Retry-After` header
+ * are the same number (MOTIR-8600).
+ */
 export function rateLimitedResponse(
   decision: RateLimitDecision,
   extraHeaders?: Record<string, string>,
 ): NextResponse {
   const retryAfter = retryAfterSeconds(decision);
+  const fields: RateLimitRefusalFields = { code: RATE_LIMITED_CODE, retryAfterSeconds: retryAfter };
   return NextResponse.json(
     {
-      code: RATE_LIMITED_CODE,
+      code: fields.code,
       error: `Too many requests. Retry in ${retryAfter} second${retryAfter === 1 ? '' : 's'}.`,
+      retryAfterSeconds: fields.retryAfterSeconds,
     },
-    { status: 429, headers: { ...extraHeaders, ...rateLimitResponseHeaders(decision) } },
+    {
+      status: 429,
+      // `Retry-After` is re-stated from the SAME computed value as the body
+      // field, so a second boundary ticking between two reads of the clock
+      // cannot make the header and the field disagree.
+      headers: {
+        ...extraHeaders,
+        ...rateLimitResponseHeaders(decision),
+        'Retry-After': String(retryAfter),
+      },
+    },
   );
 }
 

@@ -30,7 +30,8 @@ import {
 //   1. AUTH — delegates to `authenticateApiToken(req, permission)`;
 //      `unauthenticated` → 401 (undifferentiated), `forbidden` → 403.
 //   2. RATE LIMITING — per token, with `X-RateLimit-*` on every response and a
-//      429 when the budget is spent (MOTIR-1860).
+//      429 when the budget is spent (MOTIR-1860), which carries `Retry-After`
+//      and a numeric `retryAfterSeconds` (MOTIR-8600).
 //   3. The `ServiceContext` the services expect, built from the resolved
 //      `{ userId, workspaceId }`, so the route's single service call runs as
 //      the token owner and the product's own access checks apply unchanged.
@@ -206,7 +207,14 @@ export function withV1Route<P = Record<string, never>>(
       for (const [header, value] of Object.entries(rateLimitHeaders(decision))) {
         responseHeaders.set(header, value);
       }
-      if (!decision.allowed) throw new RateLimitExceededError(retryAfterSeconds(decision));
+      if (!decision.allowed) {
+        // ONE computed value feeds both the header and the body field, so the
+        // two cannot disagree (MOTIR-8600). `Retry-After` goes into
+        // `responseHeaders`, which the 429's exit path stamps like every other.
+        const retryAfter = retryAfterSeconds(decision);
+        responseHeaders.set('Retry-After', String(retryAfter));
+        throw new RateLimitExceededError(retryAfter);
+      }
 
       // ── 3. Enforce the declared permission ──────────────────────────────
       if (!auth.ok && auth.reason === 'run_token_refused') throw new RunTokenNotAllowedError();

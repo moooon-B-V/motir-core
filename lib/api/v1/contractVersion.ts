@@ -979,5 +979,17 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.65.0` after MOTIR-7708's
  *   `1.64.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   FIELDS.
+ *
+ * - `1.66.0` — MOTIR-8600 (Story MOTIR-8548) makes the 429 RETRYABLE BY MACHINE: the
+ *   error body gains an optional numeric `retryAfterSeconds`, sent on a rate-limit
+ *   refusal, and the 429 response gains a `Retry-After` header carrying the same
+ *   number. The code stays `RATE_LIMIT_EXCEEDED`.
+ *
+ *   Additive: a new optional field on an existing shape and a new response header
+ *   (§8's allowed list; ADR §6's 2026-10-14 amendment).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.66.0` after MOTIR-8098's
+ *   `1.65.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   FIELD and the HEADER.
  */
-export const V1_CONTRACT_VERSION = '1.65.0';
+export const V1_CONTRACT_VERSION = '1.66.0';

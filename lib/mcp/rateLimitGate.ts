@@ -1,11 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
-import { RATE_LIMITED_CODE } from '@/lib/rateLimit/guard';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver, McpRequestExtra } from './context';
 import type { McpToolName } from './registry';
-import { toolError } from './toolResult';
+import { rateLimitedToolError } from './toolResult';
 
 // The BILLABLE-TOOL gate at the MCP dispatch seam (MOTIR-2610) — the money half
 // of the MCP surface's limiting. The volume half is the transport guard
@@ -80,8 +79,11 @@ export function isBillableTool(toolName: string): boolean {
  * The refusal is an `isError` {@link CallToolResult}, NOT an HTTP 429: by the
  * time a tool callback runs, the JSON-RPC response is already committed to
  * status 200, and a tool-level error is the MCP-legal way to say no — every
- * client parses it, and it carries the retry seconds in the message the agent
- * reads. (The transport's own refusal is the 429; `lib/rateLimit/mcpGuard.ts`.)
+ * client parses it. It carries the retry seconds twice: in the message the agent
+ * reads, and as a NUMBER in `structuredContent` a client waits on without
+ * parsing that sentence (MOTIR-8600 — the contract is written in
+ * `lib/rateLimit/guard.ts`). (The transport's own refusal is the 429;
+ * `lib/rateLimit/mcpGuard.ts`.)
  */
 export async function billableToolDenial(
   toolName: string,
@@ -90,12 +92,32 @@ export async function billableToolDenial(
   if (!isBillableTool(toolName)) return null;
   const refusal = await enforceAiRateLimit(ctx, 'ai:generate');
   if (!refusal) return null;
-  const retryAfter = refusal.headers.get('Retry-After');
-  return toolError(
-    RATE_LIMITED_CODE,
+  const retryAfter = await refusalRetryAfterSeconds(refusal);
+  return rateLimitedToolError(
+    retryAfter,
     `Too many AI generation requests. "${toolName}" submits a model job and draws the same ` +
       `generation budget as Motir's own expand/plan buttons. Retry in ${retryAfter} seconds.`,
   );
+}
+
+/**
+ * The retry seconds a 429 carries, as a NUMBER — read from the refusal's own
+ * `retryAfterSeconds` body field, else its `Retry-After` header; never parsed
+ * out of the human sentence. Floored at 1, the same floor the limiter applies,
+ * so a malformed refusal still tells the client to wait rather than to hammer.
+ */
+export async function refusalRetryAfterSeconds(refusal: Response): Promise<number> {
+  const body: unknown = await refusal
+    .clone()
+    .json()
+    .catch(() => null);
+  const field =
+    body && typeof body === 'object'
+      ? (body as { retryAfterSeconds?: unknown }).retryAfterSeconds
+      : null;
+  const seconds =
+    typeof field === 'number' ? field : Number(refusal.headers.get('Retry-After') ?? NaN);
+  return Number.isFinite(seconds) && seconds >= 1 ? Math.ceil(seconds) : 1;
 }
 
 /** A tool callback as the SDK invokes it (args validated, actor in `extra`). */
