@@ -20,7 +20,7 @@ import {
   retryAfterSeconds,
   type RateLimitDecision,
 } from '@/lib/api/v1/rateLimit';
-import { spendLimbs } from '@/lib/rateLimit/guard';
+import { consumeSharedRateLimit } from '@/lib/rateLimit/limiter';
 import { agentWorkspaceLimb } from '@/lib/rateLimit/workspaceCeiling';
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
@@ -208,16 +208,20 @@ export function withV1Route<P = Record<string, never>>(
       // so they survive a 429, a 403, a mapped error and a 500 alike.
       //
       // The per-token limb is joined by the workspace's shared agent-volume
-      // ceiling (MOTIR-8601), spent concurrently, so N tokens in one workspace
-      // no longer get N × the budget. Only an `ok` result spends it: a
-      // `forbidden` / `run_token_refused` result carries no `workspaceId`
+      // ceiling (MOTIR-8601), so N tokens in one workspace no longer get N × the
+      // budget. The ceiling is spent only AFTER the token's own limb admits
+      // (MOTIR-8610): a token refused on its own budget costs the workspace
+      // nothing. And only an `ok` result spends it: a `forbidden` /
+      // `run_token_refused` result carries no `workspaceId`
       // (`ApiTokenAuthResult`), so it spends the per-token limb alone, exactly
       // as before. The headers report the TIGHTER limb; either refusal is a 429.
-      const [tokenDecision, ceilingDecision] = await Promise.all([
-        consumeRateLimit(tokenFingerprint(presentedToken)),
-        auth.ok ? spendLimbs([agentWorkspaceLimb(auth.workspaceId)]) : Promise.resolve(null),
-      ]);
-      const decision = refusingOrTighter(tokenDecision, ceilingDecision?.tightest ?? null);
+      const tokenDecision = await consumeRateLimit(tokenFingerprint(presentedToken));
+      const ceiling =
+        auth.ok && tokenDecision.allowed ? agentWorkspaceLimb(auth.workspaceId) : null;
+      const ceilingDecision = ceiling
+        ? await consumeSharedRateLimit(ceiling.key, ceiling.budget)
+        : null;
+      const decision = refusingOrTighter(tokenDecision, ceilingDecision);
       for (const [header, value] of Object.entries(rateLimitHeaders(decision))) {
         responseHeaders.set(header, value);
       }

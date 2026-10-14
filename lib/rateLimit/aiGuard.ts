@@ -1,7 +1,7 @@
 import type { NextResponse } from 'next/server';
 import { presentedBearerToken } from '@/lib/api/v1/bearer';
 import { aiBudget, aiGenerateBudget, aiInternalBudget } from '@/lib/rateLimit/budgets';
-import { enforceRateLimit } from '@/lib/rateLimit/guard';
+import { enforceRateLimit, enforceRateLimitOwnThenShared } from '@/lib/rateLimit/guard';
 import { rateLimitKey, type RateLimitScope } from '@/lib/rateLimit/keys';
 import { agentWorkspaceLimb } from '@/lib/rateLimit/workspaceCeiling';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -59,8 +59,9 @@ export async function enforceAiRateLimit(
 /**
  * Limit one job-token read-back (`/api/internal/ai/*`) — MOTIR-8604.
  *
- * Two limbs, spent together through `enforceRateLimit` (so a refusal carries the
- * retryable contract `rateLimitedResponse` writes):
+ * Two limbs, spent own-then-shared through `enforceRateLimitOwnThenShared`
+ * (MOTIR-8610) — the ceiling only once the job's own limb admitted — so a
+ * refusal carries the retryable contract `rateLimitedResponse` writes:
  *
  *   - the per-JOB limb: `ai:job` on the token's `jobKey`, at
  *     `aiInternalBudget()`. ⚠️ A keyless token (minted before MOTIR-8599, or
@@ -75,7 +76,7 @@ export async function enforceJobReadRateLimit(auth: {
   jobKey: string | null;
 }): Promise<NextResponse | null> {
   const { ctx, jobKey } = auth;
-  const { response } = await enforceRateLimit([
+  const { response } = await enforceRateLimitOwnThenShared(
     jobKey === null
       ? {
           scope: 'ai:internal',
@@ -88,7 +89,7 @@ export async function enforceJobReadRateLimit(auth: {
           budget: aiInternalBudget(),
         },
     agentWorkspaceLimb(ctx.workspaceId),
-  ]);
+  );
   return response;
 }
 

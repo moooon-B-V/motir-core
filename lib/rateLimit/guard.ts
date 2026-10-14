@@ -134,6 +134,15 @@ export function rateLimitedResponse(
  * deliberate: skipping the remaining limbs on the first refusal would let an
  * attacker keep one bucket artificially cool by ensuring another always refuses
  * first.
+ *
+ * ⚠️ That spend-all rule is for the caller's OWN limbs. A SHARED ceiling — the
+ * workspace's `agent:workspace` bucket (Story MOTIR-8548) — follows the
+ * opposite rule, own-then-shared ({@link spendOwnThenShared}): it is spent only
+ * once the caller's own limb has admitted the request. A caller refused by its
+ * own budget is already stopped, and charging the ceiling for it would let one
+ * looping agent, throttled on its own bucket, drain the budget every other agent
+ * of the workspace shares. Nobody can keep a bucket cool this way: the own limb
+ * is spent unconditionally, and the ceiling only ever counts admitted requests.
  */
 export interface RateLimitLimb {
   scope: RateLimitScope;
@@ -184,6 +193,44 @@ export async function spendLimbs(
     limbs.map((limb) => consumeSharedRateLimit(limb.key, limb.budget)),
   );
   return { refused: decisions.find((d) => !d.allowed) ?? null, tightest: tightest(decisions) };
+}
+
+/**
+ * Spend the caller's OWN limb, then — only if it admitted — the SHARED ceiling
+ * (MOTIR-8610, the own-then-shared rule on {@link RateLimitLimb}).
+ *
+ * A refusal by `own` is returned as both `refused` and `tightest`, and `shared`
+ * is never touched: a caller stopped by its own budget costs the workspace
+ * nothing. Otherwise `shared` is spent and decides `refused`; the headers report
+ * the tighter of the two.
+ */
+export async function spendOwnThenShared(
+  own: RateLimitLimb,
+  shared: RateLimitLimb,
+): Promise<{ refused: RateLimitDecision | null; tightest: RateLimitDecision }> {
+  const ownDecision = await consumeSharedRateLimit(own.key, own.budget);
+  if (!ownDecision.allowed) return { refused: ownDecision, tightest: ownDecision };
+  const sharedDecision = await consumeSharedRateLimit(shared.key, shared.budget);
+  return {
+    refused: sharedDecision.allowed ? null : sharedDecision,
+    tightest: tightest([ownDecision, sharedDecision]),
+  };
+}
+
+/**
+ * {@link spendOwnThenShared} as a {@link RateLimitVerdict}: the refusal is the
+ * app-level 429 {@link rateLimitedResponse} writes, so it carries the retryable
+ * contract like every other.
+ */
+export async function enforceRateLimitOwnThenShared(
+  own: RateLimitLimb,
+  shared: RateLimitLimb,
+): Promise<RateLimitVerdict> {
+  const { refused, tightest: worst } = await spendOwnThenShared(own, shared);
+  return {
+    response: refused ? rateLimitedResponse(refused) : null,
+    headers: rateLimitResponseHeaders(refused ?? worst),
+  };
 }
 
 /** Copy `headers` onto a response the handler produced, without replacing it. */
