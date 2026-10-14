@@ -40,6 +40,21 @@ export function pendingQuestion(turns: readonly PlanChangeTurnDto[]): PlanChange
   return null;
 }
 
+/**
+ * Whether the planner's latest turn DECLINED the request because the code graph
+ * was unreadable (Story MOTIR-8136): no plan was written, and that is the
+ * outcome, not a failure. Scans like {@link pendingQuestion}, so a declined turn
+ * from before the user's latest message never counts.
+ */
+export function latestTurnDeclined(turns: readonly PlanChangeTurnDto[]): boolean {
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const turn = turns[i]!;
+    if (turn.role === 'user') return false;
+    if (turn.role === 'assistant') return turn.codeUnreadable === 'declined';
+  }
+  return false;
+}
+
 /** How a question that is no longer pending was DISPOSED of. */
 export type QuestionDisposition = 'answered' | 'superseded';
 
