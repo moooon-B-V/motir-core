@@ -6,6 +6,7 @@ import {
 } from './config';
 import { dropClientDisconnectAborts } from './clientDisconnect';
 import { dropExpectedDomainErrors } from './expectedDomainErrors';
+import { restoreChosenRootName } from './transactionName';
 import { tagTransactionStall } from './transactionStall';
 
 // THE NODE RUNTIMES' `Sentry.init` OPTIONS, IN ONE PLACE (MOTIR-3606).
@@ -47,6 +48,18 @@ export function serverBeforeSend(
   return kept ? tagTransactionStall(kept, hint) : null;
 }
 
+/**
+ * The Node runtimes' `beforeSendTransaction`: put back a root name request code
+ * chose, which Next's own event-time rename overwrote (MOTIR-8566,
+ * `./transactionName`). It runs after every `preprocessEvent` hook, which is
+ * the only reason it is here rather than at the rename.
+ */
+export function serverBeforeSendTransaction<E extends Parameters<typeof restoreChosenRootName>[0]>(
+  event: E,
+): E | null {
+  return restoreChosenRootName(event);
+}
+
 /** The SDK's own `pg` instrumentation, by the name `@sentry/node` registers it. */
 export const SENTRY_AUTO_POSTGRES_INTEGRATION = 'Postgres';
 
@@ -77,6 +90,7 @@ export function serverSentryInitOptions(opts?: { traces?: boolean }): {
   initialScope: { tags: Record<string, string> };
   integrations: typeof withoutAutoPostgresSpans;
   beforeSend: typeof serverBeforeSend;
+  beforeSendTransaction: typeof serverBeforeSendTransaction;
   sendDefaultPii: false;
 } | null {
   const dsn = serverSentryDsn();
@@ -98,6 +112,8 @@ export function serverSentryInitOptions(opts?: { traces?: boolean }): {
     // …and a P2028 that IS a fault carries the readings that say which stall
     // caused it (MOTIR-6701).
     beforeSend: serverBeforeSend,
+    // A transaction never passes through `beforeSend`; this is its own hook.
+    beforeSendTransaction: serverBeforeSendTransaction,
     // No request bodies, no headers, no cookies, no IP. An error report is a
     // subset of what the database already holds ONLY if we keep it that way,
     // and `sendDefaultPii` is the switch that decides. MOTIR-1161's transfer

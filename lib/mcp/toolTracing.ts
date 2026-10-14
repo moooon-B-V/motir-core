@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import * as Sentry from '@sentry/nextjs';
 import { registerKnownMcpTool, withRequestLabel } from '@/lib/monitoring/requestLabel';
+import { ROOT_NAME_ATTR } from '@/lib/monitoring/transactionName';
 import { sentryIsInitialised } from '@/lib/monitoring/transactionSpan';
 import type { McpRequestExtra } from './context';
 
@@ -86,7 +87,12 @@ function nameTheRoot(tool: string): void {
   const root = Sentry.getRootSpan(active);
   const calls = (callsPerRoot.get(root) ?? 0) + 1;
   callsPerRoot.set(root, calls);
-  Sentry.updateSpanName(root, calls > 1 ? MCP_TOOL_SPAN.batchRootName : mcpToolRootName(tool));
+  const name = calls > 1 ? MCP_TOOL_SPAN.batchRootName : mcpToolRootName(tool);
+  Sentry.updateSpanName(root, name);
+  // ⚠️ In a built server Next renames a request root AGAIN at event time, so the
+  // name also rides the root as an attribute that `beforeSendTransaction` restores
+  // (MOTIR-8566, `lib/monitoring/transactionName.ts`).
+  root.setAttribute(ROOT_NAME_ATTR, name);
 }
 
 /** Run one tool call inside its named span. */

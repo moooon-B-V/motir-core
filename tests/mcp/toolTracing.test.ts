@@ -14,6 +14,7 @@ interface RecordedSpan {
   parent: RecordedSpan | null;
   attributes: Record<string, unknown>;
   status?: { code: number; message?: string };
+  setAttribute(key: string, value: unknown): void;
 }
 
 const rec = vi.hoisted(() => ({
@@ -26,7 +27,16 @@ const active = new AsyncLocalStorage<RecordedSpan>();
 
 vi.mock('@sentry/nextjs', () => {
   const makeSpan = (name: string, op: string | undefined, parent: RecordedSpan | null) => {
-    const span: RecordedSpan = { id: rec.spans.length + 1, name, op, parent, attributes: {} };
+    const span: RecordedSpan = {
+      id: rec.spans.length + 1,
+      name,
+      op,
+      parent,
+      attributes: {},
+      setAttribute(key: string, value: unknown) {
+        this.attributes[key] = value;
+      },
+    };
     rec.spans.push(span);
     return span;
   };
@@ -69,6 +79,7 @@ vi.mock('@sentry/nextjs', () => {
 const Sentry = await import('@sentry/nextjs');
 const { currentMcpToolName, traceMcpToolCall, tracedServer, MCP_TOOL_ATTR } =
   await import('@/lib/mcp/toolTracing');
+const { ROOT_NAME_ATTR } = await import('@/lib/monitoring/transactionName');
 
 beforeEach(() => {
   rec.spans.length = 0;
@@ -104,6 +115,9 @@ describe('one tool call', () => {
     await inRequest(() => traceMcpToolCall('add_plan_items', async () => OK));
     const root = rec.spans.find((s) => s.parent === null)!;
     expect(root.name).toBe('MCP tools/call add_plan_items');
+    // …and carries it as the attribute `beforeSendTransaction` restores after
+    // Next's event-time rename (MOTIR-8566).
+    expect(root.attributes[ROOT_NAME_ATTR]).toBe('MCP tools/call add_plan_items');
     expect(rec.tags).toContainEqual(['mcp.tool', 'add_plan_items']);
   });
 
@@ -122,6 +136,7 @@ describe('one tool call', () => {
     });
     const root = rec.spans.find((s) => s.parent === null)!;
     expect(root.name).toBe('MCP tools/call (batch)');
+    expect(root.attributes[ROOT_NAME_ATTR]).toBe('MCP tools/call (batch)');
     expect(rec.spans.filter((s) => s.op === 'mcp.server').map((s) => s.name)).toEqual([
       'tools/call get_work_item',
       'tools/call move_to_parent',
