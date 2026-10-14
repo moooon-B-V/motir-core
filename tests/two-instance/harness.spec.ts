@@ -94,7 +94,7 @@ describe('visibility: one Postgres behind both machines', () => {
 
 describe('detectability: the lane can SEE per-instance state', () => {
   let fixture: InstancePair;
-  let db: Client;
+  let pg: Client;
 
   beforeAll(async () => {
     fixture = await startInstances({
@@ -104,13 +104,13 @@ describe('detectability: the lane can SEE per-instance state', () => {
       readyTimeoutMs: 30_000,
       announcePattern: /listening on port (\d+)/,
     });
-    db = new Client({ connectionString: process.env['DATABASE_URL'] });
-    await db.connect();
+    pg = new Client({ connectionString: process.env['DATABASE_URL'] });
+    await pg.connect();
   });
 
   afterAll(async () => {
-    await db?.query(`DELETE FROM "rate_limit_counter" WHERE "key" LIKE 'two-instance-fixture:%'`);
-    await db?.end();
+    await pg?.query(`DELETE FROM "rate_limit_counter" WHERE "key" LIKE 'two-instance-fixture:%'`);
+    await pg?.end();
     await fixture?.stop();
   });
 
