@@ -520,14 +520,13 @@ describe('BillingClient', () => {
 
     // Starter is gone — its CTA never renders.
     expect(screen.queryByRole('button', { name: 'Choose Starter' })).toBeNull();
-    // Paid cards carry the bundled Motir seat; Free states the absence (never "tracker").
-    expect(
-      screen.getAllByText('+ 1 Motir seat · work items uncapped').length,
-    ).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('No Motir seat · 250-item cap')).toBeTruthy();
+    // Every paid card carries the bundled Motir seat (never "tracker"); there is
+    // no Free card to state an absence on (MOTIR-7598).
+    expect(screen.getAllByText('+ 1 Motir seat · work items uncapped')).toHaveLength(4);
+    expect(screen.queryByText('No Motir seat · 250-item cap')).toBeNull();
     expect(screen.queryByText(/tracker seat/i)).toBeNull();
     // Per-tier use-case copy + the cumulative "Everything in {prev}" lead render.
-    expect(screen.getByText('Detailed planning, plus real agent work.')).toBeTruthy();
+    expect(screen.getByText('Standard, plus stronger models for planning.')).toBeTruthy();
     expect(screen.getByText('Everything in Standard, plus')).toBeTruthy();
   });
 
@@ -540,9 +539,16 @@ describe('BillingClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
     await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
 
-    const withAllotment = BILLING_CATALOG.aiPlans.filter((p) => p.allotment);
-    expect(withAllotment.some((p) => p.allotment!.cadence === 'one_time')).toBe(true);
+    // Only the paid plans are cards (MOTIR-7598): the one-time grant is the
+    // trial, never a card, so its one-time form appears nowhere in the row.
+    const withAllotment = BILLING_CATALOG.aiPlans.filter((p) => p.allotment && p.prices);
     expect(withAllotment.some((p) => p.allotment!.cadence === 'monthly')).toBe(true);
+    const oneTime = BILLING_CATALOG.aiPlans.find((p) => p.allotment?.cadence === 'one_time')!;
+    expect(
+      screen.queryByText(
+        `${oneTime.allotment!.credits.toLocaleString('en-US')} credits · one-time`,
+      ),
+    ).toBeNull();
     for (const plan of withAllotment) {
       const n = plan.allotment!.credits.toLocaleString('en-US');
       if (plan.allotment!.cadence === 'one_time') {
@@ -573,7 +579,7 @@ describe('BillingClient', () => {
     expect(screen.getByText(/granted once and don't refresh/)).toBeTruthy();
   });
 
-  it('a one-time tier in the current-plan strip reads as one-time, with no renewal', async () => {
+  it('a one-time tier reads as the one-time trial in the free-trial strip, with no renewal', async () => {
     renderWithBody({
       ...activeStandard(),
       motirAi: {
@@ -593,7 +599,11 @@ describe('BillingClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resubscribe' }));
     await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
 
-    expect(screen.getByText('300 credits · one-time · 185 left')).toBeTruthy();
+    // Free is the trial grant (MOTIR-7598): the strip, not a current-plan strip.
+    expect(screen.getByTestId('plan-free-trial').textContent).toContain(
+      '185 of 300 trial credits left · one-time.',
+    );
+    expect(screen.queryByText('300 credits · one-time · 185 left')).toBeNull();
     expect(screen.queryByText(/300 credits \/ mo/)).toBeNull();
   });
 

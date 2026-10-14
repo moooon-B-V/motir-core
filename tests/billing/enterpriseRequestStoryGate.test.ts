@@ -822,10 +822,8 @@ function priceViolations(surfaces: Record<string, unknown>): string[] {
 const SURFACE_FILES = [
   'lib/dto/platformEnterpriseRequest.ts',
   'lib/emailTemplates/enterpriseRequestReceived.tsx',
-  'lib/billing/enterpriseRequestClient.ts',
   'lib/services/enterpriseRequestService.ts',
   'lib/services/platformEnterpriseRequestService.ts',
-  'app/(authed)/settings/organization/billing/_components/ContactSalesDialog.tsx',
   'app/(admin)/admin/enterprise-requests/page.tsx',
   'app/(admin)/admin/enterprise-requests/[id]/page.tsx',
   ...readdirSync(join(ROOT, 'app/(admin)/admin/enterprise-requests/_components')).map(
@@ -863,7 +861,6 @@ describe('guard: no price', () => {
       Record<string, unknown>
     >;
     const catalogue = (m: typeof en) => ({
-      contactSales: (m['billing'] as Record<string, unknown>)['contactSales'],
       console: (m['platformAdmin'] as Record<string, unknown>)['enterpriseRequests'],
       email: (m['email'] as Record<string, unknown>)['enterpriseRequestReceived'],
     });
@@ -880,8 +877,8 @@ describe('guard: no price', () => {
     };
     expect(priceViolations(surfaces)).toEqual([]);
     // Not vacuous: the surface really holds the copy it claims to scan.
-    expect(SURFACE_FILES.length).toBeGreaterThanOrEqual(15);
-    expect(JSON.stringify(surfaces['catalogueEn'])).toContain('Contact sales');
+    expect(SURFACE_FILES.length).toBeGreaterThanOrEqual(14);
+    expect(JSON.stringify(surfaces['catalogueEn'])).toContain('Enterprise');
   });
 
   it('FAILS on planted prices — in a string, a catalogue, an email and a DTO key (fixture)', () => {

@@ -6380,20 +6380,19 @@
       "chooseSub": "Een maandelijkse tegoedpool op organisatieniveau, los van plekken gefactureerd. Elke organisatie kan het kopen — een betaald Motir-plekkenabonnement is niet vereist. Pro is het aanbevolen uitgangspunt.",
       "current": "Huidig",
       "recommended": "Aanbevolen",
-      "trialUsed": "Proefperiode gebruikt",
       "creditsAllotment": "{n} credits per maand",
       "creditsAllotmentOneTime": "{n} credits · eenmalig",
+      "ladder": {
+        "first": "Dezelfde prijs per credit in elk abonnement",
+        "multiple": "{multiple}× de credits van {plan} · dezelfde prijs per credit"
+      },
       "perMoEquiv": "${n} per maand",
       "annualSub": "jaarlijks gefactureerd · ${yr} per jaar",
       "annualSave": "Bespaar ${n} per jaar",
       "monthlySub": "${yr} per jaar · Bespaar ${n} met jaarlijks",
-      "freePrice": "Gratis",
-      "customPrice": "Op maat",
-      "once": "eenmalig",
       "ctaChoose": "{plan} kiezen",
       "ctaUpgrade": "Upgraden naar {plan}",
       "ctaCurrent": "Huidig abonnement",
-      "ctaTrialUsed": "Proefperiode gebruikt",
       "upgrade": {
         "cta": "Upgraden naar {plan}",
         "disabledReason": "Alleen eigenaren en beheerders kunnen het abonnement wijzigen",
@@ -6457,50 +6456,40 @@
       },
       "footer": "Jaarlijkse facturering (de standaard van Stripe) wordt getoond — schakel hierboven over naar Maandelijks om te vergelijken. Btw wordt automatisch toegepast bij het afrekenen. Credits zijn een interne gebruikstoewijzing; de getoonde prijs is de kosten van het AI-abonnement, door Stripe gefactureerd aan de organisatie {org}. Je Motir-plekken worden apart gefactureerd — beheer ze op het scherm van het Motir-abonnement.",
       "seatIncluded": "+ {count, plural, one {# Motir-plek} other {# Motir-plekken}} · werkitems onbeperkt",
-      "seatNone": "Geen Motir-plek · limiet van 250 items",
-      "seatCustom": "Motir-plekken inbegrepen (op maat)",
-      "customPool": "Tegoedpool op maat",
       "everythingIn": "Alles uit {prev}, plus",
       "tiers": {
-        "free": {
-          "useCase": "Motir AI uitproberen.",
-          "features": ["Een eenmalige kennismaking met elke agent"],
-          "featuresOff": ["Geen maandelijkse aanvulling · geen bijkopen"]
-        },
         "standard": {
-          "useCase": "Gedetailleerde planning, plus een kennismaking met agents.",
+          "useCase": "Plan je projecten met de Motir AI-planner.",
           "features": [
             "Het hele project in detail plannen",
-            "Credits elke maand aangevuld · bijkopen op basis van verbruik",
-            "Ruimte om agenttaken uit te proberen"
+            "Credits worden maandelijks vernieuwd · altijd bij te kopen"
           ]
         },
         "pro": {
-          "useCase": "Gedetailleerde planning, plus echt agentwerk.",
+          "useCase": "Standard, plus sterkere modellen voor planning.",
           "prev": "Standard",
           "features": [
-            "De codeeragent op echte taken laten draaien",
-            "Altijd bijkopen voor zwaardere runs"
+            "Sterkere modellen ingeschakeld voor planning",
+            "Wissel per soort werk van planningsmodel"
           ]
         },
         "max": {
-          "useCase": "Gedetailleerde planning, plus zwaar agentwerk.",
+          "useCase": "Pro, plus ruimte om gepland werk aan de agent over te dragen.",
           "prev": "Pro",
-          "features": ["Ruimte voor aanhoudend agentwerk", "Doorvoer voor een druk team"]
+          "features": ["Ruimte om gepland werk automatisch aan de agent toe te wijzen"]
         },
         "max_x2": {
-          "useCase": "Gedetailleerde planning, plus agentwerk op twee keer het volume van Max.",
+          "useCase": "Max, met twee keer het volume.",
           "prev": "Max",
-          "features": [
-            "Twee keer de maandelijkse creditpool van Max",
-            "Ruimte voor meerdere agents tegelijk"
-          ]
-        },
-        "enterprise": {
-          "useCase": "Volume op maat, plus beheer op organisatieniveau.",
-          "prev": "Max",
-          "features": ["Facturering op rekening en SSO", "Persoonlijke support"]
+          "features": ["Twee keer de maandelijkse creditpool van Max"]
         }
+      },
+      "trial": {
+        "pill": "Gratis proefperiode",
+        "pillUsed": "Gratis proefperiode gebruikt",
+        "left": "{left} van {n} proefcredits over · eenmalig.",
+        "spent": "Alle {n} proefcredits zijn op.",
+        "pickPlan": "Kies een maandelijks Motir AI-abonnement om te blijven plannen."
       }
     },
     "topup": {
@@ -6579,120 +6568,6 @@
     "internalBilling": {
       "badge": "Interne facturering",
       "note": "Deze organisatie wordt precies als een klant gefactureerd en daarna gecompenseerd — elk bedrag hieronder is echt, en het saldo komt netto op nul uit."
-    },
-    "contactSales": {
-      "contact": "Contact opnemen met sales",
-      "sentChip": "Aanvraag verstuurd · {date}",
-      "memberReason": "Alleen eigenaren en beheerders van {org} kunnen contact opnemen met sales.",
-      "title": "Contact opnemen met sales — Enterprise",
-      "subtitle": "Vertel ons wat je Motir wilt laten draaien. Platformmedewerkers lezen elke aanvraag en antwoorden je rechtstreeks.",
-      "facts": {
-        "heading": "Meegestuurd met je aanvraag",
-        "organization": "Organisatie",
-        "requestedBy": "Aangevraagd door",
-        "currentPlan": "Huidig abonnement",
-        "repositories": "Gekoppelde repository’s"
-      },
-      "optionalNote": "Alles hieronder is optioneel, behalve het bericht.",
-      "fields": {
-        "cardsPerDay": "Werkitems per dag, ongeveer",
-        "cardsPerDayPlaceholder": "bijv. 40",
-        "parallelAgents": "Agents tegelijk",
-        "parallelAgentsPlaceholder": "bijv. 8",
-        "agentPath": "Welke agents",
-        "autonomy": "Hoe moet het draaien?",
-        "startWhen": "Wanneer zou je beginnen?",
-        "teamSize": "Teamgrootte",
-        "choose": "Kiezen…",
-        "contact": "Beste manier om je te bereiken",
-        "contactHelp": "Het e-mailadres van je account. Wijzig het als iemand anders het antwoord moet krijgen.",
-        "note": "Bericht",
-        "required": "Verplicht",
-        "notePlaceholder": "Wat moet Motir voor je team doen? Alles wat we moeten weten over je repository’s, beveiliging of planning."
-      },
-      "agentPath": {
-        "hosted": {
-          "label": "De gehoste agents van Motir",
-          "hint": "Draait op de modellen van Motir."
-        },
-        "own": {
-          "label": "Onze eigen agents",
-          "hint": "Claude Code, Codex of een andere agent met onze eigen inloggegevens, in de cloud van Motir."
-        },
-        "both": {
-          "label": "Allebei",
-          "hint": "Een beetje van allebei."
-        }
-      },
-      "autonomy": {
-        "autonomous_lead": {
-          "label": "Dag en nacht, zelfstandig",
-          "hint": "De autonome lead: Motir plant, draait en repareert, en je team beslist bij goedkeuringsmomenten."
-        },
-        "volume_only": {
-          "label": "Een groot aantal runs die wij starten",
-          "hint": "Je team start elke run."
-        },
-        "unsure": {
-          "label": "Nog niet zeker",
-          "hint": ""
-        }
-      },
-      "startWhen": {
-        "now": "Nu",
-        "within_month": "Binnen een maand",
-        "within_quarter": "Binnen een kwartaal",
-        "exploring": "Alleen aan het verkennen"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "cancel": "Annuleren",
-      "send": "Aanvraag versturen",
-      "sending": "Versturen…",
-      "close": "Sluiten",
-      "done": "Klaar",
-      "errors": {
-        "note": "Voeg een bericht toe — vertel ons wat je Motir voor je team wilt laten doen.",
-        "number": "Voer een geheel getal van minstens 1 in."
-      },
-      "refused": {
-        "open": {
-          "title": "Je organisatie heeft al een openstaande aanvraag.",
-          "body": "Die is op {date} verstuurd, vanuit een ander tabblad of door een andere beheerder. Er is niets nieuws verstuurd.",
-          "bodyNoDate": "Die is verstuurd vanuit een ander tabblad of door een andere beheerder. Er is niets nieuws verstuurd.",
-          "action": "Aanvraag bekijken"
-        },
-        "forbidden": {
-          "title": "Je kunt geen contact opnemen met sales voor {org}.",
-          "body": "Alleen eigenaren en beheerders kunnen dat. Je rol is misschien gewijzigd sinds deze pagina is geladen — vraag het een beheerder van de organisatie."
-        },
-        "network": {
-          "title": "Motir kon niet worden bereikt.",
-          "body": "Er is niets verstuurd. Controleer je verbinding en verstuur opnieuw — wat je hebt geschreven blijft bewaard."
-        }
-      },
-      "sent": {
-        "title": "Aanvraag verstuurd",
-        "body": "Platformmedewerkers antwoorden naar <b>{contact}</b>. Zolang de aanvraag niet is gesloten, toont het Enterprise-blok die in plaats van Contact opnemen met sales."
-      },
-      "request": {
-        "title": "Je Enterprise-aanvraag",
-        "subtitle": "Verstuurd op {date} door {name}.",
-        "subtitleNoName": "Verstuurd op {date}.",
-        "state": "Status",
-        "asked": "Wat je ons vertelde",
-        "unset": "Niet opgegeven",
-        "reply": "Platformmedewerkers antwoorden naar <b>{contact}</b>. Wil je iets toevoegen, beantwoord dan hun e-mail.",
-        "status": {
-          "received": "Ontvangen",
-          "in_conversation": "In gesprek",
-          "offer_sent": "Offerte verstuurd"
-        }
-      }
     }
   },
   "draftWithAi": {
