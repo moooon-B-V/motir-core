@@ -316,8 +316,8 @@ describe('useWorkbenchLiveStream', () => {
     await fake.fire({ kind: 'workbench' });
     expect(result.current.nudge).toBe(1);
     expect(result.current.moved).toEqual([]);
-    await fake.fire({ kind: 'workbench' }, ['todo']);
+    await fake.fire({ kind: 'workbench' }, ['toDo']);
     expect(result.current.nudge).toBe(2);
-    expect(result.current.moved).toEqual(['todo']);
+    expect(result.current.moved).toEqual(['toDo']);
   });
 });
