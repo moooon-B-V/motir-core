@@ -12,7 +12,11 @@ import {
   v1ErrorBodySchema,
   v1InternalErrorBodySchema,
 } from '@/lib/api/v1/openapi/errorResponse';
-import { V1_SHARED_RESPONSE_HEADERS } from '@/lib/api/v1/openapi/headers';
+import {
+  V1_RETRY_AFTER_HEADER,
+  V1_SHARED_RESPONSE_HEADERS,
+  type V1HeaderComponent,
+} from '@/lib/api/v1/openapi/headers';
 import {
   V1_WRAPPER_ERROR_STATUSES,
   type V1Operation,
@@ -222,10 +226,13 @@ function compositionBase(schema: z.ZodType): JsonObject {
   return rest;
 }
 
-/** The shared response headers, as a 3.1 `headers` object. */
-function sharedResponseHeaders(): JsonObject {
+/**
+ * The shared response headers, as a 3.1 `headers` object — plus any `extra`
+ * a single status carries (the 429's `Retry-After`, MOTIR-8600).
+ */
+function sharedResponseHeaders(extra: readonly V1HeaderComponent[] = []): JsonObject {
   const headers: JsonObject = {};
-  for (const header of V1_SHARED_RESPONSE_HEADERS) {
+  for (const header of [...V1_SHARED_RESPONSE_HEADERS, ...extra]) {
     headers[header.name] = {
       description: header.description,
       schema: documentSchema(header.schema),
@@ -258,7 +265,7 @@ function errorResponse(status: V1ErrorStatus): JsonObject {
   );
   return {
     description: V1_STATUS_DESCRIPTIONS[status],
-    headers: sharedResponseHeaders(),
+    headers: sharedResponseHeaders(status === 429 ? [V1_RETRY_AFTER_HEADER] : []),
     content: { 'application/json': { schema } },
   };
 }

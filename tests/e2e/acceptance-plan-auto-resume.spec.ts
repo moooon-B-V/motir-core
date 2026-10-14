@@ -515,9 +515,10 @@ test('a job lost before anything was saved waits in To resume, with the reason a
   await stubAiAccess(page);
   await signIn(page, email, PLANNING_ANCHOR_PASSWORD);
 
-  // A lost machine reads as the provider being unavailable, the reason an `ai_job_failed`
-  // failure reads (MOTIR-8304 keeps `model_unavailable`; the two codes' mapping is pinned in
-  // `tests/integration/planning/lostMachineFact.test.ts`).
+  // A lost machine reads as the provider being unavailable, the reason an outage reads
+  // (MOTIR-8304 keeps `model_unavailable`; the two codes' mapping is pinned in
+  // `tests/integration/planning/lostMachineFact.test.ts`). A judged `ai_job_failed` reads
+  // `job_failed` since MOTIR-8569.
   const reason = planningSession.reason.model_unavailable;
 
   setPlanOutcome(0, LOST);

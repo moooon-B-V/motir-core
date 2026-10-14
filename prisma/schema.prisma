@@ -7280,6 +7280,7 @@ enum PlanSessionFailureReason {
   model_unavailable
   token_expired
   prompt_too_large
+  job_failed
   internal
 
   @@map("plan_session_failure_reason")

@@ -219,9 +219,10 @@ function mount(
     followTo?: { key: string; trail: CanvasCrumb[] } | null;
     readerHasNavigated?: boolean;
     heldTrail?: CanvasCrumb[];
+    movingSteps?: PlanProgressStep[] | null;
   } = {},
 ) {
-  const el = (steps: PlanProgressStep[] | null) => (
+  const el = (steps: PlanProgressStep[] | null, moving = opts.movingSteps) => (
     <PlanReviewCanvas
       items={ITEMS}
       projectKey="ARP"
@@ -231,13 +232,15 @@ function mount(
       followTo={opts.followTo ?? null}
       readerHasNavigated={opts.readerHasNavigated}
       liveSteps={steps}
+      movingSteps={moving}
     />
   );
   const r = render(
     el(liveSteps),
     opts.locale === 'zh' ? { locale: 'zh', messages: zhMessages } : undefined,
   );
-  return (next: PlanProgressStep[] | null) => r.rerender(el(next));
+  return (next: PlanProgressStep[] | null, moving?: PlanProgressStep[] | null) =>
+    r.rerender(el(next, moving));
 }
 
 const box = (id: string) => document.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
@@ -386,5 +389,50 @@ describe('PlanReviewCanvas — the cues (MOTIR-7830)', () => {
     expect(screen.getByRole('img', { name: '正在起草' }).textContent).toBe('起草中');
     await waitFor(() => expect(pill()).not.toBeNull());
     expect(pill()!.textContent).toBe('ARP-2 中有 1 项正在起草 · 前往');
+  });
+});
+
+// AT WORK (Story MOTIR-8413 · MOTIR-8416): `movingSteps` says which drafted cards
+// MOVE; presence still rides `liveSteps`, so a held step draws its cue, still.
+describe('PlanReviewCanvas — the at-work motion (MOTIR-8416)', () => {
+  beforeEach(() => {
+    stubRoadmap();
+  });
+  const motionOf = (id: string) => box(id)?.getAttribute('data-cue-motion') ?? null;
+
+  it('a drafted card the moving steps name is at-work; one they do not is drawn still', async () => {
+    const steps = [step('author', 'pi_a', 's1'), step('author', 'pi_b', 's2')];
+    mount(steps, { movingSteps: [steps[0]!] });
+    await loaded();
+    expect(cueOf('pi_a')).toBe('drafting');
+    expect(motionOf('pi_a')).toBe('at-work');
+    expect(cueOf('pi_b')).toBe('drafting');
+    expect(motionOf('pi_b')).toBeNull();
+  });
+
+  it('held liveSteps with NO moving steps (stalled, reconnecting) → the chip, and no motion', async () => {
+    mount([step('author', 'pi_a')], { movingSteps: [] });
+    await loaded();
+    expect(cueOf('pi_a')).toBe('drafting');
+    expect(motionOf('pi_a')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Being drafted now' })).toBeTruthy();
+  });
+
+  it('a lay step never moves', async () => {
+    const lay = step('lay', LOGIN_ID);
+    mount([lay], { movingSteps: [lay] });
+    await loaded();
+    expect(cueOf(LOGIN_ID)).toBe('laying');
+    expect(motionOf(LOGIN_ID)).toBeNull();
+  });
+
+  it('when the moving card is finished it leaves, then the next one is at work', async () => {
+    const a = step('author', 'pi_a', 's1');
+    const b = step('author', 'pi_b', 's1');
+    const update = mount([a], { movingSteps: [a] });
+    await loaded();
+    update([b], [b]);
+    expect(motionOf('pi_a')).toBe('leaving');
+    expect(motionOf('pi_b')).toBe('at-work');
   });
 });

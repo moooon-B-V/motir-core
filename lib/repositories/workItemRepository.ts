@@ -1624,6 +1624,50 @@ export const workItemRepository = {
   },
 
   /**
+   * The LIVE, not-finished children of these gated runs' scope containers (MOTIR-8458) —
+   * what a continue over a scope run would carry (`recordHeldGates` walks the scope's
+   * live children), whoever holds them. A card a plan added under the scope after the
+   * run stopped never carries the run's `resumeRunId`, so {@link findResumeMembers}
+   * alone cannot see it. `parentId` rides back so the caller can file each child under
+   * its entry. Archived and triaged rows are excluded, like every list read.
+   */
+  async findResumeScopeChildren(
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    parentIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<(HomeWorkItemRow & { parentId: string | null })[]> {
+    if (projectScopes.length === 0 || parentIds.length === 0) return [];
+    return tx.workItem.findMany({
+      where: {
+        workspaceId,
+        parentId: { in: [...parentIds] },
+        archivedAt: null,
+        triagedAt: null,
+        AND: [homeProjectScopeWhere(projectScopes, HOME_SLICE_UNFINISHED)],
+      },
+      select: { ...HOME_WORK_ITEM_SELECT, parentId: true },
+      orderBy: homeOrderBy('updatedAt'),
+    });
+  },
+
+  /**
+   * EVERY child id of these containers, archived ones included (MOTIR-8458) — the
+   * cards a plan may have added, changed or removed under a gated run's scope. A
+   * removed child is archived, so the live read above cannot name it.
+   */
+  async findChildIdsByParents(
+    parentIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; parentId: string | null }[]> {
+    if (parentIds.length === 0) return [];
+    return tx.workItem.findMany({
+      where: { parentId: { in: [...parentIds] } },
+      select: { id: true, parentId: true },
+    });
+  },
+
+  /**
    * Which of these run TARGETS still wait to resume, and on which run (MOTIR-8011) —
    * whoever holds them, in the given projects. The same predicate as
    * `findResumeMembers`, so a target this misses is one no To resume entry can be

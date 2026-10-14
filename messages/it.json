@@ -9273,7 +9273,8 @@
         "couldNot": "Non è stato avviato nulla e non è stato addebitato nulla. {repair}",
         "changes_requested": "Non riprende nulla. Prima viene rielaborato {key}; la sua versione successiva chiede di nuovo e questa esecuzione resta in attesa.",
         "declined": "Non riprende nulla. Il lavoro che questo avrebbe sbloccato richiede un nuovo piano: ripianifica {key} oppure imposta {head} su Da fare per ricominciare.",
-        "overturned": "Non riprende nulla. L’approvazione non è più valida, quindi l’esecuzione attende una nuova decisione su {key}."
+        "overturned": "Non riprende nulla. L’approvazione non è più valida, quindi l’esecuzione attende una nuova decisione su {key}.",
+        "reshaped": "La ripresa porterà con sé la storia rimodellata."
       },
       "back": {
         "changes_requested": "{kind} rimandato indietro · modifiche richieste da <b>{name}</b>: «{note}»",
@@ -9306,7 +9307,26 @@
         "repository_not_writable": "Ricollega il repository nelle impostazioni del progetto, poi premi Continua.",
         "card_not_ready": "Rimuovi ciò che blocca {key} o riportalo In corso, poi premi Continua."
       },
-      "copyAria": "Copia il comando di ripresa per {key}"
+      "copyAria": "Copia il comando di ripresa per {key}",
+      "member": {
+        "added": "Aggiunto dopo l'arresto dell'esecuzione",
+        "rescoped": "Ambito modificato"
+      },
+      "fold": {
+        "added": "+{count} aggiunti dopo l'arresto dell'esecuzione"
+      },
+      "reshaped": {
+        "one": "Il piano <plan>{title}</plan> <aside>(approvato <when></when>)</aside> ha rimodellato questa storia dopo l'arresto dell'esecuzione: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# piano ha} other {# piani hanno}}</b> rimodellato questa storia dopo l'arresto dell'esecuzione",
+        "planLine": "Piano <plan>{title}</plan> <aside>(approvato <when></when>)</aside>: {counts}",
+        "showPlans": "Mostra piani",
+        "hidePlans": "Nascondi piani",
+        "added": "{n} aggiunti",
+        "changed": "{n} modificati",
+        "removed": "{n} rimossi",
+        "separator": ", ",
+        "label": "Piani che hanno rimodellato {key} dopo l'arresto della sua esecuzione"
+      }
     },
     "planning": {
       "scope": "I piani che hai richiesto in <project>{name}</project> e che sono ancora in fase di stesura. I piani richiesti da altri si trovano nella <link>pagina Piani</link>.",
@@ -9357,6 +9377,7 @@
         "model_unavailable": "il fornitore di IA non era disponibile",
         "token_expired": "la connessione al fornitore di IA è scaduta",
         "prompt_too_large": "il contesto del piano era troppo grande per il modello",
+        "job_failed": "il processo di pianificazione non è riuscito",
         "internal": "qualcosa è andato storto da parte nostra"
       },
       "refusal": {

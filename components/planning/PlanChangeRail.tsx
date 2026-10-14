@@ -88,6 +88,7 @@ import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { PlanAtWorkMark } from '@/components/planning/PlanAtWorkMark';
 import {
   CarryDecidedNotice,
   carriesWaitingPlan,
@@ -750,6 +751,9 @@ export function PlanChangeRail({
     >
       <div className="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
         <span className="size-2 rounded-full bg-(--el-success)" aria-hidden="true" />
+        {/* THE MARK AT WORK (MOTIR-8417) — one instance, off the snapshot the rail
+            already holds; it breathes while Motir is writing, else holds still. */}
+        <PlanAtWorkMark progress={state.liveReview?.progress ?? null} failing={state.liveFailing} />
         <span className="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {t('railLabel')}
         </span>

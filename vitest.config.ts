@@ -5009,6 +5009,17 @@ export default defineConfig({
         // shape of the gap this card exists to close.
         'lib/rateLimit/mcpGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/rateLimit/fixedWindow.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8548 · MOTIR-8607 — the per-workspace agent ceiling, the one NEW
+        // module of the story's motir-core children. MEASURED on this branch against the
+        // story's own specs (`tests/integration/rateLimit/agentRateLimitStoryGate.test.ts`
+        // plus the children's suites): 100 / 100 / 100 / 100 (lines / functions /
+        // branches / statements), then pinned at the project floor.
+        'lib/rateLimit/workspaceCeiling.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
         'lib/services/rateLimitService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/rateLimitCounterRepository.ts': {
           branches: 90,

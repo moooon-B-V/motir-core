@@ -183,6 +183,13 @@ export interface PlanningCanvasProps {
    *
    * ⚠️ Absent or `null`, the rendered DOM is byte for byte what it was before
    * this prop existed — `/roadmap`, runs, onboarding and work-item roadmaps.
+   *
+   * AT WORK (Story MOTIR-8413 · MOTIR-8416; design `design/ai-chat/design-notes.md`
+   * § _Motir at work_). A drafting cue whose `moving` is set marks its box
+   * `data-cue-motion="at-work"` — the card pops and breathes; such a MOVING cue the
+   * map stops naming while its node is still drawn is RETAINED as
+   * `data-cue-motion="leaving"` until its ring's fade ends, then dropped. Under
+   * reduced motion nothing is retained. A laying cue never moves and never lingers.
    */
   nodeCues?: ReadonlyMap<string, NodeCue> | null;
   className?: string;
@@ -194,6 +201,27 @@ export interface NodeCue {
   kind: 'drafting' | 'laying';
   label: string;
   text: string;
+  /** Motir is writing this card RIGHT NOW (`readPlanAtWork(...).steps` names it).
+   *  Absent ⇒ drawn but still. Ignored on a laying cue. */
+  moving?: boolean;
+}
+
+/** The MOVING drafting cues a map no longer names, retained for their leaving fade (pure).
+ *  `prev` is the map last rendered; `drawn` says whether a node is still on the canvas. */
+export function leavingCuesOf(
+  prev: ReadonlyMap<string, NodeCue> | null,
+  next: ReadonlyMap<string, NodeCue> | null,
+  held: Readonly<Record<string, NodeCue>>,
+  drawn: (id: string) => boolean,
+): Record<string, NodeCue> {
+  const out: Record<string, NodeCue> = {};
+  for (const [id, cue] of Object.entries(held)) {
+    if (!next?.has(id) && drawn(id)) out[id] = cue;
+  }
+  for (const [id, cue] of prev ?? []) {
+    if (cue.kind === 'drafting' && cue.moving && !next?.has(id) && drawn(id)) out[id] = cue;
+  }
+  return out;
 }
 
 // ── MOTION state (MOTIR-6297) ─────────────────────────────────────────────────
@@ -467,6 +495,28 @@ export function PlanningCanvas({
     stage === 'out' && movers.has(id) ? play?.from.get(id) : undefined;
 
   const nodeById = new Map(liveNodes.map((n) => [n.id, n]));
+
+  // ── THE CUE LEAVING (MOTIR-8416) — a drafting cue the map stops naming keeps
+  // its ring and chip through the design's leaving fade, then is dropped on that
+  // fade's end. Adjusted during render, like the motion layer above, so the first
+  // render without the cue already draws it leaving. Reduced motion retains nothing.
+  const [cueTrack, setCueTrack] = useState<{
+    seen: ReadonlyMap<string, NodeCue> | null;
+    leaving: Record<string, NodeCue>;
+  }>({ seen: nodeCues, leaving: {} });
+  if (cueTrack.seen !== nodeCues) {
+    const leaving = prefersReducedMotion()
+      ? {}
+      : leavingCuesOf(cueTrack.seen, nodeCues, cueTrack.leaving, (id) => nodeById.has(id));
+    setCueTrack({ seen: nodeCues, leaving });
+  }
+  const dropLeavingCue = (id: string) =>
+    setCueTrack((t) => {
+      if (!(id in t.leaving)) return t;
+      const leaving = { ...t.leaving };
+      delete leaving[id];
+      return { ...t, leaving };
+    });
   const rectOf = (n: CanvasNode): Rect => {
     const p = dragPos[n.id] ?? heldAt(n.id);
     const s = sizes[n.id];
@@ -597,6 +647,9 @@ export function PlanningCanvas({
     dropExitNode,
   );
   useTimedEntries(motion ? exitEdges.map((x) => [x.key, x] as const) : [], exitMs, dropExitEdge);
+  // A LEAVING cue (MOTIR-8416) goes on its ring's fade end, or after the same
+  // duration + slack if that never fires — independent of `motion`, like the cue.
+  useTimedEntries(Object.entries(cueTrack.leaving), exitMs, dropLeavingCue);
   // The outline: held, then faded (motion) or simply removed (reduced motion, §23.5).
   useTimedEntries(
     motion ? Object.entries(mo.marks) : [],
@@ -968,10 +1021,21 @@ export function PlanningCanvas({
             const r = rectOf(n);
             const mv = nodeMotion(n.id);
             // THE CUE (MOTIR-7830) — never on a node that is leaving.
-            const cue =
+            const liveCue =
               nodeCues && mv?.motion !== 'exit' && nodeById.has(n.id)
                 ? (nodeCues.get(n.id) ?? null)
                 : null;
+            const leftCue =
+              !liveCue && mv?.motion !== 'exit' && nodeById.has(n.id)
+                ? (cueTrack.leaving[n.id] ?? null)
+                : null;
+            const cue = liveCue ?? leftCue;
+            // AT WORK (MOTIR-8416): the one switch the design's motion binds to.
+            const cueMotion = leftCue
+              ? 'leaving'
+              : liveCue?.kind === 'drafting' && liveCue.moving
+                ? 'at-work'
+                : undefined;
             const cueId = cue ? `${mId}-cue-${n.id}` : undefined;
             const boxClass = withMotion(
               `absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) ${
@@ -985,6 +1049,7 @@ export function PlanningCanvas({
                 data-node-id={n.id}
                 data-motion={mv?.motion}
                 data-cue={cue?.kind}
+                data-cue-motion={cueMotion}
                 aria-describedby={cueId}
                 tabIndex={0}
                 onKeyDown={
@@ -1021,7 +1086,17 @@ export function PlanningCanvas({
                   <>
                     {/* The dotted RING — outside the deepen outline (7px vs 2px),
                         never `outline`, so a drafted card that deepens shows both. */}
-                    <span aria-hidden="true" className="canvas-cue-ring" />
+                    <span
+                      aria-hidden="true"
+                      className="canvas-cue-ring"
+                      onAnimationEnd={
+                        leftCue
+                          ? (e) => {
+                              if (e.animationName === 'canvas-fade-out') dropLeavingCue(n.id);
+                            }
+                          : undefined
+                      }
+                    />
                     {/* The labelled CHIP — the cue's name; drafting on the top
                         edge, laying on the bottom, where the children will hang. */}
                     <span

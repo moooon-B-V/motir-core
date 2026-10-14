@@ -418,6 +418,9 @@ export const STRUCTURAL_GUARD_SPECS = [
   // live-update roots (~540 files) and parses each through the compiler API. It
   // opens no database; its scanner imports only `typescript` and `node:*`.
   'tests/architecture/no-refresh-on-live-paths.test.ts',
+  // MOTIR-8418 — Story MOTIR-8413's at-work sweeps: static reads of its enumerated
+  // surface (`tests/helpers/atWorkStorySurface.ts`), no render and no database.
+  'tests/planning/atWorkSurfaceGuards.test.ts',
 ] as const;
 
 /**

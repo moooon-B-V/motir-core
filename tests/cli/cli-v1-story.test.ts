@@ -273,9 +273,16 @@ describe('the BUILT binary, in the states a happy path skips', () => {
     const first = await ws.run(['ready']);
     expect(first.exitCode, first.stderr).toBe(0);
 
-    const second = await ws.run(['ready']);
+    // ⚠️ Since MOTIR-8602 the transport WAITS a 429 out and re-sends, so with
+    // the default bound this call would sit out the window and then succeed. A
+    // bound of 0 forbids any wait: this case stays the built-binary proof of the
+    // EXHAUSTION path, and the continuation path is the end-to-end card's.
+    const second = await ws.run(['ready'], {
+      env: { MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS: '0' },
+    });
     expect(second.exitCode).toBe(1);
     expect(second.stderr).toMatch(/rate limit/i);
+    expect(second.stderr).not.toMatch(/waiting \d+s before retrying/);
     // The WAIT comes off the server's `x-ratelimit-reset`, not from a guess —
     // the only reason the CLI can tell a user when to try again.
     expect(second.stderr).toMatch(/\d/);

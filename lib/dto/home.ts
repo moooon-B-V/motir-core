@@ -114,6 +114,19 @@ export interface HomeWorkItemRowDto {
    */
   resumeMembers: HomeWorkItemRowDto[];
   /**
+   * TO RESUME ONLY, on a MEMBER of a gated SCOPE run's entry (MOTIR-8458;
+   * `design/workbench/design-notes.md` § 39.4): `added` — the run never touched it (a
+   * plan added it, or the run never reached it); `rescoped` — the run touched it and a
+   * plan approved after the run stopped changed it. Absent or `null` otherwise.
+   */
+  resumeChange?: 'added' | 'rescoped' | null;
+  /**
+   * TO RESUME ONLY, on the entry's head (MOTIR-8458; § 39.3): every plan approved AFTER
+   * the gated run stopped that added, changed or removed work in its scope, oldest
+   * approval first. Empty when none did — the entry then draws no banner.
+   */
+  resumeReshapedBy?: ResumeReshapePlanDto[];
+  /**
    * TO RESUME ONLY, on the entry's head: the newest AUTOMATIC resume an approval
    * attempted for its gated run (MOTIR-7710) — `started` reads *Resuming*, `skipped`
    * *Could not resume* with its reason. Absent when none was attempted (a run that
@@ -384,6 +397,21 @@ export interface ResumeRunDto {
   branch: string | null;
   /** The gates holding it, decided first (approved, then sent back, then waiting). */
   gates: ResumeGateDto[];
+}
+
+/**
+ * One plan that re-shaped a gated scope run's story after the run stopped (MOTIR-8458;
+ * § 39.3) — the banner's line. The counts are the plan's proposals in that scope: `add`,
+ * `modify` and `remove`; a plan with all three at zero is never listed.
+ */
+export interface ResumeReshapePlanDto {
+  planId: string;
+  title: string | null;
+  /** ISO-8601 — when the plan was approved. */
+  approvedAt: string;
+  added: number;
+  changed: number;
+  removed: number;
 }
 
 /** One gate a gated run stopped at, as it stands NOW (MOTIR-7703 · MOTIR-7712). */

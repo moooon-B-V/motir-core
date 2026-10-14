@@ -137,6 +137,27 @@ export interface McpTestServerOptions {
    * (e.g. the cross-tenant 404) that no shipped endpoint can raise yet.
    */
   extraRoutes?: Record<string, RouteModule>;
+  /**
+   * Record every ANSWERED request — its arrival and finish times, its status and
+   * its `Retry-After` — for {@link McpTestServer.requestLog} (MOTIR-8608). Off by
+   * default, so a suite that does not ask for it runs exactly as before. A
+   * throttled `motir run` is asserted from this log: which request was refused,
+   * what it was told to wait, and when the CLI actually came back.
+   */
+  recordRequests?: boolean;
+}
+
+/** One answered request, as {@link McpTestServerOptions.recordRequests} keeps it. */
+export interface RecordedRequest {
+  /** `Date.now()` when the request ARRIVED. */
+  startedAt: number;
+  /** `Date.now()` when the response FINISHED — what a client's wait counts from. */
+  at: number;
+  method: string;
+  path: string;
+  status: number;
+  /** The response's `Retry-After` header, verbatim; null when it had none. */
+  retryAfter: string | null;
 }
 
 export interface McpTestServer {
@@ -145,6 +166,10 @@ export interface McpTestServer {
   /** Every request the server saw, in order — lets a test assert that a command
    *  really did (or did not) go to the server. */
   requests: { method: string; pathname: string; authorization: string | null }[];
+  /** Every ANSWERED request, in finish order — only with `recordRequests: true`;
+   *  otherwise always empty. A request whose client hung up before the answer
+   *  finished is not in it. */
+  requestLog(): RecordedRequest[];
   /** How many client sockets the server still holds open — lets a test wait
    *  until the server has SEEN a client hang up, rather than sleeping. */
   openConnections(): Promise<number>;
@@ -221,6 +246,7 @@ export async function startMcpHttpServer(
   options: McpTestServerOptions = {},
 ): Promise<McpTestServer> {
   const requests: McpTestServer['requests'] = [];
+  const log: RecordedRequest[] = [];
   const routes = new Map<string, RouteModule>([[MCP_PATHNAME, route as RouteModule]]);
   if (options.cliDeviceRoutes) {
     // Imported lazily so a suite that does not ask for them never pulls
@@ -251,6 +277,22 @@ export async function startMcpHttpServer(
     // database (`serverWork.ts`, MOTIR-6324). Labelled, so a request that
     // never settles is named in the settle's deadline error (MOTIR-6496).
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    // Read off the route's `Response`, not the socket: headers handed to
+    // `writeHead` are not visible to `res.getHeader`.
+    let retryAfter: string | null = null;
+    if (options.recordRequests) {
+      const startedAt = Date.now();
+      res.on('finish', () => {
+        log.push({
+          startedAt,
+          at: Date.now(),
+          method: req.method ?? 'GET',
+          path: url.pathname,
+          status: res.statusCode,
+          retryAfter,
+        });
+      });
+    }
     void trackServerWork(
       (async () => {
         requests.push({
@@ -283,10 +325,11 @@ export async function startMcpHttpServer(
             res.end(JSON.stringify({ code: 'METHOD_NOT_ALLOWED' }));
             return;
           }
-          await writeResponse(
-            await handler(request as never, { params: Promise.resolve(matched.params) }),
-            res,
-          );
+          const response = await handler(request as never, {
+            params: Promise.resolve(matched.params),
+          });
+          retryAfter = response.headers.get('retry-after');
+          await writeResponse(response, res);
         } catch (err) {
           // A handler crash must surface as a 500 the CLI reports, never as an
           // unhandled rejection that takes the whole worker down mid-suite.
@@ -305,6 +348,7 @@ export async function startMcpHttpServer(
   return {
     url: `http://127.0.0.1:${port}`,
     requests,
+    requestLog: () => [...log],
     openConnections: () =>
       new Promise<number>((resolve, reject) => {
         server.getConnections((err, count) => (err ? reject(err) : resolve(count)));

@@ -69,15 +69,17 @@ export class NotFoundError extends CliError {
 }
 
 /**
- * 429 — the per-token budget is spent.
+ * 429 — the per-token budget is spent, and the transport has stopped waiting.
  *
- * `x-ratelimit-reset` is Unix epoch SECONDS, and v1 sends no `Retry-After`
- * DELIBERATELY (`lib/api/v1/openapi/headers.ts`: "one absolute instant cannot go
- * stale in transit the way a relative duration can"). So the absolute instant is
- * what the message reports, and the relative hint is derived here.
+ * `x-ratelimit-reset` is Unix epoch SECONDS, and the absolute instant is what the
+ * message reports. v1 has ALSO sent `Retry-After` and a body `retryAfterSeconds`
+ * since the retryable refusal contract (MOTIR-8600); the transport prefers the
+ * body field when it decides how long to wait (`readRetryAfterSeconds`). Since
+ * MOTIR-8602 `V1Transport.request` waits a refusal out and re-sends, so this
+ * error means the bounded total ran out — `waitedSeconds` says how long it tried.
  */
 export class RateLimitError extends CliError {
-  constructor(resetAtEpochSeconds: number | undefined, now: Date = new Date()) {
+  constructor(resetAtEpochSeconds: number | undefined, now: Date = new Date(), waitedSeconds = 0) {
     const resetAt =
       resetAtEpochSeconds === undefined ? undefined : new Date(resetAtEpochSeconds * 1000);
     const when = resetAt ? resetAt.toLocaleTimeString() : 'an unreported time';
@@ -85,12 +87,29 @@ export class RateLimitError extends CliError {
       resetAt === undefined
         ? undefined
         : Math.max(0, Math.ceil((resetAt.getTime() - now.getTime()) / 1000));
-    super(`Rate limit exceeded. The budget refills at ${when}.`, {
+    const gaveUp =
+      waitedSeconds > 0
+        ? `; gave up after waiting ${waitedSeconds} second${waitedSeconds === 1 ? '' : 's'}`
+        : '';
+    super(`Rate limit exceeded${gaveUp}. The budget refills at ${when}.`, {
       exitCode: 1,
       hint: seconds === undefined ? 'Retry shortly.' : `Retry in ${seconds} seconds.`,
     });
     this.name = 'RateLimitError';
   }
+}
+
+/** What the transport reports each time it waits out a 429 (MOTIR-8602). */
+export interface RateLimitWaitNotice {
+  operationId: string;
+  /** The whole seconds this wait is for (before jitter). */
+  waitSeconds: number;
+  /** 1 for the first retry, 2 for the second, … */
+  attempt: number;
+  /** Seconds already waited on this call, before this wait. */
+  waitedSeconds: number;
+  /** The bounded total this call may wait. */
+  maxWaitSeconds: number;
 }
 
 /**

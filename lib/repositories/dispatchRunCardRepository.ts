@@ -74,6 +74,21 @@ export const dispatchRunCardRepository = {
   },
 
   /**
+   * Which cards these runs carried — one `(run, card)` pair per leg (MOTIR-8458): a
+   * To resume member with no leg in its run is one the run never touched. A leg whose
+   * card is gone comes back with a null `workItemId`.
+   */
+  async listWorkItemIdsByRuns(
+    dispatchRunIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ dispatchRunId: string; workItemId: string | null }[]> {
+    return tx.dispatchRunCard.findMany({
+      where: { dispatchRunId: { in: [...dispatchRunIds] } },
+      select: { dispatchRunId: true, workItemId: true },
+    });
+  },
+
+  /**
    * One leg, addressed the way a reporter addresses it: by the run and the card.
    *
    * ⚠️ `workItemId` IS NULLABLE AND THE UNIQUE INDEX TREATS NULLS AS DISTINCT, so

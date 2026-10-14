@@ -9270,7 +9270,8 @@
         "couldNot": "何も起動されず、料金も発生していません。{repair}",
         "changes_requested": "何も再開されません。先に {key} が手直しされ、その次のバージョンで再び確認が求められます。この実行は待機を続けます。",
         "declined": "何も再開されません。これによって解放されるはずだった作業には新しい計画が必要です。{key} を再計画するか、{head} を「未着手」にして最初からやり直してください。",
-        "overturned": "何も再開されません。承認が無効になったため、実行は {key} についての新しい判断を待ちます。"
+        "overturned": "何も再開されません。承認が無効になったため、実行は {key} についての新しい判断を待ちます。",
+        "reshaped": "再開時には変更後のストーリーが引き継がれます。"
       },
       "back": {
         "changes_requested": "{kind}が差し戻されました · <b>{name}</b> が変更を依頼 — 「{note}」",
@@ -9303,7 +9304,26 @@
         "repository_not_writable": "プロジェクトの設定でリポジトリを再接続してから「続行」を押してください。",
         "card_not_ready": "{key} をブロックしているものを解消するか、「進行中」に戻してから「続行」を押してください。"
       },
-      "copyAria": "{key} の再開コマンドをコピー"
+      "copyAria": "{key} の再開コマンドをコピー",
+      "member": {
+        "added": "実行停止後に追加",
+        "rescoped": "範囲変更"
+      },
+      "fold": {
+        "added": "実行停止後に {count} 件追加"
+      },
+      "reshaped": {
+        "one": "計画 <plan>{title}</plan> <aside>（<when></when>に承認）</aside>が実行停止後にこのストーリーを変更しました: <b>{counts}</b>",
+        "many": "実行停止後、<b>{count, plural, other {# 件の計画}}</b>がこのストーリーを変更しました",
+        "planLine": "計画 <plan>{title}</plan> <aside>（<when></when>に承認）</aside>: {counts}",
+        "showPlans": "計画を表示",
+        "hidePlans": "計画を隠す",
+        "added": "{n} 件追加",
+        "changed": "{n} 件変更",
+        "removed": "{n} 件削除",
+        "separator": "、",
+        "label": "実行停止後に {key} を変更した計画"
+      }
     },
     "planning": {
       "scope": "<project>{name}</project> であなたが依頼し、まだ作成中の計画です。他のメンバーが依頼した計画は<link>計画ページ</link>にあります。",
@@ -9354,6 +9374,7 @@
         "model_unavailable": "AIプロバイダーが利用できなかったため",
         "token_expired": "AIプロバイダーとの接続の有効期限が切れたため",
         "prompt_too_large": "プランのコンテキストがモデルの上限を超えたため",
+        "job_failed": "計画ジョブが失敗したため",
         "internal": "こちら側で問題が発生したため"
       },
       "refusal": {

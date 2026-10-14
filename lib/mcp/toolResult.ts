@@ -143,6 +143,7 @@ import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
 import type { McpPayload } from './payloads/brand';
+import { RATE_LIMITED_CODE } from '@/lib/rateLimit/guard';
 
 // Tool-result helpers (Story 7.8 · Subtask 7.8.4, extended by 7.8.5) — the MCP
 // analogue of the route layer's typed-error → HTTP-status mapping.
@@ -228,6 +229,24 @@ export function toolError(code: string, message: string): CallToolResult {
   return {
     content: [{ type: 'text', text: `${code}: ${message}` }],
     isError: true,
+  };
+}
+
+/**
+ * Build the `isError` result for a RATE-LIMITED tool call (MOTIR-8600): the
+ * same text {@link toolError} renders, plus `structuredContent` carrying the
+ * retry seconds as a NUMBER, so a client waits without parsing a sentence.
+ *
+ * The payload is a bare object rather than an {@link McpPayload} on purpose: an
+ * error result is validated against no `outputSchema` (the MCP spec applies a
+ * tool's declared output schema to successful results only), so there is no
+ * shared schema to derive it from and `toolOk`'s brand does not apply. The
+ * contract it carries is written once, in `lib/rateLimit/guard.ts`.
+ */
+export function rateLimitedToolError(retryAfterSeconds: number, message: string): CallToolResult {
+  return {
+    ...toolError(RATE_LIMITED_CODE, message),
+    structuredContent: { code: RATE_LIMITED_CODE, retryAfterSeconds },
   };
 }
 

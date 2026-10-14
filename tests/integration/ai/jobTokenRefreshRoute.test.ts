@@ -54,6 +54,16 @@ describe('POST /api/internal/ai/job-token/refresh (MOTIR-3288)', () => {
     expect(body.exp).toBe(renewed!.exp);
   });
 
+  it('carries the per-job rate-limit key across the renewal (MOTIR-8599)', async () => {
+    const original = mintJobToken({ ...CLAIMS, ttlSeconds: 60 });
+    const res = await refreshPOST(authed(original));
+    expect(res.status).toBe(200);
+    const { token } = (await res.json()) as { token: string };
+    const key = verifyJobToken(original)!.jobKey;
+    expect(key).toBeTruthy();
+    expect(verifyJobToken(token)!.jobKey).toBe(key);
+  });
+
   it('REFUSES an expired token — renewal must not revive a dead credential', async () => {
     // The security property the short TTL is bought for. If a lapsed token could
     // be refreshed, the TTL would be unbounded in practice and a leaked token

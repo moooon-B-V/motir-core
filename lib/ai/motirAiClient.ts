@@ -37,6 +37,7 @@ import {
   PlannerModelUnreachableError,
   AI_JOB_ABANDONED_PROBLEM_CODE,
   errorFromProblem,
+  jobErrorFromProblem,
   planChangeRefusalOf,
   type JobView,
 } from './errors';
@@ -314,6 +315,8 @@ export async function submitJob(
   const switches = await evaluateOrgFeatureFlags(tenant.organizationId);
   assertFlagOn(switches, 'ai_planning');
   const sentTenant: Tenant = switches.web_search ? tenant : { ...tenant, webSearch: false };
+  // Each submission — a resume included — is a NEW job, so the mint gives it a
+  // fresh `jobKey`: its read-backs are metered per job (MOTIR-8599 / MOTIR-8604).
   const readBackToken = mintJobToken({
     userId: actor.userId,
     workspaceId: tenant.workspaceId,
@@ -388,7 +391,7 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
     jobId: body.jobId,
     status: body.status,
     result: body.result ?? null,
-    error: body.error ? errorFromProblem(body.error) : null,
+    error: body.error ? jobErrorFromProblem(body.error) : null,
     walkStop: parseJobWalkStop(body.error?.walkStop),
     // Read from the RAW problem: once mapped, an abandoned job's error is the same
     // `MotirAiUnavailableError` an outage produces (MOTIR-8304).

@@ -1,6 +1,6 @@
 import { inspectJobToken } from './jobToken';
 import { verifyServiceBearer } from './serviceBearer';
-import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
+import { enforceJobReadRateLimit } from '@/lib/rateLimit/aiGuard';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Authenticates an incoming ai→core read-back request (the /api/internal/ai/*
@@ -54,6 +54,12 @@ export class JobRateLimitedError extends Error {
 export interface JobRequestAuth {
   ctx: ServiceContext;
   projectId: string;
+  /**
+   * The token's per-job rate-limit key (MOTIR-8599), or `null` for a token
+   * minted without one (or whose claim is not a non-empty string — a malformed
+   * field is never trusted as a bucket key).
+   */
+  jobKey: string | null;
 }
 
 // Verify both credentials and return the acting ServiceContext + the token's
@@ -106,6 +112,7 @@ export function authenticateJobRequest(req: Request): JobRequestAuth {
   return {
     ctx: { userId: claims.sub, workspaceId: claims.workspaceId },
     projectId: claims.projectId,
+    jobKey: typeof claims.jobKey === 'string' && claims.jobKey !== '' ? claims.jobKey : null,
   };
 }
 
@@ -118,14 +125,17 @@ export function authenticateJobRequest(req: Request): JobRequestAuth {
  * `/api/v1`'s wrapper pins for the same reason — otherwise anyone who learned a
  * workspace id could exhaust its ceiling without holding a credential.
  *
- * The limit keys on the token's `(workspaceId, userId)` claims rather than the
- * caller's IP: `motir-ai` calls from a handful of machines, so an IP key would
- * merge every tenant's read-backs into one bucket, and the cost these calls drive
- * belongs to a workspace anyway.
+ * The limit keys on the token's claims rather than the caller's IP: `motir-ai`
+ * calls from a handful of machines, so an IP key would merge every tenant's
+ * read-backs into one bucket. Since MOTIR-8604 it is PER JOB — the token's
+ * `jobKey` claim — so a person's concurrent planning jobs no longer share one
+ * bucket; a token with no `jobKey` falls back to the `(workspaceId, userId)`
+ * bucket it always had. Every read also spends the workspace's shared agent
+ * ceiling (`enforceJobReadRateLimit`, `lib/rateLimit/aiGuard.ts`).
  */
 export async function authenticateAndLimitJobRequest(req: Request): Promise<JobRequestAuth> {
   const auth = authenticateJobRequest(req);
-  const limited = await enforceAiRateLimit(auth.ctx, 'ai:internal');
+  const limited = await enforceJobReadRateLimit({ ctx: auth.ctx, jobKey: auth.jobKey });
   if (limited) throw new JobRateLimitedError(limited);
   return auth;
 }

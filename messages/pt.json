@@ -9273,7 +9273,8 @@
         "couldNot": "Nada foi iniciado e nada foi cobrado. {repair}",
         "changes_requested": "Nada é retomado. {key} é refeito primeiro; a próxima versão dele pergunta de novo, e esta execução continua aguardando.",
         "declined": "Nada é retomado. O trabalho que isto liberaria precisa de um novo plano — replaneje {key} ou defina {head} como A fazer para recomeçar.",
-        "overturned": "Nada é retomado. A aprovação não vale mais, então a execução aguarda uma nova decisão sobre {key}."
+        "overturned": "Nada é retomado. A aprovação não vale mais, então a execução aguarda uma nova decisão sobre {key}.",
+        "reshaped": "Retomar levará a história reorganizada."
       },
       "back": {
         "changes_requested": "{kind} devolvido · alterações solicitadas por <b>{name}</b> — “{note}”",
@@ -9306,7 +9307,26 @@
         "repository_not_writable": "Reconecte o repositório nas configurações do projeto e depois pressione Continuar.",
         "card_not_ready": "Resolva o que bloqueia {key} ou mova-o de volta para Em andamento e depois pressione Continuar."
       },
-      "copyAria": "Copiar o comando de retomada de {key}"
+      "copyAria": "Copiar o comando de retomada de {key}",
+      "member": {
+        "added": "Adicionado desde que a execução parou",
+        "rescoped": "Escopo alterado"
+      },
+      "fold": {
+        "added": "+{count} adicionados desde que a execução parou"
+      },
+      "reshaped": {
+        "one": "O plano <plan>{title}</plan> <aside>(aprovado <when></when>)</aside> reorganizou esta história depois que a execução parou: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# plano reorganizou} other {# planos reorganizaram}}</b> esta história desde que a execução parou",
+        "planLine": "Plano <plan>{title}</plan> <aside>(aprovado <when></when>)</aside>: {counts}",
+        "showPlans": "Mostrar planos",
+        "hidePlans": "Ocultar planos",
+        "added": "{n} adicionados",
+        "changed": "{n} alterados",
+        "removed": "{n} removidos",
+        "separator": ", ",
+        "label": "Planos que reorganizaram {key} depois que sua execução parou"
+      }
     },
     "planning": {
       "scope": "Planos que você pediu em <project>{name}</project> e que ainda estão sendo escritos. Os planos pedidos por outras pessoas ficam na <link>página Planos</link>.",
@@ -9357,6 +9377,7 @@
         "model_unavailable": "o provedor de IA estava indisponível",
         "token_expired": "a conexão com o provedor de IA expirou",
         "prompt_too_large": "o contexto do plano era grande demais para o modelo",
+        "job_failed": "a tarefa de planejamento falhou",
         "internal": "algo deu errado do nosso lado"
       },
       "refusal": {

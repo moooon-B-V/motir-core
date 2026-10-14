@@ -9273,7 +9273,8 @@
         "couldNot": "Es wurde nichts gestartet und nichts berechnet. {repair}",
         "changes_requested": "Nichts wird fortgesetzt. {key} wird zuerst überarbeitet; seine nächste Version fragt erneut, und dieser Lauf wartet weiter.",
         "declined": "Nichts wird fortgesetzt. Die Arbeit, die dies freigegeben hätte, braucht einen neuen Plan – planen Sie {key} neu, oder setzen Sie {head} auf „Zu erledigen“, um neu zu beginnen.",
-        "overturned": "Nichts wird fortgesetzt. Die Genehmigung gilt nicht mehr, daher wartet der Lauf auf eine neue Entscheidung zu {key}."
+        "overturned": "Nichts wird fortgesetzt. Die Genehmigung gilt nicht mehr, daher wartet der Lauf auf eine neue Entscheidung zu {key}.",
+        "reshaped": "Beim Fortsetzen wird die umgestaltete Story übernommen."
       },
       "back": {
         "changes_requested": "{kind} zurückgewiesen · Änderungen angefordert von <b>{name}</b> – „{note}“",
@@ -9306,7 +9307,26 @@
         "repository_not_writable": "Verbinden Sie das Repository in den Projekteinstellungen erneut und klicken Sie dann auf „Fortsetzen“.",
         "card_not_ready": "Beseitigen Sie, was {key} blockiert, oder setzen Sie es zurück auf „In Arbeit“, und klicken Sie dann auf „Fortsetzen“."
       },
-      "copyAria": "Fortsetzungsbefehl für {key} kopieren"
+      "copyAria": "Fortsetzungsbefehl für {key} kopieren",
+      "member": {
+        "added": "Seit dem Stopp des Laufs hinzugefügt",
+        "rescoped": "Umfang geändert"
+      },
+      "fold": {
+        "added": "+{count} seit dem Stopp des Laufs hinzugefügt"
+      },
+      "reshaped": {
+        "one": "Plan <plan>{title}</plan> <aside>(genehmigt <when></when>)</aside> hat diese Story nach dem Stopp des Laufs umgestaltet: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# Plan hat} other {# Pläne haben}}</b> diese Story seit dem Stopp des Laufs umgestaltet",
+        "planLine": "Plan <plan>{title}</plan> <aside>(genehmigt <when></when>)</aside>: {counts}",
+        "showPlans": "Pläne anzeigen",
+        "hidePlans": "Pläne ausblenden",
+        "added": "{n} hinzugefügt",
+        "changed": "{n} geändert",
+        "removed": "{n} entfernt",
+        "separator": ", ",
+        "label": "Pläne, die {key} nach dem Stopp des Laufs umgestaltet haben"
+      }
     },
     "planning": {
       "scope": "Pläne, die Sie in <project>{name}</project> angefordert haben und die noch geschrieben werden. Pläne, die andere angefordert haben, finden Sie auf der <link>Seite „Pläne“</link>.",
@@ -9357,6 +9377,7 @@
         "model_unavailable": "der KI-Anbieter nicht verfügbar war",
         "token_expired": "die Verbindung zum KI-Anbieter abgelaufen ist",
         "prompt_too_large": "der Kontext des Plans für das Modell zu groß war",
+        "job_failed": "der Planungsauftrag fehlgeschlagen ist",
         "internal": "auf unserer Seite etwas schiefgelaufen ist"
       },
       "refusal": {

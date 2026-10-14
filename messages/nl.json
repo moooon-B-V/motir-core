@@ -9270,7 +9270,8 @@
         "couldNot": "Er is niets opgestart en niets in rekening gebracht. {repair}",
         "changes_requested": "Er wordt niets hervat. {key} wordt eerst herwerkt; de volgende versie vraagt het opnieuw, en deze run blijft wachten.",
         "declined": "Er wordt niets hervat. Het werk dat dit zou vrijgeven, heeft een nieuw plan nodig — plan {key} opnieuw, of zet {head} op Te doen om opnieuw te beginnen.",
-        "overturned": "Er wordt niets hervat. De Goedkeuring staat niet meer, dus de run wacht op een nieuwe beslissing over {key}."
+        "overturned": "Er wordt niets hervat. De Goedkeuring staat niet meer, dus de run wacht op een nieuwe beslissing over {key}.",
+        "reshaped": "Hervatten neemt de herschikte story mee."
       },
       "back": {
         "changes_requested": "{kind} teruggestuurd · wijzigingen gevraagd door <b>{name}</b> — ‘{note}’",
@@ -9303,7 +9304,26 @@
         "repository_not_writable": "Koppel de repository opnieuw in de projectinstellingen en druk dan op Voortzetten.",
         "card_not_ready": "Hef op wat {key} blokkeert of zet het terug op Bezig, en druk dan op Voortzetten."
       },
-      "copyAria": "De hervatopdracht voor {key} kopiëren"
+      "copyAria": "De hervatopdracht voor {key} kopiëren",
+      "member": {
+        "added": "Toegevoegd sinds de run stopte",
+        "rescoped": "Scope gewijzigd"
+      },
+      "fold": {
+        "added": "+{count} toegevoegd sinds de run stopte"
+      },
+      "reshaped": {
+        "one": "Plan <plan>{title}</plan> <aside>(goedgekeurd <when></when>)</aside> heeft deze story herschikt nadat de run stopte: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# plan heeft} other {# plannen hebben}}</b> deze story herschikt sinds de run stopte",
+        "planLine": "Plan <plan>{title}</plan> <aside>(goedgekeurd <when></when>)</aside>: {counts}",
+        "showPlans": "Plannen tonen",
+        "hidePlans": "Plannen verbergen",
+        "added": "{n} toegevoegd",
+        "changed": "{n} gewijzigd",
+        "removed": "{n} verwijderd",
+        "separator": ", ",
+        "label": "Plannen die {key} herschikten nadat de run stopte"
+      }
     },
     "planning": {
       "scope": "Plannen die je in <project>{name}</project> hebt aangevraagd en die nog worden geschreven. Plannen die anderen hebben aangevraagd, staan op de <link>pagina Plannen</link>.",
@@ -9354,6 +9374,7 @@
         "model_unavailable": "de AI-aanbieder niet beschikbaar was",
         "token_expired": "de verbinding met de AI-aanbieder verlopen was",
         "prompt_too_large": "de context van het plan te groot was voor het model",
+        "job_failed": "de planningstaak mislukt is",
         "internal": "er aan onze kant iets misging"
       },
       "refusal": {
