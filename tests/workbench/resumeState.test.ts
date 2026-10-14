@@ -195,6 +195,14 @@ describe('the derivation — one answer per case', () => {
     expect(await recompute(code.id)).toEqual({ resumeState: null, resumeRunId: null });
   });
 
+  it('a card at Implemented / In Review / Approved is delivered, not waiting (MOTIR-8611)', async () => {
+    for (const status of ['implemented', 'in_review', 'approved']) {
+      const { code } = await gatedStory();
+      await adminDb.workItem.update({ where: { id: code.id }, data: { status } });
+      expect(await recompute(code.id)).toEqual({ resumeState: null, resumeRunId: null });
+    }
+  });
+
   it('an archived card is not waiting', async () => {
     const { code } = await gatedStory();
     await adminDb.workItem.update({ where: { id: code.id }, data: { archivedAt: new Date() } });
@@ -256,6 +264,13 @@ describe('the triggers — each moves the column in the writer’s own flow', ()
   it('a status move out of the category takes the card off', async () => {
     const { code } = await gatedStory();
     await workItemsService.updateStatus(code.id, 'todo', fx.ctx);
+    expect((await stateOf(code.id)).resumeState).toBeNull();
+  });
+
+  it('delivering the card (In Progress → Implemented) takes it off To resume (MOTIR-8611)', async () => {
+    const { code } = await gatedStory();
+    expect((await stateOf(code.id)).resumeState).toBe('waiting_on_gate');
+    await workItemsService.updateStatus(code.id, 'implemented', fx.ctx);
     expect((await stateOf(code.id)).resumeState).toBeNull();
   });
 
