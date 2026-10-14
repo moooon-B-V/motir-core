@@ -276,15 +276,17 @@ export class MonitorIssueLinkNotFoundError extends Error {
  * bug the monitor reconciler FILED — its `work-item/created` event carries the
  * binding's provenance — and no `monitor_issue` row points at it yet.
  *
- * ⚠️ THIS IS THE ORDERING WINDOW, AND IT IS THROWN SO IT IS RETRIED. The
- * reconciler's create commits its own transaction, and emits its event, before
- * the outer transaction that links the row commits. So a fast consumer can see
- * the bug before the link. Throwing hands the wait to the job's idempotent retry
- * budget, which is measured in seconds; returning a value here would skip the
- * enrichment for good. A link that NEVER appears — the reconciler's outer
- * transaction rolled back after its create committed, the one window it accepts —
- * exhausts the budget and dead-letters, which is loud rather than silent. The bug
- * itself is untouched either way.
+ * ⚠️ THIS SHOULD NOT HAPPEN ANY MORE, AND IT IS STILL THROWN SO IT IS RETRIED.
+ * Before Bug MOTIR-8512 the reconciler's create committed, and emitted its event,
+ * before the outer transaction that linked the row committed, so a fast consumer
+ * saw the bug before the link (Bug MOTIR-8489 is that window reaching Sentry).
+ * Since MOTIR-8512 the reconciler writes the link inside the create's own
+ * transaction and `work-item/created` is emitted after that commit, so the event
+ * can no longer precede the link. The throw stays as a safety net: handing the
+ * wait to the job's idempotent retry budget is still better than returning a
+ * value, which would skip the enrichment for good. If it fires and exhausts the
+ * budget now, that is a regression in the reconciler's ordering, not an expected
+ * window. The bug itself is untouched either way.
  */
 export class MonitorLinkNotYetVisibleError extends Error {
   readonly code = 'MONITOR_LINK_NOT_YET_VISIBLE' as const;
