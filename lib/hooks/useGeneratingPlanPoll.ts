@@ -244,13 +244,26 @@ export function useGeneratingPlanPoll(
     enabled: topic !== null && stoppedPlanId !== planId,
   });
 
+  // ⚠️ `refresh` IS STABLE FOR THE HOOK'S LIFETIME, as it was before the seam: the
+  // source and topic are read through refs. A caller may hold it in an effect's
+  // deps (`usePlanGeneration`'s `start`, which `GenerationFlow` auto-starts on), and
+  // an identity that moved with `planId` re-ran that effect when the plan settled,
+  // starting generation over again.
   const source = useLiveSignalSource();
+  const sourceRef = useRef(source);
+  const topicRef = useRef(topic);
+  useEffect(() => {
+    sourceRef.current = source;
+    topicRef.current = topic;
+  });
   const refresh = useCallback(() => {
-    if (!topic || !tickRef.current) return;
+    const current = topicRef.current;
+    if (!current || !tickRef.current) return;
     // A source that cannot be nudged still reads now: the read policy is ours.
-    if (source.trigger) source.trigger(topic);
+    const live = sourceRef.current;
+    if (live.trigger) live.trigger(current);
     else tickRef.current(true);
-  }, [source, topic]);
+  }, []);
 
   const current = planId && snapshot && snapshot.planId === planId ? snapshot.review : null;
   return {

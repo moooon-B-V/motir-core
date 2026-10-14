@@ -338,6 +338,25 @@ describe('useGeneratingPlanPoll (MOTIR-6295)', () => {
     unmount();
   });
 
+  it('`refresh` keeps ONE identity as `planId` comes and goes', async () => {
+    // A caller holds it in an effect's deps (`usePlanGeneration.start`, which
+    // GenerationFlow auto-starts on): a new identity when the plan settles and the
+    // poll stops would re-run that effect and start generation over again.
+    fetchReview.mockResolvedValue(generating());
+    const { result, rerender, unmount } = renderHook(
+      ({ id }: { id: string | null }) => useGeneratingPlanPoll(id),
+      { initialProps: { id: null as string | null } },
+    );
+    const first = result.current.refresh;
+    rerender({ id: 'plan_1' });
+    await flush();
+    expect(result.current.refresh).toBe(first);
+    rerender({ id: null });
+    await flush();
+    expect(result.current.refresh).toBe(first);
+    unmount();
+  });
+
   describe('an unchanged plan is answered in a few bytes (MOTIR-8127)', () => {
     const versioned = (version: string, items = [A]): PlanReviewDto => ({
       ...generating(items),

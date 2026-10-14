@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import type { ToResumePlanningSessionDto } from '@/lib/dto/home';
 import type { LiveSignal } from '@/lib/live/liveSignal';
 import { NEVER_RECONNECTING } from '@/lib/live/liveFlag';
+import { LiveSignalProvider } from '@/lib/live/liveSignal';
+import { fakeLiveSource } from './helpers/fakeLiveSource';
 import { POLL_MS, planPollSource } from '@/lib/live/sources/planPollSource';
 import { workbenchWindowUrl } from '@/lib/workbench/windowClient';
 import {
@@ -35,6 +37,8 @@ const { useWorkbenchWindow } =
 const { WorkbenchTabWindowContext, useTabWindowContent } =
   await import('../../app/(authed)/workbench/_components/useTabWindowContent');
 const { keepIfEqual } = await import('@/lib/workbench/mergeRows');
+const { useWorkbenchLiveStream } =
+  await import('../../app/(authed)/workbench/_components/useWorkbenchLive');
 
 afterEach(() => {
   cleanup();
@@ -299,5 +303,21 @@ describe('useTabWindowContent', () => {
       { wrapper },
     );
     expect(result.current.content).toEqual(['seed']);
+  });
+});
+
+describe('useWorkbenchLiveStream', () => {
+  it('a signal that names no tabs still nudges, with nothing moved', async () => {
+    const fake = fakeLiveSource();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <LiveSignalProvider source={fake.source}>{children}</LiveSignalProvider>
+    );
+    const { result } = renderHook(() => useWorkbenchLiveStream(true), { wrapper });
+    await fake.fire({ kind: 'workbench' });
+    expect(result.current.nudge).toBe(1);
+    expect(result.current.moved).toEqual([]);
+    await fake.fire({ kind: 'workbench' }, ['todo']);
+    expect(result.current.nudge).toBe(2);
+    expect(result.current.moved).toEqual(['todo']);
   });
 });
