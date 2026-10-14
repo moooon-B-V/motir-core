@@ -16,7 +16,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Check, ChevronsUpDown, LoaderCircle } from 'lucide-react';
 import { cn } from '../../utils/cn';
-import { useFullscreenElement } from '../../utils/fullscreen';
+import { usePortalContainer } from '../../utils/fullscreen';
 
 // Run layout effects on the client, fall back to useEffect during SSR (the menu
 // only mounts client-side anyway — see the `mounted` gate below).
@@ -317,10 +317,6 @@ export function Combobox<T extends string>({
   // keyed on the modal surface, NOT `role`, so those popovers escape the clip
   // too. Only render the portal once mounted, since createPortal needs document.body.
   const mounted = useMounted();
-  // The portal target: the element in native full screen while there is one,
-  // else <body> — the browser paints nothing outside a full-screen element
-  // (MOTIR-7658).
-  const fullscreenElement = useFullscreenElement();
   // Viewport-anchored position for the portaled menu + the listbox's available
   // height, recomputed from the trigger rect on open / scroll / resize.
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
@@ -342,6 +338,10 @@ export function Combobox<T extends string>({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // The portal target: the element in native full screen while there is one,
+  // else <body> — the browser paints nothing outside a full-screen element
+  // (MOTIR-7658) — unless that element is inside the menu (MOTIR-8560).
+  const fullscreenContainer = usePortalContainer(menuRef);
 
   const filtered = useMemo(() => {
     // Server-driven mode: `options` is already the query's result — never filter
@@ -891,7 +891,7 @@ export function Combobox<T extends string>({
         ? inDialog
           ? menu
           : mounted
-            ? createPortal(menu, fullscreenElement ?? document.body)
+            ? createPortal(menu, fullscreenContainer ?? document.body)
             : null
         : null}
     </div>

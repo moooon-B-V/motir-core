@@ -76,6 +76,65 @@ describe('Modal portal container', () => {
   });
 });
 
+describe('a full-screen element INSIDE the surface (MOTIR-8560)', () => {
+  // The approval overlay is a Modal hosting a `<video controls>`. Its native
+  // full-screen button makes the VIDEO the full-screen element. Following it would
+  // re-portal the dialog into its own descendant: React unmounts the subtree to
+  // move it, the video leaves the document, and the browser drops out of full
+  // screen. The dialog stays where it is instead.
+  function Player() {
+    return (
+      <Modal open onOpenChange={() => {}} title="Acceptance">
+        <video data-testid="player" />
+      </Modal>
+    );
+  }
+
+  it('keeps the dialog — and the same video node — in place', () => {
+    render(<Player />);
+    const video = screen.getByTestId('player');
+    enterFullScreen(video);
+    expect(screen.getByTestId('player')).toBe(video);
+    expect(video.isConnected).toBe(true);
+    expect(document.fullscreenElement).toBe(video);
+    expect(stage.contains(screen.getByRole('dialog'))).toBe(false);
+    // Leaving full screen returns to the dialog, still open, same node.
+    enterFullScreen(null);
+    expect(screen.getByTestId('player')).toBe(video);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('a dialog already inside a full-screen canvas stays there while its video is full screen', () => {
+    enterFullScreen(stage);
+    render(<Player />);
+    const video = screen.getByTestId('player');
+    expect(stage.contains(video)).toBe(true);
+    enterFullScreen(video);
+    expect(screen.getByTestId('player')).toBe(video);
+    expect(video.isConnected).toBe(true);
+    expect(stage.contains(video)).toBe(true);
+    // Leaving the video's full screen hands it back to the canvas.
+    enterFullScreen(stage);
+    expect(screen.getByTestId('player')).toBe(video);
+    expect(stage.contains(video)).toBe(true);
+  });
+
+  it('a popover keeps its own full-screen descendant in place', () => {
+    render(
+      <Popover open>
+        <Popover.Trigger>Open</Popover.Trigger>
+        <Popover.Content data-testid="panel">
+          <video data-testid="clip" />
+        </Popover.Content>
+      </Popover>,
+    );
+    const clip = screen.getByTestId('clip');
+    enterFullScreen(clip);
+    expect(screen.getByTestId('clip')).toBe(clip);
+    expect(clip.isConnected).toBe(true);
+  });
+});
+
 describe('Popover portal container', () => {
   it('portals its content into the element in native full screen, else <body>', () => {
     const { unmount } = render(

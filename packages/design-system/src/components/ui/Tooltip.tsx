@@ -1,9 +1,9 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { cn } from '../../utils/cn';
-import { useFullscreenElement } from '../../utils/fullscreen';
+import { usePortalContainer } from '../../utils/fullscreen';
 
 /**
  * Tooltip — Radix-wrapped popover that appears on hover + focus.
@@ -33,14 +33,17 @@ export function Tooltip({
   className,
 }: TooltipProps) {
   // Into the element in native full screen while there is one, else <body>
-  // (MOTIR-7658 — the browser paints nothing outside a full-screen element).
-  const fullscreenElement = useFullscreenElement();
+  // (MOTIR-7658 — the browser paints nothing outside a full-screen element),
+  // unless that element is inside the tooltip (MOTIR-8560).
+  const contentRef = useRef<HTMLDivElement>(null);
+  const fullscreenContainer = usePortalContainer(contentRef);
   return (
     <RadixTooltip.Provider delayDuration={delayMs}>
       <RadixTooltip.Root>
         <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
-        <RadixTooltip.Portal container={fullscreenElement ?? undefined}>
+        <RadixTooltip.Portal container={fullscreenContainer ?? undefined}>
           <RadixTooltip.Content
+            ref={contentRef}
             side={side}
             sideOffset={6}
             className={cn(
