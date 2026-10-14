@@ -93,6 +93,23 @@ describe('submitJob', () => {
     expect(claims!.projectId).toBe('pj_1');
   });
 
+  it('gives every submission its own per-job rate-limit key (MOTIR-8599)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => jsonResponse({ jobId: 'j', status: 'queued' }, 202));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await submitJob('noop', tenant, { prompt: 'a' }, actor);
+    await submitJob('noop', tenant, { prompt: 'b' }, actor);
+
+    const keys = fetchMock.mock.calls.map(
+      ([, init]) => verifyJobToken(JSON.parse(init.body as string).readBackToken)!.jobKey,
+    );
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBeTruthy();
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
   it('maps a 400 problem+json to MotirAiBadRequestError', async () => {
     vi.stubGlobal(
       'fetch',

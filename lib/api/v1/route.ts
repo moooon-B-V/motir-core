@@ -18,7 +18,10 @@ import {
   rateLimitHeaders,
   RateLimitExceededError,
   retryAfterSeconds,
+  type RateLimitDecision,
 } from '@/lib/api/v1/rateLimit';
+import { consumeSharedRateLimit } from '@/lib/rateLimit/limiter';
+import { agentWorkspaceLimb } from '@/lib/rateLimit/workspaceCeiling';
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). EVERY public endpoint composes this one helper, which is what
@@ -30,7 +33,8 @@ import {
 //   1. AUTH — delegates to `authenticateApiToken(req, permission)`;
 //      `unauthenticated` → 401 (undifferentiated), `forbidden` → 403.
 //   2. RATE LIMITING — per token, with `X-RateLimit-*` on every response and a
-//      429 when the budget is spent (MOTIR-1860).
+//      429 when the budget is spent (MOTIR-1860), which carries `Retry-After`
+//      and a numeric `retryAfterSeconds` (MOTIR-8600).
 //   3. The `ServiceContext` the services expect, built from the resolved
 //      `{ userId, workspaceId }`, so the route's single service call runs as
 //      the token owner and the product's own access checks apply unchanged.
@@ -202,11 +206,33 @@ export function withV1Route<P = Record<string, never>>(
       //
       // The headers go into `responseHeaders`, which every exit path stamps,
       // so they survive a 429, a 403, a mapped error and a 500 alike.
-      const decision = await consumeRateLimit(tokenFingerprint(presentedToken));
+      //
+      // The per-token limb is joined by the workspace's shared agent-volume
+      // ceiling (MOTIR-8601), so N tokens in one workspace no longer get N × the
+      // budget. The ceiling is spent only AFTER the token's own limb admits
+      // (MOTIR-8610): a token refused on its own budget costs the workspace
+      // nothing. And only an `ok` result spends it: a `forbidden` /
+      // `run_token_refused` result carries no `workspaceId`
+      // (`ApiTokenAuthResult`), so it spends the per-token limb alone, exactly
+      // as before. The headers report the TIGHTER limb; either refusal is a 429.
+      const tokenDecision = await consumeRateLimit(tokenFingerprint(presentedToken));
+      const ceiling =
+        auth.ok && tokenDecision.allowed ? agentWorkspaceLimb(auth.workspaceId) : null;
+      const ceilingDecision = ceiling
+        ? await consumeSharedRateLimit(ceiling.key, ceiling.budget)
+        : null;
+      const decision = refusingOrTighter(tokenDecision, ceilingDecision);
       for (const [header, value] of Object.entries(rateLimitHeaders(decision))) {
         responseHeaders.set(header, value);
       }
-      if (!decision.allowed) throw new RateLimitExceededError(retryAfterSeconds(decision));
+      if (!decision.allowed) {
+        // ONE computed value feeds both the header and the body field, so the
+        // two cannot disagree (MOTIR-8600). `Retry-After` goes into
+        // `responseHeaders`, which the 429's exit path stamps like every other.
+        const retryAfter = retryAfterSeconds(decision);
+        responseHeaders.set('Retry-After', String(retryAfter));
+        throw new RateLimitExceededError(retryAfter);
+      }
 
       // ── 3. Enforce the declared permission ──────────────────────────────
       if (!auth.ok && auth.reason === 'run_token_refused') throw new RunTokenNotAllowedError();
@@ -257,6 +283,20 @@ export function withV1Route<P = Record<string, never>>(
       return stamp(NextResponse.json(INTERNAL_ERROR_BODY, { status: 500 }), responseHeaders);
     }
   };
+}
+
+/**
+ * The decision a v1 response reports: a refusing limb if either refused, else
+ * the one with fewer requests left.
+ */
+function refusingOrTighter(
+  token: RateLimitDecision,
+  ceiling: RateLimitDecision | null,
+): RateLimitDecision {
+  if (!ceiling) return token;
+  if (!token.allowed) return token;
+  if (!ceiling.allowed) return ceiling;
+  return ceiling.remaining < token.remaining ? ceiling : token;
 }
 
 /** Copy the accumulated headers onto whatever the exit path produced. */

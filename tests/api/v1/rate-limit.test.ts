@@ -118,10 +118,18 @@ describe('rate limiting — the wrapper', () => {
     expect(refused.headers.get('x-ratelimit-limit')).toBe('3');
     expect(refused.headers.get('x-ratelimit-remaining')).toBe('0');
     expect(Number(refused.headers.get('x-ratelimit-reset'))).toBeGreaterThan(0);
-    const body = (await refused.json()) as { code: string; error: string };
+    const body = (await refused.json()) as {
+      code: string;
+      error: string;
+      retryAfterSeconds: number;
+    };
     expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
     // The client learns WHEN to retry, not merely THAT it failed.
     expect(body.error).toMatch(/Retry in \d+ seconds?\./);
+    // …and reads it as a number, in the body and the header alike (MOTIR-8600).
+    expect(Number.isInteger(body.retryAfterSeconds)).toBe(true);
+    expect(body.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+    expect(refused.headers.get('Retry-After')).toBe(String(body.retryAfterSeconds));
   });
 
   // ⚠️ THE concurrency case. A serial loop passes against a broken

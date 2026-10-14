@@ -6,6 +6,7 @@ import type { RateLimitStore } from '@/lib/api/v1/rateLimit';
 import { db } from '@/lib/db';
 import { rateLimitCounterRepository } from '@/lib/repositories/rateLimitCounterRepository';
 import { mcpBudget } from '@/lib/rateLimit/budgets';
+import { tokenFingerprint } from '@/lib/api/v1/bearer';
 import { rateLimitKey } from '@/lib/rateLimit/keys';
 import { __setSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import { apiTokensService } from '@/lib/services/apiTokensService';
@@ -133,7 +134,8 @@ async function spentOnConnect(fx: WorkItemFixture, token: string): Promise<numbe
   await vi.waitFor(() => expect(statuses).toEqual([405]), { timeout: HOLD_MS * 4 });
   const rows = await adminDb.$queryRawUnsafe<Array<{ count: number }>>(
     `SELECT count::int AS count FROM "rate_limit_counter" WHERE key = $1 ORDER BY window_start`,
-    rateLimitKey('mcp:call', fx.workspaceId, fx.ownerId),
+    // Keyed on the presented credential since MOTIR-8601.
+    rateLimitKey('mcp:call', fx.workspaceId, tokenFingerprint(token)),
   );
   return rows.map((r) => r.count);
 }

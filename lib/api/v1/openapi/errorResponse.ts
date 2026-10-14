@@ -40,6 +40,12 @@ export const v1ErrorBodySchema = z
      * nothing may parse it.
      */
     error: z.string().min(1),
+    /**
+     * Present on a rate-limit refusal only (`RATE_LIMIT_EXCEEDED`, 429 —
+     * MOTIR-8600): whole seconds to wait before retrying, the same number as the
+     * `Retry-After` header. Additive under ADR §8; the code is unchanged.
+     */
+    retryAfterSeconds: z.number().int().min(1).optional(),
   })
   .strict();
 

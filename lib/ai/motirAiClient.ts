@@ -315,6 +315,8 @@ export async function submitJob(
   const switches = await evaluateOrgFeatureFlags(tenant.organizationId);
   assertFlagOn(switches, 'ai_planning');
   const sentTenant: Tenant = switches.web_search ? tenant : { ...tenant, webSearch: false };
+  // Each submission — a resume included — is a NEW job, so the mint gives it a
+  // fresh `jobKey`: its read-backs are metered per job (MOTIR-8599 / MOTIR-8604).
   const readBackToken = mintJobToken({
     userId: actor.userId,
     workspaceId: tenant.workspaceId,

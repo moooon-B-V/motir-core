@@ -1350,6 +1350,7 @@ export interface components {
         ErrorBody: {
             code: string;
             error: string;
+            retryAfterSeconds?: number;
         };
         InternalErrorBody: {
             error: string;
@@ -2929,7 +2930,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -2950,7 +2951,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -2969,7 +2970,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -2988,7 +2989,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3007,7 +3008,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3015,7 +3016,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3026,8 +3027,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3045,7 +3048,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3112,7 +3115,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3131,7 +3134,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3150,7 +3153,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3169,7 +3172,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3188,7 +3191,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3196,7 +3199,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3207,8 +3210,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3226,7 +3231,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3262,7 +3267,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3281,7 +3286,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3300,7 +3305,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3319,7 +3324,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3338,7 +3343,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3346,7 +3351,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3357,8 +3362,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3376,7 +3383,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3409,7 +3416,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3428,7 +3435,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3447,7 +3454,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3466,7 +3473,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3474,7 +3481,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3485,8 +3492,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3504,7 +3513,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3577,7 +3586,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3596,7 +3605,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3615,7 +3624,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3634,7 +3643,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3653,7 +3662,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3672,7 +3681,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3680,7 +3689,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3691,8 +3700,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3710,7 +3721,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3743,7 +3754,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3762,7 +3773,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3781,7 +3792,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3800,7 +3811,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3808,7 +3819,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3819,8 +3830,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3838,7 +3851,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3878,7 +3891,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3897,7 +3910,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3916,7 +3929,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3935,7 +3948,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3954,7 +3967,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -3962,7 +3975,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3973,8 +3986,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3992,7 +4007,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4025,7 +4040,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4044,7 +4059,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4063,7 +4078,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4082,7 +4097,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4090,7 +4105,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -4101,8 +4116,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4120,7 +4137,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4162,7 +4179,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4185,7 +4202,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4204,7 +4221,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4223,7 +4240,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4242,7 +4259,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4261,7 +4278,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4269,7 +4286,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -4280,8 +4297,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4299,7 +4318,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4337,7 +4356,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4354,7 +4373,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4373,7 +4392,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4392,7 +4411,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4411,7 +4430,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4419,7 +4438,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -4430,8 +4449,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4449,7 +4470,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4494,7 +4515,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4525,7 +4546,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4544,7 +4565,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4563,7 +4584,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4582,7 +4603,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4590,7 +4611,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -4601,8 +4622,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4620,7 +4643,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4660,7 +4683,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4681,7 +4704,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4700,7 +4723,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4719,7 +4742,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4738,7 +4761,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4746,7 +4769,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -4757,8 +4780,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4776,7 +4801,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4817,7 +4842,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4849,7 +4874,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4868,7 +4893,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4887,7 +4912,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4906,7 +4931,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4914,7 +4939,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -4925,8 +4950,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4944,7 +4971,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -4977,7 +5004,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5024,7 +5051,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5043,7 +5070,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5062,7 +5089,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5070,7 +5097,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -5081,8 +5108,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5100,7 +5129,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5133,7 +5162,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5152,7 +5181,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5171,7 +5200,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5190,7 +5219,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5198,7 +5227,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -5209,8 +5238,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5228,7 +5259,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5270,7 +5301,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5291,7 +5322,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5310,7 +5341,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5329,7 +5360,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5348,7 +5379,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5356,7 +5387,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -5367,8 +5398,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5386,7 +5419,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5426,7 +5459,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5445,7 +5478,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5464,7 +5497,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5483,7 +5516,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5502,7 +5535,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5521,7 +5554,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5540,7 +5573,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5559,7 +5592,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5567,7 +5600,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -5578,8 +5611,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5597,7 +5632,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5630,7 +5665,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5649,7 +5684,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5668,7 +5703,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5687,7 +5722,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5706,7 +5741,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5714,7 +5749,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -5725,8 +5760,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5744,7 +5781,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5780,7 +5817,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5826,7 +5863,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5845,7 +5882,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5864,7 +5901,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5883,7 +5920,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5891,7 +5928,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -5902,8 +5939,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5921,7 +5960,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5954,7 +5993,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5973,7 +6012,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -5992,7 +6031,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6011,7 +6050,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6030,7 +6069,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6038,7 +6077,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -6049,8 +6088,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6068,7 +6109,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6098,7 +6139,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6117,7 +6158,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6136,7 +6177,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6144,7 +6185,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -6155,8 +6196,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6174,7 +6217,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6209,7 +6252,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6230,7 +6273,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6249,7 +6292,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6268,7 +6311,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6276,7 +6319,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -6287,8 +6330,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6306,7 +6351,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6341,7 +6386,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6362,7 +6407,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6381,7 +6426,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6400,7 +6445,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6408,7 +6453,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -6419,8 +6464,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6438,7 +6485,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6471,7 +6518,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6490,7 +6537,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6509,7 +6556,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6528,7 +6575,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6536,7 +6583,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -6547,8 +6594,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6566,7 +6615,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6604,7 +6653,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6625,7 +6674,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6644,7 +6693,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6663,7 +6712,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6682,7 +6731,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6690,7 +6739,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -6701,8 +6750,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6720,7 +6771,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6758,7 +6809,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6779,7 +6830,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6798,7 +6849,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6817,7 +6868,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6836,7 +6887,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6844,7 +6895,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -6855,8 +6906,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -6874,7 +6927,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6917,7 +6970,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6936,7 +6989,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6955,7 +7008,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6974,7 +7027,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -6993,7 +7046,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7001,7 +7054,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7012,8 +7065,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7031,7 +7086,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7071,7 +7126,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7092,7 +7147,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7111,7 +7166,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7130,7 +7185,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7149,7 +7204,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7157,7 +7212,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7168,8 +7223,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7187,7 +7244,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7227,7 +7284,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7246,7 +7303,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7265,7 +7322,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7284,7 +7341,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7303,7 +7360,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7311,7 +7368,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7322,8 +7379,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7341,7 +7400,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7391,7 +7450,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7412,7 +7471,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7431,7 +7490,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7450,7 +7509,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7469,7 +7528,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7477,7 +7536,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7488,8 +7547,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7507,7 +7568,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7551,7 +7612,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7572,7 +7633,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7591,7 +7652,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7610,7 +7671,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7629,7 +7690,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7637,7 +7698,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7648,8 +7709,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7667,7 +7730,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7717,7 +7780,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7738,7 +7801,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7757,7 +7820,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7776,7 +7839,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7795,7 +7858,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7803,7 +7866,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7814,8 +7877,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7833,7 +7898,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7866,7 +7931,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7885,7 +7950,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7904,7 +7969,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7923,7 +7988,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -7931,7 +7996,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7942,8 +8007,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7961,7 +8028,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8004,7 +8071,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8023,7 +8090,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8042,7 +8109,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8061,7 +8128,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8080,7 +8147,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8099,7 +8166,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8107,7 +8174,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -8118,8 +8185,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8137,7 +8206,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8180,7 +8249,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8199,7 +8268,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8218,7 +8287,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8237,7 +8306,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8256,7 +8325,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8275,7 +8344,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8283,7 +8352,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -8294,8 +8363,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8313,7 +8384,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8355,7 +8426,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8374,7 +8445,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8393,7 +8464,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8412,7 +8483,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8431,7 +8502,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8439,7 +8510,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -8450,8 +8521,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8469,7 +8542,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8509,7 +8582,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8530,7 +8603,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8549,7 +8622,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8568,7 +8641,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8587,7 +8660,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8595,7 +8668,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -8606,8 +8679,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8625,7 +8700,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8665,7 +8740,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8684,7 +8759,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8703,7 +8778,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8722,7 +8797,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8741,7 +8816,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8749,7 +8824,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -8760,8 +8835,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8779,7 +8856,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8819,7 +8896,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8838,7 +8915,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8857,7 +8934,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8876,7 +8953,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8895,7 +8972,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8903,7 +8980,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -8914,8 +8991,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -8933,7 +9012,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8966,7 +9045,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -8985,7 +9064,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9004,7 +9083,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9023,7 +9102,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9042,7 +9121,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9050,7 +9129,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -9061,8 +9140,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9080,7 +9161,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9113,7 +9194,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9132,7 +9213,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9151,7 +9232,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9170,7 +9251,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9189,7 +9270,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9197,7 +9278,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -9208,8 +9289,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9227,7 +9310,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9260,7 +9343,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9279,7 +9362,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9298,7 +9381,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9317,7 +9400,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9336,7 +9419,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9344,7 +9427,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -9355,8 +9438,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9374,7 +9459,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9418,7 +9503,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9437,7 +9522,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9456,7 +9541,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9475,7 +9560,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9494,7 +9579,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9513,7 +9598,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9521,7 +9606,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -9532,8 +9617,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9551,7 +9638,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9595,7 +9682,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9614,7 +9701,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9633,7 +9720,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9652,7 +9739,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9671,7 +9758,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9679,7 +9766,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -9690,8 +9777,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9709,7 +9798,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9752,7 +9841,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9779,7 +9868,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9798,7 +9887,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9817,7 +9906,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9836,7 +9925,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9844,7 +9933,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -9855,8 +9944,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -9874,7 +9965,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9915,7 +10006,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9934,7 +10025,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9953,7 +10044,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9972,7 +10063,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -9980,7 +10071,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -9991,8 +10082,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10010,7 +10103,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10043,7 +10136,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10062,7 +10155,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10081,7 +10174,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10100,7 +10193,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10119,7 +10212,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10138,7 +10231,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10146,7 +10239,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -10157,8 +10250,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10176,7 +10271,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10195,7 +10290,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10228,7 +10323,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10247,7 +10342,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10266,7 +10361,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10285,7 +10380,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10293,7 +10388,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -10304,8 +10399,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10323,7 +10420,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10356,7 +10453,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10375,7 +10472,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10394,7 +10491,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10413,7 +10510,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10421,7 +10518,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -10432,8 +10529,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10451,7 +10550,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10484,7 +10583,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10549,7 +10648,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10568,7 +10667,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10587,7 +10686,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10595,7 +10694,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -10606,8 +10705,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10625,7 +10726,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10658,7 +10759,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10677,7 +10778,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10696,7 +10797,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10715,7 +10816,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10734,7 +10835,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10753,7 +10854,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10761,7 +10862,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -10772,8 +10873,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10791,7 +10894,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10833,7 +10936,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10852,7 +10955,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10871,7 +10974,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10890,7 +10993,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10909,7 +11012,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10917,7 +11020,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -10928,8 +11031,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -10947,7 +11052,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -10990,7 +11095,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11009,7 +11114,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11028,7 +11133,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11047,7 +11152,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11066,7 +11171,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11085,7 +11190,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11093,7 +11198,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -11104,8 +11209,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11123,7 +11230,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11165,7 +11272,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11184,7 +11291,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11203,7 +11310,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11222,7 +11329,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11241,7 +11348,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11260,7 +11367,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11268,7 +11375,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -11279,8 +11386,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11298,7 +11407,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11317,7 +11426,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11357,7 +11466,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11381,7 +11490,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11400,7 +11509,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11419,7 +11528,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11438,7 +11547,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11446,7 +11555,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -11457,8 +11566,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11476,7 +11587,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11536,7 +11647,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11555,7 +11666,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11574,7 +11685,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11593,7 +11704,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11612,7 +11723,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11631,7 +11742,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11639,7 +11750,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -11650,8 +11761,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11669,7 +11782,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11702,7 +11815,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11721,7 +11834,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11740,7 +11853,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11759,7 +11872,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11767,7 +11880,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -11778,8 +11891,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -11797,7 +11912,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11850,7 +11965,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11869,7 +11984,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11888,7 +12003,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11907,7 +12022,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11926,7 +12041,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11945,7 +12060,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11964,7 +12079,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -11972,7 +12087,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -11983,8 +12098,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -12002,7 +12119,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12045,7 +12162,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12064,7 +12181,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12083,7 +12200,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12102,7 +12219,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12121,7 +12238,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12140,7 +12257,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12148,7 +12265,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -12159,8 +12276,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -12178,7 +12297,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12211,7 +12330,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12239,7 +12358,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12258,7 +12377,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12277,7 +12396,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12296,7 +12415,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12304,7 +12423,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -12315,8 +12434,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -12334,7 +12455,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12353,7 +12474,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12386,7 +12507,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12403,7 +12524,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12422,7 +12543,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12441,7 +12562,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12460,7 +12581,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12468,7 +12589,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -12479,8 +12600,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -12498,7 +12621,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12531,7 +12654,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12550,7 +12673,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12569,7 +12692,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12588,7 +12711,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12607,7 +12730,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12615,7 +12738,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -12626,8 +12749,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -12645,7 +12770,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12678,7 +12803,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12697,7 +12822,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12716,7 +12841,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12735,7 +12860,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12754,7 +12879,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12762,7 +12887,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -12773,8 +12898,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -12792,7 +12919,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12825,7 +12952,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12844,7 +12971,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12863,7 +12990,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12882,7 +13009,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12901,7 +13028,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12909,7 +13036,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -12920,8 +13047,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -12939,7 +13068,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -12983,7 +13112,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13002,7 +13131,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13021,7 +13150,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13040,7 +13169,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13059,7 +13188,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13078,7 +13207,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13086,7 +13215,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -13097,8 +13226,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -13116,7 +13247,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13156,7 +13287,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13177,7 +13308,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13196,7 +13327,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13215,7 +13346,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13234,7 +13365,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13242,7 +13373,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -13253,8 +13384,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -13272,7 +13405,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13315,7 +13448,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13334,7 +13467,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13353,7 +13486,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13372,7 +13505,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13391,7 +13524,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13410,7 +13543,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13418,7 +13551,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -13429,8 +13562,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -13448,7 +13583,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13481,7 +13616,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13500,7 +13635,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13519,7 +13654,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13538,7 +13673,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13546,7 +13681,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -13557,8 +13692,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -13576,7 +13713,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13609,7 +13746,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13628,7 +13765,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13647,7 +13784,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13666,7 +13803,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13685,7 +13822,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13693,7 +13830,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -13704,8 +13841,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -13723,7 +13862,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13770,7 +13909,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13789,7 +13928,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13808,7 +13947,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13827,7 +13966,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13846,7 +13985,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13865,7 +14004,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
@@ -13873,7 +14012,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
             429: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -13884,8 +14023,10 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -13903,7 +14044,7 @@ export interface operations {
                     "X-RateLimit-Limit"?: string;
                     /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
                     "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
                     "X-RateLimit-Reset"?: string;
                     [name: string]: unknown;
                 };
