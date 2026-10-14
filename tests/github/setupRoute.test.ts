@@ -10,6 +10,7 @@ import {
 } from '@/lib/github/bannerStatus';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
+import { DEFAULT_RETURN_PATH } from '@/lib/github/returnSurface';
 import { adminDb } from '../helpers/adminDb';
 
 // MOTIR-3755 — the App Setup URL's outcomes. The defect this suite exists for is
@@ -93,8 +94,126 @@ describe('a repository-selection edit made on GitHub is NOT an error', () => {
     expect(GITHUB_BANNER_TONE[banner as GithubBannerStatus]).not.toBe('danger');
   });
 
-  it('leaves the org-approval actions alone', async () => {
-    expect(await bannerOf('?installation_id=42&setup_action=request')).toBe('installed');
+  // AMENDED ON THE RECORD (MOTIR-8471). This case used to assert
+  // `installed` for an organisation-approval request — the opposite of what
+  // happened: a member who is not an owner asked, GitHub sent the request to an
+  // owner, and NOTHING is installed until one approves. What it always asserted,
+  // and still does, is that an org-approval action binds nothing.
+  it('reports an org-approval request as PENDING, and binds nothing', async () => {
+    const banner = await bannerOf('?installation_id=42&setup_action=request');
+    expect(banner).toBe('install_requested');
+    expect(banner).not.toBe('installed');
+    expect(GITHUB_BANNER_TONE[banner as GithubBannerStatus]).toBe('info');
+    expect(await adminDb.githubInstallation.count({ where: { installationId: '42' } })).toBe(0);
+  });
+
+  it('reports any other non-install action as unbound — nothing was bound', async () => {
+    expect(await bannerOf('?installation_id=42&setup_action=deny')).toBe('install_unbound');
+  });
+});
+
+describe('the org-approval request returns where the install started (MOTIR-8471)', () => {
+  async function locationOf(query: string): Promise<URL> {
+    const res = await GET(setupReq(query));
+    expect(REDIRECT_STATUSES).toContain(res.status);
+    return new URL(res.headers.get('location')!);
+  }
+
+  it("returns to a verified state's origin, carrying its context", async () => {
+    const token = encodeInstallState({
+      workspaceId: 'ws_1',
+      userId: USER_ID,
+      origin: 'onboardingMigrateConnect',
+      context: { via: 'onboard_existing_project', backKind: 'roadmap' },
+    });
+    const url = await locationOf(`?installation_id=42&setup_action=request&state=${token}`);
+    expect(`${url.pathname}${url.search}`).toBe(
+      '/onboarding/migrate?via=onboard_existing_project&backKind=roadmap&github=install_requested',
+    );
+  });
+
+  it("falls back for another user's state — its origin is not the actor's", async () => {
+    const token = encodeInstallState({
+      workspaceId: 'ws_1',
+      userId: 'somebody_else',
+      origin: 'onboardingMigrateConnect',
+    });
+    const url = await locationOf(`?installation_id=42&setup_action=request&state=${token}`);
+    expect(url.pathname).toBe(DEFAULT_RETURN_PATH);
+    expect(url.searchParams.get('github')).toBe('install_requested');
+  });
+
+  it('falls back with no state, and for an unreadable one', async () => {
+    for (const query of [
+      '?installation_id=42&setup_action=request',
+      '?installation_id=42&setup_action=request&state=garbage.sig',
+    ]) {
+      const url = await locationOf(query);
+      expect(url.pathname, query).toBe(DEFAULT_RETURN_PATH);
+      expect(url.searchParams.get('github'), query).toBe('install_requested');
+    }
+  });
+});
+
+describe('the carried context is re-appended to the return address (MOTIR-8471)', () => {
+  async function pathAndQuery(query: string): Promise<string> {
+    const res = await GET(setupReq(query));
+    expect(REDIRECT_STATUSES).toContain(res.status);
+    const url = new URL(res.headers.get('location')!);
+    return `${url.pathname}${url.search}`;
+  }
+
+  it('lands on the address the step left from plus github=<status>', async () => {
+    const token = encodeInstallState({
+      workspaceId: 'ws_not_a_member',
+      userId: USER_ID,
+      origin: 'onboardingMigrateConnect',
+      context: {
+        via: 'onboard_existing_project',
+        steps: 'connect,index',
+        backKind: 'work-item',
+        backItem: 'MOTIR-12',
+      },
+    });
+    expect(await pathAndQuery(`?installation_id=42&setup_action=install&state=${token}`)).toBe(
+      '/onboarding/migrate?via=onboard_existing_project&steps=connect%2Cindex&backKind=work-item&backItem=MOTIR-12&github=install_forbidden',
+    );
+  });
+
+  it('an EXPIRED state still lands on the step it started from, reported as expired', async () => {
+    const token = encodeInstallState(
+      {
+        workspaceId: 'ws_1',
+        userId: USER_ID,
+        origin: 'onboardingMigrateConnect',
+        context: { backKind: 'project' },
+      },
+      EXPIRED_AT(),
+    );
+    expect(await pathAndQuery(`?installation_id=42&setup_action=install&state=${token}`)).toBe(
+      '/onboarding/migrate?backKind=project&github=install_expired',
+    );
+    // …and the binding was still refused.
+    expect(await adminDb.githubInstallation.count({ where: { installationId: '42' } })).toBe(0);
+  });
+
+  it('a carried value that does not read back is dropped, never redirected', async () => {
+    const token = encodeInstallState({
+      workspaceId: 'ws_not_a_member',
+      userId: USER_ID,
+      origin: 'onboardingMigrateConnect',
+      context: { via: 'https://evil.example', steps: 'connect,nope', backItem: 'MOTIR-1' },
+    });
+    expect(await pathAndQuery(`?installation_id=42&setup_action=install&state=${token}`)).toBe(
+      '/onboarding/migrate?github=install_forbidden',
+    );
+  });
+
+  it('with no context the address is exactly what the handler always produced', async () => {
+    const token = encodeInstallState({ workspaceId: 'ws_not_a_member', userId: USER_ID });
+    expect(await pathAndQuery(`?installation_id=42&setup_action=install&state=${token}`)).toBe(
+      `${DEFAULT_RETURN_PATH}?github=install_forbidden`,
+    );
   });
 });
 

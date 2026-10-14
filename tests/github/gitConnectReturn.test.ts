@@ -102,6 +102,31 @@ describe('the APP INSTALL returns to the surface that started it', () => {
     expect(await returnPathFor()).toBe(DEFAULT_RETURN_PATH);
   });
 
+  it('started on the onboarding Connect step → returns THERE, with its own query (MOTIR-8471)', async () => {
+    const state = encodeInstallState({
+      workspaceId: 'ws_not_a_member_of',
+      userId: USER_ID,
+      origin: 'onboardingMigrateConnect',
+      context: {
+        via: 'onboard_existing_project',
+        steps: 'connect,index',
+        backKind: 'roadmap',
+      },
+    });
+    const res = await setupGET(
+      new NextRequest(
+        `http://localhost:3000/api/github/setup?installation_id=42&setup_action=install&state=${state}`,
+      ),
+    );
+    const { path, banner } = locationOf(res);
+    expect(path).toBe(GITHUB_RETURN_SURFACES.onboardingMigrateConnect);
+    expect(banner).toBe('install_forbidden');
+    const back = new URL(res.headers.get('location')!).searchParams;
+    expect(back.get('via')).toBe('onboard_existing_project');
+    expect(back.get('steps')).toBe('connect,index');
+    expect(back.get('backKind')).toBe('roadmap');
+  });
+
   it('an outcome reached BEFORE the state is read still falls back', async () => {
     // `setup_action=update` with no state never decodes anything, so there is no
     // origin to honour and the historical path is the only correct answer.

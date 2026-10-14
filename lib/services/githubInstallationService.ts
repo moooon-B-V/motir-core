@@ -27,7 +27,13 @@ import {
   userInstallationsClient,
   type GithubUserInstallation,
 } from '@/lib/github/userInstallations';
-import { encodeInstallState } from '@/lib/github/installState';
+import {
+  encodeInstallState,
+  type InstallReturnContext,
+  type InstallState,
+} from '@/lib/github/installState';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { NotAMemberError } from '@/lib/workspaces/errors';
 import { githubAppInstallUrl } from '@/lib/github/appLinks';
 import type {
   GithubAccountForOrganizationDTO,
@@ -55,6 +61,16 @@ import type { GitProviderId, InstallationToken, NormalizedRepo } from '@/lib/git
 //     escape the RLS policy admits);
 //   * the READ + token paths are tenant requests — they run under
 //     `withWorkspaceContext`, so the workspace RLS gate scopes them.
+
+/**
+ * THE ONE PLACE an App install link is minted (MOTIR-8471). Every surface that
+ * starts an install calls this, so what a link contains — the signed state, the
+ * App URL — cannot change on one surface and be missed on another. Null when
+ * the App slug is unset on this deployment.
+ */
+function mintInstallUrl(state: InstallState): string | null {
+  return githubAppInstallUrl(encodeInstallState(state));
+}
 
 /**
  * The organisation's bound GitHub installation ROWS — the union of the rows
@@ -534,14 +550,40 @@ export const githubInstallationService = {
       ctx.workspaceIdHint,
       false,
     );
-    return githubAppInstallUrl(
-      encodeInstallState({
-        workspaceId,
-        userId: ctx.actorUserId,
-        organizationId: ctx.organizationId,
-        origin: 'organizationGit',
-      }),
-    );
+    return mintInstallUrl({
+      workspaceId,
+      userId: ctx.actorUserId,
+      organizationId: ctx.organizationId,
+      origin: 'organizationGit',
+    });
+  },
+
+  /**
+   * The signed install URL the onboarding Connect step starts from (Story
+   * MOTIR-8241 · MOTIR-8471): the state returns to `/onboarding/migrate` and
+   * carries the step's own query (`context`, already narrowed by
+   * `onboardingReturnContextFrom`). Null when the App is not configured.
+   *
+   * ⚠️ NO `organizationId`, deliberately. A state that names an organisation
+   * takes the callback's ORG branch, which authorises an organisation ADMIN and
+   * links an existing installation. Onboarding is first-time binding of the
+   * workspace the person is in, so the callback must take the workspace branch,
+   * whose predicate is membership — the same one asserted here, so a link is
+   * never minted for a workspace the callback would refuse.
+   */
+  async installUrlForOnboardingConnect(ctx: {
+    workspaceId: string;
+    actorUserId: string;
+    context?: InstallReturnContext;
+  }): Promise<string | null> {
+    const role = await workspacesService.getMemberRole(ctx.actorUserId, ctx.workspaceId);
+    if (!role) throw new NotAMemberError(ctx.actorUserId, ctx.workspaceId);
+    return mintInstallUrl({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.actorUserId,
+      origin: 'onboardingMigrateConnect',
+      ...(ctx.context ? { context: ctx.context } : {}),
+    });
   },
 
   /**
