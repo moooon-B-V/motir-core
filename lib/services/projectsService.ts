@@ -588,6 +588,25 @@ export const projectsService = {
    * Each slug/identifier-collision retry opens a FRESH transaction, because a
    * P2002 poisons the current one; the lock is re-taken and the count re-read
    * on every attempt, so the idempotency survives the retries too.
+   *
+   * ⚠️ A COLLISION CLIMBS A THREE-RUNG LADDER (Story MOTIR-8239 · MOTIR-8528).
+   * A taken candidate — a unique violation or a reserved retired key, which
+   * the loop cannot tell apart and does not need to — advances it:
+   *
+   *   1. a FRESH draw, for every attempt but the last, with that pair's name,
+   *      identifier and slug derived together — so the name, the key and the
+   *      address keep describing the same words. A suffixed key would make the
+   *      key disagree with the name the person reads.
+   *   2. once the draws are spent, the LAST drawn pair with the shipped
+   *      numeric identifier suffix and random slug suffix. The seeding still
+   *      COMPLETES — an exhausted draw is a degraded success, never an error —
+   *      and it is recorded as ONE structured `console.warn` naming the
+   *      workspace and the pair, so it is a fact somebody can find.
+   *   3. `IdentifierCollisionError`, only when that suffixed candidate is held
+   *      as well — no candidate the loop knows is free.
+   *
+   * `createProject` keeps its own suffix-only loop: a name a person typed is
+   * never redrawn.
    */
   async ensureDefaultProject(input: {
     workspaceId: string;
@@ -618,16 +637,19 @@ export const projectsService = {
       (tx) => workspaceRepository.findByIdInTx(input.workspaceId, tx),
     );
     if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
-    const name = generateProjectName();
-    const identifierBase = deriveIdentifierBase(name);
-    const slugBase = slugify(name);
-
-    let identifier = identifierBase;
-    let slug = slugBase;
+    // The pair this attempt inserts. Re-drawn on a collision (rung 1), so it is
+    // a per-attempt local rather than the first draw's.
+    let name = generateProjectName();
+    let identifier = deriveIdentifierBase(name);
+    let slug = slugify(name);
+    let suffixed = false;
     let lastIdentifier = identifier;
 
     for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
       lastIdentifier = identifier;
+      // Set only when THIS call's insert ran — an idempotent return of an
+      // existing project is not an exhausted draw.
+      let inserted = false;
       try {
         const project = await withWorkspaceContext(
           { userId: input.actorUserId, workspaceId: input.workspaceId },
@@ -652,7 +674,7 @@ export const projectsService = {
               return enterable ?? null;
             }
 
-            return insertProjectWithSeedsInTx(
+            const created = await insertProjectWithSeedsInTx(
               {
                 workspaceId: input.workspaceId,
                 name,
@@ -662,18 +684,43 @@ export const projectsService = {
               },
               tx,
             );
+            inserted = true;
+            return created;
           },
         );
+        if (inserted && suffixed) {
+          // Rung 2 landed: record the degraded completion. A warning, not an
+          // error — the person still gets a project and lands where they meant
+          // to — and console is this codebase's diagnostic channel.
+          console.warn('[projectsService.ensureDefaultProject] generated-name draws exhausted', {
+            workspaceId: input.workspaceId,
+            name,
+            identifier,
+            slug,
+          });
+        }
         return project ? toProjectDTO(project) : null;
       } catch (err) {
         if (isUniqueViolation(err) || err instanceof ReservedIdentifierSentinel) {
-          identifier = identifierWithSuffix(identifierBase, attempt + 1);
-          slug = `${slugBase}-${randomSlugSuffix()}`;
+          if (attempt + 1 < RETRY_ATTEMPTS - 1) {
+            // Rung 1 — a fresh pair, all three handles derived from it.
+            name = generateProjectName();
+            identifier = deriveIdentifierBase(name);
+            slug = slugify(name);
+          } else {
+            // Rung 2 — the draws are spent: the last drawn pair with the
+            // shipped suffixes. Should this candidate be held too, the loop
+            // ends and rung 3 throws below.
+            identifier = identifierWithSuffix(deriveIdentifierBase(name), 1);
+            slug = `${slugify(name)}-${randomSlugSuffix()}`;
+            suffixed = true;
+          }
           continue;
         }
         throw err;
       }
     }
+    // Rung 3 — every candidate the ladder knows is held.
     throw new IdentifierCollisionError(lastIdentifier);
   },
 
