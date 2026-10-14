@@ -6,6 +6,7 @@ import {
 } from './config';
 import { dropClientDisconnectAborts } from './clientDisconnect';
 import { dropExpectedDomainErrors } from './expectedDomainErrors';
+import { dropOrphanedSpanTransactions } from './orphanedSpans';
 import { restoreChosenRootName } from './transactionName';
 import { tagTransactionStall } from './transactionStall';
 
@@ -49,15 +50,18 @@ export function serverBeforeSend(
 }
 
 /**
- * The Node runtimes' `beforeSendTransaction`: put back a root name request code
- * chose, which Next's own event-time rename overwrote (MOTIR-8566,
- * `./transactionName`). It runs after every `preprocessEvent` hook, which is
- * the only reason it is here rather than at the rename.
+ * The Node runtimes' `beforeSendTransaction`: drop a transaction made of spans
+ * that outlived their already-sent request (MOTIR-8567, `./orphanedSpans`), then
+ * put back a root name request code chose, which Next's own event-time rename
+ * overwrote (MOTIR-8566, `./transactionName`). It runs after every
+ * `preprocessEvent` hook, which is the only reason the rename is restored here
+ * rather than at the rename.
  */
 export function serverBeforeSendTransaction<E extends Parameters<typeof restoreChosenRootName>[0]>(
   event: E,
 ): E | null {
-  return restoreChosenRootName(event);
+  const kept = dropOrphanedSpanTransactions(event);
+  return kept ? restoreChosenRootName(kept) : null;
 }
 
 /** The SDK's own `pg` instrumentation, by the name `@sentry/node` registers it. */
