@@ -6383,6 +6383,10 @@
       "trialUsed": "체험 사용함",
       "creditsAllotment": "월 {n} 크레딧",
       "creditsAllotmentOneTime": "{n} 크레딧 · 1회성",
+      "ladder": {
+        "first": "모든 플랜의 크레딧당 가격은 동일",
+        "multiple": "{plan} 크레딧의 {multiple}배 · 크레딧당 가격 동일"
+      },
       "perMoEquiv": "월 ${n}",
       "annualSub": "연간 청구 · 연 ${yr}",
       "annualSave": "연 ${n} 절약",
@@ -6481,7 +6485,7 @@
           "features": ["실제 작업에 코딩 에이전트 실행", "많은 실행이 필요할 때 언제든 충전"]
         },
         "max": {
-          "useCase": "상세한 계획과 대량의 에이전트 작업.",
+          "useCase": "바쁜 팀을 위한 상세한 계획과 에이전트 작업을 위한 여유.",
           "prev": "Pro",
           "features": ["지속적인 에이전트 작업을 위한 여유", "바쁜 팀을 위한 처리량"]
         },
@@ -6489,11 +6493,6 @@
           "useCase": "상세한 계획과 Max의 두 배 규모 에이전트 작업.",
           "prev": "Max",
           "features": ["Max의 두 배인 월간 크레딧 풀", "여러 에이전트를 동시에 실행할 여유"]
-        },
-        "enterprise": {
-          "useCase": "맞춤 사용량과 조직 관리 기능.",
-          "prev": "Max",
-          "features": ["청구서 결제 및 SSO", "전담 지원"]
         }
       }
     },

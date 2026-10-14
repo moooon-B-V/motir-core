@@ -6383,6 +6383,10 @@
       "trialUsed": "Prova usata",
       "creditsAllotment": "{n} crediti / mese",
       "creditsAllotmentOneTime": "{n} crediti · una tantum",
+      "ladder": {
+        "first": "Stesso prezzo per credito in ogni piano",
+        "multiple": "{multiple}× i crediti di {plan} · stesso prezzo per credito"
+      },
       "perMoEquiv": "${n} / mese",
       "annualSub": "fatturato annualmente · ${yr} / anno",
       "annualSave": "Risparmia ${n}/anno",
@@ -6484,7 +6488,7 @@
           ]
         },
         "max": {
-          "useCase": "Pianificazione dettagliata, più lavoro intensivo degli agenti.",
+          "useCase": "Pianificazione dettagliata per un team molto attivo, più margine per il lavoro degli agenti.",
           "prev": "Pro",
           "features": [
             "Margine per un lavoro continuativo degli agenti",
@@ -6498,11 +6502,6 @@
             "Il doppio della dotazione mensile di crediti di Max",
             "Spazio per più agenti in esecuzione insieme"
           ]
-        },
-        "enterprise": {
-          "useCase": "Volumi personalizzati, più controlli a livello di organizzazione.",
-          "prev": "Max",
-          "features": ["Fatturazione su fattura e SSO", "Supporto dedicato"]
         }
       }
     },

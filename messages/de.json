@@ -6383,6 +6383,10 @@
       "trialUsed": "Testphase genutzt",
       "creditsAllotment": "{n} Credits / Monat",
       "creditsAllotmentOneTime": "{n} Credits · einmalig",
+      "ladder": {
+        "first": "Gleicher Preis pro Credit in jedem Plan",
+        "multiple": "{multiple}× die Credits von {plan} · gleicher Preis pro Credit"
+      },
       "perMoEquiv": "${n} / Monat",
       "annualSub": "jährliche Abrechnung · ${yr} / Jahr",
       "annualSave": "${n}/Jahr sparen",
@@ -6484,7 +6488,7 @@
           ]
         },
         "max": {
-          "useCase": "Detaillierte Planung plus intensive Agentenarbeit.",
+          "useCase": "Detaillierte Planung für ein ausgelastetes Team, plus Spielraum für Agentenarbeit.",
           "prev": "Pro",
           "features": [
             "Reserven für dauerhafte Agentenarbeit",
@@ -6498,11 +6502,6 @@
             "Doppelter monatlicher Credit-Pool von Max",
             "Raum für mehrere gleichzeitig laufende Agenten"
           ]
-        },
-        "enterprise": {
-          "useCase": "Individuelles Volumen plus Organisationssteuerung.",
-          "prev": "Max",
-          "features": ["Abrechnung per Rechnung & SSO", "Dedizierter Support"]
         }
       }
     },

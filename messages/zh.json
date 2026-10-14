@@ -6383,6 +6383,10 @@
       "trialUsed": "试用已用",
       "creditsAllotment": "{n} 额度 / 月",
       "creditsAllotmentOneTime": "{n} 额度 · 一次性",
+      "ladder": {
+        "first": "每个套餐的额度单价相同",
+        "multiple": "{plan} 的 {multiple} 倍额度 · 额度单价相同"
+      },
       "perMoEquiv": "${n} / 月",
       "annualSub": "按年计费 · ${yr} / 年",
       "annualSave": "每年省 ${n}",
@@ -6477,7 +6481,7 @@
           "features": ["用智能体处理真实任务", "需要时随时加购"]
         },
         "max": {
-          "useCase": "详细规划，外加大量智能体工作。",
+          "useCase": "为忙碌的团队详细规划，并留有智能体工作的余量。",
           "prev": "Pro",
           "features": ["充足的持续智能体工作余量", "满足繁忙团队的吞吐"]
         },
@@ -6485,11 +6489,6 @@
           "useCase": "详细规划，外加两倍于 Max 的智能体工作。",
           "prev": "Max",
           "features": ["两倍于 Max 的每月额度池", "可同时运行多个智能体的余量"]
-        },
-        "enterprise": {
-          "useCase": "定制用量，外加组织管控。",
-          "prev": "Max",
-          "features": ["开票计费与 SSO", "专属支持"]
         }
       }
     },

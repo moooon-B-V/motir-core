@@ -6383,6 +6383,10 @@
       "trialUsed": "Trial used",
       "creditsAllotment": "{n} credits / mo",
       "creditsAllotmentOneTime": "{n} credits · one-time",
+      "ladder": {
+        "first": "Same price per credit on every plan",
+        "multiple": "{multiple}× {plan}’s credits · same price per credit"
+      },
       "perMoEquiv": "${n} / mo",
       "annualSub": "billed annually · ${yr} / yr",
       "annualSave": "Save ${n}/yr",
@@ -6481,7 +6485,7 @@
           "features": ["Run the coding agent on real tasks", "Top up anytime for heavier runs"]
         },
         "max": {
-          "useCase": "Detailed planning, plus heavy agent work.",
+          "useCase": "Detailed planning for a busy team, plus room for agent work.",
           "prev": "Pro",
           "features": ["Headroom for sustained agent work", "Throughput for a busy team"]
         },
@@ -6492,11 +6496,6 @@
             "Twice the Max monthly credit pool",
             "Room for several agents running at once"
           ]
-        },
-        "enterprise": {
-          "useCase": "Custom volume, plus org controls.",
-          "prev": "Max",
-          "features": ["Invoiced billing & SSO", "Dedicated support"]
         }
       }
     },

@@ -6383,6 +6383,10 @@
       "trialUsed": "Proefperiode gebruikt",
       "creditsAllotment": "{n} credits per maand",
       "creditsAllotmentOneTime": "{n} credits · eenmalig",
+      "ladder": {
+        "first": "Dezelfde prijs per credit in elk abonnement",
+        "multiple": "{multiple}× de credits van {plan} · dezelfde prijs per credit"
+      },
       "perMoEquiv": "${n} per maand",
       "annualSub": "jaarlijks gefactureerd · ${yr} per jaar",
       "annualSave": "Bespaar ${n} per jaar",
@@ -6484,7 +6488,7 @@
           ]
         },
         "max": {
-          "useCase": "Gedetailleerde planning, plus zwaar agentwerk.",
+          "useCase": "Gedetailleerde planning voor een druk team, plus ruimte voor agentwerk.",
           "prev": "Pro",
           "features": ["Ruimte voor aanhoudend agentwerk", "Doorvoer voor een druk team"]
         },
@@ -6495,11 +6499,6 @@
             "Twee keer de maandelijkse creditpool van Max",
             "Ruimte voor meerdere agents tegelijk"
           ]
-        },
-        "enterprise": {
-          "useCase": "Volume op maat, plus beheer op organisatieniveau.",
-          "prev": "Max",
-          "features": ["Facturering op rekening en SSO", "Persoonlijke support"]
         }
       }
     },

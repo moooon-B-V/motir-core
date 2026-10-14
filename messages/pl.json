@@ -6383,6 +6383,10 @@
       "trialUsed": "Okres próbny wykorzystany",
       "creditsAllotment": "{n} kredytów / mies.",
       "creditsAllotmentOneTime": "{n} kredytów · jednorazowo",
+      "ladder": {
+        "first": "Ta sama cena za kredyt w każdym planie",
+        "multiple": "{multiple}× kredytów planu {plan} · ta sama cena za kredyt"
+      },
       "perMoEquiv": "${n} / mies.",
       "annualSub": "rozliczane rocznie · ${yr} / rok",
       "annualSave": "Oszczędź ${n}/rok",
@@ -6484,7 +6488,7 @@
           ]
         },
         "max": {
-          "useCase": "Szczegółowe planowanie i intensywna praca agenta.",
+          "useCase": "Szczegółowe planowanie dla zapracowanego zespołu, z zapasem na pracę agenta.",
           "prev": "Pro",
           "features": ["Zapas na ciągłą pracę agentów", "Przepustowość dla zapracowanego zespołu"]
         },
@@ -6495,11 +6499,6 @@
             "Dwukrotność miesięcznej puli kredytów Max",
             "Miejsce na kilku agentów działających jednocześnie"
           ]
-        },
-        "enterprise": {
-          "useCase": "Indywidualny wolumen i kontrola na poziomie organizacji.",
-          "prev": "Max",
-          "features": ["Rozliczenia na fakturę i SSO", "Dedykowane wsparcie"]
         }
       }
     },
