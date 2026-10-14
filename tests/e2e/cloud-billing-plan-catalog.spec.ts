@@ -6,11 +6,12 @@ import {
   freeOrgState,
   paidOrgState,
   pinContextCookies,
+  resetBillingFixture,
   seedBillingOwner,
   setOrgBillingState,
   type BillingSeed,
 } from './_helpers/billing';
-import { db } from './_helpers/db-reset';
+import { db, resetDatabase } from './_helpers/db-reset';
 import { BILLING_CATALOG, type AiPlanCatalogEntry } from '@/lib/billing/catalog';
 import { E2E_CHECKOUT_URL } from '@/lib/test-billing-mock';
 import type { BillingFixtureTier } from '@/lib/test-billing-mock';
@@ -40,7 +41,7 @@ import zh from '@/messages/zh.json';
 //
 // ── FIGURES ARE READ, NEVER RETYPED ───────────────────────────────────────────
 // The plan names, prices, keys and the included-seat count come from the
-// catalog entry, and every label from `messages/*.json`.
+// catalog entry, and every label from `messages/<locale>.json`.
 //
 // ── WAITS ─────────────────────────────────────────────────────────────────────
 // Every step waits on the checkout request motir-core sends, or on the billing
@@ -50,6 +51,13 @@ import zh from '@/messages/zh.json';
 // 2.6 minutes on the lane's runner, so it gets the room its siblings' 150 s
 // leaves too tight.
 test.describe.configure({ timeout: 240_000 });
+
+// The cloud lane retries once against the same database; start each attempt
+// clean so a retry's seed cannot collide with the first attempt's rows.
+test.beforeEach(async () => {
+  await resetDatabase();
+  resetBillingFixture();
+});
 
 const copy = en.billing;
 const billingPath = '/settings/organization/billing';
