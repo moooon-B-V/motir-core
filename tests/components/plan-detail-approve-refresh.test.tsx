@@ -7,18 +7,19 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 
 // MOTIR-1947 — APPROVING a plan must reveal the establish step in the SAME page
-// view. The step is rendered from a SERVER read the page performs only for an
-// approved plan (`repositorySet`), while the review itself lives in this client
-// island's `useState`. That makes approve the page-state contract's "a mutation
-// touching BOTH does BOTH" case: the client refetch cannot produce the prop, and
-// `router.refresh()` cannot reach the island's state. Before the fix only the
-// refetch ran, so the canvas kept showing the proposals — the step appeared only
-// on a later navigation — and the rail's approved outcome carried no code line.
+// view. The step is rendered from the project's repository-set view, which the
+// page reads only for a plan that was already approved (`repositorySet`), while
+// the review itself lives in this client island's `useState`. MOTIR-1947 made
+// approve do both: the island's refetch AND a route refresh to re-run the page's
+// read. Story MOTIR-8539 · MOTIR-8576 RETIRED THE REFRESH: the island now reads
+// the same view itself (`fetchRepositorySet`, the step's own poll), so the step
+// still appears in the same page view and nothing re-renders the page under the
+// reader.
 //
 // What is pinned here is the ROUTING of each surface to its mechanism, so the
-// bug cannot come back quietly: approve does both, decline and the proposal
-// inline edit do NEITHER (surface kind 1 must not refresh), and the rail's code
-// line follows the refreshed PROP — not a seed that only ever ran at mount.
+// bug cannot come back quietly: approve refetches the review and reads the step,
+// decline does neither and refreshes nothing, and the rail's code line follows
+// the view — not a seed that only ever ran at mount.
 //
 // The heavy canvas and the establish step are stubbed: this is a test about which
 // update mechanism each action fires, and the step's own screen is covered by
@@ -30,6 +31,16 @@ const mocks = vi.hoisted(() => ({
   approvePlanRequest: vi.fn(async () => ({})),
   declinePlanRequest: vi.fn(async () => ({})),
   fetchPlanReview: vi.fn(),
+  fetchRepositorySet: vi.fn(),
+  reread: vi.fn(),
+}));
+
+vi.mock('@/lib/planning/repositorySetClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/planning/repositorySetClient')>()),
+  fetchRepositorySet: mocks.fetchRepositorySet,
+}));
+vi.mock('@/lib/workbench/workbenchReread', () => ({
+  useRequestWorkbenchReread: () => mocks.reread,
 }));
 
 // `PlanDetail` reads the URL for its view (MOTIR-3239), so the navigation stub
@@ -231,6 +242,7 @@ const approved = () =>
 
 beforeEach(() => {
   mocks.fetchPlanReview.mockResolvedValue(approved());
+  mocks.fetchRepositorySet.mockResolvedValue(repositorySet().view);
 });
 
 afterEach(() => {
@@ -238,17 +250,17 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)', () => {
-  it('approve refetches the review AND refreshes the server read that produces the step', async () => {
+describe('PlanDetail — approving reveals the establish step with NO route refresh (MOTIR-1947 · MOTIR-8576)', () => {
+  it('approve refetches the review ONCE, reads the step’s view, asks a Workbench reread, and never refreshes', async () => {
     renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
 
     await waitFor(() => expect(mocks.approvePlanRequest).toHaveBeenCalledWith('plan_1', null));
-    // BOTH mechanisms — the island's own refetch for the review it owns, and the
-    // refresh for the establish step only the server can render.
-    await waitFor(() => expect(mocks.fetchPlanReview).toHaveBeenCalled());
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.fetchRepositorySet).toHaveBeenCalledWith('PRJ'));
+    expect(mocks.fetchPlanReview).toHaveBeenCalledTimes(1);
+    expect(mocks.reread).toHaveBeenCalledTimes(1);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('still updates the review itself — the refresh does not replace the client refetch', async () => {
@@ -261,20 +273,18 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
     expect(await screen.findByText('Added 2 items to your backlog')).toBeTruthy();
   });
 
-  it('shows the step and its rail line when the refresh delivers the prop — with no remount', async () => {
-    const { rerender } = renderWithIntl(
-      <PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />,
-    );
+  it('shows the step and its rail line in the SAME page view after approve — with no remount, no refresh', async () => {
+    renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
+    const canvas = screen.getByTestId('plan-review-canvas');
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
-    expect(screen.getByTestId('plan-review-canvas')).toBeTruthy();
-
-    // What `router.refresh()` produces: the SAME island instance re-rendered with
-    // the repo set the server could only read once the plan was approved.
-    rerender(
-      <PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={repositorySet()} />,
+    // The establish step — the surface the route refresh used to deliver — arrives
+    // from the island's own read of the repository set.
+    expect(await screen.findByTestId('repository-set-step')).toBeTruthy();
+    expect(screen.getByTestId('plan-code-outcome').textContent).toContain(
+      'Finish setting up repositories',
     );
+    expect(mocks.refresh).not.toHaveBeenCalled();
 
     // ⚠️ AMENDED by MOTIR-3161 (bug MOTIR-3154). This asserted
     // `plan-review-canvas` was GONE — the rule Story MOTIR-1775 / MOTIR-1782
@@ -284,14 +294,35 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
     // canvas instead of taking its place.
     //
     // What this case is ACTUALLY about is unchanged and is what still matters
-    // here: the refresh's prop reaches a LIVE island and the step appears with no
-    // remount. Both halves are now asserted.
-    expect(screen.getByTestId('repository-set-step')).toBeTruthy();
-    expect(screen.getByTestId('plan-review-canvas')).toBeTruthy();
+    // here: the step reaches a LIVE island and appears with no remount. Both
+    // halves are asserted — the canvas is the SAME node it was before the press.
+    expect(screen.getByTestId('plan-review-canvas')).toBe(canvas);
+  });
+
+  it('a failed read of the step’s view degrades to no step, still with no refresh', async () => {
+    mocks.fetchRepositorySet.mockRejectedValueOnce(new Error('offline'));
+    renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
+    await waitFor(() => expect(mocks.fetchRepositorySet).toHaveBeenCalled());
+    expect(await screen.findByText('Added 2 items to your backlog')).toBeTruthy();
+    expect(screen.queryByTestId('repository-set-step')).toBeNull();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it('does not read the view again when the page already handed it down', async () => {
+    renderWithIntl(
+      <PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={repositorySet()} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
+    await waitFor(() => expect(mocks.reread).toHaveBeenCalledTimes(1));
+    expect(mocks.fetchRepositorySet).not.toHaveBeenCalled();
   });
 
   it('carries the rail code line from a prop delivered AFTER mount — not a mount-time seed', () => {
-    // The refresh's payload reaches a LIVE island: same instance, new props. A
+    // A prop that changes on a LIVE island (a navigation back onto the page): same
+    // instance, new props. A
     // `useState(() => …)` seed runs once and would leave the approved outcome
     // with no code line at all, which is the second half of the reported defect.
     const { rerender } = renderWithIntl(
@@ -322,17 +353,20 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
     expect(screen.getByTestId('plan-code-outcome').textContent).toContain('Your code is ready');
   });
 
-  it('refreshes on a 409 too — a concurrent reviewer approved, so the step is just as due', async () => {
+  it('on a 409 too — a concurrent reviewer approved — it reads the review once and the step, with no refresh', async () => {
     mocks.approvePlanRequest.mockRejectedValueOnce(new PlanRequestError(409, 'ALREADY_DECIDED'));
 
     renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
 
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+    expect(await screen.findByTestId('repository-set-step')).toBeTruthy();
+    expect(mocks.fetchPlanReview).toHaveBeenCalledTimes(1);
+    expect(mocks.reread).toHaveBeenCalledTimes(1);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
-  it('DECLINE does not refresh — it reveals no server-rendered surface', async () => {
+  it('DECLINE does not refresh, read the step or ask a reread — it decides nothing that moves', async () => {
     mocks.fetchPlanReview.mockResolvedValue(review({ status: 'declined' as PlanStatusDto }));
 
     renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
@@ -342,6 +376,8 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
     await waitFor(() => expect(mocks.declinePlanRequest).toHaveBeenCalledWith('plan_1', null));
     await waitFor(() => expect(mocks.fetchPlanReview).toHaveBeenCalled());
     expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.fetchRepositorySet).not.toHaveBeenCalled();
+    expect(mocks.reread).not.toHaveBeenCalled();
   });
 
   // The proposal INLINE EDIT test was REMOVED with the feature (MOTIR-3084):

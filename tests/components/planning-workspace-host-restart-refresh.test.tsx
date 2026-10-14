@@ -4,17 +4,25 @@ import { act, cleanup } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 
-// THE CARRY'S REFRESH WAITS FOR THE ADDRESS (bug MOTIR-8212).
+// THE CARRY REWRITES THE ADDRESS AND NOTHING NAVIGATES BESIDE IT (bug MOTIR-8212,
+// retired by Story MOTIR-8539 · MOTIR-8576).
 //
 // When an ended session is carried into a new one, the host rewrites the
-// `planSession` address and refreshes the server-rendered surfaces. The address
-// rewrite is itself a router navigation, so a refresh in the same tick overlaps
-// it — and under CI load the pair hard-reloaded the page, aborting the carried
-// turn's submit. So the refresh must wait until the router has committed the new
-// address (the launch names the new session), and fire exactly once then.
+// `planSession` address. That rewrite is itself a router navigation, and bug
+// MOTIR-8212 was a route refresh dispatched in the same tick: under CI load the
+// pair hard-reloaded the page and aborted the carried turn's submit. The fix then
+// held the refresh until the router committed the address. MOTIR-8576 removed the
+// refresh outright — the Workbench behind re-reads its own window, which is a
+// fetch and not a navigation — so the rewrite has nothing to overlap, at once or
+// later.
 
-const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+const { push, refresh, reread } = vi.hoisted(() => ({
+  push: vi.fn(),
+  refresh: vi.fn(),
+  reread: vi.fn(),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
+vi.mock('@/lib/workbench/workbenchReread', () => ({ useRequestWorkbenchReread: () => reread }));
 
 const hook = vi.hoisted(() => ({
   state: null as unknown as PlanChangeConversationState,
@@ -88,34 +96,31 @@ function host(sessionId: string | null) {
   );
 }
 
-describe('PlanningWorkspaceHost — the carry’s refresh waits for the address (MOTIR-8212)', () => {
-  it('rewrites the address at once and refreshes only after the router names the new session', () => {
+describe('PlanningWorkspaceHost — the carry navigates nothing beside the address (MOTIR-8212)', () => {
+  it('rewrites the address at once, asks the Workbench to re-read, and never refreshes', () => {
     window.history.replaceState(null, '', '/workbench?planning=replan&planSession=s1');
     const view = renderWithIntl(host('s1'));
-    refresh.mockClear();
 
     act(() => hook.onRestarted?.('s2'));
 
     expect(new URL(window.location.href).searchParams.get('planSession')).toBe('s2');
-    // The address swap is a navigation of its own — no refresh may overlap it.
+    expect(reread).toHaveBeenCalledTimes(1);
+
+    // The router committing the new address asks for nothing more.
+    view.rerender(host('s2'));
+    view.rerender(host('s2'));
+    expect(reread).toHaveBeenCalledTimes(1);
     expect(refresh).not.toHaveBeenCalled();
-
-    view.rerender(host('s2'));
-    expect(refresh).toHaveBeenCalledTimes(1);
-
-    // Settled: a later render naming the same session asks for nothing more.
-    view.rerender(host('s2'));
-    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes at once when there is no session address to rewrite', () => {
+  it('asks the same reread when there is no session address to rewrite', () => {
     window.history.replaceState(null, '', '/workbench?planning=replan');
     renderWithIntl(host(null));
-    refresh.mockClear();
 
     act(() => hook.onRestarted?.('s2'));
 
     expect(new URL(window.location.href).searchParams.has('planSession')).toBe(false);
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reread).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

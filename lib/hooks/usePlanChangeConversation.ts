@@ -743,9 +743,9 @@ export function narrateDebugFrame(
 export interface UsePlanChangeConversationOptions {
   /**
    * An approve COMMITTED work items — the caller routes the page-state fan-out
-   * (`motir-core/CLAUDE.md`): the canvas is a client island that `router.refresh()`
-   * cannot reach, so it needs an explicit refetch trigger, and the server-rendered
-   * surfaces behind the workspace take the refresh. Both, where both apply.
+   * (`motir-core/CLAUDE.md`): the canvas is a client island seeded once, so it
+   * needs an explicit refetch trigger, and the Workbench behind the workspace is
+   * asked to re-read its own window. Nothing refreshes the route (MOTIR-8576).
    */
   onApproved?: (result: PlanApproveSummary) => void;
   /**

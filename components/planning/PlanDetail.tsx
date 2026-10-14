@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { Button } from '@/components/ui/Button';
@@ -28,6 +28,8 @@ import {
 } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { mergePlanReview } from '@/lib/planning/mergePlanReview';
+import { fetchRepositorySet } from '@/lib/planning/repositorySetClient';
+import { useRequestWorkbenchReread } from '@/lib/workbench/workbenchReread';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 import {
   isSettledRow,
@@ -41,17 +43,19 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 // canvas (left) + the review rail (right), and OWNS: the "live while generating"
 // poll of the substrate read (`getPlan`, re-fetched — NEVER the 7.4 stream), the
 // Approve(materialize) / Decline actions, and the stale-warning confirm before an
-// approve when items have drifted. Seeded from the server read; `router.refresh`
+// approve when items have drifted. Seeded from the server read; a route refresh
 // can't reach a client island's `useState` seed, so state updates flow through
 // this island's own refetch on every mutation + poll tick (the page-state rule).
 //
-// APPROVE is the page-state contract's "a mutation touching BOTH does BOTH" case
-// (MOTIR-1947): it changes this island (the review → `approved`, via `refetch`)
-// AND a surface rendered on the SERVER — the establish step, which the page reads
-// only for an approved plan and hands down as `repositorySet`. A refetch cannot
-// produce that prop and a refresh cannot reach this island's state, so approve
-// does both. Decline and the proposal inline edit do NOT refresh: neither reveals
-// a server-rendered surface, and surface kind 1 (the edited cell) must not.
+// APPROVE REFRESHES NOTHING (Story MOTIR-8539 · MOTIR-8576). It changes this
+// island (the review → `approved`, filed through `refetch` and `mergePlanReview`,
+// which is what keeps the decided plan and every card's outcome on screen) and it
+// REVEALS the establish step, which the page reads only for an approved plan and
+// hands down as `repositorySet`. That step used to arrive by a route refresh
+// re-running the page's server read (MOTIR-1947); it now arrives by this island's
+// own read of the same view (`fetchRepositorySet`, the step's own poll), so the
+// approve lands in the same page view with no route refresh. The Workbench behind
+// an overlay is asked to re-read itself (`useRequestWorkbenchReread`).
 
 // The REVISION poll's cadence. The generating poll's is `useGeneratingPlanPoll`'s own.
 const POLL_MS = 2500;
@@ -114,7 +118,7 @@ export function PlanDetail({
 }: PlanDetailProps) {
   const routes = useReaderRoutes();
   const t = useTranslations('planReview');
-  const router = useRouter();
+  const requestWorkbenchReread = useRequestWorkbenchReread();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [review, setReview] = useState<PlanReviewDto>(initialReview);
@@ -130,7 +134,17 @@ export function PlanDetail({
   // saying "Approved". Only the step's OWN report is state, and null there simply
   // means "the step has not spoken yet" — it never emits null itself.
   const [reportedCodeOutcome, setReportedCodeOutcome] = useState<PlanCodeOutcome | null>(null);
-  const codeOutcome = reportedCodeOutcome ?? codeOutcomeOf(repositorySet?.view ?? null);
+  // ⚠️ THE ESTABLISH VIEW AN APPROVE REVEALS, read by this island (MOTIR-8576).
+  // The page reads it only for a plan that was ALREADY approved when it rendered;
+  // a plan approved here has no `repositorySet` prop until something reads it, and
+  // the route refresh that used to is gone. A failed read degrades to "no step",
+  // exactly as the page's own read does — the permanent door still leads back.
+  const [readEstablishView, setReadEstablishView] = useState<ProjectRepoEstablishViewDto | null>(
+    null,
+  );
+  const establishSet =
+    repositorySet ?? (readEstablishView ? { projectKey, view: readEstablishView } : null);
+  const codeOutcome = reportedCodeOutcome ?? codeOutcomeOf(establishSet?.view ?? null);
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -173,19 +187,16 @@ export function PlanDetail({
   // `getPlan` re-fetch the generating poll uses answers it, because the lease it
   // must observe is derived from the plan's own trail.
   //
-  // `router.refresh()` on the LANDING is what updates the surfaces only the
-  // server renders. It cannot reach this island's own `useState` seed — which is
-  // exactly why `refetch` runs too, and why the two are not interchangeable.
+  // The LANDING files the fresh review like any read and clears `revising`. It
+  // refreshes nothing (MOTIR-8576): a revision leaves the plan `planned`, so no
+  // surface only the server renders has moved.
   useEffect(() => {
     if (review.revision === null) return;
     const ctrl = new AbortController();
     const handle = setInterval(() => {
       void refetch(ctrl.signal)
         .then((fresh) => {
-          if (fresh.revision === null) {
-            setRevising(false);
-            router.refresh();
-          }
+          if (fresh.revision === null) setRevising(false);
         })
         .catch(() => {
           /* best-effort poll — a transient failure just retries next tick */
@@ -195,7 +206,7 @@ export function PlanDetail({
       ctrl.abort();
       clearInterval(handle);
     };
-  }, [review.revision, refetch, router]);
+  }, [review.revision, refetch]);
 
   // Live polling WHILE generating — the proposed items stream in per level as the
   // engine emits them. Stops the instant the plan leaves `generating`. The poll
@@ -247,22 +258,37 @@ export function PlanDetail({
     [planId, refetch],
   );
 
+  // After a DECISION (an approve, or the 409 that says one was already made): the
+  // Workbench behind an overlay re-reads itself, and an approved plan's establish
+  // step is read if the page did not hand it down.
+  const afterDecision = useCallback(
+    (fresh: PlanReviewDto) => {
+      requestWorkbenchReread();
+      if (fresh.status !== 'approved' || repositorySet) return;
+      // A body that is not a view (no `set`) is a failed read, like a thrown one.
+      void fetchRepositorySet(projectKey)
+        .then((view) => {
+          if (view?.set) setReadEstablishView(view);
+        })
+        .catch(() => {});
+    },
+    [requestWorkbenchReread, repositorySet, projectKey],
+  );
+
   const runAction = useCallback(
     async (
       action: (id: string) => Promise<unknown>,
-      { refreshServerSurfaces = false }: { refreshServerSurfaces?: boolean } = {},
+      { decides = false }: { decides?: boolean } = {},
     ) => {
       setBusy(true);
       setErrorCode(null);
       setErrorPlanItemId(null);
       try {
         await action(planId);
-        await refetch();
-        // The other half of the contract: re-run the page's SERVER read so a
-        // surface only it can produce (the establish step) appears in this same
-        // page view. Opt-in per action — a refresh nothing on the page needs is
-        // a wasted round-trip, and on the wrong surface it is a bug.
-        if (refreshServerSurfaces) router.refresh();
+        const fresh = await refetch();
+        // The decision committed work items: the establish step it reveals and the
+        // Workbench behind an overlay are brought current by their OWN reads.
+        if (decides) afterDecision(fresh);
       } catch (err) {
         // A 409 is NOT an error on this surface (MOTIR-3240). It means the plan
         // moved between render and click — a concurrent reviewer decided it, or
@@ -287,8 +313,8 @@ export function PlanDetail({
           if (err.code === 'APPROVAL_GATE_STALE_SUBJECT' || err.code === 'PLAN_GATE_AWAITING') {
             setErrorCode('APPROVAL_GATE_STALE_SUBJECT');
           }
-          await refetch().catch(() => {});
-          if (refreshServerSurfaces) router.refresh();
+          const fresh = await refetch().catch(() => null);
+          if (decides && fresh) afterDecision(fresh);
         } else if (isFolderMissingRefusal(err)) {
           // THE DELETED FOLDER (Part XVII §17.5, 4b) — keyed on the refusal, not
           // the generic action error: approve re-checks every `folder:<id>` a plan
@@ -311,16 +337,16 @@ export function PlanDetail({
         setDiscardOpen(false);
       }
     },
-    [planId, refetch, router],
+    [planId, refetch, afterDecision],
   );
 
-  // Approving REVEALS the establish step, which only the server can render — so
-  // this is the one action that also refreshes (MOTIR-1947).
+  // Approving REVEALS the establish step — so this is the one action that reads it
+  // (MOTIR-1947; MOTIR-8576 replaced the route refresh that used to deliver it).
   // Every press hands back the stamp of the review it was made on (MOTIR-6038), so the
   // decide door refuses a press against proposals that moved since this render.
   const stamp = review.gate?.stamp ?? null;
   const approve = useCallback(
-    () => runAction((id) => approvePlanRequest(id, stamp), { refreshServerSurfaces: true }),
+    () => runAction((id) => approvePlanRequest(id, stamp), { decides: true }),
     [runAction, stamp],
   );
   // An asked plan's decline carries its OPTIONAL reason (ADR §11.4; MOTIR-6037's band).
@@ -486,7 +512,7 @@ export function PlanDetail({
             progress={review.progress ?? null}
             progressFailing={liveFailing}
             band={
-              repositorySet && setHasEstablishWork(repositorySet.view.set.rows) ? (
+              establishSet && setHasEstablishWork(establishSet.view.set.rows) ? (
                 <div
                   data-testid="plan-detail-establish-band"
                   className="shrink-0 border-b border-(--el-border) bg-(--el-surface)"
@@ -499,8 +525,8 @@ export function PlanDetail({
                       pointed at `/settings/workspace/github`, a route MOTIR-4680
                       deleted. */}
                   <RepositorySetStep
-                    projectKey={repositorySet.projectKey}
-                    initialView={repositorySet.view}
+                    projectKey={establishSet.projectKey}
+                    initialView={establishSet.view}
                     backlogHref={routes.view('/items')}
                     connectHref="/settings/account/git"
                     onOutcomeChange={setReportedCodeOutcome}

@@ -15,6 +15,7 @@ import {
 // and the guard is right: it is the shape six separate repairs came from.
 import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 import { LiveSignalProvider, routeLiveSources } from '@/lib/live/liveSignal';
+import { WorkbenchRereadProvider } from '@/lib/workbench/workbenchReread';
 import { createWorkbenchStreamSource } from '@/lib/live/sources/workbenchStreamSource';
 import { planPollSource } from '@/lib/live/sources/planPollSource';
 
@@ -79,9 +80,15 @@ export function WorkbenchLive({ children }: { children: ReactNode }) {
     () => routeLiveSources({ workbench: stream, plan: planPollSource }),
     [stream],
   );
+  // ⚠️ THE REREAD SLOT LIVES HERE TOO (MOTIR-8576), for the reason this host is
+  // in the shell at all: the planning overlay that asks the Workbench to re-read
+  // after an approve is mounted beside the page, not inside it, so only a provider
+  // above both reaches both.
   return (
     <LiveSignalProvider source={source}>
-      <WorkbenchLiveHost>{children}</WorkbenchLiveHost>
+      <WorkbenchRereadProvider>
+        <WorkbenchLiveHost>{children}</WorkbenchLiveHost>
+      </WorkbenchRereadProvider>
     </LiveSignalProvider>
   );
 }

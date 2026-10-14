@@ -11,6 +11,7 @@ import { WorkbenchReconnecting } from './WorkbenchLive';
 import { WorkbenchTabStrip, type WorkbenchTabStripMessage } from './WorkbenchTabs';
 import { toWorkbenchRowViews, type WorkbenchRowView } from './workbenchRows';
 import { useWorkbenchWindow } from './useWorkbenchWindow';
+import { useRegisterWorkbenchReread } from '@/lib/workbench/workbenchReread';
 import {
   WorkbenchTabWindowContext,
   type WorkbenchTabWindowDto,
@@ -169,6 +170,8 @@ export function WorkbenchLiveView({
     fromWindow: viewContentOf,
     merge: mergeViewContent,
   });
+  // The overlay's approve asks THIS read to run, through the shell (MOTIR-8576).
+  useRegisterWorkbenchReread(live.reread);
   const tabWindow = useMemo<WorkbenchTabWindowValue>(
     () => ({ window: live.content.tabWindow, reread: live.reread, failures: live.failures }),
     [live.content.tabWindow, live.reread, live.failures],
