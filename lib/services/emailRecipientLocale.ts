@@ -1,6 +1,5 @@
 import { defaultLocale, isLocale, type Locale } from '@/lib/i18n/locales';
 import { userRepository } from '@/lib/repositories/userRepository';
-import { usersService } from '@/lib/services/usersService';
 
 // Which language an email is written in (Story MOTIR-7732 · MOTIR-8104).
 //
@@ -11,8 +10,8 @@ import { usersService } from '@/lib/services/usersService';
 // `email.send` payload's `data.locale` — the template renders the whole email
 // in it, and a retried send renders in the same language as the first attempt.
 //
-// ⚠️ NOTHING HERE MAY READ THE CURRENT REQUEST. `currentLocale()` answers for
-// whoever is looking at the app right now, which for an email is the wrong
+// ⚠️ NOTHING HERE MAY READ THE CURRENT REQUEST. The request's language answers
+// for whoever is looking at the app right now, which for an email is the wrong
 // person, and the guard test (MOTIR-8110) fails any sender that falls back to
 // it. A recipient Motir knows nothing about gets English, not a guess.
 //
@@ -40,8 +39,11 @@ export interface RecipientLocaleInput {
  *  value that is not one of the eleven — it falls through to the next rung. */
 export async function resolveRecipientLocale(input: RecipientLocaleInput): Promise<Locale> {
   if (input.userId) {
-    const saved = await usersService.getSavedLocale(input.userId);
-    if (saved) return saved;
+    // The saved-language read `usersService.getSavedLocale` makes, taken from
+    // the repository directly: usersService is itself a sender that imports
+    // this module, and going through it would close an import cycle.
+    const saved = await userRepository.findLocaleById(input.userId);
+    if (isLocale(saved)) return saved;
     // No saved language, or no such user. Without an address there is nothing
     // further to know about this person; with one, the address step decides
     // (and an account found there still resolves English, never the recorded

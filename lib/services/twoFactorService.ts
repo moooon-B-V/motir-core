@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { sendAuthEmail } from '@/lib/auth/authMail';
-import { currentLocale } from '@/lib/i18n/serverLocale';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { twoFactorRepository } from '@/lib/repositories/twoFactorRepository';
 import { passkeyService } from '@/lib/services/passkeyService';
@@ -238,7 +238,7 @@ export const twoFactorService = {
         recipientName: args.name || 'there',
         code: args.otp,
         expiresInMinutes: TWO_FACTOR_OTP_PERIOD_MINUTES,
-        locale: await currentLocale(),
+        locale: await resolveRecipientLocale({ userId: args.userId }),
       },
     });
   },
