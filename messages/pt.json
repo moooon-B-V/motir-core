@@ -12519,6 +12519,8 @@
         "subject_gone": "O objeto desta pergunta não existe mais, então esta pergunta foi retirada.",
         "no_longer_manual": "O item de trabalho não é mais trabalho manual, então esta pergunta foi retirada.",
         "closed_without_decision": "O item de trabalho foi fechado sem que ninguém o marcasse como concluído, então esta pergunta foi retirada.",
+        "not_ready": "O item de trabalho está bloqueado por outro trabalho, então esta pergunta foi retirada até que possa ser iniciado.",
+        "replanned": "O item de trabalho foi replanejado, então esta pergunta foi retirada.",
         "unknown": "Esta pergunta foi retirada. O motivo não foi registrado."
       },
       "causeByKind": {

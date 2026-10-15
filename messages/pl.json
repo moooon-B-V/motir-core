@@ -12519,6 +12519,8 @@
         "subject_gone": "To, czego dotyczyło pytanie, już nie istnieje, więc to pytanie zostało wycofane.",
         "no_longer_manual": "Element roboczy nie jest już pracą ręczną, więc to pytanie zostało wycofane.",
         "closed_without_decision": "Element roboczy został zamknięty bez oznaczenia go jako gotowy, więc to pytanie zostało wycofane.",
+        "not_ready": "Element roboczy jest zablokowany przez inną pracę, więc to pytanie zostało wycofane, dopóki nie będzie można go rozpocząć.",
+        "replanned": "Element roboczy został zaplanowany ponownie, więc to pytanie zostało wycofane.",
         "unknown": "To pytanie zostało wycofane. Nie zapisano powodu."
       },
       "causeByKind": {
