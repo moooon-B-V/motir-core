@@ -42,6 +42,8 @@ export interface CreatePublicFollowInput {
   confirmedAt?: Date | null;
   confirmTokenHash?: string | null;
   confirmTokenExpiresAt?: Date | null;
+  /** The email-only tier's page language (MOTIR-8105); null on the account tier. */
+  locale?: string | null;
 }
 
 export const publicFollowRepository = {
@@ -116,6 +118,7 @@ export const publicFollowRepository = {
         confirmedAt: data.confirmedAt ?? null,
         confirmTokenHash: data.confirmTokenHash ?? null,
         confirmTokenExpiresAt: data.confirmTokenExpiresAt ?? null,
+        locale: data.locale ?? null,
       },
     });
   },

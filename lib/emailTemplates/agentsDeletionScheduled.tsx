@@ -40,7 +40,7 @@ function values(p: AgentsDeletionScheduledEmailProps) {
 function AgentsDeletionScheduledEmail(props: AgentsDeletionScheduledEmailProps & { t: T }) {
   const { t } = props;
   return (
-    <EmailLayout preview={t('preview', values(props))} footer={t('footer')}>
+    <EmailLayout locale={props.locale} preview={t('preview', values(props))} footer={t('footer')}>
       <Text style={para}>{t('greeting', values(props))}</Text>
       <Text style={para}>{t('lede', values(props))}</Text>
       <Text style={para}>{t('agents', values(props))}</Text>

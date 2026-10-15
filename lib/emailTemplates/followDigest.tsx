@@ -42,10 +42,12 @@ function FollowDigestEmail({
   changelogUrl,
   unsubscribeUrl,
   entries,
+  locale,
   t,
 }: FollowDigestEmailProps & { t: T }) {
   return (
     <EmailLayout
+      locale={locale}
       preview={t('preview', { project: projectName, count: entries.length })}
       footer={t('why')}
     >

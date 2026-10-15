@@ -16,7 +16,7 @@ import { assertAccountNotSuspended } from '@/lib/auth/accountSuspension';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
-import { currentLocale } from '@/lib/i18n/serverLocale';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { applyStaffSession, type StaffSessionContext } from '@/lib/platform/staffSession';
 import {
@@ -209,7 +209,12 @@ export const authOptions: BetterAuthOptions & {
         idempotencyKey: token,
         to: user.email,
         template: 'password-reset',
-        data: { recipientName: user.name || 'there', resetUrl: url, locale: await currentLocale() },
+        data: {
+          recipientName: user.name || 'there',
+          resetUrl: url,
+          // The account holder's saved language, never the requesting browser's.
+          locale: await resolveRecipientLocale({ userId: user.id }),
+        },
       });
     },
   },

@@ -27,6 +27,7 @@ const { agentInstanceSweepService: sweeper } =
   await import('@/lib/services/agentInstanceSweepService');
 const { agentInstanceLapseService } = await import('@/lib/services/agentInstanceLapseService');
 const { deletionDateFor } = await import('@/lib/agentInstances/planLapse');
+const { formatDate } = await import('@/lib/utils/datetime');
 const { agentsDeletionScheduledEmail } =
   await import('@/lib/emailTemplates/agentsDeletionScheduled');
 const { EMAIL_TEMPLATE_CLASS } = await import('@/lib/services/emailService');
@@ -118,6 +119,28 @@ describe('the lapse: a seat-off push schedules every agent and tells each owner 
       'their-codex',
       'yue-claude',
     ]);
+  });
+
+  // Story MOTIR-7732 · MOTIR-8108 — each owner's notice in their own saved
+  // language, the deletion date written in it; the key does not change.
+  it('writes each owner’s notice, and its date, in that owner’s saved language', async () => {
+    const { colleague } = await twoAgents();
+    await adminDb.user.update({ where: { id: fx().ctx.userId }, data: { locale: 'de' } });
+    await adminDb.user.update({ where: { id: colleague.userId }, data: { locale: 'ja' } });
+    await push(false);
+
+    const expected = deletionDateFor((await org()).aiPlanLapsedAt!).toISOString();
+    const byOwner = Object.fromEntries(
+      sent().map((m) => [m.idempotencyKey.split(':').at(-1), m.data]),
+    );
+    expect(byOwner[fx().ctx.userId]).toMatchObject({
+      locale: 'de',
+      deletionDate: formatDate(expected, 'de'),
+    });
+    expect(byOwner[colleague.userId]).toMatchObject({
+      locale: 'ja',
+      deletionDate: formatDate(expected, 'ja'),
+    });
   });
 
   it('a repeated push sends no second email and keeps the first date', async () => {

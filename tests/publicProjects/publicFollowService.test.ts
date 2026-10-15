@@ -29,12 +29,16 @@ import { setProjectAccess } from '@/tests/helpers/projectAccess';
 // job imports `@/lib/email`, and eslint enforces it), so the seam a test drives
 // is the event — which is also the honest one: what this service is responsible
 // for is that the right envelope is emitted, not that a provider accepted it.
-const enqueued: Array<{ to: string; template: string; data: { confirmUrl: string } }> = [];
+const enqueued: Array<{
+  to: string;
+  template: string;
+  data: { confirmUrl: string; locale?: string };
+}> = [];
 
 vi.mock('@/lib/jobs/sendEvent', () => ({
   sendEvent: async (
     name: string,
-    payload: { to: string; template: string; data: { confirmUrl: string } },
+    payload: { to: string; template: string; data: { confirmUrl: string; locale?: string } },
   ) => {
     if (name === 'email.send') enqueued.push(payload);
   },
@@ -219,6 +223,87 @@ describe('the email-only tier', () => {
     ).rejects.toBeInstanceOf(InvalidFollowEmailError);
     expect(await adminDb.publicFollow.count()).toBe(0);
     expect(enqueued).toHaveLength(0);
+  });
+});
+
+// Story MOTIR-7732 · MOTIR-8105 — the language of the page an email-only
+// follow was made from is recorded on the row, for its emails to be written in.
+describe('the page language an email-only follow records', () => {
+  it('stores a valid page language on a new follow', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    const row = await adminDb.publicFollow.findFirstOrThrow();
+    expect(row.email).toBe('a@b.co');
+    expect(row.locale).toBe('it');
+  });
+
+  it.each(['xx', '', undefined])('stores NULL for a page language of %j', async (pageLocale) => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, pageLocale);
+    expect((await adminDb.publicFollow.findFirstOrThrow()).locale).toBeNull();
+  });
+
+  it('takes the newest page language when an UNCONFIRMED address re-subscribes', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    const first = await adminDb.publicFollow.findFirstOrThrow();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'de');
+
+    expect(await adminDb.publicFollow.count()).toBe(1);
+    const second = await adminDb.publicFollow.findFirstOrThrow();
+    expect(second.confirmTokenHash).not.toBe(first.confirmTokenHash);
+    expect(second.locale).toBe('de');
+  });
+
+  it('leaves a CONFIRMED follow’s language alone and sends nothing', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    const token = /token=([A-Za-z0-9_-]+)/.exec(enqueued[0]?.data.confirmUrl ?? '')?.[1] ?? '';
+    await publicFollowService.confirmEmailFollow(token);
+    enqueued.length = 0;
+
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'de');
+    expect(enqueued).toHaveLength(0);
+    expect((await adminDb.publicFollow.findFirstOrThrow()).locale).toBe('it');
+  });
+
+  it('records no language on an account follow', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.followAsAccount(fx.projectIdentifier, fx.ownerId);
+    expect((await adminDb.publicFollow.findFirstOrThrow()).locale).toBeNull();
+  });
+});
+
+// Story MOTIR-7732 · MOTIR-8109 — the confirmation is written in the recipient's
+// language: an account holding the address wins, then the page language, then
+// English.
+describe('the confirmation’s language', () => {
+  const localeOf = () => enqueued.map((e) => e.data.locale);
+
+  it('is the page language for an address with no account', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    expect(localeOf()).toEqual(['it']);
+  });
+
+  it('is the saved language of the account that holds the address, over the page’s', async () => {
+    const fx = await publicFixture();
+    await adminDb.user.create({ data: { email: 'nl@b.co', name: 'Nl', locale: 'nl' } });
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'nl@b.co', null, 'it');
+    expect(localeOf()).toEqual(['nl']);
+  });
+
+  it.each(['xx', undefined])('is English with no account and a page language of %j', async (l) => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, l);
+    expect(localeOf()).toEqual(['en']);
+  });
+
+  it('follows the newest page language when an unconfirmed address re-subscribes', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'de');
+    expect(localeOf()).toEqual(['it', 'de']);
   });
 });
 

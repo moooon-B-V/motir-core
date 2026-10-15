@@ -9,6 +9,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveRecipientLocales } from '@/lib/services/emailRecipientLocale';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 
@@ -51,8 +52,10 @@ import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 // EDIT re-fires `work-item/comment.created` with the same commentId — the
 // same-key dedup is what keeps watchers from being re-mailed per edit.
 //
-// LOCALE: rendered with the default locale — no persisted per-user locale yet
-// (the 5.1.6 signal gap).
+// LOCALE: each email is written in its RECIPIENT's saved language (English when
+// none is saved) — one batch read per page of deliverable watchers, so the
+// cursor walk stays free of per-watcher reads. Never the actor's language.
+// MOTIR-8107.
 //
 // 4-layer note: this is a SERVICE (the job handlers are its only callers, via
 // the injected jobServices bag). It composes repositories + the access policy
@@ -222,7 +225,9 @@ export const watcherNotificationsService = {
         deliverable = viewable.filter((w) => emailEnabled.has(w.userId));
       }
 
+      const localeByUserId = await resolveRecipientLocales(deliverable.map((w) => w.userId));
       for (const watcher of deliverable) {
+        const locale = localeByUserId.get(watcher.userId);
         if (input.kind === 'comment') {
           await sendEvent('email.send', {
             workspaceId: input.workspaceId,
@@ -238,6 +243,7 @@ export const watcherNotificationsService = {
               workItemTitle: item.title,
               excerpt,
               issueUrl,
+              locale,
             },
           });
         } else {
@@ -253,6 +259,7 @@ export const watcherNotificationsService = {
               workItemTitle: item.title,
               statusName: statusName!,
               issueUrl,
+              locale,
             },
           });
         }

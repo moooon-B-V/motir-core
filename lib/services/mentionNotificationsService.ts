@@ -6,6 +6,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { mentionExcerpt } from '@/lib/mentions/excerpt';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveRecipientLocales } from '@/lib/services/emailRecipientLocale';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -36,10 +37,10 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // name with the same commentId carrying ONLY newly-added mention ids, and a
 // commentId-scoped dedup window would silently drop that follow-up.
 //
-// LOCALE: rendered with the default locale — there is no persisted per-user
-// locale to honour yet (the same signal gap the invite email documents; the
-// invite at least has the inviter's request-scoped locale, but this fan-out
-// runs off-request in a job).
+// LOCALE: each email is written in its RECIPIENT's saved language (English when
+// none is saved), resolved for every recipient in ONE batch read — never the
+// author's language, and never a request's (this fan-out runs in a job).
+// MOTIR-8107.
 //
 // 4-layer note: this is a SERVICE (the job handler is its only caller, via
 // the injected jobServices bag). It composes repositories + the access policy
@@ -140,6 +141,7 @@ export const mentionNotificationsService = {
 
     const [author] = await userRepository.findByIds([input.authorId]);
     const recipients = await userRepository.findByIds(emailEnabledIds);
+    const localeByUserId = await resolveRecipientLocales(recipients.map((r) => r.id));
     const excerpt = mentionExcerpt(bodyMd);
     const issueUrl = `${resolveBaseUrlTrimmed()}/items/${encodeURIComponent(item.identifier)}`;
 
@@ -160,6 +162,7 @@ export const mentionNotificationsService = {
           source: input.source.kind,
           excerpt,
           issueUrl,
+          locale: localeByUserId.get(recipient.id),
         },
       });
       notifiedUserIds.push(recipient.id);

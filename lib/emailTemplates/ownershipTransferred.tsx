@@ -55,7 +55,7 @@ function detail(p: OwnershipTransferredEmailProps, t: T): string {
 function OwnershipTransferredEmail(props: OwnershipTransferredEmailProps & { t: T }) {
   const { t } = props;
   return (
-    <EmailLayout preview={t('preview', values(props))} footer={t('notYou')}>
+    <EmailLayout locale={props.locale} preview={t('preview', values(props))} footer={t('notYou')}>
       <Text style={greeting}>{t('greeting', values(props))}</Text>
       <Text style={ledeStyle}>{lede(props, t)}</Text>
       <Text style={ledeStyle}>{detail(props, t)}</Text>

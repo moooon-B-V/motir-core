@@ -1,9 +1,11 @@
+import { isLocale } from '@/lib/i18n/locales';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { publicFollowRepository } from '@/lib/repositories/publicFollowRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { PublicFollowStateDto } from '@/lib/dto/publicProjects';
 import {
@@ -195,11 +197,17 @@ export const publicFollowService = {
    * that is already confirmed re-sends nothing and answers the same; an unknown
    * address answers the same. The caller cannot learn anything about the
    * follower list from the response, which is the whole point (§7).
+   *
+   * `pageLocale` is the language of the page the visitor subscribed from. It is
+   * RECORDED on the row (MOTIR-8105) so the follow's emails can later be written
+   * in it; a value that is not one of the eleven is stored as NULL. A newer
+   * subscribe of an unconfirmed address replaces it, as it replaces the token.
    */
   async subscribeByEmail(
     identifier: string,
     rawEmail: string,
     actorUserId: string | null,
+    pageLocale?: string | null,
   ): Promise<void> {
     if (!digestAvailable()) throw new FollowDigestUnavailableError();
     const email = normalizeFollowEmail(rawEmail);
@@ -211,6 +219,7 @@ export const publicFollowService = {
     // enters the database — only its hash does, and only the email carries the
     // token itself.
     const token = mintFollowToken();
+    const recordedLocale = isLocale(pageLocale) ? pageLocale : null;
     const sendTo = await withWorkspaceServiceContext(project.workspaceId, async (tx) => {
       const existing = await publicFollowRepository.findByProjectAndEmail(project.id, email, tx);
       if (existing?.confirmedAt) {
@@ -220,6 +229,7 @@ export const publicFollowService = {
       }
       const data = {
         digestOptIn: true,
+        locale: recordedLocale,
         confirmTokenHash: hashFollowToken(token),
         confirmTokenExpiresAt: new Date(Date.now() + CONFIRM_TOKEN_TTL_MS),
       };
@@ -242,6 +252,10 @@ export const publicFollowService = {
     });
 
     if (!sendTo) return;
+    // The confirmation is written in the recipient's language (MOTIR-8109): an
+    // account holding this address keeps its saved language, otherwise the
+    // language of the page they just subscribed from, otherwise English.
+    const locale = await resolveRecipientLocale({ email: sendTo, recordedLocale });
     // ENQUEUED, and OUTSIDE the transaction. Two rules meet here and point the
     // same way: this codebase never sends mail synchronously (only the
     // `email.send` job imports `@/lib/email`, and eslint enforces it), and a
@@ -260,6 +274,7 @@ export const publicFollowService = {
       data: {
         projectName: project.name,
         confirmUrl: `${resolveBaseUrlTrimmed()}/follow/confirm?token=${encodeURIComponent(token)}`,
+        locale,
       },
     });
   },

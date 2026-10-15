@@ -17,8 +17,9 @@ import { EMAIL_LINK } from './_components/emailColors';
 // has a zero-results branch. Pure template per CLAUDE.md (no I/O, no env): the
 // savedFilterSubscriptionsService.deliver fan-out composes every prop (it
 // already built both URLs + resolved the rows AS the subscriber). Localized via
-// next-intl's synchronous createTranslator; `locale` defaults to the base
-// locale (no persisted per-user locale yet — the mention/watcher gap).
+// next-intl's synchronous createTranslator; `locale` is the RECIPIENT's
+// language, resolved by the sender (lib/services/emailRecipientLocale.ts);
+// absent ⇒ English.
 
 type T = (key: string, values?: Record<string, string | number>) => string;
 
@@ -52,7 +53,10 @@ function FilterSubscriptionEmail(p: FilterSubscriptionEmailProps & { t: T }) {
   const { t } = p;
   const truncated = p.totalCount > p.items.length;
   return (
-    <EmailLayout preview={t('preview', { filter: p.filterName, count: p.totalCount })}>
+    <EmailLayout
+      locale={p.locale}
+      preview={t('preview', { filter: p.filterName, count: p.totalCount })}
+    >
       <Text style={greeting}>{t('greeting', { name: p.recipientName })}</Text>
       <Text style={lede}>
         {p.totalCount === 0

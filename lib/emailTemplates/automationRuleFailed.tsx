@@ -17,8 +17,8 @@ import { EMAIL_LINK } from './_components/emailColors';
 // crossed the auto-disable threshold, `autoDisabled` adds the "we turned it
 // off" line. Pure template per CLAUDE.md: no I/O, no env reads — the engine
 // hands it a finished `rulesUrl`. Localized via next-intl's synchronous
-// createTranslator; `locale` defaults to the base locale (no per-user locale
-// yet — the watcher/mention precedent).
+// createTranslator; `locale` is the RECIPIENT's language, resolved by the
+// sender (lib/services/emailRecipientLocale.ts); absent ⇒ English.
 
 // A minimal translator shape (satisfied by createTranslator's result).
 type T = (key: string, values?: Record<string, string | number>) => string;
@@ -39,7 +39,7 @@ export interface AutomationRuleFailedEmailProps {
 function AutomationRuleFailedEmail(p: AutomationRuleFailedEmailProps & { t: T }) {
   const { t } = p;
   return (
-    <EmailLayout preview={t('preview', { rule: p.ruleName })}>
+    <EmailLayout locale={p.locale} preview={t('preview', { rule: p.ruleName })}>
       <Text style={greeting}>{t('greeting', { name: p.recipientName })}</Text>
       <Text style={lede}>{t('lede', { rule: p.ruleName })}</Text>
       <Text style={errorRow}>{t('errorLabel', { detail: p.errorDetail })}</Text>

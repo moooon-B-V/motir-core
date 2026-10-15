@@ -2,6 +2,8 @@ import { Body, Container, Head, Hr, Html, Img, Preview, Text } from '@react-emai
 import type { ReactNode } from 'react';
 import { EMAIL_MARK_PATH, EMAIL_MARK_PX } from '@/components/brand/waveBand';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import { defaultLocale, type Locale } from '@/lib/i18n/locales';
+import { BCP47 } from '@/lib/utils/datetime';
 
 // Shared chrome for every Motir transactional email. Each template
 // wraps its content in <EmailLayout preview="…">…</EmailLayout> so
@@ -21,6 +23,10 @@ export interface EmailLayoutProps {
   // you didn't request this, you can ignore this email.") pass it
   // here; the line break + small grey treatment is consistent.
   footer?: ReactNode;
+  // The language the email is written in — the RECIPIENT's (MOTIR-8104).
+  // Declared on <html lang> so a screen reader and a mail client's translate
+  // offer read the body in the right language. Omitted ⇒ English.
+  locale?: Locale;
 }
 
 const main = {
@@ -112,10 +118,10 @@ const signOff = {
   margin: '0',
 };
 
-export function EmailLayout({ preview, children, footer }: EmailLayoutProps) {
+export function EmailLayout({ preview, children, footer, locale }: EmailLayoutProps) {
   const brandMarkSrc = `${resolveBaseUrlTrimmed()}${EMAIL_MARK_PATH}`;
   return (
-    <Html>
+    <Html lang={BCP47[locale ?? defaultLocale]}>
       <Head />
       <Preview>{preview}</Preview>
       <Body style={main}>

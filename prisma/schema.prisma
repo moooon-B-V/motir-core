@@ -3538,6 +3538,11 @@ model PublicFollow {
   /// does not silently skip a window.
   lastDigestAt DateTime? @map("last_digest_at")
 
+  /// Language of the page an email-only follow was made from; NULL on account
+  /// follows and on follows made before the column existed (MOTIR-8105). Plain
+  /// text, validated on read by `isLocale`, so a new locale needs no migration.
+  locale String?
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
