@@ -2187,14 +2187,21 @@ export function Bubble({
             • `min-w-0` is what lets the flex item shrink at all, so the break
               happens inside the bubble instead of widening it past the rail.
 
-          ASSISTANT bubbles are untouched: they render Markdown through
-          `MarkdownView`, which blocks its own paragraphs. Only the user bubble
-          renders raw typed text. */}
+          ⚠️ THE ASSISTANT BUBBLE TAKES `min-w-0` + `wrap-anywhere` TOO
+          (MOTIR-8725). It renders Markdown through `MarkdownView`, so it needs
+          no `whitespace-pre-wrap` — but blocking its own paragraphs never made
+          it fit the rail. Without `min-w-0` this flex item kept `min-width:
+          auto`, grew to the min-content of its widest token (an inline `code`
+          span, a URL, an outcome line's chip) and pushed the guide's log into
+          a sideways scroll. `wrap-anywhere` inherits into the prose and the
+          inline code; a code BLOCK is `white-space: pre`, which it does not
+          reach, so a block still scrolls inside its own frame
+          (`CopyableCodeBlock`). */}
       <div
         className={
           isUser
             ? 'min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm whitespace-pre-wrap text-(--el-accent-text) wrap-anywhere'
-            : `rounded-(--radius-card) px-3 py-2 text-sm ${BUBBLE_FILL[tone]}`
+            : `min-w-0 rounded-(--radius-card) px-3 py-2 text-sm wrap-anywhere ${BUBBLE_FILL[tone]}`
         }
       >
         {label ? (
