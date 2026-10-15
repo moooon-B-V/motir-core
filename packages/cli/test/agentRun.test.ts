@@ -212,6 +212,64 @@ describe('the model self-report', () => {
     expect(result.unbuildableReason).toBe('r'.repeat(4000));
   });
 
+  it('reads a build-through’s `discrepancy` points, dropping a point missing a field (MOTIR-8722)', async () => {
+    const good = { planAsked: ' asked ', built: 'built', why: 'why' };
+    const result = await runAgent({
+      command: reportingAgent(
+        JSON.stringify({ model: 'm-1', discrepancy: [good, { planAsked: 'a', built: 'b' }, 7] }),
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.discrepancy).toEqual([{ planAsked: 'asked', built: 'built', why: 'why' }]);
+    for (const body of ['{"discrepancy":[]}', '{"discrepancy":"x"}', '{"model":"m-1"}']) {
+      const none = await runAgent({ command: reportingAgent(body), prompt: PROMPT, cwd: work });
+      expect(none.discrepancy, body).toBeNull();
+    }
+    const many = await runAgent({
+      command: reportingAgent(JSON.stringify({ discrepancy: Array(25).fill(good) })),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(many.discrepancy).toHaveLength(20);
+  });
+
+  it('reads a STOP: its comment falls back to the `unbuildable` text, the brief is kept (MOTIR-8722)', async () => {
+    const result = await runAgent({
+      command: reportingAgent(
+        JSON.stringify({
+          unbuildable: 'no such table',
+          stop: {
+            toPlanning: true,
+            requirement: { outcome: 'O', scopeEdge: '', behaviour: 42 },
+          },
+        }),
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.stop).toEqual({
+      comment: 'no such table',
+      toPlanning: true,
+      requirement: { outcome: 'O', scopeEdge: '' },
+    });
+
+    const own = await runAgent({
+      command: reportingAgent(JSON.stringify({ stop: { comment: 'mine', toPlanning: 'yes' } })),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(own.stop).toEqual({ comment: 'mine', toPlanning: false, requirement: null });
+
+    // Nothing to say on the card: no stop.
+    const silent = await runAgent({
+      command: reportingAgent(JSON.stringify({ stop: { toPlanning: true } })),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(silent.stop).toBeNull();
+  });
+
   it('keeps the report of an agent that FAILED — it still ran on that model', async () => {
     const result = await runAgent({
       command: fakeAgent(
@@ -357,6 +415,8 @@ describe('the injected spawn seam covers what a real child cannot show', () => {
       signal: null,
       model: null,
       unbuildableReason: null,
+      discrepancy: null,
+      stop: null,
     });
   });
 });

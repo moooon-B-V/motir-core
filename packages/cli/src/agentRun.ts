@@ -78,7 +78,57 @@ export interface AgentRunResult {
    * nothing.
    */
   unbuildableReason?: string | null;
+  /**
+   * The points of a BUILD-THROUGH the agent wrote into its self-report as `discrepancy`
+   * (MOTIR-8722) — the prompt tells an agent with no Motir tools to, so the CLI can record
+   * them with the run's own credential. Null (or absent) when it wrote none.
+   */
+  discrepancy?: AgentDiscrepancyPoint[] | null;
+  /**
+   * The agent's STOP, when it wrote one into its self-report as `stop` (MOTIR-8722) — the
+   * comment, whether the card goes to Planning, and the re-plan brief — so the CLI can
+   * make those writes with the run's own credential. Null (or absent) when it wrote none.
+   */
+  stop?: AgentStopReport | null;
 }
+
+/** One point of a build-through: what the plan asked · what was built · why. */
+export interface AgentDiscrepancyPoint {
+  planAsked: string;
+  built: string;
+  why: string;
+}
+
+/** The six `SettledRequirement` fields of a re-plan brief, as far as the agent wrote them. */
+export type AgentStopRequirement = Partial<
+  Record<
+    'outcome' | 'behaviour' | 'scopeEdge' | 'constraints' | 'acceptance' | 'assumptions',
+    string
+  >
+>;
+
+/** What the agent asked the run to do on a STOP. */
+export interface AgentStopReport {
+  /** The finding for the card's comment — `stop.comment`, else the `unbuildable` text. */
+  comment: string;
+  toPlanning: boolean;
+  requirement: AgentStopRequirement | null;
+}
+
+/** The server's bounds on a discrepancy record (`RUN_DISCREPANCY_*_MAX`). */
+const MAX_DISCREPANCY_POINTS = 20;
+const MAX_DISCREPANCY_FIELD_LENGTH = 2000;
+/** The server's bounds on a stop report (`RUN_STOP_*_MAX`). */
+const MAX_STOP_COMMENT_LENGTH = 4000;
+const MAX_STOP_FIELD_LENGTH = 2000;
+const REQUIREMENT_FIELDS = [
+  'outcome',
+  'behaviour',
+  'scopeEdge',
+  'constraints',
+  'acceptance',
+  'assumptions',
+] as const;
 
 /**
  * The longest unbuildable reason carried — the server's own bound
@@ -100,9 +150,16 @@ const MAX_MODEL_LENGTH = 200;
 export interface AgentReport {
   model: string | null;
   unbuildableReason: string | null;
+  discrepancy: AgentDiscrepancyPoint[] | null;
+  stop: AgentStopReport | null;
 }
 
-const EMPTY_REPORT: AgentReport = { model: null, unbuildableReason: null };
+const EMPTY_REPORT: AgentReport = {
+  model: null,
+  unbuildableReason: null,
+  discrepancy: null,
+  stop: null,
+};
 
 /**
  * Read the agent's self-report. Total: every failure mode — no file, no
@@ -124,8 +181,74 @@ export function readAgentReport(path: string): AgentReport {
     return EMPTY_REPORT;
   }
   if (typeof parsed !== 'object' || parsed === null) return EMPTY_REPORT;
-  const { model, unbuildable } = parsed as { model?: unknown; unbuildable?: unknown };
-  return { model: modelOf(model), unbuildableReason: reasonOf(unbuildable) };
+  const { model, unbuildable, discrepancy, stop } = parsed as {
+    model?: unknown;
+    unbuildable?: unknown;
+    discrepancy?: unknown;
+    stop?: unknown;
+  };
+  const unbuildableReason = reasonOf(unbuildable);
+  return {
+    model: modelOf(model),
+    unbuildableReason,
+    discrepancy: discrepancyOf(discrepancy),
+    stop: stopOf(stop, unbuildableReason),
+  };
+}
+
+/** A trimmed, non-empty string cut to `max`, or null. Cut rather than dropped, like a reason. */
+function textOf(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed.slice(0, max);
+}
+
+/**
+ * The build-through points. A point missing a field is dropped, not the whole record — the
+ * rest is still what the agent built differently; more than the server's 20 are cut to it.
+ */
+function discrepancyOf(value: unknown): AgentDiscrepancyPoint[] | null {
+  if (!Array.isArray(value)) return null;
+  const points: AgentDiscrepancyPoint[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const raw = entry as Record<string, unknown>;
+    const planAsked = textOf(raw.planAsked, MAX_DISCREPANCY_FIELD_LENGTH);
+    const built = textOf(raw.built, MAX_DISCREPANCY_FIELD_LENGTH);
+    const why = textOf(raw.why, MAX_DISCREPANCY_FIELD_LENGTH);
+    if (planAsked && built && why) points.push({ planAsked, built, why });
+  }
+  return points.length === 0 ? null : points.slice(0, MAX_DISCREPANCY_POINTS);
+}
+
+/**
+ * The STOP. Its comment is `stop.comment`, else the `unbuildable` text the prompt asks for
+ * anyway; with neither there is nothing to say on the card, so there is no stop.
+ * `toPlanning` must be `true` to move the card — anything else leaves it where it is.
+ */
+function stopOf(value: unknown, unbuildableReason: string | null): AgentStopReport | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const comment = textOf(raw.comment, MAX_STOP_COMMENT_LENGTH) ?? unbuildableReason;
+  if (!comment) return null;
+  let requirement: AgentStopRequirement | null = null;
+  if (typeof raw.requirement === 'object' && raw.requirement !== null) {
+    const bag = raw.requirement as Record<string, unknown>;
+    const kept: AgentStopRequirement = {};
+    for (const field of REQUIREMENT_FIELDS) {
+      // A field the agent wrote as "" is an ANSWER ("considered, there is none"), so it is
+      // kept; only a non-string is left out.
+      if (typeof bag[field] === 'string') {
+        kept[field] = (bag[field] as string).trim().slice(0, MAX_STOP_FIELD_LENGTH);
+      }
+    }
+    if (Object.keys(kept).length > 0) requirement = kept;
+  }
+  return {
+    comment: comment.slice(0, MAX_STOP_COMMENT_LENGTH),
+    toPlanning: raw.toPlanning === true,
+    requirement,
+  };
 }
 
 function modelOf(model: unknown): string | null {

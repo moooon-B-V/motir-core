@@ -2812,6 +2812,51 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
   );
 });
 
+// MOTIR-8722 — an agent with NO Motir tools (a hosted run, a run inside an agent) cannot make the
+// build-through record or the STOP's writes itself. The prompt sends both through
+// `$MOTIR_AGENT_REPORT`, and says plainly that the re-plan is not submitted on that path.
+describe('NO MOTIR TOOLS — the build-through and the STOP go through the self-report (MOTIR-8722)', () => {
+  const prompt = (policy: DispatchPromptSource['findingsPolicy']) =>
+    assembleDispatchPrompt(source({ key: 'PROD-99', findingsPolicy: policy })).prompt;
+  const REPLAN = { logBug: true, replan: true, autoApproveReplan: false };
+  const NO_REPLAN = { logBug: true, replan: false, autoApproveReplan: false };
+
+  it('the build-through puts its points into the file as "discrepancy" when the tool is missing', () => {
+    const text = prompt(REPLAN);
+    const at = text.indexOf('BUILD THROUGH — the WHAT holds');
+    const through = text.slice(at, text.indexOf('STOP — the WHAT itself breaks'));
+    expect(through).toContain('If the record_run_discrepancy tool is not available to you');
+    expect(through).toContain('"discrepancy": [{"planAsked": "…", "built": "…", "why": "…"}]');
+    // The JSON shown is the shape the CLI reads.
+    const shown = JSON.parse(
+      '{"model": "m", "discrepancy": [{"planAsked": "a", "built": "b", "why": "c"}]}',
+    ) as { discrepancy: unknown[] };
+    expect(shown.discrepancy).toHaveLength(1);
+  });
+
+  it('a re-planning STOP asks for "stop" with toPlanning and the six fields, and says nothing is submitted', () => {
+    const text = prompt(REPLAN);
+    const stop = text.slice(text.indexOf('STOP — the WHAT itself breaks'));
+    expect(stop).toContain('NO MOTIR TOOLS?');
+    expect(stop).toContain('"stop": {"toPlanning": true, "requirement": {"outcome": "…"');
+    for (const field of AI_REQUIREMENT_FIELDS) expect(stop).toContain(`"${field}"`);
+    expect(stop).toContain('It does NOT submit the');
+    expect(stop).toContain('Do not report a re-plan as submitted.');
+    // Before the Planning step it replaces, so the agent reads it in time.
+    expect(stop.indexOf('NO MOTIR TOOLS?')).toBeLessThan(
+      stop.indexOf('to Planning with the transition_status tool'),
+    );
+  });
+
+  it('a STOP with re-planning off asks for "stop" with toPlanning false and moves nothing', () => {
+    const stop = prompt(NO_REPLAN).slice(
+      prompt(NO_REPLAN).indexOf('STOP — the WHAT itself breaks'),
+    );
+    expect(stop).toContain('"stop": {"toPlanning": false}');
+    expect(stop).not.toContain('"toPlanning": true');
+  });
+});
+
 describe('the BRANCH the prompt instructs (MOTIR-6530) — what a local run records on checkout_ready', () => {
   it('is the card’s per-item branch in `per_item_pr` mode, and the prompt names that same branch', () => {
     const { prompt, branch } = assembleDispatchPrompt(source());

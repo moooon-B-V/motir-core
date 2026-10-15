@@ -177,6 +177,13 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 422 — a run-found report's reason empty or over its bound (MOTIR-8698). The body
   // schema refuses it first as `INVALID_BODY`; this row is the service's own guard.
   RUN_FOUND_REPORT_REASON_INVALID: 422,
+  // ── MOTIR-8722, the run's discrepancy and STOP reports (`…/discrepancy`, `…/stop`) ──
+  // 422 — a malformed discrepancy record or stop report; the body schema refuses the same
+  // input first as `INVALID_BODY`, these rows are the services' own guards.
+  RUN_DISCREPANCY_INVALID: 422,
+  RUN_STOP_REPORT_INVALID: 422,
+  // 409 — the leg already carries a discrepancy record (the agent made the call itself).
+  DISCREPANCY_ALREADY_RECORDED: 409,
   // ── MOTIR-6821, a hosted REVIEW run's prompt and verdict (`hosted-agent-run.md` §8) ──
   // 403 — not a review run's own credential: a PAT, a device token, a BUILD run's token.
   REVIEW_RUN_TOKEN_REQUIRED: 403,

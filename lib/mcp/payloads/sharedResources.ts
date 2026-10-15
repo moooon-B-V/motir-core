@@ -179,4 +179,16 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'sibling `report_unbuildable_target` answers the same `{ acknowledged, recordedOnRun }` ' +
     'acknowledgement, and is exempt from the payload guard because an acknowledgement represents ' +
     'no resource (`EXEMPT_TOOLS`), so there is no probed payload to compare this against.',
+  RunDiscrepancyAcknowledgement:
+    'The run’s DISCREPANCY record (MOTIR-8722) is posted over `/api/v1` by the `motir` CLI ' +
+    'around the agent, on the run’s own credential, which `verifyMcpToken` refuses. Its MCP ' +
+    'sibling `record_run_discrepancy` answers the same `{ commentId, recorded }` ' +
+    'acknowledgement, and is exempt from the payload guard because an acknowledgement represents ' +
+    'no resource (`EXEMPT_TOOLS`), so there is no probed payload to compare this against.',
+  RunStopReportAcknowledgement:
+    'The run’s STOP report (MOTIR-8722) is posted over `/api/v1` by the `motir` CLI around the ' +
+    'agent, on the run’s own credential, which `verifyMcpToken` refuses. It has no MCP sibling: ' +
+    'an agent with the Motir tools makes the STOP’s calls itself (`add_comment`, ' +
+    '`transition_status`, `append_plan_turn`, `submit_plan_session`), so there is no MCP payload ' +
+    'to compare this acknowledgement against.',
 };
