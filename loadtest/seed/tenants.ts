@@ -626,7 +626,21 @@ async function restorePools(manifest: SeedManifest, log: (line: string) => void)
       jobs.push({ id: c.id, parentId: a.burst.parents[0].id, ctx: ctxOf(a.workspaceId) });
     }
   }
-  await mapLimit(jobs, (j) => restoreCard(j.id, j.parentId, j.ctx));
+  // ONE WORKSPACE'S CARDS ARE RESTORED IN SEQUENCE. Siblings restored side by side
+  // move into the same parent and roll its status up together, and two such
+  // transactions take the parent's and the siblings' row locks in opposite orders:
+  // a re-seed after a run that claimed or ran cards failed with `40P01 deadlock
+  // detected` (found by the loadtest end-to-end lane, MOTIR-8682). Workspaces share
+  // no card, parent or project, so they still run in parallel.
+  const byWorkspace = new Map<string, typeof jobs>();
+  for (const j of jobs) {
+    const group = byWorkspace.get(j.ctx.workspaceId) ?? [];
+    group.push(j);
+    byWorkspace.set(j.ctx.workspaceId, group);
+  }
+  await mapLimit([...byWorkspace.values()], async (group) => {
+    for (const j of group) await restoreCard(j.id, j.parentId, j.ctx);
+  });
   log(`pool cards restored: ${jobs.length}`);
 }
 

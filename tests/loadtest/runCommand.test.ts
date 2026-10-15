@@ -91,6 +91,20 @@ describe('step 1 — refusals before any platform call', () => {
     expect(fake.world.calls).toEqual([]);
   });
 
+  it('refuses without the preflight’s own variables before any platform call', async () => {
+    const env = {
+      ...ENV,
+      LOADTEST_STAGING_APP: undefined,
+      LOADTEST_PRODUCTION_SENTRY_PROJECT_ID: ' ',
+    };
+    const out = await runLoadTest(SMOKE_ARGS, deps({ env }));
+    expect(out.exitCode).toBe(EXIT.refused);
+    expect(fake.logs.join('\n')).toMatch(
+      /missing LOADTEST_STAGING_APP, LOADTEST_PRODUCTION_SENTRY_PROJECT_ID/,
+    );
+    expect(fake.world.calls).toEqual([]);
+  });
+
   it('refuses a STAGING_BASE_URL whose host is not STAGING_ALLOWED_HOST', async () => {
     const out = await runLoadTest(
       SMOKE_ARGS,

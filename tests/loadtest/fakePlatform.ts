@@ -335,6 +335,7 @@ export const ENV = {
   LOADTEST_DATABASE_URL: `postgresql://motir_app:${SECRET}@${POOLED}/motir`,
   LOADTEST_ALLOWED_DB_HOST: DIRECT,
   LOADTEST_PRODUCTION_DB_HOSTS: 'ep-prod-9.us-east-2.aws.neon.tech',
+  LOADTEST_PRODUCTION_SENTRY_PROJECT_ID: '4500000000000001',
   FLY_API_TOKEN: 'fo1_flysecret',
   STAGING_BASE_URL: BASE_URL,
   STAGING_ALLOWED_HOST: 'motir-core-staging.flycast',

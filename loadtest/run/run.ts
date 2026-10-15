@@ -185,7 +185,11 @@ export const OPTIONS = {
     'LOADTEST_NEON_API_KEY',
     'LOADTEST_NEON_API_URL',
   ],
-  /** Required beside the flags (LOADTEST_STAGING_APP is the fallback for --app). */
+  /**
+   * Required beside the flags (LOADTEST_STAGING_APP is also the fallback for --app).
+   * The last two are the preflight's own: checked here so a run refuses before it
+   * scales staging or starts the generator, not at the preflight step.
+   */
   requiredEnv: [
     'LOADTEST_GENERATOR_APP',
     'LOADTEST_NEON_PROJECT',
@@ -195,6 +199,8 @@ export const OPTIONS = {
     'FLY_API_TOKEN',
     'STAGING_BASE_URL',
     'STAGING_ALLOWED_HOST',
+    'LOADTEST_STAGING_APP',
+    'LOADTEST_PRODUCTION_SENTRY_PROJECT_ID',
   ],
   exits: {
     0: 'the run completed (not: passed — the report decides that)',
@@ -833,6 +839,10 @@ function defaultSeed(deps: RunDeps): NonNullable<RunDeps['seed']> {
     const script = command === 'seed' ? 'loadtest:seed' : 'loadtest:seed:reset';
     const r = await deps.exec('pnpm', ['-s', script, ...args], { env });
     for (const line of r.stdout.split('\n').filter(Boolean)) deps.log(`seed | ${line}`);
+    // A failed seed says why on stderr (its entry prints the error's message there);
+    // without these lines the run recorded only "exited 1" (MOTIR-8682).
+    if (r.code !== 0)
+      for (const line of r.stderr.split('\n').filter(Boolean)) deps.log(`seed ! ${line}`);
     return r.code;
   };
 }

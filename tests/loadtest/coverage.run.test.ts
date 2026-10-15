@@ -540,6 +540,21 @@ describe('run — step 8, the seed', () => {
     expect(fake.logs).toContain('seed | seeded 8 users');
     expect(fake.logs).toContain('seed | reset 0 rows');
   });
+
+  it('a failed default seed logs its stderr, so the run says why', async () => {
+    const exec: Exec = async (bin, args, opts) =>
+      bin === 'pnpm'
+        ? { code: 1, stdout: 'users: 8\n', stderr: 'Raw query failed. Code: `40P01`.\n\n' }
+        : fakeExec(bin, args, opts);
+    const out = await runLoadTest(
+      SMOKE_ARGS,
+      deps({ exec, seed: undefined, readManifest: undefined }),
+    );
+    expect(out.exitCode).toBe(EXIT.refused);
+    expect(reason(out.runDir)).toBe('pnpm loadtest:seed exited 1');
+    expect(fake.logs).toContain('seed | users: 8');
+    expect(fake.logs).toContain('seed ! Raw query failed. Code: `40P01`.');
+  });
 });
 
 describe('run — step 9, k6 on the generator', () => {

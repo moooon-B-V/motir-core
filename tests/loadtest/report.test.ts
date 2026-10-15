@@ -11,6 +11,7 @@ import {
   comparableOf,
   EXIT,
   OPTIONS,
+  runId8,
   runReportCli,
   type ReportDeps,
 } from '@/loadtest/report/report';
@@ -677,6 +678,12 @@ describe('--publish', () => {
       'report.md',
     ]);
     expect(a.logs.some((l) => l.startsWith('published: '))).toBe(true);
+  });
+
+  it('two real run ids from one day publish to two folders', () => {
+    expect(runId8('20261015T091500Z-smoke-n1')).toBe('T091500Z');
+    expect(runId8('20261015T143000Z-smoke-n1')).toBe('T143000Z');
+    expect(runId8('r1aaaaaaaa-run')).toBe('r1aaaaaa');
   });
 
   it('refuses a report holding a connection string, and copies nothing', async () => {

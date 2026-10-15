@@ -152,7 +152,12 @@ export function sizeOf(run: RunRecord): string {
 
 function headerOf(
   inputs: RunInputs,
-  extra: { promEndpoint: string; promQueriedAt: string | null; generator: GeneratorLoad },
+  extra: {
+    promEndpoint: string;
+    promQueriedAt: string | null;
+    settleSeconds: number;
+    generator: GeneratorLoad;
+  },
 ) {
   const run = inputs.run;
   const pg = (r: RunInputs['pgssBefore']) =>
@@ -205,6 +210,8 @@ function headerOf(
       endpoint: extra.promEndpoint,
       app: run.app.name,
       queriedAt: extra.promQueriedAt ?? 'unmeasured',
+      /** The post-window wait before the first query (LOADTEST_PROM_SETTLE_SECONDS, default 60). */
+      settleSeconds: extra.settleSeconds,
     },
     pgStatStatements: { before: pg(inputs.pgssBefore), after: pg(inputs.pgssAfter) },
     baseline: run.baseline ?? 'none (N = 1)',
@@ -264,13 +271,11 @@ export function verdictOf(
 export async function buildReport(dir: string, deps: ReportDeps): Promise<Report> {
   const inputs = await loadRunInputs(dir);
   const run = inputs.run;
-  const settle = Number(deps.env['LOADTEST_PROM_SETTLE_SECONDS'] ?? SETTLE_SECONDS_DEFAULT);
+  const settleRead = Number(deps.env['LOADTEST_PROM_SETTLE_SECONDS'] ?? SETTLE_SECONDS_DEFAULT);
+  const settle = Number.isFinite(settleRead) ? settleRead : SETTLE_SECONDS_DEFAULT;
   const endedAt = ms(known(run.window.endedAt));
   if (Number.isFinite(endedAt)) {
-    const wait =
-      endedAt +
-      (Number.isFinite(settle) ? settle : SETTLE_SECONDS_DEFAULT) * 1000 -
-      deps.now().getTime();
+    const wait = endedAt + settle * 1000 - deps.now().getTime();
     if (wait > 0) {
       deps.log(
         `report: waiting ${Math.ceil(wait / 1000)} s for Prometheus to ingest the run's last scrape`,
@@ -469,6 +474,7 @@ export async function buildReport(dir: string, deps: ReportDeps): Promise<Report
   const header = headerOf(inputs, {
     promEndpoint: prom.endpoint,
     promQueriedAt: prom.queriedAt(),
+    settleSeconds: settle,
     generator,
   });
   return {
@@ -514,6 +520,15 @@ export class PublishRefusedError extends Error {
   }
 }
 
+/**
+ * Eight characters that keep two published runs apart. A run id starts with its
+ * UTC stamp (`20261015T221500Z-…`), whose first eight characters are only the
+ * date the folder name already carries, so the stamp's time part is used.
+ */
+export function runId8(runId: string): string {
+  return /^\d{8}(T\d{6}Z)/.exec(runId)?.[1] ?? runId.slice(0, 8);
+}
+
 export async function publishReport(runDir: string, cwd: string, run: RunRecord): Promise<string> {
   for (const f of ['report.md', 'report.json']) {
     const text = await readFile(join(runDir, f), 'utf8');
@@ -524,7 +539,7 @@ export async function publishReport(runDir: string, cwd: string, run: RunRecord)
   const dest = join(
     cwd,
     REPORTS_DIR,
-    `${date}-${run.profile.name}-n${run.instances}-${run.runId.slice(0, 8)}`,
+    `${date}-${run.profile.name}-n${run.instances}-${runId8(run.runId)}`,
   );
   await mkdir(dest, { recursive: true });
   for (const f of ['report.md', 'report.json']) await copyFile(join(runDir, f), join(dest, f));

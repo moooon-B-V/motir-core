@@ -15,7 +15,7 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ get: () => undefined, set: () => {} }),
 }));
 
-const { adminDb: db } = await import('../helpers/adminDb');
+const { adminDb } = await import('../helpers/adminDb');
 const { findV1Operation } = await import('@/lib/api/v1/openapi/registry');
 const { resetRateLimitStore } = await import('@/lib/api/v1/rateLimit');
 const {
@@ -320,11 +320,11 @@ describe('one run iteration against the shipped routes', () => {
       if (r.op === 'heartbeatDispatchRun') expect(status).toBe(204);
     }
 
-    const run = await db.dispatchRun.findUniqueOrThrow({ where: { id: runId } });
+    const run = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: runId } });
     expect(run.status).toBe('succeeded');
     expect(run.stopReason).toBe('completed');
     expect(run.lastHeartbeatAt).not.toBeNull();
-    const events = await db.dispatchRunEvent.findMany({
+    const events = await adminDb.dispatchRunEvent.findMany({
       where: { dispatchRunId: runId },
       orderBy: { seq: 'asc' },
       select: { kind: true },
@@ -345,11 +345,11 @@ describe('one run iteration against the shipped routes', () => {
     expect(kinds).not.toContain('ci_verdict');
     // The story gate (MOTIR-8681): a load-test run leaves no pull request and no
     // container behind it.
-    expect(await db.githubPullRequest.count()).toBe(0);
-    expect(await db.ciContainerUsage.count()).toBe(0);
-    expect(await db.fleetInFlightSlot.count()).toBe(0);
+    expect(await adminDb.githubPullRequest.count()).toBe(0);
+    expect(await adminDb.ciContainerUsage.count()).toBe(0);
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
 
-    const item = await db.workItem.findFirstOrThrow({
+    const item = await adminDb.workItem.findFirstOrThrow({
       where: { id: card.id },
       select: { status: true, assigneeId: true },
     });
@@ -362,7 +362,7 @@ describe('one run iteration against the shipped routes', () => {
     const card = seq.runSlice(manifest, first)[0]!;
     const claim = { op: 'claimWorkItem', step: 'claim', params: { key: card.key } };
     expect((await call(first.token, claim)).verdict.outcome).toBe(OK);
-    const runsBefore = await db.dispatchRun.count();
+    const runsBefore = await adminDb.dispatchRun.count();
     // A member of the same project, signed in as another user.
     const other = manifest.agents.find(
       (a) => a.role === 'run' && a.projectId === first.projectId && a.userId !== first.userId,
@@ -370,6 +370,6 @@ describe('one run iteration against the shipped routes', () => {
     expect(other).toBeDefined();
     const refused = await call(other.token, claim);
     expect(refused.verdict.outcome).toBe(EMPTY);
-    expect(await db.dispatchRun.count()).toBe(runsBefore);
+    expect(await adminDb.dispatchRun.count()).toBe(runsBefore);
   }, 60_000);
 });
