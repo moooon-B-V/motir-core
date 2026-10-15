@@ -151,12 +151,17 @@ const polled = (page: Page, planId: string, until: (b: PlanReviewDto) => boolean
 const held = (page: Page, planId: string, still: (b: PlanReviewDto) => boolean) =>
   planPolled(page, planId, (b) => isUnchanged(b) || still(b));
 
-/** Open a card's quick view through the canvas door. */
+/**
+ * Open a card's quick view through the canvas door, from the KEYBOARD. A card
+ * the planner is drafting wears the at-work cue, whose grow animation runs for
+ * as long as the draft does, so the card is never "stable" and a pointer click
+ * on it waits forever. Focus and Enter are the same door and need no stillness.
+ */
 async function openQuickView(page: Page, title: string): Promise<void> {
   const card = node(page, title);
   await expect(card).toBeVisible({ timeout: 4 * POLL_MS });
   await card.press('Enter');
-  await card.getByTestId('view-button').click();
+  await card.getByTestId('view-button').press('Enter');
   await expect(peek(page)).toBeVisible();
 }
 
@@ -362,7 +367,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       async () => {
         // Selecting a card and opening its quick view on the same level keep following on.
         const sameLevelCard = laterLevel === S_TITLE ? A2 : B1;
-        await node(page, sameLevelCard).click();
+        await node(page, sameLevelCard).press('Enter'); // it may wear the at-work cue
         await openQuickView(page, sameLevelCard);
         await expect(followButton(page)).toHaveCount(0);
         await closeQuickView(page);
