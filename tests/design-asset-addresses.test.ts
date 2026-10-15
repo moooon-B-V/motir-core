@@ -518,6 +518,16 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  MOTIR-2896 built the route group, so the row expired and is gone — the
   //  mechanism working exactly as its sibling comment below describes.)
   {
+    file: 'design/platform-admin/console--fleet-settings.mock.html',
+    address: '/admin/fleet-settings',
+    why: 'Forward-looking: the page the /admin setting UI card (story MOTIR-8699, blocked_by MOTIR-8703) builds. Delete this row when app/(admin)/admin/fleet-settings/page.tsx lands.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/admin/fleet-settings',
+    why: 'Forward-looking: the page the /admin setting UI card (story MOTIR-8699, blocked_by MOTIR-8703) builds. Delete this row when app/(admin)/admin/fleet-settings/page.tsx lands.',
+  },
+  {
     file: 'design/roadmap/design-notes.md',
     address: '/projects/[key]/direction/[tier]',
     why: 'Forward-looking, and the asset says so inline ("NEW — no shipped route yet"). The tier doc shipped at /direction/[tier].',

@@ -21,6 +21,7 @@ closest existing usage surface.
 | **The OPS TOOLKIT — org Operations tab · credits & plan · org suspend · kill-switches · View as · the audit log** (AMENDMENT 2026-10-03) | **`console--ops-toolkit.mock.html`** (delta, Panels 1–8) | Story 10.3’s governance writes on the shipped org and user pages, plus the hash-chained audit log at `/admin/audit-log`. **Gates MOTIR-747 … MOTIR-752.** |
 | **ENTERPRISE REQUESTS — the rail row · the list (state filter, cursor paging, count) · the detail per state · support read-only · stale refusal** (AMENDMENT 2026-10-05) | **`console--enterprise-requests.mock.html`** (delta, Panels 1–10) | A new Platform-group page at `/admin/enterprise-requests` where staff work the requests orgs send from the Enterprise card’s Contact sales. **Gates MOTIR-7609.** |
 | **IDEAS — the rail row · the list (status / kind / category / tag / text filters in the URL, keyset pages) · the detail · edit with evidence rows · retire with a reason · a superadmin’s delete · support read-only** (AMENDMENT 2026-10-07) | **`console--ideas.mock.html`** (delta, Panels 1–12) | A new Operations page at `/admin/ideas` where staff review, correct, retire and delete the ideas motir.co shows. **Gates MOTIR-7680 and MOTIR-7681.** |
+| **FLEET SETTINGS — the rail row · the superadmin setting “Run Motir’s private repositories’ CI on the fleet” · the nine-condition readiness verdict · confirm ON / OFF with a reason · the refusals · read failed · not superadmin** (AMENDMENT 2026-10, MOTIR-8703) | **`console--fleet-settings.mock.html`** (delta, Panels 1–13) | A new Operations page at `/admin/fleet-settings` where a superadmin moves Motir’s private repositories’ CI onto the fleet once it is ready, and off at any time. **Gates the /admin setting UI card (story MOTIR-8699, `blocked_by` MOTIR-8703).** |
 
 ## What this area is
 
@@ -2626,3 +2627,370 @@ asset draws no stale-edit refusal. A concurrent retire is the one race the page 
 - What motir.co shows after a change (MOTIR-7665), and any cache purge — the hourly revalidate is the
   agreed bound, which the page states.
 - A stale-edit refusal (the service has none; last write wins).
+
+---
+
+# AMENDMENT 2026-10 — Fleet settings · Motir CI on the fleet (MOTIR-8703 · story MOTIR-8699)
+
+**Design system check (first, per the design-system rule).** The project is on Motir Design
+(`@motir/design-system` `workspace:*`, `app/globals.css` imports its `theme.css`), so the page is
+drawn from that system's `--el-*` / shape tokens and its shipped primitives. Nothing the package
+lacks is needed — no proposed addition, no product-local component.
+
+**Mock (a DELTA):** [`console--fleet-settings.mock.html`](console--fleet-settings.mock.html),
+thirteen states in fourteen frames (2 is drawn twice, as the card asks; 5 carries a 5b inset).
+**Amends:** `console.mock.html` Panel 2 (the shell — one rail row is added), Panel 7a (the 404,
+referenced and not redrawn) and Panel 11 (the confirm-with-mandatory-reason grammar, reused for a
+third write after the classification control and AI planning). No existing mock is edited.
+**Gates:** the **/admin setting UI** card of story MOTIR-8699, which is `blocked_by` MOTIR-8703 and
+builds to the published result (`design-result.md` AMENDMENT 5 Q1). It builds on **MOTIR-8713**
+(`lib/services/fleetReadinessService.ts`, the readiness verdict) and **MOTIR-8714**
+(`lib/services/fleetOrgCiSettingService.ts` + `lib/dto/fleetOrgCiSetting.ts`, the setting and its
+flip), both already merged into this worktree.
+
+**Composed, not redrawn.** The token block, primitive CSS and lucide sprite are spliced verbatim
+from `console.mock.html` by way of `console--ai-planning.mock.html` (the closest sibling: a
+superadmin platform setting with a reason confirm). The rail is `AdminShell.tsx` as it stands on
+`main` — Platform: Overview · Usage & cost · Tenants · Users · Enterprise requests; Operations:
+Monitoring · **Fleet settings** · AI planning · Hosted-run models · Planning lessons · Ideas · Audit
+log — not the older mocks' rail with its reserved `Governance · 10.3` row. The additions block at the
+end of the mock's `<style>` holds only the `Switch` (as `Switch.tsx` renders it), the setting and
+readiness layout, and eight Tier-3 tokens the point-in-time block predates (`--el-text-identifier`,
+`--el-icon-muted`, `--el-danger-on-surface`, `--el-switch-on`, `--el-switch-on-border`,
+`--el-switch-off-border`, `--el-switch-knob`, `--el-switch-knob-off`), each spelled exactly as
+`packages/design-system/theme.css` defines it.
+
+## ⚠️ Where the card and this asset differ (shipped code wins — each recorded, not papered over)
+
+1. **NINE conditions, not six.** The card lists six; the verdict MOTIR-8713 actually built produces
+   nine, in this order, each `met | unmet | unknown` with an English `message`, a `reasonCode` and
+   `params`: `kill_switch`, `app_installed`, `app_runner_permission`, `app_variables_permission`,
+   `workflow_job_subscription`, `app_repositories`, `delivery_attributable`, `runner_group`,
+   `image_coverage`. The card's own scope boundary says the design follows the readiness card when
+   the sets differ, so the readiness card draws nine rows. The card's six map onto 1, 3, 4, 5, 8
+   and 9; `app_installed`, `app_repositories` and `delivery_attributable` are the three the card did
+   not name.
+2. **"Could not check" is `unknown`, and it is produced.** The card asked the readiness card to
+   produce it or say why it cannot occur. It is produced: a failed GitHub read is `unknown` with
+   reason `read_failed` (and the HTTP status in `params.status`), and when `app_installed` is not
+   `met` every condition read through the installation (`app_runner_permission`,
+   `app_variables_permission`, `workflow_job_subscription`, `app_repositories`,
+   `delivery_attributable`, `image_coverage`) is `unknown` with reason `app_not_readable`.
+   `ready` is true only when all nine are `met`, so an unknown blocks ON — drawn as **Couldn't
+   check**, counted as not met.
+3. **The verdict's count says "not met", not "unmet".** The card's _Not ready — N conditions unmet_
+   would call an unknown "unmet", which the service deliberately does not. The header reads
+   _Not ready — {n} conditions not met_ and a second line splits it (_{unmet} unmet · {unknown}
+   couldn't be checked_).
+4. **The setting is per (project, org) pair.** `fleetOrgCiSettingService` stores one row per
+   `(projectId, org)` and `listTargets` returns every pair the console offers. Today that is one
+   pair, project **MOTIR** × **moooon-B-V**, which is what the mock draws; the card's subtitle line
+   names the pair (_Project MOTIR · GitHub organisation moooon-B-V_). If `listTargets` ever returns
+   several, the page repeats the setting card + readiness card per pair, in `listTargets` order.
+5. **Three repositories, not seven.** The card says _today's seven_. Of Motir's seven repositories
+   on `moooon-B-V`, only **motir-ai, motir-gateway and motir-meta are private**; motir-core,
+   motir-marketing, motir-skills and nextjs-prisma-vercel-starter are public
+   (`docs/research/fleet-job-inventory.md`, summary table), and the fleet only ever serves private
+   repositories (the runner group access-lists private repositories only, and every readiness
+   condition considers the private set). The mock lists the three as examples, says the list is read
+   at runtime from project MOTIR's private `moooon-B-V` repositories, and the ON confirm says
+   _3 repositories_.
+6. **The write-failed sentence carries a status, not a cause.** The card's example (_…the App lacks
+   Variables (write) on moooon-B-V_) names a cause; `FleetOrgCiGithubWriteError` carries only the
+   org, the HTTP status (`null` when GitHub was unreachable) and the operation (`read` / `set` /
+   `delete`). The page therefore says what GitHub answered (_GitHub refused to set MOTIR_RUNNER on
+   moooon-B-V (HTTP 403)_) and does not guess why. A missing Variables permission is in any case
+   caught earlier, by condition 4, before ON writes anything.
+7. **Extra read-back the card did not ask for: the GitHub variable.** `getState` returns the
+   `MOTIR_RUNNER` variable read back from GitHub (`present` / `absent` / `unknown`), so the setting
+   card carries a **GitHub variable** line, and a **drift** warning when the stored state and the
+   variable disagree. Drift is folded into Panel 5 as inset 5b rather than drawn as a fourteenth
+   state.
+8. **The stored last reason is shown.** The row stores the last flip's reason (`lastReason`), so the
+   _Last changed_ line quotes it without an audit read.
+9. **No `.png` export.** The card asks for `console--fleet-settings.png`; CLAUDE.md and
+   `docs/decisions/design-result.md` AMENDMENT 4 retired exports (the mock renders on the card), so
+   none is produced.
+10. **`Switch`, not `SwitchRow`.** The card names both. `SwitchRow` drops its label and hint to
+    `--el-text-faint` when disabled, which would grey out the setting's title and explanation in
+    exactly the not-ready frames where they matter most. The page uses the `Switch` primitive with
+    `aria-labelledby` pointing at the card title, and keeps the title and explanation at full ink;
+    the disabled state is carried by the switch's own `disabled` and the reason sentence beside it.
+
+## What this page is
+
+The home of one platform setting, **Run Motir's private repositories' CI on the fleet**. Its stored
+row is the operator's INTENT; the org's `MOTIR_RUNNER` Actions variable is its EFFECT. ON writes the
+variable (`motir-runner`, private repositories) so
+`runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` sends every new job in Motir's private
+repositories to the shared `motir-fleet` machines, attributed to moooon B.V.; OFF deletes it, so the
+same expression falls back to GitHub-hosted runners. No workflow file changes either way, and
+running jobs are untouched: the variable only changes what NEW jobs request. **ON is allowed only
+when the readiness verdict is ready. OFF never reads readiness** — it is also the recovery path when
+the fleet breaks. Every flip needs a reason and writes one audit row.
+
+## The access path — a new rail row (Panels 1 · 13)
+
+**Operations → Fleet settings**, directly after **Monitoring** and before **AI planning**, icon
+`ServerCog` (lucide, the shipped set's server family beside Monitoring's `Server`), route
+**`/admin/fleet-settings`**, active when `pathname === '/admin/fleet-settings'`, label
+`platformAdmin.shell.navFleetSettings`. It sits next to Monitoring so the fleet's read surface sits
+beside its one write. It follows the **Audit log** row's rule, not Monitoring's: the row is added
+only when `operator.role === 'superadmin'`, and is ABSENT for `support` and `operator`.
+
+The page carries the reverse link: _Motir's machines appear under moooon B.V. in Monitoring ›
+Fleet_, to `/admin/monitoring` (the Fleet section of MOTIR-7314, linked, not redrawn).
+
+## The roles
+
+| Staff role                                 | Rail row | `/admin/fleet-settings`                               |
+| ------------------------------------------ | -------- | ----------------------------------------------------- |
+| `superadmin`                               | present  | reads the setting and the verdict, and flips it       |
+| `operator`                                 | absent   | the app 404 (Panel 13 → `console.mock.html` Panel 7a) |
+| `support`                                  | absent   | the app 404 (Panel 13 → Panel 7a)                     |
+| not platform staff (an org owner included) | —        | the app 404, as for every `/admin/*` route            |
+
+Both `getState` and `setEnabled` are `requirePlatformStaff('superadmin')`
+(`NotPlatformStaffError` below it, before any GitHub call), so the page has no read-only face: a
+role that cannot write cannot read either. The page maps `NotPlatformStaffError` to `notFound()`.
+
+## The panels (review EACH — mistake #31)
+
+| #   | State                               | What is drawn                                                                                                                                                                                                                                                                                                                                                                                                                                 | Source                                                                                                                          |
+| --- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **OFF · ready**                     | Inside the shell, rail row active. The setting card (title, pair, explanation, switch OFF + _Off_ chip + _Turn on_, last changed with its reason and audit-log link, GitHub variable _not set_, the three repositories, the Monitoring line) and the readiness card with all nine **Met** and the verdict **Ready**. The switch is enabled.                                                                                                   | card § States 1; MOTIR-8713 (nine conditions); MOTIR-8714 DTO (`updatedBy`, `lastReason`, `variable`)                           |
+| 2a  | **OFF · not ready — one unmet**     | `runner_group` **Not met** (`sync_pending`) with its sentence. Verdict _Not ready — 1 condition not met · 1 unmet_. The switch is DISABLED and the reason sits beside it in words: _Can't turn on until every condition is met._ The title and explanation stay at full ink.                                                                                                                                                                  | card § States 2; `runnerGroupCondition` reason `sync_pending`                                                                   |
+| 2b  | **OFF · not ready — several unmet** | `app_variables_permission` (`permission_missing`), `workflow_job_subscription` (`not_subscribed`) and `image_coverage` (`jobs_not_runnable`) **Not met**; image coverage EXPANDED to its jobs as _repo · workflow · job — missing tool_ / _can't be hosted: reason_, then the scope line. The three jobs are the real ones in `lib/ciFleet/fleetJobInventory.json` for the private set today. Past five, the list stops and ends _+{n} more_. | card § States 2; `permissionCondition`, condition 5, `imageCoverageCondition` and its `params.jobs`                             |
+| 3   | **OFF · couldn't check**            | `app_installed` **Couldn't check** (`read_failed`, HTTP 502) and the six conditions read through the installation **Couldn't check** (`app_not_readable`); `kill_switch` and `runner_group` still **Met**. Verdict _Not ready — 7 conditions not met · 7 couldn't be checked_; switch disabled. The GitHub variable line says it could not be read. Fails closed: nothing unknown is drawn as met.                                            | card § States 3; MOTIR-8713's `failedRead` + the `app_not_readable` branch; MOTIR-8714 `variable.state === 'unknown'`           |
+| 4   | **ON · ready**                      | Switch ON, _On_ chip (mint), _Turn off_. The variable reads back `MOTIR_RUNNER = motir-runner`. The Monitoring link is PROMINENT: a sky callout under the switch, _Open Monitoring › Fleet_.                                                                                                                                                                                                                                                  | card § States 4                                                                                                                 |
+| 5   | **ON · degraded**                   | `kill_switch` **Not met** (`kill_switch_engaged`) after the setting went on. A warning band under the switch: _New jobs will queue until this is fixed or the setting is turned off._ The switch stays ENABLED, with _Turning off never waits on readiness._ beside it. **5b (inset): drift** — stored ON, variable read back ABSENT, with its warning band.                                                                                  | card § States 5; MOTIR-8714 (OFF never reads readiness; `variable` read-back)                                                   |
+| 6   | **Confirm ON**                      | Panel 11's dialog: `Modal role="alertdialog"`, a reason `Input`, primary _Turn on_. Names **Off → On**, the 3 repositories and moooon B.V.'s pool.                                                                                                                                                                                                                                                                                            | card § States 6; MOTIR-8714 (`fleet.org_ci.enable`, reason `required`)                                                          |
+| 7   | **Confirm OFF**                     | The same dialog for **On → Off**: new jobs go back to GitHub-hosted runners; jobs already on the fleet finish there; turning off never waits on readiness. Primary _Turn off_.                                                                                                                                                                                                                                                                | card § States 7; MOTIR-8714 (`fleet.org_ci.disable`)                                                                            |
+| 8   | **Reason missing**                  | (a) empty reason — the primary is DISABLED (the console's rule: not a post-submit error); (b) a blank (spaces-only) reason that reached the server — `MissingAuditReasonError` — shown inline in the dialog under the field, the dialog stays open, nothing changed.                                                                                                                                                                          | card § States 8; `assertReasonSatisfied` → `MissingAuditReasonError`                                                            |
+| 9   | **Already in that state**           | The flip answered `{ outcome: 'unchanged' }` (another superadmin flipped it first). The page shows the CURRENT state, an INFO note (sky, info glyph — not an error): _Already on — nothing changed._, and the last-changed line names who did it.                                                                                                                                                                                             | card § States 9; MOTIR-8714 `FleetOrgCiFlipDTO.outcome` (both the pre-read and the `UnchangedUnderLock` path answer it)         |
+| 10  | **GitHub write failed**             | `FleetOrgCiGithubWriteError`: _Not turned on: GitHub refused to set MOTIR_RUNNER on moooon-B-V (HTTP 403)._ then _Nothing changed: the setting and the GitHub variable are as they were._ (rose callout, `role="alert"`). The switch shows its PREVIOUS state (OFF), still enabled.                                                                                                                                                           | card § States 10; MOTIR-8714 (GitHub write inside the audited transaction, rolled back; compensation restores the variable)     |
+| 11  | **Not ready at flip time**          | `FleetOrgCiNotReadyError` lists every condition not met; the refusal names them (_Not met now: App permission: Variables (write)._), the readiness card re-reads (_Checked again just now_) and shows the same, and the switch is disabled again with its reason.                                                                                                                                                                             | card § States 11; MOTIR-8714 (readiness re-read inside `setEnabled`, thrown before any write)                                   |
+| 12  | **Read failed**                     | The console's error card (Panel 7's) with **Retry**, and NO switch and NO verdict.                                                                                                                                                                                                                                                                                                                                                            | card § States 12; MOTIR-8714 (`listTargets`' `FleetOrgCiGithubWriteError('read')`, or a failed stored-state read in `getState`) |
+| 13  | **Not superadmin**                  | The rail as `operator` / `support` see it — no Fleet settings row (and no Audit log row, the precedent) — and the 404 by reference to Panel 7a.                                                                                                                                                                                                                                                                                               | card § States 13; area _Roles_                                                                                                  |
+
+No loading skeleton is drawn: the page is a server-rendered read (the card's instruction). The
+readiness read does GitHub round trips, so if the build streams the readiness card it does so with an
+in-page `<Suspense>` after the page's own 404 gate, never a `loading.tsx` (CLAUDE.md § _A
+`loading.tsx` may NOT sit above a route that decides existence_ — this route 404s).
+
+## The nine conditions — labels and sentences
+
+The UI renders `reasonCode` (+ `params`), never the service's English `message` (MOTIR-8713's own
+comment: _"The UI renders `reasonCode`"_). The sentences below are the catalogue's, written from those
+messages; each unmet sentence says what is wrong and who fixes it.
+
+| #   | key                         | label                                | reason codes it can show (state)                                                                                                          |
+| --- | --------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `kill_switch`               | Fleet kill switch                    | `kill_switch_off` (met) · `kill_switch_engaged` (unmet)                                                                                   |
+| 2   | `app_installed`             | App installed                        | `app_installed` (met) · `app_not_installed`, `app_suspended` (unmet) · `read_failed` (unknown)                                            |
+| 3   | `app_runner_permission`     | App permission: Self-hosted runners  | `granted` · `permission_missing`, `permission_insufficient` · `app_not_readable`                                                          |
+| 4   | `app_variables_permission`  | App permission: Variables (write)    | `granted` · `permission_missing`, `permission_insufficient` · `app_not_readable`                                                          |
+| 5   | `workflow_job_subscription` | `workflow_job` delivery              | `subscribed` · `not_subscribed` · `app_not_readable`                                                                                      |
+| 6   | `app_repositories`          | App reaches the repositories         | `all_reachable` · `repositories_not_granted`, `no_private_repositories` · `read_failed`, `app_not_readable`                               |
+| 7   | `delivery_attributable`     | Jobs attributed to project {project} | `attributable` · `not_attributable`, `no_private_repositories` · `read_failed`, `app_not_readable`                                        |
+| 8   | `runner_group`              | Runner group                         | `group_synced` · `no_runner_group`, `sync_pending` · `read_failed`                                                                        |
+| 9   | `image_coverage`            | Image coverage                       | `all_runnable` · `jobs_not_runnable`, `not_inventoried`, `inventory_stale`, `no_private_repositories` · `read_failed`, `app_not_readable` |
+
+A met row shows only its mark and label. An unmet or unknown row adds one sentence (`cond.*` below).
+
+**⚠️ Observed while drawing (recorded, not fixed here):** the checked-in inventory marks
+`motir-gateway`'s `macos-release.yml · release` and `windows-release.yml · release` as
+`cannot-host`, and `imageCoverageCondition` counts every non-runnable job, `cannot-host` included.
+So against today's data, image coverage is **Not met** and the verdict can never be Ready while
+motir-gateway's private set carries those two jobs. Panel 1's _Ready_ is drawn as the target state;
+Panel 2b draws today's real image-coverage row. Whether a `cannot-host` job should block readiness
+(it can never run on the fleet, and will keep requesting `motir-runner` once the variable is set
+unless its `runs-on` names its OS) is a question for the readiness card's owner, not for this design.
+
+## Copy (en — the `platformAdmin` namespace the setting UI card adds, with a `zh` twin each)
+
+Interpolated values are in `{braces}`. Repository names, org logins, emails and reasons are data,
+never catalogue strings.
+
+| key                                                  | string                                                                                                                                                                                                                                         |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shell.navFleetSettings`                             | Fleet settings                                                                                                                                                                                                                                 |
+| `fleetSettings.breadcrumb`                           | Operations · Fleet settings                                                                                                                                                                                                                    |
+| `fleetSettings.title`                                | Fleet settings                                                                                                                                                                                                                                 |
+| `fleetSettings.subtitle`                             | Where a superadmin decides whose CI runs on Motir's own machines. Every change asks for a reason and is written to the audit log.                                                                                                              |
+| `fleetSettings.setting.title`                        | Run Motir's private repositories' CI on the fleet                                                                                                                                                                                              |
+| `fleetSettings.setting.pair`                         | Project {project} · GitHub organisation {org}                                                                                                                                                                                                  |
+| `fleetSettings.setting.superadminOnly`               | Superadmin only                                                                                                                                                                                                                                |
+| `fleetSettings.setting.explanation`                  | When on, every CI job in Motir's private repositories on {org} requests the {label} label and runs on the shared {fleet} machines, attributed to moooon B.V. When off, they run on GitHub-hosted runners. No workflow file changes either way. |
+| `fleetSettings.state.on`                             | On                                                                                                                                                                                                                                             |
+| `fleetSettings.state.off`                            | Off                                                                                                                                                                                                                                            |
+| `fleetSettings.action.turnOn`                        | Turn on                                                                                                                                                                                                                                        |
+| `fleetSettings.action.turnOff`                       | Turn off                                                                                                                                                                                                                                       |
+| `fleetSettings.blocked`                              | Can't turn on until every condition is met.                                                                                                                                                                                                    |
+| `fleetSettings.offNeverBlocked`                      | Turning off never waits on readiness.                                                                                                                                                                                                          |
+| `fleetSettings.meta.lastChanged`                     | Last changed                                                                                                                                                                                                                                   |
+| `fleetSettings.meta.changedBy`                       | by {email}, {when} — “{reason}”                                                                                                                                                                                                                |
+| `fleetSettings.meta.neverChanged`                    | Never changed                                                                                                                                                                                                                                  |
+| `fleetSettings.meta.auditLink`                       | Audit log                                                                                                                                                                                                                                      |
+| `fleetSettings.meta.variable`                        | GitHub variable                                                                                                                                                                                                                                |
+| `fleetSettings.variable.present`                     | {name} = {value} on {org} (private repositories) — new jobs request the fleet.                                                                                                                                                                 |
+| `fleetSettings.variable.absent`                      | {name} is not set on {org} — jobs fall back to GitHub-hosted runners.                                                                                                                                                                          |
+| `fleetSettings.variable.unknown`                     | Couldn't read {name} on {org} — GitHub answered HTTP {status}.                                                                                                                                                                                 |
+| `fleetSettings.variable.unreachable`                 | Couldn't read {name} on {org} — GitHub could not be reached.                                                                                                                                                                                   |
+| `fleetSettings.drift.onAbsent.title`                 | Stored on, but GitHub disagrees.                                                                                                                                                                                                               |
+| `fleetSettings.drift.onAbsent.body`                  | {name} is not set on {org}, so new jobs still run on GitHub-hosted runners. Turn the setting off and on again to write it.                                                                                                                     |
+| `fleetSettings.drift.offPresent.title`               | Stored off, but GitHub disagrees.                                                                                                                                                                                                              |
+| `fleetSettings.drift.offPresent.body`                | {name} is still set on {org}, so new jobs still request the fleet. Turn the setting on and off again to remove it.                                                                                                                             |
+| `fleetSettings.meta.repositories`                    | Repositories                                                                                                                                                                                                                                   |
+| `fleetSettings.repositories.count`                   | {count, plural, one {# private repository} other {# private repositories}}, read at runtime from project {project}'s private repositories on {org}                                                                                             |
+| `fleetSettings.monitoringLine`                       | Motir's machines appear under moooon B.V. in Monitoring › Fleet                                                                                                                                                                                |
+| `fleetSettings.onCallout.title`                      | Motir's CI is on the fleet.                                                                                                                                                                                                                    |
+| `fleetSettings.onCallout.link`                       | Open Monitoring › Fleet                                                                                                                                                                                                                        |
+| `fleetSettings.degraded.title`                       | Not ready while on.                                                                                                                                                                                                                            |
+| `fleetSettings.degraded.body`                        | New jobs will queue until this is fixed or the setting is turned off.                                                                                                                                                                          |
+| `fleetSettings.readiness.title`                      | Readiness                                                                                                                                                                                                                                      |
+| `fleetSettings.readiness.subtitle`                   | Nine conditions, in the order a job meets them. A condition that couldn't be checked counts as not met.                                                                                                                                        |
+| `fleetSettings.readiness.ready`                      | Ready                                                                                                                                                                                                                                          |
+| `fleetSettings.readiness.readySub`                   | All {count} conditions met                                                                                                                                                                                                                     |
+| `fleetSettings.readiness.notReady`                   | Not ready — {count, plural, one {# condition} other {# conditions}} not met                                                                                                                                                                    |
+| `fleetSettings.readiness.unmetCount`                 | {count} unmet                                                                                                                                                                                                                                  |
+| `fleetSettings.readiness.unknownCount`               | {count} couldn't be checked                                                                                                                                                                                                                    |
+| `fleetSettings.readiness.checked`                    | Checked {when}                                                                                                                                                                                                                                 |
+| `fleetSettings.readiness.checkedAgain`               | Checked again {when}                                                                                                                                                                                                                           |
+| `fleetSettings.readiness.recheck`                    | Check again                                                                                                                                                                                                                                    |
+| `fleetSettings.mark.met`                             | Met                                                                                                                                                                                                                                            |
+| `fleetSettings.mark.unmet`                           | Not met                                                                                                                                                                                                                                        |
+| `fleetSettings.mark.unknown`                         | Couldn't check                                                                                                                                                                                                                                 |
+| `fleetSettings.cond.kill_switch.label`               | Fleet kill switch                                                                                                                                                                                                                              |
+| `fleetSettings.cond.app_installed.label`             | App installed                                                                                                                                                                                                                                  |
+| `fleetSettings.cond.app_runner_permission.label`     | App permission: Self-hosted runners                                                                                                                                                                                                            |
+| `fleetSettings.cond.app_variables_permission.label`  | App permission: Variables (write)                                                                                                                                                                                                              |
+| `fleetSettings.cond.workflow_job_subscription.label` | `workflow_job` delivery                                                                                                                                                                                                                        |
+| `fleetSettings.cond.app_repositories.label`          | App reaches the repositories                                                                                                                                                                                                                   |
+| `fleetSettings.cond.delivery_attributable.label`     | Jobs attributed to project {project}                                                                                                                                                                                                           |
+| `fleetSettings.cond.runner_group.label`              | Runner group                                                                                                                                                                                                                                   |
+| `fleetSettings.cond.image_coverage.label`            | Image coverage                                                                                                                                                                                                                                 |
+| `fleetSettings.why.kill_switch_engaged`              | The fleet kill switch is engaged ({variable}=0), so no fleet machine boots. An operator unsets or raises it.                                                                                                                                   |
+| `fleetSettings.why.app_not_installed`                | The motir-studio App is not installed on {org}. An owner of {org} installs it.                                                                                                                                                                 |
+| `fleetSettings.why.app_suspended`                    | The motir-studio App on {org} has been suspended since {date}. An owner of {org} unsuspends it.                                                                                                                                                |
+| `fleetSettings.why.permission_missing`               | The motir-studio App on {org} holds {permission}: none, and needs write. An owner of {org} accepts the permission request.                                                                                                                     |
+| `fleetSettings.why.permission_insufficient`          | The motir-studio App on {org} holds {permission}: {granted}, and needs write. An owner of {org} accepts the permission request.                                                                                                                |
+| `fleetSettings.why.not_subscribed`                   | The App is not subscribed to workflow_job events, so GitHub never tells Motir a job is queued. Whoever administers the motir-studio App subscribes it in the App's settings.                                                                   |
+| `fleetSettings.why.repositories_not_granted`         | The App's installation on {org} does not reach {repositories}. An owner of {org} adds them to the installation's repository access.                                                                                                            |
+| `fleetSettings.why.no_private_repositories`          | Project {project} has no private repository in {org}, so there is nothing for the fleet to run.                                                                                                                                                |
+| `fleetSettings.why.not_attributable`                 | A queued job from {repositories} would not be attributed to project {project}, so it would stay queued until GitHub expires it. Reconnect the repository to the project so its mirror row is current.                                          |
+| `fleetSettings.why.no_runner_group`                  | Project {project} has no runner group in {org}. An operator runs {script} --project {project}.                                                                                                                                                 |
+| `fleetSettings.why.sync_pending`                     | The project's runner group in {org} is out of sync with its repositories. An operator runs {script} --project {project}.                                                                                                                       |
+| `fleetSettings.why.jobs_not_runnable`                | {count, plural, one {# job} other {# jobs}} can't run on the fleet runner image yet. Whoever maintains the fleet image adds the missing tool; a job that needs another operating system stays unrunnable until it leaves the private set.      |
+| `fleetSettings.why.not_inventoried`                  | {repositories} {count, plural, one {is} other {are}} not in the fleet job inventory, so nobody has checked the runner image can run {count, plural, one {its} other {their}} jobs. Whoever maintains the inventory re-runs it.                 |
+| `fleetSettings.why.inventory_stale`                  | The workflows of {repositories} changed after the fleet job inventory measured them. Whoever maintains the inventory re-runs it.                                                                                                               |
+| `fleetSettings.why.read_failed`                      | Couldn't check this: GitHub answered HTTP {status}. Counts as not met until a check succeeds.                                                                                                                                                  |
+| `fleetSettings.why.read_unreachable`                 | Couldn't check this: GitHub could not be reached. Counts as not met until a check succeeds.                                                                                                                                                    |
+| `fleetSettings.why.app_not_readable`                 | Can't be checked until the motir-studio App is installed and readable on {org}.                                                                                                                                                                |
+| `fleetSettings.jobs.missing`                         | {repo} · {workflow} · {job} — missing {tools}                                                                                                                                                                                                  |
+| `fleetSettings.jobs.cannotHost`                      | {repo} · {workflow} · {job} — can't be hosted: {reason}                                                                                                                                                                                        |
+| `fleetSettings.jobs.more`                            | +{count} more                                                                                                                                                                                                                                  |
+| `fleetSettings.jobs.scope`                           | This covers the inventoried image built from main, not the image production boots.                                                                                                                                                             |
+| `fleetSettings.confirm.onTitle`                      | Turn on fleet CI for {org}?                                                                                                                                                                                                                    |
+| `fleetSettings.confirm.onBody`                       | Off → On. Every new CI job in {count, plural, one {# repository} other {# repositories}} will run on the fleet and be charged to moooon B.V.'s pool: {repositories}. Jobs already running finish where they started.                           |
+| `fleetSettings.confirm.offTitle`                     | Turn off fleet CI for {org}?                                                                                                                                                                                                                   |
+| `fleetSettings.confirm.offBody`                      | On → Off. New jobs go back to GitHub-hosted runners; jobs already running on the fleet finish there. Turning off never waits on readiness.                                                                                                     |
+| `fleetSettings.confirm.reasonLabel`                  | Reason — required, written to the audit log                                                                                                                                                                                                    |
+| `fleetSettings.confirm.reasonPlaceholderOn`          | Why are you turning this on?                                                                                                                                                                                                                   |
+| `fleetSettings.confirm.reasonPlaceholderOff`         | Why are you turning this off?                                                                                                                                                                                                                  |
+| `fleetSettings.confirm.reasonHint`                   | Shown to any operator reading this change later. “Testing” on its own answers nothing.                                                                                                                                                         |
+| `fleetSettings.confirm.reasonHintEmpty`              | The button stays disabled until a reason is typed — the same rule the server applies.                                                                                                                                                          |
+| `fleetSettings.confirm.cancel`                       | Cancel                                                                                                                                                                                                                                         |
+| `fleetSettings.confirm.confirmOn`                    | Turn on                                                                                                                                                                                                                                        |
+| `fleetSettings.confirm.confirmOff`                   | Turn off                                                                                                                                                                                                                                       |
+| `fleetSettings.refused.reasonMissing`                | Not turned {direction}: a reason is required, and it is written to the audit log with this change. Nothing changed.                                                                                                                            |
+| `fleetSettings.refused.alreadyOn`                    | Already on — nothing changed.                                                                                                                                                                                                                  |
+| `fleetSettings.refused.alreadyOff`                   | Already off — nothing changed.                                                                                                                                                                                                                 |
+| `fleetSettings.refused.alreadyBody`                  | Another superadmin changed it first, so nothing was written and no audit row was added.                                                                                                                                                        |
+| `fleetSettings.refused.githubStatus`                 | Not turned {direction}: GitHub refused to {operation} {name} on {org} (HTTP {status}).                                                                                                                                                         |
+| `fleetSettings.refused.githubUnreachable`            | Not turned {direction}: GitHub could not be reached to {operation} {name} on {org}.                                                                                                                                                            |
+| `fleetSettings.refused.nothingChanged`               | Nothing changed: the setting and the GitHub variable are as they were.                                                                                                                                                                         |
+| `fleetSettings.refused.notReady`                     | Not turned on: the fleet stopped being ready after this page loaded.                                                                                                                                                                           |
+| `fleetSettings.refused.notReadyList`                 | Not met now: {conditions}. Nothing changed. The readiness below has been checked again.                                                                                                                                                        |
+| `fleetSettings.unavailable.title`                    | Couldn't load the fleet setting                                                                                                                                                                                                                |
+| `fleetSettings.unavailable.body`                     | The setting or its readiness could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.                                                                            |
+| `fleetSettings.unavailable.retry`                    | Retry                                                                                                                                                                                                                                          |
+
+`{direction}` is _on_ / _off_ and `{operation}` is _read_ / _set_ / _delete_ — each a catalogue word
+of its own in the build, never the raw enum. The `label` / `fleet` / `name` / `variable` / `script`
+values are the code constants (`MOTIR_RUNNER_LABEL` = `motir-runner`, `motir-fleet`,
+`MOTIR_RUNNER_VARIABLE` = `MOTIR_RUNNER`, `MOTIR_FLEET_MAX_IN_FLIGHT`,
+`scripts/ci-fleet/sync-project-runner-groups.ts`) interpolated, not spelled in the catalogue.
+
+## Data — what each element reads
+
+| element                        | source                                                                                                                                                                                                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the pair (one card stack each) | `fleetOrgCiSettingService.listTargets` → `FleetOrgCiTargetDTO[]` (`projectKey`, `org`)                                                                                                                                                                                        |
+| switch + On/Off chip           | `getState(...).enabled` (the stored INTENT)                                                                                                                                                                                                                                   |
+| switch disabled (OFF only)     | `!enabled && !readiness.ready`; never disabled while `enabled`                                                                                                                                                                                                                |
+| last changed                   | `updatedBy.email`, `updatedAt` (relative), `lastReason`; `updatedBy === null` → _Never changed_                                                                                                                                                                               |
+| audit-log link                 | `/admin/audit-log?action=fleet.org_ci.enable` when `enabled`, else `?action=fleet.org_ci.disable` (the log filters by ONE action — the last flip's)                                                                                                                           |
+| GitHub variable line           | `variable.state` (`present` → `value`; `absent`; `unknown` → `status`, `null` = unreachable)                                                                                                                                                                                  |
+| drift warning                  | `enabled && variable.state === 'absent'`, or `!enabled && variable.state === 'present'`                                                                                                                                                                                       |
+| repositories                   | the private repositories of the pair — `readiness.conditions[app_repositories].params.repositories` when met (also `image_coverage`'s); when neither is met the build needs the list from the service (open question for the UI card: `getState` does not return it directly) |
+| readiness verdict + rows       | `readiness.ready`, `readiness.conditions[]` in order (`key`, `state`, `reasonCode`, `params`), `readiness.checkedAt`                                                                                                                                                          |
+| uncovered jobs                 | `image_coverage.params.jobs[]` (`repoRef`, `workflow` basename, `jobId`, `verdict`, `missing[]`, `reason`) — first five, then _+N more_                                                                                                                                       |
+| confirm count + list           | the same private-repository list                                                                                                                                                                                                                                              |
+| flip                           | `setEnabled(principal, { projectId, org }, enabled, reason)` → `{ outcome: 'changed' \| 'unchanged', state }`                                                                                                                                                                 |
+| refusals                       | `MissingAuditReasonError` (8b) · `FleetOrgCiNotReadyError.conditions` (11) · `FleetOrgCiGithubWriteError` `{ org, status, operation }` (10) · `NotPlatformStaffError` → 404 (13) · `FleetOrgCiTargetUnknownError` → 404 (a pair the console does not offer)                   |
+| read failed                    | any throw from `listTargets` / `getState` other than the 404 ones (12)                                                                                                                                                                                                        |
+
+## Colour and shape roles (`--el-*` only)
+
+| element                                | token                                                                                                                                                                                                     |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| cards                                  | the console's `Card`: `--el-page-bg`, `--el-border`, `--radius-card`, `--shadow-card`, `--spacing-card-padding`                                                                                           |
+| setting glyph tile                     | `--el-tint-lavender` + `--el-text-strong` (the `ent-org` tile)                                                                                                                                            |
+| title · explanation · meta labels      | `--el-text` · `--el-text-secondary` · `--el-text-secondary`; codes `--el-text-strong` mono                                                                                                                |
+| _Superadmin only_ chip                 | `Pill` tier: `--el-tint-lavender` + `--el-text-strong`, `--radius-badge`, `--spacing-chip-x/y`                                                                                                            |
+| Switch                                 | track OFF `--el-muted` + `--el-switch-off-border`, knob `--el-switch-knob-off`; ON `--el-switch-on` + `--el-switch-on-border`, knob `--el-switch-knob`; `rounded-full`; disabled `opacity .5`             |
+| On / Off chip                          | On `Pill` success: `--el-tint-mint` + `--el-text-strong`; Off `Pill` neutral: `--el-surface` + `--el-text-secondary` + `--el-border`                                                                      |
+| blocked reason beside the switch       | `--el-text-secondary`, glyph `--el-warning`; the calm OFF line's glyph `--el-info`                                                                                                                        |
+| **mark: Met**                          | **success role** — `--el-tint-mint` + `--el-text-strong`, `circle-check` glyph, word _Met_                                                                                                                |
+| **mark: Not met**                      | **warning role** — `--el-tint-yellow` + `--el-text-strong`, `triangle-alert` glyph, word _Not met_                                                                                                        |
+| **mark: Couldn't check**               | **warning role, its OWN word and icon** — `--el-tint-yellow` + `--el-text-strong`, `circle-question-mark` glyph, a dashed `--el-border-strong` edge, word _Couldn't check_. Never success, never neutral. |
+| verdict Ready / Not ready              | `Pill` success (`--el-tint-mint`) / warning (`--el-tint-yellow`), `--el-text-strong`; header tile `sig-ok` (`--el-tint-mint` + `--el-success`) / `sig-warn` (`--el-tint-yellow` + `--el-warning`)         |
+| unmet sentence · job list · scope line | `--el-text-secondary`; job list box `--el-border-soft`, `--radius-control`                                                                                                                                |
+| ON callout (Panel 4)                   | `--el-tint-sky` + `--el-text-strong`, link underlined in `--el-text-strong`                                                                                                                               |
+| degraded / drift band                  | toast warn: `--el-tint-yellow` + `--el-text-strong`, glyph `--el-warning`                                                                                                                                 |
+| already-in-state note                  | **info**, not error: `--el-tint-sky` + `--el-text-strong`, glyph `--el-info`                                                                                                                              |
+| write-failed / not-ready refusal       | toast error: `--el-tint-rose` + `--el-text-strong`, glyph `--el-danger`                                                                                                                                   |
+| blank-reason inline error (8b)         | **`--el-danger-on-surface`** (never `--el-danger-text`, never raw `--el-danger` as ink)                                                                                                                   |
+| links                                  | `--el-link`, underlined                                                                                                                                                                                   |
+| confirm                                | Panel 11 unchanged: `--radius-modal`, `--shadow-modal`, `Input` `--radius-input`, buttons `--radius-btn`                                                                                                  |
+| read-failed card                       | the console's error state: `--el-tint-rose` tile + `--el-danger` glyph, `--el-text` heading                                                                                                               |
+
+Unmet and couldn't-check share a hue on purpose — both block ON — and differ by word, glyph and edge,
+so they are told apart without colour.
+
+## A11y
+
+- The switch is the `Switch` primitive (`role="switch"`, `aria-checked`), named by
+  `aria-labelledby` → the card title, and `aria-describedby` → the reason beside it when there is one.
+  A blocked switch carries `disabled`; the reason is real text, not a tooltip.
+- Moving the switch does not flip it: it opens the confirm, and the switch shows the stored state
+  until the flip answers.
+- Each mark is icon + word; the icon is `aria-hidden`. The condition list is a labelled `<ul>`.
+- The confirm is `role="alertdialog"`, focus lands in the reason field, and the primary carries
+  `disabled` until the reason is non-blank. 8b's server refusal is `role="alert"` under the field and
+  keeps focus in the dialog.
+- The degraded / drift bands and the already-in-state note are `role="status"`; the write-failed
+  and not-ready refusals are `role="alert"`.
+- The read-failed card's Retry is a real button; no switch is rendered, disabled or otherwise.
+
+## What this amendment does NOT draw
+
+- **Per-repository toggles** — one switch per (project, org) pair, by the story.
+- **Any tenant-facing surface**, and **Monitoring › Fleet** itself (MOTIR-7314) — linked only.
+- **Zero offered pairs.** If `listTargets` returns nothing, the UI card shows the console's empty
+  state; suggested copy, not drawn: _No project offers fleet CI — no meta-org project has a private
+  repository in a connected org._ (`fleetSettings.empty`).
+- **A loading skeleton** — server-rendered read (see the panels table).
+- **The zh strings** — the UI card's.
+- **A `.png` export** — retired (AMENDMENT 4).
