@@ -521,7 +521,9 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         await mcpStep(agent, planId, 'calm', 'author', ref(b1!));
         await moved;
         await expectLevel(page, S2_TITLE);
-        expect(await levelTransition(page)).toBe('none');
+        // The canvas is keyed per level and can remount once more after the crumb
+        // settles; a read on the outgoing node sees no computed style at all.
+        await expect.poll(() => levelTransition(page)).toBe('none');
 
         await openQuickView(page, B1);
         await recordTyping(page);
