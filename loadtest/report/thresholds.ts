@@ -48,32 +48,40 @@ export const THROUGHPUT_BUCKETS: readonly Bucket[] = ['served', 'empty'];
 
 const P = 'k6-points.json.gz';
 const PROM = (series: string) => `prometheus:${series}`;
+/** `run.json`'s `window` timestamps: without them no steady or whole-run window exists. */
+const WINDOW = 'run.json#window';
+const K6 = [P, WINDOW] as const;
 
 /**
  * Every threshold key the profile carries → the run-directory inputs that back it.
- * The story test gate reads this: removing any of them must turn the line unmeasured.
+ *
+ * The story test gate (`tests/loadtest/storyGate.verdict.test.ts`) removes each
+ * `perInstance` / `scaleOut` input in turn and expects that line `unmeasured`, so
+ * every id there names one thing a test can take away:
+ *   - a file name — the file is deleted from the run directory;
+ *   - `run.json#window` — run.json's window timestamps are written as `unmeasured`;
+ *   - `baseline:report.json` — the baseline run's report.json is deleted;
+ *   - `prometheus:<series>` — that series answers no samples;
+ *   - `prometheus:requests-by-instance` — neither per-instance request series
+ *     (`fly_app_http_responses_count`, nor its `db_tx_wait_seconds_count` fallback)
+ *     answers.
+ * Cross-checks that never judge a line (summary.json, the app-log P2028 channel,
+ * which can FAIL the line but never PASS it) are not backing inputs.
+ * The `bottleneck` and `generator` keys configure the bottleneck ranking and the
+ * generator-saturation check rather than a threshold line; their ids say which
+ * series or files those read.
  */
 export const THRESHOLD_INPUTS: Record<string, readonly string[]> = {
-  'perInstance.targetRps': [P, 'run.json'],
-  'perInstance.readP95Ms': [P, 'run.json'],
-  'perInstance.readP99Ms': [P, 'run.json'],
-  'perInstance.mutateP95Ms': [P, 'run.json'],
-  'perInstance.mutateP99Ms': [P, 'run.json'],
-  'perInstance.errorRate': [P, 'run.json'],
-  'perInstance.p2028': [
-    PROM('db_tx_wait_seconds_count'),
-    'run.json',
-    'app-logs.ndjson',
-    'app-logs.gaps.json',
-  ],
-  'perInstance.streamLost': [P, 'run.json'],
-  'perInstance.rateLimitedMax': [P, 'run.json', 'summary.json'],
-  'scaleOut.efficiency': [
-    P,
-    'run.json',
-    'baseline:report.json',
-    PROM('fly_app_http_responses_count'),
-  ],
+  'perInstance.targetRps': K6,
+  'perInstance.readP95Ms': K6,
+  'perInstance.readP99Ms': K6,
+  'perInstance.mutateP95Ms': K6,
+  'perInstance.mutateP99Ms': K6,
+  'perInstance.errorRate': K6,
+  'perInstance.p2028': [PROM('db_tx_wait_seconds_count'), WINDOW],
+  'perInstance.streamLost': K6,
+  'perInstance.rateLimitedMax': K6,
+  'scaleOut.efficiency': [...K6, 'baseline:report.json', PROM('requests-by-instance')],
   'bottleneck.holdSeconds': [
     PROM('fly_app_concurrency'),
     PROM('fly_instance_cpu'),
@@ -248,7 +256,9 @@ export function evaluateLines(opts: {
     key: 'perInstance.p2028',
     name: 'P2028',
     status: p.status,
-    value: p.total === null ? 'unmeasured' : String(p.total),
+    // An unmeasured line never prints a count: a 0 summed over the instances that
+    // WERE measured reads as a clean reading (the story gate, MOTIR-8681).
+    value: p.total === null || p.status === 'unmeasured' ? 'unmeasured' : String(p.total),
     limit: `≤ ${p.limit}`,
     reason: p.reason,
     annotation: p.blindSpot,

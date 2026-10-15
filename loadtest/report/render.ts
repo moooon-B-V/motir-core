@@ -13,6 +13,8 @@ import type { P2028Reading } from './p2028';
 import type { ProxyShed } from './proxyShed';
 import type { Reading } from './inputs';
 
+/** A markdown table cell: backslashes first, then the pipe that would end the cell. */
+const cell = (text: string) => text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 export const VERDICTS = ['PASS', 'FAIL', 'UNMEASURED', 'INVALID'] as const;
 export type Verdict = (typeof VERDICTS)[number];
 
@@ -90,9 +92,7 @@ export function renderMarkdown(r: Report): string {
   );
   for (const l of r.lines) {
     const note = [l.reason, l.annotation].filter(Boolean).join(' — ');
-    out.push(
-      `| ${l.name} | ${l.status} | ${l.value} | ${l.limit} | ${note.replace(/\|/g, '\\|')} |`,
-    );
+    out.push(`| ${l.name} | ${l.status} | ${l.value} | ${l.limit} | ${cell(note)} |`);
   }
   const g = r.generator;
   out.push(
@@ -104,7 +104,7 @@ export function renderMarkdown(r: Report): string {
   out.push('## P2028', '');
   const p = r.p2028;
   out.push(
-    `P2028: ${p.total === null ? 'unmeasured' : p.total} — ${p.status}${p.reason ? ` (${p.reason})` : ''}`,
+    `P2028: ${p.total === null || p.status === 'unmeasured' ? 'unmeasured' : p.total} — ${p.status}${p.reason ? ` (${p.reason})` : ''}`,
   );
   for (const i of p.instances)
     out.push(
@@ -183,7 +183,7 @@ export function renderMarkdown(r: Report): string {
     out.push('| Δ total ms | Δ calls | statement |', '|---|---|---|');
     for (const row of s.top)
       out.push(
-        `| ${r2(row.totalMsDelta)} | ${row.callsDelta} | \`${row.query.slice(0, 200).replace(/\|/g, '\\|').replace(/`/g, "'")}\` |`,
+        `| ${r2(row.totalMsDelta)} | ${row.callsDelta} | \`${cell(row.query.slice(0, 200)).replace(/`/g, "'")}\` |`,
       );
     out.push('', `entered the top 200: ${s.entered.length}; left it: ${s.left.length}`);
   } else out.push(`unmeasured — ${s.reason}`);

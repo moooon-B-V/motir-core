@@ -49,9 +49,14 @@ export async function readPlatform503(
   const out: Record<string, number | null> = {};
   for (const [k, v] of d.value) {
     const instance = /instance=([^,]*)/.exec(k)?.[1] ?? 'unknown';
-    out[instance] ??= 0;
-    if (/status=503\b/.test(k))
-      out[instance] = v === null || out[instance] === null ? null : out[instance] + v;
+    // `in`, not `??=`: a null (its 503 counter went backwards) must survive a
+    // later non-503 series for the same instance.
+    const sofar = instance in out ? (out[instance] as number | null) : 0;
+    out[instance] = /status=503\b/.test(k)
+      ? v === null || sofar === null
+        ? null
+        : sofar + v
+      : sofar;
   }
   return ok(out);
 }

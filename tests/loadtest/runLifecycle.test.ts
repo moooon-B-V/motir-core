@@ -343,6 +343,11 @@ describe('one run iteration against the shipped routes', () => {
     expect(kinds.indexOf('run_opened')).toBeLessThan(kinds.indexOf('leg_verdict'));
     expect(kinds).not.toContain('delivery_linked');
     expect(kinds).not.toContain('ci_verdict');
+    // The story gate (MOTIR-8681): a load-test run leaves no pull request and no
+    // container behind it.
+    expect(await db.githubPullRequest.count()).toBe(0);
+    expect(await db.ciContainerUsage.count()).toBe(0);
+    expect(await db.fleetInFlightSlot.count()).toBe(0);
 
     const item = await db.workItem.findFirstOrThrow({
       where: { id: card.id },

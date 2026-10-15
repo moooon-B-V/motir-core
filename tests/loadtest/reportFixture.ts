@@ -13,11 +13,12 @@
 // Fly series shapes follow docs.fly.io/monitoring/metrics (read 2026-10-15); no
 // managed Prometheus was reachable where this was written.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { parseLoadProfile } from '@/loadtest/profiles/schema';
 import { resolveProfile } from '@/loadtest/profiles/resolve';
+import { runReportCli } from '@/loadtest/report/report';
 import type { RunRecord } from '@/loadtest/run/runRecord';
 
 export const ROOT = resolve(__dirname, '../..');
@@ -205,12 +206,12 @@ export function runRecord(n: number, overrides: Partial<RunRecord> = {}): RunRec
   };
 }
 
-/** `/proc/stat` samples every 5 s at a fixed utilisation. */
-export function cpuCsv(util: (t: number) => number): string {
+/** `/proc/stat` samples every 5 s at a fixed utilisation, from `from` to `to` (ms). */
+export function cpuCsv(util: (t: number) => number, from = T0 - 10_000, to = ENDED): string {
   const rows = ['epochSeconds,nproc,procStatCpu'];
   let busy = 0;
   let total = 0;
-  for (let t = T0 - 10_000; t <= ENDED; t += 5000) {
+  for (let t = from; t <= to; t += 5000) {
     const u = util(t);
     busy += Math.round(2000 * u);
     total += 2000;
@@ -344,9 +345,15 @@ export type Handler = [RegExp, (t: number) => Sample[]];
 
 const since = (t: number) => Math.max(0, t - T0 / 1000);
 
-/** A healthy staging app at N instances, as a list of handlers (first match wins). */
-export function healthyProm(n: number): Handler[] {
-  const ids = Array.from({ length: n }, (_, i) => `m${i + 1}`);
+/**
+ * A healthy staging app at N instances, as a list of handlers (first match wins).
+ * `ids` names the instances when they are not `m1`…`mN` (the run command's fake
+ * platform calls its machines `app1`…).
+ */
+export function healthyProm(
+  n: number,
+  ids: string[] = Array.from({ length: n }, (_, i) => `m${i + 1}`),
+): Handler[] {
   const each =
     (f: (t: number) => number, extra: Record<string, string> = {}) =>
     (t: number) =>
@@ -435,3 +442,34 @@ export const withHandlers = (base: Handler[], ...extra: Handler[]): Handler[] =>
   ...extra,
   ...base,
 ];
+
+export const PROM_URL = 'http://prom.stub/prometheus/moooon';
+
+/**
+ * The real `pnpm loadtest:report` over a run directory, against the stub Prometheus.
+ * Returns the exit code, the parsed report.json (null when none was written) and a
+ * line lookup by profile key.
+ */
+export async function reportOn(
+  dir: string,
+  o: { handlers?: Handler[]; now?: number; env?: Record<string, string>; cwd?: string } = {},
+) {
+  const stub = promStub(o.handlers ?? healthyProm(1));
+  const logs: string[] = [];
+  const code = await runReportCli([dir], {
+    env: { LOADTEST_FLY_PROM_TOKEN: TOKEN, LOADTEST_PROM_URL: PROM_URL, ...o.env },
+    exec: async () => ({ code: 1, stdout: '', stderr: 'no flyctl here' }),
+    cwd: o.cwd ?? dir,
+    now: () => new Date(o.now ?? ENDED + 3_600_000),
+    sleep: async () => undefined,
+    log: (l) => logs.push(l),
+    fetchImpl: stub.fetchImpl,
+  });
+  const file = join(dir, 'report.json');
+  const json = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+  const line = (key: string) =>
+    json?.lines.find((l: { key: string }) => l.key === key) as
+      | { key: string; status: string; value: string; reason: string | null }
+      | undefined;
+  return { code, json, line, logs };
+}

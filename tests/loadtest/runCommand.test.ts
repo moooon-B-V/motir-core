@@ -1,32 +1,45 @@
-import {
-  existsSync,
-  mkdtempSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_AGENT_WORKSPACE_RATE_LIMIT,
   DEFAULT_MCP_RATE_LIMIT,
 } from '@/lib/rateLimit/budgets';
 import { DEFAULT_RATE_LIMIT } from '@/lib/api/v1/rateLimit';
-import { loadHash } from '@/loadtest/profiles/resolve';
-import type { LoadProfile } from '@/loadtest/profiles/schema';
-import type { SeedManifest } from '@/loadtest/seed/manifest';
-import { parseMachines, type CommandResult, type Exec } from '@/loadtest/run/fly';
+import { parseMachines, type Exec } from '@/loadtest/run/fly';
 import { copiedFrom } from '@/loadtest/run/neon';
+import { EXIT, OPTIONS, PRODUCTION_RATE_DEFAULTS, runLoadTest } from '@/loadtest/run/run';
+
 import {
-  EXIT,
-  OPTIONS,
-  PRODUCTION_RATE_DEFAULTS,
-  runLoadTest,
-  type RunDeps,
-} from '@/loadtest/run/run';
-import type { RunRecord } from '@/loadtest/run/runRecord';
+  resetFake,
+  ROOT,
+  APP,
+  GEN_APP,
+  DIRECT,
+  SECRET,
+  SHA,
+  K6_OUT,
+  GUEST,
+  appMachine,
+  toJson,
+  newWorld,
+  fake,
+  ok,
+  fakeExec,
+  manifestFor,
+  ENV,
+  CAPTURE_STUBS,
+  deps,
+  SMOKE_ARGS,
+  flyCalls,
+  scaleCalls,
+  generatorStarts,
+  generatorStops,
+  k6Starts,
+  manifestDeletes,
+  record,
+  baselineDir,
+} from './fakePlatform';
 
 // The run command (Story MOTIR-8538 · MOTIR-8678) against a FAKE platform: `fly` and
 // `neonctl` are answered from an in-memory model of the staging app, production,
@@ -38,378 +51,7 @@ import type { RunRecord } from '@/loadtest/run/runRecord';
 // reachable where this was written; the first real run compares one response of
 // each against these fixtures.
 
-const ROOT = resolve(__dirname, '../..');
-const APP = 'motir-core-staging';
-const GEN_APP = 'motir-loadgen';
-const BASE_URL = 'http://motir-core-staging.flycast';
-const DIRECT = 'ep-quiet-sky-123456.us-east-2.aws.neon.tech';
-const POOLED = 'ep-quiet-sky-123456-pooler.us-east-2.aws.neon.tech';
-const SECRET = 'npg_s3cretPassw0rd';
-const SHA = 'a'.repeat(40);
-const K6_OUT =
-  'k6 v1.2.1 (go1.24.7, linux/amd64)\nExtensions:\n  github.com/phymbert/xk6-sse v0.1.12, k6/x/sse [js]\n';
-
-interface FakeService {
-  internal_port: number;
-  autostop?: unknown;
-  autostart?: boolean;
-  min_machines_running?: number;
-  concurrency?: { type?: string; soft_limit?: number; hard_limit?: number };
-}
-
-interface FakeMachine {
-  id: string;
-  state: string;
-  region: string;
-  group: string;
-  guest: { cpu_kind: string; cpus: number; memory_mb: number };
-  tag: string;
-  services: FakeService[];
-}
-
-const SERVICE: FakeService = {
-  internal_port: 3000,
-  autostop: 'off',
-  autostart: false,
-  concurrency: { type: 'requests', soft_limit: 100, hard_limit: 120 },
-};
-const GUEST = { cpu_kind: 'performance', cpus: 2, memory_mb: 4096 };
-
-const appMachine = (id: string, over: Partial<FakeMachine> = {}): FakeMachine => ({
-  id,
-  state: 'started',
-  region: 'iad',
-  group: 'app',
-  guest: { ...GUEST },
-  tag: SHA,
-  services: [structuredClone(SERVICE)],
-  ...over,
-});
-
-/** A `fly machine list --json` element in the documented shape. */
-function toJson(m: FakeMachine) {
-  return {
-    id: m.id,
-    name: `name-${m.id}`,
-    state: m.state,
-    region: m.region,
-    image_ref: {
-      registry: 'registry.fly.io',
-      repository: 'motir-core',
-      tag: m.tag,
-      digest: 'sha256:0',
-    },
-    config: {
-      guest: m.guest,
-      metadata: { fly_process_group: m.group },
-      services: m.services,
-      image: `registry.fly.io/motir-core:${m.tag}`,
-    },
-  };
-}
-
-interface World {
-  staging: FakeMachine[];
-  production: FakeMachine[];
-  generator: FakeMachine[];
-  /** Applied to the staging machines on each `machine list` call after the n-th. */
-  stagingAfter: { calls: number; machines: FakeMachine[] } | null;
-  stagingEnv: Record<string, string>;
-  branch: Record<string, unknown>;
-  branchUrl: string;
-  /** What the proxy answers for a request pinned to a machine id. */
-  pin: (id: string) => { status: number; body: string };
-  k6Version: string;
-  k6Exit: number;
-  failPut: boolean;
-  generatorNeverStarts: boolean;
-  scaleRefusesEquals: boolean;
-  noVolume: boolean;
-  calls: { bin: string; args: string[] }[];
-  stagingLists: number;
-}
-
-let world: World;
-let cwd: string;
-let logs: string[];
-let reports: string[];
-let clock: number;
-
-function newWorld(n = 1): World {
-  return {
-    staging: Array.from({ length: n }, (_, i) => appMachine(`app${i + 1}`)),
-    production: [appMachine('prod1'), appMachine('prod2')],
-    generator: [
-      {
-        ...appMachine('gen1'),
-        state: 'stopped',
-        group: 'app',
-        services: [],
-        guest: { cpu_kind: 'performance', cpus: 8, memory_mb: 16384 },
-      },
-    ],
-    stagingAfter: null,
-    stagingEnv: {
-      DATABASE_URL: `postgresql://motir_app:${SECRET}@${POOLED}/motir?sslmode=require`,
-    },
-    branch: {
-      id: 'br-loadtest-1',
-      name: 'loadtest',
-      parent_timestamp: '2026-10-14T03:00:00Z',
-      created_at: '2026-10-01T00:00:00Z',
-    },
-    branchUrl: `postgresql://motir_app:${SECRET}@${DIRECT}/motir?sslmode=require`,
-    pin: (id) =>
-      id.startsWith('app')
-        ? { status: 200, body: '{"state":"ready"}' }
-        : { status: 503, body: 'no such instance' },
-    k6Version: K6_OUT,
-    k6Exit: 0,
-    failPut: false,
-    generatorNeverStarts: false,
-    scaleRefusesEquals: false,
-    noVolume: false,
-    calls: [],
-    stagingLists: 0,
-  };
-}
-
-const ok = (stdout = ''): CommandResult => ({ code: 0, stdout, stderr: '' });
-const fail = (code = 1): CommandResult => ({ code, stdout: '', stderr: 'refused' });
-
-const fakeExec: Exec = async (bin, args) => {
-  const a = [...args];
-  world.calls.push({ bin, args: a });
-  if (bin === 'neonctl') {
-    if (a[0] === 'branches') return ok(JSON.stringify({ branch: world.branch }));
-    if (a[0] === 'connection-string') return ok(`${world.branchUrl}\n`);
-    return fail();
-  }
-  if (bin !== 'fly') return fail(127);
-  const app = a[a.indexOf('-a') + 1];
-  if (a[0] === 'machine' && a[1] === 'list') {
-    if (app === APP) {
-      world.stagingLists += 1;
-      if (world.stagingAfter && world.stagingLists > world.stagingAfter.calls) {
-        world.staging = world.stagingAfter.machines;
-      }
-      return ok(JSON.stringify(world.staging.map(toJson)));
-    }
-    if (app === 'motir-core') return ok(JSON.stringify(world.production.map(toJson)));
-    if (app === GEN_APP) return ok(JSON.stringify(world.generator.map(toJson)));
-    return fail();
-  }
-  if (a[0] === 'scale') {
-    if (a[2]!.startsWith('app=') && world.scaleRefusesEquals) return fail();
-    const target = a[2]!.startsWith('app=') ? Number(a[2]!.slice(4)) : Number(a[2]);
-    while (world.staging.length < target)
-      world.staging.push(appMachine(`app${world.staging.length + 1}`));
-    world.staging = world.staging.slice(0, target);
-    return ok();
-  }
-  if (a[0] === 'machine' && (a[1] === 'start' || a[1] === 'stop')) {
-    const m = world.generator.find((g) => g.id === a[2]);
-    if (!m) return fail();
-    if (a[1] === 'stop' || !world.generatorNeverStarts)
-      m.state = a[1] === 'start' ? 'started' : 'stopped';
-    return ok();
-  }
-  if (a[0] === 'ssh' && a[1] === 'sftp') {
-    if (a[2] === 'put') return world.failPut ? fail() : ok();
-    if (a[2] === 'get') {
-      const remote = a.at(-2)!;
-      const local = a.at(-1)!;
-      writeFileSync(local, remote.endsWith('summary.json') ? '{"metrics":{}}' : 'x\n');
-      return ok();
-    }
-  }
-  if (a[0] === 'ssh' && a[1] === 'console') {
-    const cmd = a[a.indexOf('-C') + 1]!;
-    if (app === APP) {
-      const name = /^printenv ([A-Z_0-9]+)$/.exec(cmd)?.[1];
-      if (!name) return fail(2);
-      const v = world.stagingEnv[name];
-      return v === undefined ? { code: 1, stdout: '', stderr: '' } : ok(`${v}\n`);
-    }
-    if (cmd.endsWith(' version')) return ok(world.k6Version);
-    if (cmd.includes('curl')) {
-      const pinned = /fly-force-instance-id: ([^"]+)"/.exec(cmd)![1]!;
-      const ans = world.pin(pinned);
-      return ok(`${ans.body}\n${ans.status}`);
-    }
-    if (cmd.includes('@@exit'))
-      return ok(`running (01m00.0s), 40/40 VUs\n@@exit ${world.k6Exit}\n`);
-    if (cmd.startsWith('cat ') && cmd.endsWith('started.at')) return ok('2026-10-15T20:00:00Z\n');
-    if (cmd.startsWith('cat ') && cmd.endsWith('ended.at')) return ok('2026-10-15T20:04:20Z\n');
-    if (cmd.includes('/proc/mounts')) return world.noVolume ? fail() : ok();
-    if (cmd.startsWith('sh -c ')) return ok();
-    return fail();
-  }
-  return fail();
-};
-
-/** A manifest that covers the smoke profile's VUs at N. */
-function manifestFor(n: number): SeedManifest {
-  const agents = [];
-  for (const role of ['read', 'write', 'claim', 'run'] as const) {
-    for (let i = 0; i < 16 * n; i++) {
-      agents.push({
-        tokenId: `${role}-${i}`,
-        token: 'mtr_secret_token',
-        role,
-        userId: 'u',
-        workspaceId: 'w',
-        projectId: 'p',
-        projectKey: 'LTA',
-        scratchPlanIds: [],
-        ...(role === 'write' && i < 2 * n
-          ? {
-              burst: {
-                cards: [],
-                parents: [
-                  { id: 'a', key: 'A' },
-                  { id: 'b', key: 'B' },
-                ],
-              },
-            }
-          : {}),
-      });
-    }
-  }
-  return {
-    version: 1,
-    runTag: 'lt',
-    seededAt: '2026-10-15T19:59:00Z',
-    baseUrl: BASE_URL,
-    databaseHost: DIRECT,
-    sessionLifetimeSeconds: 1,
-    sessionsExpireAt: '2026-10-22T00:00:00Z',
-    shape: {} as SeedManifest['shape'],
-    users: Array.from({ length: 8 * n }, (_, i) => ({ id: `u${i}` })) as SeedManifest['users'],
-    agents: agents as SeedManifest['agents'],
-    workspaces: Array.from({ length: 2 * n }, (_, i) => ({
-      id: `w${i}`,
-    })) as SeedManifest['workspaces'],
-    projects: [],
-  };
-}
-
-const ENV = {
-  LOADTEST_STAGING_APP: APP,
-  LOADTEST_GENERATOR_APP: GEN_APP,
-  LOADTEST_NEON_PROJECT: 'proj-1',
-  LOADTEST_NEON_BRANCH: 'loadtest',
-  LOADTEST_DATABASE_URL: `postgresql://motir_app:${SECRET}@${POOLED}/motir`,
-  LOADTEST_ALLOWED_DB_HOST: DIRECT,
-  LOADTEST_PRODUCTION_DB_HOSTS: 'ep-prod-9.us-east-2.aws.neon.tech',
-  FLY_API_TOKEN: 'fo1_flysecret',
-  STAGING_BASE_URL: BASE_URL,
-  STAGING_ALLOWED_HOST: 'motir-core-staging.flycast',
-  BETTER_AUTH_SECRET: 'auth-secret-value',
-  GOOGLE_CLIENT_ID: 'gid',
-  GOOGLE_CLIENT_SECRET: 'gsecret-value',
-  NODE_ENV: 'production',
-};
-
-/** Stand-ins for the run-window recorders' I/O, so no real `fly logs` or Postgres is touched. */
-const CAPTURE_STUBS: NonNullable<RunDeps['capture']> = {
-  logRunner: (_args, onLine) => {
-    let kill: () => void = () => undefined;
-    const exited = new Promise<number>((r) => {
-      kill = () => r(0);
-    });
-    onLine(
-      JSON.stringify({ timestamp: 't1', instance: 'app1', message: 'GET /api/health/ready 200' }),
-    );
-    return { exited, kill };
-  },
-  readTopStatements: async () => ({ state: 'extension_not_installed' }),
-  dbClient: () => ({
-    connect: async () => undefined,
-    query: async () => ({ rows: [{ backends: 3 }] }),
-    end: async () => undefined,
-  }),
-  sampleIntervalMs: 60_000,
-};
-
-let preflightExit = 0;
-let manifestN = 1;
-let seedCalls: string[][] = [];
-
-function deps(over: Partial<RunDeps> = {}): RunDeps {
-  return {
-    exec: fakeExec,
-    env: ENV,
-    cwd,
-    now: () => new Date(clock),
-    sleep: async (ms) => {
-      clock += ms;
-    },
-    log: (line) => logs.push(line),
-    preflight: async () => ({
-      exitCode: preflightExit,
-      text: preflightExit ? 'LIVE row' : 'PASS all',
-    }),
-    seed: async (command, args) => {
-      seedCalls.push([command, ...args]);
-      return 0;
-    },
-    readManifest: async () => manifestFor(manifestN),
-    report: async (dir) => {
-      reports.push(dir);
-      return 6;
-    },
-    capture: CAPTURE_STUBS,
-    ...over,
-  };
-}
-
-const SMOKE_ARGS = ['--profile', 'smoke', '--instances', '1', '--app', APP];
-const flyCalls = (pred: (a: string[]) => boolean) =>
-  world.calls.filter((c) => c.bin === 'fly' && pred(c.args));
-const scaleCalls = () => flyCalls((a) => a[0] === 'scale');
-const generatorStarts = () => flyCalls((a) => a[0] === 'machine' && a[1] === 'start');
-const generatorStops = () => flyCalls((a) => a[0] === 'machine' && a[1] === 'stop');
-const k6Starts = () => flyCalls((a) => a.some((x) => x.includes('setsid nohup')));
-const manifestDeletes = () =>
-  flyCalls((a) => a.some((x) => x.includes('rm -f /dev/shm/loadtest/manifest.json')));
-const record = (dir: string) =>
-  JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8')) as RunRecord;
-
-beforeEach(() => {
-  world = newWorld(1);
-  cwd = mkdtempSync(join(tmpdir(), 'loadtest-run-'));
-  mkdirSync(join(cwd, 'loadtest/k6'), { recursive: true });
-  mkdirSync(join(cwd, 'loadtest/profiles'), { recursive: true });
-  for (const f of [
-    'loadtest/k6/versions.env',
-    'loadtest/profiles/smoke.json',
-    'loadtest/profiles/default.json',
-  ]) {
-    writeFileSync(join(cwd, f), readFileSync(join(ROOT, f)));
-  }
-  writeFileSync(join(cwd, 'package.json'), '{"scripts":{}}');
-  logs = [];
-  reports = [];
-  clock = Date.parse('2026-10-15T19:00:00Z');
-  preflightExit = 0;
-  manifestN = 1;
-  seedCalls = [];
-});
-
-/** A baseline run directory at 1 instance for the smoke profile. */
-function baselineDir(): string {
-  const dir = join(cwd, 'base');
-  mkdirSync(dir, { recursive: true });
-  const smoke = JSON.parse(
-    readFileSync(join(ROOT, 'loadtest/profiles/smoke.json'), 'utf8'),
-  ) as LoadProfile;
-  writeFileSync(
-    join(dir, 'run.json'),
-    JSON.stringify({ instances: 1, profile: { sha256: loadHash(smoke) } }),
-  );
-  return dir;
-}
+beforeEach(resetFake);
 
 describe('step 1 — refusals before any platform call', () => {
   it('--app motir-core exits 2 with zero runner calls and no run.json', async () => {
@@ -418,9 +60,9 @@ describe('step 1 — refusals before any platform call', () => {
       deps(),
     );
     expect(out.exitCode).toBe(EXIT.refused);
-    expect(world.calls).toEqual([]);
+    expect(fake.world.calls).toEqual([]);
     expect(out.runDir).toBeNull();
-    expect(existsSync(join(cwd, 'loadtest/.out/runs'))).toBe(false);
+    expect(existsSync(join(fake.cwd, 'loadtest/.out/runs'))).toBe(false);
   });
 
   it('an app not ending in -staging exits 2 with zero runner calls', async () => {
@@ -429,9 +71,9 @@ describe('step 1 — refusals before any platform call', () => {
       deps({ env: { ...ENV, LOADTEST_STAGING_APP: undefined } }),
     );
     expect(out.exitCode).toBe(EXIT.refused);
-    expect(world.calls).toEqual([]);
-    expect(logs.join('\n')).toMatch(/does not end in -staging/);
-    expect(existsSync(join(cwd, 'loadtest/.out/runs'))).toBe(false);
+    expect(fake.world.calls).toEqual([]);
+    expect(fake.logs.join('\n')).toMatch(/does not end in -staging/);
+    expect(existsSync(join(fake.cwd, 'loadtest/.out/runs'))).toBe(false);
   });
 
   it('names every missing variable at once', async () => {
@@ -443,10 +85,10 @@ describe('step 1 — refusals before any platform call', () => {
     };
     const out = await runLoadTest(SMOKE_ARGS, deps({ env }));
     expect(out.exitCode).toBe(EXIT.refused);
-    expect(logs.join('\n')).toMatch(
+    expect(fake.logs.join('\n')).toMatch(
       /missing LOADTEST_GENERATOR_APP, FLY_API_TOKEN, STAGING_BASE_URL/,
     );
-    expect(world.calls).toEqual([]);
+    expect(fake.world.calls).toEqual([]);
   });
 
   it('refuses a STAGING_BASE_URL whose host is not STAGING_ALLOWED_HOST', async () => {
@@ -455,14 +97,14 @@ describe('step 1 — refusals before any platform call', () => {
       deps({ env: { ...ENV, STAGING_ALLOWED_HOST: 'other.flycast' } }),
     );
     expect(out.exitCode).toBe(EXIT.refused);
-    expect(world.calls).toEqual([]);
+    expect(fake.world.calls).toEqual([]);
   });
 
   it('N > 1 without --baseline exits 2 naming the flag', async () => {
     const out = await runLoadTest(['--profile', 'smoke', '--instances', '2', '--app', APP], deps());
     expect(out.exitCode).toBe(EXIT.refused);
-    expect(logs.join('\n')).toMatch(/--baseline <run dir> is required/);
-    expect(world.calls).toEqual([]);
+    expect(fake.logs.join('\n')).toMatch(/--baseline <run dir> is required/);
+    expect(fake.world.calls).toEqual([]);
   });
 
   it('a baseline with a different load hash exits 2', async () => {
@@ -476,11 +118,11 @@ describe('step 1 — refusals before any platform call', () => {
       deps(),
     );
     expect(out.exitCode).toBe(EXIT.refused);
-    expect(logs.join('\n')).toMatch(/different load/);
+    expect(fake.logs.join('\n')).toMatch(/different load/);
   });
 
   it('an invalid profile exits 2 naming the field', async () => {
-    const path = join(cwd, 'bad.json');
+    const path = join(fake.cwd, 'bad.json');
     writeFileSync(
       path,
       JSON.stringify({
@@ -490,8 +132,8 @@ describe('step 1 — refusals before any platform call', () => {
     );
     const out = await runLoadTest(['--profile', path, '--instances', '1', '--app', APP], deps());
     expect(out.exitCode).toBe(EXIT.refused);
-    expect(logs.join('\n')).toMatch(/extra/);
-    expect(world.calls).toEqual([]);
+    expect(fake.logs.join('\n')).toMatch(/extra/);
+    expect(fake.world.calls).toEqual([]);
   });
 });
 
@@ -554,7 +196,7 @@ describe('a completed run', () => {
     ]) {
       expect(existsSync(join(out.runDir!, f)), f).toBe(true);
     }
-    expect(reports).toEqual([out.runDir]);
+    expect(fake.reports).toEqual([out.runDir]);
     expect(out.reportExitCode).toBe(6);
   });
 
@@ -596,12 +238,12 @@ describe('a completed run', () => {
 
   it('seeds the scaled shape, then resets, against the branch', async () => {
     await runLoadTest(SMOKE_ARGS, deps());
-    expect(seedCalls.map((c) => c[0])).toEqual(['seed', 'reset']);
-    expect(seedCalls[0]).toEqual(expect.arrayContaining(['--shape', '--tag', 'lt']));
+    expect(fake.seedCalls.map((c) => c[0])).toEqual(['seed', 'reset']);
+    expect(fake.seedCalls[0]).toEqual(expect.arrayContaining(['--shape', '--tag', 'lt']));
   });
 
   it('a k6 exit of 99 is recorded as completed', async () => {
-    world.k6Exit = 99;
+    fake.world.k6Exit = 99;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.completed);
     expect(record(out.runDir!).k6.exitCode).toBe(99);
@@ -609,7 +251,7 @@ describe('a completed run', () => {
 
   it('prints no secret value or full URL', async () => {
     await runLoadTest(SMOKE_ARGS, deps());
-    const out = logs.join('\n');
+    const out = fake.logs.join('\n');
     for (const secret of [
       SECRET,
       'fo1_flysecret',
@@ -620,7 +262,7 @@ describe('a completed run', () => {
     ]) {
       expect(out).not.toContain(secret);
     }
-    const runs = join(cwd, 'loadtest/.out/runs');
+    const runs = join(fake.cwd, 'loadtest/.out/runs');
     const dir = join(runs, (await import('node:fs')).readdirSync(runs)[0]!);
     for (const f of ['run.json', 'profile.resolved.json']) {
       const text = readFileSync(join(dir, f), 'utf8');
@@ -632,7 +274,7 @@ describe('a completed run', () => {
 
 describe('scaling', () => {
   it('at N−1 makes exactly one fly scale count app=<N> call', async () => {
-    manifestN = 2;
+    fake.manifestN = 2;
     const out = await runLoadTest(
       ['--profile', 'smoke', '--instances', '2', '--app', APP, '--baseline', baselineDir()],
       deps(),
@@ -645,8 +287,8 @@ describe('scaling', () => {
   });
 
   it('falls back to the --process-group spelling and records it', async () => {
-    world.scaleRefusesEquals = true;
-    manifestN = 2;
+    fake.world.scaleRefusesEquals = true;
+    fake.manifestN = 2;
     const out = await runLoadTest(
       ['--profile', 'smoke', '--instances', '2', '--app', APP, '--baseline', baselineDir()],
       deps(),
@@ -657,7 +299,7 @@ describe('scaling', () => {
   });
 
   it('a stopped app machine exits 4 and makes no scale call', async () => {
-    world.staging.push(appMachine('app2', { state: 'stopped' }));
+    fake.world.staging.push(appMachine('app2', { state: 'stopped' }));
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(scaleCalls()).toEqual([]);
@@ -667,7 +309,7 @@ describe('scaling', () => {
 
 describe('step 2 — the platform is read before it is touched', () => {
   it('a staging size that differs from production exits 4', async () => {
-    world.staging[0]!.guest.memory_mb = 2048;
+    fake.world.staging[0]!.guest.memory_mb = 2048;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/size differs/);
@@ -675,44 +317,44 @@ describe('step 2 — the platform is read before it is touched', () => {
   });
 
   it('--candidate-size lets a different size through and is recorded', async () => {
-    world.staging[0]!.guest.memory_mb = 2048;
+    fake.world.staging[0]!.guest.memory_mb = 2048;
     const out = await runLoadTest([...SMOKE_ARGS, '--candidate-size'], deps());
     expect(out.exitCode).toBe(EXIT.completed);
     expect(record(out.runDir!).candidateSize).toBe(true);
   });
 
   it('an autostop other than off exits 4', async () => {
-    world.staging[0]!.services[0]!.autostop = 'suspend';
+    fake.world.staging[0]!.services[0]!.autostop = 'suspend';
     expect((await runLoadTest(SMOKE_ARGS, deps())).exitCode).toBe(EXIT.platform);
-    world = newWorld(1);
-    world.staging[0]!.services[0]!.autostop = true;
+    fake.world = newWorld(1);
+    fake.world.staging[0]!.services[0]!.autostop = true;
     expect((await runLoadTest(SMOKE_ARGS, deps())).exitCode).toBe(EXIT.platform);
   });
 
   it('autostop false is off', async () => {
-    world.staging[0]!.services[0]!.autostop = false;
+    fake.world.staging[0]!.services[0]!.autostop = false;
     expect((await runLoadTest(SMOKE_ARGS, deps())).exitCode).toBe(EXIT.completed);
   });
 
   it('a concurrency type other than requests exits 4', async () => {
-    world.staging[0]!.services[0]!.concurrency!.type = 'connections';
+    fake.world.staging[0]!.services[0]!.concurrency!.type = 'connections';
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/must be requests/);
   });
 
   it('an unset soft_limit or hard_limit exits 4', async () => {
-    delete world.staging[0]!.services[0]!.concurrency!.soft_limit;
+    delete fake.world.staging[0]!.services[0]!.concurrency!.soft_limit;
     expect((await runLoadTest(SMOKE_ARGS, deps())).exitCode).toBe(EXIT.platform);
-    world = newWorld(1);
-    delete world.staging[0]!.services[0]!.concurrency!.hard_limit;
+    fake.world = newWorld(1);
+    delete fake.world.staging[0]!.services[0]!.concurrency!.hard_limit;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/hard_limit unset/);
   });
 
   it('deployed limits below the requirement exit 4', async () => {
-    world.staging[0]!.services[0]!.concurrency = {
+    fake.world.staging[0]!.services[0]!.concurrency = {
       type: 'requests',
       soft_limit: 20,
       hard_limit: 25,
@@ -723,22 +365,22 @@ describe('step 2 — the platform is read before it is touched', () => {
   });
 
   it('min_machines_running changes nothing (autostart false still passes)', async () => {
-    world.staging[0]!.services[0]!.min_machines_running = 3;
-    world.staging[0]!.services[0]!.autostart = false;
+    fake.world.staging[0]!.services[0]!.min_machines_running = 3;
+    fake.world.staging[0]!.services[0]!.autostart = false;
     expect((await runLoadTest(SMOKE_ARGS, deps())).exitCode).toBe(EXIT.completed);
   });
 });
 
 describe('step 4 — the generator', () => {
   it('a generator outside iad exits 4 and is never started', async () => {
-    world.generator[0]!.region = 'ord';
+    fake.world.generator[0]!.region = 'ord';
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(generatorStarts()).toEqual([]);
   });
 
   it('a generator that does not reach started exits 4 — and is still stopped', async () => {
-    world.generatorNeverStarts = true;
+    fake.world.generatorNeverStarts = true;
     const out = await runLoadTest(SMOKE_ARGS, deps({ timeouts: { generatorStartMs: 20_000 } }));
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/did not reach started/);
@@ -747,7 +389,7 @@ describe('step 4 — the generator', () => {
   });
 
   it('a k6 version differing from versions.env exits 4 naming provisioning', async () => {
-    world.k6Version = K6_OUT.replace('v1.2.1', 'v1.3.0');
+    fake.world.k6Version = K6_OUT.replace('v1.2.1', 'v1.3.0');
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/v1\.3\.0.*provisioning/);
@@ -755,18 +397,18 @@ describe('step 4 — the generator', () => {
   });
 
   it('a k6 binary without the SSE extension exits 4', async () => {
-    world.k6Version = 'k6 v1.2.1 (go1.24.7, linux/amd64)\n';
+    fake.world.k6Version = 'k6 v1.2.1 (go1.24.7, linux/amd64)\n';
     expect((await runLoadTest(SMOKE_ARGS, deps())).exitCode).toBe(EXIT.platform);
   });
 });
 
 describe('step 5 — read N back', () => {
   it('after scaling, a read-back of N−1 started machines exits 4, no k6, generator stopped', async () => {
-    world.stagingAfter = { calls: 1, machines: [appMachine('app1')] };
+    fake.world.stagingAfter = { calls: 1, machines: [appMachine('app1')] };
     // The scale "succeeds" but the platform never shows the second machine.
     const exec: Exec = async (bin, args) =>
       args[0] === 'scale'
-        ? (world.calls.push({ bin, args: [...args] }), ok())
+        ? (fake.world.calls.push({ bin, args: [...args] }), ok())
         : fakeExec(bin, args);
     const out = await runLoadTest(
       ['--profile', 'smoke', '--instances', '2', '--app', APP, '--baseline', baselineDir()],
@@ -779,14 +421,14 @@ describe('step 5 — read N back', () => {
   });
 
   it('a read-back of N+1 started machines exits 4', async () => {
-    world.stagingAfter = { calls: 1, machines: [appMachine('app1'), appMachine('app2')] };
+    fake.world.stagingAfter = { calls: 1, machines: [appMachine('app1'), appMachine('app2')] };
     const out = await runLoadTest(SMOKE_ARGS, deps({ timeouts: { readBackMs: 10_000 } }));
     expect(out.exitCode).toBe(EXIT.platform);
     expect(k6Starts()).toEqual([]);
   });
 
   it('one machine not answering ready exits 4 with no k6 run', async () => {
-    world.pin = (id) =>
+    fake.world.pin = (id) =>
       id === 'app1'
         ? { status: 503, body: '{"state":"draining"}' }
         : { status: 503, body: 'no such instance' };
@@ -797,7 +439,7 @@ describe('step 5 — read N back', () => {
   });
 
   it('a proxy that answers the bogus pin with the app’s payload exits 4', async () => {
-    world.pin = () => ({ status: 200, body: '{"state":"ready"}' });
+    fake.world.pin = () => ({ status: 200, body: '{"state":"ready"}' });
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).pin).toMatchObject({
@@ -808,7 +450,8 @@ describe('step 5 — read N back', () => {
   });
 
   it('a readiness answer that is a redirect exits 4', async () => {
-    world.pin = (id) => (id === 'app1' ? { status: 307, body: '' } : { status: 503, body: '' });
+    fake.world.pin = (id) =>
+      id === 'app1' ? { status: 307, body: '' } : { status: 503, body: '' };
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/redirect 307/);
@@ -827,20 +470,20 @@ describe('step 5 — read N back', () => {
   it('two images exit 4; --sha mismatch exits 4; a non-SHA tag is unmeasured', async () => {
     const two = newWorld(2);
     two.staging[1]!.tag = 'b'.repeat(40);
-    world = two;
-    manifestN = 2;
+    fake.world = two;
+    fake.manifestN = 2;
     let out = await runLoadTest(
       ['--profile', 'smoke', '--instances', '2', '--app', APP, '--baseline', baselineDir()],
       deps(),
     );
     expect(record(out.runDir!).reason).toMatch(/2 images/);
 
-    world = newWorld(1);
+    fake.world = newWorld(1);
     out = await runLoadTest([...SMOKE_ARGS, '--sha', 'c'.repeat(40)], deps());
     expect(out.exitCode).toBe(EXIT.platform);
 
-    world = newWorld(1);
-    world.staging[0]!.tag = 'deployment-01J';
+    fake.world = newWorld(1);
+    fake.world.staging[0]!.tag = 'deployment-01J';
     out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.completed);
     expect(record(out.runDir!).sha).toBe('unmeasured');
@@ -850,11 +493,11 @@ describe('step 5 — read N back', () => {
 describe('step 6 — the preflight', () => {
   for (const code of [2, 4]) {
     it(`a preflight exit of ${code} is propagated and nothing after it runs`, async () => {
-      preflightExit = code;
+      fake.preflightExit = code;
       const out = await runLoadTest(SMOKE_ARGS, deps());
       expect(out.exitCode).toBe(code);
-      expect(world.calls.filter((c) => c.bin === 'neonctl')).toEqual([]);
-      expect(seedCalls).toEqual([]);
+      expect(fake.world.calls.filter((c) => c.bin === 'neonctl')).toEqual([]);
+      expect(fake.seedCalls).toEqual([]);
       expect(k6Starts()).toEqual([]);
       expect(generatorStops()).toHaveLength(1);
       expect(readFileSync(join(out.runDir!, 'preflight.txt'), 'utf8')).toMatch(/LIVE/);
@@ -868,47 +511,47 @@ describe('step 7 — the database that answers', () => {
   });
 
   it('an in-machine host that differs after normalisation exits 4', async () => {
-    world.stagingEnv['DATABASE_URL'] =
+    fake.world.stagingEnv['DATABASE_URL'] =
       `postgresql://motir_app:${SECRET}@ep-other-9-pooler.us-east-2.aws.neon.tech/motir`;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/ep-other-9\.us-east-2/);
-    expect(logs.join('\n')).not.toContain(SECRET);
-    expect(seedCalls).toEqual([]);
+    expect(fake.logs.join('\n')).not.toContain(SECRET);
+    expect(fake.seedCalls).toEqual([]);
   });
 
   it('MOTIR_MCP_RATE_LIMIT below 600 exits 4', async () => {
-    world.stagingEnv['MOTIR_MCP_RATE_LIMIT'] = '500';
+    fake.world.stagingEnv['MOTIR_MCP_RATE_LIMIT'] = '500';
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).rateLimits.mcp).toBe(500);
   });
 
   it('MOTIR_AGENT_WORKSPACE_RATE_LIMIT below its default exits 4', async () => {
-    world.stagingEnv['MOTIR_AGENT_WORKSPACE_RATE_LIMIT'] = '6000';
+    fake.world.stagingEnv['MOTIR_AGENT_WORKSPACE_RATE_LIMIT'] = '6000';
     expect((await runLoadTest(SMOKE_ARGS, deps())).exitCode).toBe(EXIT.platform);
   });
 
   it('MOTIR_API_V1_RATE_LIMIT below 1.5 × the per-token rate exits 4', async () => {
     // Smoke's run token offers about 27 requests a minute; 1.5 × that is above 40.
-    world.stagingEnv['MOTIR_API_V1_RATE_LIMIT'] = '30';
+    fake.world.stagingEnv['MOTIR_API_V1_RATE_LIMIT'] = '30';
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/MOTIR_API_V1_RATE_LIMIT is 30\/min/);
   });
 
   it('records the rate limits and the trace rate as read', async () => {
-    world.stagingEnv['MOTIR_API_V1_RATE_LIMIT'] = '6000';
-    world.stagingEnv['SENTRY_TRACES_SAMPLE_RATE'] = '0.05';
+    fake.world.stagingEnv['MOTIR_API_V1_RATE_LIMIT'] = '6000';
+    fake.world.stagingEnv['SENTRY_TRACES_SAMPLE_RATE'] = '0.05';
     const r = record((await runLoadTest(SMOKE_ARGS, deps())).runDir!);
     expect(r.rateLimits).toEqual({ apiV1: 6000, mcp: 'default', agentWorkspace: 'default' });
     expect(r.traceRate).toBe(0.05);
   });
 
   it('names the copied-from field: refresh.json first', async () => {
-    mkdirSync(join(cwd, 'loadtest/.out'), { recursive: true });
+    mkdirSync(join(fake.cwd, 'loadtest/.out'), { recursive: true });
     writeFileSync(
-      join(cwd, 'loadtest/.out/refresh.json'),
+      join(fake.cwd, 'loadtest/.out/refresh.json'),
       JSON.stringify({ refreshedAt: '2026-10-15T18:00:00Z' }),
     );
     const r = record((await runLoadTest(SMOKE_ARGS, deps())).runDir!);
@@ -966,7 +609,7 @@ describe('step 8 — the seed', () => {
 
 describe('step 9 — k6', () => {
   it('an upload failure exits 5, deletes the manifest and stops the generator', async () => {
-    world.failPut = true;
+    fake.world.failPut = true;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.k6);
     expect(record(out.runDir!).reason).toMatch(/k6 could not be started/);
@@ -974,7 +617,7 @@ describe('step 9 — k6', () => {
   });
 
   it('a k6 failure exits 5 and the manifest is still deleted', async () => {
-    world.k6Exit = 107;
+    fake.world.k6Exit = 107;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.k6);
     expect(manifestDeletes()).toHaveLength(1);
@@ -1003,7 +646,7 @@ describe('step 10 — the instance count held', () => {
       exitCode: 4,
     });
     expect(r.reason).toMatch(/changed during the run/);
-    expect(reports).toEqual([out.runDir]);
+    expect(fake.reports).toEqual([out.runDir]);
     expect(out.reportExitCode).toBe(6);
   });
 });
@@ -1100,7 +743,7 @@ describe('the run-window capture (MOTIR-8683)', () => {
   });
 
   it('on a k6 failure the point file is still fetched and deleted', async () => {
-    world.k6Exit = 107;
+    fake.world.k6Exit = 107;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.k6);
     expect(
@@ -1113,7 +756,7 @@ describe('the run-window capture (MOTIR-8683)', () => {
   });
 
   it('a generator with no /data volume exits 4', async () => {
-    world.noVolume = true;
+    fake.world.noVolume = true;
     const out = await runLoadTest(SMOKE_ARGS, deps());
     expect(out.exitCode).toBe(EXIT.platform);
     expect(record(out.runDir!).reason).toMatch(/no volume mounted at \/data/);
@@ -1177,7 +820,7 @@ describe('the run-window capture (MOTIR-8683)', () => {
     expect(
       JSON.parse(readFileSync(join(out.runDir!, 'neon-endpoint-end.json'), 'utf8')).state,
     ).toBe('ok');
-    expect(logs.join('\n')).not.toContain('neon-key-value');
+    expect(fake.logs.join('\n')).not.toContain('neon-key-value');
   });
 
   it('the direct URL resolved for the capture never reaches any output', async () => {
@@ -1187,6 +830,6 @@ describe('the run-window capture (MOTIR-8683)', () => {
       if (f.endsWith('.gz')) continue;
       expect(readFileSync(join(runDir, f), 'utf8'), f).not.toContain(SECRET);
     }
-    expect(logs.join('\n')).not.toContain(SECRET);
+    expect(fake.logs.join('\n')).not.toContain(SECRET);
   });
 });
