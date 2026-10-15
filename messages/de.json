@@ -7545,7 +7545,9 @@
         "aria": "{key} öffnen, das Arbeitselement, das dieses Gespräch neu plant",
         "pickLabel": "Folgeplanung zu <mono>{key}</mono>",
         "chose": "hat {label} gewählt",
-        "pickAria": "{key} öffnen, die Auswahl, zu der dieses Gespräch die Folgeplanung ist ({label} gewählt)"
+        "pickAria": "{key} öffnen, die Auswahl, zu der dieses Gespräch die Folgeplanung ist ({label} gewählt)",
+        "guideLabel": "Aus der Anleitung zu <mono>{key}</mono>",
+        "guideAria": "{key} öffnen, das Arbeitselement, durch das Motir AI Sie geführt hat, als es diese Neuplanung angeboten hat"
       },
       "end": {
         "failed": "Geschlossen · der Versuch ist fehlgeschlagen · {time}",

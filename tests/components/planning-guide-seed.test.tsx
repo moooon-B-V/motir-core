@@ -115,6 +115,7 @@ import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import { PlanningWorkspaceOverlay } from '@/components/planning/PlanningWorkspaceOverlay';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { withPlanningOverlay } from '@/lib/planning/launcher';
+import { guidedTargetFallback } from '@/lib/planning/guideOfferLaunch';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import { resetPickAutoSendClaimsForTests } from '@/lib/planning/pickAutoSend';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -342,7 +343,10 @@ const BASE: PlanChangeConversationState = {
 };
 const onSend = vi.fn();
 
-function rail(state: Partial<PlanChangeConversationState> = {}, opts: { key?: string } = {}) {
+function rail(
+  state: Partial<PlanChangeConversationState> = {},
+  opts: { key?: string; guide?: PlanningSeedGuideDTO } = {},
+) {
   const merged = { ...BASE, ...state };
   return (
     <PlanChangeRail
@@ -351,7 +355,7 @@ function rail(state: Partial<PlanChangeConversationState> = {}, opts: { key?: st
       projectName="Acme"
       autoSendTurn={REQUEST}
       autoSendKey={`guide:${OFFER}`}
-      guideOrigin={GUIDE}
+      guideOrigin={opts.guide ?? GUIDE}
       state={merged}
       index={indexPlanReview(merged.review)}
       targets={[]}
@@ -392,6 +396,14 @@ describe('the rail — the FROM A GUIDE framing', () => {
     expect(card.textContent).toContain('Planning');
     expect(card.textContent).toMatch(/Confirmed by you/);
     expect(document.body.textContent).not.toMatch(/re-plan this|What should change/i);
+  });
+
+  it('a confirmed offer’s card says when it was confirmed, not just now', () => {
+    const confirmedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    renderWithIntl(rail({ session: session([REQUEST]) }, { guide: { ...GUIDE, confirmedAt } }));
+    const card = screen.getByTestId('guide-origin-card');
+    expect(card.textContent).toMatch(/Confirmed by you/);
+    expect(card.textContent).toMatch(/3 hours ago/);
   });
 
   it('a session already holding a user turn (a reopen) sends nothing but keeps the framing', () => {
@@ -525,6 +537,64 @@ describe('the overlay — a guide offer opens on its target with the request to 
     expect(document.body.textContent).not.toMatch(/offer|boom/i);
   });
 
+  it('a guided-card read that FAILS still joins the card to the scope, by its key', async () => {
+    fetchGuidePlanningSeed.mockResolvedValue(SEED);
+    fetchPlanningAnchor.mockImplementation(async (key: string) => {
+      if (key === 'ACME-31') throw new Error('boom');
+      return ANCHOR_12;
+    });
+    mountOverlay();
+    await act(async () => {});
+    const host = screen.getByTestId('host');
+    expect(host.getAttribute('data-item')).toBe('ACME-12');
+    expect(host.getAttribute('data-extra')).toBe('ACME-31');
+    expect(document.body.textContent).not.toMatch(/boom/i);
+  });
+
+  it('a guided card the read cannot place still joins the scope, by its key', async () => {
+    fetchGuidePlanningSeed.mockResolvedValue(SEED);
+    fetchPlanningAnchor.mockImplementation(async (key: string) =>
+      key === 'ACME-31' ? null : ANCHOR_12,
+    );
+    mountOverlay();
+    await act(async () => {});
+    expect(screen.getByTestId('host').getAttribute('data-extra')).toBe('ACME-31');
+  });
+
+  it('a close while the seed is in flight drops the answer', async () => {
+    let release: (seed: PlanningGuideSeedDTO) => void = () => {};
+    fetchGuidePlanningSeed.mockReturnValue(new Promise((r) => (release = r)));
+    const view = mountOverlay();
+    await act(async () => {});
+    view.unmount();
+    await act(async () => release(SEED));
+    expect(fetchPlanningAnchor).not.toHaveBeenCalledWith('ACME-31', expect.anything());
+  });
+
+  it('a close while a failing seed read is in flight draws nothing', async () => {
+    let fail: (err: Error) => void = () => {};
+    fetchGuidePlanningSeed.mockReturnValue(new Promise((_r, j) => (fail = j)));
+    const view = mountOverlay();
+    await act(async () => {});
+    view.unmount();
+    await act(async () => fail(new Error('boom')));
+    expect(screen.queryByTestId('host')).toBeNull();
+  });
+
+  it('a close while the guided card is being read drops the answer', async () => {
+    fetchGuidePlanningSeed.mockResolvedValue(SEED);
+    let place: (a: typeof ANCHOR_31) => void = () => {};
+    fetchPlanningAnchor.mockImplementation((key: string) =>
+      key === 'ACME-31' ? new Promise((r) => (place = r)) : Promise.resolve(ANCHOR_12),
+    );
+    const view = mountOverlay();
+    await act(async () => {});
+    expect(screen.queryByTestId('host')).toBeNull();
+    view.unmount();
+    await act(async () => place(ANCHOR_31));
+    expect(screen.queryByTestId('host')).toBeNull();
+  });
+
   it('a target the viewer cannot see sends nothing', async () => {
     fetchGuidePlanningSeed.mockResolvedValue(SEED);
     fetchPlanningAnchor.mockImplementation(async (key: string) =>
@@ -553,5 +623,18 @@ describe('the overlay — a guide offer opens on its target with the request to 
     // The overlay hands the SAME claim key both times; the rail's claim (tested above)
     // is what keeps the second from sending.
     expect(screen.getByTestId('host').getAttribute('data-auto-key')).toBe(`guide:${OFFER}`);
+  });
+});
+
+// ── THE PURE HALF ────────────────────────────────────────────────────────────
+
+describe('guidedTargetFallback', () => {
+  it('places the guided card by its key and title alone, with no id', () => {
+    expect(guidedTargetFallback(GUIDE)).toEqual({
+      id: '',
+      identifier: 'ACME-31',
+      title: 'Publish the export',
+      kind: 'task',
+    });
   });
 });

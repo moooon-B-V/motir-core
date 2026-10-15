@@ -466,7 +466,7 @@ describe('needs_replan offer — the stored, resolved offer (MOTIR-8689)', () =>
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toContain(`Re-plan offered on: ${story.identifier}`);
     // It survives a fresh read of the thread.
-    const reread = await planChangeSessionsService.getById(fx.ctx, opened.session.id);
+    const reread = await planChangeSessionsService.getById(activeCtx.current!, opened.session.id);
     expect(reread.turns.at(-1)?.guide?.replanOffer?.targetKey).toBe(story.identifier);
   });
 
@@ -518,7 +518,8 @@ describe('needs_replan offer — the stored, resolved offer (MOTIR-8689)', () =>
     const settled = await settleWith(await open(card.identifier), [
       { type: 'needs_replan', reason: 'The target moved' },
     ]);
-    expect(settled.record).not.toHaveProperty('replanOffer');
+    // The record carries the field, empty: `replanOffer: null` is "no offer".
+    expect(settled.record?.replanOffer).toBeNull();
     const bodies = await commentOn(card.id);
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).not.toContain('Re-plan offered on');
@@ -549,7 +550,7 @@ describe('Decline a re-plan offer — POST /api/ai/guide/offer/decline (MOTIR-86
   const decline = (sessionId: string, turnId: string) =>
     declineOffer(post('/api/ai/guide/offer/decline', { sessionId, turnId }));
 
-  async function offered() {
+  async function offered(opts: { rows?: string[] } = {}) {
     const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Sending' });
     const card = await createTestWorkItem(fx, {
       kind: 'task',
@@ -560,6 +561,7 @@ describe('Decline a re-plan offer — POST /api/ai/guide/offer/decline (MOTIR-86
     });
     await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'todo' } });
     await adminDb.workItem.update({ where: { id: parent.id }, data: { status: 'todo' } });
+    if (opts.rows) await addRows(card.id, opts.rows);
     const opened = await open(card.identifier);
     const settled = await settleWith(opened, [offerAction(parent.identifier)]);
     const turn = settled.session.turns.find((t) => t.role === 'assistant')!;
@@ -637,7 +639,9 @@ describe('Decline a re-plan offer — POST /api/ai/guide/offer/decline (MOTIR-86
   });
 
   it('after a decline, Guide me through resumes the same conversation', async () => {
-    const { card, opened, turnId } = await offered();
+    // The door resumes a walk only on a card with to-do rows (a card with none
+    // starts fresh, by design), so the walk this declines on has its rows.
+    const { card, opened, turnId } = await offered({ rows: ['Rotate the key', 'Verify'] });
     await decline(opened.session.id, turnId);
     const again = await open(card.identifier);
     expect(again.session.id).toBe(opened.session.id);

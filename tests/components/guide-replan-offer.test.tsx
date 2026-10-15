@@ -6,6 +6,7 @@ import { GuideRail } from '@/components/planning/GuideRail';
 import { deriveGuideView } from '@/lib/planning/guideView';
 import type { GuideReplanOffer, GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 
 // THE RE-PLAN OFFER in the guide rail (Story MOTIR-8684 · MOTIR-8694; design
@@ -60,6 +61,7 @@ const ROWS = [
 function renderRail(
   turns: PlanChangeTurnDto[],
   props: Partial<React.ComponentProps<typeof GuideRail>> = {},
+  workItemRefs: WorkItemRefMap = {},
 ) {
   const onOpenOffer = vi.fn();
   const onDeclineOffer = vi.fn();
@@ -80,7 +82,7 @@ function renderRail(
           createdAt: '2026-10-15T10:00:00.000Z',
           updatedAt: '2026-10-15T10:00:00.000Z',
           turns,
-          workItemRefs: {},
+          workItemRefs,
         } as PlanChangeSessionDto
       }
       view={view}
@@ -138,7 +140,7 @@ describe('the undecided offer', () => {
   it('names a target that is not the guided card, and a done target resolved forward', () => {
     renderRail([assistant(offer({ targetKey: 'PAY-100' }))]);
     expect(screen.getByTestId('guide-offer-target').textContent).toContain('PAY-100');
-    expect(screen.getByTestId('guide-offer-target').textContent).toContain('not on this card');
+    expect(screen.getByTestId('guide-offer-target').textContent).toContain('not on this work item');
     cleanup();
     renderRail([
       assistant(
@@ -178,12 +180,66 @@ describe('the undecided offer', () => {
     expect((screen.getByTestId('guide-offer-confirm') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('clamps a long request until Show all', () => {
+  it('clamps a long request until Show all, and Show less clamps it again', () => {
     renderRail([assistant(offer({ requestMd: 'word '.repeat(300) }))]);
     const request = screen.getByTestId('guide-offer-request');
     expect(request.className).toContain('max-h-32');
     fireEvent.click(screen.getByTestId('guide-offer-show-all'));
     expect(request.className).not.toContain('max-h-32');
+    expect(screen.getByTestId('guide-offer-show-all').textContent).toBe('Show less');
+    fireEvent.click(screen.getByTestId('guide-offer-show-all'));
+    expect(request.className).toContain('max-h-32');
+  });
+
+  it('draws the target as the live chip when the thread resolved it, the bare key when not', () => {
+    const refs: WorkItemRefMap = {
+      w100: {
+        accessible: true,
+        id: 'w100',
+        identifier: 'PAY-100',
+        title: 'Signing keys',
+        kind: 'story',
+        archived: false,
+        status: null,
+      },
+      w5: { accessible: false, id: 'w5' },
+    };
+    renderRail([assistant(offer({ targetKey: 'pay-100' }))], {}, refs);
+    const target = screen.getByTestId('guide-offer-target');
+    expect(target.textContent).toContain('Signing keys');
+    cleanup();
+    renderRail([assistant(offer({ targetKey: 'PAY-7' }))], {}, refs);
+    const bare = screen.getByTestId('guide-offer-target');
+    expect(bare.textContent).toContain('PAY-7');
+    expect(bare.textContent).not.toContain('Signing keys');
+  });
+
+  it('without Motir AI set up: its own line, NO Confirm', () => {
+    renderRail([assistant(offer())], { canPlan: false, cannotPlanReason: 'ai_not_configured' });
+    expect(screen.getByTestId('guide-offer-cannot-plan').textContent).toContain(
+      'Motir AI isn’t set up here',
+    );
+    expect(screen.queryByTestId('guide-offer-confirm')).toBeNull();
+  });
+
+  it('a Confirm refused where it is pressed (out of credits) can be pressed again', () => {
+    const turns = [assistant(offer())];
+    const onOpenOffer = vi.fn(() => false);
+    renderRail(turns, { onOpenOffer });
+    const confirm = screen.getByTestId('guide-offer-confirm') as HTMLButtonElement;
+    fireEvent.click(confirm);
+    expect(onOpenOffer).toHaveBeenCalledWith(turns[0]!.id);
+    expect(confirm.disabled).toBe(false);
+    expect(confirm.textContent).toBe('Confirm');
+  });
+
+  it('a Confirm that opens the planner shows it starting and presses nothing more', () => {
+    const turns = [assistant(offer())];
+    renderRail(turns);
+    fireEvent.click(screen.getByTestId('guide-offer-confirm'));
+    const confirm = screen.getByTestId('guide-offer-confirm') as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    expect((screen.getByTestId('guide-offer-decline') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -194,7 +250,7 @@ describe('the decided states, from the record alone', () => {
     expect(block.getAttribute('data-offer-state')).toBe('declined');
     expect(screen.queryByTestId('guide-offer-confirm')).toBeNull();
     expect(screen.queryByTestId('guide-offer-decline')).toBeNull();
-    expect(block.textContent).toContain('Recorded on the card');
+    expect(block.textContent).toContain('Recorded on the work item');
     expect(screen.getByTestId('guide-offer-resume').textContent).toContain('step 2');
   });
 

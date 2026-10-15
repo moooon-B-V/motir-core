@@ -7545,7 +7545,9 @@
         "aria": "{key} openen, het werkitem dat dit gesprek opnieuw plant",
         "pickLabel": "Vervolg op <mono>{key}</mono>",
         "chose": "koos {label}",
-        "pickAria": "{key} openen, de keuze waarop dit gesprek het vervolg is (koos {label})"
+        "pickAria": "{key} openen, de keuze waarop dit gesprek het vervolg is (koos {label})",
+        "guideLabel": "Uit de gids voor <mono>{key}</mono>",
+        "guideAria": "{key} openen, het werkitem waar Motir AI je doorheen leidde toen het deze herplanning voorstelde"
       },
       "end": {
         "failed": "Gesloten · de poging is mislukt · {time}",

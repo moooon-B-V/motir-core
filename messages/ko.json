@@ -7539,7 +7539,9 @@
         "aria": "이 대화에서 다시 계획하는 작업 항목 {key} 열기",
         "pickLabel": "<mono>{key}</mono>의 후속 작업",
         "chose": "{label} 선택함",
-        "pickAria": "이 대화가 후속으로 이어지는 선택 {key} 열기({label} 선택함)"
+        "pickAria": "이 대화가 후속으로 이어지는 선택 {key} 열기({label} 선택함)",
+        "guideLabel": "<mono>{key}</mono> 가이드에서",
+        "guideAria": "{key} 열기, Motir AI가 이 재계획을 제안할 때 안내하던 작업 항목"
       },
       "end": {
         "failed": "종료됨 · 시도 실패 · {time}",

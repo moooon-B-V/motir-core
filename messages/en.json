@@ -7545,7 +7545,9 @@
         "aria": "Open {key}, the work item this conversation re-plans",
         "pickLabel": "Follow-up to <mono>{key}</mono>",
         "chose": "chose {label}",
-        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
+        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})",
+        "guideLabel": "From the guide on <mono>{key}</mono>",
+        "guideAria": "Open {key}, the work item Motir AI was guiding you through when it offered this re-plan"
       },
       "end": {
         "failed": "Closed · the attempt failed · {time}",

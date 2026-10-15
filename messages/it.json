@@ -7545,7 +7545,9 @@
         "aria": "Apri {key}, l’elemento di lavoro che questa conversazione ripianifica",
         "pickLabel": "Seguito di <mono>{key}</mono>",
         "chose": "scelto {label}",
-        "pickAria": "Apri {key}, la scelta di cui questa conversazione è il seguito (scelto {label})"
+        "pickAria": "Apri {key}, la scelta di cui questa conversazione è il seguito (scelto {label})",
+        "guideLabel": "Dalla guida su <mono>{key}</mono>",
+        "guideAria": "Apri {key}, l’elemento di lavoro in cui Motir AI ti stava guidando quando ha offerto questa ripianificazione"
       },
       "end": {
         "failed": "Chiusa · il tentativo non è riuscito · {time}",

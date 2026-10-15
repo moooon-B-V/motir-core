@@ -7545,7 +7545,9 @@
         "aria": "Ouvrir {key}, l'élément de travail que cette conversation replanifie",
         "pickLabel": "Suite de <mono>{key}</mono>",
         "chose": "a choisi {label}",
-        "pickAria": "Ouvrir {key}, le choix dont cette conversation est la suite (a choisi {label})"
+        "pickAria": "Ouvrir {key}, le choix dont cette conversation est la suite (a choisi {label})",
+        "guideLabel": "Depuis le guide de <mono>{key}</mono>",
+        "guideAria": "Ouvrir {key}, l'élément de travail sur lequel Motir AI vous guidait quand il a proposé cette replanification"
       },
       "end": {
         "failed": "Fermée · la tentative a échoué · {time}",

@@ -267,11 +267,14 @@ export async function resolveReplanTarget(
 ): Promise<{ targetKey: string | null; targetResolution: GuideReplanTargetResolution }> {
   let target = card;
   let resolution: GuideReplanTargetResolution = 'guided_card';
-  if (requestedKey !== null && requestedKey !== card.identifier) {
+  // Keys are case-insensitive, folded the way the guide door folds `itemKey`
+  // (`requireGuidableCard`), so a guide asking for `motir-9` reaches `MOTIR-9`.
+  const askedKey = requestedKey === null ? null : requestedKey.trim().toUpperCase();
+  if (askedKey !== null && askedKey !== card.identifier.toUpperCase()) {
     try {
       const asked = await workItemsService.getWorkItemByIdentifier(
         ctx.projectId,
-        requestedKey,
+        askedKey,
         actorOf(ctx),
       );
       if (asked.projectId === ctx.projectId) {
@@ -291,7 +294,7 @@ export async function resolveReplanTarget(
         throw err;
       }
     }
-  } else if (requestedKey !== null) {
+  } else if (askedKey !== null) {
     resolution = 'as_asked';
   }
   const [statuses, ancestorRows] = await Promise.all([

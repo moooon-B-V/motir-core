@@ -7542,7 +7542,9 @@
         "aria": "この会話が再計画する作業項目 {key} を開く",
         "pickLabel": "<mono>{key}</mono> のフォローアップ",
         "chose": "{label} を選択",
-        "pickAria": "この会話がフォローアップしている選択 {key} を開く({label} を選択)"
+        "pickAria": "この会話がフォローアップしている選択 {key} を開く({label} を選択)",
+        "guideLabel": "<mono>{key}</mono> のガイドから",
+        "guideAria": "{key} を開く（Motir AI がこの再計画を提案したときにガイドしていた作業項目）"
       },
       "end": {
         "failed": "終了 · 試行が失敗 · {time}",

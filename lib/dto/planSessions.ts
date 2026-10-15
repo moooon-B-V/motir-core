@@ -66,16 +66,23 @@ export const PLAN_SESSION_SEED_GATE_KINDS = [
 
 export type PlanSessionSeedGateKindDto = (typeof PLAN_SESSION_SEED_GATE_KINDS)[number];
 
-/** Whether a seeded session re-plans after a REFUSAL, or plans the follow-up to a PICK. */
-export type PlanSessionSeedOriginDto = 'refusal' | 'pick';
+/** Whether a seeded session re-plans after a REFUSAL, plans the follow-up to a
+ *  PICK, or was started by Confirm on a GUIDE's re-plan offer (MOTIR-8697). */
+export type PlanSessionSeedOriginDto = 'refusal' | 'pick' | 'guide';
 
-/** Where a SEEDED session came from: the seeding gate's work item and kind. */
+/** Where a SEEDED session came from: the seeding gate's work item and kind, or —
+ *  for a guide seed — the work item the guide conversation was walking. */
 export interface PlanSessionSeedDto {
   /** The seeding work item's identifier (`ACME-44`) — the row links to it. For a
-   *  pick it is the CHOICE card, not the session's anchor. */
+   *  pick it is the CHOICE card, and for a guide seed the GUIDED card, never the
+   *  session's anchor. */
   cardKey: string;
-  gateKind: PlanSessionSeedGateKindDto;
-  /** A pick is never a refusal (MOTIR-6434): the row words them differently. */
+  /** The seeding gate's kind. NULL on a guide seed (MOTIR-8697): a guide offer is
+   *  not an approval gate — it refuses nothing and picks nothing — so there is no
+   *  gate kind, and no gate verb, to show. Non-null on every refusal and pick. */
+  gateKind: PlanSessionSeedGateKindDto | null;
+  /** A pick is never a refusal (MOTIR-6434), and a guide seed is neither: the row
+   *  words all three differently. */
   origin: PlanSessionSeedOriginDto;
   /** The chosen option's label on a pick; null on a refusal. */
   chosenLabel: string | null;
@@ -117,10 +124,13 @@ export interface PlanSessionRowDto {
   /** The session this one CONTINUES (AMENDMENT 23 §6) — its id and end time —
    *  or null when it is no copy, or its source is gone. */
   copiedFrom: { id: string; endedAt: string | null } | null;
-  /** The refused gate that SEEDED the session (MOTIR-6207's `seedGateId`),
-   *  resolved to its work item. Null on an unseeded session, when the gate row is
-   *  gone (`SetNull`), and when the viewer cannot browse the gate's work item —
-   *  an unresolvable seed reads exactly like no seed (MOTIR-6209). */
+  /** Where the session was SEEDED from, resolved to a work item — EITHER the
+   *  refused or picked gate (MOTIR-6207's `seedGateId`; origin `refusal` / `pick`)
+   *  OR the guide reply turn whose re-plan offer was confirmed (MOTIR-8691's
+   *  `seedGuideTurnId`; origin `guide`, naming the guided card). Null on an
+   *  unseeded session, when the seeding row is gone (`SetNull`), and when the
+   *  viewer cannot browse the seed's work item — an unresolvable seed reads
+   *  exactly like no seed (MOTIR-6209, MOTIR-8697). */
   seed: PlanSessionSeedDto | null;
 }
 

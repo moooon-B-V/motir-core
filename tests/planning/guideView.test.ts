@@ -11,6 +11,7 @@ import {
   temporaryAddedStepId,
   type GuideAction,
   type GuideActionOutcome,
+  type GuideReplanOffer,
   type GuideTurnRecord,
 } from '@/lib/ai/guideWorkItem';
 import type { PlanChangeTurnDto } from '@/lib/dto/planChange';
@@ -480,12 +481,12 @@ describe('guideRailBody', () => {
 });
 
 describe('deriveGuideView — a re-plan offer (MOTIR-8694)', () => {
-  const OFFER = {
+  const OFFER: GuideReplanOffer = {
     reason: 'wrong card',
     requestMd: 'Re-plan it.',
     requestedTargetKey: null,
     targetKey: 'PAY-1',
-    targetResolution: 'guided_card' as const,
+    targetResolution: 'guided_card',
     declinedAt: null,
     declinedById: null,
     confirmedAt: null,

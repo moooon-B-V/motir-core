@@ -7545,7 +7545,9 @@
         "aria": "Otwórz {key}, element roboczy, który ta rozmowa planuje ponownie",
         "pickLabel": "Kontynuacja <mono>{key}</mono>",
         "chose": "wybrano: {label}",
-        "pickAria": "Otwórz {key}, wybór, którego kontynuacją jest ta rozmowa (wybrano: {label})"
+        "pickAria": "Otwórz {key}, wybór, którego kontynuacją jest ta rozmowa (wybrano: {label})",
+        "guideLabel": "Z przewodnika po <mono>{key}</mono>",
+        "guideAria": "Otwórz {key}, element roboczy, przez który prowadził Cię Motir AI, gdy zaproponował zmianę planu"
       },
       "end": {
         "failed": "Zamknięta · próba nie powiodła się · {time}",

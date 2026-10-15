@@ -7545,7 +7545,9 @@
         "aria": "Abrir {key}, o item de trabalho que esta conversa replaneja",
         "pickLabel": "Continuação de <mono>{key}</mono>",
         "chose": "escolheu {label}",
-        "pickAria": "Abrir {key}, a escolha da qual esta conversa é a continuação (escolheu {label})"
+        "pickAria": "Abrir {key}, a escolha da qual esta conversa é a continuação (escolheu {label})",
+        "guideLabel": "Do guia de <mono>{key}</mono>",
+        "guideAria": "Abrir {key}, o item de trabalho em que o Motir AI estava guiando você quando ofereceu este replanejamento"
       },
       "end": {
         "failed": "Encerrada · a tentativa falhou · {time}",

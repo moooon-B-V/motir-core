@@ -358,17 +358,21 @@ describe('Confirm — the guide-seeded first turn', () => {
     });
     expect(superseded.status).toBe(409);
     expect(superseded.json.code).toBe('GUIDE_REPLAN_OFFER_NOT_OPEN');
+    expect((await counts()).sessions).toBe(before.sessions);
+    expect((await counts()).submits).toBe(before.submits);
 
+    // A second guide conversation is a session of its own: count after it exists.
     const other = await guideOffer();
     expect((await decline(other.guideSessionId, other.turnId)).status).toBe(200);
+    const beforeDeclined = await counts();
     const declined = await confirm(target, {
       targetKeys: [target.identifier],
       seedGuideTurnId: other.turnId,
     });
     expect(declined.status).toBe(409);
     expect(declined.json.code).toBe('GUIDE_REPLAN_OFFER_NOT_OPEN');
-    expect((await counts()).sessions).toBe(before.sessions);
-    expect((await counts()).submits).toBe(before.submits);
+    expect((await counts()).sessions).toBe(beforeDeclined.sessions);
+    expect((await counts()).submits).toBe(beforeDeclined.submits);
   });
 
   it('answers 422 SEED_NOT_APPLICABLE, alike, for every way the seed is not the caller’s to use', async () => {
@@ -496,16 +500,34 @@ describe('findGuideSeededSession', () => {
 
     // A second member in the project, with their own offer and their own confirmed
     // session: the owner's view and the project's sessions differ.
+    // The owner's session holds `target`'s planning lock, so the member's offer aims at
+    // a story of its own; on the held target their Confirm is refused, and nothing is
+    // seeded for them.
     const other = await member();
-    const theirs = await guideOffer(other.id);
+    const elsewhere = await createTestWorkItem(fx, { kind: 'story', title: 'Billing' });
+    const held = await guideOffer(other.id);
+    const theirs = await guideOffer(other.id, elsewhere.identifier);
     signIn(other);
     expect(
       await planChangeSessionsService.findGuideSeededSession(activeCtx.current!, turnId),
     ).toBeNull();
-    await confirm(target, { targetKeys: [target.identifier], seedGuideTurnId: theirs.turnId });
+    const locked = await confirm(target, {
+      targetKeys: [target.identifier],
+      seedGuideTurnId: held.turnId,
+    });
+    expect(locked.status).toBe(409);
+    expect(locked.json.code).toBe('PLAN_TARGET_LOCKED');
+    expect(
+      await planChangeSessionsService.findGuideSeededSession(activeCtx.current!, held.turnId),
+    ).toBeNull();
+    const mine = await confirm(elsewhere, {
+      targetKeys: [elsewhere.identifier],
+      seedGuideTurnId: theirs.turnId,
+    });
+    expect(mine.status).toBe(200);
     expect(
       await planChangeSessionsService.findGuideSeededSession(activeCtx.current!, theirs.turnId),
-    ).toEqual({ sessionId: expect.any(String), open: true });
+    ).toEqual({ sessionId: mine.json.sessionId, open: true });
     expect(
       await planChangeSessionsService.findGuideSeededSession(activeCtx.current!, turnId),
     ).toBeNull();
