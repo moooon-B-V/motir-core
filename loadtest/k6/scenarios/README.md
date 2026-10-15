@@ -55,3 +55,44 @@ No tag, log line or summary field carries a token.
 `isCiMeteringEnabled()` is cloud billing on **and** `GITHUB_FALLBACK_ORG` set
 (`lib/ciMetering/config.ts`). Staging leaves both unset. If a staging run shows
 every claim as `error`, check those two variables first.
+
+## Reader scenarios (signed-in sessions)
+
+`readers.js` (`readerTab`, `readerBrowse`, `readerScenarios`, `probeReaderCookie`)
+runs the signed-in people beside the agents. Each VU sends one seeded user's
+`cookieHeader` exactly as the seed wrote it.
+
+It needs a k6 built with the SSE extension: `loadtest/k6/build.sh` builds the
+pair pinned in `versions.env` into `loadtest/.out/k6` (Docker's `grafana/xk6`
+when a daemon answers, else `go` + `xk6`). Run it with
+`K6_AUTO_EXTENSION_RESOLUTION=false`, so k6 never fetches a build at run time.
+
+| route              | request                                                     |
+| ------------------ | ----------------------------------------------------------- |
+| `workbench`        | `GET /workbench` and its 307 hop to `?tab=` (both `ok`)     |
+| `workbench_stream` | the held `GET /api/workbench/stream` (never timed)          |
+| `workbench_window` | one `GET /api/workbench/window?tab=&page=1` per moved frame |
+| `boards`           | `GET /boards`                                               |
+| `items`            | `GET /items`, `GET /items?page=<n>`                         |
+| `plan_get`         | `GET /api/plans/<read plan>`                                |
+| `plan_poll`        | `GET /api/plans/<read plan>?since=<reviewVersion or 0>`     |
+
+| metric                 | type    | holds                                                         |
+| ---------------------- | ------- | ------------------------------------------------------------- |
+| `reader_requests`      | Counter | every reader request — tags `route`, `outcome`, `status`      |
+| `reader_duration`      | Trend   | `ok` requests only, never the stream — tag `route`            |
+| `http_503`             | Counter | every 503 (also an `error`); says nothing about who sent it   |
+| `workbench_renders`    | Counter | one per Workbench page load                                   |
+| `stream_opened`        | Counter | held streams that proved open (200 + the opening frame)       |
+| `stream_open_failures` | Counter | attempts that did not open — tags `status`, `reconnect`       |
+| `stream_open_ms`       | Trend   | time to the opening frame                                     |
+| `stream_frames`        | Counter | watermark frames received                                     |
+| `stream_drops`         | Counter | open connections that ended before the hold                   |
+| `stream_open_at_end`   | Counter | held streams open at the end, never dropped                   |
+| `stream_reconnected`   | Counter | held streams that dropped and ended on a successful reconnect |
+| `stream_lost`          | Counter | held streams with no live connection at the end               |
+
+Every reader metric carries `role: reader`. A redirect to sign-in, re-consent, a
+two-factor hold or no-project is an `error`, never a hop. `setup()` should call
+`probeReaderCookie`, which aborts the run before any VU starts when the target
+does not accept the first user's cookie.
