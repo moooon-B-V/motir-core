@@ -1699,3 +1699,5 @@ names a hue.
 Every figure in the mock — ranges, pools, prices, top-ups, the ceiling, model ids — is
 illustrative and carries its source on the panel. The design fixes where each figure comes from,
 never its value.
+
+**Dated note (2026-10-15, MOTIR-8636):** this design was republished unchanged for a fresh review after the re-plan its first review asked for was declined.
