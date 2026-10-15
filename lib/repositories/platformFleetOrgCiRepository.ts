@@ -1,5 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { dbRead } from '@/lib/db';
+import { db } from '@/lib/db';
 
 /**
  * The platform FLEET ORG CI setting (Story MOTIR-8699 · MOTIR-8714) — one row per
@@ -7,8 +7,8 @@ import { dbRead } from '@/lib/db';
  *
  * The writes and the read that guards them take `tx`: they run inside
  * `withPlatformWrite` (the `app.platform_staff` arm the table's write policy
- * reads). The state read takes an optional `tx`; its SELECT policy is
- * unconditional, so the console reads it outside any platform transaction.
+ * reads). The state read takes no `tx`: its SELECT policy is unconditional
+ * (`USING (true)`), so the console reads it outside any platform transaction.
  */
 
 /** One setting row, as stored. */
@@ -32,13 +32,8 @@ const ROW = {
 
 export const platformFleetOrgCiRepository = {
   /** The row for one pair, or null (OFF). */
-  async find(
-    projectId: string,
-    org: string,
-    tx?: Prisma.TransactionClient,
-  ): Promise<PlatformFleetOrgCiRow | null> {
-    const client = tx ?? dbRead;
-    return client.platformFleetOrgCi.findUnique({
+  async find(projectId: string, org: string): Promise<PlatformFleetOrgCiRow | null> {
+    return db.platformFleetOrgCi.findUnique({
       where: { projectId_org: { projectId, org } },
       select: ROW,
     });
