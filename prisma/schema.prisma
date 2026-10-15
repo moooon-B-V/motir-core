@@ -403,6 +403,7 @@ model User {
   // (Story MOTIR-7521 · MOTIR-7525). SetNull: the entry outlives the account,
   // and the hash-chained audit log keeps WHO for ever.
   platformRunModelsAdded           PlatformRunModel[]                  @relation("PlatformRunModelAddedBy")
+  platformFleetOrgCiUpdated        PlatformFleetOrgCi[]                @relation("PlatformFleetOrgCiUpdatedBy")
   ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
@@ -520,6 +521,33 @@ enum PlatformAuditTargetKind {
 /// `PlatformAuditLog` row. Seeded with motir-ai's offer on the first console
 /// read after deploy (`PlatformRunModelList` marks that it happened), so no
 /// project loses its model on deploy and no migration calls motir-ai.
+/// The platform setting "Run Motir's private repositories' CI on the fleet"
+/// (Story MOTIR-8699 · MOTIR-8714), one row per (project, connected org). It
+/// stores the operator's INTENT; its EFFECT is the org's `MOTIR_RUNNER` Actions
+/// variable, written by `fleetOrgCiSettingService` in the same audited
+/// transaction. No row = OFF. Read unconditionally, written only under
+/// `app.platform_staff` (the `platform_run_model` policy shape).
+model PlatformFleetOrgCi {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  /// The org login, stored lower-cased.
+  org             String
+  enabled         Boolean  @default(false)
+  /// The reason the last flip was given — the same text its audit row carries,
+  /// kept here so the console can show it without an audited read of the trail.
+  lastReason      String?  @map("last_reason")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  updatedBy User?   @relation("PlatformFleetOrgCiUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, org])
+  @@index([updatedByUserId])
+  @@map("platform_fleet_org_ci")
+}
+
 model PlatformRunModel {
   id        String   @id @default(cuid())
   model     String   @unique
@@ -2175,6 +2203,9 @@ model Project {
   // org's group stays on the `runnerGroup*` columns above. Cascade: a group row
   // existed only to serve this project.
   runnerGroups                ProjectRunnerGroup[]
+  /// The platform switch "run this project's private-repository CI on the fleet",
+  /// one row per connected org (Story MOTIR-8699 · MOTIR-8714).
+  fleetOrgCiSettings          PlatformFleetOrgCi[]
   // The external monitored projects bound to THIS project (Story MOTIR-4926 ·
   // MOTIR-5258) — a SET whose degenerate case is one, never a column on this
   // model. Cascade: the bindings existed only to route this project's errors.
