@@ -2169,6 +2169,12 @@ model Project {
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
   repos                       ProjectRepo[]
+  // The project's runner groups in CONNECTED orgs (Story MOTIR-8699 · MOTIR-8712)
+  // — one per org other than the provisioning org that owns some of the project's
+  // private repositories and has the provisioning App installed. The provisioning
+  // org's group stays on the `runnerGroup*` columns above. Cascade: a group row
+  // existed only to serve this project.
+  runnerGroups                ProjectRunnerGroup[]
   // The external monitored projects bound to THIS project (Story MOTIR-4926 ·
   // MOTIR-5258) — a SET whose degenerate case is one, never a column on this
   // model. Cascade: the bindings existed only to route this project's errors.
@@ -14378,4 +14384,33 @@ model IdeaResearchRun {
   @@index([ranAt])
   @@index([actorUserId])
   @@map("idea_research_run")
+}
+
+/// A project's self-hosted runner group in a CONNECTED org (Story MOTIR-8699 ·
+/// MOTIR-8712) — the org-keyed SET whose degenerate case, the provisioning org's
+/// group, stays on `Project.runnerGroup*`. One row per `(project, org)`: the group
+/// in that org, access-listed to the project's PRIVATE repositories there, managed
+/// through the provisioning App's installation on that org.
+model ProjectRunnerGroup {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  workspaceId     String    @map("workspace_id")
+  /// The org login, stored lower-cased (GitHub logins are case-insensitive).
+  org             String
+  /// The provisioning App's installation on `org` the group is managed through.
+  installationId  String    @map("installation_id")
+  runnerGroupId   Int       @map("runner_group_id")
+  runnerGroupName String    @map("runner_group_name")
+  syncedAt        DateTime? @map("synced_at")
+  /// A GitHub-side failure on the last sync for THIS org — the same meaning as
+  /// `Project.runnerGroupSyncPending`, scoped to one org.
+  syncPending     Boolean   @default(false) @map("sync_pending")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([projectId, org])
+  @@index([workspaceId])
+  @@map("project_runner_group")
 }

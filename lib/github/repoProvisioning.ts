@@ -206,9 +206,16 @@ export function _setReadinessPollForTests(
  *  stable property of "our App on our org" — one lookup, not one per row. */
 const installationIdCache = new Map<string, string>();
 
+/** "The provisioning App is NOT installed on this org", remembered for
+ *  {@link NOT_INSTALLED_TTL_MS} so a tenant project's sync does not ask GitHub on
+ *  every establish (MOTIR-8712). Positives live in `installationIdCache`. */
+const notInstalledCache = new Map<string, number>();
+const NOT_INSTALLED_TTL_MS = 10 * 60_000;
+
 /** Test-only: clear the resolved-installation cache between tests. */
 export function _resetProvisioningInstallationCache(): void {
   installationIdCache.clear();
+  notInstalledCache.clear();
 }
 
 /** Whether this deployment can provision at all — the org login is configured
@@ -349,6 +356,34 @@ async function resolveProvisioningInstallationId(org: string): Promise<string> {
  */
 export function provisioningInstallationIdFor(org: string): Promise<string> {
   return resolveProvisioningInstallationId(org);
+}
+
+/**
+ * The provisioning App's installation id on `org`, or NULL when the App is not
+ * installed there (GitHub's 404) — the normal "not served" state of every tenant's
+ * connected org, which is why it is an answer rather than a throw (MOTIR-8712).
+ * A null is remembered for ten minutes; `bypassNegativeCache` re-asks (the
+ * one-shot sync script). Any other failure still throws as
+ * {@link provisioningInstallationIdFor} does.
+ */
+export async function findProvisioningInstallationId(
+  org: string,
+  options: { bypassNegativeCache?: boolean } = {},
+): Promise<string | null> {
+  const key = org.trim().toLowerCase();
+  const until = notInstalledCache.get(key);
+  if (!options.bypassNegativeCache && until !== undefined && until > Date.now()) return null;
+  try {
+    const id = await resolveProvisioningInstallationId(org);
+    notInstalledCache.delete(key);
+    return id;
+  } catch (err) {
+    if (err instanceof RepoProvisioningApiError && err.status === 404) {
+      notInstalledCache.set(key, Date.now() + NOT_INSTALLED_TTL_MS);
+      return null;
+    }
+    throw err;
+  }
 }
 
 /** One GitHub call, with transport failures normalized to the typed error. */

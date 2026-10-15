@@ -1,9 +1,16 @@
+import type { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { projectRunnerGroupRepository } from '@/lib/repositories/projectRunnerGroupRepository';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
-import { isRepoProvisioningConfigured } from '@/lib/github/repoProvisioning';
+import {
+  findProvisioningInstallationId,
+  isRepoProvisioningConfigured,
+} from '@/lib/github/repoProvisioning';
 import { runnerGroupClient, runnerGroupNameFor } from '@/lib/github/runnerGroups';
+import type { GithubOrgTarget } from '@/lib/github/orgTarget';
+import { repoVisibilityClient } from '@/lib/github/repoVisibility';
 
 // The PER-PROJECT RUNNER GROUP (Story MOTIR-1916 · MOTIR-1972) — the service that
 // keeps "one GitHub Actions runner group per Motir PROJECT, access-listed to
@@ -61,6 +68,19 @@ import { runnerGroupClient, runnerGroupNameFor } from '@/lib/github/runnerGroups
 // directly — `withWorkspaceServiceContext`, the same tier the CI meter and the
 // takeover webhook use — and takes the workspace id from the row it is acting on,
 // never from input.
+//
+// ⚠️ A PROJECT'S GROUPS ARE A SET KEYED BY ORG (Story MOTIR-8699 · MOTIR-8712), and
+// the provisioning org is its degenerate case. That group stays on the four
+// `Project.runnerGroup*` columns, reached by the exact code path it always had,
+// with no target. Every OTHER org that owns some of the project's established
+// repositories AND has the provisioning App installed gets one group IN THAT ORG,
+// access-listed to the project's PRIVATE repositories there, kept in
+// `project_runner_group` and managed through that installation
+// (`GithubOrgTarget`). An org without the App — every tenant's connected org
+// today — is `skipped_no_install` and costs no write. Each connected org fails
+// alone: its row is marked pending, and neither the provisioning pass nor another
+// org is affected. Nothing here names an org; who is served is decided by where
+// the App is installed.
 
 /**
  * The raised transaction budget for a sync. 30s is comfortably past the three
@@ -77,27 +97,60 @@ export interface ProjectRunnerGroupTarget {
   workspaceId: string;
 }
 
+/** What the connected-org pass did for ONE org (MOTIR-8712). */
+export interface ConnectedOrgSyncOutcome {
+  org: string;
+  outcome: 'synced' | 'sync_pending' | 'skipped_no_install' | 'deleted';
+  runnerGroupId?: number;
+  repositoryIds?: number[];
+  created?: boolean;
+  detail?: string;
+}
+
+/** What the connected-org pass of a delete did for ONE org. */
+export interface ConnectedOrgDeleteOutcome {
+  org: string;
+  outcome: 'deleted' | 'delete_failed';
+  runnerGroupId: number;
+  detail?: string;
+}
+
+/** Options for {@link projectRunnerGroupService.syncForProject}. */
+export interface RunnerGroupSyncOptions {
+  /** Re-ask GitHub whether the App is installed on an org it was recently not
+   *  installed on — the one-shot sync script. */
+  bypassInstallationCache?: boolean;
+}
+
 export type RunnerGroupSyncOutcome =
   /** This deployment never provisions repositories (self-hosted, or the Studio
    *  App / provisioning org is unwired), so there is no fleet, no group, and
    *  nothing to sync. A first-class state, not a misconfiguration. */
-  | { outcome: 'not_configured' }
-  /** The project row is gone (deleted between the caller's read and this one). */
-  | { outcome: 'unknown_project' }
-  /** The group exists and its access list now matches the project's set. */
-  | {
-      outcome: 'synced';
-      runnerGroupId: number;
-      /** TRUE when this call brought the group into existence — either by
-       *  creating it or by ADOPTING one that a crashed earlier run had left. */
-      created: boolean;
-      repositoryIds: number[];
-    }
-  /** GitHub refused or was unreachable. The project is marked
-   *  `runnerGroupSyncPending`; the caller's own work is unaffected. */
-  | { outcome: 'sync_pending'; detail: string };
+  (
+    | { outcome: 'not_configured' }
+    /** The project row is gone (deleted between the caller's read and this one). */
+    | { outcome: 'unknown_project' }
+    /** The group exists and its access list now matches the project's set. */
+    | {
+        outcome: 'synced';
+        runnerGroupId: number;
+        /** TRUE when this call brought the group into existence — either by
+         *  creating it or by ADOPTING one that a crashed earlier run had left. */
+        created: boolean;
+        repositoryIds: number[];
+      }
+    /** GitHub refused or was unreachable. The project is marked
+     *  `runnerGroupSyncPending`; the caller's own work is unaffected. */
+    | { outcome: 'sync_pending'; detail: string }
+  ) & {
+    /** The connected-org pass, one entry per org other than the provisioning org
+     *  that owns some of the project's repositories. ABSENT when there is none, so
+     *  a provisioning-only project's outcome reads exactly as it always did. The
+     *  top-level `outcome` keeps meaning the provisioning pass. */
+    connectedOrgs?: ConnectedOrgSyncOutcome[];
+  };
 
-export type RunnerGroupDeleteOutcome =
+export type RunnerGroupDeleteOutcome = (
   | { outcome: 'not_configured' }
   | { outcome: 'unknown_project' }
   /** The project had no group to delete — already deleted, or never made. */
@@ -105,7 +158,12 @@ export type RunnerGroupDeleteOutcome =
   | { outcome: 'deleted'; runnerGroupId: number }
   /** GitHub refused. The columns are LEFT AS THEY ARE so a retry can find the
    *  group again — clearing them would orphan it beyond reach. */
-  | { outcome: 'delete_failed'; runnerGroupId: number; detail: string };
+  | { outcome: 'delete_failed'; runnerGroupId: number; detail: string }
+) & {
+  /** The connected-org groups this delete removed or failed to — absent when the
+   *  project had none. */
+  connectedOrgs?: ConnectedOrgDeleteOutcome[];
+};
 
 /**
  * The project has no runner group, so no ephemeral runner may be provisioned for
@@ -117,9 +175,14 @@ export type RunnerGroupDeleteOutcome =
  */
 export class RunnerGroupNotProvisionedError extends Error {
   readonly code = 'RUNNER_GROUP_NOT_PROVISIONED' as const;
-  constructor(readonly projectId: string) {
+  constructor(
+    readonly projectId: string,
+    /** The org the group was asked for (MOTIR-8712); null for the provisioning
+     *  org's read through {@link projectRunnerGroupService.requireRunnerGroupId}. */
+    readonly org: string | null = null,
+  ) {
     super(
-      `Project ${projectId} has no runner group, so no ephemeral runner can be provisioned for it.`,
+      `Project ${projectId} has no runner group${org ? ` in ${org}` : ''}, so no ephemeral runner can be provisioned for it.`,
     );
     this.name = 'RunnerGroupNotProvisionedError';
   }
@@ -144,13 +207,16 @@ export const projectRunnerGroupService = {
    * because rows establish independently and asynchronously (ADR §4.1) — this is
    * per-row and re-entrant, never a one-shot at create time.
    */
-  async syncForProject(target: ProjectRunnerGroupTarget): Promise<RunnerGroupSyncOutcome> {
+  async syncForProject(
+    target: ProjectRunnerGroupTarget,
+    options: RunnerGroupSyncOptions = {},
+  ): Promise<RunnerGroupSyncOutcome> {
     const org = provisioningOrgLogin();
     if (!org || !isRepoProvisioningConfigured()) return { outcome: 'not_configured' };
 
     return withWorkspaceServiceContext(
       target.workspaceId,
-      async (tx) => {
+      async (tx): Promise<RunnerGroupSyncOutcome> => {
         // LOCK FIRST, then re-read: everything below derives the array it writes
         // to GitHub from rows that a concurrent establish is also changing. The
         // re-read is what the lock is FOR — reading before it would be reading a
@@ -174,71 +240,17 @@ export const projectRunnerGroupService = {
         );
         const repositoryIds = motirOwnedRepoIds(realized, org);
 
-        try {
-          const existing = await resolveGroup(project.runnerGroupId, target.projectId);
-          if (existing) {
-            await runnerGroupClient.setGroupRepositories(existing.id, repositoryIds);
-            await projectRepository.setRunnerGroup(
-              target.projectId,
-              {
-                runnerGroupId: existing.id,
-                runnerGroupName: existing.name || runnerGroupNameFor(target.projectId),
-                runnerGroupSyncedAt: new Date(),
-                runnerGroupSyncPending: false,
-              },
-              tx,
-            );
-            return {
-              outcome: 'synced' as const,
-              runnerGroupId: existing.id,
-              // An ADOPTED group is `created` from this project's point of view:
-              // before this call the project had no usable group id.
-              created: project.runnerGroupId !== existing.id,
-              repositoryIds,
-            };
-          }
-
-          // Created WITH its access list, so there is never an instant where a
-          // Motir group exists that grants nothing (or, worse, everything).
-          const name = runnerGroupNameFor(target.projectId);
-          const group = await runnerGroupClient.createGroup({
-            name,
-            selectedRepositoryIds: repositoryIds,
-          });
-          await projectRepository.setRunnerGroup(
-            target.projectId,
-            {
-              runnerGroupId: group.id,
-              runnerGroupName: group.name || name,
-              runnerGroupSyncedAt: new Date(),
-              runnerGroupSyncPending: false,
-            },
-            tx,
-          );
-          return {
-            outcome: 'synced' as const,
-            runnerGroupId: group.id,
-            created: true,
-            repositoryIds,
-          };
-        } catch (err) {
-          // DEGRADE, never fail the caller. The repositories are established and
-          // real; the group is behind, which is recorded so it can be seen and
-          // re-attempted. Writing the flag is a plain UPDATE on the row we already
-          // hold the lock on, so it stays inside this transaction.
-          const detail = err instanceof Error ? err.message : 'unknown';
-          await projectRepository.setRunnerGroup(
-            target.projectId,
-            { runnerGroupSyncPending: true },
-            tx,
-          );
-          console.error(
-            '[projectRunnerGroupService] runner-group sync failed — the repositories are ' +
-              'established and the group is marked unsynced',
-            { projectId: target.projectId, detail },
-          );
-          return { outcome: 'sync_pending' as const, detail };
-        }
+        const provisioning = await syncProvisioningGroup(
+          tx,
+          target,
+          project.runnerGroupId,
+          repositoryIds,
+        );
+        // The connected-org pass runs under the SAME lock, after the provisioning
+        // pass and whatever it answered — a provisioning-side failure must not
+        // strand another org's group, and the reverse.
+        const connectedOrgs = await syncConnectedOrgGroups(tx, target, realized, org, options);
+        return connectedOrgs.length > 0 ? { ...provisioning, connectedOrgs } : provisioning;
       },
       SYNC_TX_BUDGET,
     );
@@ -284,6 +296,57 @@ export const projectRunnerGroupService = {
   },
 
   /**
+   * THE CONSUMER READ for a job in ANY org (MOTIR-8712) — the boot path passes the
+   * job repository's owner. The provisioning org reads the `Project` column, so it
+   * equals {@link requireRunnerGroupId}; any other org reads its
+   * `project_runner_group` row. No row, or a pending one with no group, throws
+   * {@link RunnerGroupNotProvisionedError} naming the org — never a `Default`
+   * group.
+   */
+  async requireRunnerGroupIdFor(target: ProjectRunnerGroupTarget, org: string): Promise<number> {
+    const provisioning = provisioningOrgLogin();
+    const wanted = org.trim().toLowerCase();
+    if (provisioning !== null && provisioning.trim().toLowerCase() === wanted) {
+      const project = await withWorkspaceServiceContext(target.workspaceId, (tx) =>
+        projectRepository.findById(target.projectId, tx),
+      );
+      const id = project?.runnerGroupId ?? null;
+      if (id === null) throw new RunnerGroupNotProvisionedError(target.projectId, org);
+      return id;
+    }
+    const row = await withWorkspaceServiceContext(target.workspaceId, (tx) =>
+      projectRunnerGroupRepository.findForOrg(target.projectId, wanted, tx),
+    );
+    if (!row) throw new RunnerGroupNotProvisionedError(target.projectId, org);
+    return row.runnerGroupId;
+  },
+
+  /**
+   * The stored group for one connected org, or null — the READINESS read
+   * (MOTIR-8713). It reads the row only and makes no GitHub request.
+   */
+  async readForOrg(
+    target: ProjectRunnerGroupTarget,
+    org: string,
+  ): Promise<{
+    runnerGroupId: number;
+    runnerGroupName: string;
+    syncedAt: Date | null;
+    syncPending: boolean;
+  } | null> {
+    const row = await withWorkspaceServiceContext(target.workspaceId, (tx) =>
+      projectRunnerGroupRepository.findForOrg(target.projectId, org.trim().toLowerCase(), tx),
+    );
+    if (!row) return null;
+    return {
+      runnerGroupId: row.runnerGroupId,
+      runnerGroupName: row.runnerGroupName,
+      syncedAt: row.syncedAt,
+      syncPending: row.syncPending,
+    };
+  },
+
+  /**
    * Delete the project's group and clear its columns — the HANDOFF and
    * project-deletion path.
    *
@@ -298,44 +361,9 @@ export const projectRunnerGroupService = {
    * than a delete that can be retried.
    */
   async deleteForProject(target: ProjectRunnerGroupTarget): Promise<RunnerGroupDeleteOutcome> {
-    if (!isRepoProvisioningConfigured()) return { outcome: 'not_configured' };
-
-    return withWorkspaceServiceContext(
-      target.workspaceId,
-      async (tx) => {
-        const project = (await projectRepository.lockById(target.projectId, tx))
-          ? await projectRepository.findById(target.projectId, tx)
-          : null;
-        if (!project) return { outcome: 'unknown_project' as const };
-        const groupId = project.runnerGroupId;
-        if (groupId === null) return { outcome: 'no_group' as const };
-
-        try {
-          await runnerGroupClient.deleteGroup(groupId);
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : 'unknown';
-          console.error(
-            '[projectRunnerGroupService] could not delete the runner group — the columns are ' +
-              'left in place so a retry can find it',
-            { projectId: target.projectId, runnerGroupId: groupId, detail },
-          );
-          return { outcome: 'delete_failed' as const, runnerGroupId: groupId, detail };
-        }
-
-        await projectRepository.setRunnerGroup(
-          target.projectId,
-          {
-            runnerGroupId: null,
-            runnerGroupName: null,
-            runnerGroupSyncedAt: null,
-            runnerGroupSyncPending: false,
-          },
-          tx,
-        );
-        return { outcome: 'deleted' as const, runnerGroupId: groupId };
-      },
-      SYNC_TX_BUDGET,
-    );
+    // Every group the project holds — the provisioning org's and each connected
+    // org's (MOTIR-8712) — because project deletion leaves nothing to serve.
+    return deleteGroups(target, { includeConnectedOrgs: true });
   },
 
   /**
@@ -354,7 +382,9 @@ export const projectRunnerGroupService = {
     try {
       const result = await this.syncForProject(target);
       if (result.outcome === 'synced' && result.repositoryIds.length === 0) {
-        await this.deleteForProject(target);
+        // The PROVISIONING group only (MOTIR-8712): a handoff empties Motir's
+        // org, never a connected org's group, which the sync keeps in step itself.
+        await deleteProvisioningGroup(target);
       }
     } catch (err) {
       console.error(
@@ -386,6 +416,141 @@ export const projectRunnerGroupService = {
 };
 
 /**
+ * Delete the project's provisioning-org group and clear its columns, and — with
+ * `includeConnectedOrgs` — every connected-org group and its row. The shared body
+ * of {@link projectRunnerGroupService.deleteForProject} (everything) and
+ * {@link deleteProvisioningGroup} (the handoff: Motir's org only).
+ */
+async function deleteGroups(
+  target: ProjectRunnerGroupTarget,
+  options: { includeConnectedOrgs: boolean },
+): Promise<RunnerGroupDeleteOutcome> {
+  if (!isRepoProvisioningConfigured()) return { outcome: 'not_configured' };
+
+  return withWorkspaceServiceContext(
+    target.workspaceId,
+    async (tx): Promise<RunnerGroupDeleteOutcome> => {
+      const project = (await projectRepository.lockById(target.projectId, tx))
+        ? await projectRepository.findById(target.projectId, tx)
+        : null;
+      if (!project) return { outcome: 'unknown_project' as const };
+      const connectedOrgs = options.includeConnectedOrgs
+        ? await deleteConnectedOrgGroups(tx, target)
+        : [];
+      const withConnected = <T extends object>(outcome: T) =>
+        connectedOrgs.length > 0 ? { ...outcome, connectedOrgs } : outcome;
+      const groupId = project.runnerGroupId;
+      if (groupId === null) return withConnected({ outcome: 'no_group' as const });
+
+      try {
+        await runnerGroupClient.deleteGroup(groupId);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : 'unknown';
+        console.error(
+          '[projectRunnerGroupService] could not delete the runner group — the columns are ' +
+            'left in place so a retry can find it',
+          { projectId: target.projectId, runnerGroupId: groupId, detail },
+        );
+        return withConnected({ outcome: 'delete_failed' as const, runnerGroupId: groupId, detail });
+      }
+
+      await projectRepository.setRunnerGroup(
+        target.projectId,
+        {
+          runnerGroupId: null,
+          runnerGroupName: null,
+          runnerGroupSyncedAt: null,
+          runnerGroupSyncPending: false,
+        },
+        tx,
+      );
+      return withConnected({ outcome: 'deleted' as const, runnerGroupId: groupId });
+    },
+    SYNC_TX_BUDGET,
+  );
+}
+
+/** The HANDOFF's delete: the provisioning org's group only (MOTIR-8712). */
+function deleteProvisioningGroup(
+  target: ProjectRunnerGroupTarget,
+): Promise<RunnerGroupDeleteOutcome> {
+  return deleteGroups(target, { includeConnectedOrgs: false });
+}
+
+/**
+ * The PROVISIONING org's pass — the shipped single-org sync, unchanged in effect:
+ * no target on any call, the group on the `Project.runnerGroup*` columns.
+ */
+async function syncProvisioningGroup(
+  tx: Prisma.TransactionClient,
+  target: ProjectRunnerGroupTarget,
+  persistedId: number | null,
+  repositoryIds: number[],
+): Promise<RunnerGroupSyncOutcome> {
+  try {
+    const existing = await resolveGroup(persistedId, target.projectId);
+    if (existing) {
+      await runnerGroupClient.setGroupRepositories(existing.id, repositoryIds);
+      await projectRepository.setRunnerGroup(
+        target.projectId,
+        {
+          runnerGroupId: existing.id,
+          runnerGroupName: existing.name || runnerGroupNameFor(target.projectId),
+          runnerGroupSyncedAt: new Date(),
+          runnerGroupSyncPending: false,
+        },
+        tx,
+      );
+      return {
+        outcome: 'synced' as const,
+        runnerGroupId: existing.id,
+        // An ADOPTED group is `created` from this project's point of view:
+        // before this call the project had no usable group id.
+        created: persistedId !== existing.id,
+        repositoryIds,
+      };
+    }
+
+    // Created WITH its access list, so there is never an instant where a
+    // Motir group exists that grants nothing (or, worse, everything).
+    const name = runnerGroupNameFor(target.projectId);
+    const group = await runnerGroupClient.createGroup({
+      name,
+      selectedRepositoryIds: repositoryIds,
+    });
+    await projectRepository.setRunnerGroup(
+      target.projectId,
+      {
+        runnerGroupId: group.id,
+        runnerGroupName: group.name || name,
+        runnerGroupSyncedAt: new Date(),
+        runnerGroupSyncPending: false,
+      },
+      tx,
+    );
+    return {
+      outcome: 'synced' as const,
+      runnerGroupId: group.id,
+      created: true,
+      repositoryIds,
+    };
+  } catch (err) {
+    // DEGRADE, never fail the caller. The repositories are established and
+    // real; the group is behind, which is recorded so it can be seen and
+    // re-attempted. Writing the flag is a plain UPDATE on the row we already
+    // hold the lock on, so it stays inside this transaction.
+    const detail = err instanceof Error ? err.message : 'unknown';
+    await projectRepository.setRunnerGroup(target.projectId, { runnerGroupSyncPending: true }, tx);
+    console.error(
+      '[projectRunnerGroupService] runner-group sync failed — the repositories are ' +
+        'established and the group is marked unsynced',
+      { projectId: target.projectId, detail },
+    );
+    return { outcome: 'sync_pending' as const, detail };
+  }
+}
+
+/**
  * The group this project should be using, or null when one must be created.
  *
  * The persisted id wins when GitHub still has it. A 404 there is the
@@ -401,12 +566,189 @@ export const projectRunnerGroupService = {
 async function resolveGroup(
   persistedId: number | null,
   projectId: string,
+  orgTarget?: GithubOrgTarget,
 ): Promise<{ id: number; name: string } | null> {
   if (persistedId !== null) {
-    const found = await runnerGroupClient.getGroup(persistedId);
+    const found = await runnerGroupClient.getGroup(persistedId, orgTarget);
     if (found) return found;
   }
-  return runnerGroupClient.findGroupByName(runnerGroupNameFor(projectId));
+  return runnerGroupClient.findGroupByName(runnerGroupNameFor(projectId), orgTarget);
+}
+
+/**
+ * The CONNECTED-ORG pass (MOTIR-8712): one group per org other than the
+ * provisioning org that owns some of the project's established repositories and
+ * has the provisioning App installed, access-listed to the project's PRIVATE
+ * repositories in that org, every call made through that org's target.
+ *
+ * Runs inside the caller's transaction and project lock. A failure in one org
+ * marks only that org's row pending and is reported, never thrown.
+ */
+async function syncConnectedOrgGroups(
+  tx: Prisma.TransactionClient,
+  target: ProjectRunnerGroupTarget,
+  realized: ReadonlyArray<{ owner: string; name: string; providerRepoId: string }>,
+  provisioningOrg: string,
+  options: RunnerGroupSyncOptions,
+): Promise<ConnectedOrgSyncOutcome[]> {
+  const byOrg = groupConnectedReposByOrg(realized, provisioningOrg);
+  // Orgs that HAD a group but no longer own any of the project's repositories are
+  // swept too, so a removed repository cannot leave a stale grant behind.
+  for (const row of await projectRunnerGroupRepository.listForProject(
+    target.projectId,
+    target.workspaceId,
+    tx,
+  )) {
+    if (!byOrg.has(row.org)) byOrg.set(row.org, []);
+  }
+
+  const outcomes: ConnectedOrgSyncOutcome[] = [];
+  for (const [org, repos] of [...byOrg.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const stored = await projectRunnerGroupRepository.findForOrg(target.projectId, org, tx);
+    try {
+      const installationId = stored?.installationId
+        ? stored.installationId
+        : await findProvisioningInstallationId(org, {
+            bypassNegativeCache: options.bypassInstallationCache,
+          });
+      if (installationId === null) {
+        outcomes.push({ org, outcome: 'skipped_no_install' });
+        continue;
+      }
+      const orgTarget: GithubOrgTarget = { org, installationId, role: 'provisioning' };
+
+      const repositoryIds: number[] = [];
+      for (const repo of repos) {
+        const id = Number(repo.providerRepoId);
+        if (!Number.isInteger(id) || id <= 0 || repositoryIds.includes(id)) continue;
+        if (await repoVisibilityClient.isPrivate(repo.owner, repo.name, orgTarget)) {
+          repositoryIds.push(id);
+        }
+      }
+
+      // EMPTIED — the org no longer holds any private repository of this
+      // project. Safe here and not in the provisioning pass: a connected
+      // repository exists before it is connected, so an empty list is never
+      // "the first repository has not been created yet".
+      if (repositoryIds.length === 0) {
+        if (stored) {
+          await runnerGroupClient.deleteGroup(stored.runnerGroupId, orgTarget);
+          await projectRunnerGroupRepository.deleteForOrg(target.projectId, org, tx);
+          outcomes.push({ org, outcome: 'deleted', runnerGroupId: stored.runnerGroupId });
+        }
+        continue;
+      }
+
+      const name = runnerGroupNameFor(target.projectId);
+      const existing = await resolveGroup(
+        stored?.runnerGroupId ?? null,
+        target.projectId,
+        orgTarget,
+      );
+      let groupId: number;
+      let groupName: string;
+      if (existing) {
+        await runnerGroupClient.setGroupRepositories(existing.id, repositoryIds, orgTarget);
+        groupId = existing.id;
+        groupName = existing.name || name;
+      } else {
+        const group = await runnerGroupClient.createGroup(
+          { name, selectedRepositoryIds: repositoryIds },
+          orgTarget,
+        );
+        groupId = group.id;
+        groupName = group.name || name;
+      }
+      await projectRunnerGroupRepository.upsertForOrg(
+        {
+          projectId: target.projectId,
+          workspaceId: target.workspaceId,
+          org,
+          installationId,
+          runnerGroupId: groupId,
+          runnerGroupName: groupName,
+          syncedAt: new Date(),
+          syncPending: false,
+        },
+        tx,
+      );
+      outcomes.push({
+        org,
+        outcome: 'synced',
+        runnerGroupId: groupId,
+        repositoryIds,
+        created: stored?.runnerGroupId !== groupId,
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'unknown';
+      await projectRunnerGroupRepository.markPendingForOrg(target.projectId, org, tx);
+      console.error(
+        '[projectRunnerGroupService] connected-org runner-group sync failed — that org is ' +
+          'marked unsynced',
+        { projectId: target.projectId, org, detail },
+      );
+      outcomes.push({ org, outcome: 'sync_pending', detail });
+    }
+  }
+  return outcomes;
+}
+
+/** The project's established repositories outside the provisioning org, keyed by
+ *  lower-cased owner. */
+function groupConnectedReposByOrg(
+  realized: ReadonlyArray<{ owner: string; name: string; providerRepoId: string }>,
+  provisioningOrg: string,
+): Map<string, Array<{ owner: string; name: string; providerRepoId: string }>> {
+  const skip = provisioningOrg.trim().toLowerCase();
+  const byOrg = new Map<string, Array<{ owner: string; name: string; providerRepoId: string }>>();
+  for (const repo of realized) {
+    const org = repo.owner.trim().toLowerCase();
+    if (!org || org === skip) continue;
+    const list = byOrg.get(org) ?? [];
+    list.push(repo);
+    byOrg.set(org, list);
+  }
+  return byOrg;
+}
+
+/** Delete every connected-org group of a project, each through its own org's
+ *  target. A refused delete leaves that row so a retry can find the group. */
+async function deleteConnectedOrgGroups(
+  tx: Prisma.TransactionClient,
+  target: ProjectRunnerGroupTarget,
+): Promise<ConnectedOrgDeleteOutcome[]> {
+  const outcomes: ConnectedOrgDeleteOutcome[] = [];
+  for (const row of await projectRunnerGroupRepository.listForProject(
+    target.projectId,
+    target.workspaceId,
+    tx,
+  )) {
+    const orgTarget: GithubOrgTarget = {
+      org: row.org,
+      installationId: row.installationId,
+      role: 'provisioning',
+    };
+    try {
+      await runnerGroupClient.deleteGroup(row.runnerGroupId, orgTarget);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'unknown';
+      console.error(
+        '[projectRunnerGroupService] could not delete a connected-org runner group — its ' +
+          'row is left in place so a retry can find it',
+        { projectId: target.projectId, org: row.org, runnerGroupId: row.runnerGroupId, detail },
+      );
+      outcomes.push({
+        org: row.org,
+        outcome: 'delete_failed',
+        runnerGroupId: row.runnerGroupId,
+        detail,
+      });
+      continue;
+    }
+    await projectRunnerGroupRepository.deleteForOrg(target.projectId, row.org, tx);
+    outcomes.push({ org: row.org, outcome: 'deleted', runnerGroupId: row.runnerGroupId });
+  }
+  return outcomes;
 }
 
 /**

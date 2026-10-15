@@ -184,8 +184,11 @@ export const projectRepository = {
    * path — a user-facing read must stay workspace-scoped via `findByIdentifier`
    * above, or it leaks the existence of other tenants' projects.
    */
-  async findAllByIdentifier(identifier: string): Promise<Project[]> {
-    return db.project.findMany({ where: { identifier }, orderBy: { createdAt: 'asc' } });
+  async findAllByIdentifier(identifier: string, tx?: Prisma.TransactionClient): Promise<Project[]> {
+    // `tx` lets operator tooling read under `withSystemContext`, which the
+    // project policy's system arm admits (MOTIR-8712's sync script).
+    const client = tx ?? dbRead;
+    return client.project.findMany({ where: { identifier }, orderBy: { createdAt: 'asc' } });
   },
 
   /**
