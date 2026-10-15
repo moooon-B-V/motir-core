@@ -34,6 +34,8 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+/** The window re-read the list is handed (MOTIR-8574). */
+const reread = vi.fn();
 const { WorkbenchList } = await import('@/app/(authed)/workbench/_components/WorkbenchList');
 const { toWorkbenchRowViews } = await import('@/app/(authed)/workbench/_components/workbenchRows');
 const { PlanEditsClientError } = await import('@/lib/planning/planEditsClient');
@@ -126,6 +128,7 @@ function mount(
       pagination={{ total: opts.total ?? s.length + r.length, page: 1, pageSize: 25 }}
       empty={<p>Nothing to resume</p>}
       viewerId="u1"
+      reread={reread}
     />
   );
   const view = renderWithIntl(el(sessions, runs), {
@@ -144,6 +147,7 @@ const entryOf = (id = 'sess-1') => screen.getByTestId(`to-resume-session-${id}`)
 beforeEach(() => {
   push.mockReset();
   refresh.mockReset();
+  reread.mockReset();
   shallowPush.mockReset();
   resumePlanSession.mockReset();
 });
@@ -265,7 +269,7 @@ describe('pressing Resume', () => {
     );
     expect(within(entryOf()).getByRole('alert').textContent).toContain(t.refusal[key]);
     expect(within(entryOf()).getByRole('button', { name: 'Resume' })).toBeTruthy();
-    expect(refresh).not.toHaveBeenCalled();
+    expect(reread).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -281,7 +285,8 @@ describe('pressing Resume', () => {
       );
       expect(within(entryOf()).getByRole('alert').textContent).toContain(t.refusal[key]);
       expect(within(entryOf()).queryByRole('button', { name: 'Resume' })).toBeNull();
-      expect(refresh).toHaveBeenCalled();
+      expect(reread).toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
     },
   );
 });

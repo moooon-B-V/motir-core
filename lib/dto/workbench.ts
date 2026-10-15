@@ -1,3 +1,9 @@
+import type { ApprovalQueueDto } from '@/lib/dto/approvalGate';
+import type { HomePageDto, HomeTabCountsDto, WorkbenchPlanningPageDto } from '@/lib/dto/home';
+import type { WorkflowDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberWithAccessDTO } from '@/lib/dto/workspaces';
+import type { WorkbenchTab } from '@/lib/workbench/tab';
+
 // The Workbench's LIVE wire types (Story MOTIR-5238 · Subtask MOTIR-5240).
 //
 // ⚠️ NOTHING HERE CARRIES WORK-ITEM CONTENT, and that is a property rather than
@@ -75,4 +81,48 @@ export interface WorkbenchWatermarkDto {
    * and a missed frame costs a stale list.
    */
   moved: WorkbenchTabKey[];
+}
+
+// ── ONE WORKBENCH READ (Story MOTIR-8539 · Subtask MOTIR-8573) ──────────────
+//
+// ⚠️ UNLIKE THE WATERMARK ABOVE, THIS CARRIES CONTENT — the active tab's rows —
+// and it is a READ, not a frame: every access decision is made by the same
+// service reads the page makes, through `workbenchWindowService.read`, which is
+// the one pairing of a tab's window with the strip's counts. A client applier
+// re-reads it in place of a route refresh, and the rows and the counts arrive
+// TOGETHER, so § 21 / § 26's "the strip and the list agree" holds without one.
+
+/** A work-item tab's window, with what the page shapes its rows from. */
+export interface WorkbenchWorkItemWindowDto {
+  kind: 'workItems';
+  page: HomePageDto;
+  members: WorkspaceMemberWithAccessDTO[];
+  workflow: WorkflowDto;
+}
+
+/** To approve's window — the gate queue, read as `<ApprovalsTab>` reads it. */
+export interface WorkbenchApprovalsWindowDto {
+  kind: 'approvals';
+  queue: ApprovalQueueDto;
+}
+
+/** Planning's window — page 1 at the tab's ceiling, read as `<PlanningTab>` reads it. */
+export interface WorkbenchPlanningWindowDto {
+  kind: 'planning';
+  page: WorkbenchPlanningPageDto;
+}
+
+export type WorkbenchWindowContentDto =
+  | WorkbenchWorkItemWindowDto
+  | WorkbenchApprovalsWindowDto
+  | WorkbenchPlanningWindowDto;
+
+/** `GET /api/workbench/window` — the active tab's window and every strip count, read together. */
+export interface WorkbenchWindowDto {
+  tab: WorkbenchTab;
+  window: WorkbenchWindowContentDto;
+  /** `homeService.tabCounts`, unchanged — every count the strip renders. */
+  counts: HomeTabCountsDto;
+  /** ISO-8601 moment the read started. */
+  readAt: string;
 }

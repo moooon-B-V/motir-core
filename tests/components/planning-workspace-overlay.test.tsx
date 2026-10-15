@@ -280,6 +280,40 @@ describe('closing writes the address, and only the address', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it('a GUIDE’s close re-reads the card’s page ONCE, by whatever vector (MOTIR-8576)', async () => {
+    openAt('plan=guide&planFrom=guide&planItem=MOTIR-3', '/items/MOTIR-3');
+    const view = mount();
+    await act(async () => {});
+    expect(refresh).not.toHaveBeenCalled();
+
+    // The address loses the overlay — a Close, an Escape or a Back alike.
+    params = new URLSearchParams();
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
+    await act(async () => {});
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    // Staying closed asks for nothing more.
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('a PLANNING workspace’s close re-reads nothing: its surfaces re-read themselves', async () => {
+    openAt('plan=project&planFrom=project');
+    const view = mount();
+    await act(async () => {});
+
+    params = new URLSearchParams();
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
+    await act(async () => {});
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it('Escape reaches the same one close', async () => {
     openAt('plan=project&planFrom=project');
     mount();

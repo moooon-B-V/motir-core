@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { fetchPlanReview } from '@/lib/planning/planReviewClient';
 import type { WorkbenchPlanningPageDto, WorkbenchPlanningRowDto } from '@/lib/dto/home';
-import { PlanningRow, PLANNING_GRID_TEMPLATE } from './PlanningRow';
+import type { WorkbenchPlanningWindowDto } from '@/lib/dto/workbench';
+import { keepIfEqual, mergeRowsByIdentity } from '@/lib/workbench/mergeRows';
+import { PlanningRow as PlanningRowImpl, PLANNING_GRID_TEMPLATE } from './PlanningRow';
+import { useTabWindowContent } from './useTabWindowContent';
 import {
   mergePlanningRows,
   planningOutcomeOf,
@@ -19,12 +21,19 @@ import {
 // Panels 3–8).
 //
 // ⚠️ IT POLLS, AND THAT IS NOT A SHORTCUT PAST THE LIVE STREAM. The Workbench's
-// nudge (`useWorkbenchLive`) fires on a WATERMARK move — a work item changing — and
-// no watermark moves when a planner takes a step or authors a proposal, so there is
-// no signal to listen to. And a `router.refresh()` could not reach these rows
-// anyway: this is a client island seeded from server props through `useState`, the
-// third surface kind of CLAUDE.md § *Page state after a mutation*, whose
-// initializer runs once. So the island re-reads for itself.
+// nudge fires on a WATERMARK move — a work item changing — and no watermark moves
+// when a planner takes a step or authors a proposal, so there is no signal to
+// listen to. So this list keeps a cadence of its own.
+//
+// ⚠️ BUT THE CADENCE ASKS THE WORKBENCH'S ONE READ (Story MOTIR-8539 · Subtask
+// MOTIR-8581). A tick is the view's `reread()` — `GET /api/workbench/window` for
+// this tab — and the rows come from the window that answer carries
+// (`useTabWindowContent`), the SAME response that set the strip's Planning count.
+// It used to read `/api/workbench/planning` itself and ask for a whole route refresh
+// whenever `total` moved, so the strip's number could only ever follow the rows by
+// a whole page render; now the two land in one update and nothing refreshes. A
+// stream nudge on this tab reads the same way, and the hook's one-read-in-flight
+// rule keeps a tick and a nudge from becoming two reads.
 //
 // ⚠️ TEN SECONDS, WHILE THE DOCUMENT IS VISIBLE (§ 36.7). Ten is the compact
 // line's finest VISIBLE step — *last activity* moves in 10s steps (Part XXVI §26.4)
@@ -34,16 +43,10 @@ import {
 // comes back, because a plan's progress while nobody was looking is one read, not
 // the dozens an interval would have made.
 //
-// ⚠️ A LATE RESPONSE NEVER WINS. Each read carries a monotonic `seq` and an
-// `AbortController`; a response older than the newest applied one is dropped, and
-// a failed or aborted read leaves the last rows exactly where they were (§ 36.7,
+// ⚠️ A LATE RESPONSE NEVER WINS — the window hook's sequence and abort rules. A
+// failed or aborted read leaves the last rows exactly where they were (§ 36.7,
 // Panel 7). After three consecutive failures the rows wear Part XXVI's warning dot
 // and keep their words — nothing is greyed, and no row leaves on a failed read.
-//
-// ⚠️ THE COUNT IS A SERVER SURFACE, so a changed `total` asks for ONE
-// `router.refresh()` (§ 36.7; the page-state contract's case 2 beside this
-// island's case 3). The refresh re-reads the strip's chip; it does not and cannot
-// re-seed these rows.
 
 /** The poll's cadence (§ 36.7). */
 export const PLANNING_POLL_MS = 10_000;
@@ -51,11 +54,38 @@ export const PLANNING_POLL_MS = 10_000;
 /** Consecutive failed reads after which the rows report the dropped read. */
 export const PLANNING_FAILING_AFTER = 3;
 
+/** One row, re-rendered only when its own props moved — the merge keeps its object. */
+const PlanningRow = memo(PlanningRowImpl);
+
 interface Tracked {
+  /** The page these rows were last merged from. */
+  source: WorkbenchPlanningPageDto;
   rows: WorkbenchPlanningRowDto[];
   heldIds: ReadonlySet<string>;
   arrivedIds: ReadonlySet<string>;
-  total: number;
+}
+
+const pageOf = (window: WorkbenchPlanningWindowDto) => window.page;
+
+/** `next` over `prev`, rows by `planId` — and `prev` itself when nothing changed. */
+function mergePage(
+  prev: WorkbenchPlanningPageDto,
+  next: WorkbenchPlanningPageDto,
+): WorkbenchPlanningPageDto {
+  const items = mergeRowsByIdentity(prev.items, next.items, (row) => row.planId);
+  const rest = keepIfEqual(
+    { total: prev.total, page: prev.page, pageSize: prev.pageSize },
+    { total: next.total, page: next.page, pageSize: next.pageSize },
+  );
+  if (
+    items === prev.items &&
+    rest.total === prev.total &&
+    rest.page === prev.page &&
+    rest.pageSize === prev.pageSize
+  ) {
+    return prev;
+  }
+  return { ...next, items };
 }
 
 export function PlanningList({
@@ -81,18 +111,35 @@ export function PlanningList({
 }) {
   const t = useTranslations('workbench');
   const tPlanning = useTranslations('workbench.planning');
-  const router = useRouter();
+  const live = useTabWindowContent('planning', seed, pageOf, mergePage);
+  const page = live.content;
 
   const [tracked, setTracked] = useState<Tracked>(() => ({
-    rows: seed.items,
+    source: page,
+    rows: page.items,
     heldIds: new Set(),
     // The FIRST reading marks nothing: a reader who has just landed has had
     // nothing arrive under them.
     arrivedIds: new Set(),
-    total: seed.total,
   }));
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, PlanningRowOutcome>>(new Map());
-  const [failing, setFailing] = useState(false);
+  const failing = live.failures >= PLANNING_FAILING_AFTER;
+
+  // ⚠️ A NEW PAGE IS MERGED DURING RENDER, so the rows land in the same commit as
+  // the strip's count the same answer carried.
+  let current = tracked;
+  if (tracked.source !== page) {
+    const merged = mergePlanningRows(tracked.rows, page.items, (row) => row.planId);
+    current = {
+      source: page,
+      rows: merged.rows,
+      heldIds: merged.heldIds,
+      // `New` stays on an arrival until the next LOAD, so the marks union rather
+      // than being replaced by the newest read's.
+      arrivedIds: new Set([...tracked.arrivedIds, ...merged.arrivedIds]),
+    };
+    setTracked(current);
+  }
 
   /**
    * Read the outcome of a plan that has just left — once per row, ever (§ 36.8).
@@ -154,99 +201,35 @@ export function PlanningList({
     }
   }, [tracked.heldIds, readOutcome]);
 
-  // ⚠️ ONE `router.refresh()` WHEN THE SET'S SIZE MOVED (§ 36.7). The strip's
-  // count is a SERVER surface — the page-state contract's case 2 — and this island
-  // is case 3, so the two are updated by two mechanisms and neither reaches the
-  // other. The previous total lives in a ref written inside this effect, so a
-  // re-render with the same total asks for nothing.
-  const refreshedForTotal = useRef(seed.total);
+  // THE CADENCE (§ 36.7): a tick asks the Workbench's one read, while visible.
+  const reread = live.reread;
   useEffect(() => {
-    if (tracked.total === refreshedForTotal.current) return;
-    refreshedForTotal.current = tracked.total;
-    router.refresh();
-  }, [tracked.total, router]);
-
-  useEffect(() => {
-    let stopped = false;
-    let issued = 0;
-    let applied = 0;
-    let failures = 0;
-    const inFlight = new Set<AbortController>();
-
-    const read = () => {
-      if (stopped) return;
-      const seq = ++issued;
-      const ctrl = new AbortController();
-      inFlight.add(ctrl);
-      void fetch('/api/workbench/planning', {
-        headers: { Accept: 'application/json' },
-        signal: ctrl.signal,
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`planning read failed (${res.status})`);
-          return (await res.json()) as WorkbenchPlanningPageDto;
-        })
-        .then((page) => {
-          // Dropped: the poll stopped, or a LATER read has already been applied.
-          if (stopped || seq <= applied) return;
-          applied = seq;
-          failures = 0;
-          setFailing(false);
-          setTracked((current) => {
-            const merged = mergePlanningRows(current.rows, page.items, (row) => row.planId);
-            return {
-              rows: merged.rows,
-              heldIds: merged.heldIds,
-              // `New` stays on an arrival until the next LOAD, so the marks union
-              // rather than being replaced by the newest read's.
-              arrivedIds: new Set([...current.arrivedIds, ...merged.arrivedIds]),
-              total: page.total,
-            };
-          });
-        })
-        .catch(() => {
-          // Best-effort: the rows stand and the next read retries. A failure older
-          // than an applied success says nothing about now.
-          if (stopped || seq <= applied) return;
-          failures += 1;
-          if (failures >= PLANNING_FAILING_AFTER) setFailing(true);
-        })
-        .finally(() => {
-          inFlight.delete(ctrl);
-        });
-    };
-
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       // Back on screen: read AT ONCE rather than waiting out an interval the
       // reader cannot see (§ 36.7).
-      read();
+      reread();
     };
-
     const handle = setInterval(() => {
-      if (document.visibilityState === 'visible') read();
+      if (document.visibilityState === 'visible') reread();
     }, PLANNING_POLL_MS);
     document.addEventListener('visibilitychange', onVisibility);
-
     return () => {
-      stopped = true;
       clearInterval(handle);
       document.removeEventListener('visibilitychange', onVisibility);
-      for (const ctrl of inFlight) ctrl.abort();
-      inFlight.clear();
     };
-  }, []);
+  }, [reread]);
 
   // ⚠️ A HELD ROW KEEPS THE LIST NON-EMPTY — a tab whose last plan has just been
   // written must not flip to *No plans being written* underneath the receipt that
   // says it was.
-  if (tracked.rows.length === 0) return <>{empty}</>;
+  if (current.rows.length === 0) return <>{empty}</>;
 
-  const shown = tracked.rows.length;
+  const shown = current.rows.length;
   // The ceiling bit when the set is larger than the page the server could return
   // (§ 36.10). It is measured against the SERVER's page, not against the rows on
   // screen, so a held row does not make the note appear or disappear.
-  const rest = tracked.total - seed.items.length;
+  const rest = page.total - page.items.length;
   const atCeiling = rest > 0;
 
   return (
@@ -300,13 +283,13 @@ export function PlanningList({
             </div>
           </div>
           <div role="rowgroup">
-            {tracked.rows.map((row) => (
+            {current.rows.map((row) => (
               <PlanningRow
                 key={row.planId}
                 row={row}
-                arrived={tracked.arrivedIds.has(row.planId)}
+                arrived={current.arrivedIds.has(row.planId)}
                 outcome={
-                  tracked.heldIds.has(row.planId)
+                  current.heldIds.has(row.planId)
                     ? (outcomes.get(row.planId) ?? UNKNOWN_OUTCOME)
                     : null
                 }

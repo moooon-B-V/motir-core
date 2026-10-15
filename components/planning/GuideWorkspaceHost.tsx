@@ -9,7 +9,7 @@ import { GuideRail } from '@/components/planning/GuideRail';
 import { useGuideConversation, type GuideTodoAccess } from '@/lib/hooks/useGuideConversation';
 import { deriveGuideView } from '@/lib/planning/guideView';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
-import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
+import { useRequestWorkbenchReread } from '@/lib/workbench/workbenchReread';
 import { listTodosAction, setTodoDoneAction } from '@/app/(authed)/items/[key]/todoActions';
 
 // THE GUIDE MODE's host (Story MOTIR-7459 · MOTIR-7466) — the room the Guide me
@@ -21,9 +21,11 @@ import { listTodosAction, setTodoDoneAction } from '@/app/(authed)/items/[key]/t
 //
 // PAGE STATE AFTER A MUTATION (`motir-core/CLAUDE.md`): a landed turn writes the
 // card through its services. The canvas is a client island and re-reads its rows
-// itself (the hook does, after every settle); the item page underneath is
-// server-rendered and takes the shell's coordinated `router.refresh()` when the
-// overlay closes, so the page the reader returns to shows what the walk did.
+// itself (the hook does, after every settle). The page underneath is re-read when
+// the guide CLOSES, and not from here (Story MOTIR-8539 · MOTIR-8576): closing is
+// the reader's own act, so `PlanningWorkspaceOverlay` — which owns every close
+// vector — re-reads the card's page once. This host only asks the Workbench,
+// should it be what is underneath, to re-read its own window.
 
 const TODOS: GuideTodoAccess = { list: listTodosAction, setDone: setTodoDoneAction };
 
@@ -37,7 +39,7 @@ export interface GuideWorkspaceHostProps {
 export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const tg = useTranslations('planningWorkspace.guide');
-  const refresh = useCoordinatedRefresh();
+  const requestWorkbenchReread = useRequestWorkbenchReread();
   const { state, send, retry, reloadRows, setRowDone } = useGuideConversation({
     itemKey: card.identifier,
     workItemId: card.id,
@@ -50,10 +52,10 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
   );
   const title = view.editedTitle ?? card.title;
 
-  // The page underneath is the card's own: when the guide goes away — by Close,
-  // Esc, the scrim or Back alike — re-read it, so the list, the status and the
-  // title it shows are the ones this walk left.
-  useEffect(() => () => refresh(), [refresh]);
+  // When the guide goes away — by Close, Esc, the scrim or Back alike — a
+  // Workbench underneath re-reads its window in place. The card's own page is the
+  // overlay's to re-read (see the header).
+  useEffect(() => () => requestWorkbenchReread(), [requestWorkbenchReread]);
 
   return (
     <PlanningWorkspace

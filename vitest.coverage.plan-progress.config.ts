@@ -121,6 +121,8 @@ export default defineConfig({
       // doors and the line.
       'tests/integration/plans/planProgressResuming.test.ts',
       'tests/components/planProgressLine.resuming.test.tsx',
+      // MOTIR-8581 — the tab's rows read from the Workbench's one window read.
+      'tests/components/workbench-planning-live.test.tsx',
     ],
     coverage: {
       provider: 'v8',
@@ -185,9 +187,9 @@ export default defineConfig({
       //   · planProgressService.ts: `explanationsByProject.get(…) ?? false` (the
       //     projects are read by the same plans' own project ids, in one bound tx).
       //   · PlanningList.tsx: a failed outcome read finding an outcome ALREADY
-      //     recorded (`requested` asks about a row once, ever), and `read()`'s
-      //     `stopped` entry check (its only callers — the interval and the
-      //     visibility listener — are removed by the same cleanup that sets it).
+      //     recorded (`requested` asks about a row once, ever). (MOTIR-8581 moved the
+      //     read itself to the Workbench's one window read, so the poll's own
+      //     `stopped` entry check went with it.)
       //   · PlanningRow.tsx: a whitespace-only frame part of the row sentence (no
       //     `approvalGate.planApproval.row` message, en or zh, has one).
       //

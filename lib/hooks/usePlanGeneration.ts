@@ -9,6 +9,7 @@ import {
   startPlanGeneration,
 } from '@/lib/planning/planGenerateClient';
 import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import { mergePlanItems } from '@/lib/planning/mergePlanReview';
 
 // The client driver for the 7.4 generation ENTRY (Subtask 7.4.9 / MOTIR-1396).
 // It owns the I/O the entry can't: POST `/api/ai/plan/generate` → `{ jobId,
@@ -61,6 +62,8 @@ export function usePlanGeneration(): UsePlanGeneration {
   const [phase, setPhase] = useState<GenerationPhase>('idle');
   const [planId, setPlanId] = useState<string | null>(null);
   const [items, setItems] = useState<PlanReviewItemDto[]>([]);
+  // The items last filed — what the next snapshot merges into.
+  const itemsRef = useRef<PlanReviewItemDto[]>(items);
   const [version, setVersion] = useState(0);
 
   const mountedRef = useRef(true);
@@ -91,8 +94,14 @@ export function usePlanGeneration(): UsePlanGeneration {
   const { refresh: nudgePoll } = useGeneratingPlanPoll(phase === 'generating' ? planId : null, {
     onSnapshot: (review: PlanReviewDto) => {
       if (!mountedRef.current || settledRef.current) return;
-      setItems(review.items);
-      setVersion((v) => v + 1);
+      // MERGED into the held items by identity (Story MOTIR-8539 · MOTIR-8575): an
+      // unchanged proposal keeps its object, and `version` moves only when one moved.
+      const merged = mergePlanItems(itemsRef.current, review.items).items;
+      if (merged !== itemsRef.current) {
+        itemsRef.current = merged;
+        setItems(merged);
+        setVersion((v) => v + 1);
+      }
       if (review.status !== 'generating') {
         settle(review.items.length > 0 ? 'planned' : 'empty');
       }
@@ -102,7 +111,8 @@ export function usePlanGeneration(): UsePlanGeneration {
   const start = useCallback(() => {
     if (abortRef.current) return; // already running
     settledRef.current = false;
-    setItems([]);
+    itemsRef.current = [];
+    setItems(itemsRef.current);
     setVersion(0);
     setPlanId(null);
     setPhase('submitting');

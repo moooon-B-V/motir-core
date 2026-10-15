@@ -127,13 +127,13 @@ import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 //
 // THE LIVE READS ARE NEVER INTERCEPTED. The canvas, the progress line and the
 // tab row all read the real `GET /api/plans/[id]` poll and the real Workbench
-// Planning read (`GET /api/workbench/planning` and the tab's server render).
+// Planning read (`GET /api/workbench/window?tab=planning` and the tab's server render).
 //
 // ── Determinism, and the pace ───────────────────────────────────────────────
 // After a door call the spec waits for the next `GET /api/plans/[id]` response
 // whose BODY carries that step in `inFlightSteps` (armed before the call), and
 // only then asserts the DOM. For the tab it waits on the Workbench read: the
-// tab's server render on a navigation, or a `GET /api/workbench/planning` poll
+// tab's server render on a navigation, or a `GET /api/workbench/window` poll
 // response whose body carries the change. Stalled waits for a poll response
 // observed AFTER the backdate. Nothing sleeps to wait for state; the receipt's
 // holds (`beat()`, `chapter()`'s own) are pacing for a viewer only — remove

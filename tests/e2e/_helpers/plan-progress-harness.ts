@@ -231,7 +231,11 @@ export function planPolled(
  *  the runner does not load); three of them is the budget for the next read. */
 export const WORKBENCH_READ_BUDGET_MS = 35_000;
 
-/** The NEXT `GET /api/workbench/planning` response whose body satisfies `until`. */
+/**
+ * The NEXT Planning read whose page satisfies `until`. The tab's poll asks the
+ * Workbench's one read, `GET /api/workbench/window?tab=planning`, whose window
+ * carries the page (Story MOTIR-8539 · MOTIR-8581).
+ */
 export function workbenchPolled(
   page: Page,
   until: (body: WorkbenchPlanningPageDto) => boolean,
@@ -239,9 +243,15 @@ export function workbenchPolled(
   return page.waitForResponse(
     async (r) => {
       if (r.request().method() !== 'GET' || !r.ok()) return false;
-      if (new URL(r.url()).pathname !== '/api/workbench/planning') return false;
+      const url = new URL(r.url());
+      if (url.pathname !== '/api/workbench/window') return false;
+      if (url.searchParams.get('tab') !== 'planning') return false;
       try {
-        return until((await r.json()) as WorkbenchPlanningPageDto);
+        const body = (await r.json()) as {
+          window: { kind: string; page?: WorkbenchPlanningPageDto };
+        };
+        if (body.window.kind !== 'planning' || !body.window.page) return false;
+        return until(body.window.page);
       } catch {
         return false;
       }

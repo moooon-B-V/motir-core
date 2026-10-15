@@ -19,11 +19,17 @@ import { MAX_PLANNING_TARGETS, type PlanningTarget } from '@/lib/planning/planni
 // What matters here is that the host mounts it for a populated project, and
 // swaps in the empty state otherwise.
 
-const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+const { push, refresh, reread } = vi.hoisted(() => ({
+  push: vi.fn(),
+  refresh: vi.fn(),
+  reread: vi.fn(),
+}));
 /** The host's `onClose` is REQUIRED since MOTIR-4732 — there is no `backHref`
  *  fallback left, because the reader never leaves the page. */
 const noop = () => {};
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
+// The Workbench behind the overlay is asked to re-read itself (MOTIR-8576).
+vi.mock('@/lib/workbench/workbenchReread', () => ({ useRequestWorkbenchReread: () => reread }));
 
 // The `@`-mention search is the ONE network-backed thing inside the real
 // composer. Stubbed so the picker can be driven without a debounce and a
@@ -204,6 +210,7 @@ afterEach(() => {
   cleanup();
   push.mockReset();
   refresh.mockReset();
+  reread.mockReset();
   conversation.state = null;
   conversation.approve.mockReset();
   conversation.discard.mockReset();
@@ -624,7 +631,7 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     expect(screen.getByRole('button', { name: /List/ }).getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('page state after approve: the SERVER surfaces refresh AND the canvas island re-keys', () => {
+  it('page state after approve: no route refresh, a Workbench reread, and the canvas island re-keys', () => {
     renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
 
     // What the hook calls once the commit lands.
@@ -639,9 +646,10 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     };
     act(() => conversation.onApproved?.({ created: ['wi_30'], updated: [], removed: [] }));
 
-    // `router.refresh()` reaches the server-rendered surfaces behind the overlay…
-    expect(refresh).toHaveBeenCalledTimes(1);
-    // …and the canvas — a client island the refresh CANNOT reach — is re-keyed.
+    // Nothing refreshes the route (MOTIR-8576); the Workbench behind re-reads itself…
+    expect(refresh).not.toHaveBeenCalled();
+    expect(reread).toHaveBeenCalledTimes(1);
+    // …and the canvas — a client island seeded once — is re-keyed.
     //
     // ⚠️ The key is compared to the TREE VERSION rather than to a value captured
     // before the press (MOTIR-6186). While a plan is proposed the pane is the
@@ -656,9 +664,9 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
 });
 
 describe('PlanningWorkspaceHost — the session ENDS (MOTIR-7643)', () => {
-  it('an end releases the held cards, so the server surfaces refresh and the canvas re-keys', () => {
+  it('an end releases the held cards: a Workbench reread, no refresh, and the canvas re-keys', () => {
     const view = renderHost({ mode: 'replan', from: 'project' });
-    expect(refresh).not.toHaveBeenCalled();
+    expect(reread).not.toHaveBeenCalled();
 
     conversation.state = {
       ...IDLE,
@@ -666,7 +674,8 @@ describe('PlanningWorkspaceHost — the session ENDS (MOTIR-7643)', () => {
     };
     view.rerender(hostElement({ mode: 'replan', from: 'project' }));
 
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reread).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
     const key = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
     expect(key.startsWith('1:')).toBe(true);
   });
@@ -682,6 +691,7 @@ describe('PlanningWorkspaceHost — the session ENDS (MOTIR-7643)', () => {
       },
     );
     expect(refresh).not.toHaveBeenCalled();
+    expect(reread).not.toHaveBeenCalled();
     expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('0:')).toBe(
       true,
     );
@@ -730,29 +740,17 @@ describe('PlanningWorkspaceHost — Plan something new (MOTIR-7650)', () => {
     expect(conversation.answerRestartConfirm).toHaveBeenCalledWith('confirm');
   });
 
-  it('the swap re-points an address that named the old session, re-keys the canvas and refreshes', () => {
+  it('the swap re-points an address that named the old session, re-keys the canvas and asks a reread', () => {
     window.history.replaceState(null, '', '/items/ACME-1?plan=replan&planSession=s1');
-    const { rerender } = renderHost({ mode: 'replan', from: 'project' });
+    renderHost({ mode: 'replan', from: 'project' });
 
     act(() => conversation.onRestarted!('s2'));
 
     expect(new URL(window.location.href).searchParams.get('planSession')).toBe('s2');
-    // The refresh waits for the router to commit the new address (MOTIR-8212) —
-    // the address swap is a navigation of its own, and a refresh overlapping it
-    // can hard-reload the page.
+    // No refresh rides beside the address swap any more (MOTIR-8576), so there is
+    // no second navigation to overlap it (MOTIR-8212) and nothing to wait for.
     expect(refresh).not.toHaveBeenCalled();
-    rerender(
-      <PlanningWorkspaceHost
-        projectKey="ACME"
-        projectName="Acme"
-        launch={{ ...parsePlanningLaunch({ mode: 'replan', from: 'project' }), sessionId: 's2' }}
-        anchorId={null}
-        onClose={noop}
-        initialTarget={null}
-        canManage={false}
-      />,
-    );
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reread).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!.startsWith('1:')).toBe(
       true,
     );
@@ -765,7 +763,8 @@ describe('PlanningWorkspaceHost — Plan something new (MOTIR-7650)', () => {
     act(() => conversation.onRestarted!('s2'));
 
     expect(new URL(window.location.href).searchParams.has('planSession')).toBe(false);
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(reread).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -28,6 +28,7 @@ import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import { fetchPlanningSeed } from '@/lib/planning/planningSeedClient';
 import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { surfaceArrivalTrail } from '@/lib/planning/surfaceArrival';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -95,9 +96,9 @@ import {
 //
 // ── PAGE STATE AFTER A MUTATION (`motir-core/CLAUDE.md`) ────────────────────
 // An approve commits work items, so the page BEHIND the overlay is stale the
-// moment the reader closes it. The host already does both halves for its own
-// surfaces — `router.refresh()` for the server-rendered ones and a `treeVersion`
-// tick for the canvas, which is a client island seeded once. The host page
+// moment the reader closes it. The host brings its own surfaces current without a
+// route refresh — a `treeVersion` tick for the canvas, which is a client island
+// seeded once, and a Workbench reread for the Workbench behind (MOTIR-8576). The host page
 // underneath gets the SAME split and it is not this component's to bump: a
 // backlog's `IssueTreeTable` and a board's `BoardContainer` are islands that
 // watch `CreateIssueProvider.issuesChangedAt`, so a story that has the overlay
@@ -328,6 +329,22 @@ export function PlanningWorkspaceOverlay({
     const qs = searchParams.toString();
     return `${pathname}${qs ? `?${qs}` : ''}`;
   }, [pathname, searchParams]);
+
+  // ⚠️ A GUIDE'S CLOSE RE-READS THE CARD'S PAGE — ONCE, FROM HERE (Story MOTIR-8539
+  // · MOTIR-8576). A guide walks the card the reader opened it from, and its turns
+  // write that card; the page underneath (the item page, server-rendered) shows
+  // what the walk did only after it is read again. That re-read used to be the
+  // guide host's own refresh on unmount. It belongs to the CLOSE instead — the
+  // reader's own act, and this component owns every vector of it (Close, Esc, the
+  // scrim, Back) — so it fires on the guide's open → closed transition and nowhere
+  // else. It is the shell's COORDINATED refresh, held to one in flight (MOTIR-6640).
+  // A planning workspace's close re-reads nothing: its surfaces re-read themselves.
+  const refreshPage = useCoordinatedRefresh();
+  const guideOpenRef = useRef(false);
+  useEffect(() => {
+    if (guideOpenRef.current && !open) refreshPage();
+    guideOpenRef.current = open && launch?.mode === 'guide';
+  }, [open, launch, refreshPage]);
 
   // ⚠️ FOCUS RETURN, and why it is not free here. Radix restores focus to the
   // element that had it when the dialog opened — but only when the dialog is

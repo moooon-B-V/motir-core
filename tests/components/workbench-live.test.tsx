@@ -43,6 +43,38 @@ const { STREAM_STALE_MS } =
 const EMPTY = <p>Nothing is waiting</p>;
 const { WORKBENCH_STREAM_PATH } =
   await import('../../app/(authed)/workbench/_components/useWorkbenchLive');
+const { useWorkbenchWindow } =
+  await import('../../app/(authed)/workbench/_components/useWorkbenchWindow');
+const { WORKBENCH_WINDOW_PATH } = await import('@/lib/workbench/windowClient');
+
+type Counts = import('@/lib/dto/home').HomeTabCountsDto;
+const COUNTS: Counts = {
+  myWork: 0,
+  toDo: 0,
+  inProgress: 0,
+  toFix: 0,
+  toResume: 0,
+  recentlyFinished: 0,
+  watching: 0,
+  approvals: 0,
+  planning: 0,
+};
+
+/**
+ * The Workbench's window reader with nothing to draw (MOTIR-8574): what a nudge
+ * reaches now that the host refreshes nothing. Its reads are counted at `fetch`.
+ */
+function WindowProbe() {
+  useWorkbenchWindow<null>({
+    tab: 'approvals',
+    page: 1,
+    content: null,
+    counts: COUNTS,
+    fromWindow: () => null,
+    merge: (prev) => prev,
+  });
+  return null;
+}
 
 type Row = import('@/lib/dto/approvalGate').ApprovalQueueRowDto;
 
@@ -84,6 +116,17 @@ function controllableStream() {
   const encoder = new TextEncoder();
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     calls.push(String(input));
+    if (String(input).includes(WORKBENCH_WINDOW_PATH)) {
+      // The window read a nudge makes (MOTIR-8574) — answered at once.
+      return Promise.resolve(
+        Response.json({
+          tab: 'approvals',
+          window: { kind: 'approvals', queue: { items: [], total: 0, truncated: false } },
+          counts: COUNTS,
+          readAt: new Date().toISOString(),
+        }),
+      );
+    }
     const body = new ReadableStream<Uint8Array>({
       start(c) {
         controller = c;
@@ -106,6 +149,8 @@ function controllableStream() {
   return {
     calls,
     fetchMock,
+    /** How many window reads the nudges have made. */
+    windowReads: () => calls.filter((url) => url.includes(WORKBENCH_WINDOW_PATH)).length,
     async send(frame: { moved: string[]; cursor: string }) {
       await act(async () => {
         controller?.enqueue(encoder.encode(`event: watermark\ndata: ${JSON.stringify(frame)}\n\n`));
@@ -175,32 +220,36 @@ describe('ONE STREAM, HELD BY THE HOST', () => {
   });
 });
 
-describe('A NUDGE RE-READS — once, and only when something moved', () => {
+describe('A NUDGE RE-READS THE WINDOW — once, only when something moved, and never refreshes', () => {
   it('does NOT re-read on the opening frame, which names nothing', async () => {
     const stream = controllableStream();
     await act(async () => {
       renderWithIntl(
         <WorkbenchLive>
           <WorkbenchReconnecting />
+          <WindowProbe />
         </WorkbenchLive>,
       );
       await Promise.resolve();
     });
 
     await stream.send({ moved: [], cursor: 'w1.aaa' });
+    await act(async () => {});
 
+    expect(stream.windowReads()).toBe(0);
     // ⚠️ THE ASSERTION IS ZERO. Every connection opens with a frame that names
     // nothing — it exists to hand the client its cursor — so counting it would
     // re-read the whole page on every reconnect, for ever.
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('re-reads ONCE per frame that names a tab', async () => {
+  it('re-reads the window ONCE per frame that names a tab, and never refreshes the route', async () => {
     const stream = controllableStream();
     await act(async () => {
       renderWithIntl(
         <WorkbenchLive>
           <WorkbenchReconnecting />
+          <WindowProbe />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -208,12 +257,17 @@ describe('A NUDGE RE-READS — once, and only when something moved', () => {
 
     await stream.send({ moved: [], cursor: 'w1.aaa' });
     await stream.send({ moved: ['approvals'], cursor: 'w1.bbb' });
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(stream.windowReads()).toBe(1);
 
     // A SECOND frame naming the SAME tab is a second change, not a repeat — the
     // watermark moved again, so the surface is stale again.
     await stream.send({ moved: ['approvals'], cursor: 'w1.ccc' });
-    expect(refresh).toHaveBeenCalledTimes(2);
+    await act(async () => {});
+    expect(stream.windowReads()).toBe(2);
+    // ⚠️ AND NO ROUTE REFRESH, ever (MOTIR-8574, amending MOTIR-5242): the window
+    // read IS the re-read, so the page under the reader is never re-rendered.
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
 
@@ -483,6 +537,7 @@ describe('the CONNECTION\u2019s own arms — what a percentage cannot see', () =
       renderWithIntl(
         <WorkbenchLive>
           <WorkbenchReconnecting />
+          <WindowProbe />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -492,12 +547,14 @@ describe('the CONNECTION\u2019s own arms — what a percentage cannot see', () =
     // tab. Neither is a nudge: this surface re-reads on what it understands.
     await stream.sendRaw(JSON.stringify({ moved: 'everything', cursor: 'w1.a' }));
     await stream.sendRaw(JSON.stringify({ moved: ['not-a-tab'], cursor: 'w1.b' }));
-    expect(refresh).not.toHaveBeenCalled();
+    expect(stream.windowReads()).toBe(0);
 
     // And a frame with no cursor still nudges — the cursor is how a RECONNECT
     // resumes, not a condition for applying what a frame says.
     await stream.sendRaw(JSON.stringify({ moved: ['toDo'] }));
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(stream.windowReads()).toBe(1);
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('stays reconnecting across a SECOND failure, and backs off further', async () => {

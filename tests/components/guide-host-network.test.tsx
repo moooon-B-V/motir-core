@@ -15,7 +15,8 @@ import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 // injects. So "opens once", "lands, then re-reads the rows" and "Try again re-runs
 // the same turn" are counted as requests leaving the browser.
 
-const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
+const { refresh, reread } = vi.hoisted(() => ({ refresh: vi.fn(), reread: vi.fn() }));
+vi.mock('@/lib/workbench/workbenchReread', () => ({ useRequestWorkbenchReread: () => reread }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/items/PROD-7',
   useSearchParams: () => new URLSearchParams(),
@@ -184,6 +185,7 @@ afterEach(() => {
   listTodosAction.mockReset();
   setTodoDoneAction.mockReset();
   refresh.mockReset();
+  reread.mockReset();
   onClose.mockReset();
 });
 
@@ -550,13 +552,16 @@ describe('the person on the canvas and in the rail', () => {
     expect(listTodosAction).toHaveBeenLastCalledWith({ workItemId: 'wi-7' });
   });
 
-  it('Close closes, and the page underneath is refreshed when the guide goes away', async () => {
+  it('Close closes; the host asks a Workbench reread and refreshes nothing itself (MOTIR-8576)', async () => {
     handler = ordinary({ before: [], after: [] });
     const { unmount } = renderHost({ ...CARD, identifier: 'PROD-85' });
     await waitFor(() => expect(posted('/api/ai/guide/settle')).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(reread).not.toHaveBeenCalled();
     unmount();
-    expect(refresh).toHaveBeenCalled();
+    expect(reread).toHaveBeenCalledTimes(1);
+    // The card's own page is re-read by the overlay's close, not by the host.
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

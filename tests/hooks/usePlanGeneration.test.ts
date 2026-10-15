@@ -4,6 +4,13 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { usePlanGeneration } from '@/lib/hooks/usePlanGeneration';
 import { OUT_OF_CREDITS_CODE } from '@/lib/planning/planGenerateClient';
 import { planReview, planReviewItem } from '../helpers/planReview';
+import { createElement, type ReactNode } from 'react';
+import {
+  LiveSignalProvider,
+  type LiveSignalListener,
+  type LiveSignalSource,
+} from '@/lib/live/liveSignal';
+import { createLiveFlag } from '@/lib/live/liveFlag';
 
 // The 7.4 generation driver (Subtask 7.4.9 / MOTIR-1396). It POSTs the job, then
 // runs the live-reveal poll (success → planned/empty) + the SSE stream (failure →
@@ -140,6 +147,55 @@ describe('usePlanGeneration (MOTIR-1396)', () => {
 
     await waitFor(() => expect(result.current.phase).toBe('empty'));
     expect(result.current.items).toEqual([]);
+    unmount();
+  });
+
+  // MOTIR-8575 — the reveal files each snapshot MERGED by identity: a re-read that
+  // changed nothing keeps the very same `items` array and does not bump `version`.
+  it('an unchanged snapshot keeps the same items array and version (MOTIR-8575)', async () => {
+    const item = planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', title: 'Invoices' });
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url === '/api/ai/plan/generate') {
+        return Promise.resolve(jsonResponse(200, { jobId: 'job_1', planId: 'plan_1' }));
+      }
+      // A stream that stays open: the plan is still being written.
+      if (url.includes('/stream')) {
+        return Promise.resolve(
+          new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse(200, planReview([item], { id: 'plan_1', status: 'generating' })),
+      );
+    });
+    const listeners = new Set<LiveSignalListener>();
+    const source: LiveSignalSource = {
+      subscribe: (_topic, onSignal) => {
+        listeners.add(onSignal);
+        return () => listeners.delete(onSignal);
+      },
+      reconnecting: createLiveFlag(false),
+    };
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(LiveSignalProvider, { source }, children);
+    const { result, unmount } = renderHook(() => usePlanGeneration(), { wrapper });
+    act(() => result.current.start());
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    const items = result.current.items;
+    const version = result.current.version;
+    const reads = () =>
+      vi.mocked(globalThis.fetch).mock.calls.filter(([u]) => String(u) === '/api/plans/plan_1')
+        .length;
+    const before = reads();
+
+    await act(async () => {
+      for (const l of [...listeners]) l({ topic: { kind: 'plan', planId: 'plan_1' }, seq: 1 });
+    });
+    await waitFor(() => expect(reads()).toBe(before + 1));
+    await act(async () => {});
+    expect(result.current.items).toBe(items);
+    expect(result.current.version).toBe(version);
     unmount();
   });
 });

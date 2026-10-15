@@ -48,6 +48,7 @@ vi.mock('next-intl/server', async () => {
   };
 });
 
+const { TabWindowHarness, planningWindowAnswer } = await import('../helpers/workbenchTabWindow');
 const { PlanningList } = await import('../../app/(authed)/workbench/_components/PlanningList');
 const { PlanningEmptyAction } =
   await import('../../app/(authed)/workbench/_components/PlanningEmptyAction');
@@ -98,13 +99,16 @@ function mount(
   opts: { locale?: 'en' | 'zh'; empty?: React.ReactNode } = {},
 ) {
   const locale = opts.locale ?? 'en';
+  // Under the Workbench's one read (MOTIR-8581): a poll tick is its `reread()`.
   return renderWithIntl(
-    <PlanningList
-      seed={seed}
-      projectName="Acme Web"
-      label="Planning"
-      empty={opts.empty ?? EMPTY}
-    />,
+    <TabWindowHarness tab="planning">
+      <PlanningList
+        seed={seed}
+        projectName="Acme Web"
+        label="Planning"
+        empty={opts.empty ?? EMPTY}
+      />
+    </TabWindowHarness>,
     { locale, messages: locale === 'zh' ? zh : en },
   );
 }
@@ -117,7 +121,7 @@ function answerWith(...pages: WorkbenchPlanningPageDto[]) {
     }
     const next = pages.shift();
     if (!next) throw new Error('no page stubbed');
-    return { ok: true, json: async () => next } as unknown as Response;
+    return { ok: true, json: async () => planningWindowAnswer(next) } as unknown as Response;
   });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -449,25 +453,24 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     await poll();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/workbench/planning', expect.anything());
+    // The Workbench's one read, for this tab (MOTIR-8581).
+    expect(fetchMock).toHaveBeenCalledWith('/api/workbench/window?tab=planning', expect.anything());
     // The arrival lands at the TOP (newest first) and wears `New`.
     const rendered = screen.getAllByTestId(/^planning-row-/).map((el) => el.dataset['testid']);
     expect(rendered).toEqual(['planning-row-p2', 'planning-row-p1']);
     expect(screen.getByText('New')).toBeTruthy();
   });
 
-  it('calls `router.refresh()` EXACTLY ONCE when `total` moved, and not at all when it did not', async () => {
+  it('never refreshes the route: a moved `total` lands with the rows, from the one read', async () => {
     answerWith(
       page([row({ planId: 'p1' }), row({ planId: 'p2' })], 2),
       page([row({ planId: 'p1' }), row({ planId: 'p2' })], 2),
     );
     mount(page([row({ planId: 'p1' })], 1));
 
-    await poll();
-    expect(refresh).toHaveBeenCalledTimes(1);
-
-    await poll();
-    expect(refresh).toHaveBeenCalledTimes(1);
+    await poll(2);
+    expect(screen.getAllByTestId(/^planning-row-/)).toHaveLength(2);
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('HOLDS a row the read dropped, with the outcome it reads once from the plan', async () => {
@@ -481,7 +484,7 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
       }
       const next = pages.shift();
       if (!next) throw new Error('no page stubbed');
-      return { ok: true, json: async () => next } as unknown as Response;
+      return { ok: true, json: async () => planningWindowAnswer(next) } as unknown as Response;
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -508,7 +511,7 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
         if (String(input).startsWith('/api/plans/')) throw new Error('offline');
         const next = pages.shift();
         if (!next) throw new Error('no page stubbed');
-        return { ok: true, json: async () => next } as unknown as Response;
+        return { ok: true, json: async () => planningWindowAnswer(next) } as unknown as Response;
       }),
     );
 
@@ -520,40 +523,45 @@ describe('the LIVE island — the poll (§ 36.7, § 36.8)', () => {
     expect(heldRow.textContent).not.toContain('Written');
   });
 
-  it('a LATE response never overwrites a newer one', async () => {
-    // The first read resolves AFTER the second: the first page names only `p1`,
-    // the second names `p1` + `p2`, and the rows must end up the second's.
+  it('a tick behind a read still out waits for it, and the rows end up the newer answer’s', async () => {
+    // The first read is slow and names only `p1`; the tick behind it starts NO
+    // second read (the window hook's one-in-flight rule), and the read that follows
+    // once it settles names `p1` + `p2`.
     let release: (() => void) | null = null;
     const slow = new Promise<void>((resolve) => {
       release = resolve;
     });
     let call = 0;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        call += 1;
-        if (call === 1) {
-          await slow;
-          return { ok: true, json: async () => page([row({ planId: 'p1' })], 1) } as Response;
-        }
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      if (call === 1) {
+        await slow;
         return {
           ok: true,
-          json: async () => page([row({ planId: 'p1' }), row({ planId: 'p2' })], 2),
+          json: async () => planningWindowAnswer(page([row({ planId: 'p1' })], 1)),
         } as Response;
-      }),
-    );
+      }
+      return {
+        ok: true,
+        json: async () =>
+          planningWindowAnswer(page([row({ planId: 'p1' }), row({ planId: 'p2' })], 2)),
+      } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     mount(page([row({ planId: 'p1' })], 1));
     await poll(); // issues read 1, still in flight
-    await poll(); // issues read 2, which lands first
-    expect(screen.getAllByTestId(/^planning-row-/)).toHaveLength(2);
+    await poll(); // behind it: nothing issued
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId(/^planning-row-/)).toHaveLength(1);
 
     await act(async () => {
       release?.();
     });
     await act(async () => {});
+    await act(async () => {});
 
-    // Read 1's older page is DROPPED: `p2` is still on screen.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(screen.getAllByTestId(/^planning-row-/).map((el) => el.dataset['testid'])).toEqual([
       'planning-row-p2',
       'planning-row-p1',
@@ -648,7 +656,7 @@ describe('zh (§ 36.11)', () => {
         }
         const next = pages.shift();
         if (!next) throw new Error('no page stubbed');
-        return { ok: true, json: async () => next } as unknown as Response;
+        return { ok: true, json: async () => planningWindowAnswer(next) } as unknown as Response;
       }),
     );
 

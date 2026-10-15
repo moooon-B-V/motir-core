@@ -48,7 +48,7 @@ import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { usePlanGateForward } from './usePlanGateForward';
 import { parseApprovalOverlay, withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { fetchApprovalGateOverlay } from '@/lib/approvals/approvalOverlayClient';
-import { useWorkbenchLiveSignal } from '@/app/(authed)/workbench/_components/useWorkbenchLive';
+import { useLiveSignal, type LiveTopic } from '@/lib/live/liveSignal';
 import type { StampComponent } from '@/lib/approvalGates/stamp';
 import { announceGateDecided } from '@/lib/approvals/decidedGates';
 import type {
@@ -423,6 +423,9 @@ function listFormat(items: readonly string[], and: string): string {
   return `${items.slice(0, -1).join(', ')} ${and} ${items[items.length - 1]!}`;
 }
 
+/** The topic the open approval probes on — "something on the Workbench moved". */
+const WORKBENCH_TOPIC: LiveTopic = { kind: 'workbench' };
+
 export function ApprovalOverlay() {
   const routes = useReaderRoutes();
   const t = useTranslations('approvalOverlay');
@@ -587,23 +590,30 @@ export function ApprovalOverlay() {
   }, [itemKey, kind]);
 
   // ⚠️ WHAT THIS READER IS LOOKING AT MAY HAVE MOVED (Story MOTIR-5238 · Subtask
-  // MOTIR-5243). The Workbench host holds ONE stream and hands its signal down;
-  // this surface OPENS NOTHING — `useWorkbenchLiveSignal` reads the context, and
-  // outside the Workbench it is simply never nudged.
+  // MOTIR-5243). The shell's live host holds ONE stream and hands its signal down
+  // through the seam (`useLiveSignal`, Story MOTIR-8539 · MOTIR-8577); this
+  // surface OPENS NOTHING, and with no provider above it it is simply never nudged.
   //
   // ⚠️ A NUDGE IS NOT AN ANSWER. A frame says a TAB moved, which is mostly other
   // people's rows; the question this surface has is narrower — *did the gate I am
-  // holding open move?* — so a nudge triggers ONE probe, and the probe hands back
+  // holding open move?* — so a signal triggers ONE probe, and the probe hands back
   // the stamp this reader was shown. The SERVER compares, with the decide door's
   // own `stampMoved`, so this notice and the refusal a press would meet cannot
-  // disagree.
+  // disagree. The signal's payload is not read: what moved is the probe's answer.
   //
   // ⚠️ AND THE PROBE DOES NOT TOUCH WHAT IS ON SCREEN. Its read is used for one
-  // thing — `movedSince` — and never applied to `load`. Swapping the port's bytes
-  // under a reader mid-sentence is the one outcome the design forbids outright;
-  // *Show the current version* is the reader's own act, and it is the only thing
-  // that replaces the render.
-  const live = useWorkbenchLiveSignal();
+  // thing — `movedSince` (and the withdrawal) — and never applied to `load`.
+  // Swapping the port's bytes under a reader mid-sentence is the one outcome the
+  // design forbids outright; *Show the current version* is the reader's own act,
+  // and it is the only thing that replaces the render. Nothing a signal sets is
+  // state the port renders from, which is what keeps the reader's scroll, their
+  // selection, their focus and a half-typed refusal where they were.
+  //
+  // ⚠️ ONE PROBE IN FLIGHT (MOTIR-8577), `useGeneratingPlanPoll`'s discipline. A
+  // signal during a probe sets `pending`, and exactly one more probe runs once it
+  // settles — a burst of N signals costs two probes, not N. The probe is aborted
+  // on unmount, on a change of address and when the held stamp changes; an answer
+  // for an address or a stamp the reader has left is dropped.
   const [moved, setMoved] = useState<StampComponent[]>([]);
   // THE QUESTION WENT AWAY (MOTIR-5917; § 30 Panel 4a) — the gate this reader holds is now
   // superseded with `conflict`. `undefined` = not withdrawn; the value is what the notice
@@ -613,31 +623,57 @@ export function ApprovalOverlay() {
     token !== null && load?.token === token && load.outcome === 'read' ? load.read : null;
   const heldStamp = settledRead?.stamp ?? null;
   const heldGateId = settledRead?.gate?.id ?? null;
+
+  // What a probe is FOR, read when one is issued and again when it lands.
+  const probeView = useRef({ itemKey, kind, heldStamp, heldGateId });
+  const prober = useRef({ inFlight: null as AbortController | null, pending: false });
   useEffect(() => {
+    probeView.current = { itemKey, kind, heldStamp, heldGateId };
+    const r = prober.current;
+    // A new address or a new stamp: what was out is about a view the reader left.
+    return () => {
+      r.inFlight?.abort();
+      r.inFlight = null;
+      r.pending = false;
+    };
+  }, [itemKey, kind, heldStamp, heldGateId]);
+
+  const probe = useCallback(function issue(): void {
+    const r = prober.current;
+    if (r.inFlight) {
+      r.pending = true;
+      return;
+    }
+    const view = probeView.current;
     // Nothing to compare against: no live question, or nothing on screen yet.
-    if (itemKey === null || kind === null || !heldStamp || live.nudge === 0) return;
+    if (view.itemKey === null || view.kind === null || !view.heldStamp) return;
     const controller = new AbortController();
-    void (async () => {
-      try {
-        const probe = await fetchApprovalGateOverlay(itemKey, kind, controller.signal, heldStamp);
-        if (controller.signal.aborted || !probe) return;
+    r.inFlight = controller;
+    const isCurrent = () =>
+      !controller.signal.aborted &&
+      probeView.current.itemKey === view.itemKey &&
+      probeView.current.kind === view.kind &&
+      probeView.current.heldStamp === view.heldStamp;
+    void fetchApprovalGateOverlay(view.itemKey, view.kind, controller.signal, view.heldStamp)
+      .then((answer) => {
+        if (!isCurrent() || !answer) return;
         // One move produces one notice; a second, different move UPDATES it
         // rather than stacking — this is a set, not a log.
         setMoved((prev) =>
-          prev.join(',') === probe.movedSince.join(',') ? prev : probe.movedSince,
+          prev.join(',') === answer.movedSince.join(',') ? prev : answer.movedSince,
         );
         // ⚠️ A WITHDRAWAL MOVES NO STAMP, so `movedSince` is `[]` for it and the probe's
         // GATE is what says so: the same row, no longer awaiting, superseded for a
         // conflict. Only the gate THIS READER HOLDS counts — a later gate would be a new
         // question with its own stamp.
         if (
-          probe.gate?.id === heldGateId &&
-          probe.gate.state === 'superseded' &&
-          probe.gate.supersededCause === 'conflict'
+          answer.gate?.id === view.heldGateId &&
+          answer.gate.state === 'superseded' &&
+          answer.gate.supersededCause === 'conflict'
         ) {
           const conflicted =
-            probe.subject.state === 'resolved' && probe.subject.kind === 'pull_request_approval'
-              ? probe.subject.pullRequests.find((pr) => pr.conflicted)
+            answer.subject.state === 'resolved' && answer.subject.kind === 'pull_request_approval'
+              ? answer.subject.pullRequests.find((pr) => pr.conflicted)
               : undefined;
           setWithdrawn(
             (prev) =>
@@ -648,14 +684,25 @@ export function ApprovalOverlay() {
               },
           );
         }
-      } catch {
+      })
+      .catch(() => {
         // A failed probe says nothing. The reader keeps what they have, and the
         // stamp still protects the press — a notice is a courtesy layered on a
         // precondition, never the precondition.
-      }
-    })();
-    return () => controller.abort();
-  }, [live.nudge, heldStamp, heldGateId, itemKey, kind]);
+      })
+      .finally(() => {
+        if (r.inFlight !== controller) return;
+        r.inFlight = null;
+        if (r.pending && !controller.signal.aborted) {
+          r.pending = false;
+          issue();
+        }
+      });
+  }, []);
+
+  useLiveSignal(WORKBENCH_TOPIC, probe, {
+    enabled: itemKey !== null && kind !== null && heldStamp !== null,
+  });
   // A fresh render — a different address, or *Show the current version* — carries
   // a fresh stamp, so the notice it was about is gone.
   const shownFor = useRef<string | null>(null);
