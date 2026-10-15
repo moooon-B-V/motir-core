@@ -3524,6 +3524,16 @@ cutting a branch to fix it yourself. See
 arms' different time semantics, and what path capture cannot see. A card whose
 body opts out (`isSubsumptionCheckExempt`) is never reported.
 
+A `title-coverage` entry (`kind: "title-coverage"`, severity
+`likely-unnamed-title-part`) is the other half of the same question: a
+CONTAINER's body never mentions one or more distinguishing words its own TITLE
+carries. Everything laid under a container is laid against its body, so a body
+that silently drops a part of the title narrows the whole subtree with nothing
+marking it as a choice. It carries `words` (stemmed), and the remedy is to
+restore the part in the body or state it as excluded with the work item that
+owns it. A body that mentions a part only to hand it to another work item
+counts as naming it. Advisory only; it never gates.
+
 A `coverage` entry (`kind: "coverage"`, severity `likely-unowned-criterion`) is
 the one family about a CONTAINER's relationship to its children: one of its
 acceptance criteria has no direct child whose TITLE carries that criterion's
