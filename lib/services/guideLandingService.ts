@@ -17,6 +17,7 @@ import { guideReplyBody } from '@/lib/planning/guideReplyNotes';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { deliveryMemberState } from '@/lib/workItems/deliverySet';
 import { commentsService } from '@/lib/services/commentsService';
@@ -235,6 +236,39 @@ export function guideNeedsReplanComment(reason: string): string {
   ].join('\n');
 }
 
+/**
+ * The key a `needs_replan` offer plans against (MOTIR-8685 Q4). The guide names a
+ * target; a target that is done (or no longer in this project) cannot be planned
+ * into, so the offer resolves to the nearest NOT-done ancestor of the guided
+ * card's chain, parent first. Null when nothing qualifies — no offer is made.
+ */
+export async function resolveReplanTarget(
+  targetKey: string,
+  card: WorkItemDto,
+  ctx: ProjectContext,
+): Promise<string | null> {
+  const [target, ancestors, statuses] = await Promise.all([
+    withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(ctx.projectId, targetKey, tx),
+    ),
+    card.parentId
+      ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          workItemRepository.findAncestors(card.id, ctx.workspaceId, tx),
+        )
+      : Promise.resolve([]),
+    workflowsService.listStatusesByProject(ctx.projectId, ctx.workspaceId),
+  ]);
+  const doneKeys = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+  const open = (row: { status: string; archivedAt: Date | null }) =>
+    !doneKeys.has(row.status) && row.archivedAt === null;
+  if (target && open(target)) return target.identifier;
+  // Nearest first: `findAncestors` is root → parent, so walk it from the end.
+  for (const row of [...ancestors].reverse()) {
+    if (row.projectId === ctx.projectId && open(row)) return row.identifier;
+  }
+  return null;
+}
+
 /** The comment `close` leaves on the card — the turn's own summary. */
 export function guideCloseComment(messageMd: string): string {
   return `**Closed after a guided walk with Motir AI.**\n\n${messageMd}`;
@@ -432,7 +466,12 @@ async function landOne(
         { bodyMd: guideNeedsReplanComment(action.reason) },
         actor,
       );
-      return landed();
+      // An offer (MOTIR-8685) carries the resolved target on the outcome; a bare
+      // reason leaves the comment as the whole of it.
+      const target = action.targetKey
+        ? await resolveReplanTarget(action.targetKey, card.item, ctx)
+        : null;
+      return target ? { ...landed(), workItemKey: target } : landed();
     }
 
     case 'file_bug': {

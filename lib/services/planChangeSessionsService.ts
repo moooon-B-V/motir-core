@@ -92,6 +92,7 @@ import {
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
+import { guideOfferDeclinedBody, parseGuideOfferDeclined } from '@/lib/planning/guideOffer';
 import { KEEP_PLANNING_MARKER_BODY, NEW_SESSION_CONFIRM_BODY } from '@/lib/planChange/restart';
 
 /**
@@ -2416,6 +2417,39 @@ export const planChangeSessionsService = {
           pctx.workspaceId,
           tx,
         )) !== null,
+    );
+  },
+
+  /**
+   * Decline a guide turn's re-plan offer (MOTIR-8689; decision MOTIR-8685): a
+   * `system` marker naming the offer's turn. Nothing is planned, spent or
+   * decided. Replayable: a second decline of the same offer appends nothing.
+   * Returns null when the turn is not an assistant guide turn carrying an offer.
+   */
+  async declineGuideOffer(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto | null> {
+    const session = await requireSession(pctx, address);
+    const offered = await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      (tx) => planChangeTurnRepository.findByIdInSession(turnId, session.id, pctx.workspaceId, tx),
+    );
+    const record = offered ? readGuideTurnRecord(offered.guideTurn) : null;
+    const hasOffer = record?.actions.some(
+      (a) => a.type === 'needs_replan' && a.targetKey !== undefined,
+    );
+    if (!offered || offered.role !== 'assistant' || !hasOffer) return null;
+    return appendLocked(
+      session,
+      pctx,
+      { role: 'system', body: guideOfferDeclinedBody(turnId) },
+      {},
+      async (tx) =>
+        (await planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx)).some(
+          (t) => t.role === 'system' && parseGuideOfferDeclined(t.body) === turnId,
+        ),
     );
   },
 
