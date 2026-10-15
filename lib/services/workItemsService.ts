@@ -1233,6 +1233,8 @@ function assembleProjectForest(
  * is not implemented, so neither counts a cancelled card as finished work.
  */
 const ROADMAP_CANCELLED_KEY = 'cancelled';
+/** The status a `manual_work` question does not survive a move into (MOTIR-8670). */
+const MANUAL_WORK_NOT_READY_KEY = 'blocked';
 /** The status an item enters to be reviewed — the one whose entry re-asks its
  *  pending questions (ADR `approval-gates.md` §6d AMENDMENT, rule 7). */
 const REVIEW_STATUS_KEY = 'in_review';
@@ -2326,6 +2328,15 @@ export const workItemsService = {
             },
             tx,
           );
+          // A new card filed as BLOCKING an existing manual card takes that card's
+          // question away (MOTIR-8670): the new card is unfinished by birth.
+          if (directed.kind === 'is_blocked_by' && directed.fromId !== row.id) {
+            await manualWorkGateService.withdrawIfNewBlockerOpen(
+              directed.fromId,
+              directed.toId,
+              tx,
+            );
+          }
 
           if (directed.kind === 'relates_to') {
             const existingReciprocal = await workItemLinkRepository.findReciprocal(
@@ -3700,6 +3711,26 @@ export const workItemsService = {
       awaitingGates.some((gate) => gate.kind === 'manual_work' && gate.id !== opts.decidingGateId)
     ) {
       await manualWorkGateService.withdrawOnUndecidedClose(workItemId, tx);
+    }
+
+    // ⚠️ AND A MANUAL-WORK QUESTION LEAVES A CARD NOBODY CAN START (MOTIR-8670;
+    // `manual-work-gate.md` §6, amended). Waiting on you asks a person to do the work
+    // now; a card moved to Blocked waits on something else first, and a card moved to
+    // Planning — by hand, or parked by a plan's append — is being rewritten, so the
+    // card the run reached is not the card that will come back. Every writer, system
+    // included: the question is wrong whoever made the move. Rule 6 keeps every OTHER
+    // kind's question through `blocked`; this is the one kind whose question is about
+    // doing the work rather than judging it. Nothing re-raises it: the next run that
+    // reaches the card, ready, does.
+    if (
+      (toStatusKey === MANUAL_WORK_NOT_READY_KEY || toStatusKey === PLANNING_STATUS_KEY) &&
+      awaitingGates.some((gate) => gate.kind === 'manual_work')
+    ) {
+      if (toStatusKey === PLANNING_STATUS_KEY) {
+        await manualWorkGateService.withdrawOnReplan(workItemId, tx);
+      } else {
+        await manualWorkGateService.withdrawWhenNotReady(workItemId, tx);
+      }
     }
 
     // ⚠️ AND THE MERGE QUESTION LEAVES WITH THE CARD, WHEREVER IT GOES (MOTIR-6971;
@@ -5920,6 +5951,11 @@ export const workItemsService = {
       /* istanbul ignore next -- the non-idempotent branch never returns null (the
          forward create throws on a duplicate rather than returning null) */
       if (!link) throw new WorkItemLinkNotFoundError(input.fromId);
+      // An open prerequisite takes the manual-work question off the blocked card
+      // (MOTIR-8670), in the link's own transaction.
+      if (input.kind === 'is_blocked_by') {
+        await manualWorkGateService.withdrawIfNewBlockerOpen(input.fromId, input.toId, tx);
+      }
       return { dto: toWorkItemLinkDto(link), fromItem, toItem };
     });
 

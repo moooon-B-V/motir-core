@@ -12514,6 +12514,8 @@
         "subject_gone": "Ciò su cui verteva questa domanda non esiste più, quindi questa domanda è stata ritirata.",
         "no_longer_manual": "L’elemento di lavoro non è più lavoro manuale, quindi questa domanda è stata ritirata.",
         "closed_without_decision": "L’elemento di lavoro è stato chiuso senza che nessuno lo segnasse come completato, quindi questa domanda è stata ritirata.",
+        "not_ready": "L’elemento di lavoro è bloccato da altro lavoro, quindi questa domanda è stata ritirata finché non potrà essere avviato.",
+        "replanned": "L’elemento di lavoro è stato ripianificato, quindi questa domanda è stata ritirata.",
         "unknown": "Questa domanda è stata ritirata. Il motivo non è stato registrato."
       },
       "causeByKind": {

@@ -12514,6 +12514,8 @@
         "subject_gone": "Waar deze vraag over ging, is weg, dus deze vraag is ingetrokken.",
         "no_longer_manual": "Het werkitem is geen handmatig werk meer, dus deze vraag is ingetrokken.",
         "closed_without_decision": "Het werkitem is gesloten zonder dat iemand het als klaar heeft gemarkeerd, dus deze vraag is ingetrokken.",
+        "not_ready": "Het werkitem wordt geblokkeerd door ander werk, dus deze vraag is ingetrokken tot het kan beginnen.",
+        "replanned": "Het werkitem is opnieuw gepland, dus deze vraag is ingetrokken.",
         "unknown": "Deze vraag is ingetrokken. De reden is niet vastgelegd."
       },
       "causeByKind": {

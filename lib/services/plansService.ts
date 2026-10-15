@@ -50,6 +50,7 @@ import {
 } from '@/lib/repositories/workItemRepository';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { manualWorkGateService } from '@/lib/services/manualWorkGateService';
 import {
   workItemRevisionRepository,
   WORK_ITEM_REVISIONS_AFTER_MAX,
@@ -3781,6 +3782,17 @@ async function applyModify(
     await workItemRepository.update(item.workItemId, update, tx);
   }
 
+  // ⚠️ A RE-SCOPE TAKES THE MANUAL-WORK QUESTION OFF THE CARD (MOTIR-8670;
+  // `manual-work-gate.md` §6, amended). A run raised it about the card it reached;
+  // this approve has just changed what the card asks for — its title, its body (the
+  // stamp's `criteria`) or where it ships — so Waiting on you would ask the person to
+  // mark done work nobody has described to them. Usually the append's park already
+  // withdrew it; this catches a target the append could not park (no edge into
+  // Planning, or one already sitting there). The next run to reach the card re-asks.
+  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
+    await manualWorkGateService.withdrawOnReplan(item.workItemId, tx);
+  }
+
   // Edge changes: add/remove `is_blocked_by` links (the target is the `from`).
   // Recorded under the EXISTING `links` revision-diff key + shape that
   // workItemsService uses ({ added/removed: [{ toId, kind }] }) — so the activity
@@ -3831,7 +3843,13 @@ async function applyModify(
       },
       tx,
     );
-    if (created) linkAdded.push({ toId, kind: 'is_blocked_by' });
+    if (created) {
+      linkAdded.push({ toId, kind: 'is_blocked_by' });
+      // An open prerequisite takes the manual-work question off the card too
+      // (MOTIR-8670): the status rule above leaves the column alone, but nobody can
+      // start the work while it waits.
+      await manualWorkGateService.withdrawIfNewBlockerOpen(item.workItemId, toId, tx);
+    }
   }
   const linkRemoved: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByRemove ?? []) {

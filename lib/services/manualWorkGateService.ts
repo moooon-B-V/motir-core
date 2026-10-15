@@ -1,6 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { isManualReadyItem } from '@/lib/dto/ready';
+import { isOpenBlocker } from '@/lib/workItems/blockerReadiness';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -22,6 +23,13 @@ import { workflowsService } from './workflowsService';
 //   · WITHDRAW, `closed_without_decision` — the card reached a done status by a write
 //     nobody decided: the parent cascade, the rollup (§6). Called from
 //     `applyStatusTransition` in the move's transaction.
+//
+//   · WITHDRAW, `not_ready` / `replanned` — the card stopped being one a person can
+//     start (MOTIR-8670; §6 as amended 2026-10-15): moved to Blocked, given a
+//     `blocked_by` on unfinished work, moved to Planning, or rewritten by a plan.
+//     Called from `applyStatusTransition`, the link doors and `plansService`'s
+//     `modify`, each in its own write's transaction. Nothing re-raises it: the next
+//     run that reaches the card does, through `raise`, as for any card.
 //
 // Cancel and archive need nothing here: the shipped pull-back rule and
 // `withdrawQuestionsOnArchive` supersede every kind's awaiting gate as `pulled_back`.
@@ -200,6 +208,53 @@ export const manualWorkGateService = {
       'no_longer_manual',
       tx,
     );
+  },
+
+  /**
+   * WITHDRAW the gate when the card was moved to Blocked (MOTIR-8670, `not_ready`; §6
+   * as amended): it waits on something else first, so nobody can do the work now.
+   * Returns how many gates were withdrawn — zero on a card holding none, so a caller
+   * need not read first.
+   */
+  async withdrawWhenNotReady(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, 'not_ready', tx);
+  },
+
+  /**
+   * WITHDRAW the gate when the card was re-planned (MOTIR-8670, `replanned`; §6 as
+   * amended) — moved to Planning, or a plan approval rewrote its title, body or
+   * repository — so the card the run reached is not the card as planned.
+   */
+  async withdrawOnReplan(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, 'replanned', tx);
+  },
+
+  /**
+   * WITHDRAW the gate when a `blocked_by` was just written from this card to
+   * `blockerId` and that blocker is OPEN by the ready set's own predicate
+   * (`isOpenBlocker`: not in its project's done category and not integrated) — the
+   * person can no longer start the work (MOTIR-8670, `not_ready`). Judges the NEW edge
+   * only: an edge to finished work withdraws nothing, whatever the card's other edges
+   * are. Reads the blocker only when the card holds an awaiting gate, so every other
+   * link write pays one indexed read.
+   */
+  async withdrawIfNewBlockerOpen(
+    workItemId: string,
+    blockerId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const awaiting = await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx);
+    if (!awaiting.some((gate) => gate.kind === KIND)) return 0;
+    const blocker = await workItemRepository.findById(blockerId, tx);
+    // An archived blocker gates nothing (`findBlockerStatesForItems` skips it too).
+    if (!blocker || blocker.archivedAt) return 0;
+    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+      [blocker.projectId],
+      blocker.workspaceId,
+      tx,
+    );
+    if (!isOpenBlocker(blocker, terminalByProject)) return 0;
+    return approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, KIND, 'not_ready', tx);
   },
 
   /**

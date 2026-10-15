@@ -5460,6 +5460,14 @@ enum ApprovalGateSupersedeCause {
   /// parent cascade, the rollup — so the question closes without being recorded as
   /// approved (MOTIR-7474; `docs/decisions/manual-work-gate.md` §6).
   closed_without_decision
+  /// A `manual_work` gate's card stopped being ready for a person — it was moved to
+  /// Blocked, or gained a `blocked_by` on unfinished work — so nobody can do the work
+  /// it asks for (MOTIR-8670; `docs/decisions/manual-work-gate.md` §6, amended).
+  not_ready
+  /// A `manual_work` gate's card was re-planned — parked or moved to Planning, or a plan
+  /// approval rewrote its title or body — so the card the run reached is not the card
+  /// as planned (MOTIR-8670; `docs/decisions/manual-work-gate.md` §6, amended).
+  replanned
 
   /// The person SENT A TURN on the planning session a `planning_session` gate asked
   /// about (MOTIR-7913) — the question is answered.

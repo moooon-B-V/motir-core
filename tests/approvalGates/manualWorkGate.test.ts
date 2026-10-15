@@ -229,10 +229,11 @@ describe('Mark done', () => {
     expect((await gatesOf(card.id))[0]!.state).toBe('awaiting');
   });
 
-  it('a move that is not Done — Blocked, In progress — keeps the question', async () => {
+  // §6 kept the question through Blocked until MOTIR-8670 amended it: a Blocked card is
+  // one nobody can start, so it is withdrawn there (`manualWorkGateReconcile.test.ts`).
+  it('a move that is not Done and leaves the card workable — In progress — keeps the question', async () => {
     const card = await manualCard();
     await raisedGate(card.id);
-    await workItemsService.updateStatus(card.id, 'blocked', fx.ctx);
     await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
     expect((await gatesOf(card.id))[0]!.state).toBe('awaiting');
   });
