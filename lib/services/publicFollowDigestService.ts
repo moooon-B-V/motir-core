@@ -5,6 +5,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { signUnsubscribeToken, UNCONFIRMED_FOLLOW_TTL_MS } from '@/lib/publicProjects/followTokens';
@@ -122,6 +123,15 @@ export const publicFollowDigestService = {
       return { sent: false, itemCount: 0 };
     }
 
+    // The recipient's language, resolved only when there is something to send
+    // (MOTIR-8109): an account follow by its account; an email-only follow by
+    // the account that now holds the address, else the language recorded on the
+    // follow, else English.
+    const locale = await resolveRecipientLocale({
+      userId: follow.userId,
+      email: follow.email,
+      recordedLocale: follow.locale,
+    });
     const base = publicProjectUrl(project.identifier);
     await sendEvent('email.send', {
       workspaceId: args.workspaceId,
@@ -141,6 +151,7 @@ export const publicFollowDigestService = {
           title: entry.title,
           url: `${base}/items/${entry.identifier}`,
         })),
+        locale,
       },
     });
 

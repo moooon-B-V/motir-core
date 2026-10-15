@@ -5,6 +5,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { PublicFollowStateDto } from '@/lib/dto/publicProjects';
 import {
@@ -218,6 +219,7 @@ export const publicFollowService = {
     // enters the database — only its hash does, and only the email carries the
     // token itself.
     const token = mintFollowToken();
+    const recordedLocale = isLocale(pageLocale) ? pageLocale : null;
     const sendTo = await withWorkspaceServiceContext(project.workspaceId, async (tx) => {
       const existing = await publicFollowRepository.findByProjectAndEmail(project.id, email, tx);
       if (existing?.confirmedAt) {
@@ -227,7 +229,7 @@ export const publicFollowService = {
       }
       const data = {
         digestOptIn: true,
-        locale: isLocale(pageLocale) ? pageLocale : null,
+        locale: recordedLocale,
         confirmTokenHash: hashFollowToken(token),
         confirmTokenExpiresAt: new Date(Date.now() + CONFIRM_TOKEN_TTL_MS),
       };
@@ -250,6 +252,10 @@ export const publicFollowService = {
     });
 
     if (!sendTo) return;
+    // The confirmation is written in the recipient's language (MOTIR-8109): an
+    // account holding this address keeps its saved language, otherwise the
+    // language of the page they just subscribed from, otherwise English.
+    const locale = await resolveRecipientLocale({ email: sendTo, recordedLocale });
     // ENQUEUED, and OUTSIDE the transaction. Two rules meet here and point the
     // same way: this codebase never sends mail synchronously (only the
     // `email.send` job imports `@/lib/email`, and eslint enforces it), and a
@@ -268,6 +274,7 @@ export const publicFollowService = {
       data: {
         projectName: project.name,
         confirmUrl: `${resolveBaseUrlTrimmed()}/follow/confirm?token=${encodeURIComponent(token)}`,
+        locale,
       },
     });
   },
