@@ -1,6 +1,7 @@
 {
   "$comment": "Fleet job inventory (Story MOTIR-8699 \u00b7 MOTIR-8701). Every job in every workflow of the seven repositories project MOTIR links, measured at the recorded sha against infra/ci-runner/Dockerfile at imageDockerfileSha. Read by the readiness verdict (MOTIR-8713); the image card (MOTIR-8710) flips needs-image entries as tools land. Written by docs/research/fleet-job-inventory.md.",
   "schemaVersion": 1,
+  "imageDockerfileBlob": "f2467dd3ee7b3bcaa80b2e1e23e55c9ac92743e1",
   "repos": {
     "moooon-B-V/motir-core": {
       "repoRef": "moooon-B-V/motir-core",
@@ -862,8 +863,8 @@
               "jobId": "guard-on-live-artifact",
               "runsOn": "ubuntu-latest",
               "triggers": ["pull_request", "merge_group", "push", "workflow_dispatch", "schedule"],
-              "verdict": "needs-image",
-              "missing": ["gh"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/rate-drift.yml:240"
             },
             {
@@ -891,8 +892,8 @@
               "jobId": "sync",
               "runsOn": "ubuntu-latest",
               "triggers": ["workflow_run", "workflow_dispatch"],
-              "verdict": "needs-image",
-              "missing": ["gh"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/rate-sync.yml:113"
             }
           ]
@@ -950,16 +951,16 @@
               "jobId": "refresh",
               "runsOn": "ubuntu-latest",
               "triggers": ["schedule", "workflow_dispatch"],
-              "verdict": "needs-image",
-              "missing": ["gcc", "gh"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/catalog-refresh.yml:232"
             },
             {
               "jobId": "failure_issue",
               "runsOn": "ubuntu-latest",
               "triggers": ["schedule", "workflow_dispatch"],
-              "verdict": "needs-image",
-              "missing": ["gh"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/catalog-refresh.yml:546"
             }
           ]
@@ -971,16 +972,16 @@
               "jobId": "unit_tests",
               "runsOn": "ubuntu-latest",
               "triggers": ["push", "pull_request"],
-              "verdict": "needs-image",
-              "missing": ["gcc"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/ci.yml:61"
             },
             {
               "jobId": "opencode_e2e",
               "runsOn": "ubuntu-latest",
               "triggers": ["push", "pull_request"],
-              "verdict": "needs-image",
-              "missing": ["gcc"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/ci.yml:127"
             },
             {
@@ -1042,8 +1043,8 @@
               "jobId": "release",
               "runsOn": "ubuntu-latest",
               "triggers": ["push", "workflow_dispatch"],
-              "verdict": "needs-image",
-              "missing": ["gcc"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/linux-release.yml:48"
             }
           ]
@@ -1069,8 +1070,8 @@
               "jobId": "dispatch",
               "runsOn": "ubuntu-latest",
               "triggers": ["push", "pull_request", "workflow_dispatch"],
-              "verdict": "needs-image",
-              "missing": ["gh"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/rate-drift-dispatch.yml:73"
             }
           ]
@@ -1107,8 +1108,8 @@
               "jobId": "discover",
               "runsOn": "ubuntu-latest",
               "triggers": ["pull_request", "push"],
-              "verdict": "needs-image",
-              "missing": ["python3"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/guards.yml:35"
             },
             {
@@ -1131,8 +1132,8 @@
               "jobId": "complete",
               "runsOn": "ubuntu-latest",
               "triggers": ["pull_request", "push"],
-              "verdict": "needs-image",
-              "missing": ["python3"],
+              "verdict": "runnable",
+              "missing": [],
               "evidence": ".github/workflows/guards.yml:223"
             }
           ]

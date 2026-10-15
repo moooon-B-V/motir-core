@@ -188,10 +188,26 @@ else
 fi
 
 # The derived toolchain, checked as present rather than assumed.
-for bin in node npm npx corepack git jq curl unzip zip tar docker dockerd containerd runc setpriv sudo; do
+for bin in node npm npx corepack git jq curl unzip zip tar docker dockerd containerd runc setpriv sudo gh gcc make python3; do
   if inspect "command -v ${bin} >/dev/null"; then ok "${bin} on PATH"
   else fail "${bin} is missing from the image"; fi
 done
+
+# The tools baked for Motir's own private repositories (MOTIR-8710): each must
+# RUN in the built image, not merely sit on PATH — a broken package link or a
+# missing shared library is exactly what `command -v` cannot see.
+for check in 'gh --version' 'gcc --version' 'make --version' 'python3 --version'; do
+  if inspect "${check} >/dev/null"; then ok "\`${check}\` exits 0"
+  else fail "\`${check}\` fails in the built image"; fi
+done
+
+# cgo is the reason build-essential is here (motir-gateway's go-sqlite3): a C
+# toolchain that cannot compile and link a trivial program does not serve it.
+if inspect 'printf "int main(void){return 0;}\n" > /tmp/t.c && gcc -o /tmp/t /tmp/t.c && /tmp/t'; then
+  ok "gcc compiles and links a C program"
+else
+  fail "gcc cannot compile and link a C program — cgo builds would fall back to CGO_ENABLED=0"
+fi
 
 if inspect 'node --version | grep -q "^v22\."'; then
   ok "node is v22 (setup-node's requested major)"

@@ -358,3 +358,42 @@ fallback (`missing: ["unverified"]`) was not needed.
 | `ci.yml`                          | `build`              | `${{ vars.MOTIR_RUNNER |         | 'ubuntu-latest' }}` | runnable | —   | `.github/workflows/ci.yml:121`                         |
 | `ci.yml`                          | `e2e`                | `${{ vars.MOTIR_RUNNER |         | 'ubuntu-latest' }}` | runnable | —   | `.github/workflows/ci.yml:173`                         |
 | `cleanup-preview-deployments.yml` | `remove-deployments` | `${{ vars.MOTIR_RUNNER |         | 'ubuntu-latest' }}` | runnable | —   | `.github/workflows/cleanup-preview-deployments.yml:94` |
+
+## Image extension
+
+**Card:** MOTIR-8710. The work set is the union of `missing` over `needs-image`
+jobs in **private** repositories only. A public repository never requests the
+fleet, so its gaps are out of scope.
+
+```sh
+jq -r '.repos | to_entries[] | select(.value.visibility=="private") | .value
+  | .. | objects | select(.verdict? == "needs-image") | .missing[]' \
+  lib/ciFleet/fleetJobInventory.json | sort | uniq -c
+```
+
+At the base (the inventory as committed): `1 binfmt-misc · 4 gcc · 5 gh · 2 python3`.
+After this change: `1 binfmt-misc`.
+
+| Slug          | Disposition                                                                                                                                                                                                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gh`          | **Baked** as Ubuntu's own `gh` package (noble/universe, 2.45.0) in the base apt list, at `infra/ci-runner/Dockerfile:190`. It is pinned the way every apt entry in the file is, through the base image digest.                                                                                                   |
+| `gcc`         | **Baked** as `build-essential` (gcc, g++, make, libc6-dev) at `Dockerfile:186`. `assert-image.sh --image` also compiles and links a C program, because cgo is the reason it is there.                                                                                                                            |
+| `python3`     | **Baked** at `Dockerfile:198`. **This deviates from the inventory's recommendation** (add `actions/setup-python` to the two jobs). That fix is a workflow edit in motir-meta, which this card may not make, and the jobs never install python themselves. Baking costs one apt package and closes both jobs now. |
+| `binfmt-misc` | **Not cleared.** It is a capability of the fleet machine's kernel, not of the image, so it stays `needs-image` until somebody runs a privileged `tonistiigi/binfmt` install on a live fleet machine. Recorded in the Dockerfile's "NOT installed" notes.                                                         |
+
+**Jobs flipped to `runnable` (10):**
+
+- motir-ai: `rate-drift.yml` `guard-on-live-artifact`, `rate-sync.yml` `sync`.
+- motir-gateway: `catalog-refresh.yml` `refresh` and `failure_issue`, `ci.yml` `unit_tests` and `opencode_e2e`, `linux-release.yml` `release`, `rate-drift-dispatch.yml` `dispatch`.
+- motir-meta: `guards.yml` `discover` and `complete`.
+
+**Private-repository jobs still not `runnable` (3):**
+
+- motir-gateway `docker-image.yml` `push_to_registries` (`binfmt-misc`, above).
+- motir-gateway `macos-release.yml` `release` (`cannot-host`).
+- motir-gateway `windows-release.yml` `release` (`cannot-host`).
+
+The manifest's `imageDockerfileBlob` is `git hash-object infra/ci-runner/Dockerfile`
+at this change. The image was not built in this session, which has a Docker client
+but no daemon. The `--image` assertions run in `runner-image.yml` on the pull
+request, and that run is the build proof.
