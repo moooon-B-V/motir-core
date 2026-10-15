@@ -235,6 +235,7 @@
     "noteShowLess": "Show less",
     "field_description": "Description",
     "field_explanation": "Explanation",
+    "field_todos": "Steps",
     "field_links": "Dependencies",
     "field_parent": "Parent",
     "field_targetRepo": "Repository",

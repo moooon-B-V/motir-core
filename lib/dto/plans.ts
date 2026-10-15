@@ -339,14 +339,12 @@ export interface PlanItemProposedFields {
    * to-do list, proposed with the card so the reviewer reads what approve will
    * write (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1).
    *
-   * `add` ONLY, and that is a DECISION rather than an omission (AMENDMENT 14 D2):
-   * {@link PlanItemPatch} deliberately has no twin, because a committed card's
-   * list carries a PERSON'S PROGRESS — every row has `doneAt` / `doneById` — and
-   * a plan is not the editor of somebody's progress. A re-plan that overwrote
-   * four ticked rows would be the day the checkbox stopped meaning anything, and
-   * it would happen under one approval by someone reading titles. The doors that
-   * DO edit a live card's list are the item page's own section and the
-   * item-scoped assistant (MOTIR-1344).
+   * Since MOTIR-8668 (AMENDMENT 27, which overturns AMENDMENT 14 D2) a `modify`
+   * may carry it too — {@link PlanItemPatch.todos} REPLACES a committed card's
+   * list at approve. D2 kept the list off the patch because ticked rows carry a
+   * person's progress; AMENDMENT 27 keeps that cost VISIBLE instead of
+   * forbidding it: the review's change row and `get_plan` both say how many
+   * steps the replacement drops and how many of them were ticked.
    *
    * Validated at BOTH write boundaries against the STORE's own caps —
    * `lib/plans/validateProposedTodos.ts`, importing the three constants from
@@ -477,6 +475,26 @@ export interface PlanItemPatch {
    * Applied by `applyModify` with a `difficulty` revision diff cell.
    */
   difficulty?: WorkItemDifficultyDto | null;
+  /**
+   * REPLACE the target's ORDERED STEPS (MOTIR-8668; `agent-authored-plans.md`
+   * AMENDMENT 27, overturning AMENDMENT 14 D2) — the `modify` mirror of
+   * {@link PlanItemProposedFields.todos}, so a re-plan of a `manual` card can
+   * give it the steps the card is missing on the plan a person approves.
+   *
+   * A REPLACEMENT, never a merge: at approve the target's list becomes exactly
+   * this array, in order, with no row ticked, and every prior row is deleted.
+   * Sparse at the KEY: absent leaves the list untouched; an explicit `[]` or
+   * `null` CLEARS it. Validated against the store's caps through
+   * `validateProposedTodos`, and refused when the TARGET is (or is re-kinded
+   * to) a container — at the append, the correction, and at approve as
+   * `todos_on_container`. NOT a mark key: a `modify` of a `done` / `cancelled`
+   * card that carries it is refused `PLAN_TARGET_IMMUTABLE`.
+   *
+   * The progress it discards is shown, not hidden: the review's `todos` change
+   * row reads the live count, and `get_plan` prints how many steps the
+   * replacement drops and how many of them were ticked.
+   */
+  todos?: ProposedTodoInput[] | null;
   /**
    * RE-PIN the target's repo (MOTIR-1884) — the `modify` mirror of the `add`
    * path's {@link PlanItemProposedFields.targetRepo}, so a re-plan that moves work
@@ -655,6 +673,7 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'storyPoints',
   'estimateMinutes',
   'difficulty',
+  'todos',
   'targetRepo',
   'targetRepos',
   'targetRepositories',

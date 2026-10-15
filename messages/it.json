@@ -235,6 +235,7 @@
     "noteShowLess": "Mostra meno",
     "field_description": "Descrizione",
     "field_explanation": "Spiegazione",
+    "field_todos": "Passaggi",
     "field_links": "Dipendenze",
     "field_parent": "Elemento padre",
     "field_targetRepo": "Repository",

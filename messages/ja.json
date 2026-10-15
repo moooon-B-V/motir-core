@@ -235,6 +235,7 @@
     "noteShowLess": "表示を減らす",
     "field_description": "説明",
     "field_explanation": "理由",
+    "field_todos": "手順",
     "field_links": "依存関係",
     "field_parent": "親",
     "field_targetRepo": "リポジトリ",

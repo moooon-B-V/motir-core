@@ -549,6 +549,18 @@ const patchSchema = z
           DIFFICULTY_DESCRIPTION +
           ' Judged on the target’s MERGED kind. An explicit `null` clears it.',
       ),
+    todos: z
+      .array(proposedTodoSchema)
+      .nullable()
+      .optional()
+      .describe(
+        'REPLACE the target’s ordered steps (its to-do list). Approve makes the list exactly ' +
+          'this array, in order, none ticked, and DELETES every existing row — ticked ones ' +
+          'included; the review and `get_plan` show how many steps that drops and how many ' +
+          'were ticked. Omit the key to leave the list alone; `[]` or `null` clears it. Leaf ' +
+          'kinds only (judged on the target’s MERGED kind). Not a mark key: a `modify` of a ' +
+          'done or cancelled card that carries it is refused.',
+      ),
     targetRepo: z
       .string()
       .nullable()

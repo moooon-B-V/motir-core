@@ -527,7 +527,16 @@ export type PlanGrammarViolation =
    * path refuses it here, by name, rather than clearing a field nobody asked to
    * clear. The patch fixes it with `type: null`.
    */
-  | 'type_on_container';
+  | 'type_on_container'
+  /**
+   * A `modify` whose `patch.todos` REPLACES the step list of a target that is a
+   * container in the projected tree (MOTIR-8668; `agent-authored-plans.md`
+   * AMENDMENT 27). The proposal doors refuse it with `INVALID_PROPOSAL`; this
+   * reason is for the one path they cannot see, a target re-kinded to a
+   * container after the append. Approve writes the rows directly, so without it
+   * a story would carry the to-do list every other door refuses it.
+   */
+  | 'todos_on_container';
 
 /*
  * ⚠️ `subject_on_container` WAS A MEMBER AND IS RETIRED (MOTIR-5607).
@@ -566,6 +575,7 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   malformed_subject: true,
   difficulty_on_container: true,
   type_on_container: true,
+  todos_on_container: true,
 };
 
 /** {@link PlanGrammarViolation}'s members as an array — see the record above. */
