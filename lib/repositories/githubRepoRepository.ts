@@ -629,6 +629,16 @@ export const githubRepoRepository = {
     });
   },
 
+  /** Every mirror row for one GitHub repository id, across installations,
+   *  oldest first. The fleet intake's connected-org fallback (MOTIR-8720) reads it
+   *  to find the ONE row a repository is mirrored under when the delivery came in
+   *  on an installation that has no mirror row of its own; the caller refuses
+   *  zero or several. `tx` because `github_repo`'s RLS admits it only under
+   *  `withSystemContext`. */
+  async listByRepoId(repoId: string, tx: Prisma.TransactionClient): Promise<GithubRepo[]> {
+    return tx.githubRepo.findMany({ where: { repoId }, orderBy: { id: 'asc' } });
+  },
+
   /** Create-or-refresh one selected repo, keyed on the unique
    *  `(installation_id, repo_id)` pair. `provider` defaults to the column default
    *  (`'github'`) when omitted; a GitLab project selection passes `'gitlab'`

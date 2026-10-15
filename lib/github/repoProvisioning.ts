@@ -337,6 +337,20 @@ async function resolveProvisioningInstallationId(org: string): Promise<string> {
   return installationId;
 }
 
+/**
+ * The provisioning App's installation id on `org`, read with the App JWT
+ * (`GET /orgs/{org}/installation`) — the same resolver `provisioningAuth()` uses,
+ * exported for a caller that must PROVE a delivery's installation is the
+ * provisioning App's on some org (MOTIR-8720: the fleet intake's connected-org
+ * fallback). Positive results are cached per org; a 404 (the App is not
+ * installed there) is a `RepoProvisioningApiError` with that status, a transport
+ * failure one with `status: null`, and an unwired Studio key
+ * `RepoProvisioningNotConfiguredError`.
+ */
+export function provisioningInstallationIdFor(org: string): Promise<string> {
+  return resolveProvisioningInstallationId(org);
+}
+
 /** One GitHub call, with transport failures normalized to the typed error. */
 async function request(
   url: string,
