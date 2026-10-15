@@ -56,6 +56,15 @@ export const GUIDE_ROWS_MAX = 100;
 export const GUIDE_CONTEXT_TURNS_MAX = 40;
 /** The longest prompt for the person's LOCAL agent (motir-ai: 2 000; A3.9 (a)). */
 export const GUIDE_AGENT_PROMPT_MAX = 2_000;
+/** The longest re-plan request the guide writes on a `needs_replan` offer
+ *  (MOTIR-8685; motir-ai: 4 000). It is sent verbatim as the planner's first turn. */
+export const GUIDE_REPLAN_REQUEST_MAX = 4_000;
+/** The most ancestors the context carries for the guided card, root → parent; when
+ *  capped, the NEAREST survive (the tree is capped at 4 levels, so a real chain
+ *  never reaches this). */
+export const GUIDE_ANCESTORS_MAX = 8;
+/** A work-item key as the guide names a re-plan target: `<PROJECT>-<n>`. */
+const GUIDE_TARGET_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,31}-\d{1,9}$/;
 
 // ── Out: the context core sends ────────────────────────────────────────────────
 
@@ -95,12 +104,27 @@ export interface GuideContext {
      *  card (MOTIR-7800) — so the model cites a known bug instead of filing it
      *  again. A `file_bug` whose title matches one is refused with its key. */
     openBugs: GuideOpenBug[];
+    /** The card's ancestors, root → parent, in the same project (MOTIR-8685).
+     *  Empty for a root or folder-filed card. */
+    ancestors: GuideContextAncestor[];
   };
   todos: { temporary: boolean; rows: GuideContextRow[] };
   turns: GuideContextTurn[];
   /** The CURRENT (latest `user`) turn's files, resolved (`guide-turn-files.md`
    *  A3.4). Absent when the turn carried none. */
   files?: GuideContextFile[];
+}
+
+/** One ancestor of the guided card, root → parent (MOTIR-8685: so the guide can
+ *  choose the parent as the re-plan target, and know when an ancestor is finished).
+ *  `statusCategory` is the status's CATEGORY in the project's workflow, never its
+ *  literal key. */
+export interface GuideContextAncestor {
+  key: string;
+  title: string;
+  type: string | null;
+  status: string | null;
+  statusCategory: string | null;
 }
 
 /** A known, not-done bug linked `relates_to` the guided card. */
@@ -122,6 +146,8 @@ export interface GuideCardInput {
   pullRequests: ReadonlyArray<{ url: string | null; state: string | null }>;
   /** The open bugs related to the card; absent reads as none. */
   openBugs?: readonly GuideOpenBug[];
+  /** The card's ancestors, root → parent; absent reads as none. */
+  ancestors?: readonly GuideContextAncestor[];
 }
 
 export interface GuideRowInput {
@@ -158,6 +184,14 @@ export function buildGuideContext(
       openBugs: (card.openBugs ?? [])
         .slice(0, GUIDE_ROWS_MAX)
         .map((b) => ({ key: b.key, title: b.title, status: b.status })),
+      // Root → parent; when capped, the NEAREST ancestors survive.
+      ancestors: (card.ancestors ?? []).slice(-GUIDE_ANCESTORS_MAX).map((a) => ({
+        key: a.key,
+        title: a.title,
+        type: a.type,
+        status: a.status,
+        statusCategory: a.statusCategory,
+      })),
     },
     todos: {
       temporary: opts.temporary === true && rows.length > 0,
@@ -224,8 +258,11 @@ export type GuideAction =
   // Writes nothing to the card; recorded on the conversation, like `current_step`.
   | { type: 'local_agent_prompt'; rowId: string; prompt: string }
   // A3.9 (b): the change asked for would alter the card's TARGET. Edits nothing;
-  // landed like `cannot_do`, as a comment on the guided card.
-  | { type: 'needs_replan'; reason: string }
+  // landed like `cannot_do`, as a comment on the guided card. MOTIR-8685 widens it
+  // to a RE-PLAN OFFER: `requestMd` is the re-plan request the guide wrote and
+  // `targetKey` the work item it chose to re-plan. BOTH or NEITHER — a reason-only
+  // `needs_replan` (the shipped shape) still parses and offers nothing.
+  | { type: 'needs_replan'; reason: string; requestMd?: string; targetKey?: string }
   // MOTIR-7800 (decision MOTIR-7798 Q3): file ONE confirmed defect as a `bug`, as
   // the person. No kind and no project field: the landing hard-wires both.
   // `explanationMd` is written at birth by the same create; null means none.
@@ -458,8 +495,25 @@ function parseAction(raw: unknown, i: number): GuideAction {
       return out;
     }
     case 'cannot_do':
-    case 'needs_replan':
       return { type, reason: reason() };
+    case 'needs_replan': {
+      const base = { type, reason: reason() } as const;
+      const hasRequest = raw['requestMd'] !== undefined && raw['requestMd'] !== null;
+      const hasTarget = raw['targetKey'] !== undefined && raw['targetKey'] !== null;
+      if (!hasRequest && !hasTarget) return base;
+      // A half an offer is no offer: Confirm needs both the text it would send and
+      // the card it would send it on (MOTIR-8685).
+      if (!hasRequest)
+        throw new InvalidGuideTurnError(`${where}.requestMd`, 'is required with targetKey');
+      if (!hasTarget)
+        throw new InvalidGuideTurnError(`${where}.targetKey`, 'is required with requestMd');
+      const requestMd = text(raw, 'requestMd', GUIDE_REPLAN_REQUEST_MAX, where);
+      const targetKey = text(raw, 'targetKey', 50, where);
+      if (!GUIDE_TARGET_KEY_PATTERN.test(targetKey)) {
+        throw new InvalidGuideTurnError(`${where}.targetKey`, 'must be a work-item key');
+      }
+      return { ...base, requestMd, targetKey };
+    }
     case 'local_agent_prompt': {
       const v = raw['prompt'];
       if (typeof v !== 'string' || v.trim().length === 0) {
