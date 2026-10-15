@@ -310,7 +310,23 @@ interface ProjectRoadmapCanvasBaseProps {
    *   not overridden, and the consumer is told so through `onFollowDeclined` so it
    *   can offer its own way there.
    */
-  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  followTo?: {
+    key: string;
+    trail: readonly CanvasCrumb[];
+    /**
+     * `'whileOn'` only (MOTIR-8594; design Part XXVIII §28.7): what to say through
+     * the canvas's own live region when this grant MOVES NOTHING — a host turning
+     * following back on, while the canvas already stands where the planner is,
+     * still owes the reader a word. A grant that moves announces where it went.
+     */
+    announce?: string;
+    /**
+     * `'whileOn'` only (MOTIR-8594; §28.7): a grant made for a PRESS hands focus to
+     * the canvas once the requested level is the one drawn — after the move's
+     * remount, never to the level it is leaving.
+     */
+    focus?: boolean;
+  } | null;
   /**
    * HOW `followTo` IS HONOURED (MOTIR-8593, Story MOTIR-8590; design Part XXVIII).
    *
@@ -539,6 +555,21 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   nodeCues?: ReadonlyMap<string, NodeCue> | null;
   /**
+   * THE FOLLOW CONTROL (MOTIR-8594; design Part XXVIII §28.3, Table A) — drawn as
+   * the RIGHTMOST member of the bar's trips group (`canvas-bar-trips`), after the
+   * shipped offer / pill, so it never jumps when the pill comes and goes. Supplying
+   * it also shows the bar at the root. Absent, the bar is byte for byte as shipped.
+   */
+  followControl?: ReactNode;
+  /**
+   * THE TRIP RULE's follow destination (§28.3): the level *Follow the planner*
+   * goes to — a focus id, or `null` for the top level. The arrivals / in-flight
+   * pill is HIDDEN while its *Go there* would land there (its count keeps counting
+   * underneath), so no row offers two controls to one place. `undefined` (the
+   * default) applies no rule.
+   */
+  followLevelId?: string | null;
+  /**
    * The cues IN FLIGHT, with where each one is (MOTIR-7830; §26.7). An entry is
    * OFF-LEVEL when its node is not on the drawn level and it is not a `laying`
    * cue on the level the reader stands in; off-level entries are counted in the
@@ -640,6 +671,8 @@ export function ProjectRoadmapCanvas({
   arrivals = null,
   levelBand,
   nodeCues = null,
+  followControl,
+  followLevelId,
   inFlight = null,
   elsewhereOffer,
 }: ProjectRoadmapCanvasProps) {
@@ -852,7 +885,14 @@ export function ProjectRoadmapCanvas({
     null,
   );
   const [followFade, setFollowFade] = useState(false);
+  // A DRIVEN arrival withholds the cue's pop until the crossfade has ended
+  // (MOTIR-8594; design Part XXVIII §28.4): the move animates the level's opacity,
+  // the pop the node box, and the two never overlap.
+  const [cueHeld, setCueHeld] = useState(false);
   const [followAnnouncement, setFollowAnnouncement] = useState<string | null>(null);
+  const [followFocus, setFollowFocus] = useState<{ key: string; levelId: string | null } | null>(
+    null,
+  );
   if (followTo !== null && followTo.key !== followEvent?.key && followMode === 'whileOn') {
     // THE WHILE-ON ARM (MOTIR-8593) — every new key is granted. A request naming
     // the level already in view is granted and moves nothing, so a driven step
@@ -860,6 +900,7 @@ export function ProjectRoadmapCanvas({
     const last = followTo.trail[followTo.trail.length - 1] ?? null;
     const levelId = last?.id ?? null;
     const moves = levelId !== focusId;
+    if (followTo.focus) setFollowFocus({ key: followTo.key, levelId });
     setFollowEvent({
       key: followTo.key,
       granted: true,
@@ -868,6 +909,7 @@ export function ProjectRoadmapCanvas({
       reportTrail: moves ? [...followTo.trail] : null,
     });
     if (moves) {
+      setCueHeld(true);
       setFocusId(levelId);
       setCrumbs([...followTo.trail]);
       setLocalPositions({});
@@ -878,6 +920,8 @@ export function ProjectRoadmapCanvas({
       setFollowAnnouncement(
         tTarget('movedAnnouncement', { target: last?.label ?? resolvedRootLabel }),
       );
+    } else if (followTo.announce) {
+      setFollowAnnouncement(followTo.announce);
     }
   } else if (followTo !== null && followTo.key !== followEvent?.key) {
     const everGranted = followEvent?.everGranted ?? false;
@@ -949,6 +993,32 @@ export function ProjectRoadmapCanvas({
   // Release the fade once the followed level has painted, so it transitions IN
   // rather than appearing already faded. A frame, not a timer: the class does the
   // easing and this only flips the endpoint.
+  // The release's BACKSTOP: under reduced motion (or with no transition at all)
+  // no `transitionend` arrives, so the hold also ends after the crossfade's own
+  // duration plus a margin. A timer callback, not a synchronous effect setState.
+  useEffect(() => {
+    if (!cueHeld) return;
+    const id = setTimeout(() => setCueHeld(false), 300);
+    return () => clearTimeout(id);
+  }, [cueHeld]);
+  // A press's focus lands once the requested level is the one DRAWN: the level
+  // remounts per focus (`key={level:…}`), so focusing earlier would hand focus to
+  // an element about to unmount.
+  const focusedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (followFocus === null || focusedForRef.current === followFocus.key) return;
+    if ((level?.focusId ?? null) !== followFocus.levelId) return;
+    const canvas = rootRef.current?.querySelector<HTMLElement>('[role="application"]');
+    if (!canvas) return;
+    focusedForRef.current = followFocus.key;
+    canvas.focus();
+  }, [followFocus, level]);
+  const shownCues = useMemo(() => {
+    if (!cueHeld || !nodeCues) return nodeCues;
+    const still = new Map<string, NodeCue>();
+    for (const [id, cue] of nodeCues) still.set(id, { ...cue, moving: false });
+    return still;
+  }, [cueHeld, nodeCues]);
   useEffect(() => {
     if (!followFade) return;
     const id = requestAnimationFrame(() => setFollowFade(false));
@@ -1640,12 +1710,99 @@ export function ProjectRoadmapCanvas({
   // count, joined by the cues the reader cannot see. With no `inFlight` it is the
   // arrivals pill exactly as shipped.
   const drawnIds = new Set(nodes.map((n) => n.id));
-  const slot = liveSlot(
+  const liveSlotNow = liveSlot(
     arrivalsPill,
     inFlight ? offLevelInFlight(inFlight, drawnIds, focusId) : [],
   );
+  // THE TRIP RULE (MOTIR-8594; §28.3): hidden while its trip IS the follow trip.
+  const slot =
+    liveSlotNow !== null &&
+    followLevelId !== undefined &&
+    (liveSlotNow.trail[liveSlotNow.trail.length - 1]?.id ?? null) === followLevelId
+      ? null
+      : liveSlotNow;
+  // Inside the trips group the group carries the `ml-auto`, not each trip.
+  const tripPush = followControl ? '' : 'ml-auto ';
   const slotIdentifier = (trail: readonly CanvasCrumb[]) =>
     trail[trail.length - 1]?.crumbKey ?? trail[trail.length - 1]?.label ?? resolvedRootLabel;
+
+  // The bar's TRIPS — the offer, else the pill (one slot).
+  const trips = (
+    <>
+      {/* ⚠️ THE READER NAVIGATED, SO THE CANVAS DID NOT MOVE (MOTIR-6161) —
+                  and saying nothing would strand them: the plan is landing somewhere
+                  they are not looking. A quiet affordance in the bar's own row, never
+                  a toast and never a modal, and it never moves anything by itself.
+                  Taking it IS an explicit reader act, which is the one thing allowed
+                  to move a reader who has navigated. */}
+      {offer !== null && (
+        <button
+          type="button"
+          data-testid="canvas-follow-offer"
+          onClick={() => {
+            const next = offer.trail;
+            // An elsewhere offer needs no clearing: once the reader stands
+            // where the plan is, it stops arming by itself.
+            if (offer === declined) setDeclined(null);
+            onReaderNavigatedRef.current?.('pick');
+            setCrumbs([...next]);
+            setFocusId(next[next.length - 1]?.id ?? null);
+            setLocalPositions({});
+            setSelectedId(null);
+            setHighlightId(null);
+            setShowChangesOverride(null);
+            suppressedLevelRef.current = levelKey(next[next.length - 1]?.id ?? null);
+            setFollowFade(true);
+            setFollowAnnouncement(
+              tTarget('movedAnnouncement', {
+                target: next[next.length - 1]?.label ?? resolvedRootLabel,
+              }),
+            );
+          }}
+          className={`${tripPush}inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)`}
+        >
+          <span
+            aria-hidden="true"
+            className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
+          />
+          {tTarget('goToTarget', {
+            identifier:
+              offer.trail[offer.trail.length - 1]?.crumbKey ??
+              offer.trail[offer.trail.length - 1]?.label ??
+              resolvedRootLabel,
+          })}
+        </button>
+      )}
+      {/* THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — ONE slot,
+                  in the follow offer's own markup. The offer WINS it when it is up: it
+                  already names where the plan lands. */}
+      {offer === null && slot !== null && (
+        <button
+          type="button"
+          data-testid="canvas-arrivals-offer"
+          onClick={() => goToArrivals(slot.trail)}
+          className={`${tripPush}inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)`}
+        >
+          <span
+            aria-hidden="true"
+            className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
+          />
+          {slot.key === 'newAndDraftingIn'
+            ? tTarget(slot.key, {
+                arrived: slot.arrived,
+                drafting: slot.drafting,
+                identifier: slotIdentifier(slot.trail),
+              })
+            : slot.key === 'layingIn'
+              ? tTarget(slot.key, { identifier: slotIdentifier(slot.trail) })
+              : tTarget(slot.key, {
+                  count: slot.count,
+                  identifier: slotIdentifier(slot.trail),
+                })}
+        </button>
+      )}
+    </>
+  );
 
   // The bar's crumb row — the whole bar without a band, row one with one.
   const breadcrumbRow = (
@@ -1715,77 +1872,13 @@ export function ProjectRoadmapCanvas({
           );
         })}
       </ol>
-      {/* ⚠️ THE READER NAVIGATED, SO THE CANVAS DID NOT MOVE (MOTIR-6161) —
-                and saying nothing would strand them: the plan is landing somewhere
-                they are not looking. A quiet affordance in the bar's own row, never
-                a toast and never a modal, and it never moves anything by itself.
-                Taking it IS an explicit reader act, which is the one thing allowed
-                to move a reader who has navigated. */}
-      {offer !== null && (
-        <button
-          type="button"
-          data-testid="canvas-follow-offer"
-          onClick={() => {
-            const next = offer.trail;
-            // An elsewhere offer needs no clearing: once the reader stands
-            // where the plan is, it stops arming by itself.
-            if (offer === declined) setDeclined(null);
-            onReaderNavigatedRef.current?.('pick');
-            setCrumbs([...next]);
-            setFocusId(next[next.length - 1]?.id ?? null);
-            setLocalPositions({});
-            setSelectedId(null);
-            setHighlightId(null);
-            setShowChangesOverride(null);
-            suppressedLevelRef.current = levelKey(next[next.length - 1]?.id ?? null);
-            setFollowFade(true);
-            setFollowAnnouncement(
-              tTarget('movedAnnouncement', {
-                target: next[next.length - 1]?.label ?? resolvedRootLabel,
-              }),
-            );
-          }}
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-        >
-          <span
-            aria-hidden="true"
-            className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
-          />
-          {tTarget('goToTarget', {
-            identifier:
-              offer.trail[offer.trail.length - 1]?.crumbKey ??
-              offer.trail[offer.trail.length - 1]?.label ??
-              resolvedRootLabel,
-          })}
-        </button>
-      )}
-      {/* THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — ONE slot,
-                in the follow offer's own markup. The offer WINS it when it is up: it
-                already names where the plan lands. */}
-      {offer === null && slot !== null && (
-        <button
-          type="button"
-          data-testid="canvas-arrivals-offer"
-          onClick={() => goToArrivals(slot.trail)}
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-        >
-          <span
-            aria-hidden="true"
-            className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
-          />
-          {slot.key === 'newAndDraftingIn'
-            ? tTarget(slot.key, {
-                arrived: slot.arrived,
-                drafting: slot.drafting,
-                identifier: slotIdentifier(slot.trail),
-              })
-            : slot.key === 'layingIn'
-              ? tTarget(slot.key, { identifier: slotIdentifier(slot.trail) })
-              : tTarget(slot.key, {
-                  count: slot.count,
-                  identifier: slotIdentifier(slot.trail),
-                })}
-        </button>
+      {followControl ? (
+        <div data-testid="canvas-bar-trips" className="ml-auto flex shrink-0 items-center gap-1.5">
+          {trips}
+          {followControl}
+        </div>
+      ) : (
+        trips
       )}
     </>
   );
@@ -1793,6 +1886,10 @@ export function ProjectRoadmapCanvas({
   return (
     <div
       ref={rootRef}
+      // The crossfade's end releases a driven arrival's cue (§28.4).
+      onTransitionEnd={(e) => {
+        if (cueHeld && e.propertyName === 'opacity') setCueHeld(false);
+      }}
       data-testid="roadmap-canvas"
       data-fullscreen={expanded || undefined}
       className={expanded ? 'fixed inset-0 z-50 bg-(--el-canvas)' : 'relative h-full w-full'}
@@ -1816,7 +1913,7 @@ export function ProjectRoadmapCanvas({
         {/* breadcrumb + Back overlay — only while drilled. At the ROOT it renders
             for the arrivals pill too (§23.7): the root crumb and the pill, and no
             Back, because there is nowhere to go back to. */}
-        {(drilled || offer !== null || slot !== null) && (
+        {(drilled || offer !== null || slot !== null || Boolean(followControl)) && (
           <nav
             aria-label={t('breadcrumb')}
             // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
@@ -2238,7 +2335,7 @@ export function ProjectRoadmapCanvas({
           ariaLabel={resolvedAriaLabel}
           motion={motion}
           animateInitial={animateInitial}
-          nodeCues={nodeCues}
+          nodeCues={shownCues}
         />
       )}
     </div>

@@ -26,6 +26,10 @@ import {
 import type { PlanApproveProgressView } from '@/components/planning/PlanApproveProgress';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
+import { FollowPlannerControl } from '@/components/planning/FollowPlannerControl';
+import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
+import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
+import { drivenFollowRequest, nextDrivenStep, type DrivenStep } from '@/lib/planning/plannerDrive';
 import { GuideWorkspaceHost } from '@/components/planning/GuideWorkspaceHost';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
 import {
@@ -292,6 +296,7 @@ function PlanWorkspaceHost({
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const tPlanReview = useTranslations('planReview');
+  const tFollow = useTranslations('planningWorkspace.follow');
   const requestWorkbenchReread = useRequestWorkbenchReread();
 
   // ── THE SURFACE SEED (MOTIR-7050) ───────────────────────────────────────────
@@ -698,6 +703,132 @@ function PlanWorkspaceHost({
   const paneReview = liveReview ?? (showsProposed ? review : null) ?? state.discardedReview ?? null;
   const paneLive = liveReview !== null;
   const paneDiscarded = !paneLive && !showsProposed && paneReview !== null;
+
+  // ── FOLLOW THE PLANNER (Story MOTIR-8590 · Subtask MOTIR-8594; design Part XXVIII) ──
+  //
+  // While the pane is LIVE the canvas is DRIVEN by the planner: the host holds the
+  // step it follows (`nextDrivenStep`, held across polls — `null` keeps the hold,
+  // so a stalled or failing read leaves the canvas where it is), a FOLLOWING flag,
+  // and an `epoch` the *Follow the planner* button bumps so the same level is asked
+  // for again. Following starts ON the first time a plan is seen live, turns OFF on
+  // the person's own navigation (`onReaderNavigated` — never `onLevelChange`, which
+  // a driven move also fires), and the whole of it ends when the plan leaves
+  // `generating`: the control plays its leaving fade, and a plan that was watched
+  // live asks the canvas for nothing afterwards (§28.2 — the one-shot triggers keep
+  // their meaning only for a plan that was never driven).
+  //
+  // ⚠️ FLAG 1 (§28.4) is NOT answered here: a sustained run of steps that each end
+  // within one poll moves the canvas every poll. No dwell rule is invented; the
+  // design leaves that call to whoever judges it at real size.
+  //
+  // ONE progress clock for the pane: the same reading drives the progress line, the
+  // canvas cues and the driven step, so the canvas never follows a step the words
+  // have stopped naming (Part XXVI §26.4).
+  const paneReading = usePlanProgressReading(paneReview?.progress ?? null, {
+    failing: state.liveFailing,
+  });
+  const paneId = paneReview?.id ?? null;
+  const [drive, setDrive] = useState<{
+    planId: string | null;
+    /** The pane was LIVE when this plan was first seen — only then is it driven. */
+    watchedLive: boolean;
+    live: boolean;
+    on: boolean;
+    epoch: number;
+    held: DrivenStep | null;
+    /** The request the last press asked for: it alone carries the resumed words. */
+    resumeKey: string | null;
+    leaving: boolean;
+  }>(() => ({
+    planId: paneId,
+    watchedLive: paneLive,
+    live: paneLive,
+    on: paneLive,
+    epoch: 0,
+    held: null,
+    resumeKey: null,
+    leaving: false,
+  }));
+  const drivenNow = useMemo(
+    () =>
+      paneLive && paneReview && paneReading && drive.planId === paneReview.id
+        ? nextDrivenStep(drive.held, paneReading.liveSteps, paneReview.items, proposedWord)
+        : null,
+    [paneLive, paneReview, paneReading, drive.planId, drive.held, proposedWord],
+  );
+  // Derived state, folded in render (the paneTick shape above).
+  if (drive.planId !== paneId) {
+    setDrive({
+      planId: paneId,
+      watchedLive: paneLive,
+      live: paneLive,
+      on: paneLive,
+      epoch: 0,
+      held: null,
+      resumeKey: null,
+      leaving: false,
+    });
+  } else if (drive.live !== paneLive) {
+    setDrive({ ...drive, live: paneLive, leaving: drive.watchedLive && !paneLive });
+  } else if (
+    drivenNow !== null &&
+    (drivenNow.id !== drive.held?.id ||
+      drivenNow.levelId !== drive.held?.levelId ||
+      drivenNow.trail.length !== drive.held?.trail.length)
+  ) {
+    setDrive({ ...drive, held: drivenNow });
+  }
+  const drivenPane = drive.planId === paneId && drive.watchedLive;
+  const drivenRequest = useMemo(() => {
+    const request = drivenFollowRequest(drive.held, drive.epoch);
+    if (request && request.key === drive.resumeKey) {
+      return { ...request, announce: tFollow('resumedAnnouncement'), focus: true };
+    }
+    return request;
+  }, [drive.held, drive.epoch, drive.resumeKey, tFollow]);
+  // What the pane's canvas is asked for: the driven step while live and following
+  // — until a step names a level, the shipped arrival (§23.8, one key, so granted
+  // once); NOTHING once a plan watched live has left `generating`; else the one-shot.
+  const paneFollowTo: ProjectRoadmapCanvasProps['followTo'] = drivenPane
+    ? paneLive && drive.on
+      ? (drivenRequest ?? followTo)
+      : null
+    : followTo;
+  const paneRef = useRef<HTMLDivElement>(null);
+  const followReaderNavigated = useCallback(() => {
+    setDrive((d) => (d.on ? { ...d, on: false } : d));
+  }, []);
+  const followPlanner = useCallback(() => {
+    setDrive((d) => {
+      const epoch = d.epoch + 1;
+      return {
+        ...d,
+        on: true,
+        epoch,
+        resumeKey: drivenFollowRequest(d.held, epoch)?.key ?? null,
+      };
+    });
+    // §28.7: the press hands focus to the canvas, which is where the result is.
+    // With a driven step the canvas does it (`focus` on the request below), once
+    // the level is drawn; with none nothing moves, so the canvas in view takes it.
+    if (!drive.held) {
+      paneRef.current?.querySelector<HTMLElement>('[role="application"]')?.focus();
+    }
+  }, [drive.held]);
+  const followLeft = useCallback(() => {
+    setDrive((d) => (d.leaving ? { ...d, leaving: false } : d));
+  }, []);
+  const followIdle = paneReading?.state === 'stalled' || state.liveFailing;
+  const followControl =
+    drivenPane && (paneLive || drive.leaving) ? (
+      <FollowPlannerControl
+        following={drive.on}
+        idle={followIdle}
+        leaving={!paneLive}
+        onLeft={followLeft}
+        onFollow={followPlanner}
+      />
+    ) : undefined;
   // ⚠️ A NAMED session is opened to show its plan (bug MOTIR-6289) — a To-approve row
   // or a Plans row writes `planSession`. Until the conversation has read whether a plan
   // is pending, the pane is its skeleton, NOT the roadmap: drawing `PlanChangeCanvas`
@@ -946,7 +1077,10 @@ function PlanWorkspaceHost({
               draw, and its skeleton and empty statement fill the same box as a drawn
               level. */}
           <div
-            className="relative min-h-0 flex-1 overflow-hidden"
+            ref={paneRef}
+            // The pane's width is what the follow control reads to go compact
+            // (§28.3 A10: below 32rem the glyph alone).
+            className="@container/plan-pane relative min-h-0 flex-1 overflow-hidden"
             style={{ '--canvas-foot-inset': PLAN_CONFIRM_BAR_HEIGHT } as CSSProperties}
           >
             {paneReview !== null ? (
@@ -980,7 +1114,16 @@ function PlanWorkspaceHost({
                     ? initialCanvasTrail
                     : null)
                 }
-                followTo={followTo}
+                followTo={paneFollowTo}
+                // While live the canvas is driven (MOTIR-8594): every new key is
+                // honoured, and the person's own navigation turns following off.
+                followMode={drivenPane && paneLive ? 'whileOn' : undefined}
+                onReaderNavigated={drivenPane && paneLive ? followReaderNavigated : undefined}
+                followControl={followControl}
+                followLevelId={
+                  drivenPane && paneLive && drive.held ? drive.held.levelId : undefined
+                }
+                progressReading={paneReading}
                 readerHasNavigated={readerHasNavigated}
                 onCanvasLevelChange={noteReaderLevel}
                 live={paneLive}

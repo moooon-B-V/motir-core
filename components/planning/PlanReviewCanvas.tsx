@@ -130,13 +130,17 @@ export interface PlanReviewCanvasProps {
   /** Forwarded verbatim to the foundation — see its own contract. Together with
    *  `readerHasNavigated` this is how a swapped-in canvas declines a follow rather
    *  than yanking the reader, and how the bar comes to offer it. */
-  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  followTo?: ProjectRoadmapCanvasProps['followTo'];
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
   /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followMode`. */
   followMode?: ProjectRoadmapCanvasProps['followMode'];
   /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `onReaderNavigated`. */
   onReaderNavigated?: ProjectRoadmapCanvasProps['onReaderNavigated'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followControl`. */
+  followControl?: ProjectRoadmapCanvasProps['followControl'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followLevelId`. */
+  followLevelId?: ProjectRoadmapCanvasProps['followLevelId'];
   onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**
    * The plan is being WRITTEN and this canvas is drawing it live (MOTIR-6300;
@@ -190,6 +194,8 @@ export function PlanReviewCanvas({
   readerHasNavigated = false,
   followMode,
   onReaderNavigated,
+  followControl,
+  followLevelId,
   onLevelChange,
   live = false,
   offerPlanElsewhere = false,
@@ -663,6 +669,8 @@ export function PlanReviewCanvas({
         readerHasNavigated={readerHasNavigated}
         followMode={followMode}
         onReaderNavigated={onReaderNavigated}
+        followControl={followControl}
+        followLevelId={followLevelId}
         onLevelChange={onLevelChange}
         // The level the reviewer is standing on FOLLOWS its container through
         // approve, rather than being left addressed by an id that has stopped

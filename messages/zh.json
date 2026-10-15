@@ -8090,6 +8090,11 @@
         },
         "hint": "你的下一条消息会开始追问。"
       }
+    },
+    "follow": {
+      "following": "正在跟随规划器",
+      "resume": "跟随规划器",
+      "resumedAnnouncement": "已重新跟随规划器"
     }
   },
   "codeHealth": {
