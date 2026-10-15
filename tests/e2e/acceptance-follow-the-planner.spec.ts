@@ -138,6 +138,19 @@ const carries = (b: PlanReviewDto, ...sessionKeys: string[]) =>
 const itemOf = (b: PlanReviewDto, planItemId: string) =>
   b.items.find((i) => i.planItemId === planItemId);
 
+// The pane polls with `?since=` (MOTIR-8127): while nothing it shows has moved,
+// the answer is `{ unchanged: true }` and carries no review at all. Such an
+// answer never satisfies a CHANGE (it has no steps, items or status to read, so
+// a negative predicate would pass on it vacuously) — and it always satisfies a
+// HOLD, because whatever held at the last full read still holds.
+const isUnchanged = (b: unknown) => (b as { unchanged?: unknown }).unchanged === true;
+/** The next poll whose FULL review satisfies `until`. Arm it before the door call. */
+const polled = (page: Page, planId: string, until: (b: PlanReviewDto) => boolean) =>
+  planPolled(page, planId, (b) => !isUnchanged(b) && until(b));
+/** The next poll that still holds `still`: an unchanged answer, or a full review satisfying it. */
+const held = (page: Page, planId: string, still: (b: PlanReviewDto) => boolean) =>
+  planPolled(page, planId, (b) => isUnchanged(b) || still(b));
+
 /** Open a card's quick view through the canvas door. */
 async function openQuickView(page: Page, title: string): Promise<void> {
   const card = node(page, title);
@@ -271,7 +284,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
 
     await chapter('The canvas follows the planner, level by level', async () => {
       await openPlanningTab(page);
-      const opened = planPolled(page, planId, (b) => b.status === 'generating');
+      const opened = polled(page, planId, (b) => b.status === 'generating');
       await openRow(page, planRow(page, title));
       await opened;
       await showCanvas(page);
@@ -280,18 +293,14 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       await expect(followButton(page)).toHaveCount(0);
 
       // The planner lays the story's children: the canvas goes to that level.
-      let read = planPolled(page, planId, (b) => stepOf(b.inFlightSteps, 'walk')?.kind === 'lay');
+      let read = polled(page, planId, (b) => stepOf(b.inFlightSteps, 'walk')?.kind === 'lay');
       await mcpStep(agent, planId, 'walk', 'lay', seed.storyId);
       await read;
       await expectLevel(page, S_TITLE);
       await beat();
 
       // It drafts a card one level further down: the canvas follows it there.
-      read = planPolled(
-        page,
-        planId,
-        (b) => stepOf(b.inFlightSteps, 'walk')?.targetRef === ref(t1!),
-      );
+      read = polled(page, planId, (b) => stepOf(b.inFlightSteps, 'walk')?.targetRef === ref(t1!));
       await mcpStep(agent, planId, 'walk', 'author', ref(t1!));
       await read;
       await expectLevel(page, T_TITLE);
@@ -299,7 +308,8 @@ test('the canvas follows the planner while a plan is written, stops when the rea
 
       // It settles the brief, which names no level: the canvas stays where it is.
       for (let i = 0; i < 2; i += 1) {
-        read = planPolled(page, planId, (b) => stepOf(b.inFlightSteps, 'walk')?.kind === 'settle');
+        const settled = (b: PlanReviewDto) => stepOf(b.inFlightSteps, 'walk')?.kind === 'settle';
+        read = i === 0 ? polled(page, planId, settled) : held(page, planId, settled);
         if (i === 0) await mcpStep(agent, planId, 'walk', 'settle');
         await read;
         await expectLevel(page, T_TITLE);
@@ -312,7 +322,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
     await chapter('Two cards are drafted at once — the canvas holds on the first', async () => {
       await mcpStep(agent, planId, 'walk', 'end');
       // Both started INSIDE one poll lag, with no await between them.
-      const both = planPolled(page, planId, (b) => carries(b, 'draft-s2', 'draft-s'));
+      const both = polled(page, planId, (b) => carries(b, 'draft-s2', 'draft-s'));
       await Promise.all([
         mcpStep(agent, planId, 'draft-s2', 'author', ref(b1!)),
         mcpStep(agent, planId, 'draft-s', 'author', ref(a1!)),
@@ -330,13 +340,13 @@ test('the canvas follows the planner while a plan is written, stops when the rea
 
       // Three more responses, each still carrying both: the canvas does not hop.
       for (let i = 0; i < 3; i += 1) {
-        await planPolled(page, planId, (b) => carries(b, 'draft-s2', 'draft-s'));
+        await held(page, planId, (b) => carries(b, 'draft-s2', 'draft-s'));
         await expectLevel(page, earlierLevel);
       }
       await beat();
 
       // The first draft ends: the canvas moves on to the one still being written.
-      const moved = planPolled(
+      const moved = polled(
         page,
         planId,
         (b) => !carries(b, earlierSession) && carries(b, laterSession),
@@ -357,7 +367,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         await expect(followButton(page)).toHaveCount(0);
         await closeQuickView(page);
         await expect(followState(page)).toHaveText(follow.following);
-        const ended = planPolled(page, planId, (b) => !carries(b, laterSession));
+        const ended = polled(page, planId, (b) => !carries(b, laterSession));
         await mcpStep(agent, planId, laterSession, 'end');
         await ended;
 
@@ -371,12 +381,12 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         await beat();
 
         // New drafts on other levels arrive: the canvas stays; the off-level count rises.
-        let read = planPolled(page, planId, (b) => carries(b, 'over-t'));
+        let read = polled(page, planId, (b) => carries(b, 'over-t'));
         await mcpStep(agent, planId, 'over-t', 'author', ref(t1!));
         await read;
         await expectLevel(page, EPIC);
         await expect(arrivals(page)).toHaveText(/^1 /);
-        read = planPolled(page, planId, (b) => carries(b, 'over-t', 'over-s2'));
+        read = polled(page, planId, (b) => carries(b, 'over-t', 'over-s2'));
         await mcpStep(agent, planId, 'over-s2', 'author', ref(b1!));
         await read;
         await expectLevel(page, EPIC);
@@ -402,7 +412,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       await beat();
 
       // …and it follows again: the task's draft ends, the other story's is next.
-      const moved = planPolled(page, planId, (b) => !carries(b, 'over-t') && carries(b, 'over-s2'));
+      const moved = polled(page, planId, (b) => !carries(b, 'over-t') && carries(b, 'over-s2'));
       await mcpStep(agent, planId, 'over-t', 'end');
       await moved;
       await expectLevel(page, S2_TITLE);
@@ -411,7 +421,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
 
     await chapter('A stalled plan, and a failing read, hold the canvas still', async () => {
       const at = await backdatePlanActivity(planId, PLAN_STALLED_AFTER_MS + 60_000);
-      await planPolled(
+      await polled(
         page,
         planId,
         (b) => b.lastActivityAt !== undefined && Date.parse(b.lastActivityAt) <= at.getTime(),
@@ -435,7 +445,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       await mcpStep(agent, planId, 'resume-s', 'author', ref(a1!));
       await failedTwice;
       await expectLevel(page, S2_TITLE);
-      const recovered = planPolled(
+      const recovered = polled(
         page,
         planId,
         (b) => !carries(b, 'over-s2') && carries(b, 'resume-s'),
@@ -455,7 +465,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
           'waiting',
         );
         await recordTyping(page);
-        const arrived = planPolled(page, planId, (b) => itemOf(b, a1!)?.descriptionMd === BODY);
+        const arrived = polled(page, planId, (b) => itemOf(b, a1!)?.descriptionMd === BODY);
         await tool(agent, UPDATE_PLAN_ITEM_TOOL_NAME, {
           planId,
           planItemId: a1,
@@ -498,11 +508,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       'Under reduced motion the canvas moves without a transition, and nothing types',
       async () => {
         await page.emulateMedia({ reducedMotion: 'reduce' });
-        const moved = planPolled(
-          page,
-          planId,
-          (b) => !carries(b, 'resume-s') && carries(b, 'calm'),
-        );
+        const moved = polled(page, planId, (b) => !carries(b, 'resume-s') && carries(b, 'calm'));
         await mcpStep(agent, planId, 'resume-s', 'end');
         await mcpStep(agent, planId, 'calm', 'author', ref(b1!));
         await moved;
@@ -511,11 +517,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
 
         await openQuickView(page, B1);
         await recordTyping(page);
-        const arrived = planPolled(
-          page,
-          planId,
-          (b) => itemOf(b, b1!)?.descriptionMd === BODY_REDUCED,
-        );
+        const arrived = polled(page, planId, (b) => itemOf(b, b1!)?.descriptionMd === BODY_REDUCED);
         await tool(agent, UPDATE_PLAN_ITEM_TOOL_NAME, {
           planId,
           planItemId: b1,
@@ -533,7 +535,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
     );
 
     await chapter('The plan is proposed — the control goes, and the canvas stays put', async () => {
-      const proposed = planPolled(page, planId, (b) => b.status !== 'generating');
+      const proposed = polled(page, planId, (b) => b.status !== 'generating');
       await tool(agent, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [], final: true });
       const body = (await ((await proposed) as Response).json()) as PlanReviewDto;
       expect(body.status).toBe('planned');
@@ -573,7 +575,7 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         ['page-2', c2!],
         ['page-3', c1!],
       ] as const) {
-        const read = planPolled(page, siblingId, (b) => carries(b, session));
+        const read = polled(page, siblingId, (b) => carries(b, session));
         await mcpStep(agent, siblingId, 'page-1', 'end');
         await mcpStep(agent, siblingId, session, 'author', ref(target));
         await read;
