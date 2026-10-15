@@ -174,6 +174,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // (MOTIR-688). Checked before the run is read, so it is not an existence
   // oracle: the answer is the same for a run that exists and one that does not.
   DISPATCH_RUN_TOKEN_OUT_OF_SCOPE: 403,
+  // 422 — a run-found report's reason empty or over its bound (MOTIR-8698). The body
+  // schema refuses it first as `INVALID_BODY`; this row is the service's own guard.
+  RUN_FOUND_REPORT_REASON_INVALID: 422,
   // ── MOTIR-6821, a hosted REVIEW run's prompt and verdict (`hosted-agent-run.md` §8) ──
   // 403 — not a review run's own credential: a PAT, a device token, a BUILD run's token.
   REVIEW_RUN_TOKEN_REQUIRED: 403,

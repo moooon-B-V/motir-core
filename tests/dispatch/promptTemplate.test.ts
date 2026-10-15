@@ -2705,7 +2705,16 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
       const text = block(policy);
       expect(text.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME)).toHaveLength(2);
       const four = stepText(text, 4);
-      expect(four).toMatch(/^ {2}4\. Report it with the report_unbuildable_target tool/);
+      expect(four).toMatch(/^ {2}4\. Report it\. If the environment variable MOTIR_AGENT_REPORT/);
+      // The run's own file FIRST (MOTIR-8698): the CLI reports with the run's
+      // credential, so an agent with no Motir token or MCP still reaches it.
+      expect(four).toContain('"unbuildable": "<the SAME text as your step-3 comment>"');
+      expect(four.indexOf('"unbuildable"')).toBeLessThan(
+        four.indexOf(REPORT_UNBUILDABLE_TARGET_TOOL_NAME),
+      );
+      expect(four).toMatch(
+        /If the variable is unset, report it with the report_unbuildable_target tool/,
+      );
       expect(stepText(text, 3)).toContain('3. Comment the finding on PROD-99');
       expect(four).toMatch(/projectKey:\s+PROD\b/);
       expect(four).toMatch(/targetKey:\s+PROD-99\b/);
@@ -3029,7 +3038,7 @@ describe('THE CARD IS WRONG — the WHAT test, BUILD THROUGH and STOP (MOTIR-865
       expect(stop, name).toContain('Do NOT RESTRUCTURE THE PLAN');
       expect(stop, name).toContain('Comment the finding on PROD-7');
       expect(stop, name).toMatch(
-        /Report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-7 reason:/,
+        /report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-7 reason:/,
       );
       expect(prompt.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME), name).toHaveLength(2);
       if (policy.replan) {

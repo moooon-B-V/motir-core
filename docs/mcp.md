@@ -3953,6 +3953,13 @@ report on the same leg returns the same acknowledgement and records nothing more
 Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries — a token
 from `motir login` reaches it without widening the grant.
 
+**A dispatched agent usually does not call it** (MOTIR-8698, the record's
+AMENDMENT 1). An agent `motir run` starts is handed `$MOTIR_AGENT_REPORT`, writes
+its reason there as `"unbuildable"`, and the CLI makes the same report with the
+run's own credential through `POST /api/v1/dispatch-runs/{id}/unbuildable` — the
+only way a hosted or agent-instance run can, since its agent holds no Motir token.
+This tool is the fallback for an agent with no such file.
+
 #### `record_run_discrepancy`
 
 A dispatched runner's record of **what it built differently from the plan**

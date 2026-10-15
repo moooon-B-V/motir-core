@@ -271,3 +271,53 @@ describe('agent_exited carries the agent’s self-reported model TOP-LEVEL (MOTI
     expect(exited).toHaveProperty('model', null);
   });
 });
+
+describe('the run-found report rides the leg, before any verdict settles it (MOTIR-8698)', () => {
+  async function legWith(unbuildableReason: string | null, exitCode = 0) {
+    const order: string[] = [];
+    const reports: Array<[string, string]> = [];
+    const primary = target();
+    await runDispatchLeg({
+      client: {
+        getWorkItem: async () => ({ item: { status: 'planning' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [] },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({ exitCode, signal: null, model: 'm', unbuildableReason }),
+      run: git(false),
+      reporter: {
+        event: (e: { kind: string }) => order.push(e.kind),
+        reportUnbuildable: async (key: string, reason: string) => {
+          order.push('report');
+          reports.push([key, reason]);
+        },
+      } as never,
+    });
+    return { order, reports };
+  }
+
+  it('reports the agent’s reason on the leg’s card, after agent_exited and before leg_verdict', async () => {
+    const { order, reports } = await legWith('no such table');
+    expect(reports).toEqual([['PROD-1', 'no such table']]);
+    expect(order.indexOf('agent_exited')).toBeLessThan(order.indexOf('report'));
+    expect(order.indexOf('report')).toBeLessThan(order.indexOf('leg_verdict'));
+  });
+
+  it('reports even when the agent then exited non-zero', async () => {
+    const { reports } = await legWith('no such table', 3);
+    expect(reports).toHaveLength(1);
+  });
+
+  it('reports nothing when the agent gave no reason', async () => {
+    const { reports } = await legWith(null);
+    expect(reports).toHaveLength(0);
+  });
+});

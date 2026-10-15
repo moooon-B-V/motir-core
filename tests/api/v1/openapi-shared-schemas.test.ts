@@ -492,7 +492,10 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // the flat `GET …/ready` the lanes replaced.
     // 70 with MOTIR-6821's review run's two routes — `getWorkItemReviewPrompt`
     // (`project:browse`) and `submitWorkItemAgentReview` (`work_item:edit`).
-    expect(V1_OPERATIONS.length).toBe(70);
+    // 71 with MOTIR-8698's `POST …/dispatch-runs/{id}/unbuildable`
+    // (`reportDispatchRunUnbuildable`, `work_item:edit`) — the run-found report,
+    // answered to a hosted run's own credential.
+    expect(V1_OPERATIONS.length).toBe(71);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

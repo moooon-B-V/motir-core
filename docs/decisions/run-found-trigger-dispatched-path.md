@@ -215,3 +215,58 @@ unchanged.
   guards own the first, and MOTIR-6225's verdict owns the second.
 - **How Motir staff read a customer's verbatim reason** when they debug a customer-tenant bug.
   That is a support-access question, not a filing question.
+
+## AMENDMENT 1 — the report reaches the server in every lane, and Motir's own MCP plans file (MOTIR-8698, 2026-10-15)
+
+**What was wrong.** The record assumed _"The runner reaches motir-core only through that MCP
+server"_ with a `CLI_TOKEN_GRANT` token. That held only for a tenant running the agent on their
+own machine with a Motir MCP configured. A hosted run's agent and an agent-instance run's agent
+hold no Motir token (`AGENT_RUN_WITHHELD_ENV`), and `/api/mcp` refuses a run token
+(`lib/mcp/auth.ts`), so step 4 had nothing to land on. A local agent with no Motir MCP had the
+same problem. And the precondition _"only a plan motir-ai made fires a bug"_ excluded every one of
+Motir's own plans, which are written by `plan.py` over the MCP (`authorSource = mcp`).
+
+**What changes.**
+
+1. **A run door.** `POST /api/v1/dispatch-runs/{id}/unbuildable`, body `{ targetKey, reason }`,
+   gated `work_item:edit` and admitted to a run token bound to its own run
+   (`lib/hostedRuns/runTokenRoutes.ts`, binding `own_run`). It runs the same service as the MCP
+   tool (`runFoundReportService.reportUnbuildableTargetForRun`). The one difference is which leg:
+   the leg `targetKey` holds on THIS run, read under the run's lock. Only the run's operator (or
+   the run's own credential) may report for it. The answer is the same acknowledgement.
+2. **The CLI makes the call, not the agent.** Step 4 of the prompt's STOP branch now tells an agent
+   that has `$MOTIR_AGENT_REPORT` to write its reason into that file as `"unbuildable"`. The CLI
+   reads it when the agent exits (`runAgent`), and the leg posts the report with the run's own
+   credential before any verdict settles the leg (`runDispatchLeg`). The MCP tool stays as the
+   fallback for a reader with no such file. One path covers rows 4, 5 and 6, because hosted runs
+   and agent-instance runs execute the CLI's own `motir run`.
+3. **Motir's own MCP plans file.** The precondition admits `mcp` as well as `native` when the
+   target is in the system principal's workspace (Motir's own). Everywhere else it is unchanged: a
+   tenant's `mcp` plan, and `manual`, `api` or `null` anywhere, never fire. The reviewer's
+   precondition on MOTIR-6226 stands for every tenant.
+
+Nothing about WHERE a bug lands changes. It is always Motir's planner-bug home, filed as the system
+principal, and the `customer_workspace` regime and its allowlist are unchanged.
+
+### The rows, as they stand now
+
+| #   | Who runs, and how                                                 | How the report reaches motir-core                                                                     | Planning bug filed?                                                                      |
+| --- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1   | Motir team, runbook (`motir run` skill, motir-meta `run.md`)      | The runbook reads the verdict and files with `create_work_item` into `@planner-bug-home` (MOTIR-6231) | ✅ into Motir's `Bugs / Planning bugs`                                                   |
+| 2   | Motir team, CLI dispatch (`motir run/auto`)                       | The CLI posts the run door with the developer's credential                                            | ✅ for a `native` **or `mcp`** plan, unchanged since approval (`motir_workspace` regime) |
+| 3   | Tenant, CLI dispatch on their own machine, agent with a Motir MCP | The CLI posts the run door; the agent may also call the tool (one record per leg)                     | ✅ for a `native` plan, unchanged (`customer_workspace` regime)                          |
+| 4   | Tenant, CLI dispatch, agent with no Motir MCP                     | The CLI posts the run door from the agent's `$MOTIR_AGENT_REPORT`                                     | ✅ for a `native` plan, unchanged                                                        |
+| 5   | Hosted run (Motir cloud)                                          | The container's CLI posts the run door with the run token                                             | ✅ for a `native` plan, unchanged                                                        |
+| 6   | Run inside the user's agent instance (MOTIR-7024)                 | The instance's CLI posts the run door with the run token                                              | ✅ for a `native` plan, unchanged                                                        |
+
+The arms after the call (no open leg, `no_plan`, not admitted, `changed`, no system principal,
+admitted and `unchanged`) are the ones in [Decision](#decision), with "not `native`" read as "not
+admitted" above.
+
+### What this amendment does NOT decide
+
+- The other MCP calls the prompt asks a hosted or agent-instance agent to make (the STOP branch's
+  comment, Planning transition, `append_plan_turn` and `submit_plan_session`, and the build-through's
+  `record_run_discrepancy`). They have the same wall and are filed as **MOTIR-8722**.
+- `motir next`, which only prints the prompt for a person's own agent. No CLI is around the agent to
+  read a report file, so that agent still needs the MCP tool.

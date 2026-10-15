@@ -2512,6 +2512,25 @@ export class MotirClient {
     }
   }
 
+  /**
+   * The RUN-FOUND REPORT (MOTIR-8698) — the agent stopped because `targetKey`, a card
+   * this run holds, cannot be built as written. The server records it on the card's
+   * leg of this run and, when an approved plan shaped the card unchanged, files ONE
+   * planning bug into Motir's own planner-bug home. The answer is only whether the
+   * card had an open leg on the run.
+   */
+  async reportDispatchRunUnbuildable(args: {
+    runId: string;
+    targetKey: string;
+    reason: string;
+  }): Promise<{ recordedOnRun: boolean }> {
+    const body = await this.v1.request('reportDispatchRunUnbuildable', {
+      path: { id: args.runId },
+      body: { targetKey: args.targetKey, reason: args.reason },
+    });
+    return { recordedOnRun: body.recordedOnRun };
+  }
+
   /** CLOSE the run with its stop reason. The status is DERIVED server-side. */
   async closeDispatchRun(args: { runId: string; stopReason: DispatchStopReason }): Promise<void> {
     await this.v1.request('closeDispatchRun', {

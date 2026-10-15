@@ -351,8 +351,10 @@ export interface AgentStep {
    * Answer the prompt's self-report line the way a real agent does (MOTIR-2419):
    * write `{"model": …}` at the path in `$MOTIR_AGENT_REPORT`. Omitted, the agent
    * writes nothing — the honest "I cannot tell", which must leave a null model.
+   * `unbuildable` is the prompt's STOP step 4 (MOTIR-8698): the agent's reason
+   * for stopping, which the CLI reports with the run's credential.
    */
-  report?: { model: string };
+  report?: { model?: string; unbuildable?: string };
 }
 
 export interface FakeAgent {
@@ -440,7 +442,7 @@ const step = steps[index] ?? steps[steps.length - 1] ?? {};
 if (step.create) mkdirSync(join(process.cwd(), step.create), { recursive: true });
 
 if (step.report && process.env.MOTIR_AGENT_REPORT) {
-  writeFileSync(process.env.MOTIR_AGENT_REPORT, JSON.stringify({ model: step.report.model }));
+  writeFileSync(process.env.MOTIR_AGENT_REPORT, JSON.stringify(step.report));
 }
 
 if (step.integrate) {
