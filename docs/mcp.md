@@ -3962,10 +3962,10 @@ acceptance criteria held (`docs/decisions/run-findings-protocol.md`, the
 MOTIR-8654 amendment). It is called **once, after building and before the pull
 request**.
 
-| Input    | Type   | Required | Notes                                                                                                          |
-| -------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------- |
-| `key`    | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                           |
-| `points` | array  | yes      | 1–20 entries of `{ planAsked, built, why }`; each field is non-empty text of at most 2000 characters, trimmed. |
+| Input    | Type   | Required | Notes                                                                                                             |
+| -------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `key`    | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                              |
+| `points` | array  | yes      | 1–20 entries of `planAsked`, `built` and `why`; each field is non-empty text of at most 2000 characters, trimmed. |
 
 **Output** — the id of the card comment the server wrote, and whether the run
 record was written too:
