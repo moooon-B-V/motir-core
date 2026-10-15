@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
+  type ProjectRoadmapCanvasProps,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import {
@@ -132,6 +133,10 @@ export interface PlanReviewCanvasProps {
   followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followMode`. */
+  followMode?: ProjectRoadmapCanvasProps['followMode'];
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `onReaderNavigated`. */
+  onReaderNavigated?: ProjectRoadmapCanvasProps['onReaderNavigated'];
   onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**
    * The plan is being WRITTEN and this canvas is drawing it live (MOTIR-6300;
@@ -183,6 +188,8 @@ export function PlanReviewCanvas({
   followTo = null,
   onFollowDeclined,
   readerHasNavigated = false,
+  followMode,
+  onReaderNavigated,
   onLevelChange,
   live = false,
   offerPlanElsewhere = false,
@@ -654,6 +661,8 @@ export function PlanReviewCanvas({
         followTo={followTo}
         onFollowDeclined={onFollowDeclined}
         readerHasNavigated={readerHasNavigated}
+        followMode={followMode}
+        onReaderNavigated={onReaderNavigated}
         onLevelChange={onLevelChange}
         // The level the reviewer is standing on FOLLOWS its container through
         // approve, rather than being left addressed by an id that has stopped

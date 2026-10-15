@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Info, List, Workflow } from 'lucide-react';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
+import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
 import { Segmented } from '@/components/ui/Segmented';
 import type { PlanViewDto } from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
@@ -104,6 +105,10 @@ export interface PlanProposalViewsProps {
   followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followMode`. */
+  followMode?: ProjectRoadmapCanvasProps['followMode'];
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `onReaderNavigated`. */
+  onReaderNavigated?: ProjectRoadmapCanvasProps['onReaderNavigated'];
   onCanvasLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**
    * The plan is being WRITTEN, and this pane is drawing it as it is (MOTIR-6300;
@@ -165,6 +170,8 @@ export function PlanProposalViews({
   followTo = null,
   onFollowDeclined,
   readerHasNavigated = false,
+  followMode,
+  onReaderNavigated,
   onCanvasLevelChange,
   live = false,
   liveFailing = false,
@@ -209,6 +216,8 @@ export function PlanProposalViews({
       followTo={followTo}
       onFollowDeclined={onFollowDeclined}
       readerHasNavigated={readerHasNavigated}
+      followMode={followMode}
+      onReaderNavigated={onReaderNavigated}
       onLevelChange={onCanvasLevelChange}
       live={live}
       offerPlanElsewhere={offerPlanElsewhere}

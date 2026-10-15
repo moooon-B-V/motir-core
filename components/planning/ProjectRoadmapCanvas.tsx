@@ -299,7 +299,8 @@ interface ProjectRoadmapCanvasBaseProps {
    * React throws `Too many re-renders`. `followTo` writes once and then stops, so
    * it cannot enter that loop.
    *
-   * THE CONTRACT, and all three clauses are load-bearing:
+   * THE CONTRACT of the default `followMode: 'once'`, and all three clauses are
+   * load-bearing (`'whileOn'` drops the last two — see `followMode`):
    * - **Keyed.** A given `key` is honoured AT MOST ONCE, so a re-render with the
    *   same request is a no-op rather than a second move.
    * - **At most one move per mount.** A second target settling later does not
@@ -310,6 +311,35 @@ interface ProjectRoadmapCanvasBaseProps {
    *   can offer its own way there.
    */
   followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  /**
+   * HOW `followTo` IS HONOURED (MOTIR-8593, Story MOTIR-8590; design Part XXVIII).
+   *
+   * - **`'once'`** (the default, and every mount before this): the three clauses
+   *   above, unchanged.
+   * - **`'whileOn'`**: the CONSUMER owns whether following is on — it sends a
+   *   request while on and `null` while off — so the canvas honours EVERY NEW KEY.
+   *   Neither an earlier grant, nor the reader's own navigation, nor a seeded
+   *   `readerHasNavigated` declines it, so nothing is ever declined and
+   *   `onFollowDeclined` never fires. The same key on a re-render is still a no-op,
+   *   and a new key naming the level already in view moves nothing — no fade, no
+   *   announcement — so a driven step that stays on one level is silent. A grant
+   *   that moves REPORTS the level through `onLevelChange` (in this mode only), so
+   *   a host holding the trail stays true after a driven move; that is why a host
+   *   must turn following off on `onReaderNavigated`, never on `onLevelChange`.
+   */
+  followMode?: 'once' | 'whileOn';
+  /**
+   * THE PERSON MOVED THE CANVAS (MOTIR-8593) — fired in both follow modes, once per
+   * act, and ONLY for a move the person made: `'crumb'` (a crumb, the root crumb or
+   * the ellipsis crumb), `'back'`, `'drill'` (an explicit Open — never the
+   * auto-descend that follows it), `'search'` (a search-to-locate submit that finds
+   * a card) and `'pick'` (taking the follow offer, or the arrivals / in-flight
+   * *Go there*). Never for the canvas's own moves — a `followTo` grant, an
+   * auto-descend, a `controlledTrail` adoption, a `resolveHeldNode` re-key — and
+   * never for an act that leaves the level as it is: selecting a card, View, the
+   * Locate control, pan, zoom, full screen, dragging or Reset layout.
+   */
+  onReaderNavigated?: (via: 'crumb' | 'back' | 'drill' | 'search' | 'pick') => void;
   /**
    * The canvas DECLINED a `followTo` because the reader had already navigated.
    *
@@ -596,7 +626,9 @@ export function ProjectRoadmapCanvas({
   isFolderCrumb,
   isTargetCrumb,
   followTo = null,
+  followMode = 'once',
   onFollowDeclined,
+  onReaderNavigated,
   readerHasNavigated = false,
   initialTrail,
   onLevelChange,
@@ -757,6 +789,20 @@ export function ProjectRoadmapCanvas({
   useEffect(() => {
     onFollowDeclinedRef.current = onFollowDeclined;
   }, [onFollowDeclined]);
+  // Same pattern for the person-navigation report (MOTIR-8593): the movers are
+  // `useCallback`s that must stay stable, and each calls this from the mover
+  // itself, outside any state updater, so StrictMode cannot double it.
+  const onReaderNavigatedRef = useRef(onReaderNavigated);
+  useEffect(() => {
+    onReaderNavigatedRef.current = onReaderNavigated;
+  }, [onReaderNavigated]);
+  // For `onLevelChange` (MOTIR-3835): the reporters are `useCallback`s with empty
+  // deps, and a consumer's handler is commonly recreated every render. Declared
+  // here, above the follow block, because a `'whileOn'` grant reports through it.
+  const onLevelChangeRef = useRef(onLevelChange);
+  useEffect(() => {
+    onLevelChangeRef.current = onLevelChange;
+  }, [onLevelChange]);
 
   // ── FOLLOW a newly settled target (MOTIR-6161) ──────────────────────────────
   //
@@ -794,6 +840,9 @@ export function ProjectRoadmapCanvas({
     granted: boolean;
     everGranted: boolean;
     levelId: string | null;
+    /** `'whileOn'` only: the trail a grant MOVED to, reported through
+     *  `onLevelChange`; `null` when the grant moved nothing. */
+    reportTrail?: CanvasCrumb[] | null;
   } | null>(null);
   // The request the canvas DECLINED, kept so the breadcrumb bar can offer it.
   // Held HERE rather than by the consumer because the design puts the affordance
@@ -804,7 +853,33 @@ export function ProjectRoadmapCanvas({
   );
   const [followFade, setFollowFade] = useState(false);
   const [followAnnouncement, setFollowAnnouncement] = useState<string | null>(null);
-  if (followTo !== null && followTo.key !== followEvent?.key) {
+  if (followTo !== null && followTo.key !== followEvent?.key && followMode === 'whileOn') {
+    // THE WHILE-ON ARM (MOTIR-8593) — every new key is granted. A request naming
+    // the level already in view is granted and moves nothing, so a driven step
+    // that stays on one level neither fades nor announces.
+    const last = followTo.trail[followTo.trail.length - 1] ?? null;
+    const levelId = last?.id ?? null;
+    const moves = levelId !== focusId;
+    setFollowEvent({
+      key: followTo.key,
+      granted: true,
+      everGranted: true,
+      levelId,
+      reportTrail: moves ? [...followTo.trail] : null,
+    });
+    if (moves) {
+      setFocusId(levelId);
+      setCrumbs([...followTo.trail]);
+      setLocalPositions({});
+      setSelectedId(null);
+      setHighlightId(null);
+      setShowChangesOverride(null);
+      setFollowFade(true);
+      setFollowAnnouncement(
+        tTarget('movedAnnouncement', { target: last?.label ?? resolvedRootLabel }),
+      );
+    }
+  } else if (followTo !== null && followTo.key !== followEvent?.key) {
     const everGranted = followEvent?.everGranted ?? false;
     const grant = !navigated && !everGranted;
     const last = followTo.trail[followTo.trail.length - 1] ?? null;
@@ -846,6 +921,7 @@ export function ProjectRoadmapCanvas({
       // A followed level is one the consumer asked the reader to SEE, so it must
       // not be auto-descended past — the same rule `navigate` applies.
       suppressedLevelRef.current = levelKey(followEvent.levelId);
+      if (followEvent.reportTrail) onLevelChangeRef.current?.(followEvent.reportTrail);
     } else {
       onFollowDeclinedRef.current?.(followEvent.key);
     }
@@ -956,12 +1032,6 @@ export function ProjectRoadmapCanvas({
   useEffect(() => {
     resolveHeldNodeRef.current = resolveHeldNode;
   }, [resolveHeldNode]);
-  // Same reason, for `onLevelChange` (MOTIR-3835): the reporters are `useCallback`s
-  // with empty deps, and a consumer's handler is commonly recreated every render.
-  const onLevelChangeRef = useRef(onLevelChange);
-  useEffect(() => {
-    onLevelChangeRef.current = onLevelChange;
-  }, [onLevelChange]);
   // Mirror the crumb ids for the auto-descend's cycle guard (a ref, so the load
   // effect can read the current path without re-running on every crumb change).
   // `crumbsRef` mirrors the crumbs THEMSELVES for the same reason (MOTIR-3835):
@@ -1265,13 +1335,17 @@ export function ProjectRoadmapCanvas({
       suppressedLevelRef.current = null;
       // Drill: fetch the node's children (the load effect fires on focusId change).
       applyDrill(n);
+      // The PERSON drilled (MOTIR-8593) — reported here, not in `applyDrill`, which
+      // the auto-descend shares.
+      onReaderNavigatedRef.current?.('drill');
     },
     [byId, applyDrill],
   );
 
-  const navigate = useCallback((crumbId: string | null) => {
+  const navigate = useCallback((crumbId: string | null, via: 'crumb' | 'back' = 'crumb') => {
     // The reader moved (MOTIR-6161) — a crumb click or Back disarms the follow.
     setNavigated(true);
+    onReaderNavigatedRef.current?.(via);
     // The user EXPLICITLY climbed to this level (a crumb click, or Back via `goBack`) —
     // never auto-descend out of it again, or the breadcrumb root becomes a trap.
     suppressedLevelRef.current = levelKey(crumbId);
@@ -1294,7 +1368,7 @@ export function ProjectRoadmapCanvas({
   }, []);
 
   const goBack = useCallback(() => {
-    navigate(crumbs.length >= 2 ? (crumbs[crumbs.length - 2]?.id ?? null) : null);
+    navigate(crumbs.length >= 2 ? (crumbs[crumbs.length - 2]?.id ?? null) : null, 'back');
   }, [crumbs, navigate]);
 
   // *Go there* on the ARRIVALS pill (MOTIR-6300; §23.7) — a navigation the reader
@@ -1305,6 +1379,7 @@ export function ProjectRoadmapCanvas({
     const next = [...trail];
     const levelId = next[next.length - 1]?.id ?? null;
     setNavigated(true);
+    onReaderNavigatedRef.current?.('pick');
     suppressedLevelRef.current = levelKey(levelId);
     setCrumbs(next);
     setFocusId(levelId);
@@ -1319,6 +1394,8 @@ export function ProjectRoadmapCanvas({
     const ms = searchMatches(nodes, query);
     const target = ms[0];
     if (target === undefined) return;
+    // A search jump is the person taking over (MOTIR-8593), though it stays on the level.
+    onReaderNavigatedRef.current?.('search');
     setFocusScale(undefined); // search-locate pans only — keep the user's zoom
     setHighlightId(target);
     setFocusNonce((n) => n + 1);
@@ -1653,6 +1730,7 @@ export function ProjectRoadmapCanvas({
             // An elsewhere offer needs no clearing: once the reader stands
             // where the plan is, it stops arming by itself.
             if (offer === declined) setDeclined(null);
+            onReaderNavigatedRef.current?.('pick');
             setCrumbs([...next]);
             setFocusId(next[next.length - 1]?.id ?? null);
             setLocalPositions({});
