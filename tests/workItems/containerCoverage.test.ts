@@ -227,6 +227,12 @@ describe('unnamedTitleWords (MOTIR-8647)', () => {
     expect(words).not.toContain('board');
   });
 
+  it('ignores a title word that names the kind of work, not its subject', () => {
+    expect(unnamedTitleWords('Draws and builds', 'The design criterion lives here.')).not.toContain(
+      'build',
+    );
+  });
+
   it('is silent for an empty body and for a title with no distinguishing word', () => {
     expect(unnamedTitleWords(TITLE, null)).toEqual([]);
     expect(unnamedTitleWords(TITLE, '   ')).toEqual([]);

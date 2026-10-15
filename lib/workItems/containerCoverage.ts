@@ -327,6 +327,31 @@ export function containerCoverageFinding(
  * ⚠️ A heuristic like its sibling: a body that delivers a part under a synonym is
  * reported, and the channel never gates.
  */
+/**
+ * Title words that name the KIND of work rather than its subject (*"build"*,
+ * *"implement"*), so a body that never repeats one has dropped nothing. Compared
+ * after {@link stem}, and applied to the TITLE side of {@link unnamedTitleWords}
+ * only — the criterion check keeps its own vocabulary.
+ */
+const TITLE_ACTION_WORDS: ReadonlySet<string> = new Set([
+  'build',
+  'create',
+  'implement',
+  'write',
+  'define',
+  'ensure',
+  'support',
+  'enable',
+  'handle',
+  'update',
+  'introduce',
+  'provide',
+  'improve',
+  'refactor',
+  'extend',
+  'wire',
+]);
+
 export function unnamedTitleWords(
   title: string,
   descriptionMd: string | null | undefined,
@@ -334,5 +359,7 @@ export function unnamedTitleWords(
   const body = (descriptionMd ?? '').trim();
   if (body === '') return [];
   const bodyWords = distinguishingWords(body);
-  return [...distinguishingWords(title)].filter((word) => !bodyWords.has(word)).sort();
+  return [...distinguishingWords(title)]
+    .filter((word) => !TITLE_ACTION_WORDS.has(word) && !bodyWords.has(word))
+    .sort();
 }
