@@ -72,10 +72,23 @@ const norm = (s: string) =>
     .replace(/[\s\u00a0\u202f]+/g, ' ')
     .trim();
 
+/** An HTML fragment's text, its tags replaced by `sep`. Repeated until nothing
+ *  tag-shaped is left, so a tag split around another (`<scr<b>ipt>`) cannot
+ *  survive one pass. */
+function stripTags(html: string, sep: string): string {
+  let prev: string;
+  let out = html;
+  do {
+    prev = out;
+    out = out.replace(/<[^>]*>/g, sep);
+  } while (out !== prev);
+  return out;
+}
+
 /** The text of every link in an HTML email. */
 function anchorLabels(html: string): string[] {
   return [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((m) =>
-    norm(decodeEntities(m[1]!.replace(/<[^>]+>/g, ''))),
+    norm(decodeEntities(stripTags(m[1]!, ''))),
   );
 }
 
@@ -95,7 +108,7 @@ function decodeEntities(s: string): string {
 /** What a reader sees: the subject, the preview and body (the HTML's text), and
  *  the plain-text part. */
 function visible(email: RenderedEmail): string {
-  const htmlText = decodeEntities(email.html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
+  const htmlText = decodeEntities(stripTags(email.html, ' ')).replace(/\s+/g, ' ');
   return [email.subject, htmlText, email.text].join('\n');
 }
 
