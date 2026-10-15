@@ -52,7 +52,7 @@ import {
   type PlanningTarget,
 } from '@/lib/planning/planningTargets';
 import type { PlanningLaunch } from '@/lib/planning/launcher';
-import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
+import type { PlanningSeedGuideDTO, PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import { useOptionalReport } from '@/app/(authed)/_components/ReportProvider';
@@ -238,6 +238,19 @@ export interface PlanningWorkspaceHostProps {
    *  viewer's own recent seeded conversation, not a Plans-row reopen, so the rail
    *  draws no reopened line (design MOTIR-6206 sheet 7). */
   sessionIsResume?: boolean;
+  /** The GUIDE OFFER the first send carries, so the session it starts remembers it and
+   *  the offer is marked confirmed with it (Story MOTIR-8684 · MOTIR-8693). Paired with
+   *  `autoSendTurn`; NEVER set beside `seedGateId` — the two seeds are exclusive. */
+  seedGuideTurnId?: string | null;
+  /** The *from a guide* framing (design MOTIR-8686 sheet 9): rides a guide offer's
+   *  first open AND its resume. */
+  guideOrigin?: PlanningSeedGuideDTO | null;
+  /** Targets beside the anchor in the INITIAL set — the guided card, so the plan's
+   *  card hold parks it at Planning with the target. */
+  extraInitialTargets?: readonly PlanningTarget[];
+  /** The send was answered `409 GUIDE_REPLAN_OFFER_CONFIRMED { sessionId }`: the offer
+   *  already started a session elsewhere, so the overlay returns to it. */
+  onGuideOfferConfirmed?: (sessionId: string) => void;
 }
 
 /**
@@ -293,7 +306,16 @@ function PlanWorkspaceHost({
   autoSendKey,
   followUp = null,
   sessionIsResume = false,
+  seedGuideTurnId = null,
+  guideOrigin = null,
+  extraInitialTargets,
+  onGuideOfferConfirmed,
 }: PlanningWorkspaceHostProps) {
+  // A session remembers ONE seed (`plan_change_session_one_seed`): a host handed both
+  // is a caller bug, so it is refused here rather than at the server's check.
+  if (seedGateId && seedGuideTurnId) {
+    throw new Error('A planning workspace is seeded by a gate or a guide offer, never both.');
+  }
   const t = useTranslations('planningWorkspace');
   const tPlanReview = useTranslations('planReview');
   const tFollow = useTranslations('planningWorkspace.follow');
@@ -323,7 +345,9 @@ function PlanWorkspaceHost({
   // both panes read it: the composer collects it and the canvas rings it. The
   // entrance's item seeds it as the INITIAL target — not a locked one, so the
   // user can remove it (⨉) or add more (design panel 5).
-  const [targets, setTargets] = useState<PlanningTarget[]>(initialTarget ? [initialTarget] : []);
+  const [targets, setTargets] = useState<PlanningTarget[]>(
+    initialTarget ? [initialTarget, ...(extraInitialTargets ?? [])] : [],
+  );
   const addTarget = useCallback(
     (target: PlanningTarget) => setTargets((current) => addPlanningTarget(current, target)),
     [],
@@ -501,6 +525,8 @@ function PlanWorkspaceHost({
     // the first send carries.
     sessionIsResume,
     seedGateId,
+    seedGuideTurnId,
+    onGuideOfferConfirmed,
     // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
     // refetch tick — the one surface a route refresh cannot reach.
     onTriageChanged: report?.notifySubmissionsChanged,
@@ -1234,6 +1260,7 @@ function PlanWorkspaceHost({
               }
             : {})}
           {...(followUp ? { followUp } : {})}
+          {...(guideOrigin ? { guideOrigin } : {})}
           state={state}
           index={index}
           targets={targets}

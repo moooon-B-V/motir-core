@@ -7969,6 +7969,16 @@
     "followUpCard": {
       "label": "选择的后续规划"
     },
+    "guideSeed": {
+      "chip": "来自引导",
+      "lead": "已在 {target} 上打开，来自 Motir AI 对 {guided} 的引导。",
+      "card": "来自引导",
+      "cardBy": "由{who}确认 · {when}",
+      "justNow": "刚刚",
+      "you": "你",
+      "status": "规划中",
+      "offerClosed": "此重新规划提议已不再有效。请回到引导查看当前进展。"
+    },
     "guide": {
       "openedFrom": "从 {key} 打开",
       "reading": "正在读取 {key} 及其待办清单…",

@@ -76,6 +76,10 @@ export type PlanningLaunchContext =
   | { kind: 'roadmap' }
   | { kind: 'convention-refine'; repoKey: string }
   | { kind: 'refused-gate'; gateId: string }
+  /** A guide's RE-PLAN OFFER (Story MOTIR-8684 · MOTIR-8693): `plan=contextual&planFrom=
+   *  guide-offer&planOffer=<turnId>`. It carries the offer's turn id and nothing else —
+   *  the request text, the target and the guided card are read from the server. */
+  | { kind: 'guide-offer'; guideTurnId: string }
   /** The Guide me through door on a manual card (MOTIR-7466; design MOTIR-7462
    *  panel 1): `plan=guide&planFrom=guide&planItem=<KEY>`. */
   | { kind: 'guide'; itemKey: string };
@@ -158,6 +162,10 @@ export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMod
       return 'replan';
     case 'guide':
       return 'guide';
+    // The ADDRESS's mode only: the overlay resolves the workspace from the offer's
+    // seed, as it does for `refused-gate`.
+    case 'guide-offer':
+      return 'contextual';
     case 'project':
       if (context.hasPlan === undefined) return 'project';
       return context.hasPlan ? 'replan' : 'generation';
@@ -193,6 +201,7 @@ const PLANNING_ORIGINS: readonly PlanningOrigin[] = [
   'roadmap',
   'convention-refine',
   'refused-gate',
+  'guide-offer',
   'guide',
 ];
 
@@ -218,6 +227,9 @@ export interface PlanningLaunch {
    *  a refusal or, since MOTIR-6435, a pick. Present only for that origin, and only
    *  when the address carries one. */
   gateId?: string;
+  /** The guide offer a `guide-offer` launch is seeded from (`planOffer`, MOTIR-8693) —
+   *  the offer's turn id. Present only for that origin. */
+  guideTurnId?: string;
   /** Send the start turn (`planStart`, MOTIR-7973) — present only for a `work-item`
    *  origin with an anchor and no named session. */
   startTurn?: boolean;
@@ -341,6 +353,14 @@ export const OVERLAY_PARAM_NAMES = {
    * asking again.
    */
   start: 'planStart',
+  /**
+   * The GUIDE OFFER a `guide-offer` launch is seeded from (Story MOTIR-8684 ·
+   * MOTIR-8693) — written ONLY for that origin, as
+   * `plan=contextual&planFrom=guide-offer&planOffer=<turnId>`, and read only for it.
+   * It is the offer's turn id and NOTHING else: the request text, the target and the
+   * guided card are read from the server, never carried in the URL.
+   */
+  guideOffer: 'planOffer',
 } as const;
 
 /**
@@ -386,6 +406,8 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
   }
   if (context.kind === 'convention-refine') params.set(OVERLAY_PARAM_NAMES.repo, context.repoKey);
   if (context.kind === 'refused-gate') params.set(OVERLAY_PARAM_NAMES.gate, context.gateId);
+  if (context.kind === 'guide-offer')
+    params.set(OVERLAY_PARAM_NAMES.guideOffer, context.guideTurnId);
   if ((context.kind === 'project' || context.kind === 'work-item') && context.sessionId) {
     params.set(OVERLAY_PARAM_NAMES.session, context.sessionId);
     // The entrance rides ONLY with a named session: it says where THAT session was
@@ -546,6 +568,8 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
   // The gate rides ONLY its own origin, like `planItem` and `planRepo` do.
   const gateId =
     from === 'refused-gate' ? first(readParam(params, OVERLAY_PARAM_NAMES.gate)) : null;
+  const guideTurnId =
+    from === 'guide-offer' ? first(readParam(params, OVERLAY_PARAM_NAMES.guideOffer)) : null;
   const itemKey = from === 'work-item' ? first(readParam(params, OVERLAY_PARAM_NAMES.item)) : null;
   // The start rides ONLY an item origin with its anchor and no named session —
   // the same rule the write side keeps (MOTIR-7973).
@@ -564,6 +588,7 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     ...(sessionId ? { sessionId } : {}),
     ...(via ? { via } : {}),
     ...(gateId ? { gateId } : {}),
+    ...(guideTurnId ? { guideTurnId } : {}),
     ...(startTurn ? { startTurn: true } : {}),
   };
 }

@@ -7975,6 +7975,16 @@
     "followUpCard": {
       "label": "Follow-up to a choice"
     },
+    "guideSeed": {
+      "chip": "from a guide",
+      "lead": "Opened on {target} from Motir AI’s guide on {guided}.",
+      "card": "From a guide",
+      "cardBy": "Confirmed by {who} · {when}",
+      "justNow": "just now",
+      "you": "you",
+      "status": "Planning",
+      "offerClosed": "This re-plan offer is no longer open. Go back to the guide to see where it stands."
+    },
     "guide": {
       "openedFrom": "Opened from {key}",
       "reading": "Reading {key} and its to-do list…",

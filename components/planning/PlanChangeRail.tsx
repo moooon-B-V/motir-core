@@ -62,7 +62,9 @@ import {
   type PlanApproveProgressView,
 } from '@/components/planning/PlanApproveProgress';
 import type { PlanGateView } from '@/lib/planning/planGateView';
-import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
+import type { PlanningSeedGuideDTO, PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
+import { GuideOriginCard } from '@/components/planning/GuideOriginCard';
+import { GUIDE_OFFER_CLOSED } from '@/lib/hooks/usePlanChangeConversation';
 import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
 import {
   dispositionMarkerFor,
@@ -231,6 +233,12 @@ export interface PlanChangeRailProps {
    * opener. Absent on every other launch.
    */
   followUp?: PlanningSeedPickDTO | null;
+  /**
+   * THE *FROM A GUIDE* FRAMING (design MOTIR-8686 sheet 9; MOTIR-8693): the conversation
+   * is the planner a guide's re-plan offer started. The chip, the lead and the *From a
+   * guide* card say so. Composed from the pick's follow-up framing; absent otherwise.
+   */
+  guideOrigin?: PlanningSeedGuideDTO | null;
   state: PlanChangeConversationState;
   /** The indexed proposal — the rail MIRRORS the canvas bar's counts. */
   index: PlanChangeDiffIndex;
@@ -347,6 +355,7 @@ export function PlanChangeRail({
   onAutoSend,
   initialDraftCaret,
   followUp = null,
+  guideOrigin = null,
   state,
   index,
   targets,
@@ -538,7 +547,8 @@ export function PlanChangeRail({
   // No starters while the rail HOLDS A SEED (design MOTIR-6206 sheet 2): the seed
   // is the start. Cleared, the rail is an ordinary item re-plan again. A pick's
   // follow-up never shows them: its first turn is the start, sent for the person.
-  const holdsSeed = (Boolean(initialDraft) && draft.trim() !== '') || followUp !== null;
+  const holdsSeed =
+    (Boolean(initialDraft) && draft.trim() !== '') || followUp !== null || guideOrigin !== null;
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading' && !holdsSeed;
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
   // composer is pre-focused and prompts for what's wrong, and what the user types
@@ -758,7 +768,11 @@ export function PlanChangeRail({
           {t('railLabel')}
         </span>
         <Pill tone="neutral" className="ml-auto" data-testid="planning-mode-chip">
-          {followUp ? t('mode.followUp') : t(MODE_LABEL_KEY[launch.mode])}
+          {guideOrigin
+            ? t('guideSeed.chip')
+            : followUp
+              ? t('mode.followUp')
+              : t(MODE_LABEL_KEY[launch.mode])}
         </Pill>
         {restartable ? (
           <RestartControl
@@ -918,19 +932,27 @@ export function PlanChangeRail({
             blank screen; only the conversation is empty (design panel 6). */}
         <Bubble role="assistant">
           <span>
-            {followUp
-              ? launch.itemKey
-                ? t('lead.followUp', { choice: followUp.choiceKey, item: launch.itemKey })
-                : t('lead.followUpProject', { choice: followUp.choiceKey, project: projectName })
-              : t(leadKey(launch), {
-                  project: projectName,
-                  item: launch.itemKey ?? '',
-                  repo: launch.repoKey ?? '',
-                })}
+            {guideOrigin
+              ? t('guideSeed.lead', {
+                  target: launch.itemKey ?? '',
+                  guided: guideOrigin.guidedKey,
+                })
+              : followUp
+                ? launch.itemKey
+                  ? t('lead.followUp', { choice: followUp.choiceKey, item: launch.itemKey })
+                  : t('lead.followUpProject', { choice: followUp.choiceKey, project: projectName })
+                : t(leadKey(launch), {
+                    project: projectName,
+                    item: launch.itemKey ?? '',
+                    repo: launch.repoKey ?? '',
+                  })}
           </span>{' '}
-          <span>{followUp ? tc('openerFollowUp', { label: followUp.label }) : tc('opener')}</span>
+          {guideOrigin ? null : (
+            <span>{followUp ? tc('openerFollowUp', { label: followUp.label }) : tc('opener')}</span>
+          )}
         </Bubble>
         {followUp ? <FollowUpCard pick={followUp} /> : null}
+        {guideOrigin ? <GuideOriginCard guide={guideOrigin} /> : null}
 
         {/* REFUSED IN PLACE (AMENDMENT 23 §4; MOTIR-7633 sheet 5): another
             person's session or plan holds the card. Nothing was sent. */}
@@ -1363,7 +1385,19 @@ export function PlanChangeRail({
           <WaitingPlanFailureLine failure={failure} again={failedAgain} />
         ) : null}
 
+        {state.errorCode === GUIDE_OFFER_CLOSED && !ended ? (
+          // The offer closed under the send (declined, replaced, or a scope it does not
+          // fit): said in place, nothing retried, and no Try again to press (MOTIR-8693).
+          <p
+            role="alert"
+            className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+          >
+            {t('guideSeed.offerClosed')}
+          </p>
+        ) : null}
+
         {state.errorCode &&
+        state.errorCode !== GUIDE_OFFER_CLOSED &&
         !ended &&
         (failure === null || isTurnRefusal(state.errorCode)) &&
         state.errorCode !== 'timedOut' &&
