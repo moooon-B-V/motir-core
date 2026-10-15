@@ -380,21 +380,22 @@ test('the canvas follows the planner while a plan is written, stops when the rea
         await expect(followButton(page)).toHaveAccessibleName(follow.resume);
         await beat();
 
-        // New drafts on other levels arrive: the canvas stays; the off-level count rises.
+        // New drafts on other levels arrive: the canvas stays where the reader put
+        // it. The arrivals pill is HIDDEN by the trip rule (§28.3, row A4): its
+        // *Go there* would land on the earliest draft's level, which is where
+        // Follow the planner goes, and no row offers two controls to one place.
         let read = polled(page, planId, (b) => carries(b, 'over-t'));
         await mcpStep(agent, planId, 'over-t', 'author', ref(t1!));
         await read;
         await expectLevel(page, EPIC);
-        await expect(arrivals(page)).toHaveText(/^1 /);
+        await expect(followButton(page)).toBeVisible();
+        await expect(arrivals(page)).toHaveCount(0);
         read = polled(page, planId, (b) => carries(b, 'over-t', 'over-s2'));
         await mcpStep(agent, planId, 'over-s2', 'author', ref(b1!));
         await read;
         await expectLevel(page, EPIC);
-        await expect(arrivals(page)).toHaveText(/^2 /);
-        await expect(arrivals(page)).toHaveText(
-          new RegExp(`${patternOf(arrival.draftingAcross)}|${patternOf(arrival.draftingIn)}`),
-        );
         await expect(followButton(page)).toBeVisible();
+        await expect(arrivals(page)).toHaveCount(0);
         await beat();
       },
     );
