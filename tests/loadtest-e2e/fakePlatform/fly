@@ -177,7 +177,10 @@ const MACHINE_PATHS = ['/opt/loadtest', '/dev/shm/loadtest', '/proc/mounts', '/d
 function reroot(text, root) {
   let out = text;
   for (const p of MACHINE_PATHS) {
-    const re = new RegExp(`(^|[\\s'"=(])${p.replace(/\//g, '\\/')}(?=$|[/\\s'"):;])`, 'g');
+    const re = new RegExp(
+      `(^|[\\s'"=(])${p.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?=$|[/\\s'"):;])`,
+      'g',
+    );
     out = out.replace(re, (_, lead) => `${lead}${root}${p}`);
   }
   return out;

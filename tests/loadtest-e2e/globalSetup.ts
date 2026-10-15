@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   createWriteStream,
   existsSync,
@@ -216,10 +217,10 @@ export default async function setup(project: TestProject): Promise<() => Promise
   const copy = workingCopy(ROOT, join(tmp, 'checkout'));
 
   const secrets = {
-    authSecret: `loadtest-e2e-auth-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`,
-    flyApiToken: `fm2_e2eFakeFlyToken${Math.random().toString(36).slice(2)}`,
-    promToken: `e2e-prom-token-${Math.random().toString(36).slice(2)}`,
-    neonApiKey: `napi_e2e${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`,
+    authSecret: `loadtest-e2e-auth-${randomBytes(16).toString('hex')}`,
+    flyApiToken: `fm2_e2eFakeFlyToken${randomBytes(8).toString('hex')}`,
+    promToken: `e2e-prom-token-${randomBytes(8).toString('hex')}`,
+    neonApiKey: `napi_e2e${randomBytes(16).toString('hex')}`,
   };
   const sha = gitSha(ROOT);
   const statePath = join(stateDir, 'state.json');
