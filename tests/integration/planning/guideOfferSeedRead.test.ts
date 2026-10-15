@@ -60,8 +60,6 @@ const { planChangeSessionsService } = await import('@/lib/services/planChangeSes
 const { POST: planRoute } = await import('@/app/api/work-items/[id]/ai/plan/route');
 const { POST: declineRoute } = await import('@/app/api/ai/guide/offer/decline/route');
 const { GET: seedRoute } = await import('@/app/api/ai/guide/offer/[turnId]/planning-seed/route');
-const { replanOfferStateOf } = await import('@/lib/planning/guideReplanOffer');
-const { readGuideTurnRecord } = await import('@/lib/ai/guideWorkItem');
 
 type Actor = { id: string; email: string; name: string };
 
@@ -222,11 +220,6 @@ async function counts() {
     turns: await adminDb.planChangeTurn.count(),
     submits: submitJobMock.mock.calls.length,
   };
-}
-
-async function storedOffer(turnId: string) {
-  const row = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turnId } });
-  return readGuideTurnRecord(row.guideTurn)?.replanOffer ?? null;
 }
 
 async function readSeed(turnId: string) {
