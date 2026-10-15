@@ -22,6 +22,8 @@
     "staging:two-machine-check": "tsx --tsconfig tsconfig.node.json scripts/staging/two-machine-check.ts",
     "loadtest:preflight": "tsx --tsconfig tsconfig.node.json loadtest/preflight/sideEffects.ts",
     "loadtest:secrets-template": "tsx --tsconfig tsconfig.node.json loadtest/staging/sideEffectSwitches.ts --write",
+    "loadtest:seed": "tsx --tsconfig tsconfig.node.json loadtest/seed/seed.ts",
+    "loadtest:seed:reset": "tsx --tsconfig tsconfig.node.json loadtest/seed/reset.ts",
     "db:seed": "tsx --tsconfig tsconfig.node.json scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx --tsconfig tsconfig.node.json scripts/seed-large.ts",
     "db:seed:collab": "tsx --tsconfig tsconfig.node.json scripts/seed-collab.ts",
