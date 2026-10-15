@@ -106,7 +106,7 @@ export const dispatchRunEventRepository = {
    */
   async findFindingOnRun(
     dispatchRunId: string,
-    kind: 'bug_filed' | 'plan_submitted' | 'unbuildable_reported',
+    kind: 'bug_filed' | 'plan_submitted' | 'unbuildable_reported' | 'discrepancy_recorded',
     findingId: string,
     tx: Prisma.TransactionClient,
   ): Promise<{ id: string } | null> {

@@ -92,6 +92,9 @@ export const EVENT_STEP = {
   // A review run's verdict (MOTIR-6821) — what the run CONCLUDED, written by the verdict
   // route's service; the review leg passes through no build step.
   review_verdict: null,
+  // A run's discrepancy record (MOTIR-8655) — what the run BUILT THROUGH and wrote down,
+  // not a stage the leg passed through.
+  discrepancy_recorded: null,
   // One step the agent said it was about to take (MOTIR-7450). The agent's own
   // account, not a stage the leg passed through: a step line must not move the
   // leg, which the runner's own events and the milestones own.

@@ -490,8 +490,13 @@ describe('the INGEST refuses a client-reported finding — both directions', () 
   // The forgery guard. The whole value of the record is that it says what
   // actually happened, and a run token that could append `bug_filed` could
   // assert a bug the run never filed.
-  it('rejects `bug_filed`, `plan_submitted` and `unbuildable_reported` on the append body', () => {
-    for (const kind of ['bug_filed', 'plan_submitted', 'unbuildable_reported']) {
+  it('rejects every server-written finding on the append body', () => {
+    for (const kind of [
+      'bug_filed',
+      'plan_submitted',
+      'unbuildable_reported',
+      'discrepancy_recorded',
+    ]) {
       expect(dispatchRunEventInputSchema.safeParse({ kind }).success).toBe(false);
     }
   });

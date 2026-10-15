@@ -262,6 +262,57 @@ export class RunFoundReportReasonInvalidError extends Error {
   }
 }
 
+/** The bounds of a run's discrepancy record (MOTIR-8655, decision page MOTIR-8654 §2). */
+export const RUN_DISCREPANCY_POINTS_MAX = 20;
+export const RUN_DISCREPANCY_FIELD_MAX = 2000;
+
+/**
+ * 422 — a discrepancy record is malformed: no points, more than
+ * {@link RUN_DISCREPANCY_POINTS_MAX}, or a `planAsked` / `built` / `why` that is empty or longer
+ * than {@link RUN_DISCREPANCY_FIELD_MAX} characters once trimmed (Story MOTIR-8651 ·
+ * MOTIR-8655, `runDiscrepancyService.recordDiscrepancy`).
+ *
+ * Refused, not truncated, and checked BEFORE anything is resolved or written: a cut point
+ * reads as a whole one, and the refusal says nothing about the card or its run.
+ */
+export class RunDiscrepancyInvalidError extends Error {
+  readonly code = 'RUN_DISCREPANCY_INVALID';
+  constructor(
+    readonly reason: 'points_empty' | 'points_too_many' | 'field_empty' | 'field_too_long',
+    readonly where?: { point: number; field: 'planAsked' | 'built' | 'why' },
+  ) {
+    const at = where ? ` (point ${where.point}, \`${where.field}\`)` : '';
+    super(
+      reason === 'points_empty'
+        ? 'A discrepancy record needs at least one point (planAsked · built · why); nothing was written.'
+        : reason === 'points_too_many'
+          ? `A discrepancy record takes at most ${RUN_DISCREPANCY_POINTS_MAX} points; list the ` +
+            'most important ones and call once. Nothing was written.'
+          : reason === 'field_empty'
+            ? `A discrepancy point's fields must each be non-empty${at}; nothing was written.`
+            : `A discrepancy point's fields are at most ${RUN_DISCREPANCY_FIELD_MAX} characters` +
+              `${at}; shorten it. Nothing was written.`,
+    );
+    this.name = 'RunDiscrepancyInvalidError';
+  }
+}
+
+/**
+ * 409 — the card's open leg already carries a discrepancy record. ONE record per leg
+ * (decision page MOTIR-8654 §3): the first call wrote the comment and the finding, and this
+ * one writes nothing — no second comment.
+ */
+export class DiscrepancyAlreadyRecordedError extends Error {
+  readonly code = 'DISCREPANCY_ALREADY_RECORDED';
+  constructor(readonly workItemKey: string) {
+    super(
+      `${workItemKey} already has a discrepancy record on this run. Record ONE per card, with ` +
+        'every point in it; nothing was written.',
+    );
+    this.name = 'DiscrepancyAlreadyRecordedError';
+  }
+}
+
 /**
  * 403 — a hosted run's own credential (MOTIR-688) reaching a DIFFERENT run's
  * ingest, or opening a run at all. A run token is bound to exactly one
