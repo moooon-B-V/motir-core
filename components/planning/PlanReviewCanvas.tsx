@@ -252,6 +252,14 @@ export function PlanReviewCanvas({
     proposal: null,
     key: null,
   });
+  // WHILE THE PLAN IS WRITTEN the open peek follows the live item by its
+  // `planItemId` (MOTIR-8595), so a field that arrives mid-view reaches it. A
+  // proposal withdrawn mid-view keeps its last copy: closing is the reader's act.
+  // Off `live` it is the copy taken at open, as shipped.
+  const peekedProposal =
+    live && peeked.proposal
+      ? (items.find((i) => i.planItemId === peeked.proposal?.planItemId) ?? peeked.proposal)
+      : peeked.proposal;
   const byNodeId = useMemo(() => new Map(items.map((i) => [i.nodeId, i])), [items]);
   // node id → its identifier, accumulated as levels load. A ref, not state: it is
   // a lookup the View handler reads, never something a render depends on.
@@ -748,7 +756,8 @@ export function PlanReviewCanvas({
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the
           ordinary work-item peek below, unchanged. */}
       <ProposalPeek
-        item={peeked.proposal}
+        item={peekedProposal}
+        live={live}
         outcome={outcome}
         onClose={closePeek}
         onOpenProposal={openProposalById}
