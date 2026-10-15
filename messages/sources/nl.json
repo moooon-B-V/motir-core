@@ -182,6 +182,7 @@
   "planReview.noteShowLess": "Show less",
   "planReview.field_description": "Description",
   "planReview.field_explanation": "Explanation",
+  "planReview.field_todos": "Steps",
   "planReview.field_links": "Dependencies",
   "planReview.field_parent": "Parent",
   "planReview.field_targetRepo": "Repository",
