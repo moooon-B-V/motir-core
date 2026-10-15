@@ -2347,6 +2347,29 @@ export interface WorkItemCoverageAdvisoryDto {
 }
 
 /**
+ * A CONTAINER whose body never mentions a word its own TITLE carries (MOTIR-8647).
+ * Every work item laid under a container is laid against its body, not its title,
+ * so a body that silently drops a named part of the title narrows the requirement
+ * for the whole subtree with nothing marking it as a choice. The remedy is the
+ * author's: restore the part in the body, or state it as excluded with the work
+ * item that owns it.
+ *
+ * ⚠️ Its own `kind`, not a severity on {@link WorkItemCoverageAdvisoryDto}: that
+ * family is keyed by `criterionIndex` and `adoptedChildren`, and a reader that
+ * narrowed on `kind: 'coverage'` would print a finding about a criterion this one
+ * does not have. Rides `validate_work_item` only, advisory and never a gate.
+ */
+export interface WorkItemTitleCoverageAdvisoryDto {
+  /** The union discriminant — see {@link WorkItemValidityAdvisoryDto}. */
+  kind: 'title-coverage';
+  /** The CONTAINER whose body does not carry its title. */
+  item: string;
+  severity: 'likely-unnamed-title-part';
+  /** The title's distinguishing words (stemmed) that the body never mentions. */
+  words: string[];
+}
+
+/**
  * A criterion naming a FILE another open work item also names, where the file
  * does not exist yet and no `blocked_by` orders the two (MOTIR-5424) — the
  * reference family's PATH arm. The key-based {@link WorkItemProseReferenceAdvisoryDto}
@@ -2396,7 +2419,15 @@ export interface WorkItemPathReferenceAdvisoryDto {
 export type WorkItemValidityAdvisoryDto =
   | WorkItemProseAdvisoryDto
   | WorkItemCoverageAdvisoryDto
+  | WorkItemTitleCoverageAdvisoryDto
   | WorkItemPathReferenceAdvisoryDto;
+
+/** Narrow an advisory to the TITLE-COVERAGE family (MOTIR-8647). */
+export function isTitleCoverageAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemTitleCoverageAdvisoryDto {
+  return a.kind === 'title-coverage';
+}
 
 /** Narrow an advisory to the PATH-REFERENCE family (MOTIR-5424). */
 export function isPathReferenceAdvisory(

@@ -308,3 +308,31 @@ export function containerCoverageFinding(
   if (unownedCriterionIndices.length === 0) return null;
   return { unownedCriterionIndices, adoptedChildren };
 }
+
+/**
+ * The TITLE words a container's body never mentions (MOTIR-8647) — the other
+ * half of the coverage question. {@link unownedCriteria} asks whether each
+ * CRITERION has a child; this asks whether each part of the TITLE has been
+ * carried into the body at all. A body that quietly names fewer parts than its
+ * title becomes the requirement every child is laid against, so nothing
+ * downstream compares it to the title again, and the narrowing is invisible.
+ *
+ * A title word counts as carried when the body names it anywhere — as scope, or
+ * as an exclusion handed to another work item — because either is a decision.
+ * What is reported is the word the body never mentions. Same distinguishing-word
+ * fold as the criterion check (stemmed, stopword-filtered), so it degrades to
+ * silence on a short title, and an empty body is never reported (an unauthored
+ * container has nothing to narrow).
+ *
+ * ⚠️ A heuristic like its sibling: a body that delivers a part under a synonym is
+ * reported, and the channel never gates.
+ */
+export function unnamedTitleWords(
+  title: string,
+  descriptionMd: string | null | undefined,
+): string[] {
+  const body = (descriptionMd ?? '').trim();
+  if (body === '') return [];
+  const bodyWords = distinguishingWords(body);
+  return [...distinguishingWords(title)].filter((word) => !bodyWords.has(word)).sort();
+}

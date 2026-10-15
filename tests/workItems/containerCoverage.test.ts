@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NOT_YET_FILED,
   containerCoverageFinding,
+  unnamedTitleWords,
   criterionTokens,
   quantifiesOverChildren,
   unownedCriteria,
@@ -207,5 +208,28 @@ describe('NOT_YET_FILED — the filing instant of a PLAN proposal (MOTIR-5403)',
     expect(
       containerCoverageFinding({ descriptionMd: BODY, createdAt: NOT_YET_FILED }, [proposedChild]),
     ).toBeNull();
+  });
+});
+
+describe('unnamedTitleWords (MOTIR-8647)', () => {
+  const TITLE =
+    'Re-runnable staging load test with an agent-dominated mix: claims, runs, boards beside signed-in readers';
+
+  it('reports the title words the body never mentions — the MOTIR-8538 shape', () => {
+    const body = 'Scope: the hot-route mix for the staging load test, readers included.';
+    expect(unnamedTitleWords(TITLE, body)).toEqual(expect.arrayContaining(['claim', 'board']));
+  });
+
+  it('counts a word the body only hands to another work item as named', () => {
+    const body = 'Excluded: claims, runs and boards belong to MOTIR-9. Staging load test readers.';
+    const words = unnamedTitleWords(TITLE, body);
+    expect(words).not.toContain('claim');
+    expect(words).not.toContain('board');
+  });
+
+  it('is silent for an empty body and for a title with no distinguishing word', () => {
+    expect(unnamedTitleWords(TITLE, null)).toEqual([]);
+    expect(unnamedTitleWords(TITLE, '   ')).toEqual([]);
+    expect(unnamedTitleWords('Fix it', 'anything')).toEqual([]);
   });
 });

@@ -287,6 +287,7 @@ import type {
   WorkItemValidityDto,
   WorkItemSoftBlockDto,
   WorkItemCoverageAdvisoryDto,
+  WorkItemTitleCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
   CrossLevelEdgeDto,
   InvalidEdgeDto,
@@ -309,7 +310,7 @@ import {
   type ProseAdvisorySubject,
 } from '@/lib/services/proseGraphAdvisoryService';
 import { buildPathReferenceAdvisories } from '@/lib/services/pathReferenceAdvisoryService';
-import { containerCoverageFinding } from '@/lib/workItems/containerCoverage';
+import { containerCoverageFinding, unnamedTitleWords } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
@@ -9110,6 +9111,7 @@ async function computeWorkItemValidity(
   const crossLevelEdges = computeCrossLevelEdges(edges, membersById, chains);
   const invalidEdges = await computeInvalidEdges(edges, membersById, chains, ctx);
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
+  const titleCoverage = await computeSubtreeTitleCoverageAdvisories(notDone, members, ctx);
   // The PATH-REFERENCE family (MOTIR-5424), off the SAME scanned bodies the prose
   // family read — `subjects` is `notDone` mapped in order, so the two zip.
   const pathReferences = await buildPathReferenceAdvisories(
@@ -9132,7 +9134,7 @@ async function computeWorkItemValidity(
     blockers,
     invalidEdges,
     crossLevelEdges,
-    advisories: [...prose, ...coverage, ...pathReferences],
+    advisories: [...prose, ...coverage, ...titleCoverage, ...pathReferences],
     softBlocks,
   };
 }
@@ -9479,6 +9481,52 @@ async function computeSubtreeCoverageAdvisories(
   }
   // Deterministic wire order: by container, then by criterion.
   advisories.sort((a, b) => a.item.localeCompare(b.item) || a.criterionIndex - b.criterionIndex);
+  return advisories;
+}
+
+/**
+ * The TITLE-COVERAGE advisories for a validated subtree (MOTIR-8647) — for every
+ * NOT-done member that holds children, does its body mention each distinguishing
+ * word its title carries? The pure decision is `unnamedTitleWords`; this gathers
+ * the containers' titles and bodies in two reads.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — appended beside the coverage family, and the
+ * `valid` / `blockers` verdict is computed without it.
+ */
+async function computeSubtreeTitleCoverageAdvisories(
+  notDone: Array<{ id: string; identifier: string }>,
+  members: Array<{ id: string; parentId: string | null }>,
+  ctx: ServiceContext,
+): Promise<WorkItemTitleCoverageAdvisoryDto[]> {
+  const parentIds = new Set(members.flatMap((m) => (m.parentId === null ? [] : [m.parentId])));
+  const containers = notDone.filter((m) => parentIds.has(m.id));
+  if (containers.length === 0) return [];
+  const ids = containers.map((c) => c.id);
+  const bodies = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findDescriptionsByIds(ids, ctx.workspaceId, tx),
+  );
+  const titles = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTitlesByIds(ids, ctx.workspaceId, tx),
+      )
+    ).map((row) => [row.id, row.title]),
+  );
+  const advisories: WorkItemTitleCoverageAdvisoryDto[] = [];
+  for (const container of containers) {
+    const body = bodies.find((row) => row.id === container.id);
+    const title = titles.get(container.id);
+    if (!body || title === undefined) continue;
+    const words = unnamedTitleWords(title, body.descriptionMd);
+    if (words.length === 0) continue;
+    advisories.push({
+      kind: 'title-coverage',
+      item: container.identifier,
+      severity: 'likely-unnamed-title-part',
+      words,
+    });
+  }
+  advisories.sort((a, b) => a.item.localeCompare(b.item));
   return advisories;
 }
 

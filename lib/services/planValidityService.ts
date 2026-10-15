@@ -22,6 +22,7 @@ import {
 import {
   NOT_YET_FILED,
   containerCoverageFinding,
+  unnamedTitleWords,
   type CoverageChild,
 } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
@@ -32,6 +33,7 @@ import type {
   CrossLevelEdgeDto,
   InvalidEdgeDto,
   WorkItemCoverageAdvisoryDto,
+  WorkItemTitleCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
   WorkItemSoftBlockDto,
   WorkItemValidityDto,
@@ -449,6 +451,62 @@ async function projectedCoverageAdvisories(
 }
 
 /**
+ * The TITLE-COVERAGE advisories for a PROJECTED subtree (MOTIR-8647) — the same
+ * question the committed verdict asks (does a container's body mention each
+ * distinguishing word its title carries?), put to the tree the plan would leave,
+ * so a plan that narrows a story's body is told before approval rather than after.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER.
+ */
+async function projectedTitleCoverageAdvisories(
+  proj: Projection,
+  memberIds: ReadonlySet<string>,
+  ctx: ServiceContext,
+): Promise<WorkItemTitleCoverageAdvisoryDto[]> {
+  const containers = [...memberIds]
+    .map((id) => proj.nodes.get(id)!)
+    .filter((node) => !isDone(proj, node) && proj.childrenByParent.has(node.id));
+  if (containers.length === 0) return [];
+
+  const storedIds = containers
+    .map((node) => node.id)
+    .filter((id) => !id.startsWith(TEMP_REF_PREFIX));
+  const storedBodies = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findDescriptionsByIds(storedIds, ctx.workspaceId, tx),
+      )
+    ).map((row) => [row.id, row.descriptionMd] as const),
+  );
+  const storedTitles = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTitlesByIds(storedIds, ctx.workspaceId, tx),
+      )
+    ).map((row) => [row.id, row.title] as const),
+  );
+
+  const advisories: WorkItemTitleCoverageAdvisoryDto[] = [];
+  for (const node of containers) {
+    const title = projectedTitle(proj, node.id) ?? storedTitles.get(node.id);
+    if (title === undefined) continue;
+    const descriptionMd = proj.projectedDescription.has(node.id)
+      ? (proj.projectedDescription.get(node.id) ?? null)
+      : (storedBodies.get(node.id) ?? null);
+    const words = unnamedTitleWords(title, descriptionMd);
+    if (words.length === 0) continue;
+    advisories.push({
+      kind: 'title-coverage',
+      item: node.identifier,
+      severity: 'likely-unnamed-title-part',
+      words,
+    });
+  }
+  advisories.sort((a, b) => a.item.localeCompare(b.item));
+  return advisories;
+}
+
+/**
  * Which projected edges does the PLAN own (MOTIR-7727)? The edge findings
  * below — `invalidEdges` and `crossLevelEdges` — judge the tree the plan would
  * leave, and that tree holds every edge anyone ever drew in the project. A plan
@@ -680,6 +738,7 @@ export const planValidityService = {
     // Prose families first, then COVERAGE — the committed verdict's order.
     const prose = await projectedProseAdvisories(proj, memberIds, ctx);
     const coverage = await projectedCoverageAdvisories(proj, memberIds, ctx);
+    const titleCoverage = await projectedTitleCoverageAdvisories(proj, memberIds, ctx);
     // Only the edge findings this PLAN owns (MOTIR-7727) — an old bad edge in
     // the subtree is the committed verdict's to report, not the plan's.
     const owns = planOwnsEdge(proj);
@@ -691,7 +750,7 @@ export const planValidityService = {
       blockers,
       invalidEdges,
       crossLevelEdges,
-      advisories: [...prose, ...coverage],
+      advisories: [...prose, ...coverage, ...titleCoverage],
       softBlocks: await projectedSoftBlocks(proj, root.id, ctx),
     };
   },
