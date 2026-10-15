@@ -96,3 +96,29 @@ Every reader metric carries `role: reader`. A redirect to sign-in, re-consent, a
 two-factor hold or no-project is an `error`, never a hop. `setup()` should call
 `probeReaderCookie`, which aborts the run before any VU starts when the target
 does not accept the first user's cookie.
+
+## Run-lifecycle scenario (`/api/v1`)
+
+`runs.js` (`runsScenario(ctx)`) makes, per iteration, the calls a single-card
+`motir run <KEY>` makes when its agent exits without pushing
+(`../runs/sequence.js` cites the CLI line by line): `GET /me`,
+`GET /workspaces`, read, claim, dispatch prompt, open (`origin: 'local'`, which
+starts nothing), a beat at open, `run_opened` and `checkout_ready` each sent at
+once, the designs read, a beat plus a flush every 60 s of agent time, the replan
+read, the final batch and the close (`stopReason: completed`). No pull request,
+CI or container is reached. The card is then recycled (unassigned, back to
+`todo`) with two calls tagged `step: recycle`, which the CLI never makes.
+
+Each VU uses its own `run` agent and a disjoint slice of that agent's project's
+run pool. `requestsPerIteration({ agentSeconds, recycle })` is the per-token
+request count the run command checks against `MOTIR_API_V1_RATE_LIMIT`.
+
+| metric                   | type    | holds                                             |
+| ------------------------ | ------- | ------------------------------------------------- |
+| `run_steps`              | Counter | every request — tags `step`, `outcome`, `role`    |
+| `run_step_duration`      | Trend   | `ok` requests only — tag `step`                   |
+| `run_lifecycle_duration` | Trend   | one claim → close, clean iterations only          |
+| `runs_completed`         | Counter | iterations that reached the close with every `ok` |
+| `run_claim_refused`      | Counter | claims answered `taken` / `not_claimable`         |
+| `run_pool_exhausted`     | Counter | iterations whose VU had no run card               |
+| `run_limited`            | Counter | 429s on any step (backed off, same run resumed)   |
