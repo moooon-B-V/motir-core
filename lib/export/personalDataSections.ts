@@ -765,6 +765,13 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'moooon B.V. operator who last flipped it. A record about a customer tenant, ' +
     'written only from the platform tier — `PlatformAuditLog`’s argument; every flip ' +
     'is recorded there (`org.kill_switch_off` / `org.kill_switch_on`).',
+  PlatformFleetOrgCi:
+    'The platform switch that moves a connected organisation’s private CI onto the ' +
+    'shared runner fleet (MOTIR-8714), whose only User FK is the platform superadmin ' +
+    'who last flipped it. Platform configuration written only from the platform tier, ' +
+    'not a record about the operator as a data subject — `PlatformRunModel`’s argument; ' +
+    'every flip is recorded in the audit log (`fleet.org_ci.enable` / ' +
+    '`fleet.org_ci.disable`) with the same actor.',
   PlatformRunModel:
     'A row of the platform-wide hosted-run model list (MOTIR-7525) whose only User FK ' +
     'is the moooon B.V. operator who added the model. Platform configuration written ' +
