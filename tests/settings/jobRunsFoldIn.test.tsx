@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
 // Story MOTIR-4843 · MOTIR-4861 — the `Job runs` FOLD-IN, and the four gates it
@@ -45,6 +45,15 @@ vi.mock('@/app/(authed)/settings/workspace/jobs/_components/JobsPane', async (im
   },
 }));
 
+// The caller's platform-staff standing (MOTIR-8199), resolved fresh on every
+// render. Its own cases — the real gate against a real `platformRole` column —
+// are `tests/jobs/platformStanding.test.ts`; here it is the input the fold-in
+// turns into `showSystemTab`.
+const resolveJobsPlatformRole = vi.fn();
+vi.mock('@/lib/jobs/platformStanding', () => ({
+  resolveJobsPlatformRole: () => resolveJobsPlatformRole(),
+}));
+
 import { JobRunsFoldInSection } from '@/app/(authed)/settings/organization/_components/JobRunsFoldInSection';
 
 const WORKSPACE_ID = 'ws1';
@@ -54,7 +63,6 @@ const WORKSPACE_ID = 'ws1';
 const MEMBER = {
   workspaceId: WORKSPACE_ID,
   actorUserId: 'u1',
-  actorEmail: 'member@example.com',
   searchParams: {},
 };
 
@@ -63,18 +71,21 @@ async function renderSection(props: Parameters<typeof JobRunsFoldInSection>[0]) 
   return paneProps.mock.calls.at(-1)![0] as Record<string, unknown>;
 }
 
+beforeEach(() => {
+  resolveJobsPlatformRole.mockResolvedValue(null);
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  delete process.env['PLATFORM_ADMIN_EMAIL'];
 });
 
 describe('the Job runs fold-in — it renders for a WORKSPACE MEMBER', () => {
   it('renders for a plain member, with no org role anywhere in its signature', async () => {
     await renderSection(MEMBER);
     expect(screen.getByTestId('jobs-pane')).toBeTruthy();
-    // The structural half of §6d here: the section takes a workspace id, a user
-    // id and an email. There is no org role in its inputs at all, so it CANNOT
+    // The structural half of §6d here: the section takes a workspace id and a
+    // user id. There is no org role in its inputs at all, so it CANNOT
     // inherit the host page's admin gate even by accident.
     const props = paneProps.mock.calls.at(-1)![0] as Record<string, unknown>;
     expect(props['workspaceId']).toBe(WORKSPACE_ID);
@@ -95,21 +106,32 @@ describe('the Job runs fold-in — it renders for a WORKSPACE MEMBER', () => {
 });
 
 describe('the Job runs fold-in — the SYSTEM tab gate, which it still owns', () => {
-  it('is present only when the request email matches PLATFORM_ADMIN_EMAIL', async () => {
-    process.env['PLATFORM_ADMIN_EMAIL'] = 'staff@motir.co';
-    const staff = await renderSection({ ...MEMBER, actorEmail: 'staff@motir.co' });
-    expect(staff['showSystemTab']).toBe(true);
+  it.each(['support', 'operator', 'superadmin'] as const)(
+    'is present for platform staff at %s',
+    async (role) => {
+      resolveJobsPlatformRole.mockResolvedValue(role);
+      expect((await renderSection(MEMBER))['showSystemTab']).toBe(true);
+    },
+  );
+
+  it('is ABSENT for a caller with no platform role', async () => {
+    expect((await renderSection(MEMBER))['showSystemTab']).toBe(false);
   });
 
-  it('is ABSENT for everyone else, and when the env var is unset', async () => {
-    process.env['PLATFORM_ADMIN_EMAIL'] = 'staff@motir.co';
+  it('ignores PLATFORM_ADMIN_EMAIL, even when it is set', async () => {
+    // The env var was the old gate (MOTIR-8199 retired it here). Setting it
+    // must open nothing: only a platform role does.
+    vi.stubEnv('PLATFORM_ADMIN_EMAIL', 'member@example.com');
     expect((await renderSection(MEMBER))['showSystemTab']).toBe(false);
+    vi.unstubAllEnvs();
+  });
+
+  it('re-reads the standing on EVERY render — a revoke is not remembered', async () => {
+    resolveJobsPlatformRole.mockResolvedValueOnce('operator');
+    expect((await renderSection(MEMBER))['showSystemTab']).toBe(true);
     cleanup();
-    delete process.env['PLATFORM_ADMIN_EMAIL'];
-    // ⚠️ With no admin email configured NOBODY sees it — not everybody. An
-    // `email === undefined` comparison would open it to any user whose email is
-    // missing, which is why the source guards on `Boolean(adminEmail)` first.
-    expect((await renderSection({ ...MEMBER, actorEmail: '' }))['showSystemTab']).toBe(false);
+    expect((await renderSection(MEMBER))['showSystemTab']).toBe(false);
+    expect(resolveJobsPlatformRole).toHaveBeenCalledTimes(2);
   });
 });
 
