@@ -615,7 +615,13 @@ export const publicFollowBodySchema = z
 
 /** The body of `POST …/subscribe`. */
 export const publicSubscribeBodySchema = z
-  .object({ email: z.string().meta({ description: 'The address to send the digest to.' }) })
+  .object({
+    email: z.string().meta({ description: 'The address to send the digest to.' }),
+    locale: z.string().optional().meta({
+      description:
+        "The language of the page the visitor subscribed from, one of the app's locale codes. Recorded so the follow's emails are written in it; when absent or unknown, the request's language is recorded.",
+    }),
+  })
   .strict()
   .meta({ id: 'PublicSubscribeBody' });
 

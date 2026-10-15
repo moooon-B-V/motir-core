@@ -1,3 +1,4 @@
+import { isLocale } from '@/lib/i18n/locales';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { publicFollowRepository } from '@/lib/repositories/publicFollowRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -195,11 +196,17 @@ export const publicFollowService = {
    * that is already confirmed re-sends nothing and answers the same; an unknown
    * address answers the same. The caller cannot learn anything about the
    * follower list from the response, which is the whole point (§7).
+   *
+   * `pageLocale` is the language of the page the visitor subscribed from. It is
+   * RECORDED on the row (MOTIR-8105) so the follow's emails can later be written
+   * in it; a value that is not one of the eleven is stored as NULL. A newer
+   * subscribe of an unconfirmed address replaces it, as it replaces the token.
    */
   async subscribeByEmail(
     identifier: string,
     rawEmail: string,
     actorUserId: string | null,
+    pageLocale?: string | null,
   ): Promise<void> {
     if (!digestAvailable()) throw new FollowDigestUnavailableError();
     const email = normalizeFollowEmail(rawEmail);
@@ -220,6 +227,7 @@ export const publicFollowService = {
       }
       const data = {
         digestOptIn: true,
+        locale: isLocale(pageLocale) ? pageLocale : null,
         confirmTokenHash: hashFollowToken(token),
         confirmTokenExpiresAt: new Date(Date.now() + CONFIRM_TOKEN_TTL_MS),
       };

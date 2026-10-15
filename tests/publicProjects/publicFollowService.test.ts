@@ -222,6 +222,54 @@ describe('the email-only tier', () => {
   });
 });
 
+// Story MOTIR-7732 · MOTIR-8105 — the language of the page an email-only
+// follow was made from is recorded on the row, for its emails to be written in.
+describe('the page language an email-only follow records', () => {
+  it('stores a valid page language on a new follow', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    const row = await adminDb.publicFollow.findFirstOrThrow();
+    expect(row.email).toBe('a@b.co');
+    expect(row.locale).toBe('it');
+  });
+
+  it.each(['xx', '', undefined])('stores NULL for a page language of %j', async (pageLocale) => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, pageLocale);
+    expect((await adminDb.publicFollow.findFirstOrThrow()).locale).toBeNull();
+  });
+
+  it('takes the newest page language when an UNCONFIRMED address re-subscribes', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    const first = await adminDb.publicFollow.findFirstOrThrow();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'de');
+
+    expect(await adminDb.publicFollow.count()).toBe(1);
+    const second = await adminDb.publicFollow.findFirstOrThrow();
+    expect(second.confirmTokenHash).not.toBe(first.confirmTokenHash);
+    expect(second.locale).toBe('de');
+  });
+
+  it('leaves a CONFIRMED follow’s language alone and sends nothing', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'it');
+    const token = /token=([A-Za-z0-9_-]+)/.exec(enqueued[0]?.data.confirmUrl ?? '')?.[1] ?? '';
+    await publicFollowService.confirmEmailFollow(token);
+    enqueued.length = 0;
+
+    await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'a@b.co', null, 'de');
+    expect(enqueued).toHaveLength(0);
+    expect((await adminDb.publicFollow.findFirstOrThrow()).locale).toBe('it');
+  });
+
+  it('records no language on an account follow', async () => {
+    const fx = await publicFixture();
+    await publicFollowService.followAsAccount(fx.projectIdentifier, fx.ownerId);
+    expect((await adminDb.publicFollow.findFirstOrThrow()).locale).toBeNull();
+  });
+});
+
 describe('confirmation', () => {
   async function subscribeAndGetToken(fx: WorkItemFixture): Promise<string> {
     await publicFollowService.subscribeByEmail(fx.projectIdentifier, 'reader@example.com', null);
