@@ -3179,6 +3179,21 @@ export default defineConfig({
         'lib/monitoring/metricsServer.ts',
         'lib/mcp/toolTracing.ts',
         'scripts/pgTopStatements.ts',
+        // Story MOTIR-8651 · BUILD THROUGH (Subtask MOTIR-8662) — the two NEW modules the
+        // discrepancy record added: the service that validates the points and writes the
+        // comment and the `discrepancy_recorded` finding in one transaction, and the MCP
+        // tool over it. Pinned in `thresholds` below at the project floor (90 on every
+        // metric). ⚠️ NOT MEASURED LOCALLY — this sandbox has no database, and both are
+        // exercised only through DB-backed specs (`tests/runDiscrepancyService.test.ts`,
+        // `tests/mcp/record-run-discrepancy.test.ts`, and this story's gate
+        // `tests/integration/runs/buildThroughStoryGate.test.ts`), so the coverage job on
+        // the pull request is the first measurement. Raise to the measured number, or
+        // fix the spec, if it reads lower. The shared files the story changed
+        // (`dispatchRunService.ts`, `commentsService.ts`, `promptTemplate.ts`,
+        // `RunFindings.tsx`, `dispatchRunEventRepository.ts`) carry other stories' code and
+        // are not newly pinned (the MOTIR-6633 rule).
+        'lib/services/runDiscrepancyService.ts',
+        'lib/mcp/tools/recordRunDiscrepancy.ts',
         'scripts/pgTopStatementsQuery.ts',
       ],
       reporter: ['text', 'text-summary'],
@@ -3191,6 +3206,19 @@ export default defineConfig({
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
         // ── Story MOTIR-6170 · THE VISITOR (Subtask MOTIR-6650) — see `include`. ──
+        // ── Story MOTIR-8651 · BUILD THROUGH (Subtask MOTIR-8662) — see `include`. ──
+        'lib/services/runDiscrepancyService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mcp/tools/recordRunDiscrepancy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'lib/visitor/consentPath.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/visitor/context.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/visitor/cookie.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
