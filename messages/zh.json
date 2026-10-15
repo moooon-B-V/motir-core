@@ -8092,9 +8092,9 @@
       }
     },
     "follow": {
-      "following": "正在跟随规划器",
-      "resume": "跟随规划器",
-      "resumedAnnouncement": "已重新跟随规划器"
+      "following": "正在跟随规划者",
+      "resume": "跟随规划者",
+      "resumedAnnouncement": "已重新跟随规划者"
     }
   },
   "codeHealth": {
