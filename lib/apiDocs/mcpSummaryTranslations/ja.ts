@@ -388,6 +388,12 @@ export const ja: McpSummaryTranslations = {
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
   },
+  record_run_discrepancy: {
+    summary:
+      'HOW だけが誤っている計画に沿って作業項目を実装したランナーが、計画と異なる形で実装した内容を記録します。作業項目へのコメントと実行記録が残り、受理されます。',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+  },
   report_unbuildable_target: {
     summary:
       'ディスパッチされたランナーが、停止した作業項目を実装不可として報告します。受理されるだけで、対応すべきことはありません。',

@@ -865,6 +865,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: 'bf12bf352e1e',
   },
+  record_run_discrepancy: {
+    summary:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+    descriptionFingerprint: '711c8278f527',
+  },
   create_plan: {
     summary:
       'Open a plan to propose into — the reviewable container an agent fills instead of writing items.',

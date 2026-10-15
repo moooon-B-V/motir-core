@@ -356,6 +356,12 @@ export const zh: McpSummaryTranslations = {
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
   },
+  record_run_discrepancy: {
+    summary:
+      '按仅在“如何做”上有误的计划构建工作项的运行器，记录它实际有何不同的做法：一条工作项评论加一条运行记录，并予确认。',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+  },
   report_unbuildable_target: {
     summary: '已派发的运行器报告它停下的那个工作项无法构建：仅作确认，无需任何处理。',
     source:

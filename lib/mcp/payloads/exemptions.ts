@@ -23,6 +23,11 @@ import type { McpToolName } from '../registry';
  * column fails the run rather than being skipped.
  */
 export const EXEMPT_TOOLS = {
+  record_run_discrepancy:
+    'Returns an ACKNOWLEDGEMENT — `{ commentId, recorded }` — of a comment it wrote on the ' +
+    'card and, when the card had an open dispatch leg, a server-written finding on the run. It ' +
+    'represents no resource, and there is no `/api/v1` operation by decision — nothing but the ' +
+    'runner that built the card through calls it (decision page MOTIR-8654, MOTIR-8657).',
   report_unbuildable_target:
     'Returns an ACKNOWLEDGEMENT of a server-side finding — `{ acknowledged: true, ' +
     'recordedOnRun }` — and deliberately nothing else: the verdict, the approving plan and any ' +

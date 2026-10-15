@@ -122,6 +122,12 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // The run-found report (MOTIR-6286) — item-keyed within a project, so a
     // non-member must read A's key as not-found rather than record on A's run.
     report_unbuildable_target: { projectKey: t.projectKey, targetKey: t.item1, reason: 'leak?' },
+    // The run discrepancy record (MOTIR-8657) — item-keyed, so a non-member must read A's key
+    // as not-found rather than comment on A's card or record on A's run.
+    record_run_discrepancy: {
+      key: t.item1,
+      points: [{ planAsked: 'leak?', built: 'leak?', why: 'leak?' }],
+    },
     open_plan_session: { projectKey: t.projectKey },
     append_plan_turn: { projectKey: t.projectKey, body: 'leak?' },
     submit_plan_session: { projectKey: t.projectKey },

@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **97 tools**.
+`initialize` handshake and registers **98 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3952,6 +3952,44 @@ report on the same leg returns the same acknowledgement and records nothing more
 
 Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries — a token
 from `motir login` reaches it without widening the grant.
+
+#### `record_run_discrepancy`
+
+A dispatched runner's record of **what it built differently from the plan**
+(Story MOTIR-8651 · MOTIR-8657). It is called when the run built the card
+through a plan that was wrong only about the HOW — the card's outcome and
+acceptance criteria held (`docs/decisions/run-findings-protocol.md`, the
+MOTIR-8654 amendment). It is called **once, after building and before the pull
+request**.
+
+| Input    | Type   | Required | Notes                                                                                                          |
+| -------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `key`    | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                           |
+| `points` | array  | yes      | 1–20 entries of `{ planAsked, built, why }`; each field is non-empty text of at most 2000 characters, trimmed. |
+
+**Output** — the id of the card comment the server wrote, and whether the run
+record was written too:
+
+```json
+{ "commentId": "…", "recorded": true }
+```
+
+`recorded` is `false` when the card had no open leg on a running dispatch run:
+the comment is still written, and nothing is put on a run.
+
+**One record per leg**: a second call on the same leg is refused with
+`DISCREPANCY_ALREADY_RECORDED` and writes nothing more. Other refusals:
+
+- an empty `points`, more than 20, or a field that is empty or over 2000
+  characters → `RUN_DISCREPANCY_INVALID`;
+- an unknown key, or a key in another workspace → `WORK_ITEM_NOT_FOUND`
+  (404-not-403);
+- a caller who may read but not edit the card → `PERMISSION_DENIED`.
+
+If the WHAT itself cannot be built, this is the wrong tool: stop and use
+`report_unbuildable_target`.
+
+Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries.
 
 #### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason` · `report_plan_step` · `hold_plan_revision`
 
