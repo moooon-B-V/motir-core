@@ -8,7 +8,8 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-c
 // POST /api/ai/guide/decline — DECLINE a guide turn's re-plan offer (Story
 // MOTIR-8684 · MOTIR-8689; decision MOTIR-8685). Body: { turnId, sessionId }.
 // Records a marker on the thread; plans nothing, spends nothing, decides no gate.
-// Replayable. Submits no model job, so it is not rate-limited.
+// Replayable. Submits no model job: NOT rate-limited, deliberately — the guide
+// settle precedent exactly (one marker row on a thread already open).
 //
 // HTTP only (CLAUDE.md 4-layer): parse, call ONE service method, map errors.
 export async function POST(req: Request): Promise<Response> {
