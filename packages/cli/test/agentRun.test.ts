@@ -180,6 +180,38 @@ describe('the model self-report', () => {
     expect(result.model).toBe('gpt-5-codex');
   });
 
+  it('reads the STOP step’s `unbuildable` reason beside the model (MOTIR-8698)', async () => {
+    const result = await runAgent({
+      command: reportingAgent('{"model":"m-1","unbuildable":"  the table does not exist \\n"}'),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.model).toBe('m-1');
+    expect(result.unbuildableReason).toBe('the table does not exist');
+  });
+
+  it('a reason with no model is still a reason; a bad one is null, never an error', async () => {
+    const alone = await runAgent({
+      command: reportingAgent('{"unbuildable":"no such table"}'),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(alone).toMatchObject({ model: null, unbuildableReason: 'no such table' });
+    for (const body of ['{"unbuildable":42}', '{"unbuildable":"   "}', '{"model":"m-1"}']) {
+      const result = await runAgent({ command: reportingAgent(body), prompt: PROMPT, cwd: work });
+      expect(result.unbuildableReason, body).toBeNull();
+    }
+  });
+
+  it('CUTS an over-long reason to the server’s bound rather than dropping the report', async () => {
+    const result = await runAgent({
+      command: reportingAgent(JSON.stringify({ unbuildable: 'r'.repeat(5000) })),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.unbuildableReason).toBe('r'.repeat(4000));
+  });
+
   it('keeps the report of an agent that FAILED — it still ran on that model', async () => {
     const result = await runAgent({
       command: fakeAgent(
@@ -320,7 +352,12 @@ describe('the injected spawn seam covers what a real child cannot show', () => {
     });
     child.emit('close', null, null);
 
-    expect(await result).toEqual({ exitCode: 1, signal: null, model: null });
+    expect(await result).toEqual({
+      exitCode: 1,
+      signal: null,
+      model: null,
+      unbuildableReason: null,
+    });
   });
 });
 

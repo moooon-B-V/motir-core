@@ -70,7 +70,23 @@ export interface AgentRunResult {
    * observed.
    */
   model: string | null;
+  /**
+   * The agent's REASON for stopping on an unbuildable card, when it wrote one into
+   * its self-report as `unbuildable` (MOTIR-8698) — the prompt's STOP branch tells
+   * it to, so the CLI can make the run-found report with the run's own credential.
+   * Null (or absent, from a caller's fake) when the agent built the card, or said
+   * nothing.
+   */
+  unbuildableReason?: string | null;
 }
+
+/**
+ * The longest unbuildable reason carried — the server's own bound
+ * (`RUN_FOUND_REPORT_REASON_MAX`). A longer one is CUT to it rather than dropped:
+ * unlike a model id, the head of a reason is still the reason, and dropping it
+ * would silence the report it exists to make.
+ */
+const MAX_UNBUILDABLE_REASON_LENGTH = 4000;
 
 /**
  * The longest string accepted as a model identifier. A self-report is UNTRUSTED
@@ -80,30 +96,50 @@ export interface AgentRunResult {
  */
 const MAX_MODEL_LENGTH = 200;
 
+/** What the self-report said. Each field is read on its own: a bad one is null. */
+export interface AgentReport {
+  model: string | null;
+  unbuildableReason: string | null;
+}
+
+const EMPTY_REPORT: AgentReport = { model: null, unbuildableReason: null };
+
 /**
  * Read the agent's self-report. Total: every failure mode — no file, no
- * permission, invalid JSON, a non-object, a non-string, a blank or an
- * implausibly long `model` — is the same answer, a null model.
+ * permission, invalid JSON, a non-object — is the empty report; a non-string, a
+ * blank or an implausibly long `model` is a null model; a non-string or blank
+ * `unbuildable` is a null reason.
  */
-function readAgentReport(path: string): string | null {
+export function readAgentReport(path: string): AgentReport {
   let raw: string;
   try {
     raw = readFileSync(path, 'utf8');
   } catch {
-    return null;
+    return EMPTY_REPORT;
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return null;
+    return EMPTY_REPORT;
   }
-  if (typeof parsed !== 'object' || parsed === null) return null;
-  const model = (parsed as { model?: unknown }).model;
+  if (typeof parsed !== 'object' || parsed === null) return EMPTY_REPORT;
+  const { model, unbuildable } = parsed as { model?: unknown; unbuildable?: unknown };
+  return { model: modelOf(model), unbuildableReason: reasonOf(unbuildable) };
+}
+
+function modelOf(model: unknown): string | null {
   if (typeof model !== 'string') return null;
   const trimmed = model.trim();
   if (trimmed === '' || trimmed.length > MAX_MODEL_LENGTH) return null;
   return trimmed;
+}
+
+function reasonOf(reason: unknown): string | null {
+  if (typeof reason !== 'string') return null;
+  const trimmed = reason.trim();
+  if (trimmed === '') return null;
+  return trimmed.slice(0, MAX_UNBUILDABLE_REASON_LENGTH);
 }
 
 export interface RunAgentOptions {
@@ -186,83 +222,91 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
   }
 
   try {
-    const result = await new Promise<Omit<AgentRunResult, 'model'>>((resolve, reject) => {
-      const tee = opts.onOutput;
-      const promptOnStdin = opts.command.promptOnStdin !== false;
-      const args = [...opts.command.args, ...(opts.command.promptArgs?.(prompt, promptFile) ?? [])];
-      const child = spawnFn(opts.command.binary, args, {
-        cwd: opts.cwd,
-        // stdin piped (we write the prompt); stdout/stderr inherited so the
-        // agent's output streams straight through to the user's terminal —
-        // unless a caller wants a COPY, in which case they are piped and
-        // forwarded to the very same streams below. A launcher that takes its
-        // prompt on argv leaves stdin unconnected (`promptOnStdin: false`).
-        stdio: [
-          promptOnStdin ? 'pipe' : 'ignore',
-          tee ? 'pipe' : 'inherit',
-          tee ? 'pipe' : 'inherit',
-        ],
-        env: {
-          // A built-in launcher's environment REPLACES the inherited one — it is
-          // an allow-list (MOTIR-6559), and merging would defeat it.
-          ...(opts.command.env ?? opts.env ?? process.env),
-          MOTIR_PROMPT_FILE: promptFile,
-          MOTIR_AGENT_REPORT: reportFile,
-          // Set ONLY when every file landed. An unset variable is what tells the
-          // agent to follow the prompt's fetch instruction instead, so setting it
-          // over a partial directory would be the one lie this design forbids.
-          ...(designReady ? { [MOTIR_DESIGN_DIR_ENV]: designRoot } : {}),
-        },
-      });
+    const result = await new Promise<Omit<AgentRunResult, 'model' | 'unbuildableReason'>>(
+      (resolve, reject) => {
+        const tee = opts.onOutput;
+        const promptOnStdin = opts.command.promptOnStdin !== false;
+        const args = [
+          ...opts.command.args,
+          ...(opts.command.promptArgs?.(prompt, promptFile) ?? []),
+        ];
+        const child = spawnFn(opts.command.binary, args, {
+          cwd: opts.cwd,
+          // stdin piped (we write the prompt); stdout/stderr inherited so the
+          // agent's output streams straight through to the user's terminal —
+          // unless a caller wants a COPY, in which case they are piped and
+          // forwarded to the very same streams below. A launcher that takes its
+          // prompt on argv leaves stdin unconnected (`promptOnStdin: false`).
+          stdio: [
+            promptOnStdin ? 'pipe' : 'ignore',
+            tee ? 'pipe' : 'inherit',
+            tee ? 'pipe' : 'inherit',
+          ],
+          env: {
+            // A built-in launcher's environment REPLACES the inherited one — it is
+            // an allow-list (MOTIR-6559), and merging would defeat it.
+            ...(opts.command.env ?? opts.env ?? process.env),
+            MOTIR_PROMPT_FILE: promptFile,
+            MOTIR_AGENT_REPORT: reportFile,
+            // Set ONLY when every file landed. An unset variable is what tells the
+            // agent to follow the prompt's fetch instruction instead, so setting it
+            // over a partial directory would be the one lie this design forbids.
+            ...(designReady ? { [MOTIR_DESIGN_DIR_ENV]: designRoot } : {}),
+          },
+        });
 
-      if (tee) {
-        // Forward FIRST, tee second: the terminal is the contract and the copy
-        // is the extra. A `pipe` nobody reads fills its buffer and stalls the
-        // child, so both streams are consumed unconditionally once piped.
-        const forward = (src: NodeJS.ReadableStream | null, sink: NodeJS.WritableStream): void => {
-          if (!src) return;
-          src.setEncoding('utf8');
-          src.on('data', (chunk: string) => {
-            sink.write(chunk);
-            try {
-              tee(chunk);
-            } catch {
-              /* an observation may never break the run it observes */
-            }
-          });
-          src.on('error', () => {});
-        };
-        forward(child.stdout, process.stdout);
-        forward(child.stderr, process.stderr);
-      }
+        if (tee) {
+          // Forward FIRST, tee second: the terminal is the contract and the copy
+          // is the extra. A `pipe` nobody reads fills its buffer and stalls the
+          // child, so both streams are consumed unconditionally once piped.
+          const forward = (
+            src: NodeJS.ReadableStream | null,
+            sink: NodeJS.WritableStream,
+          ): void => {
+            if (!src) return;
+            src.setEncoding('utf8');
+            src.on('data', (chunk: string) => {
+              sink.write(chunk);
+              try {
+                tee(chunk);
+              } catch {
+                /* an observation may never break the run it observes */
+              }
+            });
+            src.on('error', () => {});
+          };
+          forward(child.stdout, process.stdout);
+          forward(child.stderr, process.stderr);
+        }
 
-      child.on('error', (err: NodeJS.ErrnoException) => {
-        reject(
-          err.code === 'ENOENT'
-            ? new CliError(`Could not launch the agent "${opts.command.binary}": not found.`, {
-                hint: 'Run `motir doctor` to check your agent command and credentials.',
-              })
-            : new CliError(`Could not launch the agent "${opts.command.binary}": ${err.message}`),
-        );
-      });
+        child.on('error', (err: NodeJS.ErrnoException) => {
+          reject(
+            err.code === 'ENOENT'
+              ? new CliError(`Could not launch the agent "${opts.command.binary}": not found.`, {
+                  hint: 'Run `motir doctor` to check your agent command and credentials.',
+                })
+              : new CliError(`Could not launch the agent "${opts.command.binary}": ${err.message}`),
+          );
+        });
 
-      // An agent that closes stdin early (or never reads it) makes the write
-      // fail with EPIPE. That is not an error: the prompt is ALSO on disk at
-      // $MOTIR_PROMPT_FILE, which is the whole reason both channels exist.
-      const stdin = promptOnStdin ? child.stdin : null;
-      if (stdin) {
-        stdin.on('error', () => {});
-        stdin.end(prompt);
-      }
+        // An agent that closes stdin early (or never reads it) makes the write
+        // fail with EPIPE. That is not an error: the prompt is ALSO on disk at
+        // $MOTIR_PROMPT_FILE, which is the whole reason both channels exist.
+        const stdin = promptOnStdin ? child.stdin : null;
+        if (stdin) {
+          stdin.on('error', () => {});
+          stdin.end(prompt);
+        }
 
-      child.on('close', (code, signal) => {
-        resolve({ exitCode: signal ? 1 : (code ?? 1), signal });
-      });
-    });
+        child.on('close', (code, signal) => {
+          resolve({ exitCode: signal ? 1 : (code ?? 1), signal });
+        });
+      },
+    );
     // Read the self-report BEFORE the `finally` takes the temp dir with it —
     // and read it whatever the exit code was: an agent that reported its model
     // and then failed still ran on that model.
-    return { ...result, model: readAgentReport(reportFile) };
+    return { ...result, ...readAgentReport(reportFile) };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

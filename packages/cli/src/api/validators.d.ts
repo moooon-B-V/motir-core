@@ -84,6 +84,7 @@ export declare const operation_moveWorkItemsToSprint: ValidateFunction;
 export declare const operation_openDispatchRun: ValidateFunction;
 export declare const operation_openPlanSession: ValidateFunction;
 export declare const operation_recordWorkItemIntegration: ValidateFunction;
+export declare const operation_reportDispatchRunUnbuildable: ValidateFunction;
 export declare const operation_reportWorkItemImplementation: ValidateFunction;
 export declare const operation_restoreWorkItem: ValidateFunction;
 export declare const operation_startSprint: ValidateFunction;

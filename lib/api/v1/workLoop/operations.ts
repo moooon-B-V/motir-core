@@ -36,6 +36,10 @@ import {
   dispatchRunSchema,
 } from '@/lib/api/v1/workLoop/schema';
 import {
+  unbuildableReportAcknowledgementSchema,
+  unbuildableReportBodySchema,
+} from '@/lib/api/v1/workLoop/unbuildableReport';
+import {
   agentReviewBodySchema,
   agentReviewResultSchema,
   reviewPromptSchema,
@@ -1024,6 +1028,46 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [404, 409],
   }),
   defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/unbuildable',
+    operationId: 'reportDispatchRunUnbuildable',
+    summary: 'Report that a run stopped on an unbuildable card',
+    description:
+      'The RUN reports that its agent stopped because `targetKey`, a card the run holds, ' +
+      'cannot be built as written — the same report as the `report_unbuildable_target` MCP ' +
+      'tool, sent by the CLI with the run\u2019s own credential after the agent exits, so it ' +
+      'reaches the server whether or not the agent had a Motir MCP. The server records it on ' +
+      'the card\u2019s leg of THIS run and, when the card is exactly what an approved plan ' +
+      'shaped, files ONE planning bug into Motir\u2019s own planner-bug home — never into the ' +
+      'caller\u2019s project. ONE report per leg: a retry answers the same acknowledgement and ' +
+      'does nothing more. The answer says only whether the card had an open leg on the run; ' +
+      'it never carries the verdict, the plan, the outcome or a bug key. ' +
+      'Only the operator who opened the run may report for it.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run\u2019s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: unbuildableReportBodySchema,
+      description: 'The stopped card\u2019s key and the agent\u2019s reason.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: unbuildableReportAcknowledgementSchema },
+      description: 'The acknowledgement: whether the card had an open leg on this run.',
+    },
+    // 403 for a run token naming another run, or a caller who may not edit the card;
+    // 404 for an unknown, cross-workspace or another operator's run, or an unknown card;
+    // 409 when the run is already closed; 422 for a malformed body.
+    errorStatuses: [403, 404, 409, 422],
+  }),
+  defineOperation({
     method: 'GET',
     path: '/api/v1/dispatch-runs/{id}/close-out-prompt',
     operationId: 'getDispatchRunCloseOutPrompt',
@@ -1173,6 +1217,7 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   PlanOutcome: planOutcomeSchema,
   Plan: planSchema,
   PlanSession: planSessionSchema,
+  UnbuildableReportAcknowledgement: unbuildableReportAcknowledgementSchema,
   ActivityEntry: activityEntrySchema,
   DispatchRun: dispatchRunSchema,
   DispatchRunCard: dispatchRunCardSchema,

@@ -309,3 +309,57 @@ describe('the null reporter', () => {
     expect(nullDispatchRunReporter.offline).toBe(false);
   });
 });
+
+describe('the run-found report (MOTIR-8698)', () => {
+  it('posts the stopped card and reason on the run it holds', async () => {
+    const reports: Array<{ runId: string; targetKey: string; reason: string }> = [];
+    const { client } = fakeClient({
+      async reportDispatchRunUnbuildable(args) {
+        reports.push(args);
+        return { recordedOnRun: true };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.open(OPEN);
+
+    await reporter.reportUnbuildable!('PROD-1', 'no such table');
+
+    expect(reports).toEqual([{ runId: 'run_1', targetKey: 'PROD-1', reason: 'no such table' }]);
+  });
+
+  it('is sent even after event reporting went OFFLINE, and its own failure takes nothing down', async () => {
+    const warnings: string[] = [];
+    let reported = 0;
+    const { client } = fakeClient({
+      async appendDispatchRunEvents() {
+        throw new Error('500');
+      },
+      async reportDispatchRunUnbuildable() {
+        reported += 1;
+        throw new Error('network down');
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'card_claimed', workItemKey: 'PROD-1' });
+    await reporter.flush();
+    expect(reporter.offline).toBe(true);
+
+    await expect(reporter.reportUnbuildable!('PROD-1', 'why')).resolves.toBeUndefined();
+    expect(reported).toBe(1);
+    expect(warnings.some((w) => w.includes('could not report PROD-1 as unbuildable'))).toBe(true);
+  });
+
+  it('sends nothing when no run is held', async () => {
+    let reported = 0;
+    const { client } = fakeClient({
+      async reportDispatchRunUnbuildable() {
+        reported += 1;
+        return { recordedOnRun: true };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.reportUnbuildable!('PROD-1', 'why');
+    expect(reported).toBe(0);
+  });
+});

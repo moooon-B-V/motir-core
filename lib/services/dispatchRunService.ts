@@ -1305,6 +1305,13 @@ export const dispatchRunService = {
            */
           kind: Extract<DispatchEventKind, 'unbuildable_reported'>;
           data: Prisma.InputJsonObject;
+          /**
+           * The leg the report already resolved, when it came through a RUN's own
+           * door (MOTIR-8698, `reportUnbuildableTargetForRun`) — that door names the
+           * run, so the finding lands on THAT run's leg rather than whichever open
+           * leg the card has newest. Omitted, the card's open leg, as before.
+           */
+          legId?: string;
         },
     ctx: ServiceContext,
   ): Promise<{ recorded: boolean }> {
@@ -1321,7 +1328,9 @@ export const dispatchRunService = {
                 at,
                 tx,
               )
-            : await dispatchRunCardRepository.findOpenLegForWorkItem(input.anchorWorkItemId, tx);
+            : input.kind === 'unbuildable_reported' && input.legId !== undefined
+              ? await dispatchRunCardRepository.findById(input.legId, tx)
+              : await dispatchRunCardRepository.findOpenLegForWorkItem(input.anchorWorkItemId, tx);
           if (!leg) return { recorded: false };
 
           const findingId = input.kind === 'unbuildable_reported' ? leg.id : input.findingId;
@@ -1401,6 +1410,40 @@ export const dispatchRunService = {
       }
       await dispatchRunRepository.touchHeartbeat(runId, new Date(), tx);
     });
+  },
+
+  /**
+   * THE LEG A RUN'S OWN REPORT IS ABOUT (MOTIR-8698) — the open leg `workItemId` has
+   * on run `runId`, for the run-found report's run door
+   * (`POST /api/v1/dispatch-runs/{id}/unbuildable`).
+   *
+   * Refused exactly as {@link heartbeat} is, from the same locked read: a hosted
+   * run's credential naming another run is `DispatchRunTokenOutOfScopeError`; an
+   * unknown run, another tenant's, or one this caller did not open is
+   * `DispatchRunNotFoundError`; a closed run is `DispatchRunTerminalError`. A card
+   * the run does not hold, or whose leg has already ended, answers `null` — the
+   * report's "not on a run" arm, which records and files nothing.
+   */
+  async findOpenLegOnRun(
+    runId: string,
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<DispatchRunCard | null> {
+    assertRunTokenScope(runId, ctx);
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+        if (!locked || locked.createdById !== ctx.userId) {
+          throw new DispatchRunNotFoundError(runId);
+        }
+        if (locked.status !== 'running') {
+          throw new DispatchRunTerminalError(runId, locked.status);
+        }
+        const leg = await dispatchRunCardRepository.findByRunAndWorkItem(runId, workItemId, tx);
+        return leg && leg.endedAt === null ? leg : null;
+      },
+    );
   },
 
   /**

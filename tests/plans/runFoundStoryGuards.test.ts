@@ -301,7 +301,7 @@ describe('the RENDERED dispatch prompt (criterion 5)', () => {
       const block = cardIsWrongBlock(prompt);
       expect(block.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME)).toHaveLength(2);
       expect(flat(block)).toMatch(
-        /4\. Report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-42/,
+        /4\. Report it\. If the environment variable MOTIR_AGENT_REPORT is set, .* report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-42/,
       );
     },
   );
