@@ -353,6 +353,10 @@ describe('PlanReviewCanvas — the plan is BESIDE the reader (MOTIR-6223, second
     mount([proposal()], { heldTrail: INSIDE_LOGIN, offerPlanElsewhere: true });
     const offer = await screen.findByTestId('canvas-follow-offer');
     expect(offer.textContent).toBe('Plan is in ARP-1 · Go there');
+    // The offer shares the slot's compact form below a 32rem bar (MOTIR-8646):
+    // its words stay its accessible name when the label goes sr-only.
+    expect(offer.getAttribute('aria-label')).toBe('Plan is in ARP-1 · Go there');
+    expect(offer.className).toContain('@max-[32rem]/canvas-bar:size-(--height-control)');
     expect(band()).toBeNull();
     fireEvent.click(offer);
     // Taking it moves the canvas to the plan's level, and the offer goes.
