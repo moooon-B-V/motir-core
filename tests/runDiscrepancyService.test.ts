@@ -8,7 +8,7 @@ import {
 } from '@/lib/dispatchRuns/errors';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { PermissionDeniedError } from '@/lib/projects/errors';
-import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { DISPATCH_RUN_EVENT_LIMIT, dispatchRunService } from '@/lib/services/dispatchRunService';
 import { runDiscrepancyService } from '@/lib/services/runDiscrepancyService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -285,6 +285,51 @@ describe('no open leg — the comment is still written, and that is not an error
     await dispatchRunService.close(runId, { stopReason: 'completed' }, fx.ctx);
 
     expect((await record(c.key, [POINT], fx.ctx)).recorded).toBe(false);
+  });
+});
+
+describe('the edges', () => {
+  it('a key with no dash and a key of an unknown project are both WorkItemNotFoundError', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    await expect(record('NODASH', [POINT], fx.ctx)).rejects.toBeInstanceOf(WorkItemNotFoundError);
+    await expect(record('NOPE-1', [POINT], fx.ctx)).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+
+  it('a point with a MISSING field is refused as an empty field', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    await expect(record(c.key, [{ planAsked: 'a', built: 'b' }], fx.ctx)).rejects.toBeInstanceOf(
+      RunDiscrepancyInvalidError,
+    );
+  });
+
+  it('a call made through an automation rule still records', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    const result = await record(c.key, [POINT], { ...fx.ctx, viaAutomationRuleId: 'rule-1' });
+    expect(result.commentId).toEqual(expect.any(String));
+  });
+
+  it('a run already at the event cap keeps the comment and answers recorded: false', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    const runId = await openLegs(fx, [c.key], fx.ctx);
+    await adminDb.dispatchRunEvent.createMany({
+      data: Array.from({ length: DISPATCH_RUN_EVENT_LIMIT }, (_, i) => ({
+        workspaceId: fx.workspaceId,
+        dispatchRunId: runId,
+        seq: 100_000 + i,
+        kind: 'card_claimed' as const,
+        reportedBy: 'cli' as const,
+        data: {},
+      })),
+    });
+
+    const result = await record(c.key, [POINT], fx.ctx);
+
+    expect(result.recorded).toBe(false);
+    expect(await findings(c.id)).toHaveLength(0);
+    expect(await adminDb.comment.count({ where: { workItemId: c.id } })).toBe(1);
   });
 });
 
