@@ -75,6 +75,8 @@ import {
   EmptyPlanChangeTurnError,
   GuideSessionNotPlannableError,
   PlanSessionAwaitingResumeError,
+  GuideReplanOfferNotFoundError,
+  GuideReplanOfferNotOpenError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -92,7 +94,7 @@ import {
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
-import { guideOfferDeclinedBody, parseGuideOfferDeclined } from '@/lib/planning/guideOffer';
+import { replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
 import { KEEP_PLANNING_MARKER_BODY, NEW_SESSION_CONFIRM_BODY } from '@/lib/planChange/restart';
 
 /**
@@ -2421,36 +2423,68 @@ export const planChangeSessionsService = {
   },
 
   /**
-   * Decline a guide turn's re-plan offer (MOTIR-8689; decision MOTIR-8685): a
-   * `system` marker naming the offer's turn. Nothing is planned, spent or
-   * decided. Replayable: a second decline of the same offer appends nothing.
-   * Returns null when the turn is not an assistant guide turn carrying an offer.
+   * Decline a guide conversation's re-plan offer (MOTIR-8689; decision MOTIR-8685):
+   * stamps `declinedAt` / `declinedById` on the offer, under the session's row lock
+   * (the lock `claimGuideLanding` takes, so a decline serializes against a landing
+   * and against a later Confirm). Appends no turn, submits no job, plans nothing,
+   * spends nothing, and does not touch the work item.
+   *
+   *  - not the caller's own `guide` session, or no offer on that assistant turn ⇒
+   *    404, with nothing telling the cases apart;
+   *  - already `declined` ⇒ IDEMPOTENT: the thread comes back, nothing is written;
+   *  - `superseded` ⇒ `GuideReplanOfferNotOpenError`.
+   *
+   * ⚠️ HOOK (MOTIR-8691): once a planning session can be seeded from an offer, a
+   * confirmed offer is refused here too — the check goes after the state read.
    */
-  async declineGuideOffer(
+  async declineGuideReplanOffer(
     turnId: string,
     pctx: ProjectContext,
     address: PlanChangeSessionAddress,
-  ): Promise<PlanChangeSessionDto | null> {
+  ): Promise<PlanChangeSessionDto> {
     const session = await requireSession(pctx, address);
-    const offered = await withWorkspaceContext(
+    if (session.origin !== 'guide' || session.createdById !== pctx.userId) {
+      throw new PlanChangeSessionNotFoundError(pctx.projectId);
+    }
+    await withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-      (tx) => planChangeTurnRepository.findByIdInSession(turnId, session.id, pctx.workspaceId, tx),
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const rows = await planChangeTurnRepository.listBySessionId(
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        const turns = rows.map((t) => ({
+          id: t.id,
+          role: t.role,
+          guide: readGuideTurnRecord(t.guideTurn),
+        }));
+        const state = replanOfferStateOf(turns, turnId);
+        if (state === null) throw new GuideReplanOfferNotFoundError(turnId);
+        if (state === 'declined') return;
+        if (state === 'superseded') throw new GuideReplanOfferNotOpenError(turnId);
+        const row = rows.find((t) => t.id === turnId)!;
+        const record = readGuideTurnRecord(row.guideTurn)!;
+        await planChangeTurnRepository.setGuideTurn(
+          row.id,
+          pctx.workspaceId,
+          // The stored JSON, with only the offer's decision changed: every other
+          // key of the column rides through untouched.
+          {
+            ...(row.guideTurn as Record<string, unknown>),
+            replanOffer: {
+              ...record.replanOffer!,
+              declinedAt: new Date().toISOString(),
+              declinedById: pctx.userId,
+            },
+          } as Prisma.InputJsonValue,
+          tx,
+        );
+      },
     );
-    const record = offered ? readGuideTurnRecord(offered.guideTurn) : null;
-    const hasOffer = record?.actions.some(
-      (a) => a.type === 'needs_replan' && a.targetKey !== undefined,
-    );
-    if (!offered || offered.role !== 'assistant' || !hasOffer) return null;
-    return appendLocked(
-      session,
-      pctx,
-      { role: 'system', body: guideOfferDeclinedBody(turnId) },
-      {},
-      async (tx) =>
-        (await planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx)).some(
-          (t) => t.role === 'system' && parseGuideOfferDeclined(t.body) === turnId,
-        ),
-    );
+    return planChangeSessionsService.getById(pctx, session.id);
   },
 
   /**

@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
-import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
-import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-change/_errors';
+import { guideLandingService } from '@/lib/services/guideLandingService';
+import { mapPlanChangeError, noActiveProject, readSessionId } from '../../../plan-change/_errors';
 
-// POST /api/ai/guide/decline — DECLINE a guide turn's re-plan offer (Story
-// MOTIR-8684 · MOTIR-8689; decision MOTIR-8685). Body: { turnId, sessionId }.
-// Records a marker on the thread; plans nothing, spends nothing, decides no gate.
+// POST /api/ai/guide/offer/decline — DECLINE a guide reply's re-plan offer (Story
+// MOTIR-8684 · MOTIR-8689; decision MOTIR-8685). Body: { sessionId, turnId }.
+// Stamps the decision on the offer; plans nothing, spends nothing, decides no gate.
 // Replayable. Submits no model job: NOT rate-limited, deliberately — the guide
-// settle precedent exactly (one marker row on a thread already open).
+// settle precedent exactly (one stamp on a thread already open).
 //
 // HTTP only (CLAUDE.md 4-layer): parse, call ONE service method, map errors.
 export async function POST(req: Request): Promise<Response> {
@@ -35,15 +35,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const result = await planChangeSessionsService.declineGuideOffer(body.turnId, ctx, {
-      sessionId,
-    });
-    if (!result) {
-      return NextResponse.json(
-        { code: 'NO_OFFER', error: 'That turn carries no re-plan offer.' },
-        { status: 404 },
-      );
-    }
+    const result = await guideLandingService.declineReplanOffer(body.turnId, ctx, { sessionId });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

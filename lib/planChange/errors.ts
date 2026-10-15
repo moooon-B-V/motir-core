@@ -289,6 +289,33 @@ export class PlanChangeTurnNotFoundError extends Error {
 }
 
 /**
+ * A turn that holds no re-plan offer (or is not an assistant turn of the caller's
+ * own guide conversation). → 404 `GUIDE_REPLAN_OFFER_NOT_FOUND`; one answer for
+ * every way it can be wrong, so it never tells another member's offer apart from
+ * a missing one (MOTIR-8689).
+ */
+export class GuideReplanOfferNotFoundError extends Error {
+  readonly code = 'GUIDE_REPLAN_OFFER_NOT_FOUND' as const;
+  constructor(turnId: string) {
+    super(`No re-plan offer on turn ${turnId}.`);
+    this.name = 'GuideReplanOfferNotFoundError';
+  }
+}
+
+/**
+ * The offer exists but can no longer be decided: a later turn superseded it
+ * (MOTIR-8689), or a planning session was started from it. → 409
+ * `GUIDE_REPLAN_OFFER_NOT_OPEN`.
+ */
+export class GuideReplanOfferNotOpenError extends Error {
+  readonly code = 'GUIDE_REPLAN_OFFER_NOT_OPEN' as const;
+  constructor(turnId: string) {
+    super(`The re-plan offer on turn ${turnId} is no longer open.`);
+    this.name = 'GuideReplanOfferNotOpenError';
+  }
+}
+
+/**
  * The work item an ask turn names as its ANCHOR (`anchorKey`, MOTIR-7047) does
  * not resolve for this caller: an unknown key, a key in another project or
  * workspace, or one they may not browse. ONE answer for all of them, and the same

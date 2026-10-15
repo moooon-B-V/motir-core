@@ -292,6 +292,21 @@ describe('parseGuideTurn', () => {
     ]);
   });
 
+  it('reads an offer with no target (the guided card), and a blank request as no offer (MOTIR-8689)', () => {
+    const noTarget = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [{ type: 'needs_replan', reason: 'x', requestMd: 'Re-plan it.' }],
+    });
+    expect(noTarget.actions).toEqual([
+      { type: 'needs_replan', reason: 'x', requestMd: 'Re-plan it.' },
+    ]);
+    const blank = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [{ type: 'needs_replan', reason: 'x', requestMd: '   ', targetKey: 'MOTIR-4' }],
+    });
+    expect(blank.actions).toEqual([{ type: 'needs_replan', reason: 'x', targetKey: 'MOTIR-4' }]);
+  });
+
   it('still reads a reason-only needs_replan, which offers nothing (MOTIR-8685)', () => {
     const turn = parseGuideTurn({
       messageMd: 'ok',
@@ -387,21 +402,6 @@ describe('parseGuideTurn', () => {
     ['a bug naming a kind', { ...VALID.file_bug, kind: 'task' }, 'actions[0]'],
     ['a bug naming a project', { ...VALID.file_bug, projectKey: 'OTHER' }, 'actions[0]'],
     ['a needs_replan with no reason', { type: 'needs_replan' }, 'actions[0].reason'],
-    [
-      'a needs_replan request with no target',
-      { type: 'needs_replan', reason: 'x', requestMd: 'Re-plan it.' },
-      'actions[0].targetKey',
-    ],
-    [
-      'a needs_replan target with no request',
-      { type: 'needs_replan', reason: 'x', targetKey: 'MOTIR-4' },
-      'actions[0].requestMd',
-    ],
-    [
-      'a needs_replan with a blank request',
-      { type: 'needs_replan', reason: 'x', requestMd: '   ', targetKey: 'MOTIR-4' },
-      'actions[0].requestMd',
-    ],
     [
       'a needs_replan request over the cap',
       {
@@ -561,6 +561,45 @@ describe('readGuideTurnRecord', () => {
         workItemKey: 'PROD-7',
       },
     ]);
+  });
+
+  it('reads a stored re-plan offer field by field, and a malformed one as no offer (MOTIR-8689)', () => {
+    const offer = {
+      reason: 'The domain is retired',
+      requestMd: 'Re-plan MOTIR-4.',
+      requestedTargetKey: 'MOTIR-4',
+      targetKey: 'MOTIR-4',
+      targetResolution: 'as_asked',
+      declinedAt: null,
+      declinedById: null,
+    };
+    const base = { actions: [VALID.needs_replan], outcomes: [{ outcome: 'landed' }] };
+    expect(readGuideTurnRecord({ ...base, replanOffer: offer })?.replanOffer).toEqual(offer);
+    // Absent fields of a stored offer read as null.
+    const sparse = { reason: 'r', requestMd: 'q', targetResolution: 'none' };
+    expect(readGuideTurnRecord({ ...base, replanOffer: sparse })?.replanOffer).toEqual({
+      reason: 'r',
+      requestMd: 'q',
+      requestedTargetKey: null,
+      targetKey: null,
+      targetResolution: 'none',
+      declinedAt: null,
+      declinedById: null,
+    });
+    // A record with no offer reads exactly as before; a malformed offer drops
+    // alone, the actions still read.
+    expect(readGuideTurnRecord(base)).not.toHaveProperty('replanOffer');
+    for (const bad of [
+      'x',
+      { ...offer, requestMd: 3 },
+      { ...offer, targetResolution: 'sideways' },
+      { ...offer, targetKey: 7 },
+      { ...offer, declinedAt: 7 },
+    ]) {
+      const read = readGuideTurnRecord({ ...base, replanOffer: bad });
+      expect(read?.replanOffer ?? null).toBeNull();
+      expect(read?.actions).toHaveLength(1);
+    }
   });
 
   it('reads anything that no longer parses as null', () => {

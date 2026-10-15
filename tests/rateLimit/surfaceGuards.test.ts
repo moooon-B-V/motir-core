@@ -893,7 +893,7 @@ describe('the routes are actually WIRED to the guards', () => {
     // precedent exactly (MOTIR-7470).
     // The decline of a re-plan offer writes one marker row on the thread and
     // plans nothing (MOTIR-8689).
-    'app/api/ai/guide/decline/route.ts',
+    'app/api/ai/guide/offer/decline/route.ts',
     'app/api/ai/guide/settle/route.ts',
     'app/api/ai/jobs/[jobId]/route.ts',
     // The boundary MAILBOX (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068): a turn

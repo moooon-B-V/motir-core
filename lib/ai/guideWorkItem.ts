@@ -260,8 +260,8 @@ export type GuideAction =
   // A3.9 (b): the change asked for would alter the card's TARGET. Edits nothing;
   // landed like `cannot_do`, as a comment on the guided card. MOTIR-8685 widens it
   // to a RE-PLAN OFFER: `requestMd` is the re-plan request the guide wrote and
-  // `targetKey` the work item it chose to re-plan. BOTH or NEITHER — a reason-only
-  // `needs_replan` (the shipped shape) still parses and offers nothing.
+  // `targetKey` the work item it chose to re-plan (none ⇒ the guided card). A
+  // reason-only `needs_replan` (the shipped shape) still parses and offers nothing.
   | { type: 'needs_replan'; reason: string; requestMd?: string; targetKey?: string }
   // MOTIR-7800 (decision MOTIR-7798 Q3): file ONE confirmed defect as a `bug`, as
   // the person. No kind and no project field: the landing hard-wires both.
@@ -498,21 +498,16 @@ function parseAction(raw: unknown, i: number): GuideAction {
       return { type, reason: reason() };
     case 'needs_replan': {
       const base = { type, reason: reason() } as const;
-      const hasRequest = raw['requestMd'] !== undefined && raw['requestMd'] !== null;
-      const hasTarget = raw['targetKey'] !== undefined && raw['targetKey'] !== null;
-      if (!hasRequest && !hasTarget) return base;
-      // A half an offer is no offer: Confirm needs both the text it would send and
-      // the card it would send it on (MOTIR-8685).
-      if (!hasRequest)
-        throw new InvalidGuideTurnError(`${where}.requestMd`, 'is required with targetKey');
-      if (!hasTarget)
-        throw new InvalidGuideTurnError(`${where}.targetKey`, 'is required with requestMd');
-      const requestMd = text(raw, 'requestMd', GUIDE_REPLAN_REQUEST_MAX, where);
-      const targetKey = text(raw, 'targetKey', 50, where);
-      if (!GUIDE_TARGET_KEY_PATTERN.test(targetKey)) {
+      const requestMd = optText(raw, 'requestMd', GUIDE_REPLAN_REQUEST_MAX, where);
+      const targetKey = optText(raw, 'targetKey', 50, where);
+      if (targetKey !== null && !GUIDE_TARGET_KEY_PATTERN.test(targetKey)) {
         throw new InvalidGuideTurnError(`${where}.targetKey`, 'must be a work-item key');
       }
-      return { ...base, requestMd, targetKey };
+      return {
+        ...base,
+        ...(requestMd !== null ? { requestMd } : {}),
+        ...(targetKey !== null ? { targetKey } : {}),
+      };
     }
     case 'local_agent_prompt': {
       const v = raw['prompt'];
@@ -606,12 +601,76 @@ export interface GuideActionOutcome {
   workItemKey?: string;
 }
 
+/** How the landing arrived at an offer's target (MOTIR-8689). */
+export type GuideReplanTargetResolution =
+  | 'as_asked'
+  | 'guided_card'
+  | 'nearest_open_ancestor'
+  | 'none';
+
+const REPLAN_RESOLUTIONS: readonly GuideReplanTargetResolution[] = [
+  'as_asked',
+  'guided_card',
+  'nearest_open_ancestor',
+  'none',
+];
+
+/** The re-plan offer a `needs_replan` lands as, stored on the guide reply turn.
+ *  `requestedTargetKey` is what the guide asked for, verbatim; `targetKey` is what
+ *  the offer will plan on (null only with `targetResolution: 'none'`). */
+export interface GuideReplanOffer {
+  reason: string;
+  requestMd: string;
+  requestedTargetKey: string | null;
+  targetKey: string | null;
+  targetResolution: GuideReplanTargetResolution;
+  declinedAt: string | null;
+  declinedById: string | null;
+}
+
 /** The `guide_turn` column on an assistant turn: the validated actions, each
- *  one's outcome (same order), and whether the walk was on a temporary list. */
+ *  one's outcome (same order), whether the walk was on a temporary list, and the
+ *  re-plan offer it landed, if any (absent reads as null). */
 export interface GuideTurnRecord {
   actions: GuideAction[];
   outcomes: GuideActionOutcome[];
   temporary: boolean;
+  replanOffer?: GuideReplanOffer | null;
+}
+
+function nullableString(v: unknown): string | null | undefined {
+  if (v === null || v === undefined) return null;
+  return typeof v === 'string' ? v : undefined;
+}
+
+/** A stored offer, narrowed field by field. A malformed one reads as null; the
+ *  rest of the record still reads. */
+function readReplanOffer(value: unknown): GuideReplanOffer | null {
+  if (!isRecord(value)) return null;
+  const { reason, requestMd, targetResolution } = value;
+  if (typeof reason !== 'string' || typeof requestMd !== 'string') return null;
+  if (!REPLAN_RESOLUTIONS.includes(targetResolution as GuideReplanTargetResolution)) return null;
+  const requestedTargetKey = nullableString(value['requestedTargetKey']);
+  const targetKey = nullableString(value['targetKey']);
+  const declinedAt = nullableString(value['declinedAt']);
+  const declinedById = nullableString(value['declinedById']);
+  if (
+    requestedTargetKey === undefined ||
+    targetKey === undefined ||
+    declinedAt === undefined ||
+    declinedById === undefined
+  ) {
+    return null;
+  }
+  return {
+    reason,
+    requestMd,
+    requestedTargetKey,
+    targetKey,
+    targetResolution: targetResolution as GuideReplanTargetResolution,
+    declinedAt,
+    declinedById,
+  };
 }
 
 /**
@@ -642,7 +701,14 @@ export function readGuideTurnRecord(value: unknown): GuideTurnRecord | null {
         : {}),
     };
   });
-  return { actions, outcomes, temporary: value['temporary'] === true };
+  // Present only when a well-formed offer is stored; absent reads as null.
+  const replanOffer = readReplanOffer(value['replanOffer']);
+  return {
+    actions,
+    outcomes,
+    temporary: value['temporary'] === true,
+    ...(replanOffer ? { replanOffer } : {}),
+  };
 }
 
 /** The id a temporary walk gives a step an `add_step` added — derived from where
