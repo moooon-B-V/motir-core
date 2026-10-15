@@ -176,8 +176,8 @@ describe('resolveProfile', () => {
 
   it('passes every threshold section through unchanged, and gives k6 none', () => {
     const p = DEFAULT();
-    p.thresholds.bottleneck = { predicates: ['db_pool'] };
-    p.thresholds.generator = { cpuMax: 0.8 };
+    p.thresholds.bottleneck.cpuBusyFraction = 0.5;
+    p.thresholds.generator.cpuMeanMax = 0.7;
     const r = resolveProfile(p, 2);
     expect(r.thresholds).toEqual(p.thresholds);
     expect(hasKeyDeep(r.k6, 'thresholds')).toBe(false);
@@ -268,8 +268,8 @@ describe('the load hash', () => {
     p.notes = ['different'];
     p.thresholds.perInstance.readP95Ms = 1;
     p.thresholds.scaleOut.efficiency = 0.5;
-    p.thresholds.bottleneck = { x: 1 };
-    p.thresholds.generator = { y: 2 };
+    p.thresholds.bottleneck.holdSeconds = 60;
+    p.thresholds.generator.cpuPeakMax = 0.5;
     p.name = 'renamed';
     expect(loadHash(p)).toBe(base);
   });

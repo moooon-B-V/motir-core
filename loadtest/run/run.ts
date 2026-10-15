@@ -32,6 +32,8 @@
 //    9 k6 on the generator, detached; fetch the summary; delete the manifest
 //   10 read the platform again — the instance count held
 //   11 stop the generator (a `finally`), write the run directory, invoke the report
+//      (`pnpm loadtest:report`, MOTIR-8679), which waits for Prometheus to settle and
+//      prints the verdict line — after exit 4 or 5 too, so it can say INVALID and why
 // Step 1 writes no run.json (there is no run yet). Every later path writes it,
 // with `exitCode` and `reason`, BEFORE exiting non-zero.
 //

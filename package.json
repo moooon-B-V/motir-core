@@ -25,6 +25,7 @@
     "loadtest:seed": "tsx --tsconfig tsconfig.node.json loadtest/seed/seed.ts",
     "loadtest:seed:reset": "tsx --tsconfig tsconfig.node.json loadtest/seed/reset.ts",
     "loadtest:run": "tsx --tsconfig tsconfig.node.json loadtest/run/run.ts",
+    "loadtest:report": "tsx --tsconfig tsconfig.node.json loadtest/report/report.ts",
     "db:seed": "tsx --tsconfig tsconfig.node.json scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx --tsconfig tsconfig.node.json scripts/seed-large.ts",
     "db:seed:collab": "tsx --tsconfig tsconfig.node.json scripts/seed-collab.ts",

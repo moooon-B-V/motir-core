@@ -73,8 +73,42 @@ const seedShape = z
   })
   .strict();
 
-/** A threshold section the report owns (`bottleneck`, `generator`): accepted, passed through. */
-const reportSection = z.record(z.string(), z.unknown());
+/**
+ * The report's first-bottleneck predicates (MOTIR-8679). A candidate saturates when
+ * its predicate holds for `holdSeconds`; the earliest onset is the first bottleneck.
+ */
+const bottleneckSection = z
+  .object({
+    holdSeconds: positive,
+    /** Proxy: `fly_app_concurrency` ≥ this × `run.json` `concurrency.hardLimit`. */
+    proxyHardLimitFraction: positive,
+    /** App CPU: busy CPUs ≥ this × the machine's `cpus`. */
+    cpuBusyFraction: fraction,
+    /** App CPU: `fly_instance_cpu_throttle` rate, in CPU-seconds per second, above this. */
+    cpuThrottleMax: nonNegative,
+    /** App memory: available ÷ total below this. */
+    memoryAvailableMin: fraction,
+    /** Pool: mean `db_pool_waiting_at_acquire` at or above this. */
+    poolWaitingMean: nonNegative,
+    /** Pool: `db_tx_wait_seconds` p95 at or above this. */
+    poolWaitP95Seconds: positive,
+    /** Database: active backends ≥ this × `max_connections`. */
+    dbActiveFraction: fraction,
+    /** Database: backends waiting on a `Lock` at or above this. */
+    dbLockWaiting: count(1),
+  })
+  .strict();
+
+/** When the load generator itself is the limit: such a run is INVALID (MOTIR-8679). */
+const generatorSection = z
+  .object({
+    /** Steady-window mean CPU utilisation at or above this. */
+    cpuMeanMax: fraction,
+    /** Any `peakSeconds` window at or above this. */
+    cpuPeakMax: fraction,
+    peakSeconds: positive,
+  })
+  .strict();
 
 export const LoadProfile = z
   .object({
@@ -154,8 +188,8 @@ export const LoadProfile = z
           })
           .strict(),
         scaleOut: z.object({ efficiency: fraction }).strict(),
-        bottleneck: reportSection.optional(),
-        generator: reportSection.optional(),
+        bottleneck: bottleneckSection,
+        generator: generatorSection,
       })
       .strict(),
   })

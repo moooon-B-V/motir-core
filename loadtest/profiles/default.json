@@ -15,7 +15,8 @@
     "ASSUMPTION — agentThinkSeconds 0.9 between a non-run agent's iterations, and readerBrowseThinkSeconds 5 between a browser's steps (±50 % jitter in the scenario).",
     "COMPUTED — the offered load counts calls per iteration from the scenario code: read 1, write 1 + the transition share (1.11), claim 3 (claim, then release with update + transition, counted as always taking its card so the figure stays an upper bound). Run VUs come from requestsPerIteration. The burst and the per-frame workbench window reads are not in the steady figure.",
     "ASSUMPTION — burst.retryAfterCapSeconds is the longest Retry-After any scenario waits before going on. It is the profile's only back-off cap, so every scenario receives it.",
-    "READING, NOT A THRESHOLD — proxy_shed (HTTP 503 per instance) is reported beside the verdict and judged by nothing."
+    "READING, NOT A THRESHOLD — proxy_shed (HTTP 503 per instance) is reported beside the verdict and judged by nothing.",
+    "ASSUMPTION — thresholds.bottleneck.cpuThrottleMax 0.05 CPU-s/s: Fly does not document what fly_instance_cpu_balance or the throttle counter read on a throttled shared machine, so this is tuned on the first smoke run's real series (MOTIR-8679)."
   ],
   "clients": 1000,
   "mix": {
@@ -131,6 +132,22 @@
     },
     "scaleOut": {
       "efficiency": 0.8
+    },
+    "bottleneck": {
+      "holdSeconds": 30,
+      "proxyHardLimitFraction": 1,
+      "cpuBusyFraction": 0.9,
+      "cpuThrottleMax": 0.05,
+      "memoryAvailableMin": 0.1,
+      "poolWaitingMean": 1,
+      "poolWaitP95Seconds": 0.25,
+      "dbActiveFraction": 0.9,
+      "dbLockWaiting": 5
+    },
+    "generator": {
+      "cpuMeanMax": 0.8,
+      "cpuPeakMax": 0.9,
+      "peakSeconds": 30
     }
   }
 }
