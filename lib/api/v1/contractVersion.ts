@@ -1002,5 +1002,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.67.0` after MOTIR-8600's
  *   `1.66.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
  *   MEMBERS.
+ *
+ * - `1.68.0` — MOTIR-8698 adds `reportDispatchRunUnbuildable`:
+ *   `POST /api/v1/dispatch-runs/{id}/unbuildable`, body `{ targetKey, reason }`, `200`
+ *   with `UnbuildableReportAcknowledgement` (`{ acknowledged, recordedOnRun }`) — the
+ *   run-found report made by the CLI with the run's own credential, so a hosted run, a
+ *   run inside an agent instance and an agent with no Motir MCP all reach it
+ *   (`run-found-trigger-dispatched-path.md` AMENDMENT 1). A run token may call it for
+ *   its own run (`runTokenRoutes.ts`, binding `own_run`).
+ *
+ *   Additive: a new operation and a new component (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.68.0` after MOTIR-8670's
+ *   `1.67.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.67.0';
+export const V1_CONTRACT_VERSION = '1.68.0';

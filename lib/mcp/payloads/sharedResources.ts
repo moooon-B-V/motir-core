@@ -173,4 +173,10 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'only caller is that run’s own token, which never reaches MCP, and a tool would put a gate ' +
     'decision in reach of an agent credential that is not the review run’s — so there is no ' +
     'MCP payload to compare (`submitWorkItemAgentReview`’s entry in the work-loop story gate).',
+  UnbuildableReportAcknowledgement:
+    'The run’s UNBUILDABLE report (MOTIR-8698) is posted over `/api/v1` by the `motir` CLI ' +
+    'around the agent, on the run’s own credential, which `verifyMcpToken` refuses. Its MCP ' +
+    'sibling `report_unbuildable_target` answers the same `{ acknowledged, recordedOnRun }` ' +
+    'acknowledgement, and is exempt from the payload guard because an acknowledgement represents ' +
+    'no resource (`EXEMPT_TOOLS`), so there is no probed payload to compare this against.',
 };

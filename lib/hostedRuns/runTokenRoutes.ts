@@ -222,6 +222,15 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     calledBy: 'cli',
   },
   {
+    // The run reports that its agent stopped on an unbuildable card (MOTIR-8698) —
+    // the agent has no Motir token here, so the CLI makes the report for it.
+    operationId: 'reportDispatchRunUnbuildable',
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/unbuildable',
+    binding: 'own_run',
+    calledBy: 'cli',
+  },
+  {
     operationId: 'issueDispatchRunGitCredentials',
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/git-credential',

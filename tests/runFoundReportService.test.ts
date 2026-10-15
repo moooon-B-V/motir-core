@@ -19,6 +19,10 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
+import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
+import { RUN_TOKEN_ROUTES } from '@/lib/hostedRuns/runTokenRoutes';
+import { runCredentialService } from '@/lib/services/runCredentialService';
+import { bearer } from './fixtures/apiV1Fixtures';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
@@ -46,6 +50,7 @@ import {
 
 beforeEach(async () => {
   await truncateAuthTables();
+  resetRateLimitStore();
 });
 
 afterAll(async () => {
@@ -617,5 +622,285 @@ describe('permissions and input', () => {
     }
     // Trimmed first: surrounding whitespace does not count toward the bound.
     expect(await report(fx, card, fx.ctx, `  ${'x'.repeat(4000)}  `)).toEqual(NOT_ON_RUN);
+  });
+});
+
+// ── AMENDMENT 1 (MOTIR-8698) — the report reaches the server in every lane ─────────
+//
+// Rows 4–6 of the record's table: a hosted run's agent and an agent-instance run's
+// agent hold no Motir token (`/api/mcp` refuses the run token), and a local agent may
+// have no Motir MCP. The CLI makes the report instead, through
+// `POST /api/v1/dispatch-runs/{id}/unbuildable`, with the RUN's credential. Row 2: a
+// Motir-workspace plan written over the MCP (`plan.py`) files; a tenant's still does not.
+
+/** A server-opened run over `card` — `hosted`, or `instance` naming an agent — with
+ *  its leg OPEN, and the run's own bearer credential. */
+async function serverRunOver(
+  fx: WorkItemFixture,
+  card: Card,
+  origin: 'hosted' | 'instance',
+): Promise<{ runId: string; headers: Record<string, string> }> {
+  let agentInstanceId: string | null = null;
+  if (origin === 'instance') {
+    const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
+    const agent = await adminDb.agentInstance.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: ws.organizationId,
+        projectId: fx.projectId,
+        ownerId: fx.ownerId,
+        name: 'my-agent',
+        profileId: 'claude-code',
+        imageTag: 'latest',
+        imageDigest: 'sha256:test',
+        region: 'iad',
+        state: 'running',
+      },
+    });
+    agentInstanceId = agent.id;
+  }
+  const run = await adminDb.dispatchRun.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      command: 'run',
+      origin,
+      agentInstanceId,
+      createdById: fx.ownerId,
+      cards: {
+        create: [
+          {
+            workspaceId: fx.workspaceId,
+            workItemId: card.id,
+            workItemKey: card.key,
+            position: 0,
+            disposition: 'running',
+            startedAt: new Date(),
+          },
+        ],
+      },
+    },
+  });
+  const { token } = await runCredentialService.mintRunCredential({
+    dispatchRunId: run.id,
+    dispatcherUserId: fx.ownerId,
+    expiresAt: new Date(Date.now() + 60 * 60_000),
+  });
+  return { runId: run.id, headers: bearer(token) };
+}
+
+async function postUnbuildable(
+  runId: string,
+  headers: Record<string, string>,
+  body: unknown,
+): Promise<Response> {
+  const { POST } = await import('@/app/api/v1/dispatch-runs/[id]/unbuildable/route');
+  return POST(
+    new Request(`http://localhost:3000/api/v1/dispatch-runs/${runId}/unbuildable`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ id: runId }) },
+  );
+}
+
+describe('AMENDMENT 1 — the run door, authenticated by the run’s own credential only', () => {
+  it('the route is on the run-token list, bound to its own run, called by the CLI', () => {
+    expect(RUN_TOKEN_ROUTES).toContainEqual({
+      operationId: 'reportDispatchRunUnbuildable',
+      method: 'POST',
+      path: '/api/v1/dispatch-runs/{id}/unbuildable',
+      binding: 'own_run',
+      calledBy: 'cli',
+    });
+  });
+
+  it.each(['hosted', 'instance'] as const)(
+    'a %s run stopped on a native + unchanged CUSTOMER card files exactly ONE bug into Motir’s planner-bug home',
+    async (origin) => {
+      const meta = await makeMeta();
+      const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+      const card = await planBorn(fx, 'native', { title: 'SENTINEL-TARGET-TITLE' });
+      const tenantItemsBefore = await adminDb.workItem.count({
+        where: { workspaceId: fx.workspaceId },
+      });
+      const { runId, headers } = await serverRunOver(fx, card, origin);
+
+      const res = await postUnbuildable(runId, headers, { targetKey: card.key, reason: REASON });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual(ON_RUN);
+      // A retry is the same acknowledgement and files nothing more.
+      const again = await postUnbuildable(runId, headers, { targetKey: card.key, reason: REASON });
+      expect(await again.json()).toEqual(ON_RUN);
+
+      const t = await traces(card, meta);
+      expect(t.bugs).toHaveLength(1);
+      expect(t.bugs[0]!.workspaceId).toBe(meta.fx.workspaceId);
+      expect(t.bugs[0]!.folderId).toBe(meta.planningFolderId);
+      expect(t.rows).toHaveLength(1);
+      expect(t.rows[0]).toMatchObject({ outcome: 'filed', filedWorkItemId: t.bugs[0]!.id });
+      // The customer regime is unchanged: pointers only cross.
+      const crossed = `${t.bugs[0]!.title}\n${t.bugs[0]!.descriptionMd ?? ''}`;
+      for (const sentinel of ['SENTINEL-TARGET-TITLE', 'SENTINEL-REASON', card.key]) {
+        expect(crossed).not.toContain(sentinel);
+      }
+      // The finding is on THIS run's leg, in the tenant; nothing written into the
+      // tenant's project.
+      expect(t.events).toHaveLength(1);
+      expect(t.events[0]!.dispatchRunId).toBe(runId);
+      expect(t.events[0]!.workspaceId).toBe(fx.workspaceId);
+      expect(eventData(t.events[0]!)).toMatchObject({ outcome: 'filed', reason: REASON });
+      expect(await adminDb.workItem.count({ where: { workspaceId: fx.workspaceId } })).toBe(
+        tenantItemsBefore,
+      );
+    },
+  );
+
+  it('a run token naming ANOTHER run is refused 403, and nothing is written', async () => {
+    const meta = await makeMeta();
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const card = await planBorn(fx, 'native');
+    const other = await planBorn(fx, 'native', { title: 'Other card' });
+    const mine = await serverRunOver(fx, card, 'hosted');
+    const theirs = await serverRunOver(fx, other, 'hosted');
+
+    const res = await postUnbuildable(theirs.runId, mine.headers, {
+      targetKey: other.key,
+      reason: REASON,
+    });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code: string }).code).toBe('DISPATCH_RUN_TOKEN_OUT_OF_SCOPE');
+    expect((await traces(other, meta)).rows).toHaveLength(0);
+    expect((await traces(other, meta)).bugs).toHaveLength(0);
+  });
+
+  it('a run token naming a card its run does not hold is refused, and nothing is written', async () => {
+    const meta = await makeMeta();
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const card = await planBorn(fx, 'native');
+    const elsewhere = await planBorn(fx, 'native', { title: 'Not on this run' });
+    const { runId, headers } = await serverRunOver(fx, card, 'hosted');
+
+    // The run token's `run_cards` binding refuses the card before the leg is read.
+    const res = await postUnbuildable(runId, headers, { targetKey: elsewhere.key, reason: REASON });
+    expect(res.status).toBe(403);
+    const t = await traces(elsewhere, meta);
+    expect(t.rows).toHaveLength(0);
+    expect(t.bugs).toHaveLength(0);
+  });
+
+  it('the operator’s own credential naming a card the run does not hold is "not on the run"', async () => {
+    const meta = await makeMeta();
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const card = await planBorn(fx, 'native');
+    const elsewhere = await planBorn(fx, 'native', { title: 'Not on this run' });
+    const runId = await openLegs(fx, [card.key], fx.ctx);
+
+    expect(
+      await runFoundReportService.reportUnbuildableTargetForRun(
+        runId,
+        { targetKey: elsewhere.key, reason: REASON },
+        fx.ctx,
+      ),
+    ).toEqual(NOT_ON_RUN);
+    const t = await traces(elsewhere, meta);
+    expect(t.rows).toHaveLength(0);
+    expect(t.bugs).toHaveLength(0);
+  });
+
+  it('another member cannot report for a run they did not open', async () => {
+    const meta = await makeMeta();
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const cli = await cliGrantMemberOf(fx);
+    const card = await planBorn(fx, 'native');
+    const runId = await openLegs(fx, [card.key], fx.ctx);
+
+    await expect(
+      runFoundReportService.reportUnbuildableTargetForRun(
+        runId,
+        { targetKey: card.key, reason: REASON },
+        cli,
+      ),
+    ).rejects.toMatchObject({ code: 'DISPATCH_RUN_NOT_FOUND' });
+    expect((await traces(card, meta)).rows).toHaveLength(0);
+  });
+
+  it('a closed run is a 409, and a blank reason a 422 — neither writes', async () => {
+    const meta = await makeMeta();
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const card = await planBorn(fx, 'native');
+    const { runId, headers } = await serverRunOver(fx, card, 'hosted');
+
+    const blank = await postUnbuildable(runId, headers, { targetKey: card.key, reason: '   ' });
+    expect(blank.status).toBe(422);
+
+    await adminDb.dispatchRun.update({
+      where: { id: runId },
+      data: { status: 'succeeded', endedAt: new Date() },
+    });
+    const closed = await postUnbuildable(runId, headers, { targetKey: card.key, reason: REASON });
+    expect(closed.status).toBe(409);
+    expect(((await closed.json()) as { code: string }).code).toBe('DISPATCH_RUN_TERMINAL');
+    expect((await traces(card, meta)).rows).toHaveLength(0);
+  });
+});
+
+describe('AMENDMENT 1 — row 2: Motir’s own MCP-written (plan.py) plans file; a tenant’s do not', () => {
+  it('a CLI dispatch in MOTIR’s workspace, on a card an approved MCP plan shaped, files ONE bug through the run door', async () => {
+    const meta = await makeMeta();
+    const card = await mcpBorn(meta.fx);
+    const runId = await openLegs(meta.fx, [card.key], meta.fx.ctx);
+
+    expect(
+      await runFoundReportService.reportUnbuildableTargetForRun(
+        runId,
+        { targetKey: card.key, reason: REASON },
+        meta.fx.ctx,
+      ),
+    ).toEqual(ON_RUN);
+
+    const t = await traces(card, meta);
+    expect(t.bugs).toHaveLength(1);
+    expect(t.bugs[0]!.folderId).toBe(meta.planningFolderId);
+    expect(t.bugs[0]!.descriptionMd).toContain(REASON);
+    expect(t.rows[0]).toMatchObject({ outcome: 'filed' });
+    expect(eventData(t.events[0]!)).toMatchObject({ outcome: 'filed', authorSource: 'mcp' });
+  });
+
+  it('the same MCP plan in a CUSTOMER workspace still files none — through either door', async () => {
+    const meta = await makeMeta();
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const cli = await cliGrantMemberOf(fx);
+    const card = await mcpBorn(fx);
+    const runId = await openLegs(fx, [card.key], cli);
+
+    expect(
+      await runFoundReportService.reportUnbuildableTargetForRun(
+        runId,
+        { targetKey: card.key, reason: REASON },
+        cli,
+      ),
+    ).toEqual(ON_RUN);
+
+    const t = await traces(card, meta);
+    expect(t.rows[0]).toMatchObject({ outcome: 'not_native' });
+    expect(t.bugs).toHaveLength(0);
+  });
+
+  it('a MANUAL plan in Motir’s own workspace still files none', async () => {
+    const meta = await makeMeta();
+    const plan = await plansService.createPlan(
+      meta.fx.projectId,
+      { title: 'Hand plan', authorSource: 'manual' },
+      meta.fx.ctx,
+    );
+    const card = await approveWithOneAdd(meta.fx, plan.id, 'Hand-planned card');
+    await openLegs(meta.fx, [card.key], meta.fx.ctx);
+
+    expect(await report(meta.fx, card, meta.fx.ctx)).toEqual(ON_RUN);
+    const t = await traces(card, meta);
+    expect(t.rows[0]).toMatchObject({ outcome: 'not_native' });
+    expect(t.bugs).toHaveLength(0);
   });
 });

@@ -2131,7 +2131,8 @@ function modelSelfReport(): string[] {
     "  only chance to record it, and it becomes the work item's implementation",
     '  provenance.',
     '',
-    '  If you genuinely cannot tell, write no file at all: an empty record is honest,',
+    '  If you genuinely cannot tell, leave "model" out — write no file at all unless',
+    '  a STOP below asks you to add to it: an empty record is honest,',
     '  and a guessed one is not. If the variable is unset, skip this entirely.',
   ];
 }
@@ -2574,6 +2575,14 @@ function buildThroughSteps(
  * fetch this same server-assembled prompt, so the instruction is written here
  * and nowhere per command.
  *
+ * ⚠️ THE TOOL IS THE FALLBACK, NOT THE ROUTE (MOTIR-8698, the record's AMENDMENT 1).
+ * A dispatched agent is handed `$MOTIR_AGENT_REPORT`, so step 4 tells it to write its
+ * reason there as `unbuildable`; the CLI reads it after the exit and posts the report
+ * with the RUN's credential (`POST /api/v1/dispatch-runs/{id}/unbuildable`). A hosted
+ * agent holds no Motir token and `/api/mcp` refuses the run token, and a local agent
+ * may have no Motir MCP — the tool reached neither. The tool stays for a reader with
+ * no such file (a `--print` prompt pasted into a session that has the MCP).
+ *
  * ── NARROWED (2026-10, Story MOTIR-8651 · MOTIR-8658) ───────────────────────
  *
  * These steps are now the STOP branch ONLY: the one a run takes when the WHAT itself breaks,
@@ -2594,14 +2603,21 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     `     ${permitted}`,
     `  3. Comment the finding on ${src.key}: what is false, and the evidence — the`,
     '     file you read, the command you ran, what it said.',
-    '  4. Report it with the report_unbuildable_target tool:',
+    '  4. Report it. If the environment variable MOTIR_AGENT_REPORT is set, put the',
+    '     SAME text as your step-3 comment into the JSON file at that path, as',
+    '     "unbuildable" beside "model":',
+    '',
+    '         {"model": "<as above>", "unbuildable": "<the SAME text as your step-3 comment>"}',
+    '',
+    '     and the run makes the report for you when you exit — no Motir tool needed.',
+    '     If the variable is unset, report it with the report_unbuildable_target tool:',
     '',
     `         projectKey: ${src.projectKey}`,
     `         targetKey:  ${src.key}`,
     '         reason:     the SAME text as your step-3 comment',
     '',
-    '     It spends nothing. It is safe to repeat: the server keeps one record per',
-    '     run. It returns nothing to act on.',
+    '     Either way it is one report. It spends nothing. It is safe to repeat: the',
+    '     server keeps one record per run. It returns nothing to act on.',
   ];
 
   // The switch. With re-planning disabled there is nothing to submit and nowhere
