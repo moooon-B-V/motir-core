@@ -3976,6 +3976,141 @@
            referent) IS defined above, so it now resolves in both themes. */
         --focus-ring-color: var(--color-primary);
       }
+
+      /* Utility shims — the classes this board's markup carries that the lifted sheet above never compiled (MOTIR-4687's correspondence). Values are Tailwind v4's own, over the design system's tokens. */
+      .bg-\(--el-text\) {
+        background-color: var(--el-text);
+      }
+      .decoration-\(--el-border-strong\) {
+        text-decoration-color: var(--el-border-strong);
+      }
+      .gap-x-3 {
+        column-gap: calc(var(--spacing) * 3);
+      }
+      .gap-y-0\.5 {
+        row-gap: calc(var(--spacing) * 0.5);
+      }
+      .h-8 {
+        height: calc(var(--spacing) * 8);
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .max-w-\[10rem\] {
+        max-width: 10rem;
+      }
+      .mt-0\.5 {
+        margin-top: calc(var(--spacing) * 0.5);
+      }
+      .pl-11 {
+        padding-left: calc(var(--spacing) * 11);
+      }
+      .shadow-\(--shadow-subtle\) {
+        box-shadow: var(--shadow-subtle);
+      }
+      .text-\(--el-text-faint\) {
+        color: var(--el-text-faint);
+      }
+      .text-\(--el-text-inverted\) {
+        color: var(--el-text-inverted);
+      }
+      .text-\[9px\] {
+        font-size: 9px;
+      }
+      .transition-colors {
+        transition-property:
+          color, background-color, border-color, text-decoration-color, fill, stroke;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
+      }
+      .w-8 {
+        width: calc(var(--spacing) * 8);
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .w-full {
+        width: 100%;
+      }
+      .z-10 {
+        z-index: 10;
+      }
+      .sm\:flex-nowrap {
+        @media (width >= 40rem) {
+          flex-wrap: nowrap;
+        }
+      }
+      .sm\:w-auto {
+        @media (width >= 40rem) {
+          width: auto;
+        }
+      }
+      .sm\:pl-0 {
+        @media (width >= 40rem) {
+          padding-left: calc(var(--spacing) * 0);
+        }
+      }
+      .hover\:border-\(--el-border-strong\) {
+        &:hover {
+          @media (hover: hover) {
+            border-color: var(--el-border-strong);
+          }
+        }
+      }
+      .hover\:decoration-\(--el-text\) {
+        &:hover {
+          @media (hover: hover) {
+            text-decoration-color: var(--el-text);
+          }
+        }
+      }
+      .after\:absolute {
+        &::after {
+          content: var(--tw-content);
+          position: absolute;
+        }
+      }
+      .after\:inset-0 {
+        &::after {
+          content: var(--tw-content);
+          inset: calc(var(--spacing) * 0);
+        }
+      }
+      .after\:rounded-\(--radius-card\) {
+        &::after {
+          content: var(--tw-content);
+          border-radius: var(--radius-card);
+        }
+      }
+      .focus-visible\:after\:ring-2 {
+        &:focus-visible {
+          &::after {
+            content: var(--tw-content);
+            --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width))
+              var(--tw-ring-color, currentcolor);
+            box-shadow:
+              var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
+              var(--tw-ring-shadow), var(--tw-shadow);
+          }
+        }
+      }
+      .focus-visible\:after\:ring-\(--focus-ring-color\) {
+        &:focus-visible {
+          &::after {
+            content: var(--tw-content);
+            --tw-ring-color: var(--focus-ring-color);
+          }
+        }
+      }
+      /* The page frame — declared by plans-sessions--seeded.mock.html, which this delta amends, and copied from it verbatim. */
+      .mk-page {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px;
+        width: 960px;
+        max-width: 100%;
+      }
     </style>
   </head>
   <body>
@@ -3994,7 +4129,10 @@
       <div class="sheethead">
         <div class="snum">1</div>
         <div>
-          <h2>A guide never refuses and never picks — its seed link reads <i>From the guide on {KEY}</i></h2>
+          <h2>
+            A guide never refuses and never picks — its seed link reads
+            <i>From the guide on {KEY}</i>
+          </h2>
           <p>
             The link opens the GUIDED card (the manual work item the person was walking through),
             not the row's anchor. The row title is the session's anchor, the work item the re-plan
@@ -4226,7 +4364,8 @@
                   <a
                     href="#"
                     class="block truncate text-sm font-semibold text-(--el-text) after:absolute after:inset-0 after:rounded-(--radius-card) focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-(--focus-ring-color)"
-                    >ACME-12 · Account recovery and sign-in, every path a person can take back into their account</a
+                    >ACME-12 · Account recovery and sign-in, every path a person can take back into
+                    their account</a
                   >
                   <div
                     class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)"
@@ -4260,8 +4399,8 @@
         </div>
       </div>
       <div class="note">
-        <b>Row order here is only for the comparison.</b> In the list the rows sort by last activity,
-        like every other row. The guide row's trailing chip is the session's plan state
+        <b>Row order here is only for the comparison.</b> In the list the rows sort by last
+        activity, like every other row. The guide row's trailing chip is the session's plan state
         (<i>No plan yet</i> until the planner proposes), exactly as the other two.
       </div>
     </section>
