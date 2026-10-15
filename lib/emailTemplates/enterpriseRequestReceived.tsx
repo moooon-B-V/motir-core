@@ -63,7 +63,7 @@ function EnterpriseRequestReceivedEmail(props: EnterpriseRequestReceivedEmailPro
   const { t } = props;
   const needs = needLines(props, t);
   return (
-    <EmailLayout preview={t('preview', values(props))} footer={t('footer')}>
+    <EmailLayout locale={props.locale} preview={t('preview', values(props))} footer={t('footer')}>
       <Text style={para}>{t('greeting')}</Text>
       <Text style={para}>{t('lede', values(props))}</Text>
       <Text style={heading}>{t('needsHeading')}</Text>

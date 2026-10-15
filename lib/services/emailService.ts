@@ -4,6 +4,7 @@ import {
   sendEmail,
   type EmailSendResult,
 } from '@/lib/email';
+import type { Locale } from '@/lib/i18n/locales';
 import { emailDeliveryService } from '@/lib/services/emailDeliveryService';
 import {
   passwordResetEmail,
@@ -89,6 +90,14 @@ import {
 // runs in the durable job (with retries), not in the user-facing request.
 // An ESLint no-restricted-imports rule pins `@/lib/email` to this file so a
 // future caller can't regress to a synchronous send.
+
+/**
+ * The language an email is written in: the RECIPIENT's, one of the eleven
+ * (MOTIR-8104). Every template's props carry it as `locale`, so it rides on the
+ * `email.send` payload's `data` and a retried send renders in the language the
+ * first attempt did. Resolve it with `lib/services/emailRecipientLocale.ts`.
+ */
+export type EmailLocale = Locale;
 
 /**
  * A transactional email to render + dispatch. Discriminated by `template`;

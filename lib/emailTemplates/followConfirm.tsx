@@ -30,9 +30,18 @@ export interface FollowConfirmEmailProps {
   locale?: Locale;
 }
 
-function FollowConfirmEmail({ projectName, confirmUrl, t }: FollowConfirmEmailProps & { t: T }) {
+function FollowConfirmEmail({
+  projectName,
+  confirmUrl,
+  locale,
+  t,
+}: FollowConfirmEmailProps & { t: T }) {
   return (
-    <EmailLayout preview={t('preview', { project: projectName })} footer={t('ignore')}>
+    <EmailLayout
+      locale={locale}
+      preview={t('preview', { project: projectName })}
+      footer={t('ignore')}
+    >
       <Text style={lede}>{t('lede', { project: projectName })}</Text>
       <Section style={cta}>
         <PrimaryButton href={confirmUrl} label={t('confirm')} />

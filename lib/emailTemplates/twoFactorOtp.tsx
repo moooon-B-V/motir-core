@@ -49,10 +49,11 @@ function TwoFactorOtpEmail({
   recipientName,
   code,
   expiresInMinutes,
+  locale,
   t,
 }: TwoFactorOtpEmailProps & { t: T }) {
   return (
-    <EmailLayout preview={t('preview')} footer={t('security')}>
+    <EmailLayout locale={locale} preview={t('preview')} footer={t('security')}>
       <Text style={greeting}>{t('greeting', { name: recipientName })}</Text>
       <Text style={lede}>{t('lede')}</Text>
       <Section style={codeRow}>

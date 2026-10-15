@@ -15,8 +15,9 @@ import { EMAIL_LINK } from './_components/emailColors';
 // `work-item/transitioned` event; `statusName` arrives resolved (the status's
 // display name, or its key when the status was deleted between write and
 // send). Pure template per CLAUDE.md: no I/O, no env reads. Localized via
-// next-intl's synchronous createTranslator; `locale` defaults to the base
-// locale (no persisted per-user locale yet — the mentionNotification gap).
+// next-intl's synchronous createTranslator; `locale` is the RECIPIENT's
+// language, resolved by the sender (lib/services/emailRecipientLocale.ts);
+// absent ⇒ English.
 
 // A minimal translator shape (satisfied by createTranslator's result).
 type T = (key: string, values?: Record<string, string | number>) => string;
@@ -38,6 +39,7 @@ function WatcherTransitionNotificationEmail(p: WatcherTransitionNotificationEmai
   const { t } = p;
   return (
     <EmailLayout
+      locale={p.locale}
       preview={t('preview', {
         actor: p.actorName,
         identifier: p.workItemIdentifier,

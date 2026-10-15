@@ -30,10 +30,11 @@ function EmailChangeEmail({
   recipientName,
   newEmail,
   confirmUrl,
+  locale,
   t,
 }: EmailChangeEmailProps & { t: T }) {
   return (
-    <EmailLayout preview={t('preview')} footer={t('expires')}>
+    <EmailLayout locale={locale} preview={t('preview')} footer={t('expires')}>
       <Text style={greeting}>{t('greeting', { name: recipientName })}</Text>
       <Text style={lede}>{t('lede', { email: newEmail })}</Text>
       <Section style={cta}>

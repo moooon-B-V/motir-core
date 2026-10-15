@@ -24,9 +24,14 @@ export interface PasswordResetEmailProps {
   locale?: Locale;
 }
 
-function PasswordResetEmail({ recipientName, resetUrl, t }: PasswordResetEmailProps & { t: T }) {
+function PasswordResetEmail({
+  recipientName,
+  resetUrl,
+  locale,
+  t,
+}: PasswordResetEmailProps & { t: T }) {
   return (
-    <EmailLayout preview={t('preview')} footer={t('expires')}>
+    <EmailLayout locale={locale} preview={t('preview')} footer={t('expires')}>
       <Text style={greeting}>{t('greeting', { name: recipientName })}</Text>
       <Text style={lede}>{t('lede')}</Text>
       <Section style={cta}>
