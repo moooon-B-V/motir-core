@@ -594,7 +594,7 @@ describe('seam 4 — the four CLIs’ option lists', () => {
   });
 
   const readme = join(ROOT, 'loadtest/README.md');
-  it.skipIf(!existsSync(readme))('every exported flag is documented in loadtest/README.md', () => {
+  it('every exported flag is documented in loadtest/README.md', () => {
     const text = readFileSync(readme, 'utf8');
     for (const [cli, flags] of Object.entries(CLIS))
       for (const f of flags) expect(text, `${cli} ${f}`).toContain(f);
