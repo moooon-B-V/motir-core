@@ -53,13 +53,16 @@ const PASSWORD = 'scheduled-engine-spec-pass-123';
  * the jobs dashboard's ordinary tab reads `listByWorkspace`, which filters on it
  * — so a workspace operator has never been able to see a cron run, on either
  * engine. The SYSTEM tab (`listAll`, under `withSystemContext`) is where they
- * have always been visible, and it is gated on `PLATFORM_ADMIN_EMAIL`, which
- * `playwright.config.ts` now sets for the lane.
+ * have always been visible, and it is gated on platform-staff standing
+ * (`User.platformRole`, `support` or above — MOTIR-8196), so the spec grants this
+ * one user `operator` through the owner client right after sign-up. That is a
+ * test fixture, not a product path: platform roles are granted out-of-band
+ * (`docs/decisions/platform-staff-auth.md` §6), and no other spec holds one.
  *
  * This story does NOT change the dashboard, its DTOs or its service, so this is
  * the recipe's step automated against the surface that actually renders it.
  */
-const OPERATOR_EMAIL = process.env['PLATFORM_ADMIN_EMAIL'] ?? 'sched-platform-admin@example.com';
+const OPERATOR_EMAIL = 'sched-platform-admin@example.com';
 
 /**
  * The `latest` pilot: a REAL job, on its REAL daily schedule, whose handler is a
@@ -132,6 +135,12 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
 }) => {
   test.setTimeout(120_000);
   await signUp(page, OPERATOR_EMAIL);
+  // The standing is read fresh per request, so granting it after sign-up and
+  // before the dashboard opens is enough for the System tab to render.
+  await adminDb.user.update({
+    where: { email: OPERATOR_EMAIL },
+    data: { platformRole: 'operator' },
+  });
 
   // The daily sweep runs on the engine because the engine is the only lane there
   // is — MOTIR-3418 retired Inngest, and `lib/jobs/engine/ledger.ts` writes

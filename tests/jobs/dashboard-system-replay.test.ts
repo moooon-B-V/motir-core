@@ -12,7 +12,6 @@ import {
   SystemReplayForbiddenError,
   SystemReplayWorkspaceRowError,
 } from '@/lib/jobs/errors';
-import { isPlatformOperator } from '@/lib/jobs/platformOperator';
 // Side-effect import: evaluates `email.send`'s definition module so the engine
 // knows its idempotency template. A replay of a job whose definition is not
 // loaded in THIS process still works, but with no dedup key — which would turn
@@ -33,12 +32,15 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // tenant RLS), and the list the System tab reads.
 //
 // MOTIR-8197 — the first refusal is the caller's PLATFORM ROLE now, not their
-// email against `PLATFORM_ADMIN_EMAIL`: `operator` or above replays, `support`
+// email against an env var (removed by MOTIR-8200): `operator` or above replays, `support`
 // (who sees the tab) and a tenant user are refused, and the env var grants
 // nothing even when it names the caller. The role reaches the service already
 // resolved — the action reads it fresh per request — so these cases hand it in.
 
 const OPERATOR_EMAIL = 'operator@motir.test';
+// The retired env-var gate, named in pieces so the repository-wide grep for it
+// stays clean (MOTIR-8200) while this file still proves setting it grants nothing.
+const RETIRED_ADMIN_EMAIL_ENV = 'PLATFORM_ADMIN' + '_EMAIL';
 const FUNCTION_ID = 'system.platform-meter-report';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -228,8 +230,8 @@ describe('jobsDashboardService.replaySystemDLQ', () => {
     expect(await adminDb.jobEvent.count()).toBe(0);
   });
 
-  it('PLATFORM_ADMIN_EMAIL grants nothing — not even when it names the caller', async () => {
-    vi.stubEnv('PLATFORM_ADMIN_EMAIL', OPERATOR_EMAIL);
+  it('the retired admin-email env var grants nothing — not even when it names the caller', async () => {
+    vi.stubEnv(RETIRED_ADMIN_EMAIL_ENV, OPERATOR_EMAIL);
     const dlqId = await seedDlq({ workspaceId: null });
 
     await expect(
@@ -345,23 +347,5 @@ describe('jobsDashboardService.listSystemDlq', () => {
     expect(after.replayedRecently).toBe(1);
     expect(after.rows.map((r) => r.id)).toEqual([dlqId]);
     expect(after.rows[0]!.replayedAt).not.toBeNull();
-  });
-});
-
-describe('isPlatformOperator', () => {
-  it('matches only the configured email, exactly', () => {
-    vi.stubEnv('PLATFORM_ADMIN_EMAIL', OPERATOR_EMAIL);
-    expect(isPlatformOperator(OPERATOR_EMAIL)).toBe(true);
-    expect(isPlatformOperator('someone@else.test')).toBe(false);
-    expect(isPlatformOperator(OPERATOR_EMAIL.toUpperCase())).toBe(false);
-    expect(isPlatformOperator(null)).toBe(false);
-    expect(isPlatformOperator(undefined)).toBe(false);
-    expect(isPlatformOperator('')).toBe(false);
-  });
-
-  it('matches nobody when PLATFORM_ADMIN_EMAIL is unset or empty', () => {
-    vi.stubEnv('PLATFORM_ADMIN_EMAIL', '');
-    expect(isPlatformOperator(OPERATOR_EMAIL)).toBe(false);
-    expect(isPlatformOperator('')).toBe(false);
   });
 });

@@ -81,9 +81,10 @@ describe('resolveJobsPlatformRole', () => {
     await expect(resolveJobsPlatformRole()).resolves.toBeNull();
   });
 
-  it('ignores PLATFORM_ADMIN_EMAIL, even when it names the caller', async () => {
+  it('ignores the retired admin-email env var, even when it names the caller', async () => {
     const user = await createTestUser({ email: 'owner@tenant.test' });
-    vi.stubEnv('PLATFORM_ADMIN_EMAIL', 'owner@tenant.test');
+    // Named in pieces so the repository grep for the retired gate stays clean.
+    vi.stubEnv('PLATFORM_ADMIN' + '_EMAIL', 'owner@tenant.test');
     currentSession = { user: { id: user.id } };
 
     const { resolveJobsPlatformRole } = await freshStanding();

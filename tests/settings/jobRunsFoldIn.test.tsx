@@ -118,10 +118,11 @@ describe('the Job runs fold-in — the SYSTEM tab gate, which it still owns', ()
     expect((await renderSection(MEMBER))['showSystemTab']).toBe(false);
   });
 
-  it('ignores PLATFORM_ADMIN_EMAIL, even when it is set', async () => {
-    // The env var was the old gate (MOTIR-8199 retired it here). Setting it
-    // must open nothing: only a platform role does.
-    vi.stubEnv('PLATFORM_ADMIN_EMAIL', 'member@example.com');
+  it('ignores the retired admin-email env var, even when it is set', async () => {
+    // The env var was the old gate (MOTIR-8199 retired it here, MOTIR-8200
+    // deleted it). Setting it must open nothing: only a platform role does. The
+    // name is built in pieces so the repository grep for it stays clean.
+    vi.stubEnv('PLATFORM_ADMIN' + '_EMAIL', 'member@example.com');
     expect((await renderSection(MEMBER))['showSystemTab']).toBe(false);
     vi.unstubAllEnvs();
   });

@@ -7,8 +7,8 @@ import { NotPlatformStaffError } from '@/lib/platform/errors';
 // The jobs dashboard's platform-staff gate, in ONE place (MOTIR-8197).
 //
 // The System tab and the workspace-less dead-letter replay used to be granted
-// to whoever's email matched `PLATFORM_ADMIN_EMAIL` — a stopgap until real
-// platform-admin roles existed. Those roles ship (`User.platformRole`,
+// to whoever's email matched an environment variable — a stopgap until real
+// platform-admin roles existed, removed with no fallback (MOTIR-8200). Those roles ship (`User.platformRole`,
 // `docs/decisions/platform-staff-auth.md`), so the two levels the jobs surface
 // asks for are named here once and read from the account's standing, fresh on
 // every request.
