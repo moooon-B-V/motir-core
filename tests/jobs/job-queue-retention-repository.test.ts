@@ -85,7 +85,7 @@ describe('job_queue retention — repository methods (MOTIR-8584)', () => {
     expect(left.map((r) => r.id)).toEqual(['failed', 'pending']);
   });
 
-  it("deleteByRuns deletes the listed runs' steps and no other run's", async () => {
+  it("deleteByRuns deletes the listed runs' steps and no other run's, and an empty list is a no-op", async () => {
     await seedRun('run-a', 'succeeded', OLD);
     await seedRun('run-b', 'succeeded', OLD);
     await seedRun('run-c', 'succeeded', OLD);
@@ -98,8 +98,10 @@ describe('job_queue retention — repository methods (MOTIR-8584)', () => {
     const deleted = await withSystemContext((tx) =>
       jobStepRepository.deleteByRuns(['run-a', 'run-b'], tx),
     );
+    const none = await withSystemContext((tx) => jobStepRepository.deleteByRuns([], tx));
 
     expect(deleted).toBe(2);
+    expect(none).toBe(0);
     const left = await adminDb.jobStep.findMany({ select: { runId: true } });
     expect(left.map((r) => r.runId)).toEqual(['run-c']);
   });
