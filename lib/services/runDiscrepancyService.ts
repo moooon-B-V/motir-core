@@ -17,6 +17,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -110,8 +111,17 @@ export const runDiscrepancyService = {
     const points = validatePoints(input.points);
     const key = input.key.trim().toUpperCase();
 
-    const project = await projectsService.getByKey(projectKeyOf(key), ctx);
-    await projectAccessService.assertCanEdit(project.id, ctx);
+    // An unknown project, another workspace's key and an unbrowsable project all answer the SAME
+    // `WorkItemNotFoundError` as an unknown card — nothing about the card's existence leaks
+    // (`runFoundReportService.resolveTarget` is the sibling).
+    let project: Awaited<ReturnType<typeof projectsService.getByKey>>;
+    try {
+      project = await projectsService.getByKey(projectKeyOf(key), ctx);
+    } catch (err) {
+      if (err instanceof ProjectNotFoundError) throw new WorkItemNotFoundError(key);
+      throw err;
+    }
+    await projectAccessService.assertPermission(project.id, ctx, 'work_item:edit');
 
     const bound = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
     const { result, workItemId } = await withWorkspaceContext(bound, async (tx) => {
