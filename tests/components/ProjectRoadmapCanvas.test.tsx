@@ -246,6 +246,44 @@ describe('ProjectRoadmapCanvas', () => {
     expect(onView).toHaveBeenCalledWith('V');
   });
 
+  // MOTIR-8648 — the action buttons render INSIDE the card's focusable wrapper, so
+  // a key pressed on a focused button bubbles to the wrapper's own Enter/Space
+  // handler. That handler used to `preventDefault()` it, which cancels the click
+  // the browser synthesizes for a button, and re-activate the card instead. A
+  // `false` from `fireEvent.keyDown` is exactly that cancellation, which happy-dom
+  // reports even though it does not synthesize the click itself.
+  it.each(['Enter', ' '])(
+    'a %j keydown on a focused action button reaches the button, not the card',
+    async (key) => {
+      const onView = vi.fn();
+      const onSelect = vi.fn();
+      const level: RoadmapLevel = {
+        nodes: [{ ...node('D', 'Drill me', true), viewable: true }],
+        deps: [],
+      };
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={() => Promise.resolve(level)}
+          onView={onView}
+          onSelect={onSelect}
+        />,
+      );
+      await screen.findByText('Drill me');
+      fireEvent.keyDown(el('D')!, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      for (const testId of ['view-button', 'drill-button']) {
+        const button = await screen.findByTestId(testId);
+        button.focus();
+        // Not cancelled: the browser goes on to click the button.
+        expect(fireEvent.keyDown(button, { key })).toBe(true);
+      }
+      // And the card was not re-activated underneath the button.
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByTestId('view-button'));
+      expect(onView).toHaveBeenCalledWith('D');
+    },
+  );
+
   it('surfaces BOTH View and Open on a selected drillable viewable node (View distinct from drill)', async () => {
     const onView = vi.fn();
     const level: RoadmapLevel = {
