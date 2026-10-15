@@ -56,6 +56,21 @@ describe('the requirement door is the MCP tool — `motir plan` is NOT touched',
     // `/api/v1` is for the CLI and third parties. This value went through the
     // first, so the second gained nothing: no body schema, no client method,
     // no file/STDIN reader — the five hops the CLI door would have needed.
-    expect(read('client.ts')).not.toContain('requirement');
+    //
+    // Scoped to the PLAN-SESSION methods since MOTIR-8722: `reportDispatchRunStop`
+    // carries a STOP brief under the key `requirement`, and that value is written
+    // into a card COMMENT for a person to submit. It never reaches a planner, so
+    // it is not a second door onto this one. The plan-session block is read from
+    // `openPlanSession` up to `getPlanStatus`, and each method is asserted to be in it.
+    const src = read('client.ts');
+    const start = src.indexOf('async openPlanSession(');
+    const end = src.indexOf('async getPlanStatus(');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const planSession = src.slice(start, end);
+    for (const method of ['openPlanSession', 'appendPlanTurn', 'submitPlanSession']) {
+      expect(planSession).toContain(`async ${method}(`);
+    }
+    expect(planSession).not.toContain('requirement');
   });
 });
