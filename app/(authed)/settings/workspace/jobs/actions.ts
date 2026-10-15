@@ -6,6 +6,7 @@ import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
+import { resolveJobsPlatformRole } from '@/lib/jobs/platformStanding';
 import {
   ReplayForbiddenError,
   DlqEntryNotFoundError,
@@ -79,9 +80,11 @@ export async function replayDlqAction(dlqId: string): Promise<ActionResult> {
 /**
  * The OPERATOR's replay of a dead letter with no workspace (MOTIR-8083) — the
  * System tab's Replay control. Transport only: the session, one service call,
- * typed errors to copy. The platform-operator gate and the "no workspace on the
- * row" refusal both live in the service, so a non-operator posting this directly
- * fails exactly as a click would, and so does a workspace's row.
+ * typed errors to copy. The caller's platform role is read fresh on every call
+ * (`resolveJobsPlatformRole`) and handed to the service, where the `operator`
+ * gate and the "no workspace on the row" refusal both live — so a non-operator
+ * posting this directly fails exactly as a click would, and so does a
+ * workspace's row.
  *
  * No workspace context is read: the operator replays across the deployment, and
  * the row being replayed has no workspace to scope to.
@@ -91,13 +94,14 @@ export async function replaySystemDlqAction(dlqId: string): Promise<ActionResult
   if (!session) redirect('/sign-in');
   const t = await getErrorsTranslator();
   if (!dlqId) return { ok: false, error: t('actions.missingDlqId') };
+  const platformRole = await resolveJobsPlatformRole();
 
   let outcome: 'replayed' | 'already-replayed';
   try {
     ({ outcome } = await jobsDashboardService.replaySystemDLQ({
       dlqId,
       userId: session.user.id,
-      userEmail: session.user.email,
+      platformRole,
     }));
   } catch (err) {
     if (err instanceof SystemReplayForbiddenError) {
