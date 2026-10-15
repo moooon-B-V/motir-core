@@ -81,7 +81,7 @@ permissions: {}
 jobs:
   release:
     name: Version Packages, then tag what merged
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO healthy run on record — this lane does not exist on `main` yet, so its
     # first runs cannot be measured before it does. Its mechanical cost is a
     # checkout, a workspace `pnpm install` and either a pull-request write or

@@ -49,7 +49,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO HEALTHY run on record — the single run (28624215359, 2026-07-02)
     # FAILED after 1.2 min → 15, a STATED FLOOR rather than a measurement,
     # sized like `release-brand.yml` from the structurally identical

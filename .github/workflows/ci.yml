@@ -323,7 +323,7 @@ jobs:
   changes:
     name: What changed
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.4–2.4 min → 10 (~4x). Ten is the floor every short job
     # gets; see the ceilings block above.
     timeout-minutes: 10
@@ -567,7 +567,7 @@ jobs:
   lint:
     name: Lint + Prettier
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 2.9–4.3 min → 15 (~3.5x). Prettier over the whole tree is the
     # variable half, so this one is sized on a multiple rather than the floor.
     timeout-minutes: 15
@@ -612,7 +612,7 @@ jobs:
   structural-guards:
     name: Structural guards
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.4–2.0 min → 10 (~5x, the short-job floor).
     timeout-minutes: 10
     steps:
@@ -633,7 +633,7 @@ jobs:
   typecheck:
     name: TypeScript
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 2.0–2.6 min for the old single `tsc --noEmit`. `tsc -b` also
     # EMITS the app project's declarations, which is what the tests and scripts
     # projects consume: measured locally at 151 s cold against 68 s for the old
@@ -790,7 +790,7 @@ jobs:
 
   design-system:
     name: Design-system package
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.1–1.3 min → 10 (~8x, the short-job floor).
     timeout-minutes: 10
     # Runs when the diff reaches this package — its own paths, or an install
@@ -825,7 +825,7 @@ jobs:
 
   cli:
     name: CLI package
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.3–1.6 min → 10 (~6x, the short-job floor).
     timeout-minutes: 10
     # Gated on its own package's paths, as `design-system` above (MOTIR-5323).
@@ -860,7 +860,7 @@ jobs:
 
   orchestrator:
     name: Orchestrator package
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No healthy run on record yet — this job is new (MOTIR-4299). Sized on the
     # `design-system` / `cli` jobs it is modelled on, whose observed range is
     # 1.1–1.6 min over the same install-then-build-then-vitest shape, and which
@@ -905,7 +905,7 @@ jobs:
 
   pages:
     name: Pages package
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No healthy run on record yet — this job is new (MOTIR-5758). Sized on the
     # `orchestrator` job it copies, which takes the 10-minute short-job floor.
     # Re-derive it from this lane's own runs once there are four, per
@@ -967,7 +967,7 @@ jobs:
   design-guards:
     name: Design asset guards
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 2.6 min → 10 (~3.8x, still above the short-job floor). NOT
     # RAISED — re-derived, which is a different act (MOTIR-4449, criterion 9).
     #
@@ -1054,7 +1054,7 @@ jobs:
   docs-guards:
     name: Docs guards
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No observation yet — this job is new. Sized against `design-guards`, the
     # lane it is modelled on, whose install-plus-vitest shape it shares with one
     # extra `prisma generate`: 10 minutes, the same ceiling, to be re-derived
@@ -1082,7 +1082,7 @@ jobs:
   build:
     name: Next.js build
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 3.6–4.5 min → 15 (~3.3x). `next build` grows with the app and
     # is the one short job whose normal duration has moved, so it gets a
     # multiple rather than the floor.
@@ -1275,7 +1275,7 @@ jobs:
     # `migrate deploy` is ~75s — which at 8 legs adds ~6 runner-minutes to a
     # ~74-runner-minute lane while cutting its WALL clock from ~24 min to ~10.
     name: Vitest (${{ matrix.leg }}/20)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 20.1–24.9 min per leg across three shards and four green runs
     # AT THE OLD 3-SHARD MEMBERSHIP; at 8 the same work per leg is ~10 min.
     # ⚠️ RE-MEASURED AT TWELVE BY MOTIR-4448: 7.3 min / median 8.9 / p95 17.1 /
@@ -1454,7 +1454,7 @@ jobs:
 
   coverage:
     name: Vitest coverage
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.3–1.5 min (n=7 clean merge-group runs, 2026-09-04; median 1.4,
     # p95 1.5) → 10 (~6.7x, the short-job floor). It only merges the shards'
     # reports; the measuring is done by `test`.
@@ -1582,7 +1582,7 @@ jobs:
     # constants and default collab seed apply — a bulk leg must NOT inherit an
     # at-scale cap or it would skew the ordinary board specs.
     name: Playwright E2E (${{ matrix.id }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Defence in depth for MOTIR-2970. GitHub's default per-job budget is 360
     # minutes, and a leg that wedges in setup burns every one of them while
     # holding `CI complete` red — three times in ~6 hours on 2026-08-18, each on
@@ -1815,7 +1815,7 @@ jobs:
   # BOTH job bodies and asserts exactly that.
   e2e-at-scale:
     name: Playwright E2E at-scale (${{ matrix.id }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 2.9–12.3 min across the four at-scale legs (n=28 legs over 7 clean
     # merge-group runs, 2026-09-04 — collab 2.9–3.6, board 3.8–4.9, reporting
     # 5.2–7.2, billing-cloud 8.6–12.3) → 45 (~3.7x on the worst leg), the same
@@ -2084,7 +2084,7 @@ jobs:
 
   deploy:
     name: Deploy to Fly
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     needs: [lint, typecheck, build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     # A release must NOT be cancelled mid-flight by a newer push — the
@@ -2379,7 +2379,7 @@ jobs:
   # own convention.
   story-4753-coverage:
     name: Coverage (onboarding routing)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.5 min of test time; the ceiling bounds a hang rather than
     # setting a target, and the fixed cost (checkout + Postgres + install +
     # `migrate deploy`) is ~75 s on this runner class.
@@ -2433,7 +2433,7 @@ jobs:
   # run against a real database, per the repository's own convention.
   story-4905-coverage:
     name: Coverage (approved status)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.8 min of test time locally; the ceiling bounds a hang rather
     # than setting a target, and the fixed cost (checkout + Postgres + install +
     # `migrate deploy`) is ~75 s on this runner class.
@@ -2482,7 +2482,7 @@ jobs:
   # `include`, per-file thresholds, and a real Postgres for the delivery rows.
   story-6617-coverage:
     name: Coverage (in-flight code)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed ~0.6 min of test time locally; the ceiling bounds a hang rather
     # than setting a target, and the fixed cost (checkout + Postgres + install +
     # `migrate deploy`) is ~75 s on this runner class.
@@ -2532,7 +2532,7 @@ jobs:
   # project, its repository set and every permission decision.
   story-7858-coverage:
     name: Coverage (code read)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed ~0.7 min of test time locally (4 files); the ceiling bounds a hang
     # rather than setting a target.
     timeout-minutes: 15
@@ -2580,7 +2580,7 @@ jobs:
   # project, its repository set and every permission decision.
   story-8136-coverage:
     name: Coverage (code unreadable)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed ~1 min of test time locally (5 files); the ceiling bounds a hang
     # rather than setting a target.
     timeout-minutes: 15
@@ -2629,7 +2629,7 @@ jobs:
   # Postgres for the same reason.
   story-683-coverage:
     name: Coverage (hosted agent run)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # A new lane with no healthy CI run to quote yet. The same-shaped
     # approved-status lane above observed 0.8 min of test time; this one runs
     # ~22 test files against Postgres, plus the fixed cost (checkout, Postgres,
@@ -2678,7 +2678,7 @@ jobs:
 
   story-6860-coverage:
     name: Coverage (agent instances)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-6860's coverage floor (MOTIR-6876): the agent-instance record,
     # lifecycle, sweep and charge, routes, jobs and page, measured over their own
     # tests against Postgres. A new lane with no CI run to quote yet; the 20-min
@@ -2723,7 +2723,7 @@ jobs:
 
   story-727-coverage:
     name: Coverage (operator console)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-727 (10.1, the operator console) — MOTIR-7296's per-file floor over
     # the files the story's motir-core cards added (`vitest.coverage.platform-admin.config.ts`):
     # the audited platform reads, the spend vocabulary, the console's client-side
@@ -2770,7 +2770,7 @@ jobs:
 
   story-7630-coverage:
     name: Coverage (planning session lifecycle)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-7630 (a planning session ENDS) — MOTIR-7644's per-file floor over
     # the files the story added and the small readers it rewrote
     # (`vitest.coverage.session-lifecycle.config.ts`): the end operation, the
@@ -2816,7 +2816,7 @@ jobs:
 
   story-7631-coverage:
     name: Coverage (plan something new)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-7631 (Plan something new from inside the overlay) — MOTIR-7652's
     # floor over the files the story added (`vitest.coverage.plan-something-new.config.ts`):
     # the restart constants and its two doors, measured by the restart suites against
@@ -2861,7 +2861,7 @@ jobs:
 
   story-7820-coverage:
     name: Coverage (plan progress)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-7820 (live plan progress) — MOTIR-7832's per-file floor over the
     # files the story wrote (`vitest.coverage.plan-progress.config.ts`): the step
     # store, both signal doors, the progress derivation, the reader's Planning read
@@ -2907,7 +2907,7 @@ jobs:
 
   story-8060-coverage:
     name: Coverage (planner narration)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-8060 (the planner's narration) — MOTIR-8066's per-file floor
     # over the files the story wrote (`vitest.coverage.plan-narration.config.ts`):
     # the narration store, both widened step doors, the chat-panel read and its
@@ -2954,7 +2954,7 @@ jobs:
 
   story-7974-coverage:
     name: Coverage (tool-call narration)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-7974 (one line per tool call on the planning rail) — MOTIR-7981's
     # per-file floor over the files the story wrote
     # (`vitest.coverage.tool-call-narration.config.ts`): the per-call rules and the
@@ -3002,7 +3002,7 @@ jobs:
 
   story-7883-coverage:
     name: Coverage (plan approval only in the overlay)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-7883 (a plan is approved only in the planning overlay) — MOTIR-7892's
     # per-file floor over the files the story added (`vitest.coverage.plan-overlay-only.config.ts`):
     # the plan-overlay door hook and its link, measured by the story gate (the door's
@@ -3049,7 +3049,7 @@ jobs:
 
   story-7928-coverage:
     name: Coverage (a waiting plan keeps its conversation)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-7928 (a waiting plan whose session has ended keeps its conversation) —
     # MOTIR-7933's per-file floor over the files the story added
     # (`vitest.coverage.waiting-plan-carry.config.ts`), measured by the story gate (the
@@ -3095,7 +3095,7 @@ jobs:
 
   story-7602-coverage:
     name: Coverage (Enterprise requests)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Story MOTIR-7602 (Contact sales reaches platform staff) — MOTIR-7610's per-file
     # floor over the files the story added (`vitest.coverage.enterprise-requests.config.ts`):
     # the request record and its route, the staff email, the Contact-sales form, and the
@@ -3150,7 +3150,7 @@ jobs:
   # every landing the gate drives run against a real database.
   story-7797-coverage:
     name: Coverage (bug filing)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # A new lane with no CI run to quote yet. Locally 9 files ran in ~2.2 min of
     # wall time, coverage-instrumented, against Postgres; the ceiling bounds a
     # hang rather than setting a target — replace it with a measured figure.
@@ -3203,7 +3203,7 @@ jobs:
   # build (the component suites import the design system), like `story-7631-coverage`.
   story-7990-coverage:
     name: Coverage (talk to the planner)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # A new lane with no CI run to quote yet. Locally the 13 spec files ran in
     # ~1.7 min against Postgres, coverage-instrumented; the ceiling bounds
     # a hang rather than setting a target — replace it with a measured figure.
@@ -3306,7 +3306,7 @@ jobs:
   # the package build, for the same reasons as the hosted-run lane above.
   story-1626-coverage:
     name: Coverage (review agent)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # A new lane with no healthy CI run to quote yet. The same-shaped
     # approved-status lane above observed 0.8 min of test time; this one runs
     # ~22 test files against Postgres, plus the fixed cost (checkout, Postgres,
@@ -3360,7 +3360,7 @@ jobs:
   # `@motir/pages` from its `dist/`. The package's own floor is the `pages` job's.
   story-5752-coverage:
     name: Coverage (pages)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # A new lane with no CI run to quote yet. Observed 2.6 min of test time locally
     # (16 files, coverage-instrumented, against Postgres), plus the fixed cost
     # (checkout, Postgres, install, package build, `migrate deploy`). The 20-min
@@ -3459,7 +3459,7 @@ jobs:
         runner-image,
         deploy,
       ]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed <0.1 min → 10 (the short-job floor). It reads the `needs`
     # context and exits. The clock starts when the job STARTS, so waiting for
     # fifteen other jobs costs it nothing.

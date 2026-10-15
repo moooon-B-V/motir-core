@@ -362,8 +362,8 @@ export const jobRunRepository = {
    * System-tab read (1.6.5): every run across all workspaces INCLUDING the
    * untenanted system rows (workspace_id IS NULL). No workspace filter — the
    * caller MUST run this under withSystemContext (the only context whose RLS
-   * branch admits null-workspace rows), and the dashboard only reaches it for a
-   * PLATFORM_ADMIN_EMAIL operator. Newest-first, paged.
+   * branch admits null-workspace rows), and the dashboard only reaches it for
+   * platform staff (`support` or above). Newest-first, paged.
    */
   async listAll(
     opts: { status?: JobRunStatus; limit: number; offset: number },
