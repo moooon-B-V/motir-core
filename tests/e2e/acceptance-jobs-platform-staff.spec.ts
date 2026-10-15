@@ -40,6 +40,13 @@ const systemLink = (page: Page) => page.getByRole('link', { name: 'System', exac
 const systemDlqHeading = (page: Page) =>
   page.getByRole('heading', { name: 'Dead letters with no workspace', exact: true });
 const systemDlqTable = (page: Page) => page.getByRole('table', { name: 'System dead letters' });
+// The three sign-ups below queue their own emails, and in CI those can fail and
+// dead-letter with no workspace while the spec runs — so the System tab may hold
+// rows besides the seeded one. Every assertion reads the SEEDED row, found by
+// the event name only it carries.
+const SEEDED_EVENT = `email.send.acceptance-${STAMP}`;
+const seededRow = (page: Page) =>
+  systemDlqTable(page).getByRole('row').filter({ hasText: SEEDED_EVENT });
 
 /** A Server Action POSTed to `pathname`. */
 function serverAction(page: Page, pathname: string): Promise<Response> {
@@ -111,7 +118,7 @@ test.beforeEach(async ({ page }) => {
     data: {
       workspaceId: null,
       functionId: 'email.send',
-      eventName: 'email.send',
+      eventName: SEEDED_EVENT,
       eventData: {
         to: 'reset@example.com',
         template: 'password-reset',
@@ -140,13 +147,11 @@ test('platform staff see the System tab, an operator replays, a tenant owner see
   await chapter('Support sees the System tab but cannot replay', async () => {
     await signInAs(page, SUPPORT_EMAIL);
     await openSystemTab(page);
-    await expect(
-      systemDlqTable(page).getByRole('cell', { name: 'email.send', exact: true }).first(),
-    ).toBeVisible();
+    await expect(seededRow(page)).toBeVisible();
     await beat();
 
     const replay = serverAction(page, '/settings/organization');
-    await systemDlqTable(page).getByRole('button', { name: 'Replay' }).click();
+    await seededRow(page).getByRole('button', { name: 'Replay' }).click();
     expect((await replay).status(), 'the refused replay still answers').toBe(200);
     await expect(
       page.getByText('Only the platform operator can replay system dead letters.').first(),
@@ -161,14 +166,14 @@ test('platform staff see the System tab, an operator replays, a tenant owner see
     await openSystemTab(page);
 
     const replay = serverAction(page, '/settings/organization');
-    await systemDlqTable(page).getByRole('button', { name: 'Replay' }).click();
+    await seededRow(page).getByRole('button', { name: 'Replay' }).click();
     expect((await replay).status(), 'the replay').toBe(200);
     await expect.poll(() => replayedAt(dlqId), { timeout: 20_000 }).not.toBeNull();
 
     await page.reload();
     await expect(systemDlqHeading(page)).toBeVisible({ timeout: 30_000 });
     // A replayed row is a record, not a chore: its Replay control is gone.
-    await expect(systemDlqTable(page).getByRole('button', { name: 'Replay' })).toHaveCount(0);
+    await expect(seededRow(page).getByRole('button', { name: 'Replay' })).toHaveCount(0);
     await beat();
   });
 
