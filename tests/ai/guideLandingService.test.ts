@@ -410,6 +410,70 @@ describe('needs_replan (A3.9 (b))', () => {
   });
 });
 
+describe('needs_replan offer — the resolved target (MOTIR-8685 Q4)', () => {
+  /** A manual card under a story under an epic, all on a workflow status. */
+  async function chain() {
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Email' });
+    const story = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Sending',
+      parentId: epic.id,
+    });
+    const card = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Rotate the signing key',
+      type: 'manual',
+      executor: 'human',
+      parentId: story.id,
+    });
+    for (const w of [epic, story, card]) {
+      await adminDb.workItem.update({ where: { id: w.id }, data: { status: 'todo' } });
+    }
+    return { epic, story, card };
+  }
+
+  const offer = (targetKey: string) => [
+    {
+      type: 'needs_replan',
+      reason: 'The story is wrong',
+      requestMd: 'Re-plan the story',
+      targetKey,
+    },
+  ];
+
+  it('an open target is the key the offer carries', async () => {
+    const { story, card } = await chain();
+    const settled = await settleWith(await open(card.identifier), offer(story.identifier));
+    expect(settled.record?.outcomes[0]).toMatchObject({
+      type: 'needs_replan',
+      outcome: 'landed',
+      workItemKey: story.identifier,
+    });
+  });
+
+  it('a done target resolves to the nearest not-done ancestor, parent first', async () => {
+    const { epic, story, card } = await chain();
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'todo' } });
+    await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'done' } });
+    const settled = await settleWith(await open(card.identifier), offer(story.identifier));
+    expect(settled.record?.outcomes[0]?.workItemKey).toBe(epic.identifier);
+  });
+
+  it('an archived or unknown target with nothing open above it makes no offer', async () => {
+    const { epic, story, card } = await chain();
+    await adminDb.workItem.update({ where: { id: epic.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'done' } });
+    const settled = await settleWith(await open(card.identifier), offer('NOPE-999'));
+    expect(settled.record?.outcomes[0]).toEqual({ type: 'needs_replan', outcome: 'landed' });
+  });
+
+  it('a card with no parent resolves only to an open target', async () => {
+    const card = await manualCard();
+    const settled = await settleWith(await open(card.identifier), offer('NOPE-999'));
+    expect(settled.record?.outcomes[0]).toEqual({ type: 'needs_replan', outcome: 'landed' });
+  });
+});
+
 describe('local_agent_prompt (A3.9 (a))', () => {
   it('is recorded on the conversation and writes nothing to the card', async () => {
     const card = await manualCard();
