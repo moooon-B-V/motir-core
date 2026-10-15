@@ -2,6 +2,7 @@ import 'server-only';
 
 import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import type {
   FleetOrgCiFlipDTO,
   FleetOrgCiStateDTO,
@@ -114,7 +115,7 @@ function orgTargetFor(target: FleetOrgCiTargetDTO): GithubOrgTarget {
  * `FleetOrgCiGithubWriteError` (`read`) rather than silently hiding an org.
  */
 async function offeredTargets(): Promise<FleetOrgCiTargetDTO[]> {
-  const provisioning = provisioningOrgLogin()?.trim().toLowerCase() ?? null;
+  const provisioning = provisioningOrgLogin();
   const projects = await withSystemContext((tx) => projectRepository.listInMetaOrganizations(tx));
   const targets: FleetOrgCiTargetDTO[] = [];
   for (const project of projects) {
@@ -124,7 +125,7 @@ async function offeredTargets(): Promise<FleetOrgCiTargetDTO[]> {
     const byOrg = new Map<string, typeof realized>();
     for (const repo of realized) {
       const key = repo.owner.trim().toLowerCase();
-      if (!key || key === provisioning) continue;
+      if (!key || isMotirHostedOwner(key, provisioning)) continue;
       byOrg.set(key, [...(byOrg.get(key) ?? []), repo]);
     }
     for (const [key, repos] of [...byOrg.entries()].sort(([a], [b]) => a.localeCompare(b))) {
@@ -166,9 +167,9 @@ async function offeredTargets(): Promise<FleetOrgCiTargetDTO[]> {
 
 async function resolveTarget(pair: FleetOrgCiPair): Promise<FleetOrgCiTargetDTO> {
   const key = pair.org.trim().toLowerCase();
-  const provisioning = provisioningOrgLogin()?.trim().toLowerCase() ?? null;
   // Refused before any GitHub call: the provisioning org is never offered.
-  if (!key || key === provisioning) throw new FleetOrgCiTargetUnknownError(pair.projectId, key);
+  if (!key || isMotirHostedOwner(key, provisioningOrgLogin()))
+    throw new FleetOrgCiTargetUnknownError(pair.projectId, key);
   const found = (await offeredTargets()).find(
     (t) => t.projectId === pair.projectId && t.org.toLowerCase() === key,
   );
