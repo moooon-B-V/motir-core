@@ -633,6 +633,18 @@ interface Crumb {
 // the user had zoomed out/in.
 const LOCATE_ZOOM = 1;
 
+// THE LIVE SLOT'S PILL — the follow offer and the arrivals count share one markup
+// (§23.7). Below a 32rem BAR it yields first (MOTIR-8646): the label goes
+// `sr-only` and the pill becomes a `--height-control` square showing only its
+// dot, named by `aria-label` + `title` — the compact form Part XXVIII gives the
+// follow control, so the crumbs keep the room to name the level. Unshrunk, the
+// pill kept its full width at the narrowest split (384px pane) and crushed the
+// crumb trail to one letter. The bar `nav` is the `canvas-bar` container;
+// `tripPush` adds the `ml-auto` when the pill stands alone.
+const SLOT_PILL_CLASS =
+  'inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) @max-[32rem]/canvas-bar:size-(--height-control) @max-[32rem]/canvas-bar:justify-center @max-[32rem]/canvas-bar:p-0';
+const SLOT_PILL_LABEL_CLASS = '@max-[32rem]/canvas-bar:sr-only';
+
 export function ProjectRoadmapCanvas({
   loadLevel,
   reloadKey,
@@ -1725,6 +1737,32 @@ export function ProjectRoadmapCanvas({
   const tripPush = followControl ? '' : 'ml-auto ';
   const slotIdentifier = (trail: readonly CanvasCrumb[]) =>
     trail[trail.length - 1]?.crumbKey ?? trail[trail.length - 1]?.label ?? resolvedRootLabel;
+  // The slot's words, computed once: the pill's visible label AND its accessible
+  // name, because below a 32rem bar the label goes `sr-only` (MOTIR-8646).
+  const offerLabel =
+    offer !== null
+      ? tTarget('goToTarget', {
+          identifier:
+            offer.trail[offer.trail.length - 1]?.crumbKey ??
+            offer.trail[offer.trail.length - 1]?.label ??
+            resolvedRootLabel,
+        })
+      : null;
+  const slotLabel =
+    slot === null
+      ? null
+      : slot.key === 'newAndDraftingIn'
+        ? tTarget(slot.key, {
+            arrived: slot.arrived,
+            drafting: slot.drafting,
+            identifier: slotIdentifier(slot.trail),
+          })
+        : slot.key === 'layingIn'
+          ? tTarget(slot.key, { identifier: slotIdentifier(slot.trail) })
+          : tTarget(slot.key, {
+              count: slot.count,
+              identifier: slotIdentifier(slot.trail),
+            });
 
   // The bar's TRIPS — the offer, else the pill (one slot).
   const trips = (
@@ -1739,6 +1777,8 @@ export function ProjectRoadmapCanvas({
         <button
           type="button"
           data-testid="canvas-follow-offer"
+          aria-label={offerLabel ?? undefined}
+          title={offerLabel ?? undefined}
           onClick={() => {
             const next = offer.trail;
             // An elsewhere offer needs no clearing: once the reader stands
@@ -1759,18 +1799,13 @@ export function ProjectRoadmapCanvas({
               }),
             );
           }}
-          className={`${tripPush}inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)`}
+          className={`${tripPush}${SLOT_PILL_CLASS}`}
         >
           <span
             aria-hidden="true"
             className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
           />
-          {tTarget('goToTarget', {
-            identifier:
-              offer.trail[offer.trail.length - 1]?.crumbKey ??
-              offer.trail[offer.trail.length - 1]?.label ??
-              resolvedRootLabel,
-          })}
+          <span className={SLOT_PILL_LABEL_CLASS}>{offerLabel}</span>
         </button>
       )}
       {/* THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — ONE slot,
@@ -1780,25 +1815,16 @@ export function ProjectRoadmapCanvas({
         <button
           type="button"
           data-testid="canvas-arrivals-offer"
+          aria-label={slotLabel ?? undefined}
+          title={slotLabel ?? undefined}
           onClick={() => goToArrivals(slot.trail)}
-          className={`${tripPush}inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)`}
+          className={`${tripPush}${SLOT_PILL_CLASS}`}
         >
           <span
             aria-hidden="true"
             className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
           />
-          {slot.key === 'newAndDraftingIn'
-            ? tTarget(slot.key, {
-                arrived: slot.arrived,
-                drafting: slot.drafting,
-                identifier: slotIdentifier(slot.trail),
-              })
-            : slot.key === 'layingIn'
-              ? tTarget(slot.key, { identifier: slotIdentifier(slot.trail) })
-              : tTarget(slot.key, {
-                  count: slot.count,
-                  identifier: slotIdentifier(slot.trail),
-                })}
+          <span className={SLOT_PILL_LABEL_CLASS}>{slotLabel}</span>
         </button>
       )}
     </>
@@ -1925,7 +1951,7 @@ export function ProjectRoadmapCanvas({
             // With a LEVEL CHANGE BAND (MOTIR-6223) the bar STACKS: `breadcrumbRow`
             // becomes its first row, unchanged, and the band the second, inside the
             // same card. Without one it is the single-row bar, byte for byte.
-            className={`pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 ${band ? 'flex-col items-stretch' : 'items-center gap-1'} rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)`}
+            className={`@container/canvas-bar pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 ${band ? 'flex-col items-stretch' : 'items-center gap-1'} rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)`}
           >
             {band ? (
               <>
