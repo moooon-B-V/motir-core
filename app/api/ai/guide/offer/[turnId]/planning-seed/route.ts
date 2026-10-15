@@ -17,7 +17,7 @@ import type { PlanningGuideSeedReadDTO } from '@/lib/dto/planningSeed';
 // Session-authed through the ACTIVE project: the no-project arm, the 2FA hold, then
 // ONE service call. Every "nothing here for you" — an unknown turn, another member's
 // guide conversation, a declined or superseded offer, a card the viewer cannot
-// browse — is the SAME 404 body, never a 403. Not rate-limited: it submits no job.
+// browse — is the SAME 404 body, never a 403. It submits no model job: NOT rate-limited, deliberately.
 //
 // Thin HTTP layer (CLAUDE.md § 4-layer): no `db`, no transaction, no logic.
 

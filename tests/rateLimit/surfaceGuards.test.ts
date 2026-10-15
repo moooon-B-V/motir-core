@@ -894,6 +894,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // The decline of a re-plan offer writes one marker row on the thread and
     // plans nothing (MOTIR-8689).
     'app/api/ai/guide/offer/decline/route.ts',
+    // The seed of a re-plan offer is a pure read: it composes the first turn and
+    // reports the session, and submits no model job (MOTIR-8692).
+    'app/api/ai/guide/offer/[turnId]/planning-seed/route.ts',
     'app/api/ai/guide/settle/route.ts',
     'app/api/ai/jobs/[jobId]/route.ts',
     // The boundary MAILBOX (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068): a turn

@@ -3258,7 +3258,7 @@ jobs:
   # `story-7990-coverage`.
   story-8684-coverage:
     name: Coverage (guide re-plan offer)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # A new lane with no CI run to quote yet. Locally the 17 spec files ran in
     # ~1.1 min against Postgres, coverage-instrumented; the ceiling bounds a hang
     # rather than setting a target — replace it with a measured figure.
