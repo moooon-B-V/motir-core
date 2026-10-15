@@ -59,7 +59,8 @@ const S1: CanvasCrumb[] = [...E1, { id: 'S1', label: 'MOTIR-2 · Story one' }];
 const E2: CanvasCrumb[] = [{ id: 'E2', label: 'MOTIR-3 · Epic two' }];
 
 function Canvas(p: Partial<ProjectRoadmapCanvasProps>) {
-  return <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" {...p} />;
+  const props = { loadLevel, rootLabel: 'Roadmap', ...p } as ProjectRoadmapCanvasProps;
+  return <ProjectRoadmapCanvas {...props} />;
 }
 
 describe("followMode: 'whileOn'", () => {
@@ -295,7 +296,7 @@ describe('onReaderNavigated — the person, never the canvas', () => {
       nodes: [{ ...node('V', 'View me'), viewable: true, ready: true }],
       deps: [],
     };
-    const levelsWithV = { ...levels, S2: viewable };
+    const levelsWithV: Record<string, RoadmapLevel> = { ...levels, S2: viewable };
     const load = (id: string | null) =>
       Promise.resolve(levelsWithV[id ?? '__root__'] ?? { nodes: [], deps: [] });
     const base = { loadLevel: load, rootLabel: 'Roadmap', onReaderNavigated: nav } as const;

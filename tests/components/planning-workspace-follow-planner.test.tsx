@@ -318,7 +318,7 @@ const driving = (
   over: Partial<PlanProgressSnapshot> = {},
 ) => {
   const s = live(items);
-  return { ...s, liveReview: { ...s.liveReview, progress: progressOf(steps, over) } };
+  return { ...s, liveReview: { ...s.liveReview!, progress: progressOf(steps, over) } };
 };
 
 /** Mount on an empty live plan (so the pane seeds the Canvas view), then drive it. */
