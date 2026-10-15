@@ -279,7 +279,7 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
               </h2>
               {/* PINNED ABOVE THE LOG, and absent entirely when the run
                   produced nothing — which is most runs. See `RunFindings`. */}
-              <RunFindings events={events} />
+              <RunFindings events={events} cards={run.cards} />
               <RunLogPane run={run} events={events} selectedWorkItemId={selectedWorkItemId} />
             </section>
           </div>

@@ -12028,6 +12028,8 @@
       "approvedFor": "goedgekeurd voor {key}",
       "materialized": "{count, plural, one {# voorstel} other {# voorstellen}} omgezet in werk",
       "bugFiled": "Bug aangemaakt",
+      "discrepancy": "Anders gebouwd",
+      "discrepancyPoints": "{count, plural, one {# punt} other {# punten}}",
       "open": "Openen →"
     },
     "scope": {

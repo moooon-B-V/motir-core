@@ -633,6 +633,12 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           targetKey: item1,
           reason: 'scoped report',
         },
+        // MOTIR-8657 — the caller's OWN item. Gated on `work_item:edit`, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        record_run_discrepancy: {
+          key: item1,
+          points: [{ planAsked: 'scoped', built: 'scoped', why: 'scoped' }],
+        },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },

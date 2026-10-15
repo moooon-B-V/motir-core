@@ -1,0 +1,2891 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · A DISCREPANCY the run recorded — the findings strip row (MOTIR-8656)
+    </title>
+    <!--
+      DELTA MOCK — Subtask MOTIR-8656 (Story MOTIR-8651). It AMENDS one shipped surface for ONE
+      change: the run modal's findings strip (design/runs/run-modal.mock.html panel 9, spec in
+      design/runs/design-notes.md § "What the run PRODUCED") gains a FOURTH kind of finding — the
+      DISCREPANCY a run recorded when it built a work item through a plan that was wrong only about
+      the HOW.
+
+      IT EDITS NO EXISTING MOCK. run-modal.mock.html is a record of what was drawn and stays exactly
+      as it is; this sheet holds only the panels that change. Spec: design/runs/design-notes.md
+      § "A DISCREPANCY the run recorded".
+
+      THE STYLESHEET AND THE SPRITE SHEET ARE run-modal.mock.html's, VERBATIM. The `dc-` block at the
+      end of the stylesheet is this sheet's only addition: one dot colour (an EXISTING element token)
+      and nothing else. No new sprite, no new tone.
+
+      NO RAW HEX AND NO RAW SHAPE UTILITIES in the additions: colour is --el-* element tokens and
+      shape is the element-semantic shape tokens throughout. The noun is `work item`, never the
+      authoring shorthand.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      /* Utility shims — the mock is static HTML, so the handful of Tailwind
+         utilities the shipped components emit are declared here against the SAME
+         tokens. Nothing invents a value. */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .items-start {
+        align-items: flex-start;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .max-w-md {
+        max-width: 28rem;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-serif {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .relative {
+        position: relative;
+      }
+      .w-6 {
+        width: 1.5rem;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-12 {
+        height: 3rem;
+      }
+      .w-12 {
+        width: 3rem;
+      }
+      .dsCard {
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .dsPillSuccess {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillWarning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .panelBody {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        gap: 28px;
+        align-items: start;
+      }
+      .rail {
+        width: 18rem;
+      }
+      .main {
+        min-width: 0;
+      }
+      /* padding + margin utilities used by the shipped markup */
+      .px-3\.5 {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-10 {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+      }
+      .p-0\.5 {
+        padding: 0.125rem;
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-1\.5 {
+        margin-top: 0.375rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-3 {
+        margin-top: 0.75rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .-mt-0\.5 {
+        margin-top: -0.125rem;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      /* the shipped arbitrary-value utilities, spelled out */
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .h-\[15px\] {
+        height: 15px;
+      }
+      .w-\[15px\] {
+        width: 15px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .shadow-\(--shadow-card\) {
+        box-shadow: var(--shadow-card);
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .rounded-\(--radius-card\) {
+        border-radius: var(--radius-card);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+      /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
+         its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
+         surface is a left-column section card and has no rail, so a single
+         child would otherwise land in the 18rem track and render at a width the
+         product never uses. */
+      .panelBody {
+        display: block;
+      }
+      /* The left column's real width: the item page is a `1fr 18rem` grid with a
+         24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
+         section card below is drawn at that width, which is what makes the
+         overflow panels (13–14) measurements rather than illustrations. */
+      .secCard,
+      .panelBody > .grid {
+        max-width: 800px;
+      }
+      .twoUp {
+        max-width: 100%;
+      }
+
+      /* ── Extra utility shims this asset needs, same tokens ─────────────── */
+      .w-full {
+        width: 100%;
+      }
+      .gap-3 {
+        gap: 12px;
+      }
+      .gap-0\.5 {
+        gap: 2px;
+      }
+      .mt-4 {
+        margin-top: 16px;
+      }
+      .mb-2 {
+        margin-bottom: 8px;
+      }
+      .ml-auto {
+        margin-left: auto;
+      }
+      .line-through {
+        text-decoration: line-through;
+      }
+      .overflow-x-auto {
+        overflow-x: auto;
+      }
+      .cursor-grab {
+        cursor: grab;
+      }
+      .select-none {
+        user-select: none;
+      }
+      .whitespace-pre {
+        white-space: pre;
+      }
+      .h-5 {
+        height: 20px;
+      }
+      .w-5 {
+        width: 20px;
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .py-2 {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .px-2 {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .text-\[12px\] {
+        font-size: 12px;
+      }
+      .text-\[12\.5px\] {
+        font-size: 12.5px;
+      }
+
+      /* ── The asset's OWN elements ─────────────────────────────────────── */
+      /* A section card, `ContentSectionCard` markup-for-markup. */
+      .secCard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card, var(--color-background));
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .secBody {
+        padding: 8px var(--spacing-card-padding) 16px;
+      }
+      /* ONE to-do row. A grid so the checkbox, the body and the row actions
+         each get their own track — and so the body track can be `min-w-0`,
+         which is what lets a long command scroll inside itself instead of
+         widening the row. */
+      .todoRow {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: start;
+        gap: 10px;
+        padding: 9px 4px;
+        border-radius: var(--radius-control, 8px);
+      }
+      .todoRow + .todoRow {
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .todoRow.isHover {
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      /* The shipped `Checkbox` primitive's box. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border: 1px solid var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 6px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-card, var(--color-background));
+        color: transparent;
+        flex: none;
+      }
+      .cbox.isOn {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbox.isInert {
+        border-color: var(--el-border);
+        background: var(--el-muted, var(--color-muted));
+      }
+      /* The command value — mono, scrolling inside ITS OWN box. */
+      /* The INSTRUCTIONS disclosure. Collapsed by default so a list of ten rows
+         reads as ten lines whether or not any of them carries notes; the tell
+         is the chevron, which only renders on a row that HAS notes. */
+      .notesToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .notesToggle svg {
+        transition: transform 120ms;
+      }
+      .notesToggle.isOpen svg {
+        transform: rotate(90deg);
+      }
+      .notesBody {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 2px solid var(--el-border-strong, var(--el-border));
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .notesBody ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .notesBody code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 1px 4px;
+        border-radius: var(--radius-control, 4px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .notesBody a {
+        color: var(--el-link);
+      }
+      /* The MARKDOWN EDITOR, mirrored from `comments.mock.html`'s composer —
+         the shipped `MarkdownEditor` at `size="compact"`, whose button set is
+         bold · italic · strike · inline code · link · bulleted · numbered
+         (`components/ui/MarkdownEditor.tsx`). Not an approximation: the same
+         chrome the comment composer already renders on this page. */
+      .mdEditor {
+        margin-top: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .mdEditor.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .editorToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tbIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tbIcon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editorArea {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .editorArea ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fieldLabel {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .cmdBox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .cmdVal {
+        /* A `<pre>`, not a `<code>`: `white-space: pre` is only honoured if the
+           markup preserves the line, and a formatter will reflow the contents of
+           an inline element. This is also what the shipped `CodeBlock` renders
+           (`ScrollableRegion as="pre"`). */
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: pre;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.7;
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 6px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn, 8px);
+        background: var(--el-card, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        padding: 5px 10px;
+        line-height: 1.2;
+      }
+      .btnIcon {
+        padding: 5px;
+      }
+      .btnPrimary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btnDanger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .rowActions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        color: var(--el-text-secondary);
+      }
+      .execMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .execMark.isAgent {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .addRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 4px 2px;
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .inputBox {
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-card, var(--color-background));
+      }
+      .inputBox.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .dropGap {
+        height: 2px;
+        margin: 2px 4px;
+        border-radius: 2px;
+        background: var(--el-accent);
+      }
+      .ghostRow {
+        opacity: 0.5;
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 8px);
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        background: var(--el-page-bg, var(--color-background));
+      }
+      .colLabel {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .twoUp {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .foldRule {
+        position: relative;
+        border-top: 2px dashed var(--el-accent);
+        margin: 4px 0;
+      }
+      .foldRule span {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--el-page-bg, var(--color-background));
+        padding: 0 6px;
+        color: var(--el-accent-on-surface, var(--el-text-secondary));
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 8px);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .regionBox.isThis {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .narrow {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-card, var(--color-background));
+      }
+    </style>
+    <style>
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0 0 10px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .stage {
+        max-width: 720px;
+      }
+      .stageWide {
+        max-width: 980px;
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        padding: 10px 14px;
+        font-size: 12.5px;
+      }
+      .regionBox.is-new {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* ── the shipped section chrome (ContentSectionCard over Card) ───────── */
+      .secCard {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-card-padding);
+        padding-bottom: 0;
+      }
+      .secHead h2 {
+        margin: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-base);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .secSub {
+        font-size: var(--font-size-sm);
+        color: var(--el-text-secondary);
+      }
+      .secBody {
+        padding: var(--spacing-card-padding);
+      }
+      .secRight {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── the run-status pill: ONE vocabulary, tinted background + strong ink ── */
+      .runPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-xs);
+        font-weight: 500;
+        line-height: 1rem;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .runPill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .t-queued {
+        background: var(--el-muted);
+      }
+      .t-queued .dot {
+        background: var(--el-status-todo);
+      }
+      .t-running {
+        background: var(--el-tint-sky);
+      }
+      .t-running .dot {
+        background: var(--el-status-in-progress);
+      }
+      .t-integrated {
+        background: var(--el-tint-mint);
+      }
+      .t-integrated .dot {
+        background: var(--el-status-done);
+      }
+      .t-implemented {
+        background: var(--el-tint-mint);
+      }
+      .t-implemented .dot {
+        background: var(--el-status-done);
+      }
+      .t-failed {
+        background: var(--el-tint-rose);
+      }
+      .t-failed .dot {
+        background: var(--el-danger);
+      }
+      .t-replanned {
+        background: var(--el-tint-lavender);
+      }
+      .t-replanned .dot {
+        background: var(--el-status-planning);
+      }
+      .t-skipped {
+        background: var(--el-muted);
+      }
+      .t-skipped .dot {
+        background: var(--el-text-tertiary);
+      }
+      .t-cancelled {
+        background: var(--el-muted);
+      }
+      .t-cancelled .dot {
+        background: var(--el-status-cancelled);
+      }
+      .t-timedout {
+        background: var(--el-tint-peach);
+      }
+      .t-timedout .dot {
+        background: var(--el-warning);
+      }
+      .t-offline {
+        background: var(--el-tint-peach);
+      }
+      .t-offline .dot {
+        background: var(--el-text-tertiary);
+      }
+
+      /* ── the live timeline ─────────────────────────────────────────────── */
+      .tl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        position: relative;
+      }
+      .tl::before {
+        content: '';
+        position: absolute;
+        left: 7px;
+        top: 10px;
+        bottom: 10px;
+        width: 1px;
+        background: var(--el-border);
+      }
+      .tlRow {
+        position: relative;
+        display: grid;
+        grid-template-columns: 16px 1fr auto;
+        align-items: baseline;
+        gap: 10px;
+        padding: 6px 0;
+      }
+      .tlDot {
+        width: 9px;
+        height: 9px;
+        margin-left: 3px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+        position: relative;
+        top: 4px;
+      }
+      .tlRow.is-done .tlDot {
+        background: var(--el-status-done);
+      }
+      .tlRow.is-now .tlDot {
+        background: var(--el-status-in-progress);
+        box-shadow: 0 0 0 3px var(--el-tint-sky);
+      }
+      .tlRow.is-fail .tlDot {
+        background: var(--el-danger);
+      }
+      .tlRow.is-pending .tlDot {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+      }
+      .tlLabel {
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .tlRow.is-pending .tlLabel {
+        color: var(--el-text-secondary);
+      }
+      .tlDetail {
+        display: block;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+      .tlWhen {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+
+      .metaRow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .metaRow .k {
+        color: var(--el-text-tertiary);
+      }
+      .mono {
+        font-family: var(--font-mono, monospace);
+      }
+
+      /* the "one of N" line — the single most useful sentence on this card */
+      .setLine {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: var(--font-size-sm);
+      }
+      .setLine a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .notice {
+        display: flex;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: var(--radius-control);
+        font-size: var(--font-size-sm);
+        color: var(--el-text-strong);
+        margin-bottom: 14px;
+      }
+      .notice.warn {
+        background: var(--el-warning-surface);
+      }
+      .notice.info {
+        background: var(--el-notice-info-bg);
+      }
+      .notice .body {
+        min-width: 0;
+      }
+      .notice .body strong {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .notice .body span {
+        color: var(--el-text-strong);
+      }
+
+      /* the recent-runs list */
+      .runList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .runList li {
+        display: grid;
+        grid-template-columns: 8.5rem 1fr auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: var(--font-size-sm);
+      }
+      .runList .when {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        white-space: nowrap;
+      }
+      .runList .who {
+        color: var(--el-text-secondary);
+        font-size: var(--font-size-xs);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .runList .dur {
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .listFoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 12px;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .btnGhost {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-button-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        cursor: pointer;
+      }
+
+      /* the collapsed log console */
+      .console {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        margin-top: 14px;
+      }
+      .consoleHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-surface-soft);
+        border: 0;
+        font-family: var(--font-sans, sans-serif);
+        font-size: var(--font-size-sm);
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .consoleHead .chev {
+        transition: transform var(--transition-duration);
+      }
+      .consoleHead.is-open .chev {
+        transform: rotate(90deg);
+      }
+      .consoleHead .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .consoleBody {
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        font-family: var(--font-mono, monospace);
+        font-size: 11.5px;
+        line-height: 1.65;
+        padding: 10px 12px;
+        max-height: 190px;
+        overflow: auto;
+        border-top: 1px solid var(--el-border);
+      }
+      .consoleFoot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--el-surface-soft);
+        border-top: 1px solid var(--el-border);
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+      }
+
+      .emptyBox {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 26px 20px;
+        color: var(--el-text-secondary);
+      }
+      .emptyBox .glyph {
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-muted);
+        color: var(--el-icon-muted);
+        margin-bottom: 12px;
+      }
+      .emptyBox .glyph svg {
+        width: 20px;
+        height: 20px;
+      }
+      .emptyBox h3 {
+        margin: 0 0 4px;
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .emptyBox p {
+        margin: 0;
+        font-size: var(--font-size-xs);
+        color: var(--el-text-secondary);
+        max-width: 46ch;
+        line-height: 1.6;
+      }
+
+      .toneTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .toneTable th,
+      .toneTable td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: middle;
+      }
+      .toneTable th {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .toneTable td.mono {
+        color: var(--el-text-secondary);
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .caption {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+    </style>
+
+    <style>
+      /* ── Surfaces this area did not need until now ───────────────────────
+         The run SECTION is a panel inside a page somebody else owns, so the
+         first mock needed no page header, no table and no rail. These two are
+         PAGES. Everything below is composed from the same tokens as above —
+         no new colour, no raw radius, no fixed control height.               */
+
+      /* A page header, not a section card: `/runs` owns its own top of page,
+         where the run SECTION composed into one somebody else owned. (The run view is an OVERLAY on `/runs`, not a second route.)                */
+      .pgHead {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .pgTitle {
+        font-family: var(--font-serif), Georgia, serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .pgSub {
+        font-size: 0.8125rem;
+        color: var(--el-text-secondary);
+        margin: 0.125rem 0 0;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .crumb svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* The shipped TableShell grammar, copied from
+         app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx:
+         a rounded, bordered, horizontally scrollable wrapper over a plain
+         table; secondary ink in the head, body ink in the cells.             */
+      .tblWrap {
+        overflow-x: auto;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .tbl thead {
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .tbl th {
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        white-space: nowrap;
+      }
+      .tbl td {
+        font-size: 0.875rem;
+        color: var(--el-text);
+        vertical-align: middle;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .tbl tbody tr + tr td {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .tbl tbody tr.is-link:hover td {
+        background: var(--el-surface-soft);
+      }
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .dim {
+        color: var(--el-text-secondary);
+      }
+
+      /* The current / past switch — the shipped `Segmented` primitive's shape. */
+      .seg {
+        display: inline-flex;
+        padding: 2px;
+        gap: 2px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      .seg button {
+        font: inherit;
+        font-size: 0.8125rem;
+        border: 0;
+        cursor: pointer;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .seg button[aria-current='true'] {
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* The sidebar rail, drawn only so the ACCESS PATH is visible rather than
+         described. Its rows are the shipped rail's shape, not a new one.      */
+      .rail {
+        width: 232px;
+        padding: var(--spacing-control-y);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+      }
+      .railRow {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .railRow svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .railRow.is-new {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .railRow.is-active {
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* A skeleton row, for the loading face. Not a state the run section
+         needed: it filled with the item page's ONE settle, and these pages
+         own their own wait.                                                  */
+      .skel {
+        height: 12px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+
+      /* ⚠️ THE STAGE IS WIDER HERE THAN IN run-section.mock.html, and that is a
+         property of the SUBJECT rather than a preference. That asset draws a
+         SECTION inside a page somebody else owns, so its 720px stage is the
+         real width of the thing it draws. These two are PAGES: a run's set is a
+         seven-column table and squeezing it into a section's width would be
+         drawing the wrong measurement. 980px is the area's own `.stageWide`,
+         reused rather than invented. */
+      .stage {
+        max-width: 980px;
+      }
+
+      /* Cells whose content is a single token — a command, a timestamp, a
+         duration — never wrap: a wrapped `motir run` reads as two words and a
+         wrapped `18m 04s` reads as two numbers. The flexible cells are the
+         scope and the leg summary, which are prose and should wrap. */
+      .tbl td.nw,
+      .tbl th.nw {
+        white-space: nowrap;
+      }
+    </style>
+
+    <style>
+      /* ── THE RUN MODAL (MOTIR-3893, 2026-08-30) ──────────────────────────
+         The run view is an OVERLAY over `/runs`, not a route. Everything below
+         composes the same tokens as the blocks above — no new colour, no raw
+         radius, no fixed control height.
+
+         ⚠️ THE CANVAS ITSELF IS NOT DRAWN HERE. `design/roadmap/` owns the
+         spatial canvas — its pan, zoom, drill, search, locate, layout and the
+         work-item NODE's look — and `components/planning/ProjectRoadmapCanvas.tsx`
+         is the shipped foundation this pane MOUNTS. What these rules draw is
+         the node's shape only far enough to show WHAT A RUN ADDS to it: the
+         member's disposition in this run. Re-specifying the canvas would give
+         the product two accounts of one component.                            */
+
+      /* The dimmed list the overlay sits over — drawn so that "close returns
+         you to where you were" is visible rather than asserted. */
+      .under {
+        position: absolute;
+        inset: 0;
+        padding: 0.75rem;
+        overflow: hidden;
+        border-radius: var(--radius-card);
+      }
+      .underVeil {
+        position: absolute;
+        inset: 0;
+        background: var(--el-text);
+        opacity: 0.32;
+      }
+      .modalWrap {
+        position: relative;
+        height: 460px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-surface-soft);
+      }
+      .modal {
+        position: absolute;
+        inset: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .mHead {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: var(--spacing-card-padding);
+        padding-bottom: 0.625rem;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .mClose {
+        margin-left: auto;
+        flex: none;
+        display: grid;
+        place-items: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        color: var(--el-text-secondary);
+      }
+      .mClose svg {
+        width: 15px;
+        height: 15px;
+      }
+      /* The two panes. The canvas takes the room because it is the thing being
+         read; the log is a column you follow. */
+      .mBody {
+        flex: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+        min-height: 0;
+      }
+      .mPane {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .mPane + .mPane {
+        border-left: 1px solid var(--el-border-soft);
+      }
+      .paneHead {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── the canvas pane ── the SHAPE only; design/roadmap owns the rest ── */
+      .cv {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        background-color: var(--el-surface-soft);
+        background-image: radial-gradient(var(--el-border) 1px, transparent 1px);
+        background-size: 18px 18px;
+      }
+      .cvNode {
+        position: absolute;
+        width: 190px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 0.5rem 0.5625rem;
+        box-shadow: var(--shadow-subtle);
+      }
+      .cvNode.sel {
+        border-color: var(--el-accent);
+        box-shadow: var(--shadow-card);
+      }
+      .cvNode.notReached {
+        opacity: 0.55;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .cvHead {
+        display: flex;
+        align-items: center;
+        gap: 0.4375rem;
+      }
+      .cvTile {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .cvTile svg {
+        width: 13px;
+        height: 13px;
+      }
+      .cvKey {
+        font-family: var(--font-mono), ui-monospace, monospace;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .cvTitle {
+        font-size: 0.6875rem;
+        color: var(--el-text-secondary);
+        line-height: 1.25;
+        margin-top: 0.125rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      /* WHAT A RUN ADDS to a node that is already designed. */
+      .cvDisp {
+        margin-top: 0.4375rem;
+        padding-top: 0.4375rem;
+        border-top: 1px solid var(--el-border-soft);
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+      }
+      .cvWhy {
+        font-size: 0.625rem;
+        color: var(--el-text-secondary);
+      }
+      .cvEdges {
+        position: absolute;
+        inset: 0;
+        /* ⚠️ `width`/`height` ARE REQUIRED, and `inset: 0` is not enough. An SVG
+           is a REPLACED element: with no width/height attribute it takes its
+           INTRINSIC size, and `inset: 0` does not stretch it the way it stretches
+           a div. Every edge SVG in this asset was resolving to 16x16 — so every
+           path drew at ~4x6px and NO EDGE HAS EVER BEEN VISIBLE here, including
+           the running one panel 2 is entirely about. Measured, not guessed: six
+           SVGs at `16x16`, and `543x315` / `461x208` with these two lines. */
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .cvChrome {
+        position: absolute;
+        left: 0.5rem;
+        bottom: 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 0.25rem 0.5rem;
+        font-size: 0.6875rem;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── THE RUNNING EDGE (MOTIR-3893, Yue 2026-08-30) ───────────────────
+         On a run the EDGE is the point: it is what says why this work item is
+         being worked now and what becomes reachable when it lands. A static
+         arrow says the dependency exists; a MOVING one says the run is
+         travelling along it. So every edge FROM the running node TO a work item
+         it blocks flows, in the running tone this area already owns.
+
+         ⚠️ A PNG CANNOT SHOW MOTION, so the panel draws the dash pattern and
+         the arrow that carry it, and says in copy what moves. Read the mock in
+         a browser to see it run.                                              */
+      .cvEdges .flow {
+        stroke: var(--el-status-in-progress);
+        stroke-width: 2;
+        stroke-dasharray: 5 7;
+        animation: edgeflow 1.1s linear infinite;
+      }
+      @keyframes edgeflow {
+        to {
+          stroke-dashoffset: -24;
+        }
+      }
+      /* ⚠️ REQUIRED, not a courtesy. A looping animation with no still state is
+         a vestibular hazard and an attention sink on a page somebody leaves
+         open for an hour. Reduced motion keeps the WEIGHT and the HUE — the
+         edge still reads as the live one — and stops the travel. */
+      @media (prefers-reduced-motion: reduce) {
+        .cvEdges .flow {
+          animation: none;
+          stroke-dasharray: none;
+        }
+      }
+
+      /* ── the log pane ── the console treatment is run-section.mock.html's ── */
+      .logBody {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 0.5rem var(--spacing-card-padding);
+        font-family: var(--font-mono), ui-monospace, monospace;
+        font-size: 0.6875rem;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+      }
+      .logLine {
+        display: flex;
+        gap: 0.5rem;
+        white-space: pre;
+      }
+      .logT {
+        color: var(--el-text-tertiary);
+        flex: none;
+      }
+      .logSrc {
+        flex: none;
+        color: var(--el-accent-on-surface);
+      }
+      .logTxt {
+        min-width: 0;
+        overflow-x: auto;
+        color: var(--el-text);
+      }
+      .logFoot {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 0.6875rem;
+        color: var(--el-text-secondary);
+      }
+      .logEmpty {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        padding: var(--spacing-card-padding);
+        text-align: center;
+      }
+      .logEmpty p {
+        margin: 0.25rem 0 0;
+        font-size: 0.75rem;
+        color: var(--el-text-secondary);
+        max-width: 30ch;
+      }
+
+      /* ── what the run PRODUCED (MOTIR-3982) ── pinned above the log ── */
+      .findStrip {
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .findRow {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.4375rem var(--spacing-card-padding);
+        font-size: 0.75rem;
+        color: var(--el-text);
+      }
+      .findRow + .findRow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      /* The ASK — the only row that carries an accent rule and an action. */
+      .findRow.ask {
+        box-shadow: inset 3px 0 0 var(--el-status-planning);
+      }
+      .findRow.gone {
+        color: var(--el-text-secondary);
+      }
+      .findKind {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-pill);
+        transform: translateY(-1px);
+      }
+      .findKind.plan {
+        background: var(--el-status-planning);
+      }
+      .findKind.bug {
+        background: var(--el-type-bug);
+      }
+      .findTxt {
+        min-width: 0;
+        flex: 1;
+      }
+      .findGo {
+        flex: none;
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+      }
+      .findSub {
+        padding: 0 var(--spacing-card-padding) 0.4375rem calc(var(--spacing-card-padding) + 1rem);
+        font-size: 0.6875rem;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+      }
+      /* The WORK ITEM's own status — deliberately NOT a run tone. The run's
+         dispositions and a work item's statuses are two vocabularies, and one
+         pill shape for both is how a reader starts reading them as one. */
+      .wiPill {
+        display: inline-block;
+        margin-left: 0.375rem;
+        padding: 0.0625rem 0.375rem;
+        border-radius: var(--radius-pill);
+        font-size: 0.625rem;
+        font-weight: 600;
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+      }
+      .wiPill.st-done {
+        border-color: var(--el-status-done);
+        color: var(--el-status-done);
+      }
+      .wiPill.st-declined {
+        border-color: var(--el-status-cancelled);
+        color: var(--el-status-cancelled);
+      }
+      .wiPill.st-archived {
+        background: var(--el-archived-pill-bg);
+        color: var(--el-archived-pill-text);
+        border-color: transparent;
+      }
+      /* The node's INDEX into the strip — a count, never the copy. */
+      .nodeFind {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: auto;
+        padding: 0 0.25rem;
+        border-radius: var(--radius-pill);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+        font-size: 0.625rem;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .nodeFind .findKind {
+        width: 5px;
+        height: 5px;
+        transform: none;
+      }
+
+      /* ── dc- · the DISCREPANCY row (MOTIR-8656) — the ONLY addition ────────────
+         One dot, one EXISTING element token. --el-info reads as "informational":
+         neither the bug's defect red (--el-type-bug) nor the ask's re-plan hue
+         (--el-status-planning). It adds no row to the tone table. */
+      .findKind.rec {
+        background: var(--el-info);
+      }
+      .dcPair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        max-width: 980px;
+      }
+      .dcPair > .dcSide {
+        min-width: 0;
+      }
+      .dcSide.isDark {
+        padding: 0.75rem;
+        background: var(--color-background);
+        border-radius: var(--radius-card);
+      }
+      .dcCap {
+        margin: 0 0 0.375rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .dcStrip {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .dcNarrow {
+        width: 390px;
+        max-width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <!-- ⚠️ ARROWHEADS, and they are not decoration: WITHOUT THE ARROW AN EDGE
+           DOES NOT SAY WHICH WORK ITEM IS BLOCKED (Yue, 2026-08-30). The whole
+           claim of the running edge is that it points FROM what an agent is
+           working TO what becomes reachable when it lands, and a plain line
+           states a relationship without a direction.
+
+           These mirror `PlanningCanvas`'s shipped markers exactly — same
+           viewBox, refX, size and `orient="auto-start-reverse"` — and they live
+           in a separate <svg> for the same reason the component's do: marker
+           refs are document-global, and a second element inside `.cvEdges` would
+           break the path-count-equals-edge-count property its guard asserts. -->
+      <defs>
+        <marker
+          id="arrow-run"
+          viewBox="0 0 10 10"
+          refX="8.5"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0L10 5L0 10z" fill="var(--el-status-in-progress)" />
+        </marker>
+        <marker
+          id="arrow-still"
+          viewBox="0 0 10 10"
+          refX="8.5"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0L10 5L0 10z" fill="var(--el-border-strong)" />
+        </marker>
+      </defs>
+      <symbol
+        id="i-bot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2" />
+        <path d="M20 14h2" />
+        <path d="M15 13v2" />
+        <path d="M9 13v2" />
+      </symbol>
+      <symbol
+        id="i-chevron"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+        />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-cloud-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m2 2 20 20" />
+        <path d="M5.8 5.8A7 7 0 0 0 8 19h9a4 4 0 0 0 1.8-.4" />
+        <path d="M9.5 4.6A7 7 0 0 1 19 10a4 4 0 0 1 1.9 7.4" />
+      </symbol>
+      <symbol
+        id="i-git-pr"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M6 9v6" />
+        <circle cx="18" cy="18" r="3" />
+        <path d="M18 15V9a3 3 0 0 0-3-3h-2" />
+        <path d="m15 9-2-3 2-3" />
+      </symbol>
+    </svg>
+
+    <div class="sheet">
+      <div class="sheetHead">
+        <h1>A DISCREPANCY the run recorded — a fourth row in the findings strip</h1>
+        <p>
+          A run that finds its plan wrong only about the HOW builds the work item through and
+          records what it built differently. The record is a comment on the work item and a pointer
+          on the run; the strip shows the pointer and one label —
+          <strong>a count, never a point’s text</strong>. It is a RECORD, not a defect and not an
+          ask: the run delivered, and nothing waits on the reader.
+        </p>
+        <p>
+          Every panel is drawn light and dark. The strip’s existing rows are
+          <span class="mono">run-modal.mock.html</span> panel 9’s, verbatim; only the row marked
+          <em>Built differently</em> is new.
+        </p>
+      </div>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">D1</span>One discrepancy, one point — alone in the strip.
+        </h2>
+        <p class="panelNote">
+          <strong>A build-through that filed nothing else still grows the strip</strong> — the strip
+          is absent only when the run produced no finding at all (panel 9 of
+          <span class="mono">run-modal.mock.html</span>, not redrawn). The row is a RECORD: the run
+          delivered, nothing waits on the reader, so there is no accent rule and no waiting
+          language. The dot is <span class="mono">--el-info</span>.
+        </p>
+        <p class="panelNote">
+          The row names the leg’s work item (mono, like the bug row) and the number of points —
+          <strong>only the count</strong>. The points’ text lives in the comment the door opens.
+        </p>
+        <div class="stage stageWide">
+          <div class="dcPair">
+            <div class="dcSide">
+              <p class="dcCap">Light</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 1
+                    point</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+            <div class="dcSide isDark" data-theme="dark" data-appearance-scope>
+              <p class="dcCap">Dark</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 1
+                    point</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">D2</span>One discrepancy, three points — beside a submitted plan
+          and a filed bug.
+        </h2>
+        <p class="panelNote">
+          <strong
+            >Order: the ask, then what already happened (plans approved, then discrepancies), then
+            bugs.</strong
+          >
+          Nothing that ships today moves: the ask stays on top, the approved-plans block keeps its
+          place, bugs stay last. The discrepancy joins the group of rows that report something that
+          already happened, beside the approved-plans block, in the run’s own order. Every row has
+          its own door.
+        </p>
+        <p class="panelNote">
+          Drawn at desktop and at 390px: at 390px the text wraps under the dot and
+          <em>Open →</em> keeps its own line end — nothing is cut, nothing collapses into a count.
+        </p>
+        <div class="stage stageWide">
+          <div class="dcPair">
+            <div class="dcSide">
+              <p class="dcCap">Light</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow ask">
+                  <span class="findKind plan" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 6
+                    proposals, waiting for you.</span
+                  >
+                  <span class="findGo">Review →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 3
+                    points</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind bug" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Bug filed</strong> · <span class="mono">MOTIR-1802</span> — The ingest
+                    route drops the last row</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+            <div class="dcSide isDark" data-theme="dark" data-appearance-scope>
+              <p class="dcCap">Dark</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow ask">
+                  <span class="findKind plan" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 6
+                    proposals, waiting for you.</span
+                  >
+                  <span class="findGo">Review →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 3
+                    points</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind bug" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Bug filed</strong> · <span class="mono">MOTIR-1802</span> — The ingest
+                    route drops the last row</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top: 0.75rem">
+            <div class="dcPair">
+              <div class="dcSide">
+                <p class="dcCap">Light · 390px</p>
+                <div class="findStrip dcStrip dcNarrow">
+                  <div class="findRow ask">
+                    <span class="findKind plan" aria-hidden="true"></span>
+                    <span class="findTxt"
+                      ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 6
+                      proposals, waiting for you.</span
+                    >
+                    <span class="findGo">Review →</span>
+                  </div>
+                  <div class="findRow">
+                    <span class="findKind rec" aria-hidden="true"></span>
+                    <span class="findTxt"
+                      ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 3
+                      points</span
+                    >
+                    <span class="findGo">Open →</span>
+                  </div>
+                  <div class="findRow">
+                    <span class="findKind bug" aria-hidden="true"></span>
+                    <span class="findTxt"
+                      ><strong>Bug filed</strong> · <span class="mono">MOTIR-1802</span> — The
+                      ingest route drops the last row</span
+                    >
+                    <span class="findGo">Open →</span>
+                  </div>
+                </div>
+              </div>
+              <div class="dcSide isDark" data-theme="dark" data-appearance-scope>
+                <p class="dcCap">Dark · 390px</p>
+                <div class="findStrip dcStrip dcNarrow">
+                  <div class="findRow ask">
+                    <span class="findKind plan" aria-hidden="true"></span>
+                    <span class="findTxt"
+                      ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 6
+                      proposals, waiting for you.</span
+                    >
+                    <span class="findGo">Review →</span>
+                  </div>
+                  <div class="findRow">
+                    <span class="findKind rec" aria-hidden="true"></span>
+                    <span class="findTxt"
+                      ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 3
+                      points</span
+                    >
+                    <span class="findGo">Open →</span>
+                  </div>
+                  <div class="findRow">
+                    <span class="findKind bug" aria-hidden="true"></span>
+                    <span class="findTxt"
+                      ><strong>Bug filed</strong> · <span class="mono">MOTIR-1802</span> — The
+                      ingest route drops the last row</span
+                    >
+                    <span class="findGo">Open →</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">D3</span>A parent run — two legs with a discrepancy each.
+        </h2>
+        <p class="panelNote">
+          <strong>One record per leg, one row per record.</strong> Two legs, two rows, each naming
+          its own work item — never “2 discrepancies”, which loses the only thing a reader wants:
+          which two. Rows keep the run’s order (<span class="mono">seq</span>), not the order of the
+          legs on the canvas.
+        </p>
+        <div class="stage stageWide">
+          <div class="dcPair">
+            <div class="dcSide">
+              <p class="dcCap">Light</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 2
+                    points</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1795</span> — 1
+                    point</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+            <div class="dcSide isDark" data-theme="dark" data-appearance-scope>
+              <p class="dcCap">Dark</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 2
+                    points</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1795</span> — 1
+                    point</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">D4</span>A build-through that turned into a stop — the same leg
+          carries both.
+        </h2>
+        <p class="panelNote">
+          <strong>Neither row replaces the other.</strong> The run built through, recorded a
+          discrepancy, then found the outcome itself unreachable and re-planned. The discrepancy
+          stays (a recorded point is never undone) and the ask sits above it with its accent rule.
+          The ask is still the louder row; the record is still there.
+        </p>
+        <div class="stage stageWide">
+          <div class="dcPair">
+            <div class="dcSide">
+              <p class="dcCap">Light</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow ask">
+                  <span class="findKind plan" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 4
+                    proposals, waiting for you.</span
+                  >
+                  <span class="findGo">Review →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1793</span> — 2
+                    points</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+            <div class="dcSide isDark" data-theme="dark" data-appearance-scope>
+              <p class="dcCap">Dark</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow ask">
+                  <span class="findKind plan" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Plan submitted</strong> for <span class="mono">MOTIR-1793</span> — 4
+                    proposals, waiting for you.</span
+                  >
+                  <span class="findGo">Review →</span>
+                </div>
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1793</span> — 2
+                    points</span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle"><span class="panelNum">D5</span>The leg’s work item is gone.</h2>
+        <p class="panelNote">
+          <strong>Rendered from the run’s own data, with no link, never dropped.</strong> The key
+          comes from the leg (<span class="mono">cards[].key</span>), which survives the work item’s
+          deletion. The row is secondary ink and has no door: a link into nothing would fail as a
+          missing page rather than as a gone record. It is silent about the loss, the way the bug
+          row is.
+        </p>
+        <div class="stage stageWide">
+          <div class="dcPair">
+            <div class="dcSide">
+              <p class="dcCap">Light</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow gone">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 3
+                    points</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="dcSide isDark" data-theme="dark" data-appearance-scope>
+              <p class="dcCap">Dark</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow gone">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span> — 3
+                    points</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle"><span class="panelNum">D6</span>The point count is missing.</h2>
+        <p class="panelNote">
+          <strong>The label without a count, never “0 points”.</strong> A count that is not a number
+          is not zero: zero would claim the run recorded nothing, and the row exists because it
+          recorded something. The door is unchanged.
+        </p>
+        <div class="stage stageWide">
+          <div class="dcPair">
+            <div class="dcSide">
+              <p class="dcCap">Light</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span></span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+            <div class="dcSide isDark" data-theme="dark" data-appearance-scope>
+              <p class="dcCap">Dark</p>
+              <div class="findStrip dcStrip">
+                <div class="findRow">
+                  <span class="findKind rec" aria-hidden="true"></span>
+                  <span class="findTxt"
+                    ><strong>Built differently</strong> · <span class="mono">MOTIR-1791</span></span
+                  >
+                  <span class="findGo">Open →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">D7</span>The leg’s node on the canvas — nothing is drawn, and why.
+        </h2>
+        <p class="panelNote">
+          <strong>No node count ships.</strong> Panel 9 of
+          <span class="mono">run-modal.mock.html</span> drew a small count on the canvas node as “an
+          index into the strip”, but the shipped node (<span class="mono">WorkItemNode</span>’s
+          <span class="mono">RunLegBadge</span>) carries a tone and a label only — there is no
+          finding count on a node today, for bugs or plans. This pass therefore draws nothing on the
+          node and adds no count: when the node count ships, a discrepancy is one more finding in it
+          (the default stated in the notes), and that is for the count's own build work item to
+          decide, not this one.
+        </p>
+        <div class="stage stageWide">
+          <p class="dim" style="margin: 0; font-size: 0.75rem">
+            Nothing to draw here — see the notes.
+          </p>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

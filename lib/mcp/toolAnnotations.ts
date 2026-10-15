@@ -196,6 +196,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // W: recordRunDiscrepancy.ts → runDiscrepancyService.recordDiscrepancy — one comment on the card and one finding on its open leg; additive, refused (not repeated) on a second call
+  record_run_discrepancy: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 
   // ── Plan authoring ────────────────────────────────────────────────────────
   // W: authorPlan.ts → plansService.createPlan — a new session, plan and revision row; additive

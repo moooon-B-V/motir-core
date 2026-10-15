@@ -64,14 +64,17 @@ const approved = (seq: number, planId: string, key: string, proposalCount: numbe
 
 describe('⚠️ a run that produced NEITHER grows no region at all', () => {
   it('renders nothing for an empty stream', () => {
-    const { container } = render(<RunFindings events={[]} />);
+    const { container } = render(<RunFindings events={[]} cards={[]} />);
     expect(container.innerHTML).toBe('');
     expect(screen.queryByTestId('run-findings')).toBeNull();
   });
 
   it('renders nothing for a run whose events are all ordinary lifecycle', () => {
     const { container } = render(
-      <RunFindings events={[ev({ kind: 'card_settled', seq: 1 }), ev({ kind: 'log', seq: 2 })]} />,
+      <RunFindings
+        events={[ev({ kind: 'card_settled', seq: 1 }), ev({ kind: 'log', seq: 2 })]}
+        cards={[]}
+      />,
     );
     // Not an empty box, not a heading — NOTHING. The log starts at the top.
     expect(container.innerHTML).toBe('');
@@ -80,7 +83,7 @@ describe('⚠️ a run that produced NEITHER grows no region at all', () => {
 
 describe('the PLAN in its two states, which must not look alike', () => {
   it('a SUBMITTED plan is an ASK: it says it is waiting and offers the review', async () => {
-    render(<RunFindings events={[submitted(3, 'pln_8c41', 6)]} />);
+    render(<RunFindings events={[submitted(3, 'pln_8c41', 6)]} cards={[]} />);
     await act(async () => {});
 
     const row = screen.getByTestId('finding-plan-submitted');
@@ -107,6 +110,7 @@ describe('the PLAN in its two states, which must not look alike', () => {
     render(
       <RunFindings
         events={[approved(4, 'pln_a077', 'MOTIR-1793', 2), approved(5, 'pln_b12', 'MOTIR-1801', 3)]}
+        cards={[]}
       />,
     );
 
@@ -127,7 +131,12 @@ describe('the PLAN in its two states, which must not look alike', () => {
   });
 
   it('the two are DIFFERENT rows — an ask never wears the news face', () => {
-    render(<RunFindings events={[submitted(1, 'pln_1', 1), approved(2, 'pln_2', 'MOTIR-9', 1)]} />);
+    render(
+      <RunFindings
+        events={[submitted(1, 'pln_1', 1), approved(2, 'pln_2', 'MOTIR-9', 1)]}
+        cards={[]}
+      />,
+    );
     expect(screen.getByTestId('finding-plan-submitted')).toBeTruthy();
     expect(screen.getByTestId('finding-plan-approved')).toBeTruthy();
   });
@@ -135,7 +144,7 @@ describe('the PLAN in its two states, which must not look alike', () => {
 
 describe('the BUGS — separate rows, each one reachable', () => {
   it('shows one bug, with a link to it', () => {
-    render(<RunFindings events={[bug(2, 'MOTIR-3991', 'Prisma generate fails')]} />);
+    render(<RunFindings events={[bug(2, 'MOTIR-3991', 'Prisma generate fails')]} cards={[]} />);
 
     const row = screen.getByTestId('finding-bug');
     expect(row.textContent).toContain('MOTIR-3991');
@@ -153,6 +162,7 @@ describe('the BUGS — separate rows, each one reachable', () => {
           bug(2, 'MOTIR-2', 'second'),
           bug(3, 'MOTIR-3', 'third'),
         ]}
+        cards={[]}
       />,
     );
 
@@ -163,7 +173,7 @@ describe('the BUGS — separate rows, each one reachable', () => {
 
 describe('⚠️ it renders ONLY what the record carries', () => {
   it('a bug whose event has no title shows no title, and invents none', () => {
-    render(<RunFindings events={[bug(1, 'MOTIR-3991', null)]} />);
+    render(<RunFindings events={[bug(1, 'MOTIR-3991', null)]} cards={[]} />);
     const row = screen.getByTestId('finding-bug');
     expect(row.textContent).toContain('MOTIR-3991');
     // The em-dash separator only appears WITH a title.
@@ -173,7 +183,7 @@ describe('⚠️ it renders ONLY what the record carries', () => {
   it('a finding whose TARGET the record cannot name renders, with no link', () => {
     // The gone case: drawn from `data` alone. It must not be dropped (that would
     // say the run found nothing) and must not link nowhere.
-    render(<RunFindings events={[bug(1, null, 'A defect somebody later deleted')]} />);
+    render(<RunFindings events={[bug(1, null, 'A defect somebody later deleted')]} cards={[]} />);
 
     const row = screen.getByTestId('finding-bug');
     expect(row.textContent).toContain('A defect somebody later deleted');
@@ -181,7 +191,7 @@ describe('⚠️ it renders ONLY what the record carries', () => {
   });
 
   it('a submitted plan with no plan id renders the fact and offers no review link', () => {
-    render(<RunFindings events={[submitted(1, null, 4)]} />);
+    render(<RunFindings events={[submitted(1, null, 4)]} cards={[]} />);
     expect(screen.getByTestId('finding-plan-submitted').textContent).toContain('Plan submitted');
     expect(screen.queryByRole('link', { name: 'Review →' })).toBeNull();
   });
@@ -193,6 +203,7 @@ describe('⚠️ it renders ONLY what the record carries', () => {
           ev({ kind: 'bug_filed', seq: 1, data: 'not an object' }),
           ev({ kind: 'plan_submitted', seq: 2, data: { planId: 42, proposalCount: 'six' } }),
         ]}
+        cards={[]}
       />,
     );
     // Both rows still render; neither invents a value from a wrong type.
@@ -204,9 +215,112 @@ describe('⚠️ it renders ONLY what the record carries', () => {
 describe('the order is the RUN’s', () => {
   it('sorts by seq, not by arrival', () => {
     render(
-      <RunFindings events={[bug(9, 'MOTIR-LATE', 'later'), bug(2, 'MOTIR-EARLY', 'earlier')]} />,
+      <RunFindings
+        events={[bug(9, 'MOTIR-LATE', 'later'), bug(2, 'MOTIR-EARLY', 'earlier')]}
+        cards={[]}
+      />,
     );
     const strip = screen.getByTestId('run-findings');
     expect(strip.textContent!.indexOf('earlier')).toBeLessThan(strip.textContent!.indexOf('later'));
+  });
+});
+
+describe('a DISCREPANCY the run recorded (MOTIR-8659 · design § A DISCREPANCY)', () => {
+  const legs = [
+    { id: 'leg_1', key: 'MOTIR-100' },
+    { id: 'leg_2', key: 'MOTIR-200' },
+  ];
+  const discrepancy = (seq: number, cardId: string, data: unknown) =>
+    ev({ kind: 'discrepancy_recorded', seq, cardId, data });
+
+  it('renders the label, the leg’s key and the plural count, with a door to the work item', () => {
+    render(
+      <RunFindings
+        events={[
+          discrepancy(1, 'leg_1', { commentId: 'c1', pointCount: 3, dispatchRunCardId: 'leg_1' }),
+        ]}
+        cards={legs}
+      />,
+    );
+    const row = screen.getByTestId('finding-discrepancy');
+    expect(row.textContent).toContain('Built differently');
+    expect(row.textContent).toContain('MOTIR-100');
+    expect(row.textContent).toContain('3 points');
+    const door = screen.getByRole('link', { name: 'Open →' });
+    expect(door.getAttribute('href')).toBe('/items/MOTIR-100');
+  });
+
+  it('uses the singular for one point', () => {
+    render(<RunFindings events={[discrepancy(1, 'leg_1', { pointCount: 1 })]} cards={legs} />);
+    expect(screen.getByTestId('finding-discrepancy').textContent).toContain('1 point');
+    expect(screen.getByTestId('finding-discrepancy').textContent).not.toContain('1 points');
+  });
+
+  it('a missing or non-numeric pointCount shows no count, never "0 points"', () => {
+    render(
+      <RunFindings
+        events={[discrepancy(1, 'leg_1', {}), discrepancy(2, 'leg_2', { pointCount: 'three' })]}
+        cards={legs}
+      />,
+    );
+    const rows = screen.getAllByTestId('finding-discrepancy');
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect(r.textContent).not.toMatch(/point/);
+  });
+
+  it('a leg that is not on the run keeps the row but offers no door', () => {
+    render(<RunFindings events={[discrepancy(1, 'leg_gone', { pointCount: 2 })]} cards={legs} />);
+    expect(screen.getByTestId('finding-discrepancy').textContent).toContain('Built differently');
+    expect(screen.queryByRole('link', { name: 'Open →' })).toBeNull();
+  });
+
+  it('a parent run shows one row per leg, each naming its own key, in seq order', () => {
+    render(
+      <RunFindings
+        events={[
+          discrepancy(5, 'leg_2', { pointCount: 2 }),
+          discrepancy(2, 'leg_1', { pointCount: 1 }),
+        ]}
+        cards={legs}
+      />,
+    );
+    const rows = screen.getAllByTestId('finding-discrepancy');
+    expect(rows[0]!.textContent).toContain('MOTIR-100');
+    expect(rows[1]!.textContent).toContain('MOTIR-200');
+  });
+
+  it('sits after the approved plans and before the bugs, below the ask', () => {
+    render(
+      <RunFindings
+        events={[
+          bug(1, 'MOTIR-9', 'a bug'),
+          discrepancy(2, 'leg_1', { pointCount: 3 }),
+          approved(3, 'pln_2', 'MOTIR-9', 1),
+          submitted(4, 'pln_1', 1),
+        ]}
+        cards={legs}
+      />,
+    );
+    const ids = Array.from(
+      screen.getByTestId('run-findings').querySelectorAll('[data-testid^="finding-"]'),
+    ).map((n) => n.getAttribute('data-testid'));
+    expect(ids).toEqual([
+      'finding-plan-submitted',
+      'finding-plan-approved',
+      'finding-discrepancy',
+      'finding-bug',
+    ]);
+  });
+
+  it('shows only the pointer: no point text appears', () => {
+    render(
+      <RunFindings
+        events={[
+          discrepancy(1, 'leg_1', { commentId: 'c1', pointCount: 1, planAsked: 'SECRET-ASKED' }),
+        ]}
+        cards={legs}
+      />,
+    );
+    expect(screen.getByTestId('run-findings').textContent).not.toContain('SECRET-ASKED');
   });
 });

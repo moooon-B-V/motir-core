@@ -12022,6 +12022,8 @@
       "approvedFor": "为 {key} 批准",
       "materialized": "已落地 {count, plural, other {# 条提案}}",
       "bugFiled": "已提交缺陷",
+      "discrepancy": "构建方式与计划不同",
+      "discrepancyPoints": "{count, plural, other {# 项差异}}",
       "open": "打开 →"
     },
     "scope": {

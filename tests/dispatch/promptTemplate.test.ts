@@ -12,6 +12,7 @@ import {
   LIST_DESIGNS_TOOL_NAME,
   NO_INJECTIONS,
   parseFindingsPolicy,
+  RECORD_DISCREPANCY_TOOL_NAME,
   RENDERED_SURFACE_TRIGGER,
   renderErrorEvidence,
   type DispatchPromptSource,
@@ -19,6 +20,7 @@ import {
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME } from '@/lib/mcp/tools/publishTestInstructions';
+import { RECORD_RUN_DISCREPANCY_TOOL_NAME } from '@/lib/mcp/tools/recordRunDiscrepancy';
 import { REPORT_UNBUILDABLE_TARGET_TOOL_NAME } from '@/lib/mcp/tools/reportUnbuildableTarget';
 import { GET_DESIGN_TOOL_NAME as REGISTERED_GET_DESIGN } from '@/lib/mcp/tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME as REGISTERED_LIST_DESIGNS } from '@/lib/mcp/tools/listDesigns';
@@ -1623,7 +1625,7 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
   /** The card-is-wrong branch alone: from its heading to the third branch. */
   function replanArm(prompt: string): string {
     const section = cardOutcomeBranches(prompt);
-    const at = section.indexOf('THE CARD IS WRONG');
+    const at = section.indexOf('STOP — the WHAT itself breaks');
     expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
     return section.slice(at);
   }
@@ -2671,7 +2673,7 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
       source({ key: 'PROD-99', findingsPolicy: policy }),
     ).prompt;
     const branches = cardOutcomeBranches(prompt);
-    const at = branches.indexOf('THE CARD IS WRONG');
+    const at = branches.indexOf('STOP — the WHAT itself breaks');
     expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
     return branches.slice(at);
   }
@@ -2903,5 +2905,185 @@ describe('the CONTINUE block and workflow (MOTIR-6531)', () => {
     const { prompt } = assembleDispatchPrompt(source());
     expect(prompt).not.toContain('CONTINUE — you are carrying on');
     expect(gitSection(prompt)).toMatch(/-b subtask\/PROD-7/);
+  });
+});
+
+// ── THE CARD IS WRONG, in two ways — the WHAT test, BUILD THROUGH and STOP (MOTIR-8658) ──
+//
+// Story MOTIR-8651. A run that finds its card wrong first asks ONE question about the WHAT. Yes
+// builds through and records a discrepancy; no stops exactly as before. The test's wording is the
+// decision page's (MOTIR-8654), quoted verbatim — where this suite and that page disagree, the
+// page wins.
+
+describe('THE CARD IS WRONG — the WHAT test, BUILD THROUGH and STOP (MOTIR-8658)', () => {
+  const WHAT_TEST = [
+    "Is the WHAT — the card's outcome and its acceptance criteria — unchanged,",
+    "consistent with itself and with shipped reality and other cards' scope, and",
+    'reachable by this run alone?',
+  ].join(' ');
+  const flat = (text: string) => text.replace(/\s+/g, ' ');
+
+  const POLICIES = [
+    { name: 'full', policy: { logBug: true, replan: true, autoApproveReplan: false } },
+    { name: 'no re-plan', policy: { logBug: true, replan: false, autoApproveReplan: false } },
+    { name: 'two lanes', policy: { logBug: true, replan: true, autoApproveReplan: true } },
+    { name: 'nothing filed', policy: { logBug: false, replan: false, autoApproveReplan: false } },
+  ] as const;
+
+  /** The card-is-wrong block of the composed prompt, from its heading to FOUND A DEFECT. */
+  function wrongBlock(over: Partial<DispatchPromptSource> = {}): string {
+    const branches = cardOutcomeBranches(assembleDispatchPrompt(source(over)).prompt);
+    const at = branches.indexOf('THE CARD IS WRONG —');
+    expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
+    return branches.slice(at);
+  }
+
+  /** BUILD THROUGH's own text: from its heading up to the STOP heading. */
+  function buildThrough(block: string): string {
+    const at = block.indexOf('BUILD THROUGH — the WHAT holds');
+    const stop = block.indexOf('STOP — the WHAT itself breaks');
+    expect(at, 'a BUILD THROUGH section').toBeGreaterThan(-1);
+    expect(stop, 'a STOP section').toBeGreaterThan(at);
+    return block.slice(at, stop);
+  }
+
+  const DECISION = { type: 'decision', executor: 'coding_agent' } as const;
+
+  it('names the tool from the REGISTERED constant, and never says "the nearest thing that works"', () => {
+    expect(RECORD_DISCREPANCY_TOOL_NAME).toBe(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    for (const over of [{}, { sessionBranch: 'motir/auto-1' }, DECISION]) {
+      const { prompt } = assembleDispatchPrompt(source(over));
+      expect(prompt).not.toContain('nearest thing that works');
+      expect(buildThrough(wrongBlock(over))).toContain(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    }
+  });
+
+  it.each([
+    { lane: 'code', over: {} },
+    { lane: 'decision', over: DECISION },
+  ])(
+    'the $lane lane: the test, then BUILD THROUGH, then STOP, then FOUND A DEFECT — in that order',
+    ({ over }) => {
+      const prompt = assembleDispatchPrompt(source({ key: 'PROD-7', ...over })).prompt;
+      const branches = outcomeSection(prompt);
+      const order = [
+        branches.indexOf('THE CARD IS WRONG —'),
+        flat(branches).indexOf(WHAT_TEST),
+        branches.indexOf('BUILD THROUGH — the WHAT holds'),
+        branches.indexOf('STOP — the WHAT itself breaks'),
+        branches.indexOf('FOUND A DEFECT — your card is fine'),
+      ];
+      expect(
+        order.every((n) => n > -1),
+        `every part renders: ${order}`,
+      ).toBe(true);
+      // The test text is offset in the FLAT string, so compare the rest by position and the
+      // test by presence: it has to sit between the header and BUILD THROUGH.
+      const flatBranches = flat(branches);
+      expect(flatBranches.indexOf(WHAT_TEST)).toBeGreaterThan(
+        flatBranches.indexOf('THE CARD IS WRONG —'),
+      );
+      expect(flatBranches.indexOf(WHAT_TEST)).toBeLessThan(
+        flatBranches.indexOf('BUILD THROUGH — the WHAT holds'),
+      );
+      expect(order[2]).toBeLessThan(order[3]!);
+      expect(order[3]).toBeLessThan(order[4]!);
+    },
+  );
+
+  it('BUILD THROUGH (code lane) records ONCE with the key and the three fields, before committing', () => {
+    const section = flat(buildThrough(wrongBlock({ key: 'PROD-7' })));
+    expect(section).toContain(`Call the ${RECORD_RUN_DISCREPANCY_TOOL_NAME} tool ONCE`);
+    expect(section).toContain('after you have built and before you commit');
+    expect(section).toContain('key: PROD-7');
+    for (const field of ['planAsked', 'built', 'why']) expect(section).toContain(field);
+    expect(section).toContain('DISCREPANCY_ALREADY_RECORDED');
+    expect(section).toContain('## Deviations from the plan');
+    expect(section).toContain('Discrepancy record missing: <the error code or message>');
+    expect(section).toMatch(/recorded: false means PROD-7 has no open run leg/);
+    expect(section).toContain('is NOT a failure');
+    // What survives from STOP: the WHAT is never widened.
+    expect(section).toContain('You change the ROUTE, never the WHAT');
+    expect(section).toContain('Never edit, re-scope, re-parent or archive any card');
+  });
+
+  it('BUILD THROUGH hands nothing back: no report, no Planning, no planner, no classification vocabulary', () => {
+    for (const over of [{}, { sessionBranch: 'motir/auto-1' }, DECISION]) {
+      const section = buildThrough(wrongBlock(over));
+      expect(section).not.toContain(REPORT_UNBUILDABLE_TARGET_TOOL_NAME);
+      expect(section).not.toMatch(/submit_plan_session|append_plan_turn|status planning/);
+      expect(section).not.toMatch(/verdict|unchanged|planning bug|classif/i);
+    }
+  });
+
+  it('STOP keeps today’s steps under every policy, and names the report tool exactly once in the whole prompt', () => {
+    for (const { name, policy } of POLICIES) {
+      const prompt = assembleDispatchPrompt(
+        source({ key: 'PROD-7', findingsPolicy: policy }),
+      ).prompt;
+      const block = flat(wrongBlock({ key: 'PROD-7', findingsPolicy: policy }));
+      const stop = block.slice(block.indexOf('STOP — the WHAT itself breaks'));
+      expect(stop, name).toContain('1. REVERT FIRST.');
+      expect(stop, name).toContain('Do not improvise');
+      expect(stop, name).toContain('Do NOT RESTRUCTURE THE PLAN');
+      expect(stop, name).toContain('Comment the finding on PROD-7');
+      expect(stop, name).toMatch(
+        /Report it with the report_unbuildable_target tool: projectKey: PROD targetKey: PROD-7 reason:/,
+      );
+      expect(prompt.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME), name).toHaveLength(2);
+      if (policy.replan) {
+        expect(stop, name).toContain('Move PROD-7 to Planning');
+        expect(stop, name).toContain('submit_plan_session');
+      } else {
+        expect(stop, name).toContain('Stop, and leave the card In Progress');
+        expect(stop, name).not.toContain('submit_plan_session');
+      }
+      // The two lanes are information inside STOP, and only under --auto-approve-replan.
+      expect(stop.includes('TWO LANES, and WHICH ONE'), name).toBe(policy.autoApproveReplan);
+    }
+  });
+
+  it('BUILD THROUGH renders identically under every combination of the findings policy', () => {
+    const [first, ...rest] = POLICIES.map(({ policy }) =>
+      buildThrough(wrongBlock({ key: 'PROD-7', findingsPolicy: policy })),
+    );
+    for (const section of rest) expect(section).toBe(first);
+  });
+
+  it('FOUND A DEFECT says it applies on BUILD THROUGH too, and keeps its comment-only alternative', () => {
+    for (const { policy } of POLICIES) {
+      const prompt = assembleDispatchPrompt(
+        source({ key: 'PROD-7', findingsPolicy: policy }),
+      ).prompt;
+      const defect = flat(prompt.slice(prompt.indexOf('FOUND A DEFECT — your card is fine')));
+      expect(defect).toContain('It applies during a BUILD THROUGH as well');
+      expect(defect).toContain('filing a bug never turns a build-through into STOP');
+      if (!policy.logBug) expect(defect).toContain('do NOT create a work item');
+    }
+  });
+
+  it('the decision lane records BEFORE publish_decision_page, lists deviations in the report, and does not transition', () => {
+    const block = wrongBlock({ key: 'PROD-7', ...DECISION });
+    const section = flat(buildThrough(block));
+    expect(section).toContain('before publish_decision_page');
+    expect(section).toContain('list the same points in your FINISHED report');
+    expect(section).toContain('do NOT transition the card');
+    expect(section).not.toContain('## Deviations from the plan');
+    expect(section).toContain('Discrepancy record missing:');
+    // STOP still opens with PUBLISH NOTHING.
+    const stop = block.slice(block.indexOf('STOP — the WHAT itself breaks'));
+    expect(stop.indexOf('PUBLISH NOTHING')).toBeGreaterThan(-1);
+    expect(stop.indexOf('PUBLISH NOTHING')).toBeLessThan(stop.indexOf('Do not improvise'));
+  });
+
+  it('with a session branch, the Deviations section goes in the SESSION pull request body, and no PR of its own is asked for', () => {
+    const section = flat(
+      buildThrough(wrongBlock({ key: 'PROD-7', sessionBranch: 'motir/auto-1' })),
+    );
+    expect(section).toContain(
+      '"## Deviations from the plan" section for PROD-7 to the BODY of the session pull request',
+    );
+    expect(section).not.toMatch(/open (a|the) pull request/i);
   });
 });

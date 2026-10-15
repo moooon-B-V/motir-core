@@ -392,6 +392,12 @@ export const fr: McpSummaryTranslations = {
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
   },
+  record_run_discrepancy: {
+    summary:
+      'Un exécuteur qui a réalisé un élément de travail avec un plan erroné seulement sur le COMMENT consigne ce qu’il a construit autrement — un commentaire sur l’élément et une trace de l’exécution, avec accusé de réception.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+  },
   report_unbuildable_target: {
     summary:
       "Un exécuteur dispatché signale l'élément de travail sur lequel il s'est arrêté comme infaisable — accusé de réception, rien à faire.",

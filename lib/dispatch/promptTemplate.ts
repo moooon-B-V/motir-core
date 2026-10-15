@@ -99,6 +99,14 @@ export const RENDERED_SURFACE_TRIGGER =
 export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
 
 /**
+ * The tool BUILD THROUGH names (Story MOTIR-8651 · MOTIR-8658). A literal for the same reason
+ * {@link HOW_TO_TEST_TOOL_NAME} is one, and `tests/dispatch/promptTemplate.test.ts` asserts it
+ * equals the REGISTERED tool name, so a rename fails there rather than in a prompt an agent reads
+ * weeks later.
+ */
+export const RECORD_DISCREPANCY_TOOL_NAME = 'record_run_discrepancy';
+
+/**
  * The two DESIGN tools this prompt names, and the variable the CLI sets
  * (Story MOTIR-5553 · Subtask MOTIR-5563).
  *
@@ -2191,9 +2199,11 @@ function decisionOutcomeProtocol(src: DispatchPromptSource): string[] {
     '  and the approval moves it to done; any status you write asserts a decision',
     '  nobody has made. Do NOT publish How to test: a decision has nothing to run.',
     '',
-    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
-    'shipped, or an acceptance criterion cannot be satisfied. Do NOT find the',
-    'nearest thing that works and decide that. In order:',
+    ...cardIsWrongHeader(),
+    ...whatTest(src),
+    ...buildThroughSteps(src, { lane: 'decision' }),
+    '',
+    'STOP — the WHAT itself breaks. In order:',
     '',
     '  1. PUBLISH NOTHING. A page you have started may stay as a draft, but do not',
     '     call publish_decision_page: the publish is what asks a person to approve.',
@@ -2261,9 +2271,11 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '  and after you have exited. Setting it yourself asserts a green run that has',
     '  not happened yet.',
     '',
-    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
-    'shipped, or an acceptance criterion cannot be satisfied. Do NOT find the',
-    'nearest thing that works and build that. In order:',
+    ...cardIsWrongHeader(),
+    ...whatTest(src),
+    ...buildThroughSteps(src, { lane: 'code', sessionBranch }),
+    '',
+    'STOP — the WHAT itself breaks. In order:',
     '',
     '  1. REVERT FIRST. Put the tree back the way you found it and commit',
     '     NOTHING. Do this before anything else — every later step is a step in',
@@ -2353,6 +2365,141 @@ function openPullRequestStep(): string[] {
 }
 
 /**
+ * THE CARD IS WRONG, in two ways (Story MOTIR-8651 · MOTIR-8658; the decision page _A run builds
+ * through a wrong HOW — the discrepancy record_, MOTIR-8654, which wins wherever this text and it
+ * differ).
+ *
+ * This block used to end *"Do NOT find the nearest thing that works and build that"*, and every
+ * wrong card, whether the WHAT or only the HOW was wrong, went down STOP. It now says the card can
+ * be wrong in two ways and that the first thing to do is decide which: {@link whatTest} asks the
+ * one question, {@link buildThroughSteps} is the YES branch, and {@link cardIsWrongSteps} is the
+ * NO branch (STOP) with its text unchanged in substance.
+ *
+ * Both lanes (code, decision page) and both re-plan policies render the SAME three pieces. The
+ * build-through block is NOT switched by {@link FindingsPolicy}: `logBug` and `replan` switch
+ * filing and re-planning off, not recording, and `autoApproveReplan` has no bearing on it.
+ */
+function cardIsWrongHeader(): string[] {
+  return [
+    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
+    'shipped, or an acceptance criterion cannot be satisfied. It can be wrong in two',
+    'different ways, and the first thing to do is decide which. Do NOT improvise a',
+    'fix that changes what the card asks for.',
+    '',
+  ];
+}
+
+/**
+ * The ONE question a run asks when it finds its card wrong. The question is quoted VERBATIM from
+ * the decision page (MOTIR-8654), so that every runner text — this prompt, `run.md`, the
+ * `motir-run` skill — asks the same thing; the sorting lines are the page's stop-site table, cut
+ * to the rows a dispatched agent can meet.
+ */
+function whatTest(src: DispatchPromptSource): string[] {
+  return [
+    `Decide which FIRST, before you change anything. The WHAT of ${src.key} is its outcome`,
+    'and its acceptance criteria; everything else it says — the route, the helper it',
+    'names, the file it says to edit — is the HOW. Ask ONE question:',
+    '',
+    "  Is the WHAT — the card's outcome and its acceptance criteria — unchanged,",
+    "  consistent with itself and with shipped reality and other cards' scope, and",
+    '  reachable by this run alone?',
+    '',
+    '  YES means BUILD THROUGH. For example: a precondition the card names is false',
+    '  but you can work around it inside this card; existing code the plan never',
+    '  said to change conflicts with it; or a planned HOW cannot be built as written',
+    '  while the outcome is reachable another way.',
+    '  NO means STOP. The WHAT must change; its criteria contradict each other,',
+    "  shipped reality or another card's scope; it needs a person's decision, a",
+    "  credential, or another card's unbuilt work; or it cannot ship as one piece.",
+    '',
+  ];
+}
+
+/**
+ * BUILD THROUGH — the YES branch (Story MOTIR-8651 · MOTIR-8658).
+ *
+ * ⚠️ IT CHANGES THE ROUTE, NEVER THE WHAT. What survives from STOP is the half that was
+ * load-bearing: no adjacent fix, no widening, nothing outside what the WHAT needs, and no editing,
+ * re-scoping, re-parenting or archiving any card. An agent allowed to "build through" without that
+ * sentence would use it to widen a card.
+ *
+ * ⚠️ THE FINISHED ORDER IS POINTED AT, NOT COPIED. `howToTestStep`, `openPullRequestStep` and the
+ * session-branch variant stay single-sourced; the discrepancy is recorded BEFORE the lane's
+ * delivery step so the pull request can say whether the record is missing.
+ *
+ * ⚠️ THE RUNNER CLASSIFIES NOTHING. The text names no verdict, no planning bug and no
+ * classification: an agent told a bug may be filed writes its points for that audience.
+ */
+function buildThroughSteps(
+  src: DispatchPromptSource,
+  where: { lane: 'decision' } | { lane: 'code'; sessionBranch: string | null },
+): string[] {
+  const decision = where.lane === 'decision';
+  const beforeDelivery = decision ? 'publish_decision_page' : 'you commit';
+  const finish = decision
+    ? [
+        '  3. Finish through the FINISHED order above, exactly as written: publish the',
+        '     page, and do NOT transition the card.',
+      ]
+    : [
+        '  3. Finish through the FINISHED order above, exactly as written: push, open',
+        '     or join the pull request, link it, publish How to test, and move the',
+        '     card to Implemented.',
+      ];
+  const stated = decision
+    ? [
+        '  4. State the deviations where the page is reviewed: list the same points in',
+        '     your FINISHED report.',
+      ]
+    : where.sessionBranch
+      ? [
+          '  4. State the deviations where the work is reviewed: add a',
+          `     "## Deviations from the plan" section for ${src.key} to the BODY of the`,
+          '     session pull request, listing the same points.',
+        ]
+      : [
+          '  4. State the deviations where the work is reviewed: the pull request body',
+          '     carries a "## Deviations from the plan" section listing the same points.',
+        ];
+  return [
+    'BUILD THROUGH — the WHAT holds. You are not stopping. In order:',
+    '',
+    "  1. Do NOT revert. Build to the card's outcome and acceptance criteria, by the",
+    '     route that reaches them. What still holds from STOP: no adjacent fix, no',
+    '     widening of the WHAT, nothing outside what the WHAT needs. You change the',
+    '     ROUTE, never the WHAT. Never edit, re-scope, re-parent or archive any card.',
+    `  2. Call the ${RECORD_DISCREPANCY_TOOL_NAME} tool ONCE, after you have built and`,
+    `     before ${beforeDelivery}:`,
+    '',
+    `         key:    ${src.key}`,
+    '         points: one entry per deviation, each { planAsked, built, why } —',
+    '                 what the plan asked, what you built instead, and why the',
+    "                 plan's way could not be followed",
+    '',
+    '     1–20 points, each field 1–2000 characters. Put EVERY deviation in this one',
+    '     call, never one call per point. Do not repeat it: a second call is refused',
+    '     DISCREPANCY_ALREADY_RECORDED and writes nothing. It answers',
+    `     { commentId, recorded }; recorded: false means ${src.key} has no open run leg.`,
+    '     The comment was still written, and that is NOT a failure. A point that',
+    '     describes something STILL broken after this card is done is a defect: file',
+    '     it as a bug first, by the defect branch that follows this section, and cite',
+    "     its key in that point's why.",
+    ...finish,
+    ...stated,
+    '  5. If the call errors or is refused, still deliver. Write the exact line',
+    '         Discrepancy record missing: <the error code or message>',
+    '     both in the Deviations list and in your FINISHED report.',
+    '  6. Say BUILD THROUGH in your FINISHED report. Do NOT report the card as',
+    '     unbuildable, do NOT move it to Planning, and do NOT send anything to the',
+    '     planner: the card is being built, not handed back.',
+    '  7. If, while building through, the WHAT turns out to be unreachable after all,',
+    '     switch to STOP below, from its step 1. A discrepancy you already recorded',
+    '     stays; do not try to undo it.',
+  ];
+}
+
+/**
  * The steps after the revert, which is where the re-plan switch lives.
  *
  * ⚠️ THE PROHIBITION IS REPLACED, NOT DELETED, and what survives is the half that
@@ -2426,6 +2573,15 @@ function openPullRequestStep(): string[] {
  * One composition, every dispatching path: `run`, `batch`, `auto` and `next` all
  * fetch this same server-assembled prompt, so the instruction is written here
  * and nowhere per command.
+ *
+ * ── NARROWED (2026-10, Story MOTIR-8651 · MOTIR-8658) ───────────────────────
+ *
+ * These steps are now the STOP branch ONLY: the one a run takes when the WHAT itself breaks,
+ * after {@link whatTest} says so. *"Do not improvise"* governs this branch, and
+ * {@link buildThroughSteps} is the route-only exception for a card whose HOW alone is wrong
+ * (decision page _A run builds through a wrong HOW — the discrepancy record_, MOTIR-8654). The
+ * text below is unchanged in substance; the caller renders the `STOP` sub-heading and the
+ * lane's own step 1.
  */
 function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): string[] {
   const permitted = policy.replan
@@ -2676,7 +2832,8 @@ function foundADefect(src: DispatchPromptSource, policy: FindingsPolicy): string
     'FOUND A DEFECT — your card is fine, and something ELSE is broken. This is NOT',
     'an ending: it does not finish your card, it does not fail it, and it does not',
     'change which of the two outcomes above you report. You record what you found',
-    'and CARRY ON with the card in hand.',
+    'and CARRY ON with the card in hand. It applies during a BUILD THROUGH as well,',
+    'and filing a bug never turns a build-through into STOP.',
     '',
   ];
 

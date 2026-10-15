@@ -12022,6 +12022,8 @@
       "approvedFor": "{key}에 대해 승인됨",
       "materialized": "{count, plural, other {제안 #개}} 구체화됨",
       "bugFiled": "버그 등록됨",
+      "discrepancy": "계획과 다르게 구현됨",
+      "discrepancyPoints": "{count, plural, other {#개 항목}}",
       "open": "열기 →"
     },
     "scope": {

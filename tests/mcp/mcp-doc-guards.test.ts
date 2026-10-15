@@ -265,6 +265,22 @@ describe('`report_unbuildable_target` is documented as an acknowledgement (MOTIR
   });
 });
 
+// MOTIR-8657 — `record_run_discrepancy`'s contract section, after `report_unbuildable_target`.
+describe('`record_run_discrepancy` is documented as a one-per-leg record (MOTIR-8657)', () => {
+  it('docs/mcp.md carries its section after `report_unbuildable_target`', () => {
+    const doc = read('docs/mcp.md');
+    const start = doc.indexOf('#### `record_run_discrepancy`');
+    expect(start).toBeGreaterThan(doc.indexOf('#### `report_unbuildable_target`'));
+    const section = doc.slice(start, doc.indexOf('\n#### ', start + 1));
+    for (const input of ['`key`', '`points`', '`planAsked`', '`built`', '`why`']) {
+      expect(section).toContain(input);
+    }
+    expect(section).toContain('DISCREPANCY_ALREADY_RECORDED');
+    expect(section).toContain('RUN_DISCREPANCY_INVALID');
+    expect(section).toContain('`report_unbuildable_target`');
+  });
+});
+
 // MOTIR-7793 — `get_code_health`'s contract section and its permission's
 // decision record. HERE, in the docs-guard lane, for the same reason as the two
 // above; keyed on the literal name so this spec still imports nothing that

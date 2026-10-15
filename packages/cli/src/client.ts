@@ -1172,7 +1172,10 @@ export type DispatchEventKind =
   | 'unbuildable_reported'
   // A review run's verdict (MOTIR-6821) — appended by the verdict route's SERVICE,
   // refused by the ingest like the three above.
-  | 'review_verdict';
+  | 'review_verdict'
+  // A run's discrepancy record (MOTIR-8655) — appended by the discrepancy SERVICE in the
+  // same transaction as the card comment, refused by the ingest like the four above.
+  | 'discrepancy_recorded';
 
 export interface DispatchRunOpened {
   runId: string;
@@ -1316,7 +1319,7 @@ export interface DispatchRunAppended {
 
 /**
  * The kinds this CLI may REPORT — every member of {@link DispatchEventKind}
- * except the four the server writes (`review_verdict`, MOTIR-6821, the fourth).
+ * except the five the server writes (`review_verdict`, MOTIR-6821, the fourth; `discrepancy_recorded`, MOTIR-8655, the fifth).
  *
  * ⚠️ THE EXCLUSION IS THE POINT (MOTIR-3981, `run-findings-protocol.md` Q5).
  * `bug_filed`, `plan_submitted` and `unbuildable_reported` (MOTIR-6282) carry
@@ -1328,7 +1331,11 @@ export interface DispatchRunAppended {
  */
 export type ReportableEventKind = Exclude<
   DispatchEventKind,
-  'bug_filed' | 'plan_submitted' | 'unbuildable_reported' | 'review_verdict'
+  | 'bug_filed'
+  | 'plan_submitted'
+  | 'unbuildable_reported'
+  | 'review_verdict'
+  | 'discrepancy_recorded'
 >;
 
 /** One event on the wire. `body` is the OPT-IN log payload — default OFF. */

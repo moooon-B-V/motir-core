@@ -12594,6 +12594,15 @@ enum DispatchEventKind {
   /// ⚠️ SERVER-WRITTEN, like `unbuildable_reported`: the verdict route's service
   /// appends it, and the v1 ingest refuses it, so a run token cannot forge one.
   review_verdict
+  /// A run BUILT THROUGH a card whose plan was wrong only about the HOW and recorded
+  /// each discrepancy through `record_run_discrepancy` (MOTIR-8655,
+  /// `A run builds through a wrong HOW — the discrepancy record`, decision page
+  /// MOTIR-8654). CARD-scoped, one per leg; `data` is a POINTER only
+  /// (`{ commentId, pointCount, dispatchRunCardId }`) — the text lives in the card comment.
+  /// ⚠️ SERVER-WRITTEN, like `unbuildable_reported`: the discrepancy service appends it in
+  /// the same transaction as the comment, and the v1 ingest refuses it, so a run token
+  /// cannot forge one.
+  discrepancy_recorded
 
   /// One step the agent says it is about to take, in one line of at most 500
   /// characters (`agent-reported-runs.md` §3) — written through `report_action`.

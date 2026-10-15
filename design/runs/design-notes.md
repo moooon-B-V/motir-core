@@ -611,6 +611,127 @@ showing more than that would be a design specifying a privacy change.
 
 ---
 
+## A DISCREPANCY the run recorded — a fourth row in the findings strip (MOTIR-8656, 2026-10-15)
+
+**AMENDS** § _What the run PRODUCED_ above (and its panel 9 of `run-modal.mock.html`) in the delta
+**[`run-modal--discrepancy-finding.mock.html`](./run-modal--discrepancy-finding.mock.html)**, panels
+**D1–D7**, each drawn light and dark and, where the layout differs (D2), at 390px. Subtask
+MOTIR-8656 of Story MOTIR-8651. **No existing mock is edited**, no image export ships
+(`docs/decisions/design-result.md` AMENDMENT 4), and the strip's three existing rows are drawn as
+shipped. The component that renders the new row is **MOTIR-8659**; the record it reads is written by
+**MOTIR-8655** and reached through **MOTIR-8657**'s `record_run_discrepancy`; the browser proof is
+**MOTIR-8663**. The decision is the page _A run builds through a wrong HOW — the discrepancy record_
+(MOTIR-8654).
+
+**What a discrepancy IS.** A run built a work item through a plan that was wrong only about the HOW:
+the outcome was kept, the route changed, and the run wrote down what the plan asked, what it built and
+why. It is a **RECORD of a decision the run made on its own**. It is not a defect (the run delivered),
+not an ask (nothing waits on the reader) and not a re-plan. It is closest in kind to the NEWS row — _it
+already happened_ — and it must not borrow the bug's hue or the ask's rule, or a build-through would
+read as broken work or as something to approve.
+
+### Decisions
+
+1. **Marker and hue — a dot in `--el-info`, no rule, no waiting language.** One existing element token,
+   already used as a dot elsewhere in the product. It reads as _informational_. **`--el-type-bug` is
+   ruled out** (red says _defect_, and a delivered build-through is not one) and
+   **`--el-status-planning` is ruled out** (it is the ask's accent and the `replanned` tone: it would
+   say _a person must decide_). The dot is a graphic and needs 3:1; the label stays on `--el-text`.
+   **The tone table above gains no row** — this is a finding marker, not a run disposition.
+2. **Label and count — _Built differently_, then the leg's key, then _N points_.** The label names
+   the act in the product's noun and is the same on every row. **Only the count** is shown: the points'
+   text lives in the work item's comment, and the strip shows nothing `data` does not hold
+   (`run-findings-protocol.md` Q5). A row that quoted a point would be a design that changed what the
+   record carries.
+3. **Which work item — always named, mono.** The key is resolved from the event's leg
+   (`event.cardId` → `run.cards[].key`) and shown even on a one-leg run, so a row reads the same
+   everywhere. `RunFindings` today receives only `events`; **the build passes it the run's legs**.
+4. **Order — the ask, then what already happened, then bugs.** Nothing that ships moves: the ask keeps
+   the top (the one row that waits on a person), the approved-plans block keeps its place, bugs keep
+   the bottom. The discrepancy rows join the _already happened_ group, **after the approved-plans
+   block and before the bugs**, separate rows in the run's own `seq` order — never _"3 discrepancies"_,
+   which loses which three (D3). A build-through that turned into a stop shows **both** rows on the
+   same leg, neither replacing the other (D4).
+5. **The door — `Open →` to `/items/<key>`.** The comment is addressed by `data.commentId`, **but the
+   item page cannot address a single comment**: read at `origin/main` 911e777,
+   `app/(authed)/items/[key]/_components/CommentRow.tsx` and `CommentsSection.tsx` render rows with no
+   `id` attribute, and nothing on the page reads a hash or a query to scroll to one. So the door lands
+   on the work item, whose Activity section lists the comment. **Landing on the comment is not yet
+   possible**; adding an anchor (`id` on the row + a hash read) is a separate change to the item
+   page, owned by whoever picks up that follow-up — **the build must not invent an address**, and
+   `commentId` stays in the data for the day it can be used. The door's verb is the strip's shared
+   `Open →` (`runs.findings.open`, shipped).
+6. **The node marker — nothing is drawn, no count is added.** Panel 9 drew a count on the canvas node
+   as _an index into the strip_, but **no count ships**: `components/planning/WorkItemNode.tsx`'s
+   `RunLegBadge` carries `{ tone, label }` and nothing else, so there is no node marker for bugs or
+   plans either. When one ships, **a discrepancy is one more finding in it** (the default: the node is
+   an index into the strip), and that build owns the decision. D7 states this and draws nothing.
+
+### Every state
+
+| panel | state                                           | what is drawn                                                              |
+| ----- | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| D1    | one discrepancy, one point, alone               | the strip appears, holding one row — _1 point_, singular                   |
+| D2    | three points, beside a submitted plan and a bug | the order of decision 4, each row with its own door; also at 390px         |
+| D3    | a parent run, two legs                          | two rows, each naming its own key                                          |
+| D4    | a build-through that became a stop              | the ask on top, the discrepancy under it, same key                         |
+| D5    | the leg's work item is gone                     | the row from the run's own data, secondary ink, **no door**, never dropped |
+| D6    | `pointCount` missing or not a number            | the label and key, no count — never _0 points_                             |
+| D7    | the node marker                                 | nothing: no count ships (decision 6)                                       |
+
+**Not redrawn:** the run with no findings (the strip is absent, unchanged — panel 9) and
+reporting-offline (unchanged, panel 9's own).
+
+### Fields read
+
+| rendered element | field(s) read                                                                                   | panel  |
+| ---------------- | ----------------------------------------------------------------------------------------------- | ------ |
+| whether it shows | the event's `kind` is `discrepancy_recorded`                                                    | all    |
+| the run's order  | `DispatchRunEventDto.seq`                                                                       | D2, D3 |
+| the work item    | `DispatchRunEventDto.cardId` → `DispatchRunDto.cards[].key` (survives the work item's deletion) | all    |
+| the count        | `data.pointCount` — a number, else the label alone                                              | D1, D6 |
+| the door         | the same key → `/items/<key>`; `data.commentId` is read but not yet addressable (decision 5)    | D1–D4  |
+| no door          | the work item is not visible to this reader (the bug row's rule)                                | D5     |
+
+`data.dispatchRunCardId` is the record's own identity (one per leg) and is not displayed.
+
+### Tone and tokens
+
+| element            | token                                                                         |
+| ------------------ | ----------------------------------------------------------------------------- |
+| the dot            | `--el-info`, `--radius-pill` (the strip's `.findKind`)                        |
+| label              | `--el-text`, weight 600                                                       |
+| the key, the count | `--el-text` (mono for the key)                                                |
+| a gone row         | `--el-text-secondary`                                                         |
+| the door           | `--el-accent-on-surface`, weight 600 (the strip's `.findGo`)                  |
+| row and strip      | `--el-surface-soft`, `--el-border-soft`, `--spacing-card-padding` — unchanged |
+
+### Copy — `en` + `zh`
+
+Under **`runs.findings.*`**, beside the shipped keys; `open` is reused unchanged.
+
+| key                 | en                                              | zh                                |
+| ------------------- | ----------------------------------------------- | --------------------------------- |
+| `discrepancy`       | Built differently                               | 构建方式与计划不同                |
+| `discrepancyPoints` | {count, plural, one {# point} other {# points}} | {count, plural, other {# 项差异}} |
+| `open` (reused)     | Open →                                          | 打开 →                            |
+
+The row reads _Built differently · KEY — N points_. Neither string says _card_.
+
+### GIVES / TAKES
+
+| key        | GIVES / TAKES                                                                                                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-8659 | **GIVES** every panel above, the order, the copy and the tokens — it builds the row. **TAKES** the run's legs into `RunFindings` (for the key) and builds to `/items/<key>`, not to a comment address                                 |
+| MOTIR-8655 | **GIVES** nothing drawn. **TAKES** that `data` is exactly `{ commentId, pointCount, dispatchRunCardId }`, as shipped                                                                                                                  |
+| MOTIR-8663 | **GIVES** the copy to assert (_Built differently_, _3 points_) and the door's landing: the work item page. **TAKES** nothing — its criterion _the door opens the comment_ is amended to _opens the work item whose Activity lists it_ |
+| MOTIR-3893 | **GIVES** nothing, **TAKES** nothing — named only in two stylesheet comments carried verbatim from `run-modal.mock.html` (the run modal's rules)                                                                                      |
+| MOTIR-3982 | **GIVES** nothing, **TAKES** nothing — named only in the stylesheet comment above the strip's rules, carried verbatim; the strip it designed is the one this row extends                                                              |
+| MOTIR-8656 | this design's own work item, named in the sheet's header comment                                                                                                                                                                      |
+| MOTIR-8651 | **GIVES** nothing. **TAKES** nothing. Fixture keys in the mock (MOTIR-1791, MOTIR-1793, MOTIR-1795, MOTIR-1802) are **fixtures**, not work items this design depends on                                                               |
+
+---
+
 ## A container's OWN runs — the door on its page, and `/runs?scope=<KEY>`
 
 `run-scope.mock.html` · MOTIR-5402 (design) · gates MOTIR-5363. Measured on `origin/main`
