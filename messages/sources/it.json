@@ -9479,6 +9479,8 @@
   "runs.findings.approvedFor": "approved for {key}",
   "runs.findings.materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
   "runs.findings.bugFiled": "Bug filed",
+  "runs.findings.discrepancy": "Built differently",
+  "runs.findings.discrepancyPoints": "{count, plural, one {# point} other {# points}}",
   "runs.findings.open": "Open →",
   "runs.scope.heading": "Run as a scope",
   "runs.scope.lineLive": "An agent is working this work item’s children as one run.",

@@ -12023,6 +12023,8 @@
       "approvedFor": "genehmigt für {key}",
       "materialized": "{count, plural, one {# Vorschlag} other {# Vorschläge}} umgesetzt",
       "bugFiled": "Bug erfasst",
+      "discrepancy": "Anders gebaut",
+      "discrepancyPoints": "{count, plural, one {# Punkt} other {# Punkte}}",
       "open": "Öffnen →"
     },
     "scope": {
