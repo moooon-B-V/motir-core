@@ -1,5 +1,6 @@
 'use client';
 
+import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CopyableSessionDto,
@@ -515,9 +516,7 @@ function narrationFrom(
 
 const NO_NARRATION = { narration: null, narrationKept: null } as const;
 
-/** The `errorCode` a guide-seeded send ends on when its offer is no longer open — the
- *  rail words it as `planningWorkspace.guideSeed.offerClosed`. */
-export const GUIDE_OFFER_CLOSED = 'GUIDE_OFFER_CLOSED';
+export { GUIDE_OFFER_CLOSED };
 
 export interface StalePlanState {
   planId: string;

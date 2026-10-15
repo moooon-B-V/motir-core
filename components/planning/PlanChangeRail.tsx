@@ -64,7 +64,7 @@ import {
 import type { PlanGateView } from '@/lib/planning/planGateView';
 import type { PlanningSeedGuideDTO, PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import { GuideOriginCard } from '@/components/planning/GuideOriginCard';
-import { GUIDE_OFFER_CLOSED } from '@/lib/hooks/usePlanChangeConversation';
+import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
 import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
 import {
   dispositionMarkerFor,
