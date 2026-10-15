@@ -31,9 +31,10 @@ export const EXEMPT_TOOLS = {
   report_unbuildable_target:
     'Returns an ACKNOWLEDGEMENT of a server-side finding — `{ acknowledged: true, ' +
     'recordedOnRun }` — and deliberately nothing else: the verdict, the approving plan and any ' +
-    'bug filed stay on the server. It represents no resource, and there is no `/api/v1` ' +
-    'operation by decision — nothing but the dispatched runner calls it ' +
-    '(`docs/decisions/run-found-trigger-dispatched-path.md`, MOTIR-6286).',
+    'bug filed stay on the server. It represents no resource. Its `/api/v1` sibling, ' +
+    '`POST /dispatch-runs/{id}/unbuildable` (MOTIR-8698), is the CLI’s door on the run’s own ' +
+    'credential and answers the same acknowledgement ' +
+    '(`docs/decisions/run-found-trigger-dispatched-path.md` AMENDMENT 1, MOTIR-6286).',
   get_approved_shape_verdict:
     'Returns a VERDICT — is this card still what the last approved plan approved ' +
     '(`unchanged` / `changed` / `no_plan`), with the diverging revision and the child-set ' +
