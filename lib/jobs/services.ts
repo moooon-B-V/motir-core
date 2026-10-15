@@ -59,6 +59,7 @@ import { codeGraphDriftService } from '@/lib/services/codeGraphDriftService';
 import { codeGraphIndexCatchUpService } from '@/lib/services/codeGraphIndexCatchUpService';
 import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
 import { jobRunsService } from '@/lib/services/jobRunsService';
+import { jobQueueRetentionService } from '@/lib/services/jobQueueRetentionService';
 import { dataExportService } from '@/lib/services/dataExportService';
 import { accountErasureSweepService } from '@/lib/services/accountErasureSweepService';
 import { organizationDeletionNotifier } from '@/lib/services/organizationDeletionNotifier';
@@ -154,6 +155,9 @@ export const jobServices = {
   // The ledger itself is a job's subject exactly once: the abandoned-run reap
   // (MOTIR-3683), which closes rows no completion write will ever reach.
   jobRuns: jobRunsService,
+  // The queue retention pass (Story MOTIR-8540): bounds `job_queue`, `job_step`
+  // and `job_event` beside the ledger's own retention.
+  jobQueueRetention: jobQueueRetentionService,
   supervisionSweep: supervisionSweepService,
   // The personal-data export (Story 8.4 · MOTIR-3701) — the build job and
   // the retention sweep are both its callers.

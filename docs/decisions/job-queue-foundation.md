@@ -366,6 +366,7 @@ cron job cannot ship without joining this table.
 | `system.dispatch-run-sweep`                 | `30 6 * * *`  | `latest`    | MOTIR-1792. Two convergent halves. The RETENTION half owes a published promise — a run started with `--report-log` says its log body is deleted after 30 days — so a missed night is a night of content we said was gone still sitting in a tenant's rows, the same class of commitment as the automation-retention and data-export sweeps. The REAP half is `system.job-run-reap`'s argument verbatim, one object out: another day of the run surface showing a dead run as `running` is the precise harm it exists to end. One pass covers every missed fire in both halves, because each candidate set is defined by ELAPSED TIME (`created_at < now − 30d`, `started_at < now − 12h`) rather than by the fire instant; replaying is free because a cleared body stops matching `body IS NOT NULL` and a closed run stops matching `status = 'running'`.                                                                                                                                                                                                                                                                                  |
 | `system.daily-health-check`                 | `0 9 * * *`   | `latest`    | See §11.7 — the disposition interacts with the probe this job carries, and `skip` would make a routine restart across 09:00 report as a fault.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `system.filter-subscription-tick`           | `0 * * * *`   | `latest`    | A worker back at 14:03 having missed the 14:00 fire delivers the 14:00 hour's digests correctly, because the handler scans the CURRENT UTC hour. The per-occurrence idempotency key collapses a duplicate. See §11.6 for what a catch-up cannot recover.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `system.job-queue-retention`                | `15 6 * * *`  | `latest`    | MOTIR-8540. Deletes succeeded `job_queue` rows past the 30-day window with their steps, then the events they orphan. A missed fire is another day of growth in the tables it bounds; one pass sees everything every missed pass would have, because the candidate set is defined by ELAPSED TIME (`created_at < now − 30d`), and replaying is free because a deleted row stops matching.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `system.job-run-reap`                       | `0 6 * * *`   | `latest`    | A missed fire still owes its work, and what waiting for the next one costs is another day of the operator surface showing a dead run as `running` — the precise harm the job exists to end. One pass sees everything every missed pass would have, because the candidate set is defined by elapsed time rather than by the fire instant; replaying is free because a closed row stops matching `status = 'running'`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `system.migrate-onboarding-sweep`           | `*/5 * * * *` | `latest`    | What it repairs is a person's wedged onboarding run, and it re-derives from durable state. Fifteen more minutes on top of an outage is paid by a user who is already waiting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `system.public-follow-digest-tick`          | `0 9 * * 1`   | `latest`    | Weekly, and the longest gap of any job here — a worker back on Tuesday having missed Monday's fire still owes that week's digest, and skipping it means a follower simply never hears about the week. Safe to catch up because the handler derives due-ness from each follower's own `lastDigestAt` rather than from the fire instant, and the per-occurrence key (`<followId>:<ISO week>`) collapses a duplicate at the runtime and at the provider.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -1725,6 +1726,77 @@ reimplementing it.
   reasoning is untouched by this section: a callback that may be lost needs the poll loop as its
   correctness path, and a poll loop is what this section re-homes rather than removes.
 
+## §17 — `job_queue`'s unique keys dedup within the retention window, not forever (MOTIR-8540)
+
+**Amendment, 2026-10-14.** **Evidence pinned at:** `motir-core` `origin/main` @ `9b538d7d`.
+**Consumed by:** [MOTIR-8540], the `job_queue` retention pass. The reader audit it rests on is
+`docs/decisions/job-queue-retention-readers.md`.
+
+### §17.1 — What changes
+
+Until now nothing deleted a `job_queue` row, so the queue's three unique keys deduplicated FOREVER:
+`(event_id, job_id)`, `(job_id, scheduled_for)` and the partial `job_queue_job_idempotency_key` on
+`(job_id, idempotency_key) WHERE idempotency_key IS NOT NULL`. The dispatcher, `enqueueScheduled`
+and `createIfAbsent` read a violation as "already queued", so **a row's existence is the dedup
+record**.
+
+`system.job-queue-retention` (daily, `15 6 * * *`) now deletes `succeeded` rows whose `created_at`
+is older than `JOB_QUEUE_RETENTION_MS` (**30 days**, `lib/services/jobRunsService.ts`), together with
+their `job_step` rows and the `job_event` rows left orphaned. So **each key now deduplicates for 30
+days from when its row was written**, and a re-emit of the same key after that enqueues and runs
+again. The horizon runs from `created_at`, not from success, because the keys were written at
+creation.
+
+### §17.2 — What is not narrowed
+
+- **A row that is not `succeeded`.** `pending`, `running`, `failed` and `cancelled` rows are never
+  deleted, so their keys still deduplicate for as long as the row exists. A run that dead-lettered
+  keeps its key forever.
+- **The newest `scheduled_for` row of each job**, in any state, whatever its age. It is
+  `latestScheduledFor`'s catch-up watermark (§11), so the `(job_id, scheduled_for)` dedup of the
+  latest tick is never lost.
+- **Events a run still points at.** `job_queue.event_id` cascades from `job_event`, so the pass
+  deletes only events no queue row of any state references.
+- **The ledger.** `job_run` and `job_run_dlq` are untouched; `job_run` keeps its own window
+  ([MOTIR-6935]).
+
+### §17.3 — Why 30 days is safe for `email.send` and for DLQ replay
+
+- **`email.send` ([MOTIR-3459]).** Its key is derived from the thing the email is about — a request,
+  a gate, a mention, a recipient (`data-export-ready:${requestId}`,
+  `mention:${sourceId}:${recipientId}`, `org-deletion:${requestId}:…`). One event carries it once.
+  What re-emits the SAME key is a retry or a redelivery, and every such path is far inside 30 days:
+  a job retry is minutes, a GitHub webhook redelivery is limited to its recent deliveries, and an
+  invite token expires after `INVITE_EXPIRY_MS` (7 days). The one daily sweep that re-sends reminders,
+  the organization-deletion notifier, records what it sent and skips it itself, and its window
+  closes within 30 days. So no email depends on a key older than the window.
+- **DLQ replay.** `lib/jobs/dlq.ts` re-shapes the key to `{original}:replay:{dlqId}`. A second press
+  of Replay within 30 days of the first is still refused as `already-replayed`. After 30 days, once
+  the replay run has succeeded and been deleted, a second press enqueues again. That is a deliberate
+  press on an operator surface that already shows the row's `replayedAt`, not a silent duplicate.
+  The original dead letter is a `failed` row and is never deleted, so a replay never loses its
+  source.
+
+### §17.4 — The cost, and the rule for a dedup that must outlive the window
+
+The cost is a re-run of a job whose key is re-emitted more than 30 days after its first run.
+Nothing in the tree does that today.
+
+**The rule.** A job that must never run twice for a key, however far apart the emits, does NOT rely
+on `job_queue`'s unique keys. It records its own durable fact and checks it, as the
+organization-deletion notifier does with its sent-record. And a new emitter whose re-emit horizon could exceed 30 days is a reason to lengthen
+`JOB_QUEUE_RETENTION_MS` (a separate constant from `JOB_RUN_RETENTION_MS` for exactly this) or to
+add such a record, decided where it is introduced.
+
+### §17.5 — What §17 does not settle
+
+- **`failed` rows.** They are kept for the DLQ. If they too prove unbounded, that is a separate item
+  with its own window, decided against what the dead-letter surface needs.
+- **Disk.** Deleted rows free space that autovacuum reuses; shrinking the files (`VACUUM FULL`,
+  `pg_repack`) is not part of this.
+- **An index for the pass.** It runs daily and capped (`JOB_QUEUE_PURGE_MAX_BATCHES`); whether its
+  scans need an index is a measurement on production, not a decision taken here.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484
@@ -1754,3 +1826,6 @@ reimplementing it.
 [MOTIR-4652]: https://app.motir.co/items/MOTIR-4652
 [MOTIR-5020]: https://app.motir.co/items/MOTIR-5020
 [MOTIR-5022]: https://app.motir.co/items/MOTIR-5022
+[MOTIR-8540]: https://app.motir.co/items/MOTIR-8540
+[MOTIR-6935]: https://app.motir.co/items/MOTIR-6935
+[MOTIR-3459]: https://app.motir.co/items/MOTIR-3459

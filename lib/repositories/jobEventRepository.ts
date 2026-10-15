@@ -82,4 +82,31 @@ export const jobEventRepository = {
   async countByName(name: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.jobEvent.count({ where: { name } });
   },
+
+  /**
+   * Delete at most `limit` events older than `cutoff` that NO `job_queue` row of
+   * ANY state references, oldest first, and return how many went (Story
+   * MOTIR-8540). An event a `pending`, `running` or `failed` run still points at
+   * is kept: the run reads its payload, and a DLQ replay re-reads the dead run.
+   * `job_queue.event_id` is the only reference to `job_event`
+   * (`docs/decisions/job-queue-retention-readers.md`), and it cascades, which is
+   * why only an orphan may go.
+   *
+   * Age is `received_at`, the table's only timestamp; it has no `created_at`.
+   */
+  async deleteOrphanedOlderThan(
+    cutoff: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.$executeRaw`
+      DELETE FROM "job_event" WHERE "id" IN (
+        SELECT e."id" FROM "job_event" e
+        WHERE e."received_at" < ${cutoff}
+          AND NOT EXISTS (SELECT 1 FROM "job_queue" q WHERE q."event_id" = e."id")
+        ORDER BY e."received_at" ASC
+        LIMIT ${limit}
+      )
+    `;
+  },
 };

@@ -613,6 +613,9 @@ export interface JobEventDataMap {
    *  design: the fleet spans tenants because the infrastructure bill does. */
   'system.supervision-sweep': SystemScheduledData;
   'system.job-run-reap': SystemScheduledData;
+  /** The queue retention pass (Story MOTIR-8540) — deletes succeeded `job_queue`
+   *  rows past the window, their steps and orphaned events. Cross-tenant by design. */
+  'system.job-queue-retention': SystemScheduledData;
   /** The personal-data export retention sweep (Story 8.4 · MOTIR-3701) —
    *  deletes each archive's blob once its seven-day window has run out and
    *  moves the row to `expired`. Cross-tenant by design. */

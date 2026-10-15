@@ -574,4 +574,65 @@ export const jobQueueRepository = {
   async countByState(state: JobRunState, tx: Prisma.TransactionClient): Promise<number> {
     return tx.jobQueueRun.count({ where: { state } });
   },
+
+  /**
+   * The SUCCEEDED rows past the retention cutoff that the queue retention pass
+   * may delete, oldest first, at most `limit` (Story MOTIR-8540).
+   *
+   * Age is `created_at`: the unique keys a row holds were written when it was
+   * created, so the dedup horizon runs from then. A run created before the cutoff
+   * that only just succeeded is deletable, and that is accepted. `cutoff` is bound
+   * by the caller and compared only with `created_at`, which Prisma writes as
+   * naive UTC, so no database clock is read here.
+   *
+   * ⚠️ THE KEEP-RULE: the newest `scheduled_for` row of each job survives whatever
+   * its age, because `latestScheduledFor` reads it as the scheduler's catch-up
+   * watermark. "Newest" is measured over rows of ANY state, exactly as that reader
+   * measures it. `docs/decisions/job-queue-retention-readers.md` lists every
+   * reader this protects.
+   *
+   * ⚠️ WHY A PER-JOB `max()` AND NOT THE `NOT EXISTS` IT IS EQUIVALENT TO. "No
+   * row of the job has a later `scheduled_for`" is exactly "`scheduled_for` is
+   * at least the job's `max(scheduled_for)`". Written as a correlated `NOT EXISTS
+   * (… n.scheduled_for > q.scheduled_for)`, the RLS barrier on `job_queue` makes
+   * the planner probe it with a bitmap scan that fetches EVERY newer row of the
+   * job for EVERY candidate, before the `LIMIT` applies: 6.8 s per batch on a
+   * 100k-row table as the runtime role, growing with the backlog. The `max()` is
+   * computed once per pass statement and measured 122 ms on the same table.
+   *
+   * No row lock, and never a `pending` or `running` row, so it cannot contend with
+   * `claimDueRuns`' `FOR UPDATE SKIP LOCKED`.
+   */
+  async findPurgeableSucceededIds(
+    cutoff: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT q."id" FROM "job_queue" q
+      LEFT JOIN (
+        SELECT n."job_id", max(n."scheduled_for") AS "latest"
+        FROM "job_queue" n
+        GROUP BY n."job_id"
+      ) l ON l."job_id" = q."job_id"
+      WHERE q."state" = 'succeeded'
+        AND q."created_at" < ${cutoff}
+        AND NOT (q."scheduled_for" IS NOT NULL AND q."scheduled_for" >= l."latest")
+      ORDER BY q."created_at" ASC
+      LIMIT ${limit}
+    `;
+    return rows.map((row) => row.id);
+  },
+
+  /**
+   * Delete the given runs — GUARDED ON THEM STILL BEING `succeeded`, so a caller
+   * bug cannot delete a live or failed row. The ONLY delete `job_queue` has.
+   */
+  async deleteSucceededByIds(ids: string[], tx: Prisma.TransactionClient): Promise<number> {
+    if (ids.length === 0) return 0;
+    const res = await tx.jobQueueRun.deleteMany({
+      where: { id: { in: ids }, state: 'succeeded' },
+    });
+    return res.count;
+  },
 };

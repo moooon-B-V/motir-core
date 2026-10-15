@@ -72,7 +72,7 @@ export interface RetiredStepId {
 /**
  * Every live memoized step, by id.
  *
- * 62 entries over 70 call sites: an id used at several sites in one handler is
+ * 63 entries over 71 call sites: an id used at several sites in one handler is
  * pinned once, and the guard requires those sites to agree.
  *
  * ⚠️ MOTIR-6448 KEPT SEVEN IDS ON PURPOSE. `ContainerUsage` / `ContainerAccrual`
@@ -345,6 +345,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'probe-boot': {
     file: 'lib/test-deferring-job.ts',
     shape: '{ bootedAt: string }',
+  },
+  'purge-expired-job-queue': {
+    file: 'lib/jobs/definitions/jobQueueRetention.ts',
+    shape:
+      '{ batches: number; drained: boolean; jobEvent: number; jobQueue: number; jobStep: number }',
   },
   'purge-expired-job-runs': {
     file: 'lib/jobs/definitions/jobRunReap.ts',
