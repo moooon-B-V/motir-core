@@ -3224,6 +3224,13 @@ would leave a reader to work out that they are the same surface.
 
 ## ⭐ The canvas ARRIVES INSIDE the node being planned — the target's children, in both phases (MOTIR-6159, 2026-09-24)
 
+> **Superseded in part by `design/ai-planning/design-notes.md` Part XXVIII (MOTIR-8591, 2026-10-15).**
+> On the planning overlay while a plan is `generating`, § _The person who NAVIGATED FIRST_ (never move
+> after the reader navigated, and the _Plan is in {identifier} · Go there_ offer) is replaced by _follow
+> while on; the person's navigation turns following off; Follow the planner asks again_. The FOLLOW-MOVE's
+> transition, reduced-motion form and announcement below are REUSED unchanged by every driven move.
+> Outside `generating` this section stands as written.
+
 **Asset:** `planning-workspace--arrival.mock.html` — a **DELTA**, eight panels, holding only what
 changes.
 **Story:** MOTIR-6154 — _the planning surface OPENS INSIDE the node being planned_.

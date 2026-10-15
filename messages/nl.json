@@ -8096,6 +8096,11 @@
         },
         "hint": "Je volgende bericht start het ondervragen."
       }
+    },
+    "follow": {
+      "following": "Volgt de planner",
+      "resume": "De planner volgen",
+      "resumedAnnouncement": "Volgt de planner weer"
     }
   },
   "codeHealth": {

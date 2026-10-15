@@ -1247,7 +1247,8 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [];
  *     there. The rename that would resolve it is the `runs/` family's, not the
  *     control's.
  *
- *   `seg-ic` — HERE (4 assets): a verbatim transcription of
+ *   `seg-ic` — HERE (5 assets; `follow-the-planner` added by MOTIR-8591, the
+ *     same transcription rendered from the shipped canvas toolbar): a verbatim transcription of
  *     `packages/design-system/src/components/ui/Segmented.tsx:100`,
  *     `'seg-ic inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center'`
  *     with the ink split onto `text-(--el-tabnav-active)` / `text-(--el-text-faint)`
@@ -1303,6 +1304,12 @@ const TREE_DECLARED_COLLISIONS: {
     token: 'seg-ic',
     count: 2,
     card: 'MOTIR-4944',
+  },
+  {
+    file: 'design/ai-planning/plan-review--follow-the-planner.mock.html',
+    token: 'seg-ic',
+    count: 62,
+    card: 'MOTIR-8591',
   },
   { file: 'design/brand/brand-mark.mock.html', token: 'fr', count: 11, card: 'MOTIR-4944' },
   { file: 'design/github/github.mock.html', token: 'helper', count: 2, card: 'MOTIR-4944' },

@@ -8096,6 +8096,11 @@
         },
         "hint": "Sua próxima mensagem inicia as perguntas."
       }
+    },
+    "follow": {
+      "following": "Seguindo o planejador",
+      "resume": "Seguir o planejador",
+      "resumedAnnouncement": "Seguindo o planejador novamente"
     }
   },
   "codeHealth": {
