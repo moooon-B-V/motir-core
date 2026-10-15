@@ -991,5 +991,16 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.66.0` after MOTIR-8098's
  *   `1.65.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   FIELD and the HEADER.
+ *
+ * - `1.67.0` — MOTIR-8670 adds `not_ready` and `replanned` to the approval-gate
+ *   supersede cause: a `manual_work` gate is withdrawn when its card is Blocked or gains
+ *   an open `blocked_by`, and when it is re-planned (`docs/decisions/manual-work-gate.md`
+ *   §6, amended).
+ *
+ *   Additive: new members of an enum every client must tolerate (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.67.0` after MOTIR-8600's
+ *   `1.66.0`. If a sibling has taken it since, RENUMBER this entry — it names the ENUM
+ *   MEMBERS.
  */
-export const V1_CONTRACT_VERSION = '1.66.0';
+export const V1_CONTRACT_VERSION = '1.67.0';

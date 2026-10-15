@@ -1717,6 +1717,8 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'subject_gone',
   'no_longer_manual',
   'closed_without_decision',
+  'not_ready',
+  'replanned',
   'answered',
   'session_ended',
 ] as const satisfies readonly ApprovalGateSupersedeCauseDTO[];

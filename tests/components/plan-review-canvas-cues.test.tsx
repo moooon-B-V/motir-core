@@ -316,6 +316,27 @@ describe('PlanReviewCanvas — the cues (MOTIR-7830)', () => {
     expect(pill()).toBeNull();
   });
 
+  it('the pill yields first on a narrow bar: a compact square named by its words (MOTIR-8646)', async () => {
+    mount([step('author', 'pi_c')]);
+    await loaded();
+    const offer = await waitFor(() => {
+      expect(pill()).not.toBeNull();
+      return pill()!;
+    });
+    const words = '1 being drafted in ARP-2 · Go there';
+    // The bar is the container the compact form queries.
+    expect(breadcrumb().className).toContain('@container/canvas-bar');
+    // Below 32rem the pill becomes a --height-control square with no padding…
+    expect(offer.className).toContain('@max-[32rem]/canvas-bar:size-(--height-control)');
+    expect(offer.className).toContain('@max-[32rem]/canvas-bar:p-0');
+    // …and its label goes sr-only, never truncated, so its words stay its name.
+    const label = within(offer).getByText(words);
+    expect(label.className).toBe('@max-[32rem]/canvas-bar:sr-only');
+    expect(offer.getAttribute('aria-label')).toBe(words);
+    expect(offer.getAttribute('title')).toBe(words);
+    expect(screen.getByRole('button', { name: words })).toBe(offer);
+  });
+
   it('two drafting steps on two OTHER levels read "elsewhere", named by the earliest', async () => {
     mount([step('author', 'pi_c', 's1'), step('author', 'pi_d', 's2')]);
     await loaded();

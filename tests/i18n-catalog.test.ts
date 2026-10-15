@@ -794,6 +794,10 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalGate.withdrawn.cause.closed_without_decision':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.not_ready':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.replanned':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalGate.withdrawn.cause.unknown':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalGate.withdrawn.causeByKind.decision_approval.head_moved':
