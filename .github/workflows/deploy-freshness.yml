@@ -97,7 +97,7 @@ permissions:
 jobs:
   freshness:
     name: Is production running the head of main?
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO healthy run on record — this lane does not exist yet on `main`, and its
     # first runs cannot be measured before it does. Its mechanical cost is a
     # checkout plus one dependency-free node script making a single HTTP request,

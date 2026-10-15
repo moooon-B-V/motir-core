@@ -382,7 +382,7 @@ jobs:
   # filter anywhere near it, which is the whole gate MOTIR-4257 adds.
   membership:
     name: Does the lane hold a spec?
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.3–0.6 min → 10 (~17x, the short-job floor). It only reads
     # the changed-file list and decides whether the lane holds a spec.
     timeout-minutes: 10
@@ -518,7 +518,7 @@ jobs:
   # through `e2e-setup`'s existing `next-build: download` path (MOTIR-1706).
   build:
     name: Next.js build (acceptance)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 4.1–4.6 min → 15 (~3.3x). `next build` grows with the app, so
     # this gets a multiple rather than the floor — the same reading `ci.yml`'s
     # own `build` job took, arrived at from THIS lane's runs.
@@ -586,7 +586,7 @@ jobs:
 
   acceptance:
     name: Playwright E2E (acceptance) ${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # ⚠️ DERIVED FROM THIS LANE, NOT COPIED FROM `e2e`. The acceptance specs
     # are an order of magnitude heavier than ordinary E2E per test, so the
     # number next door is not evidence about this one either way. First sized
@@ -854,7 +854,7 @@ jobs:
     name: Acceptance complete
     if: always()
     needs: [membership, build, acceptance]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed <0.1 min → 10 (the short-job floor) — MEASURED on this lane's
     # first run, not copied from `ci-complete`: 04:05:41 → 04:05:43, two
     # seconds. It reads the `needs` context and exits, and the clock starts when
