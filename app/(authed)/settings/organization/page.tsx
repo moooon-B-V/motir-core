@@ -187,7 +187,6 @@ export default async function OrganizationSettingsPage({
           canManageWorkspaces={canManageWorkspaces}
           activeWorkspaceId={ctx?.workspaceId ?? null}
           actorUserId={session.user.id}
-          actorEmail={session.user.email}
           orgWorkspaceCount={orgWorkspaces.length}
           foldInWorkspace={foldInWorkspace}
           jobsParams={jobsParams}
@@ -217,7 +216,6 @@ async function OrgPaneBody({
   canManageWorkspaces,
   activeWorkspaceId,
   actorUserId,
-  actorEmail,
   orgWorkspaceCount,
   foldInWorkspace,
   jobsParams,
@@ -235,7 +233,6 @@ async function OrgPaneBody({
   canManageWorkspaces: boolean;
   activeWorkspaceId: string | null;
   actorUserId: string;
-  actorEmail: string;
   orgWorkspaceCount: number;
   foldInWorkspace: { id: string } | null;
   jobsParams: { tab?: string; status?: string; page?: string };
@@ -334,7 +331,6 @@ async function OrgPaneBody({
         <JobRunsFoldInSection
           workspaceId={foldInWorkspace.id}
           actorUserId={actorUserId}
-          actorEmail={actorEmail}
           searchParams={jobsParams}
         />
       ) : null}
