@@ -8097,6 +8097,11 @@
         },
         "hint": "Your next message starts the grilling."
       }
+    },
+    "follow": {
+      "following": "Following the planner",
+      "resume": "Follow the planner",
+      "resumedAnnouncement": "Following the planner again"
     }
   },
   "codeHealth": {

@@ -8094,6 +8094,11 @@
         },
         "hint": "次のメッセージで質問が始まります。"
       }
+    },
+    "follow": {
+      "following": "プランナーを追従中",
+      "resume": "プランナーを追従",
+      "resumedAnnouncement": "プランナーの追従を再開しました"
     }
   },
   "codeHealth": {

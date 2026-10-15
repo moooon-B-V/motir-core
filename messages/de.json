@@ -8097,6 +8097,11 @@
         },
         "hint": "Ihre nächste Nachricht startet die Befragung."
       }
+    },
+    "follow": {
+      "following": "Folgt dem Planer",
+      "resume": "Dem Planer folgen",
+      "resumedAnnouncement": "Folgt dem Planer wieder"
     }
   },
   "codeHealth": {

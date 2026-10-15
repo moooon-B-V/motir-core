@@ -8097,6 +8097,11 @@
         },
         "hint": "Twoja następna wiadomość rozpocznie przepytywanie."
       }
+    },
+    "follow": {
+      "following": "Podąża za planistą",
+      "resume": "Podążaj za planistą",
+      "resumedAnnouncement": "Znowu podąża za planistą"
     }
   },
   "codeHealth": {

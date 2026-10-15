@@ -209,14 +209,43 @@ export interface InFlightStep {
 }
 
 /**
+ * THE LEVEL A STEP NAMES (MOTIR-8592) — the one rule the cues, *Go there* and the
+ * planner-driven canvas share, so "where is this step?" has a single answer.
+ *
+ * - `author` → the level the target item SITS on: its parent's children, or the
+ *   top level (`levelId: null`, `trail: []`) for a root item.
+ * - `lay` → the target's OWN children level, and only when the plan's items can
+ *   place it: some item sits on that level and the trail ends at the node.
+ * - `settle`, a step with no target, or a target the items do not hold → `null`.
+ */
+export function stepLevel(
+  items: readonly PlanReviewItemDto[],
+  step: InFlightStep,
+  proposedWord: string,
+): { levelId: string | null; trail: CanvasCrumb[] } | null {
+  if (step.kind === 'settle' || step.targetNodeId === null) return null;
+  const nodeId = step.targetNodeId;
+  if (step.kind === 'author') {
+    const item = items.find((i) => i.nodeId === nodeId);
+    if (!item) return null;
+    const levelId = proposalLevelKey(item);
+    return { levelId, trail: levelTrail(items, levelId, proposedWord) };
+  }
+  if (!items.some((i) => proposalLevelKey(i) === nodeId)) return null;
+  const trail = levelTrail(items, nodeId, proposedWord);
+  if (trail[trail.length - 1]?.id !== nodeId) return null;
+  return { levelId: nodeId, trail };
+}
+
+/**
  * Map the live steps to cues. A `settle` step, and any step with no target node
  * (the untargeted lay and author), mark nothing (§26.6: an item not yet on the
  * plan has no cell). Several steps → several cues; one node named by both kinds
  * is `drafting`. `inFlight` holds one entry per cue whose level the plan's items
- * can place — a committed target the walk has not written a `modify` for, or a
- * parent with no child proposed yet, keeps its node cue wherever it is drawn and
- * adds no entry, because *Go there* would have nowhere to go. Order: the steps'
- * (earliest first).
+ * can place ({@link stepLevel}) — a committed target the walk has not written a
+ * `modify` for, or a parent with no child proposed yet, keeps its node cue
+ * wherever it is drawn and adds no entry, because *Go there* would have nowhere to
+ * go. Order: the steps' (earliest first).
  */
 export function inFlightCues(
   items: readonly PlanReviewItemDto[],
@@ -231,20 +260,12 @@ export function inFlightCues(
   }
   const inFlight: InFlightCue[] = [];
   for (const [nodeId, kind] of cues) {
-    if (kind === 'drafting') {
-      const item = items.find((i) => i.nodeId === nodeId);
-      if (!item) continue;
-      inFlight.push({
-        nodeId,
-        kind,
-        trail: levelTrail(items, proposalLevelKey(item), proposedWord),
-      });
-    } else {
-      if (!items.some((i) => proposalLevelKey(i) === nodeId)) continue;
-      const trail = levelTrail(items, nodeId, proposedWord);
-      if (trail[trail.length - 1]?.id !== nodeId) continue;
-      inFlight.push({ nodeId, kind, trail });
-    }
+    const level = stepLevel(
+      items,
+      { kind: kind === 'drafting' ? 'author' : 'lay', targetNodeId: nodeId },
+      proposedWord,
+    );
+    if (level) inFlight.push({ nodeId, kind, trail: level.trail });
   }
   return { cues, inFlight };
 }

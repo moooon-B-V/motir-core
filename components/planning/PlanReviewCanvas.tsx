@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
+  type ProjectRoadmapCanvasProps,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import {
@@ -129,9 +130,17 @@ export interface PlanReviewCanvasProps {
   /** Forwarded verbatim to the foundation — see its own contract. Together with
    *  `readerHasNavigated` this is how a swapped-in canvas declines a follow rather
    *  than yanking the reader, and how the bar comes to offer it. */
-  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  followTo?: ProjectRoadmapCanvasProps['followTo'];
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followMode`. */
+  followMode?: ProjectRoadmapCanvasProps['followMode'];
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `onReaderNavigated`. */
+  onReaderNavigated?: ProjectRoadmapCanvasProps['onReaderNavigated'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followControl`. */
+  followControl?: ProjectRoadmapCanvasProps['followControl'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followLevelId`. */
+  followLevelId?: ProjectRoadmapCanvasProps['followLevelId'];
   onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**
    * The plan is being WRITTEN and this canvas is drawing it live (MOTIR-6300;
@@ -183,6 +192,10 @@ export function PlanReviewCanvas({
   followTo = null,
   onFollowDeclined,
   readerHasNavigated = false,
+  followMode,
+  onReaderNavigated,
+  followControl,
+  followLevelId,
   onLevelChange,
   live = false,
   offerPlanElsewhere = false,
@@ -239,6 +252,14 @@ export function PlanReviewCanvas({
     proposal: null,
     key: null,
   });
+  // WHILE THE PLAN IS WRITTEN the open peek follows the live item by its
+  // `planItemId` (MOTIR-8595), so a field that arrives mid-view reaches it. A
+  // proposal withdrawn mid-view keeps its last copy: closing is the reader's act.
+  // Off `live` it is the copy taken at open, as shipped.
+  const peekedProposal =
+    live && peeked.proposal
+      ? (items.find((i) => i.planItemId === peeked.proposal?.planItemId) ?? peeked.proposal)
+      : peeked.proposal;
   const byNodeId = useMemo(() => new Map(items.map((i) => [i.nodeId, i])), [items]);
   // node id → its identifier, accumulated as levels load. A ref, not state: it is
   // a lookup the View handler reads, never something a render depends on.
@@ -654,6 +675,10 @@ export function PlanReviewCanvas({
         followTo={followTo}
         onFollowDeclined={onFollowDeclined}
         readerHasNavigated={readerHasNavigated}
+        followMode={followMode}
+        onReaderNavigated={onReaderNavigated}
+        followControl={followControl}
+        followLevelId={followLevelId}
         onLevelChange={onLevelChange}
         // The level the reviewer is standing on FOLLOWS its container through
         // approve, rather than being left addressed by an id that has stopped
@@ -731,7 +756,8 @@ export function PlanReviewCanvas({
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the
           ordinary work-item peek below, unchanged. */}
       <ProposalPeek
-        item={peeked.proposal}
+        item={peekedProposal}
+        live={live}
         outcome={outcome}
         onClose={closePeek}
         onOpenProposal={openProposalById}

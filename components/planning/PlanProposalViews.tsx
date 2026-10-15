@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Info, List, Workflow } from 'lucide-react';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
+import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
 import { Segmented } from '@/components/ui/Segmented';
 import type { PlanViewDto } from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
@@ -12,7 +13,10 @@ import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planRevie
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
 import { PlanProgressLineView } from '@/components/planning/PlanProgressLine';
-import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
+import {
+  usePlanProgressReading,
+  type PlanProgressClockReading,
+} from '@/lib/hooks/usePlanProgressReading';
 import {
   readPlanAtWork,
   type PlanProgressSnapshot,
@@ -101,9 +105,17 @@ export interface PlanProposalViewsProps {
    * of moving somebody who chose where to stand.
    */
   canvasHeldTrail?: readonly CanvasCrumb[] | null;
-  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  followTo?: ProjectRoadmapCanvasProps['followTo'];
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followMode`. */
+  followMode?: ProjectRoadmapCanvasProps['followMode'];
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `onReaderNavigated`. */
+  onReaderNavigated?: ProjectRoadmapCanvasProps['onReaderNavigated'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followControl`. */
+  followControl?: ProjectRoadmapCanvasProps['followControl'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followLevelId`. */
+  followLevelId?: ProjectRoadmapCanvasProps['followLevelId'];
   onCanvasLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**
    * The plan is being WRITTEN, and this pane is drawing it as it is (MOTIR-6300;
@@ -148,6 +160,13 @@ export interface PlanProposalViewsProps {
   /** The poll's `failing` (§26.10): the line holds the last snapshot and the
    *  marker says *Reconnecting*. */
   progressFailing?: boolean;
+  /**
+   * THE HOST'S READING of `progress` (MOTIR-8594) — when a host already reads the
+   * one clock (the overlay drives its canvas from the same live steps), it hands
+   * the reading in so the line, the cues and the driven step read ONE instant and
+   * ONE interval. Absent (the plan page), this component reads its own.
+   */
+  progressReading?: PlanProgressClockReading | null;
 }
 
 export function PlanProposalViews({
@@ -165,6 +184,10 @@ export function PlanProposalViews({
   followTo = null,
   onFollowDeclined,
   readerHasNavigated = false,
+  followMode,
+  onReaderNavigated,
+  followControl,
+  followLevelId,
   onCanvasLevelChange,
   live = false,
   liveFailing = false,
@@ -172,11 +195,17 @@ export function PlanProposalViews({
   offerPlanElsewhere = false,
   progress = null,
   progressFailing = false,
+  progressReading: hostReading,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
   // THE ONE CLOCK (MOTIR-7829): read once here, so the line and anything else
   // this pane draws from the steps read the same instant.
-  const progressReading = usePlanProgressReading(progress, { failing: progressFailing });
+  // A host that reads the clock itself hands the reading in; the hook is still
+  // called (on `null`, so it starts no interval) to keep the hook order fixed.
+  const ownReading = usePlanProgressReading(hostReading === undefined ? progress : null, {
+    failing: progressFailing,
+  });
+  const progressReading = hostReading === undefined ? ownReading : hostReading;
   // AT WORK (MOTIR-8416): the one at-work answer over that same reading — which
   // cards may MOVE. Presence still rides the held `liveSteps`, so a dropped read
   // keeps the cue drawn while its motion stops.
@@ -209,6 +238,10 @@ export function PlanProposalViews({
       followTo={followTo}
       onFollowDeclined={onFollowDeclined}
       readerHasNavigated={readerHasNavigated}
+      followMode={followMode}
+      onReaderNavigated={onReaderNavigated}
+      followControl={followControl}
+      followLevelId={followLevelId}
       onLevelChange={onCanvasLevelChange}
       live={live}
       offerPlanElsewhere={offerPlanElsewhere}

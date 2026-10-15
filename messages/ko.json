@@ -8091,6 +8091,11 @@
         },
         "hint": "다음 메시지부터 질문이 시작됩니다."
       }
+    },
+    "follow": {
+      "following": "계획 도구를 따라가는 중",
+      "resume": "계획 도구 따라가기",
+      "resumedAnnouncement": "계획 도구를 다시 따라가는 중"
     }
   },
   "codeHealth": {
