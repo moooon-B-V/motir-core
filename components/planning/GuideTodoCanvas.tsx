@@ -226,9 +226,11 @@ export function GuideTodoCanvas({
         {!loading && !proposed && view.total > 0 ? (
           <div className="mt-3 flex items-center gap-3" data-testid="guide-progress">
             <span className="flex-none text-[13px] font-semibold text-(--el-text)">
-              {view.currentStep !== null
-                ? t('stepOf', { n: view.currentStep, total: view.total })
-                : tt('allDone')}
+              {view.walkStopped
+                ? t('offer.walkStopped')
+                : view.currentStep !== null
+                  ? t('stepOf', { n: view.currentStep, total: view.total })
+                  : tt('allDone')}
             </span>
             <div
               className="relative h-1 flex-1 overflow-hidden rounded-full bg-(--el-muted)"

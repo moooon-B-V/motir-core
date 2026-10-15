@@ -7975,6 +7975,16 @@
     "followUpCard": {
       "label": "Seguito di una scelta"
     },
+    "guideSeed": {
+      "chip": "da una guida",
+      "lead": "Aperta su {target} dalla guida di Motir AI su {guided}.",
+      "card": "Da una guida",
+      "cardBy": "Confermato da {who} · {when}",
+      "justNow": "proprio ora",
+      "you": "tu",
+      "status": "In pianificazione",
+      "offerClosed": "Questa offerta di ripianificazione non è più aperta. Torna alla guida per vedere a che punto è."
+    },
     "guide": {
       "openedFrom": "Aperto da {key}",
       "reading": "Lettura di {key} e del suo elenco di cose da fare…",
@@ -8006,7 +8016,8 @@
       "errors": {
         "notManual": "Motir AI guida una persona nel lavoro manuale, e questo elemento di lavoro è destinato a un agente, quindi qui non c’è nulla da guidare.",
         "closed": "Questo elemento di lavoro è completato o archiviato, quindi non resta nulla da guidare.",
-        "forbidden": "Per essere guidato in questo elemento di lavoro ti serve l’autorizzazione a modificarlo e a pianificare con Motir AI."
+        "forbidden": "Per essere guidato in questo elemento di lavoro ti serve l’autorizzazione a modificarlo e a pianificare con Motir AI.",
+        "offerClosed": "Questa offerta è già stata decisa, quindi non può essere modificata. Ricarica l’elemento di lavoro per vedere a che punto è."
       },
       "youTicked": "Hai spuntato il passaggio {n} dell’elenco",
       "youUnticked": "Hai tolto la spunta al passaggio {n} dell’elenco",
@@ -8061,6 +8072,32 @@
         "typeText": "Testo",
         "typeMarkdown": "Markdown",
         "typeFile": "File"
+      },
+      "offer": {
+        "label": "Richiesta di ripianificazione",
+        "target": "Destinazione",
+        "targetElsewhere": "La ripianificazione parte da {key}, non da questo elemento di lavoro.",
+        "resolved": "{done} è completato, quindi la ripianificazione parte da {open}.",
+        "noTarget": "Non c’è nessun elemento di lavoro aperto da cui ripianificare.",
+        "confirm": "Conferma",
+        "confirming": "Avvio in corso…",
+        "openSession": "Apri la sessione di pianificazione",
+        "decline": "Rifiuta",
+        "declining": "Rifiuto in corso…",
+        "showAll": "Mostra tutto",
+        "showLess": "Mostra meno",
+        "confirmHelp": "Apre la pianificazione di Motir AI su {key} con questa richiesta inviata. Consuma crediti.",
+        "declineHelp": "Chiude questa offerta. Non viene pianificato nulla.",
+        "replaced": "Sostituita da un’offerta più recente",
+        "started": "Ripianificazione avviata",
+        "startedBy": "Confermato · {when}",
+        "declined": "Rifiutata",
+        "declinedBy": "Rifiutata · {when}",
+        "recorded": "Registrata nell’elemento di lavoro",
+        "resumeAt": "«Guidami» riprenderà dal passaggio {n}.",
+        "walkStopped": "Il percorso guidato è fermo.",
+        "cannotPlan": "Non puoi avviare la pianificazione qui: chiedi a chi può farlo, oppure condividi questa richiesta.",
+        "noAi": "Motir AI non è configurato qui, quindi la pianificazione non può partire. Puoi comunque condividere questa richiesta."
       }
     },
     "restart": {

@@ -8010,7 +8010,8 @@
       "errors": {
         "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给智能体的，因此这里没有可引导的内容。",
         "closed": "这个工作项已完成或已归档，没有需要引导的内容了。",
-        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。"
+        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。",
+        "offerClosed": "这个提议已经有结果，无法再更改。请刷新工作项查看最新状态。"
       },
       "youTicked": "你在清单上勾选了第 {n} 步",
       "youUnticked": "你在清单上取消勾选了第 {n} 步",
@@ -8065,6 +8066,32 @@
         "typeText": "文本",
         "typeMarkdown": "Markdown",
         "typeFile": "文件"
+      },
+      "offer": {
+        "label": "重新规划请求",
+        "target": "目标",
+        "targetElsewhere": "重新规划将从 {key} 开始，而不是这个工作项。",
+        "resolved": "{done} 已完成，所以重新规划从 {open} 开始。",
+        "noTarget": "没有可以作为起点的未完成工作项。",
+        "confirm": "确认",
+        "confirming": "正在开始…",
+        "openSession": "打开规划会话",
+        "decline": "拒绝",
+        "declining": "正在拒绝…",
+        "showAll": "展开全部",
+        "showLess": "收起",
+        "confirmHelp": "在 {key} 上打开 Motir AI 规划，并发送此请求。会消耗额度。",
+        "declineHelp": "关闭此提议，不会规划任何内容。",
+        "replaced": "已被更新的提议取代",
+        "started": "已开始重新规划",
+        "startedBy": "已确认 · {when}",
+        "declined": "已拒绝",
+        "declinedBy": "已拒绝 · {when}",
+        "recorded": "已记录在工作项上",
+        "resumeAt": "再次点击“带我完成”会从第 {n} 步继续。",
+        "walkStopped": "引导已停止。",
+        "cannotPlan": "你无法在这里开始规划——请联系有权限的人，或把此请求分享给他们。",
+        "noAi": "这里还没有配置 Motir AI，无法开始规划。你仍可以分享此请求。"
       }
     },
     "restart": {

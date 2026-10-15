@@ -8016,7 +8016,8 @@
       "errors": {
         "notManual": "Motir AI guides a person through manual work, and this work item is for an agent, so there is nothing to guide here.",
         "closed": "This work item is done or archived, so there is nothing left to guide.",
-        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it."
+        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it.",
+        "offerClosed": "This offer was already decided, so it can’t be changed. Reload the work item to see where it stands."
       },
       "youTicked": "You ticked step {n} on the list",
       "youUnticked": "You unticked step {n} on the list",
@@ -8071,6 +8072,32 @@
         "typeText": "Text",
         "typeMarkdown": "Markdown",
         "typeFile": "File"
+      },
+      "offer": {
+        "label": "Re-plan request",
+        "target": "Aimed at",
+        "targetElsewhere": "The re-plan starts on {key}, not on this work item.",
+        "resolved": "{done} is done, so the re-plan starts on {open}.",
+        "noTarget": "There is no open work item to re-plan from.",
+        "confirm": "Confirm",
+        "confirming": "Starting…",
+        "openSession": "Open the planning session",
+        "decline": "Decline",
+        "declining": "Declining…",
+        "showAll": "Show all",
+        "showLess": "Show less",
+        "confirmHelp": "Opens Motir AI planning on {key} with this request sent. It spends credits.",
+        "declineHelp": "Closes this offer. Nothing is planned.",
+        "replaced": "Replaced by a newer offer",
+        "started": "Re-plan started",
+        "startedBy": "Confirmed · {when}",
+        "declined": "Declined",
+        "declinedBy": "Declined · {when}",
+        "recorded": "Recorded on the work item",
+        "resumeAt": "Guide me through will pick up at step {n}.",
+        "walkStopped": "The walk is stopped.",
+        "cannotPlan": "You can’t start planning here — ask someone who can, or share this request.",
+        "noAi": "Motir AI isn’t set up here, so planning can’t start. You can still share this request."
       }
     },
     "restart": {

@@ -478,3 +478,46 @@ describe('guideRailBody', () => {
     expect(guideRailBody('Edited by hand.', r)).toBe('Edited by hand.');
   });
 });
+
+describe('deriveGuideView — a re-plan offer (MOTIR-8694)', () => {
+  const OFFER = {
+    reason: 'wrong card',
+    requestMd: 'Re-plan it.',
+    requestedTargetKey: null,
+    targetKey: 'PAY-1',
+    targetResolution: 'guided_card' as const,
+    declinedAt: null,
+    declinedById: null,
+    confirmedAt: null,
+    confirmedById: null,
+    confirmedSessionId: null,
+  };
+  const offered = (over: Partial<typeof OFFER> = {}) =>
+    turn('assistant', { ...record([]), replanOffer: { ...OFFER, ...over } });
+  const rows = [todo('r1', 'One', true), todo('r2', 'Two'), todo('r3', 'Three')];
+
+  it('an undecided offer stops the walk: no current step, and the resume step is the first open one', () => {
+    const view = deriveGuideView([offered()], rows, { idle: true });
+    expect(view.walkStopped).toBe(true);
+    expect(view.currentId).toBeNull();
+    expect(view.currentStep).toBeNull();
+    expect(view.resumeStep).toBe(2);
+  });
+
+  it('a declined offer resumes the walk at the first unticked step', () => {
+    const view = deriveGuideView([offered({ declinedAt: '2026-10-15T11:00:00.000Z' })], rows, {
+      idle: true,
+    });
+    expect(view.walkStopped).toBe(false);
+    expect(view.currentId).toBe('r2');
+    expect(view.resumeStep).toBe(2);
+  });
+
+  it('a turn with no offer leaves the walk going, and every step done has no resume step', () => {
+    const view = deriveGuideView([turn('assistant', record([]))], [todo('r1', 'One', true)], {
+      idle: true,
+    });
+    expect(view.walkStopped).toBe(false);
+    expect(view.resumeStep).toBeNull();
+  });
+});

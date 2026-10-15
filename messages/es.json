@@ -7975,6 +7975,16 @@
     "followUpCard": {
       "label": "Seguimiento de una elección"
     },
+    "guideSeed": {
+      "chip": "desde una guía",
+      "lead": "Abierto en {target} desde la guía de Motir AI sobre {guided}.",
+      "card": "Desde una guía",
+      "cardBy": "Confirmado por {who} · {when}",
+      "justNow": "ahora mismo",
+      "you": "tú",
+      "status": "En planificación",
+      "offerClosed": "Esta oferta de replanificación ya no está abierta. Vuelve a la guía para ver en qué punto está."
+    },
     "guide": {
       "openedFrom": "Abierto desde {key}",
       "reading": "Leyendo {key} y su lista de pasos…",
@@ -8006,7 +8016,8 @@
       "errors": {
         "notManual": "Motir AI guía a una persona en trabajo manual, y este elemento de trabajo es para un Agente, así que aquí no hay nada que guiar.",
         "closed": "Este elemento de trabajo está hecho o archivado, así que no queda nada que guiar.",
-        "forbidden": "Necesitas permiso para editar este elemento de trabajo y para planificar con Motir AI para que se te guíe en él."
+        "forbidden": "Necesitas permiso para editar este elemento de trabajo y para planificar con Motir AI para que se te guíe en él.",
+        "offerClosed": "Esta oferta ya se resolvió, así que no se puede cambiar. Recarga el elemento de trabajo para ver en qué punto está."
       },
       "youTicked": "Marcaste el paso {n} de la lista",
       "youUnticked": "Desmarcaste el paso {n} de la lista",
@@ -8061,6 +8072,32 @@
         "typeText": "Texto",
         "typeMarkdown": "Markdown",
         "typeFile": "Archivo"
+      },
+      "offer": {
+        "label": "Solicitud de replanificación",
+        "target": "Dirigida a",
+        "targetElsewhere": "La replanificación empieza en {key}, no en este elemento de trabajo.",
+        "resolved": "{done} está hecho, así que la replanificación empieza en {open}.",
+        "noTarget": "No hay ningún elemento de trabajo abierto desde el que replanificar.",
+        "confirm": "Confirmar",
+        "confirming": "Iniciando…",
+        "openSession": "Abrir la sesión de planificación",
+        "decline": "Rechazar",
+        "declining": "Rechazando…",
+        "showAll": "Mostrar todo",
+        "showLess": "Mostrar menos",
+        "confirmHelp": "Abre la planificación de Motir AI en {key} con esta solicitud enviada. Consume créditos.",
+        "declineHelp": "Cierra esta oferta. No se planifica nada.",
+        "replaced": "Reemplazada por una oferta más reciente",
+        "started": "Replanificación iniciada",
+        "startedBy": "Confirmada · {when}",
+        "declined": "Rechazada",
+        "declinedBy": "Rechazada · {when}",
+        "recorded": "Registrada en el elemento de trabajo",
+        "resumeAt": "“Guíame” continuará en el paso {n}.",
+        "walkStopped": "El recorrido está detenido.",
+        "cannotPlan": "No puedes iniciar la planificación aquí: pide a alguien que pueda, o comparte esta solicitud.",
+        "noAi": "Motir AI no está configurado aquí, así que no se puede iniciar la planificación. Aun así, puedes compartir esta solicitud."
       }
     },
     "restart": {
