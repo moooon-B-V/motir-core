@@ -6,6 +6,12 @@ import type { WorkbenchWatermarkDto } from '@/lib/dto/workbench';
 import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 import { getLiveSignalHub } from '@/lib/live/liveSignalHub';
 import { createWorkbenchStreamSession } from '@/lib/workbench/workbenchStreamSession';
+import { planReviewService } from '@/lib/services/planReviewService';
+import {
+  parseWatchParams,
+  WORKBENCH_STREAM_PLAN_FRAME,
+  type WorkbenchStreamPlanFrame,
+} from '@/lib/workbench/planWatch';
 
 // GET /api/workbench/stream (Story MOTIR-5238 · MOTIR-5241) — the Workbench's
 // LIVE TAIL, as Server-Sent Events.
@@ -50,8 +56,16 @@ import { createWorkbenchStreamSession } from '@/lib/workbench/workbenchStreamSes
 // stays subscribed and keeps re-reading the database for somebody who has closed
 // the tab, and nothing would ever stop it.
 //
-// THE FRAME CARRIES NO CONTENT — which tabs moved, and the new cursor. Nothing
-// else. A reader therefore receives nothing their own reads would not return,
+// PLAN FRAMES RIDE THE SAME STREAM (MOTIR-8730). A tab names the plans it is
+// watching on the URL (`?watch=<planId>:<reviewVersion>`, at most ten, parsed by
+// `lib/workbench/planWatch.ts`; anything malformed is a 400 BEFORE the first
+// read). A notification about a watched plan makes the session read that plan's
+// review version under the reader's own admission, and a `plan` frame
+// `{ planId, reviewVersion }` is written only when it moved. A plan the reader
+// may not see answers nothing at all — no frame, no error, no hint it exists.
+//
+// THE FRAME CARRIES NO CONTENT — which tabs moved, and the new cursor; for a
+// plan, its id and review version. Nothing else. A reader therefore receives nothing their own reads would not return,
 // and the access decision stays in those reads rather than being made a second
 // time here.
 //
@@ -124,7 +138,15 @@ async function openStream(req: Request): Promise<Response> {
   }
   const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id };
 
-  const since = new URL(req.url).searchParams.get('since');
+  const params = new URL(req.url).searchParams;
+  const since = params.get('since');
+
+  // The watched-plan set is validated AFTER the gate and BEFORE any read, so a
+  // malformed one is a status with a JSON body and never a stream.
+  const watched = parseWatchParams(params);
+  if (!Array.isArray(watched)) {
+    return NextResponse.json({ code: 'INVALID_WATCH', error: watched.error }, { status: 400 });
+  }
 
   // ⚠️ A READER WHO HAS ALREADY LEFT NEVER SUBSCRIBES (MOTIR-8568).
   if (req.signal.aborted) return new Response(null, { status: 204 });
@@ -185,6 +207,16 @@ async function openStream(req: Request): Promise<Response> {
     // Every re-read is the reader's own read, under their own workspace context.
     read: (reader, cursor) => workbenchWatermarkService.read(reader, cursor),
     write: emit,
+    watched,
+    // The plan read is the reader's own, behind the review read's admission.
+    readPlan: (planId) => planReviewService.readReviewVersionForReader(planId, ctx),
+    writePlan: (frame: WorkbenchStreamPlanFrame) =>
+      write(
+        formatFrame(WORKBENCH_STREAM_PLAN_FRAME, {
+          planId: frame.planId,
+          reviewVersion: frame.reviewVersion,
+        }),
+      ),
   });
 
   let ended = false;

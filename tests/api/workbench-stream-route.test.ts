@@ -465,3 +465,60 @@ describe('A RE-READ THAT FAILS after the stream opened is logged, and the stream
     );
   });
 });
+
+describe('THE WATCHED-PLAN SET (MOTIR-8730)', () => {
+  it('answers 400 with a JSON body, and NO read, for a malformed watch set', async () => {
+    const spy = vi.spyOn(workbenchWatermarkService, 'read');
+    const subscribe = vi.spyOn(getLiveSignalHub(), 'subscribe');
+    const eleven = Array.from({ length: 11 }, (_, i) => `watch=p${i}%3A`).join('&');
+
+    for (const query of ['watch=no-separator', 'watch=bad%20id%3Arv1.a', eleven]) {
+      const res = await GET(req(`/api/workbench/stream?${query}`));
+      expect(res.status, query).toBe(400);
+      expect(res.headers.get('Content-Type')).toContain('application/json');
+      expect(await res.json()).toMatchObject({ code: 'INVALID_WATCH' });
+    }
+    expect(spy).not.toHaveBeenCalled();
+    expect(subscribe).not.toHaveBeenCalled();
+  });
+
+  it('writes a plan frame when a watched plan is written to while the reader is connected', async () => {
+    const { plansService } = await import('@/lib/services/plansService');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Watched' }, fx.ctx);
+    const { planReviewService } = await import('@/lib/services/planReviewService');
+    const current = await planReviewService.readReviewVersionForReader(plan.id, fx.ctx);
+
+    const res = await GET(
+      req(
+        `/api/workbench/stream?watch=${encodeURIComponent(`${plan.id}:${current!.reviewVersion}`)}`,
+      ),
+    );
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    const deadline = Date.now() + 8_000;
+    await listening();
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add' as const, proposedFields: { title: 'A card', kind: 'task' as const } }],
+      fx.ctx,
+    );
+    while (!text.includes('event: plan') && Date.now() < deadline) {
+      const chunk = await Promise.race([
+        reader.read(),
+        sleep(deadline - Date.now()).then(() => ({ done: true, value: undefined }) as const),
+      ]);
+      if (chunk.done || !chunk.value) break;
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    await reader.cancel();
+
+    const block = text.split('\n\n').find((b) => b.startsWith('event: plan'));
+    expect(block, text).toBeDefined();
+    const data = JSON.parse(/^data: (.+)$/m.exec(block!)![1]!);
+    // A signal, never content: exactly the plan id and its new version.
+    expect(Object.keys(data).sort()).toEqual(['planId', 'reviewVersion']);
+    expect(data.planId).toBe(plan.id);
+    expect(data.reviewVersion).not.toBe(current!.reviewVersion);
+  });
+});

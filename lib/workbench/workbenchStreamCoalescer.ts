@@ -32,6 +32,14 @@ export function projectWindowKey(workspaceId: string, projectId: string): string
   return `p:${workspaceId}:${projectId}`;
 }
 
+/**
+ * The window key for one plan's writes (MOTIR-8730). Independent of the project
+ * key: a plan write arms both, and each stream reacts to the one it listens on.
+ */
+export function planWindowKey(workspaceId: string, planId: string): string {
+  return `plan:${workspaceId}:${planId}`;
+}
+
 /** The window key for a write that names a workspace but no project. */
 export function workspaceWindowKey(workspaceId: string): string {
   return `w:${workspaceId}`;
