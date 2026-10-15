@@ -1,8 +1,11 @@
 import {
   DiscrepancyAlreadyRecordedError,
+  DispatchRunNotFoundError,
+  DispatchRunTerminalError,
   RUN_DISCREPANCY_FIELD_MAX,
   RUN_DISCREPANCY_POINTS_MAX,
   RunDiscrepancyInvalidError,
+  UnknownDispatchRunCardError,
 } from '@/lib/dispatchRuns/errors';
 import {
   composeDiscrepancyComment,
@@ -14,7 +17,7 @@ import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRep
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
+import { assertRunTokenScope, DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -50,6 +53,14 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // whose account the record is in.
 //
 // Permission: `work_item:edit` on the card's project — the key `CLI_TOKEN_GRANT` already holds.
+//
+// ⚠️ THE RUN DOOR (MOTIR-8722) names its run: `POST /api/v1/dispatch-runs/{id}/discrepancy`,
+// which the CLI posts with the run's own credential from the points the agent wrote into
+// `$MOTIR_AGENT_REPORT` — a hosted or agent-instance agent holds no Motir token and `/api/mcp`
+// refuses a run token. Given `runId`, the leg is the card's leg on THAT run, read under that
+// run's lock, and a card that is not an open leg of it is refused (`UNKNOWN_DISPATCH_RUN_CARD`)
+// before anything is written: a run's credential reaches only its own cards, so the
+// "no open leg, comment anyway" arm is the agent door's alone.
 
 /** What the runner sends. */
 export interface RecordDiscrepancyInput {
@@ -107,7 +118,12 @@ export const runDiscrepancyService = {
   async recordDiscrepancy(
     input: RecordDiscrepancyInput,
     ctx: ServiceContext,
+    opts: {
+      /** The run door's run (MOTIR-8722): pin the leg to it, and refuse a card it does not hold. */
+      runId?: string;
+    } = {},
   ): Promise<RecordDiscrepancyResult> {
+    if (opts.runId !== undefined) assertRunTokenScope(opts.runId, ctx);
     const points = validatePoints(input.points);
     const key = input.key.trim().toUpperCase();
 
@@ -128,11 +144,30 @@ export const runDiscrepancyService = {
       const item = await workItemRepository.findByIdentifier(project.id, key, tx);
       if (!item) throw new WorkItemNotFoundError(key);
 
-      // The leg first, then the run row's lock, then the dedupe UNDER the lock.
-      const leg = await dispatchRunCardRepository.findOpenLegForWorkItem(item.id, tx);
+      // The leg first, then the run row's lock, then the dedupe UNDER the lock. The run
+      // door locks its named run FIRST and reads the card's leg on it.
+      let leg: Awaited<ReturnType<typeof dispatchRunCardRepository.findOpenLegForWorkItem>>;
+      if (opts.runId !== undefined) {
+        const locked = await dispatchRunRepository.findTerminalStateForUpdate(opts.runId, tx);
+        if (!locked || locked.createdById !== ctx.userId) {
+          throw new DispatchRunNotFoundError(opts.runId);
+        }
+        if (locked.status !== 'running') {
+          throw new DispatchRunTerminalError(opts.runId, locked.status);
+        }
+        const pinned = await dispatchRunCardRepository.findByRunAndWorkItem(
+          opts.runId,
+          item.id,
+          tx,
+        );
+        if (!pinned || pinned.endedAt !== null) throw new UnknownDispatchRunCardError(key);
+        leg = pinned;
+      } else {
+        leg = await dispatchRunCardRepository.findOpenLegForWorkItem(item.id, tx);
+        if (leg) await dispatchRunRepository.findTerminalStateForUpdate(leg.dispatchRunId, tx);
+      }
       let run: Awaited<ReturnType<typeof dispatchRunRepository.findById>> = null;
       if (leg) {
-        await dispatchRunRepository.findTerminalStateForUpdate(leg.dispatchRunId, tx);
         const already = await dispatchRunEventRepository.findFindingOnRun(
           leg.dispatchRunId,
           'discrepancy_recorded',

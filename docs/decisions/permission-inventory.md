@@ -565,6 +565,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/dispatch-runs/[id]/heartbeat`                   | —     | RLS (the run's own workspace) + the run's own operator                                  | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/git-credential`              | —     | the run credential's own binding, then RLS                                              | —          | token-scoped | R76 |
 | `/api/v1/dispatch-runs/[id]/unbuildable`                 | —     | RLS + the run's own operator, then `assertPermission` (`work_item:edit`) on the card    | —          | token-scoped | R75 |
+| `/api/v1/dispatch-runs/[id]/discrepancy`                 | —     | `assertPermission` (`work_item:edit`) on the card, then RLS + the run's own operator    | —          | token-scoped | R75 |
+| `/api/v1/dispatch-runs/[id]/stop`                        | —     | `assertPermission` (`work_item:edit`) on the card, then RLS + the run's own operator    | —          | token-scoped | R75 |
 | `/api/v1/folders/[folderId]`                             | —     | `assertCanBrowse`, `assertCanEdit`                                                      | —          | token-scoped | R1  |
 | `/api/v1/me`                                             | —     | — none —                                                                                | —          | token-scoped | R1  |
 | `/api/v1/plans/[planId]`                                 | —     | `assertCanBrowse`                                                                       | —          | token-scoped | R1  |

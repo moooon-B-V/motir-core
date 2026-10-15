@@ -589,3 +589,18 @@ export class AgentRunReportInvalidError extends Error {
     this.name = 'AgentRunReportInvalidError';
   }
 }
+
+/**
+ * 422 — a run's STOP report is malformed (MOTIR-8722, `runStopReportService`): the finding
+ * is empty or over `RUN_STOP_COMMENT_MAX` characters once trimmed, or a brief field is over
+ * `RUN_STOP_FIELD_MAX`. Refused, not truncated, and checked before anything is resolved or
+ * written. The body schema refuses the same input first as `INVALID_BODY`; this is the
+ * service's own guard.
+ */
+export class RunStopReportInvalidError extends Error {
+  readonly code = 'RUN_STOP_REPORT_INVALID';
+  constructor(readonly field: string) {
+    super(`A run's stop report has an empty or over-long \`${field}\`; nothing was written.`);
+    this.name = 'RunStopReportInvalidError';
+  }
+}

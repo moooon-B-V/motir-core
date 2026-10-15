@@ -270,3 +270,48 @@ admitted" above.
   `record_run_discrepancy`). They have the same wall and are filed as **MOTIR-8722**.
 - `motir next`, which only prints the prompt for a person's own agent. No CLI is around the agent to
   read a report file, so that agent still needs the MCP tool.
+
+## AMENDMENT 2 — the build-through record and the STOP's own writes reach the server too (MOTIR-8722, 2026-10-15)
+
+**What was wrong.** AMENDMENT 1 gave ONE of the agent's Motir calls a run door: the unbuildable
+report. Every other call the dispatch prompt names was still an MCP call, so a hosted run's agent
+and an agent-instance run's agent (no Motir token, `/api/mcp` refuses a run token) could make none
+of them. A build-through left no discrepancy record (only the prompt's _"Discrepancy record
+missing"_ line), and a STOP left the card In Progress with no comment, no Planning status and no
+re-plan.
+
+**What changes.**
+
+1. **The build-through record.** `POST /api/v1/dispatch-runs/{id}/discrepancy`, body
+   `{ key, points }`, runs `runDiscrepancyService.recordDiscrepancy` pinned to the card's leg on
+   THIS run. One comment on the card, one `discrepancy_recorded` finding on the leg, one record per
+   leg. The agent writes the points into `$MOTIR_AGENT_REPORT` as `"discrepancy"` when the
+   `record_run_discrepancy` tool is not available to it, and the CLI posts them when it exits.
+2. **The STOP's writes.** `POST /api/v1/dispatch-runs/{id}/stop`, body
+   `{ key, comment, toPlanning, requirement? }`, runs `runStopReportService.reportStopForRun`: one
+   comment carrying the agent's finding and, with `toPlanning`, the move to Planning in the same
+   transaction, with the agent's re-plan brief kept in that comment. The agent writes `"stop"`
+   beside `"unbuildable"` when it has no Motir tools; the comment text is the `unbuildable` text.
+   The CLI posts it before the leg's verdict, so a card it moved to Planning settles the leg as
+   `replanned`.
+3. Both doors are `work_item:edit`, admitted to a run token for its own run only (`own_run` in
+   `lib/hostedRuns/runTokenRoutes.ts`), and refuse a card that is not an open leg of the run.
+
+**What does NOT change, and why: the re-plan is not submitted from a run's credential.** The
+card's acceptance allowed either a submitted re-plan or a prompt that says what to do instead.
+This amendment takes the second for the submit, and only for the submit. A run's credential holds
+no `ai:*` key by decision (`HOSTED_RUN_TOKEN_GRANT`: _"a run token can neither author nor read a
+plan"_; `permission-inventory.md` R75 refuses _"every plan or AI route"_ by name), and submitting
+is the act that spends the owner's AI credits. Granting it would widen what every hosted and
+agent-instance run can spend unattended, which is a decision for the owner of that grant, not a
+side effect of a bug fix. So on these lanes the card goes to Planning, out of the pickable set,
+with the finding and the brief on it, and the comment and the prompt both say the re-plan was not
+submitted. A person submits it from the card. An agent that has the Motir tools (a local run with
+a Motir MCP) still makes every STOP call itself, the submit included.
+
+| Lane                                 | Build-through record           | STOP: comment and Planning     | STOP: re-plan submitted                          |
+| ------------------------------------ | ------------------------------ | ------------------------------ | ------------------------------------------------ |
+| Local run, agent with a Motir MCP    | the agent's tool call          | the agent's tool calls         | ✅ the agent's `submit_plan_session`             |
+| Local run, agent with no Motir MCP   | the CLI posts `…/discrepancy`  | the CLI posts `…/stop`         | ❌ the brief is on the card; a person submits it |
+| Hosted run                           | the container's CLI, run token | the container's CLI, run token | ❌ as above: the run token holds no `ai:*` key   |
+| Run inside the user's agent instance | the instance's CLI, run token  | the instance's CLI, run token  | ❌ as above                                      |

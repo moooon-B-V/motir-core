@@ -231,6 +231,22 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     calledBy: 'cli',
   },
   {
+    // The run records its agent's build-through discrepancy, and its STOP (MOTIR-8722) —
+    // the agent has no Motir token here, so the CLI posts what it wrote in its self-report.
+    operationId: 'recordDispatchRunDiscrepancy',
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/discrepancy',
+    binding: 'own_run',
+    calledBy: 'cli',
+  },
+  {
+    operationId: 'reportDispatchRunStop',
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/stop',
+    binding: 'own_run',
+    calledBy: 'cli',
+  },
+  {
     operationId: 'issueDispatchRunGitCredentials',
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/git-credential',
