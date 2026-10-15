@@ -10,6 +10,8 @@ import { orgCan } from '@/lib/organizations/capabilities';
 import {
   createCheckoutSession,
   createPortalSession,
+  estimateCalculator,
+  getCalculatorCategories,
   getOrgSubscription,
   getOrgUsage,
   getPendingPlanChange,
@@ -20,7 +22,11 @@ import {
   upgradePlan,
   type SeatQuantityResult,
 } from '@/lib/ai/motirAiClient';
-import { MotirAiError, MotirAiPlanChangeRefusedError } from '@/lib/ai/errors';
+import {
+  CalculatorRequestRefusedError,
+  MotirAiError,
+  MotirAiPlanChangeRefusedError,
+} from '@/lib/ai/errors';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { isPaidAiSubscriptionStatus } from '@/lib/services/aiPlanGateService';
 import {
@@ -42,6 +48,11 @@ import {
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { Organization } from '@/generated/prisma/client';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
+import {
+  calculatorEstimateRequestSchema,
+  type CalculatorAnswerDTO,
+  type CalculatorCategoriesDTO,
+} from '@/lib/dto/billing';
 import type {
   BillingCheckoutDTO,
   BillingSessionDTO,
@@ -101,6 +112,22 @@ function billingPageUrl(query?: string): string {
   return `${resolveBaseUrlTrimmed()}${billingPagePath()}${query ?? ''}`;
 }
 
+/**
+ * The billing page's VIEW gate (the three statements `getBillingStatus` makes):
+ * cloud only (404 off-cloud), a member of the org (404 otherwise, the no-leak
+ * rule), holding `manageBilling` (403 for a plain member).
+ */
+async function assertCanViewBilling(input: OrgActorInput): Promise<void> {
+  if (!isCloudBilling()) throw new BillingNotAvailableError();
+  const access = await organizationsService.resolveOrgAccess(
+    input.actorUserId,
+    input.organizationId,
+  );
+  if (!orgCan(access.role, 'manageBilling')) {
+    throw new BillingForbiddenError('Viewing billing requires an org owner or admin.');
+  }
+}
+
 export const billingService = {
   /**
    * The org's billing status — the two billed lines + the catalog (Story 8.1.6).
@@ -149,6 +176,40 @@ export const billingService = {
       role: access.role,
       canManageBilling: orgCan(access.role, 'manageBilling'),
     });
+  },
+
+  /**
+   * The Calculator's pickers (MOTIR-8637): the engine's model categories, band
+   * for band, including a band with no live model. Gated exactly as the billing
+   * page's status read is — the calculator is for whoever that page is for.
+   * Nothing is cached; every call reaches the engine.
+   */
+  async getCalculatorCategories(input: OrgActorInput): Promise<CalculatorCategoriesDTO> {
+    await assertCanViewBilling(input);
+    return getCalculatorCategories();
+  },
+
+  /**
+   * One calculator estimate (MOTIR-8637). The gate runs FIRST, then the body is
+   * parsed by the strict request schema — so a refused body never reaches the
+   * engine, and a non-member learns nothing from a malformed one. The answer is
+   * the engine's, unaltered: an `estimate`, or its `empty_category`.
+   */
+  async estimateCalculator(input: OrgActorInput & { body: unknown }): Promise<CalculatorAnswerDTO> {
+    await assertCanViewBilling(input);
+    const parsed = calculatorEstimateRequestSchema.safeParse(input.body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const path = issue?.path.join('.') ?? '';
+      // An unknown key's issue sits on its PARENT's path and names the key.
+      const unknownKey = issue?.code === 'unrecognized_keys' ? (issue.keys[0] ?? null) : null;
+      const field = unknownKey ? (path ? `${path}.${unknownKey}` : unknownKey) : path || null;
+      throw new CalculatorRequestRefusedError(
+        field,
+        `${field ?? 'body'}: ${issue?.message ?? 'invalid'}`,
+      );
+    }
+    return estimateCalculator(parsed.data);
   },
 
   /**

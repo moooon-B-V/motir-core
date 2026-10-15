@@ -314,6 +314,67 @@ export function planChangeRefusalOf(p: Problem): MotirAiPlanChangeRefusedError |
   return reason ? new MotirAiPlanChangeRefusedError(reason, p.detail ?? p.title) : null;
 }
 
+// ── The calculator's own answers (MOTIR-8637) ─────────────────────────────────
+//
+// The engine's public calculator (`/v1/public/calculator/*`, motir-ai MOTIR-8627)
+// answers every outage as ONE `internal_error` whose detail starts
+// `calculator_unavailable:` — the §5 union is closed, so the DETAIL PREFIX is the
+// only carrier of "the engine cannot estimate right now". `errorFromProblem` maps
+// `internal_error` and `rate_limited` alike to MotirAiUnavailableError, so these
+// recognizers run BEFORE it, the way `planChangeRefusalOf` does.
+
+/** motir-ai's `CALCULATOR_UNAVAILABLE_DETAIL_PREFIX` (`src/services/calculatorService.ts`). */
+export const CALCULATOR_UNAVAILABLE_DETAIL_PREFIX = 'calculator_unavailable';
+
+// The engine cannot estimate right now — its own `unavailable` answer, or its
+// per-client rate limit. Both mean ASK AGAIN, and neither carries a number.
+export class CalculatorUnavailableError extends MotirAiError {
+  readonly code = 'CALCULATOR_UNAVAILABLE' as const;
+  constructor(detail: string) {
+    super(`the calculator cannot estimate right now: ${detail}`);
+    this.name = 'CalculatorUnavailableError';
+  }
+}
+
+// A calculator request refused as sent — by motir-core's own schema before the
+// boundary, or by the engine's `validation_error`. `field` names the offending
+// input when it is known (`itemsPerMonth.low`, `planning.modelIds`, `quantity`).
+export class CalculatorRequestRefusedError extends MotirAiError {
+  readonly code = 'CALCULATOR_REQUEST_INVALID' as const;
+  constructor(
+    readonly field: string | null,
+    detail: string,
+  ) {
+    super(`the calculator refused the request: ${detail}`);
+    this.name = 'CalculatorRequestRefusedError';
+  }
+}
+
+/** The engine's unavailable answer a problem carries, or `null` when it carries none. */
+export function calculatorUnavailableOf(p: Problem): CalculatorUnavailableError | null {
+  if (p.code === 'rate_limited') return new CalculatorUnavailableError(p.detail ?? p.title);
+  if (p.code !== 'internal_error') return null;
+  const detail = p.detail ?? '';
+  return detail.startsWith(`${CALCULATOR_UNAVAILABLE_DETAIL_PREFIX}:`)
+    ? new CalculatorUnavailableError(detail)
+    : null;
+}
+
+/**
+ * The engine's refusal of a calculator request, or `null`. The field is read off
+ * the engine's own wording — `unknown field '<name>'`, or a detail opening with
+ * the dotted field it names — and is `null` when the wording names none.
+ */
+export function calculatorRefusalOf(p: Problem): CalculatorRequestRefusedError | null {
+  if (p.code !== 'validation_error') return null;
+  const detail = p.detail ?? p.title;
+  const field =
+    /^unknown field '([^']+)'/.exec(detail)?.[1] ??
+    /^([a-zA-Z]+(?:\.[a-zA-Z]+)*) (?:must|is) /.exec(detail)?.[1] ??
+    null;
+  return new CalculatorRequestRefusedError(field, detail);
+}
+
 /**
  * A FAILED JOB's terminal problem, mapped (MOTIR-8569). The same as
  * {@link errorFromProblem} except for `ai_job_failed`, which a job's terminal error
