@@ -1055,6 +1055,11 @@ export function PlanningCanvas({
                 onKeyDown={
                   onNodeActivate
                     ? (e) => {
+                        // The card's OWN key only (MOTIR-8648): a renderNode may put
+                        // buttons inside the card (View, Open, the target toggle), and
+                        // their Enter/Space bubbles here. preventDefault() on it would
+                        // cancel the button's click and re-activate the card instead.
+                        if (e.target !== e.currentTarget) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           onNodeActivate(n.id);
