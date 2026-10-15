@@ -27,12 +27,17 @@ import {
 const CARET_CLASS = 'inline-block h-[1em] w-0.5 align-text-bottom bg-(--el-accent-on-surface)';
 
 /** Cuts `root`'s text at `budget` characters, removing everything after the cursor,
- *  and returns the text node the cursor sits at the end of. */
-function cutAt(root: Node, budget: number): { left: number; at: Text | null } {
+ *  and returns the text node the cursor sits at the end of. The first text node is
+ *  always kept (emptied at a zero budget), so the caret sits inside the field's
+ *  own block from the very first frame. */
+function cutAt(
+  root: Node,
+  budget: number,
+  at: Text | null = null,
+): { left: number; at: Text | null } {
   let left = budget;
-  let at: Text | null = null;
   for (const child of [...root.childNodes]) {
-    if (left <= 0) {
+    if (left <= 0 && at) {
       root.removeChild(child);
       continue;
     }
@@ -43,9 +48,7 @@ function cutAt(root: Node, budget: number): { left: number; at: Text | null } {
       at = text;
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       (child as Element).removeAttribute('id');
-      const inner = cutAt(child, left);
-      left = inner.left;
-      if (inner.at) at = inner.at;
+      ({ left, at } = cutAt(child, left, at));
     }
   }
   return { left, at };
@@ -104,8 +107,8 @@ export function TypeInText({
       const caret = document.createElement('span');
       caret.className = CARET_CLASS;
       caret.setAttribute('data-typewriter-caret', '');
-      if (at?.parentNode) at.parentNode.insertBefore(caret, at.nextSibling);
-      else (clone.firstElementChild ?? clone).appendChild(caret);
+      // A field with any text to type always yields a cursor node.
+      at?.parentNode?.insertBefore(caret, at.nextSibling);
       copy.replaceChildren(...clone.childNodes);
       frame = requestAnimationFrame(draw);
     };
