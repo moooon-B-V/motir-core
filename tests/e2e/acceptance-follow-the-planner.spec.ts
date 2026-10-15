@@ -152,16 +152,18 @@ const held = (page: Page, planId: string, still: (b: PlanReviewDto) => boolean) 
   planPolled(page, planId, (b) => isUnchanged(b) || still(b));
 
 /**
- * Open a card's quick view through the canvas door, from the KEYBOARD. A card
- * the planner is drafting wears the at-work cue, whose grow animation runs for
- * as long as the draft does, so the card is never "stable" and a pointer click
- * on it waits forever. Focus and Enter are the same door and need no stillness.
+ * Open a card's quick view through the canvas door. A card the planner is
+ * drafting wears the at-work cue, whose grow animation runs for as long as the
+ * draft does, so the card is never "stable" and an ordinary click waits
+ * forever; the click is FORCED past that check (it still lands on the button).
+ * The keyboard is no way round it: Enter on View bubbles to the card's own
+ * Enter handler, which cancels the button's click.
  */
 async function openQuickView(page: Page, title: string): Promise<void> {
   const card = node(page, title);
   await expect(card).toBeVisible({ timeout: 4 * POLL_MS });
   await card.press('Enter');
-  await card.getByTestId('view-button').press('Enter');
+  await card.getByTestId('view-button').click({ force: true });
   await expect(peek(page)).toBeVisible();
 }
 
