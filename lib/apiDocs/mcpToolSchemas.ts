@@ -349,6 +349,46 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'Re-judge the target’s difficulty. How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the target’s MERGED kind. An explicit `null` clears it.',
                 },
+                todos: {
+                  anyOf: [
+                    {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          text: {
+                            type: 'string',
+                            description:
+                              'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                          },
+                          notesMd: {
+                            type: ['string', 'null'],
+                            description:
+                              'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                          },
+                          commandText: {
+                            type: ['string', 'null'],
+                            description:
+                              'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                          },
+                          executor: {
+                            anyOf: [
+                              { type: 'string', enum: ['coding_agent', 'human'] },
+                              { type: 'null' },
+                            ],
+                            description:
+                              'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                          },
+                        },
+                        required: ['text'],
+                        additionalProperties: false,
+                      },
+                    },
+                    { type: 'null' },
+                  ],
+                  description:
+                    'REPLACE the target’s ordered steps (its to-do list). Approve makes the list exactly this array, in order, none ticked, and DELETES every existing row — ticked ones included; the review and `get_plan` show how many steps that drops and how many were ticked. Omit the key to leave the list alone; `[]` or `null` clears it. Leaf kinds only (judged on the target’s MERGED kind). Not a mark key: a `modify` of a done or cancelled card that carries it is refused.',
+                },
                 targetRepo: {
                   type: ['string', 'null'],
                   description: 'RE-PIN which repo the item ships in. An explicit `null` unpins it.',
@@ -3398,6 +3438,46 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 ],
                 description:
                   'Re-judge the target’s difficulty. How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the target’s MERGED kind. An explicit `null` clears it.',
+              },
+              todos: {
+                anyOf: [
+                  {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        text: {
+                          type: 'string',
+                          description:
+                            'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                        },
+                        notesMd: {
+                          type: ['string', 'null'],
+                          description:
+                            'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                        },
+                        commandText: {
+                          type: ['string', 'null'],
+                          description:
+                            'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                        },
+                        executor: {
+                          anyOf: [
+                            { type: 'string', enum: ['coding_agent', 'human'] },
+                            { type: 'null' },
+                          ],
+                          description:
+                            'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                        },
+                      },
+                      required: ['text'],
+                      additionalProperties: false,
+                    },
+                  },
+                  { type: 'null' },
+                ],
+                description:
+                  'REPLACE the target’s ordered steps (its to-do list). Approve makes the list exactly this array, in order, none ticked, and DELETES every existing row — ticked ones included; the review and `get_plan` show how many steps that drops and how many were ticked. Omit the key to leave the list alone; `[]` or `null` clears it. Leaf kinds only (judged on the target’s MERGED kind). Not a mark key: a `modify` of a done or cancelled card that carries it is refused.',
               },
               targetRepo: {
                 type: ['string', 'null'],

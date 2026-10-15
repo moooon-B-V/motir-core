@@ -832,9 +832,18 @@ function validateProposal(p: ProposalInput): void {
     // A `modify` may RE-JUDGE the target's difficulty (MOTIR-6133). MEMBERSHIP
     // only here — this pass is pure and the target's KIND needs a read, so the
     // container half runs inside `addProposals`' transaction
-    // (`assertModifyDifficultiesLegalAtAppend`), through the same validator.
+    // (`assertModifyLeafFieldsLegalAtAppend`), through the same validator.
     validateProposedDifficulty(
       p.patch.difficulty,
+      null,
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
+    // A `modify` may REPLACE the target's steps (MOTIR-8668 · AMENDMENT 27). The
+    // rows against the store's caps here; the container half needs the target's
+    // kind, so it runs in `addProposals`' transaction beside the difficulty's
+    // (`assertModifyLeafFieldsLegalAtAppend`).
+    validateProposedTodos(
+      p.patch.todos,
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
@@ -3899,6 +3908,62 @@ async function applyModify(
     };
   }
 
+  // REPLACE THE STEPS (MOTIR-8668 · `agent-authored-plans.md` AMENDMENT 27,
+  // overturning AMENDMENT 14 D2). Absent leaves the list alone; an array — `[]`
+  // included — or `null` makes the list exactly that array, in order, none
+  // ticked. A replacement and never a merge: every prior row goes, ticked ones
+  // with it, which is the cost D2 refused and AMENDMENT 27 accepts because the
+  // review row and `get_plan` both state it before anyone presses Approve.
+  //
+  // Through the REPOSITORY, for the reason the `add` path gives at its own todo
+  // insert: `workItemTodosService` opens its own transaction and approve applies
+  // in ONE. The normalizers and the executor seed are the same ones that insert
+  // reaches for, with the card's executor AS THIS PATCH LEAVES IT standing in
+  // for the proposal's. Recorded in the revision under the `todos` cell the
+  // service writes (`{ added, removed }`), so the activity feed renders it
+  // through the disposition it already has.
+  if (patch.todos !== undefined) {
+    const before = await workItemTodoRepository.listByWorkItem(item.workItemId, tx);
+    const incoming = patch.todos ?? [];
+    if (before.length > 0 || incoming.length > 0) {
+      await workItemTodoRepository.deleteByWorkItem(item.workItemId, tx);
+      const cardExecutor =
+        update.executor === undefined
+          ? current.executor
+          : typeof update.executor === 'string'
+            ? update.executor
+            : null;
+      const added: MaterializedTodo[] = [];
+      let lastPosition: string | null = null;
+      for (const todo of incoming) {
+        const notesMd = normalizeNotes(todo.notesMd);
+        modifyLanguage ??= toOrgContentLanguage(
+          await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+        );
+        const row = await workItemTodoRepository.create(
+          {
+            workspaceId: ctx.workspaceId,
+            workItemId: item.workItemId,
+            text: requireText(todo.text),
+            notesMd,
+            textLanguage: modifyLanguage,
+            notesLanguage: hasText(notesMd) ? modifyLanguage : null,
+            commandText: normalizeCommand(todo.commandText),
+            executor: (todo.executor ?? cardExecutor ?? 'human') as WorkItemCreateInput['executor'],
+            position: keyForAppend(lastPosition),
+          },
+          tx,
+        );
+        lastPosition = row.position;
+        added.push({ id: row.id, text: row.text });
+      }
+      diff.todos = {
+        ...(added.length > 0 ? { added } : {}),
+        ...(before.length > 0 ? { removed: before.map((t) => ({ id: t.id, text: t.text })) } : {}),
+      };
+    }
+  }
+
   // ONE revision for the whole modify (same id — lands as a single entry in the
   // existing work-item revision/activity log; identity is never re-minted).
   //
@@ -4016,18 +4081,20 @@ async function assertReparentsLegalAtAppend(
 }
 
 /**
- * The container refusal for a `modify`'s `patch.difficulty`, at the APPEND
- * (MOTIR-6133 · AMENDMENT 19) — the half `validateProposal` defers because it
- * needs the TARGET's kind. Judged through the same shared validator the `add`
- * path, the deepen and the correction call.
+ * The container refusal for a `modify`'s LEAF-ONLY fields, at the APPEND —
+ * `patch.difficulty` (MOTIR-6133 · AMENDMENT 19) and `patch.todos` (MOTIR-8668 ·
+ * AMENDMENT 27) — the half `validateProposal` defers because it needs the
+ * TARGET's kind. Judged through the same shared validators the `add` path, the
+ * deepen and the correction call.
  *
  * Only the INCOMING batch is judged: rows already on the plan were judged when
  * they were appended, and a target re-kinded since is the approve gate's case
- * (`difficulty_on_container`). A target that resolves to nothing is left to the
- * close, as every other live-row question on this path is. Skipped with no read
- * when no incoming `modify` sets a non-null difficulty.
+ * (`difficulty_on_container` / `todos_on_container`). A target that resolves to
+ * nothing is left to the close, as every other live-row question on this path
+ * is. Skipped with no read when no incoming `modify` sets a non-null difficulty
+ * or a non-empty step list.
  */
-async function assertModifyDifficultiesLegalAtAppend(
+async function assertModifyLeafFieldsLegalAtAppend(
   proposals: readonly ProposalInput[],
   ctx: ServiceContext,
   planProjectId: string,
@@ -4037,8 +4104,8 @@ async function assertModifyDifficultiesLegalAtAppend(
     (p) =>
       p.op === 'modify' &&
       p.workItemId &&
-      p.patch?.difficulty !== undefined &&
-      p.patch?.difficulty !== null,
+      ((p.patch?.difficulty !== undefined && p.patch?.difficulty !== null) ||
+        (Array.isArray(p.patch?.todos) && p.patch.todos.length > 0)),
   );
   if (judged.length === 0) return;
   await withProjectNarrowingSuspended(tx, planProjectId, async () => {
@@ -4053,11 +4120,9 @@ async function assertModifyDifficultiesLegalAtAppend(
       // is judged against the kind it will have.
       const kind = p.patch!.kind ?? kindById.get(p.workItemId!);
       if (kind === undefined) continue;
-      validateProposedDifficulty(
-        p.patch!.difficulty,
-        kind,
-        proposalLabel({ op: p.op, workItemId: p.workItemId }),
-      );
+      const label = proposalLabel({ op: p.op, workItemId: p.workItemId });
+      validateProposedDifficulty(p.patch!.difficulty, kind, label);
+      validateProposedTodos(p.patch!.todos, kind, label);
     }
   });
 }
@@ -5229,10 +5294,10 @@ export const plansService = {
           // legal later. One closure read, only when the plan draws such an edge.
           await assertSupersedesAcyclicAtAppend(effectiveNodes, ctx, fresh.projectId, tx);
 
-          // The container half of a `modify`'s DIFFICULTY (MOTIR-6133), which
-          // `validateProposal` could not judge without the target's kind. Costs
-          // one batched read, and only when the batch sets a non-null one.
-          await assertModifyDifficultiesLegalAtAppend(proposals, ctx, fresh.projectId, tx);
+          // The container half of a `modify`'s DIFFICULTY (MOTIR-6133) and STEPS
+          // (MOTIR-8668), which `validateProposal` could not judge without the
+          // target's kind. Costs one batched read, and only when the batch sets one.
+          await assertModifyLeafFieldsLegalAtAppend(proposals, ctx, fresh.projectId, tx);
 
           // The FINISHED-TARGET rule for a `modify` that sets a mark (MOTIR-6663),
           // which `validateProposal` could not judge without the target's live
@@ -6576,6 +6641,25 @@ export const plansService = {
               validateProposedDifficulty(
                 input.patch.difficulty,
                 input.patch.kind ?? (target ? target.kind : null),
+                proposalLabel({ op: item.op, workItemId: item.workItemId }),
+              );
+            }
+            // The replacement patch's STEPS (MOTIR-8668), the same way: the rows
+            // against the store's caps always, the container half against the
+            // target's PROJECTED kind, read only when the list is non-empty.
+            if (Array.isArray(input.patch?.todos) && input.patch.todos.length > 0) {
+              const target = item.workItemId
+                ? await workItemRepository.findById(item.workItemId, tx)
+                : null;
+              validateProposedTodos(
+                input.patch.todos,
+                input.patch.kind ?? (target ? target.kind : null),
+                proposalLabel({ op: item.op, workItemId: item.workItemId }),
+              );
+            } else {
+              validateProposedTodos(
+                input.patch?.todos,
+                null,
                 proposalLabel({ op: item.op, workItemId: item.workItemId }),
               );
             }

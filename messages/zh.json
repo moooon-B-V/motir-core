@@ -235,6 +235,7 @@
     "noteShowLess": "收起",
     "field_description": "描述",
     "field_explanation": "说明",
+    "field_todos": "步骤",
     "field_links": "依赖关系",
     "field_parent": "父级",
     "field_targetRepo": "目标仓库",

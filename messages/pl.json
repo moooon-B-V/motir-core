@@ -235,6 +235,7 @@
     "noteShowLess": "Pokaż mniej",
     "field_description": "Opis",
     "field_explanation": "Wyjaśnienie",
+    "field_todos": "Kroki",
     "field_links": "Zależności",
     "field_parent": "Element nadrzędny",
     "field_targetRepo": "Repozytorium",

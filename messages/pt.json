@@ -235,6 +235,7 @@
     "noteShowLess": "Mostrar menos",
     "field_description": "Descrição",
     "field_explanation": "Explicação",
+    "field_todos": "Etapas",
     "field_links": "Dependências",
     "field_parent": "Pai",
     "field_targetRepo": "Repositório",

@@ -301,15 +301,13 @@ describe('update_plan_proposal — the CORRECTION door carries `todos`', () => {
     await client.close();
   });
 
-  it('a `modify`’s patch carries NO steps — a plan does not edit a person’s progress', async () => {
+  it('a `modify`’s patch carries steps — stored on the proposal, applied only at approve (MOTIR-8668)', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
 
-    // The patch schema declares no `todos` and `applyModify` writes only
-    // `PLAN_ITEM_PATCH_KEYS`, so a key sent here could never reach a column
-    // (AMENDMENT 14 D2). Since MOTIR-6259 it is not even stored: the append
-    // REFUSES a patch key it cannot apply, by name, instead of dropping it.
+    // AMENDMENT 27 overturns AMENDMENT 14 D2: the patch declares `todos`, the
+    // append stores it, and nothing touches the card's list until approve.
     const target = await createTestWorkItem(fx, { title: 'A committed card', kind: 'task' });
     const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
@@ -317,15 +315,14 @@ describe('update_plan_proposal — the CORRECTION door carries `todos`', () => {
         {
           op: 'modify',
           workItemId: target.id,
-          patch: { title: 'A re-scoped title', todos: [{ text: 'Should not land' }] },
+          patch: { title: 'A re-scoped title', todos: [{ text: 'Lands at approve' }] },
         },
       ],
     });
 
-    expect(appended.isError).toBe(true);
-    expect(JSON.stringify(appended.content)).toContain('`todos`');
-    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
-    // Nothing anywhere turns this into a to-do row.
+    expect(appended.isError).toBeFalsy();
+    const stored = await adminDb.planItem.findFirstOrThrow({ where: { planId } });
+    expect((stored.patch as { todos?: unknown }).todos).toEqual([{ text: 'Lands at approve' }]);
     expect(await adminDb.workItemTodo.count()).toBe(0);
     await client.close();
   });

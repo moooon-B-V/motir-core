@@ -140,6 +140,10 @@ export type PlacementByPlanItemId = ReadonlyMap<string, ProposalPlacement>;
 export interface ProposalMarkRefs {
   keyById: ReadonlyMap<string, string>;
   markById: ReadonlyMap<string, string | null>;
+  /** The live step count of each `modify` target whose patch REPLACES its list
+   *  (MOTIR-8668) — how many rows it has and how many are ticked. Absent from a
+   *  caller that did not read it; the line then prints `replaces ?`. */
+  todoCountById?: ReadonlyMap<string, { total: number; done: number }>;
 }
 
 /** A ref as the reader's word for it: its KEY when one resolved, else verbatim. */
@@ -184,6 +188,29 @@ function modifyMark(item: PlanItemDto, marks?: ProposalMarkRefs): string {
   return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
 }
 
+/**
+ * ` · todos: N steps (replaces M, K ticked)` — a `modify`'s REPLACEMENT step
+ * list (MOTIR-8668 · AMENDMENT 27). The ticked count is the point: approve
+ * deletes those rows, and they are a person's progress, so the reviewer reads
+ * the cost on the same line as the change. `cleared` for `[]` / `null`; `?` for
+ * the old side when the live list could not be read. Empty when the patch
+ * leaves the list alone.
+ */
+function modifySteps(item: PlanItemDto, marks?: ProposalMarkRefs): string {
+  const todos = item.patch?.todos;
+  if (todos === undefined) return '';
+  const n = todos?.length ?? 0;
+  const count = item.workItemId ? marks?.todoCountById?.get(item.workItemId) : undefined;
+  const known = item.workItemId != null && marks?.todoCountById !== undefined;
+  const replaces = !known
+    ? 'replaces ?'
+    : count && count.total > 0
+      ? `replaces ${count.total}${count.done > 0 ? `, ${count.done} ticked` : ''}`
+      : 'replaces none';
+  const what = n > 0 ? `${n} step${n === 1 ? '' : 's'}` : 'cleared';
+  return ` · todos: ${what} (${replaces})`;
+}
+
 /** One proposal as a single line — the op, what it targets, and its sizing. */
 function describeItem(
   item: PlanItemDto,
@@ -217,6 +244,7 @@ function describeItem(
   return (
     `${marker} modify ${target}` +
     (changed.length > 0 ? ` — ${changed.join(', ')}` : '') +
+    modifySteps(item, marks) +
     modifyMark(item, marks) +
     blockers(item.blockedByRefs)
   );
@@ -476,7 +504,9 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'supersedes edges by key — `supersedes +K1 −K2` (the target replaces / stops replacing ' +
         'them) and `superseded by +K3` (K3 replaces the target) — and an `add` line prints ' +
         '`supersedes K1, K2` from its `supersedesRefs`; `structuredContent` carries the patch ' +
-        'keys and `supersedesRefs` in full. ' +
+        'keys and `supersedesRefs` in full. A `modify` whose patch REPLACES the target’s steps ' +
+        'prints `todos: N steps (replaces M, K ticked)` — approve deletes the old rows, ticked ' +
+        'ones included. ' +
         `Reach for \`${GET_PLAN_STATUS_TOOL_NAME}\` ` +
         'instead when you only need the status of a submitted job (and whether that job died); ' +
         'reach for this one to SHOW or judge the content. A plan still generating returns the ' +

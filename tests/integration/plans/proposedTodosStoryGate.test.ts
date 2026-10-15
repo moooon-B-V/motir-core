@@ -294,53 +294,202 @@ describe('guards a coverage number cannot see', () => {
     expect(otherRows).toEqual([]);
   });
 
-  it('a `modify` may not carry steps, and a committed card’s list survives approve untouched', async () => {
+  it('a `modify` REPLACES a committed card’s steps — in order, none ticked, the old rows gone (MOTIR-8668)', async () => {
     const fx = await makeWorkItemFixture();
-    // A committed card with a list somebody has already made progress on — the
-    // exact thing AMENDMENT 14 D2 refuses to let a plan rewrite.
+    // A committed card a person has made progress on: two steps, one ticked.
     const target = await createTestWorkItem(fx, { title: 'A card mid-flight', kind: 'task' });
-    await workItemTodosService.addTodo(target.id, { text: 'Already done by a person' }, fx.ctx);
+    const ticked = await workItemTodosService.addTodo(
+      target.id,
+      { text: 'Already done by a person' },
+      fx.ctx,
+    );
+    await workItemTodosService.addTodo(target.id, { text: 'Not started' }, fx.ctx);
+    await workItemTodosService.setTodoDone(ticked.todo.id, true, fx.ctx);
     const before = await workItemTodosService.listTodos(target.id, fx.ctx);
-    expect(before.items).toHaveLength(1);
 
     const client = await connectClient(fx.ctx);
     const opened = await call(client, CREATE_PLAN_TOOL_NAME, { projectKey: fx.projectIdentifier });
     const planId = struct(opened).id;
-    // Smuggled onto the patch: the schema declares no `todos` there, and
-    // `applyModify` writes only `PLAN_ITEM_PATCH_KEYS`. Since MOTIR-6259 the
-    // append REFUSES it by name rather than storing a key nothing applies.
-    const smuggled = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
       proposals: [
         {
           op: 'modify',
           workItemId: target.id,
-          patch: { title: 'A re-scoped title', todos: [{ text: 'Should never land' }] },
+          patch: { title: 'A re-scoped title', todos: FOUR_STEPS },
         },
       ],
     });
-    expect(smuggled.isError).toBe(true);
-    expect(JSON.stringify(smuggled.content)).toContain('`todos`');
-    // The same re-scope WITHOUT the steps is what a plan can say about this card.
-    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
-      planId,
-      proposals: [{ op: 'modify', workItemId: target.id, patch: { title: 'A re-scoped title' } }],
-    });
-    await plansService.markPlanned(planId, fx.ctx);
+    expect(appended.isError).toBeFalsy();
 
-    // The review model shows no steps for a `modify` — Part XV §15.4.
+    // `get_plan` states the replacement AND what it costs, on the proposal's line.
+    const read = await call(client, 'get_plan', { planId });
+    expect(text(read)).toContain('todos: 4 steps (replaces 2, 1 ticked)');
+
+    await plansService.markPlanned(planId, fx.ctx);
+    // The review: a `todos` change row — the live count with its ticked count →
+    // the new steps, numbered. The peek field stays `add`-only (AMENDMENT 14 D6).
     const item = (await planReviewService.getPlanReview(planId, fx.ctx)).items[0]!;
     expect(item.todos).toBeNull();
     expect(item.proposal.todos).toBeNull();
+    const row = item.changes.find((c) => c.field === 'todos');
+    expect(row?.from).toBe('2 (1 ✓)');
+    expect(row?.to).toMatch(/^1\. Create a restricted API key · 2\. Scope it to charges:write/);
 
     await plansService.approvePlan(planId, fx.ctx);
     await client.close();
 
-    // The person's row is exactly as it was. Nothing was added, replaced or
-    // cleared — a plan is not the editor of somebody's progress.
     const after = await workItemTodosService.listTodos(target.id, fx.ctx);
-    expect(after.items.map((t) => t.text)).toEqual(['Already done by a person']);
-    expect(after.items[0]!.id).toBe(before.items[0]!.id);
+    expect(after.items.map((t) => t.text)).toEqual(FOUR_STEPS.map((t) => t.text));
+    expect(after.items.every((t) => t.doneAt === null)).toBe(true);
+    // The notes, the command and the per-step executor travel; the rest seed
+    // from the card (a `task` with no executor of its own ⇒ `human`).
+    expect(after.items[1]!.notesMd).toBe('Dashboard → Developers → API keys.');
+    expect(after.items[2]!.commandText).toBe('fly secrets set STRIPE_KEY=… -a motir');
+    expect(after.items[2]!.executor).toBe('coding_agent');
+    const oldIds = new Set(before.items.map((t) => t.id));
+    expect(after.items.some((t) => oldIds.has(t.id))).toBe(false);
+    expect(await adminDb.workItemTodo.count({ where: { workItemId: target.id } })).toBe(4);
+
+    // ONE revision records both sides, in the cell the to-do service writes.
+    const revisions = await adminDb.workItemRevision.findMany({
+      where: { workItemId: target.id, changeKind: 'updated' },
+    });
+    const applied = revisions.filter((r) => (r.diff as { title?: unknown }).title !== undefined);
+    expect(applied).toHaveLength(1);
+    const cell = (applied[0]!.diff as { todos: { added: unknown[]; removed: unknown[] } }).todos;
+    expect(cell.added).toHaveLength(4);
+    expect(cell.removed).toEqual(before.items.map((t) => ({ id: t.id, text: t.text })));
+  });
+
+  it.each([
+    ['an empty list', []],
+    ['null', null],
+  ])('%s CLEARS the list; a patch without the key leaves it untouched', async (_label, todos) => {
+    const fx = await makeWorkItemFixture();
+    const cleared = await createTestWorkItem(fx, { title: 'Cleared', kind: 'task' });
+    const kept = await createTestWorkItem(fx, { title: 'Kept', kind: 'task' });
+    await workItemTodosService.addTodo(cleared.id, { text: 'Goes' }, fx.ctx);
+    const keptRow = await workItemTodosService.addTodo(kept.id, { text: 'Stays' }, fx.ctx);
+
+    const client = await connectClient(fx.ctx);
+    const planId = struct(
+      await call(client, CREATE_PLAN_TOOL_NAME, { projectKey: fx.projectIdentifier }),
+    ).id;
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        { op: 'modify', workItemId: cleared.id, patch: { todos } },
+        { op: 'modify', workItemId: kept.id, patch: { title: 'Kept, re-titled' } },
+      ],
+    });
+    expect(appended.isError).toBeFalsy();
+    expect(text(await call(client, 'get_plan', { planId }))).toContain(
+      'todos: cleared (replaces 1)',
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+    await plansService.approvePlan(planId, fx.ctx);
+    await client.close();
+
+    expect((await workItemTodosService.listTodos(cleared.id, fx.ctx)).items).toEqual([]);
+    const keptAfter = await workItemTodosService.listTodos(kept.id, fx.ctx);
+    expect(keptAfter.items.map((t) => t.id)).toEqual([keptRow.todo.id]);
+  });
+
+  it('refuses steps on a container target at the append, and caps each row like the store', async () => {
+    const fx = await makeWorkItemFixture();
+    const task = await createTestWorkItem(fx, { title: 'A task', kind: 'task' });
+    const client = await connectClient(fx.ctx);
+    const planId = struct(
+      await call(client, CREATE_PLAN_TOOL_NAME, { projectKey: fx.projectIdentifier }),
+    ).id;
+
+    // Re-kinded to a story in the same patch: judged on the PROJECTED kind.
+    const rekinded = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: task.id,
+          patch: { kind: 'story', type: null, difficulty: null, todos: [{ text: 'A step' }] },
+        },
+      ],
+    });
+    expect(rekinded.isError).toBe(true);
+    expect(text(rekinded)).toContain('is a container and its steps are its children');
+
+    const tooLong = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: task.id,
+          patch: { todos: [{ text: 'x'.repeat(TODO_TEXT_MAX_LENGTH + 1) }] },
+        },
+      ],
+    });
+    expect(tooLong.isError).toBe(true);
+    expect(text(tooLong)).toContain('step 1');
+    await client.close();
+  });
+
+  it('approve refuses steps on a target re-kinded to a container after the append — `todos_on_container`', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { title: 'Becomes a story', kind: 'task' });
+    const client = await connectClient(fx.ctx);
+    const planId = struct(
+      await call(client, CREATE_PLAN_TOOL_NAME, { projectKey: fx.projectIdentifier }),
+    ).id;
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { todos: [{ text: 'A step' }] } }],
+    });
+    expect(appended.isError).toBeFalsy();
+    await client.close();
+
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { kind: 'story', type: null, executor: null },
+    });
+    const err = (await plansService.markPlanned(planId, fx.ctx).catch((e: unknown) => e)) as {
+      code?: string;
+      reason?: string;
+    };
+    expect(err.code).toBe('PLAN_GRAMMAR_VIOLATION');
+    expect(err.reason).toBe('todos_on_container');
+    expect(await adminDb.workItemTodo.count({ where: { workItemId: target.id } })).toBe(0);
+  });
+
+  it('steps are not a mark key: a mark-only `modify` of a done card that also carries them is PLAN_TARGET_IMMUTABLE', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { title: 'Finished work', kind: 'task' });
+    await workItemTodosService.addTodo(target.id, { text: 'Done long ago' }, fx.ctx);
+    await adminDb.workItem.update({ where: { id: target.id }, data: { status: 'done' } });
+
+    const client = await connectClient(fx.ctx);
+    const planId = struct(
+      await call(client, CREATE_PLAN_TOOL_NAME, { projectKey: fx.projectIdentifier }),
+    ).id;
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { obsolescence: 'outdated', todos: [{ text: 'Rewritten history' }] },
+        },
+      ],
+    });
+    await client.close();
+
+    const err = (await plansService
+      .markPlanned(planId, fx.ctx)
+      .then(() => plansService.approvePlan(planId, fx.ctx))
+      .then(() => null)
+      .catch((e: unknown) => e)) as { code?: string } | null;
+    expect(err?.code).toBe('PLAN_TARGET_IMMUTABLE');
+    const after = await workItemTodosService.listTodos(target.id, fx.ctx);
+    expect(after.items.map((t) => t.text)).toEqual(['Done long ago']);
   });
 
   it('a failure on a later row rolls the WHOLE approve back — no card with half a list', async () => {

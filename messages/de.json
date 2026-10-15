@@ -235,6 +235,7 @@
     "noteShowLess": "Weniger anzeigen",
     "field_description": "Beschreibung",
     "field_explanation": "Erläuterung",
+    "field_todos": "Schritte",
     "field_links": "Abhängigkeiten",
     "field_parent": "Übergeordnet",
     "field_targetRepo": "Repository",
