@@ -33,6 +33,10 @@ import {
   registerReportUnbuildableTarget,
 } from './tools/reportUnbuildableTarget';
 import {
+  RECORD_RUN_DISCREPANCY_TOOL_NAME,
+  registerRecordRunDiscrepancy,
+} from './tools/recordRunDiscrepancy';
+import {
   ADD_PLAN_ITEMS_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   UPDATE_PLAN_ITEM_TOOL_NAME,
@@ -208,6 +212,7 @@ export const MCP_TOOL_NAMES = [
   GET_PLAN_TOOL_NAME,
   GET_APPROVED_SHAPE_VERDICT_TOOL_NAME,
   REPORT_UNBUILDABLE_TARGET_TOOL_NAME,
+  RECORD_RUN_DISCREPANCY_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   ADD_PLAN_ITEMS_TOOL_NAME,
   UPDATE_PLAN_ITEM_TOOL_NAME,
@@ -400,6 +405,10 @@ export function registerMcpTools(
   // the approving plan's author, whether a planning bug is filed) and answers an
   // acknowledgement only; `docs/decisions/run-found-trigger-dispatched-path.md`.
   registerReportUnbuildableTarget(target, resolveContext);
+  // The RUN DISCREPANCY record (MOTIR-8657) — the runner's one call after it builds a card
+  // through a plan that was wrong only about the HOW. A comment on the card and, on an open
+  // leg, a server-written finding on the run; decision page MOTIR-8654.
+  registerRecordRunDiscrepancy(target, resolveContext);
   // The plan AUTHORING door (MOTIR-2988) — `create_plan` + `add_plan_items`, so
   // an agent can PROPOSE a tree the user reviews instead of writing work items
   // straight into it. The third door beside `create_work_item` (writes now, no

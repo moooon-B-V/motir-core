@@ -17,12 +17,14 @@ describe('ReportableEventKind', () => {
     const plan: ReportableEventKind = 'plan_submitted';
     // @ts-expect-error — a review run's verdict, appended by the verdict route (MOTIR-6821).
     const review: ReportableEventKind = 'review_verdict';
+    // @ts-expect-error — a run's discrepancy record, appended by the discrepancy service (MOTIR-8655).
+    const discrepancy: ReportableEventKind = 'discrepancy_recorded';
 
     // …while the member is still part of the READ vocabulary a reader types
     // the whole stream over.
     const read: DispatchEventKind = 'unbuildable_reported';
     const reportable: ReportableEventKind = 'card_settled';
 
-    expect([report, bug, plan, review, read, reportable]).toHaveLength(6);
+    expect([report, bug, plan, review, discrepancy, read, reportable]).toHaveLength(7);
   });
 });

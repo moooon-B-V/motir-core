@@ -105,8 +105,10 @@ import {
   AgentRunReportInvalidError,
   ContinueFromInvalidError,
   ContinueRunRefusedError,
+  DiscrepancyAlreadyRecordedError,
   DispatchRunNotFoundError,
   RepairRunRefusedError,
+  RunDiscrepancyInvalidError,
   RunFoundReportReasonInvalidError,
 } from '@/lib/dispatchRuns/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
@@ -656,6 +658,12 @@ export function toToolError(err: unknown): CallToolResult {
     // bound is the SERVICE's, so it must reach the runner as this code rather
     // than as a JSON-RPC internal error.
     err instanceof RunFoundReportReasonInvalidError ||
+    // RUN_DISCREPANCY_INVALID / DISCREPANCY_ALREADY_RECORDED (MOTIR-8657) —
+    // `record_run_discrepancy`'s points empty, too many or over-long (the message names the
+    // point and field), and a second record on a leg that already has one. Each is the
+    // runner's own input or its own repeat, fixable in one hop, and must reach it as a code.
+    err instanceof RunDiscrepancyInvalidError ||
+    err instanceof DiscrepancyAlreadyRecordedError ||
     // REPAIR_RUN_NOT_FOUND / REPAIR_RUN_NOT_YOURS (MOTIR-6807) — a
     // `touch_work_item_repair` / `close_work_item_repair` naming a run that is not
     // the caller's own repair run of that card. Refused before anything is

@@ -537,3 +537,16 @@ closed it `drained` (indistinguishable from running out of work). This amends th
 - **What reads the rows** is To resume and the gate-resume (MOTIR-7707, MOTIR-7708, MOTIR-7710) —
   not this record. `pull_request_approval`, `pull_request_merge`, `acceptance_result`,
   `plan_approval` and `agent_review` never stop a parent run mid-story and are not recorded.
+
+## AMENDMENT 6 — `discrepancy_recorded`, a run's record of what it built through (MOTIR-8654, 2026-10-15)
+
+> **Added 2026-10-15 (Story MOTIR-8651 · MOTIR-8655), by the decision page _A run builds
+> through a wrong HOW — the discrepancy record_ (MOTIR-8654, approved).** `DispatchEventKind`
+> gains one CARD-scoped member, **`discrepancy_recorded`**, written by
+> `runDiscrepancyService.recordDiscrepancy` in the same transaction as the card comment it
+> points at. Its `data` is `{ commentId, pointCount, dispatchRunCardId }` and never the text;
+> its identity is the LEG (`data.dispatchRunCardId`, deduped by `findFindingOnRun`), so a leg
+> carries at most one. It is **server-written**: the v1 ingest (`dispatchEventKindSchema`)
+> refuses it, the CLI's `ReportableEventKind` excludes it, and `EVENT_STEP` maps it to `null`
+> because a finding advances no step. Like the other findings it is not a stage the leg passed
+> through. With no open leg the comment is still written and no event exists.

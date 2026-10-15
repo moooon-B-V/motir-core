@@ -480,6 +480,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // verdict, the plan or a bug key — so what that gate protects never reaches
   // the caller (`docs/decisions/run-found-trigger-dispatched-path.md`, *Its key*).
   report_unbuildable_target: 'work_item:edit',
+  // The run discrepancy record (MOTIR-8657) — a comment on the card plus a finding on the
+  // caller's run leg: editing the card. `CLI_TOKEN_GRANT` already holds `work_item:edit`, so a
+  // sandboxed `motir run` agent reaches it with the grant NOT widened.
+  record_run_discrepancy: 'work_item:edit',
 
   // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
   // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /

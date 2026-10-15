@@ -12025,6 +12025,8 @@
       "approvedFor": "{key} について承認済み",
       "materialized": "{count, plural, other {# 件の提案}}を具体化しました",
       "bugFiled": "バグを登録しました",
+      "discrepancy": "計画と異なる実装",
+      "discrepancyPoints": "{count, plural, other {#件の相違}}",
       "open": "開く →"
     },
     "scope": {

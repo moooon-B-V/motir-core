@@ -385,6 +385,12 @@ export const ko: McpSummaryTranslations = {
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
   },
+  record_run_discrepancy: {
+    summary:
+      'HOW만 잘못된 계획으로 작업 항목을 빌드한 러너가 계획과 다르게 빌드한 내용을 기록합니다 — 작업 항목 댓글과 실행 기록이 남고, 확인됩니다.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+  },
   report_unbuildable_target: {
     summary:
       'dispatch된 러너가 멈춘 작업 항목을 빌드 불가로 보고합니다 — 확인만 되며 따로 조치할 것은 없습니다.',

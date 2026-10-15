@@ -35,7 +35,13 @@ interface PlanData {
   key?: unknown;
 }
 
+/** `discrepancy_recorded.data` — a POINTER and a count; the points' text lives in the comment. */
+interface DiscrepancyData {
+  pointCount?: unknown;
+}
+
 type Finding =
+  | { kind: 'discrepancy'; seq: number; itemKey: string | null; points: number | null }
   | { kind: 'bug'; seq: number; itemKey: string | null; title: string | null }
   | { kind: 'submitted'; seq: number; planId: string | null; proposals: number | null }
   | {
@@ -51,17 +57,28 @@ const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 
 export interface RunFindingsProps {
   events: DispatchRunEventDto[];
+  /** The run's legs — a discrepancy names its work item through `event.cardId`. */
+  cards: ReadonlyArray<{ id: string; key: string | null }>;
 }
 
-export function RunFindings({ events }: RunFindingsProps) {
+export function RunFindings({ events, cards }: RunFindingsProps) {
   const routes = useReaderRoutes();
   const t = useTranslations('runs');
 
   const findings = useMemo<Finding[]>(() => {
     const out: Finding[] = [];
     for (const ev of events) {
-      const d = (ev.data ?? {}) as BugFiled & PlanData;
-      if (ev.kind === 'bug_filed') {
+      const d = (ev.data ?? {}) as BugFiled & PlanData & DiscrepancyData;
+      if (ev.kind === 'discrepancy_recorded') {
+        // The key comes from the leg, which survives the work item's deletion.
+        const leg = cards.find((c) => c.id === ev.cardId);
+        out.push({
+          kind: 'discrepancy',
+          seq: ev.seq,
+          itemKey: leg?.key ?? null,
+          points: num(d.pointCount),
+        });
+      } else if (ev.kind === 'bug_filed') {
         out.push({ kind: 'bug', seq: ev.seq, itemKey: str(d.key), title: str(d.title) });
       } else if (ev.kind === 'plan_submitted') {
         out.push({
@@ -82,12 +99,13 @@ export function RunFindings({ events }: RunFindingsProps) {
     }
     // The RUN's order, never arrival order.
     return out.sort((a, b) => a.seq - b.seq);
-  }, [events]);
+  }, [events, cards]);
 
   if (findings.length === 0) return null;
 
   const asks = findings.filter((f) => f.kind === 'submitted');
   const approved = findings.filter((f) => f.kind === 'approved');
+  const discrepancies = findings.filter((f) => f.kind === 'discrepancy');
   const bugs = findings.filter((f) => f.kind === 'bug');
 
   return (
@@ -172,6 +190,44 @@ export function RunFindings({ events }: RunFindingsProps) {
           </ul>
         </div>
       ) : null}
+
+      {/* A DISCREPANCY — the run built the work item through a plan that was wrong
+          only about the HOW and wrote down why (`design/runs/design-notes.md`
+          § A DISCREPANCY the run recorded). It already happened and nothing waits
+          on the reader, so it takes the info dot: no accent rule, and not the
+          bug's red. Separate rows in the run's order, the count only — the points'
+          text lives in the work item's comment (Q5). ⚠️ The door lands on the WORK
+          ITEM, never an invented comment address: the item page cannot address a
+          single comment. No door when the leg's key is gone. */}
+      {discrepancies.map((f) => (
+        <div
+          key={f.seq}
+          data-testid="finding-discrepancy"
+          className="flex items-baseline gap-2 border-t border-(--el-border-soft) px-(--spacing-card-padding) py-1.5 text-xs first:border-t-0"
+        >
+          <span
+            className="size-2 flex-none translate-y-px rounded-(--radius-badge) bg-(--el-info)"
+            aria-hidden="true"
+          />
+          <span
+            className={`min-w-0 flex-1 ${f.itemKey !== null ? 'text-(--el-text)' : 'text-(--el-text-secondary)'}`}
+          >
+            <strong className="font-medium">{t('findings.discrepancy')}</strong>
+            {f.itemKey !== null ? <span className="font-mono"> · {f.itemKey}</span> : null}
+            {f.points !== null
+              ? ` — ${t('findings.discrepancyPoints', { count: f.points })}`
+              : null}
+          </span>
+          {f.itemKey !== null ? (
+            <Link
+              href={routes.item(f.itemKey)}
+              className="flex-none font-medium text-(--el-accent-on-surface) underline-offset-2 hover:underline"
+            >
+              {t('findings.open')}
+            </Link>
+          ) : null}
+        </div>
+      ))}
 
       {/* THE BUGS — separate rows always. "3 bugs" loses the only thing a reader
           wants, which three. ⚠️ ADDITIVE IS NOT UNREACHABLE: each row OPENS,

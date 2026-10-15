@@ -390,6 +390,12 @@ export const nl: McpSummaryTranslations = {
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
   },
+  record_run_discrepancy: {
+    summary:
+      'Een runner die een werkitem bouwde via een plan dat alleen in het HOE klopte niet, legt vast wat hij anders bouwde — een opmerking op het werkitem en een runregistratie, bevestigd.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+  },
   report_unbuildable_target: {
     summary:
       'Een uitgezonden runner meldt het werkitem waarop hij stopte als niet te bouwen — bevestigd, niets om op te handelen.',

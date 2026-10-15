@@ -2283,6 +2283,45 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  record_run_discrepancy: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The card you built through (e.g. "ACME-7") — on a parent run, the CHILD you were working.',
+      },
+      points: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            planAsked: {
+              type: 'string',
+              description: 'What the plan asked for — the route it laid out.',
+            },
+            built: {
+              type: 'string',
+              description: 'What you built instead — the route you actually took.',
+            },
+            why: {
+              type: 'string',
+              description:
+                'Why the plan could not be built as written. If the point describes something that is STILL BROKEN after the card is done, file it as a bug and cite its key here.',
+            },
+          },
+          required: ['planAsked', 'built', 'why'],
+          additionalProperties: false,
+        },
+        description:
+          'Every discrepancy you found, in ONE call — 1–20 points, each field 1–2000 characters once trimmed.',
+      },
+    },
+    required: ['key', 'points'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   reinforce_lesson: {
     type: 'object',
     properties: {
@@ -3885,6 +3924,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   publish_test_instructions: 'Publish How to test',
   read_file: 'Read a file',
   record_plan_revision_reason: 'Record WHY a plan had to change',
+  record_run_discrepancy: 'Record what you built differently from the plan',
   reinforce_lesson: 'Reinforce a lesson',
   report_action: 'Report your next step',
   report_plan_step: 'Report the step a planner session is on',
@@ -4255,6 +4295,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   read_file: { title: 'Read a file', readOnlyHint: true, openWorldHint: true },
   record_plan_revision_reason: {
     title: 'Record WHY a plan had to change',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  record_run_discrepancy: {
+    title: 'Record what you built differently from the plan',
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,

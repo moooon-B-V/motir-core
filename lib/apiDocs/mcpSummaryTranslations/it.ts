@@ -394,6 +394,12 @@ export const it: McpSummaryTranslations = {
     source:
       'Report the step a planner session is on (settle, lay, author) or end it — an advisory progress signal on a generating plan.',
   },
+  record_run_discrepancy: {
+    summary:
+      'Un runner che ha costruito un elemento di lavoro con un piano sbagliato solo sul COME registra ciò che ha costruito in modo diverso: un commento sull’elemento e un record dell’esecuzione, con presa d’atto.',
+    source:
+      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+  },
   report_unbuildable_target: {
     summary:
       'Un runner inviato segnala l’elemento di lavoro su cui si è fermato come non costruibile: preso atto, non c’è nulla da fare.',
