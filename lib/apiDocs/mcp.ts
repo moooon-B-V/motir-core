@@ -843,9 +843,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the note's first line, and the supersedes edges by KEY on both a `modify`
     // and an `add`. A reader deciding whether this tool shows a plan that retires
     // finished cards needs to know it does, and that the refs come back as keys.
+    //
+    // MOTIR-8668 REWROTE it again: a `modify` may now REPLACE a card's steps, and
+    // the description says the line prints how many it drops and how many were
+    // ticked. A reader deciding whether this tool shows what a re-plan costs a
+    // person's progress needs to know it does.
     summary:
-      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note) and its supersedes edges, named by key.',
-    descriptionFingerprint: '978802db7b0b',
+      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, and the steps a change replaces with how many were ticked.',
+    descriptionFingerprint: '2db178782de8',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and
