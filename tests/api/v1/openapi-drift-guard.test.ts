@@ -736,6 +736,19 @@ describe('every operation’s REAL response validates against its declared schem
       { id: runId },
     );
 
+    // The RUN-FOUND REPORT (MOTIR-8698) — the run's leg on `runCard` is open (the
+    // append above claimed it). No plan shaped the card, so it is recorded on the
+    // leg and nothing is filed; the answer is the acknowledgement either way.
+    await drive(
+      'reportDispatchRunUnbuildable',
+      () => import('@/app/api/v1/dispatch-runs/[id]/unbuildable/route'),
+      send(`/api/v1/dispatch-runs/${runId}/unbuildable`, 'POST', {
+        targetKey: runCard,
+        reason: 'The card names a table that does not exist.',
+      }),
+      { id: runId },
+    );
+
     // The HEARTBEAT (MOTIR-6528) — before the close, while the run is open: 204.
     await drive(
       'heartbeatDispatchRun',

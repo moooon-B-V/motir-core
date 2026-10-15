@@ -12,7 +12,6 @@ import {
   SystemReplayForbiddenError,
   SystemReplayWorkspaceRowError,
 } from '@/lib/jobs/errors';
-import { isPlatformOperator } from '@/lib/jobs/platformOperator';
 // Side-effect import: evaluates `email.send`'s definition module so the engine
 // knows its idempotency template. A replay of a job whose definition is not
 // loaded in THIS process still works, but with no dedup key — which would turn
@@ -31,8 +30,17 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // a seeded `workspaceId: null` row reaching `replayed`, the two refusals that are
 // the whole of its safety (it runs under `withSystemContext`, which bypasses
 // tenant RLS), and the list the System tab reads.
+//
+// MOTIR-8197 — the first refusal is the caller's PLATFORM ROLE now, not their
+// email against an env var (removed by MOTIR-8200): `operator` or above replays, `support`
+// (who sees the tab) and a tenant user are refused, and the env var grants
+// nothing even when it names the caller. The role reaches the service already
+// resolved — the action reads it fresh per request — so these cases hand it in.
 
 const OPERATOR_EMAIL = 'operator@motir.test';
+// The retired env-var gate, named in pieces so the repository-wide grep for it
+// stays clean (MOTIR-8200) while this file still proves setting it grants nothing.
+const RETIRED_ADMIN_EMAIL_ENV = 'PLATFORM_ADMIN' + '_EMAIL';
 const FUNCTION_ID = 'system.platform-meter-report';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -65,11 +73,10 @@ async function seedDlq(opts: {
 const asOperator = (dlqId: string) => ({
   dlqId,
   userId: operator.id,
-  userEmail: OPERATOR_EMAIL,
+  platformRole: 'operator' as const,
 });
 
 beforeEach(async () => {
-  vi.stubEnv('PLATFORM_ADMIN_EMAIL', OPERATOR_EMAIL);
   await truncateAuthTables();
   await truncateJobRuns();
   operator = await usersService.createUser({
@@ -177,30 +184,60 @@ describe('jobsDashboardService.replaySystemDLQ', () => {
     expect(await adminDb.jobQueueRun.count({ where: { jobId: 'email.send' } })).toBe(1);
   });
 
-  it('refuses a caller who is not the platform operator — and re-emits nothing', async () => {
+  it('a superadmin replays too — the ladder contains operator', async () => {
+    const dlqId = await seedDlq({ workspaceId: null });
+
+    const result = await jobsDashboardService.replaySystemDLQ({
+      dlqId,
+      userId: operator.id,
+      platformRole: 'superadmin',
+    });
+
+    expect(result.outcome).toBe('replayed');
+    expect(
+      (await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } }))!.replayedAt,
+    ).not.toBeNull();
+  });
+
+  it('logs the [jobs.replay] audit line with door: system', async () => {
+    const dlqId = await seedDlq({ workspaceId: null });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await jobsDashboardService.replaySystemDLQ(asOperator(dlqId));
+
+    const line = warn.mock.calls.find(([tag]) => tag === '[jobs.replay]');
+    expect(line).toBeDefined();
+    expect(JSON.parse(line![1] as string)).toMatchObject({
+      dlqId,
+      workspaceId: null,
+      actorUserId: operator.id,
+      door: 'system',
+      outcome: 'replayed',
+    });
+  });
+
+  it.each([
+    ['a support user — who sees the System tab but may not replay', 'support' as const],
+    ['a tenant user with no platform role (a workspace or org owner included)', null],
+  ])('refuses %s — and re-emits nothing', async (_name, platformRole) => {
     const dlqId = await seedDlq({ workspaceId: null });
 
     await expect(
-      jobsDashboardService.replaySystemDLQ({
-        dlqId,
-        userId: tenantOwner.id,
-        userEmail: 'tenant-owner@example.com',
-      }),
+      jobsDashboardService.replaySystemDLQ({ dlqId, userId: tenantOwner.id, platformRole }),
     ).rejects.toBeInstanceOf(SystemReplayForbiddenError);
 
     expect((await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } }))!.replayedAt).toBeNull();
     expect(await adminDb.jobEvent.count()).toBe(0);
   });
 
-  it('refuses everybody when PLATFORM_ADMIN_EMAIL is unset — an empty gate matches nobody', async () => {
-    vi.stubEnv('PLATFORM_ADMIN_EMAIL', '');
+  it('the retired admin-email env var grants nothing — not even when it names the caller', async () => {
+    vi.stubEnv(RETIRED_ADMIN_EMAIL_ENV, OPERATOR_EMAIL);
     const dlqId = await seedDlq({ workspaceId: null });
 
-    for (const userEmail of ['', OPERATOR_EMAIL]) {
-      await expect(
-        jobsDashboardService.replaySystemDLQ({ dlqId, userId: operator.id, userEmail }),
-      ).rejects.toBeInstanceOf(SystemReplayForbiddenError);
-    }
+    await expect(
+      jobsDashboardService.replaySystemDLQ({ dlqId, userId: operator.id, platformRole: null }),
+    ).rejects.toBeInstanceOf(SystemReplayForbiddenError);
+    expect((await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } }))!.replayedAt).toBeNull();
     expect(await adminDb.jobEvent.count()).toBe(0);
   });
 
@@ -240,7 +277,7 @@ describe('jobsDashboardService.replaySystemDLQ', () => {
       jobsDashboardService.replaySystemDLQ({
         dlqId,
         userId: tenantOwner.id,
-        userEmail: 'tenant-owner@example.com',
+        platformRole: 'support',
       });
 
     // The same refusal whether the id exists or not.
@@ -310,22 +347,5 @@ describe('jobsDashboardService.listSystemDlq', () => {
     expect(after.replayedRecently).toBe(1);
     expect(after.rows.map((r) => r.id)).toEqual([dlqId]);
     expect(after.rows[0]!.replayedAt).not.toBeNull();
-  });
-});
-
-describe('isPlatformOperator', () => {
-  it('matches only the configured email, exactly', () => {
-    expect(isPlatformOperator(OPERATOR_EMAIL)).toBe(true);
-    expect(isPlatformOperator('someone@else.test')).toBe(false);
-    expect(isPlatformOperator(OPERATOR_EMAIL.toUpperCase())).toBe(false);
-    expect(isPlatformOperator(null)).toBe(false);
-    expect(isPlatformOperator(undefined)).toBe(false);
-    expect(isPlatformOperator('')).toBe(false);
-  });
-
-  it('matches nobody when PLATFORM_ADMIN_EMAIL is unset or empty', () => {
-    vi.stubEnv('PLATFORM_ADMIN_EMAIL', '');
-    expect(isPlatformOperator(OPERATOR_EMAIL)).toBe(false);
-    expect(isPlatformOperator('')).toBe(false);
   });
 });

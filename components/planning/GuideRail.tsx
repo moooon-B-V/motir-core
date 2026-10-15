@@ -221,7 +221,11 @@ export function GuideRail({
           const el = e.currentTarget;
           stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 48;
         }}
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
+        // `overflow-x-hidden`, stated (MOTIR-8725): with only `overflow-y-auto`
+        // the unstated axis computes to `auto`, so one over-wide reply drew a
+        // scrollbar along the whole log. The log holds prose that wraps; a code
+        // block scrolls inside its own frame. Same choice as MOTIR-4578.
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-4"
         role="log"
         data-testid="guide-rail-log"
       >

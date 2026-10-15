@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.67.0";
+export const GENERATED_AGAINST = "1.68.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -470,6 +470,13 @@ export const V1_OPERATIONS = {
     permission: "work_item:edit",
     successStatus: 200,
     responseComponent: "IntegrationResult",
+  },
+  "reportDispatchRunUnbuildable": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/unbuildable",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "UnbuildableReportAcknowledgement",
   },
   "reportWorkItemImplementation": {
     method: "POST",

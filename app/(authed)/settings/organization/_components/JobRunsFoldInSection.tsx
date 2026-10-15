@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { isPlatformOperator } from '@/lib/jobs/platformOperator';
+import { resolveJobsPlatformRole } from '@/lib/jobs/platformStanding';
 import {
   JobsPane,
   parseJobsParams,
@@ -33,7 +33,7 @@ import {
 //   Runs tab                  any workspace member          (no role)
 //   DLQ tab + count badge     any workspace member          (no role)
 //   DLQ replay control        workspace OWNER               (`isOwner` prop)
-//   System tab                PLATFORM_ADMIN_EMAIL          (`showSystemTab`)
+//   System tab                platform staff, support+      (`showSystemTab`)
 //
 // The dashboard itself is NOT redrawn: `JobsDashboard` and everything under
 // `workspace/jobs/_components/` are composed exactly as the standalone route
@@ -48,12 +48,10 @@ import {
 export async function JobRunsFoldInSection({
   workspaceId,
   actorUserId,
-  actorEmail,
   searchParams,
 }: {
   workspaceId: string;
   actorUserId: string;
-  actorEmail: string;
   /**
    * ⚠️ THE HOST PAGE'S OWN QUERY, and this section is URL-DRIVEN through it
    * (Story MOTIR-4843 · MOTIR-4849).
@@ -71,10 +69,10 @@ export async function JobRunsFoldInSection({
 }) {
   const t = await getTranslations('settings.organization');
 
-  // The pre-Epic-6 platform-admin escape hatch (Subtask 1.6.3), read exactly as
-  // the standalone route reads it so the two doors cannot disagree about who
-  // sees the System tab.
-  const showSystemTab = isPlatformOperator(actorEmail);
+  // Platform-staff standing (support or above), read fresh per request through
+  // the same resolver the standalone route calls, so the two doors cannot
+  // disagree about who sees the System tab (MOTIR-8199).
+  const showSystemTab = (await resolveJobsPlatformRole()) !== null;
 
   const params = parseJobsParams(searchParams, showSystemTab);
 

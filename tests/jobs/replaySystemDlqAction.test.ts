@@ -35,6 +35,13 @@ vi.mock('@/lib/i18n/errorsTranslator', () => ({
       ) as string,
 }));
 
+// The caller's platform role, resolved fresh by the action on every call
+// (MOTIR-8197). Its own cases are `platformStanding.test.ts`.
+const resolveJobsPlatformRole = vi.fn();
+vi.mock('@/lib/jobs/platformStanding', () => ({
+  resolveJobsPlatformRole: () => resolveJobsPlatformRole(),
+}));
+
 const replaySystemDLQ = vi.fn();
 vi.mock('@/lib/services/jobsDashboardService', () => ({
   jobsDashboardService: { replaySystemDLQ: (...a: unknown[]) => replaySystemDLQ(...a) },
@@ -46,6 +53,7 @@ const SESSION = { user: { id: 'u-op', email: 'operator@motir.test' } };
 
 beforeEach(() => {
   getSession.mockResolvedValue(SESSION);
+  resolveJobsPlatformRole.mockResolvedValue('operator');
 });
 
 afterEach(() => {
@@ -53,7 +61,7 @@ afterEach(() => {
 });
 
 describe('replaySystemDlqAction', () => {
-  it('passes the SESSION user — id and email — to the service, never anything the client sent', async () => {
+  it('passes the SESSION user and the freshly resolved platform role to the service, never anything the client sent', async () => {
     replaySystemDLQ.mockResolvedValue({ outcome: 'replayed' });
 
     const result = await replaySystemDlqAction('dlq-1');
@@ -62,9 +70,23 @@ describe('replaySystemDlqAction', () => {
     expect(replaySystemDLQ).toHaveBeenCalledWith({
       dlqId: 'dlq-1',
       userId: 'u-op',
-      userEmail: 'operator@motir.test',
+      platformRole: 'operator',
     });
     expect(result).toEqual({ ok: true, alreadyReplayed: false });
+  });
+
+  it('re-reads the platform role on EVERY call — a revoked role is not remembered', async () => {
+    replaySystemDLQ.mockResolvedValue({ outcome: 'replayed' });
+
+    await replaySystemDlqAction('dlq-1');
+    resolveJobsPlatformRole.mockResolvedValue(null);
+    await replaySystemDlqAction('dlq-1');
+
+    expect(resolveJobsPlatformRole).toHaveBeenCalledTimes(2);
+    expect(replaySystemDLQ.mock.calls.map(([input]) => input.platformRole)).toEqual([
+      'operator',
+      null,
+    ]);
   });
 
   it('reports an already-replayed row as a success, not a failure', async () => {

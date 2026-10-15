@@ -48,7 +48,7 @@ jobs:
   # ── The base image + the two in-container suites ───────────────────────────
   sandbox-smoke:
     name: Sandbox smoke (loop + failure + confinement)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Sized on the RELEASE lane, which is the slow one: it also runs the
     # two-platform "Push the base image" step below. `ci.yml` and
     # `image-cache-main.yml` run this same job without that step.
@@ -228,7 +228,7 @@ jobs:
 
   sandbox-profiles-matrix:
     name: Sandbox profile matrix (setup)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.2–0.4 min across 14 runs → 10 (~29x, the short-job floor).
     # It emits the profile matrix and nothing else.
     timeout-minutes: 10
@@ -248,7 +248,7 @@ jobs:
   sandbox-profiles:
     name: Sandbox profile ${{ matrix.profile.id }} (tier ${{ matrix.profile.tier }})
     needs: sandbox-profiles-matrix
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 2.6–16.7 min across 112 legs (eight profiles × 14 runs of both
     # callers) → 50 (~3x on the worst, `aider` (tier 2) at 16.68 min on ci.yml
     # run 33214411817, which SUCCEEDED). Sized on the slowest LEG, not the
@@ -405,7 +405,7 @@ jobs:
     name: Verify the published images
     if: ${{ inputs.publish }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.1–1.8 min across five runs → 10 (~6x, the short-job floor).
     # `if: inputs.publish`, so it only ever runs on the release path.
     timeout-minutes: 10
@@ -476,7 +476,7 @@ jobs:
     name: Verify the published images pull ANONYMOUSLY
     if: ${{ inputs.publish }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.5–0.6 min across three runs → 10 (~17x, the short-job floor).
     # `if: inputs.publish`, so it only ever runs on the release path.
     timeout-minutes: 10
@@ -541,7 +541,7 @@ jobs:
     name: Verify the published CLI has every command the docs name
     if: ${{ inputs.publish }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.5 min on run 31529928332 → 10 (~22x, the short-job floor).
     # One run on record: this job is newer than the others (MOTIR-2612).
     timeout-minutes: 10

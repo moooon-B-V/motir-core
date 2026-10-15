@@ -14,7 +14,9 @@ import { MOTIR_FLEET_RUNNER_LABEL } from '@/lib/ciMetering/runnerRates';
 // ⚠️ WHY THIS IS NOT PARANOIA. The `workflow_job` `queued` event fires for
 // GitHub-HOSTED jobs too, for every repository the App is installed on. Motir's
 // own `motir-core` CI is 31 jobs / 141.6 job-minutes per run (§J), all of them
-// `ubuntu-latest`, all of them delivering `queued` events to this same webhook.
+// requesting `${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` — `ubuntu-latest` while
+// `MOTIR_RUNNER` is unset on `moooon-B-V` (MOTIR-8704) — and all of them
+// delivering `queued` events to this same webhook.
 // A listener that provisions on "we received a queued event" would silently
 // migrate Motir's own release path onto infrastructure Motir is still building
 // — the precise outcome §J's scope boundary exists to prevent, arriving through

@@ -6,7 +6,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { resolveWorkspaceTierDisclosure } from '@/lib/workspaces/tierDisclosure.server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
-import { isPlatformOperator } from '@/lib/jobs/platformOperator';
+import { resolveJobsPlatformRole } from '@/lib/jobs/platformStanding';
 import { JobsPane, parseJobsParams } from './_components/JobsPane';
 
 // Operator dashboard — server component (Subtask 1.6.5). Reads the active
@@ -14,7 +14,8 @@ import { JobsPane, parseJobsParams } from './_components/JobsPane';
 // searchParams, fetches just the active tab's data (+ the DLQ badge count) via
 // the service layer, and hands typed, serializable data to the client
 // JobsDashboard. All reads are workspace-scoped in the service (the system tab
-// is gated to a PLATFORM_ADMIN_EMAIL operator both here and in the service).
+// is gated to platform-staff standing (support or above) here, and its replay to
+// operator in the service).
 
 interface JobsPageProps {
   searchParams: Promise<{ tab?: string; status?: string; page?: string }>;
@@ -67,11 +68,11 @@ export default async function WorkspaceJobsPage({ searchParams }: JobsPageProps)
     );
   }
 
-  // The pre-Epic-6 platform-admin escape hatch (Subtask 1.6.3): the System tab
-  // is visible only when the request user's email matches PLATFORM_ADMIN_EMAIL.
-  // Tracked for replacement with real platform-admin roles in Epic 6
-  // (PRODECT_FINDINGS #36).
-  const showSystemTab = isPlatformOperator(session.user.email);
+  // The System tab is gated to platform-staff standing (support or above),
+  // read fresh per request from the account's platform role (MOTIR-8199), so a
+  // revoked staff member loses it on their next page load. The org fold-in asks
+  // the same resolver, so the two doors cannot disagree about who sees it.
+  const showSystemTab = (await resolveJobsPlatformRole()) !== null;
 
   // ⚠️ PARSED BY THE SHARED PANE, not here (Story MOTIR-4843 · MOTIR-4849).
   // This surface has TWO doors now — this route above the workspace-tier reveal
@@ -86,8 +87,8 @@ export default async function WorkspaceJobsPage({ searchParams }: JobsPageProps)
   // than the two the asset expected. The asset has `getMemberRole` PRECEDING the
   // other reads, on the reasoning that "the role selects which list is fetched".
   // It does not: which list is fetched is decided by `requestedTab`, and the only
-  // thing that can narrow that is `showSystemTab` — which is an env var compared
-  // against the session email, with no read behind it at all. `role` is consumed
+  // thing that can narrow that is `showSystemTab` — which costs one platform
+  // standing read, awaited above before the wave. `role` is consumed
   // once, as `isOwner`, and it is a PROP on the dashboard. So all THREE reads are
   // independent and go in one wave. This is the heaviest page in the settings
   // family at nine awaits, and it is the one where the difference is worth most.

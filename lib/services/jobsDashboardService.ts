@@ -12,7 +12,9 @@ import {
   SystemReplayForbiddenError,
   SystemReplayWorkspaceRowError,
 } from '@/lib/jobs/errors';
-import { isPlatformOperator } from '@/lib/jobs/platformOperator';
+import { JOBS_SYSTEM_REPLAY_ROLE } from '@/lib/jobs/platformStanding';
+import { platformRoleAtLeast } from '@/lib/platform/auth';
+import type { PlatformRole } from '@/generated/prisma/client';
 import type { JobRunDTO, JobRunDlqDTO, JobRunStatus, SystemDlqListDTO } from '@/lib/dto/jobs';
 
 // Read + replay surface for the operator dashboard (Story 1.6 · Subtask 1.6.5).
@@ -21,8 +23,8 @@ import type { JobRunDTO, JobRunDlqDTO, JobRunStatus, SystemDlqListDTO } from '@/
 // while this service is the tenant-facing READER + the owner-gated replay
 // action. Every tenant read runs under withWorkspaceContext so the job_run /
 // job_run_dlq RLS policies scope it to the active workspace; the system tab is
-// the one withSystemContext read, reachable only by a PLATFORM_ADMIN_EMAIL
-// operator (the page enforces that gate before calling listSystemRuns).
+// the one withSystemContext read, reachable only by platform staff (the page
+// resolves their standing at `support` before calling listSystemRuns).
 //
 // Why a separate service file and not more methods on jobRunsService: the writer
 // and the reader have opposite RLS contexts and opposite callers (runtime vs.
@@ -143,8 +145,8 @@ export const jobsDashboardService = {
   /**
    * Every run across all workspaces, INCLUDING untenanted system rows. Runs
    * under withSystemContext (the only context whose RLS branch admits null-
-   * workspace rows). The CALLER must verify the requester is a platform admin
-   * before invoking this — the service trusts that gate (same shape as the
+   * workspace rows). The CALLER must verify the requester holds platform-staff
+   * standing (`support` or above) before invoking this — the service trusts that gate (same shape as the
    * workspace settings page resolving membership before listMembers).
    */
   async listSystemRuns(input: {
@@ -170,7 +172,7 @@ export const jobsDashboardService = {
    * replayed within {@link SYSTEM_DLQ_REPLAYED_WINDOW_DAYS}; each group newest
    * failure first. Runs under withSystemContext (the only RLS branch that admits
    * an untenanted row), so, like {@link listSystemRuns}, the CALLER must have
-   * verified the requester is the platform operator before calling this.
+   * verified the requester holds platform-staff standing before calling this.
    */
   async listSystemDlq(now: Date = new Date()): Promise<SystemDlqListDTO> {
     const since = new Date(now.getTime() - SYSTEM_DLQ_REPLAYED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -197,8 +199,11 @@ export const jobsDashboardService = {
    * ⚠️ THIS RUNS UNDER `withSystemContext`, WHICH BYPASSES TENANT RLS, so its two
    * refusals are the whole of its safety and both are enforced HERE, not in the
    * Server Action or the UI (the hidden button is a hint, not the gate):
-   *   1. the caller must be the platform operator (`PLATFORM_ADMIN_EMAIL`) —
-   *      the same comparison that shows them the System tab;
+   *   1. the caller's platform role must stand at `operator` or above
+   *      (`JOBS_SYSTEM_REPLAY_ROLE`). The role is resolved fresh per request by
+   *      the caller (`resolveJobsPlatformRole`) and handed in, because that read
+   *      is request-scoped and this service is also called with no request. A
+   *      `support` user sees the System tab and is still refused here;
    *   2. the row must have `workspace_id IS NULL`. A workspace's row keeps its
    *      manager-gated door; letting the operator door take it would make this
    *      a way to replay ANY tenant's dead letter by id.
@@ -212,9 +217,9 @@ export const jobsDashboardService = {
   async replaySystemDLQ(input: {
     dlqId: string;
     userId: string;
-    userEmail: string;
+    platformRole: PlatformRole | null;
   }): Promise<ReplayDLQResult> {
-    if (!isPlatformOperator(input.userEmail)) {
+    if (!input.platformRole || !platformRoleAtLeast(input.platformRole, JOBS_SYSTEM_REPLAY_ROLE)) {
       throw new SystemReplayForbiddenError(input.userId);
     }
     return withSystemContext(async (tx) => {

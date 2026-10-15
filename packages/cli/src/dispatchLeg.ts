@@ -241,6 +241,16 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     data: { model: result.model ?? null, signal: result.signal ?? null },
   });
 
+  // THE RUN-FOUND REPORT (MOTIR-8698) — the agent stopped on an unbuildable card and
+  // said why in its self-report. The CLI makes the report, with the run's own
+  // credential, because the agent may hold none (a hosted run, a run inside an agent
+  // instance) or have no Motir MCP to make it with. BEFORE any verdict settles the
+  // leg: the server records it on the leg that is still open. Whatever the exit
+  // code — an agent that reported and then failed still found what it found.
+  if (result.unbuildableReason) {
+    await reporter.reportUnbuildable?.(key, result.unbuildableReason);
+  }
+
   if (result.exitCode !== 0) {
     return settle({
       kind: 'agent_failed',

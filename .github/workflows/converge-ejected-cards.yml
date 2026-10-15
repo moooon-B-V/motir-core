@@ -43,7 +43,7 @@ concurrency:
 jobs:
   converge:
     name: Re-ask the merge question on cards ejected before the re-ask shipped
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO HEALTHY RUN TO QUOTE — this lane has never run. Production held 6 standing
     # failure exits on 2026-09-19 and the sweep reads one card per transaction, so the
     # work itself is seconds; the install + `migrate deploy` ahead of it are what take

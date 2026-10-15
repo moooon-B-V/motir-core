@@ -120,20 +120,6 @@ process.env['E2E_JOB_WORKER'] ??= '1';
 // state. `E2E_JOB_WORKER_CODE_GRAPH_SEAM=0` turns it off.
 process.env['E2E_JOB_WORKER_CODE_GRAPH_SEAM'] ??= '1';
 
-// MOTIR-3473 — the PLATFORM-ADMIN identity the jobs dashboard's SYSTEM tab is
-// gated on. Set here so the spec and the app server agree on one value.
-//
-// ⚠️ IT IS NEEDED BECAUSE A SCHEDULED RUN IS UNTENANTED. Every `system.*` job
-// writes `workspace_id = NULL`, and the dashboard's ordinary tab reads
-// `listByWorkspace`, which filters on it — so a workspace operator cannot see a
-// cron run at all, on either engine. The system tab (`listAll`, under
-// `withSystemContext`) is where such a run has ALWAYS been visible, so driving it
-// is the faithful automation of the story's verification recipe rather than a way
-// around it. It changes nothing for any other spec: the tab appears only for a
-// session whose email is exactly this one, and only this spec signs up as it.
-process.env['PLATFORM_ADMIN_EMAIL'] ??= 'sched-platform-admin@example.com';
-const PLATFORM_ADMIN_EMAIL = process.env['PLATFORM_ADMIN_EMAIL'];
-
 // ⚠️ THE EMAIL PATHS GET THE SAME TREATMENT, AND FOR A MEASURED REASON. They
 // were hardcoded literals in `webServer.env` while the runner-side helpers
 // (`email-capture.ts`, `email-fault.ts`) each accept an env override — so a run
@@ -348,9 +334,6 @@ export default defineConfig({
         MOTIR_E2E_FAKE_GATEWAY_STATUS: '1',
         FLY_APP_NAME: 'motir-core-e2e',
         FLY_REGION: 'iad',
-        // MOTIR-3473 — the same value the runner holds, so the server's
-        // system-tab gate and the spec's sign-up agree. See the note above it.
-        PLATFORM_ADMIN_EMAIL,
         // MOTIR-2816: the SERVER's own connection, and nothing else in the run.
         ...(APP_ROLE_SERVER && OWNER_DATABASE_URL
           ? { DATABASE_URL: appRoleDatabaseUrl(OWNER_DATABASE_URL) }

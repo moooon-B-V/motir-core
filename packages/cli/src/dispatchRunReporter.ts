@@ -131,6 +131,17 @@ export interface DispatchRunReporter {
   /** Flush, then close the run with its stop reason, and stop the heartbeat. Never
    *  throws; a second call is a no-op. */
   close(stopReason: DispatchStopReason): Promise<void>;
+  /**
+   * Report that the agent stopped because `targetKey` is UNBUILDABLE (MOTIR-8698) —
+   * the run-found report, made by the CLI with the run's own credential so it
+   * reaches Motir in every lane (a hosted agent holds no Motir token; a local one
+   * may have no Motir MCP). Awaited, so it lands before the leg settles; never
+   * throws. A no-op when no run is held.
+   *
+   * OPTIONAL so a hand-written fake that predates it still type-checks; the real
+   * reporter always has it.
+   */
+  reportUnbuildable?(targetKey: string, reason: string): Promise<void>;
   /** True once a failure has taken reporting down for this session. */
   readonly offline: boolean;
   /** The run this reporter opened, or null when it never opened one. */
@@ -155,7 +166,7 @@ export interface DispatchRunReporterDeps {
    * still type-checks; production always passes the real client, which has it.
    */
   client: Pick<MotirClient, 'openDispatchRun' | 'appendDispatchRunEvents' | 'closeDispatchRun'> &
-    Partial<Pick<MotirClient, 'heartbeatDispatchRun'>>;
+    Partial<Pick<MotirClient, 'heartbeatDispatchRun' | 'reportDispatchRunUnbuildable'>>;
   /** Where the single offline warning goes. `console.error` in production. */
   warn?: (message: string) => void;
   /**
@@ -402,6 +413,22 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
 
     async flush() {
       await flushQueue();
+    },
+
+    async reportUnbuildable(targetKey, reason) {
+      const id = runId;
+      const client = deps.client;
+      if (id === null || closed || client.reportDispatchRunUnbuildable === undefined) return;
+      // ⚠️ NOT through `attempt`, and NOT gated on `offline`. This is not telemetry:
+      // it is the one way a planner's mistake found by this run reaches Motir, so a
+      // lost event batch earlier in the run must not silence it, and its own failure
+      // must not take the rest of the reporting down. Swallowed all the same — a
+      // report that cannot land never changes what the run did.
+      try {
+        await client.reportDispatchRunUnbuildable({ runId: id, targetKey, reason });
+      } catch {
+        warn(`motir: could not report ${targetKey} as unbuildable to Motir. The run continues.`);
+      }
     },
 
     async close(stopReason) {
