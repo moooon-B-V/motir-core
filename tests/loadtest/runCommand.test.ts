@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -117,6 +124,7 @@ interface World {
   failPut: boolean;
   generatorNeverStarts: boolean;
   scaleRefusesEquals: boolean;
+  noVolume: boolean;
   calls: { bin: string; args: string[] }[];
   stagingLists: number;
 }
@@ -160,6 +168,7 @@ function newWorld(n = 1): World {
     failPut: false,
     generatorNeverStarts: false,
     scaleRefusesEquals: false,
+    noVolume: false,
     calls: [],
     stagingLists: 0,
   };
@@ -232,6 +241,7 @@ const fakeExec: Exec = async (bin, args) => {
       return ok(`running (01m00.0s), 40/40 VUs\n@@exit ${world.k6Exit}\n`);
     if (cmd.startsWith('cat ') && cmd.endsWith('started.at')) return ok('2026-10-15T20:00:00Z\n');
     if (cmd.startsWith('cat ') && cmd.endsWith('ended.at')) return ok('2026-10-15T20:04:20Z\n');
+    if (cmd.includes('/proc/mounts')) return world.noVolume ? fail() : ok();
     if (cmd.startsWith('sh -c ')) return ok();
     return fail();
   }
@@ -301,6 +311,27 @@ const ENV = {
   NODE_ENV: 'production',
 };
 
+/** Stand-ins for the run-window recorders' I/O, so no real `fly logs` or Postgres is touched. */
+const CAPTURE_STUBS: NonNullable<RunDeps['capture']> = {
+  logRunner: (_args, onLine) => {
+    let kill: () => void = () => undefined;
+    const exited = new Promise<number>((r) => {
+      kill = () => r(0);
+    });
+    onLine(
+      JSON.stringify({ timestamp: 't1', instance: 'app1', message: 'GET /api/health/ready 200' }),
+    );
+    return { exited, kill };
+  },
+  readTopStatements: async () => ({ state: 'extension_not_installed' }),
+  dbClient: () => ({
+    connect: async () => undefined,
+    query: async () => ({ rows: [{ backends: 3 }] }),
+    end: async () => undefined,
+  }),
+  sampleIntervalMs: 60_000,
+};
+
 let preflightExit = 0;
 let manifestN = 1;
 let seedCalls: string[][] = [];
@@ -328,6 +359,7 @@ function deps(over: Partial<RunDeps> = {}): RunDeps {
       reports.push(dir);
       return 6;
     },
+    capture: CAPTURE_STUBS,
     ...over,
   };
 }
@@ -1032,5 +1064,129 @@ describe('the contract with its neighbours', () => {
     expect(pkg.scripts['loadtest:run']).toBe(
       'tsx --tsconfig tsconfig.node.json loadtest/run/run.ts',
     );
+  });
+});
+
+describe('the run-window capture (MOTIR-8683)', () => {
+  const CAPTURED = [
+    'app-logs.ndjson',
+    'app-logs.gaps.json',
+    'db-samples.csv',
+    'neon-endpoint-start.json',
+    'neon-endpoint-end.json',
+    'pgss-before.json',
+    'pgss-after.json',
+    'k6-points.json.gz',
+  ];
+
+  it('a completed run directory holds every recording', async () => {
+    const out = await runLoadTest(SMOKE_ARGS, deps());
+    expect(out.exitCode).toBe(EXIT.completed);
+    for (const f of CAPTURED) expect(existsSync(join(out.runDir!, f)), f).toBe(true);
+    expect(record(out.runDir!).capture).toMatchObject({ logLines: 1, logInstances: ['app1'] });
+  });
+
+  it('runs k6 with --out json= to a .gz on the volume, fetches it and deletes it', async () => {
+    const out = await runLoadTest(SMOKE_ARGS, deps());
+    expect(readFileSync(join(out.runDir!, 'run.sh'), 'utf8')).toMatch(
+      /--out json=\/data\/run\/k6-points\.json\.gz/,
+    );
+    expect(
+      flyCalls((a) => a[2] === 'get' && a.at(-2) === '/data/run/k6-points.json.gz'),
+    ).toHaveLength(1);
+    expect(
+      flyCalls((a) => a.some((x) => x.includes('rm -f /data/run/k6-points.json.gz'))),
+    ).toHaveLength(1);
+  });
+
+  it('on a k6 failure the point file is still fetched and deleted', async () => {
+    world.k6Exit = 107;
+    const out = await runLoadTest(SMOKE_ARGS, deps());
+    expect(out.exitCode).toBe(EXIT.k6);
+    expect(
+      flyCalls((a) => a[2] === 'get' && a.at(-2) === '/data/run/k6-points.json.gz'),
+    ).toHaveLength(1);
+    expect(
+      flyCalls((a) => a.some((x) => x.includes('rm -f /data/run/k6-points.json.gz'))),
+    ).toHaveLength(1);
+    expect(existsSync(join(out.runDir!, 'pgss-after.json'))).toBe(true);
+  });
+
+  it('a generator with no /data volume exits 4', async () => {
+    world.noVolume = true;
+    const out = await runLoadTest(SMOKE_ARGS, deps());
+    expect(out.exitCode).toBe(EXIT.platform);
+    expect(record(out.runDir!).reason).toMatch(/no volume mounted at \/data/);
+    expect(generatorStops()).toHaveLength(1);
+  });
+
+  it('a failing recorder leaves its state file and the run still completes', async () => {
+    const out = await runLoadTest(
+      SMOKE_ARGS,
+      deps({
+        capture: {
+          ...CAPTURE_STUBS,
+          readTopStatements: async () => {
+            throw new Error('permission denied for pg_stat_statements');
+          },
+          dbClient: () => ({
+            connect: async () => {
+              throw new Error('connection refused');
+            },
+            query: async () => ({ rows: [] }),
+            end: async () => undefined,
+          }),
+        },
+      }),
+    );
+    expect(out.exitCode).toBe(EXIT.completed);
+    for (const f of ['pgss-before.state.json', 'pgss-after.state.json', 'db-samples.state.json']) {
+      expect(existsSync(join(out.runDir!, f)), f).toBe(true);
+    }
+    expect(record(out.runDir!).exitCode).toBe(0);
+  });
+
+  it('without LOADTEST_NEON_API_KEY both endpoint files say unmeasured', async () => {
+    const out = await runLoadTest(SMOKE_ARGS, deps());
+    for (const f of ['neon-endpoint-start.json', 'neon-endpoint-end.json']) {
+      expect(JSON.parse(readFileSync(join(out.runDir!, f), 'utf8')).state).toBe('unmeasured');
+    }
+  });
+
+  it('with a key, the endpoint read goes to LOADTEST_NEON_API_URL', async () => {
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      urls.push(url);
+      return new Response(JSON.stringify({ endpoints: [{ id: 'ep', current_state: 'active' }] }));
+    }) as unknown as typeof fetch;
+    const out = await runLoadTest(
+      SMOKE_ARGS,
+      deps({
+        env: {
+          ...ENV,
+          LOADTEST_NEON_API_KEY: 'neon-key-value',
+          LOADTEST_NEON_API_URL: 'http://neon-stub.local/v2',
+        },
+        capture: { ...CAPTURE_STUBS, fetchImpl },
+      }),
+    );
+    expect(urls).toEqual([
+      'http://neon-stub.local/v2/projects/proj-1/branches/br-loadtest-1/endpoints',
+      'http://neon-stub.local/v2/projects/proj-1/branches/br-loadtest-1/endpoints',
+    ]);
+    expect(
+      JSON.parse(readFileSync(join(out.runDir!, 'neon-endpoint-end.json'), 'utf8')).state,
+    ).toBe('ok');
+    expect(logs.join('\n')).not.toContain('neon-key-value');
+  });
+
+  it('the direct URL resolved for the capture never reaches any output', async () => {
+    const out = await runLoadTest(SMOKE_ARGS, deps());
+    const runDir = out.runDir!;
+    for (const f of readdirSync(runDir)) {
+      if (f.endsWith('.gz')) continue;
+      expect(readFileSync(join(runDir, f), 'utf8'), f).not.toContain(SECRET);
+    }
+    expect(logs.join('\n')).not.toContain(SECRET);
   });
 });

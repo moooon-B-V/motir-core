@@ -42,10 +42,19 @@ export const REMOTE_SECRET_DIR = '/dev/shm/loadtest';
 export const REMOTE_MANIFEST = `${REMOTE_SECRET_DIR}/manifest.json`;
 export const REMOTE_PROFILE = `${REMOTE_RUN_DIR}/profile.resolved.json`;
 export const REMOTE_SCRIPT = `${REMOTE_RUN_DIR}/run.sh`;
+/** k6's raw points, on the generator's VOLUME (tmpfs is RAM); a `.gz` name gzips them. */
+export const REMOTE_POINTS = `${REMOTE_RUN_DIR}/k6-points.json.gz`;
+/** Where the generator's volume must be mounted. */
+export const VOLUME_MOUNT = '/data';
 /** k6 exit codes read as "the run completed": none, and a failed threshold. */
 export const K6_COMPLETED_CODES = [0, 99] as const;
 /** The files fetched back into the run directory. */
-export const FETCHED_FILES = ['summary.json', 'generator-cpu.csv', 'k6.log'] as const;
+export const FETCHED_FILES = [
+  'summary.json',
+  'generator-cpu.csv',
+  'k6.log',
+  'k6-points.json.gz',
+] as const;
 
 export interface GeneratorRef {
   fly: FlyRunner;
@@ -133,7 +142,7 @@ export async function readPinnedVersions(cwd: string): Promise<Record<string, st
 }
 
 /** The k6 command line the run script runs. No threshold option, ever. */
-export function k6CommandLine(extraOut: readonly string[] = []): string {
+export function k6CommandLine(extraOut: readonly string[] = [`json=${REMOTE_POINTS}`]): string {
   return [
     `K6_AUTO_EXTENSION_RESOLUTION=false ${REMOTE_K6} run`,
     `-e LOADTEST_PROFILE=${REMOTE_PROFILE}`,
@@ -145,12 +154,12 @@ export function k6CommandLine(extraOut: readonly string[] = []): string {
 }
 
 /** The run script uploaded to the generator: a CPU sampler beside k6, an exit file at the end. */
-export function runScript(extraOut: readonly string[] = []): string {
+export function runScript(extraOut: readonly string[] = [`json=${REMOTE_POINTS}`]): string {
   return [
     '#!/bin/sh',
     '# Written by loadtest/run/generator.ts (MOTIR-8678). Runs detached under setsid nohup.',
     `cd ${REMOTE_RUN_DIR} || exit 1`,
-    'rm -f k6.exit k6.log summary.json generator-cpu.csv started.at ended.at',
+    'rm -f k6.exit k6.log summary.json generator-cpu.csv started.at ended.at k6-points.json.gz',
     'date -u +%Y-%m-%dT%H:%M:%SZ > started.at',
     'echo "epochSeconds,nproc,procStatCpu" > generator-cpu.csv',
     '( while [ ! -f k6.exit ]; do echo "$(date -u +%s),$(nproc),$(head -n 1 /proc/stat)" >> generator-cpu.csv; sleep 5; done ) &',
@@ -245,6 +254,22 @@ export async function readRemoteLine(g: GeneratorRef, path: string): Promise<str
 export async function deleteManifest(g: GeneratorRef): Promise<boolean> {
   const r = await g.fly(
     sshArgs(g.app, g.id, shScript(`rm -f ${REMOTE_MANIFEST} && test ! -e ${REMOTE_MANIFEST}`)),
+  );
+  return r.code === 0;
+}
+
+/** Whether a volume is mounted at `/data` on the generator (the point file lives there). */
+export async function hasVolume(g: GeneratorRef): Promise<boolean> {
+  const r = await g.fly(
+    sshArgs(g.app, g.id, shScript(`grep -qs " ${VOLUME_MOUNT} " /proc/mounts`)),
+  );
+  return r.code === 0;
+}
+
+/** Delete the point file on the generator once it is fetched (or the run failed). */
+export async function deletePoints(g: GeneratorRef): Promise<boolean> {
+  const r = await g.fly(
+    sshArgs(g.app, g.id, shScript(`rm -f ${REMOTE_POINTS} && test ! -e ${REMOTE_POINTS}`)),
   );
   return r.code === 0;
 }

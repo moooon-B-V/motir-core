@@ -80,6 +80,8 @@ export interface RunRecord {
     stoppedAt: M<string>;
   };
   k6: { version: M<string>; extensions: M<string[]>; exitCode: M<number> };
+  /** What the run-window recorders captured (MOTIR-8683); the files themselves sit beside run.json. */
+  capture: M<{ logLines: number; logGaps: number; logInstances: string[]; dbSamples: number }>;
   /** True once the manifest uploaded to the generator was deleted there. */
   manifestDeleted: M<boolean>;
   /** The baseline run directory (N > 1). */
@@ -142,6 +144,7 @@ export function newRunRecord(init: {
       stoppedAt: UNMEASURED,
     },
     k6: { version: UNMEASURED, extensions: UNMEASURED, exitCode: UNMEASURED },
+    capture: UNMEASURED,
     manifestDeleted: UNMEASURED,
     baseline: init.baseline,
     exitCode: null,

@@ -82,18 +82,36 @@ export async function readBranch(exec: Exec, project: string, branch: string): P
   }
 }
 
-/** The branch's endpoint host (`neonctl connection-string`), the URL itself discarded. */
-export async function readBranchHost(exec: Exec, project: string, branch: string): Promise<string> {
+/** The role every connection string is minted for: the app's own. */
+export const NEON_ROLE = 'motir_app';
+
+/**
+ * The branch's DIRECT connection string (`neonctl connection-string <branch>`: the
+ * branch positional, never `--pooled`). It carries the role's password: the caller
+ * holds it in memory only and never prints or writes it.
+ */
+export async function branchConnectionString(
+  exec: Exec,
+  project: string,
+  branch: string,
+): Promise<string> {
   const r = await exec('neonctl', [
     'connection-string',
     branch,
     '--project-id',
     project,
     '--role-name',
-    'motir_app',
+    NEON_ROLE,
   ]);
   if (r.code !== 0) throw new PlatformReadError(`neonctl connection-string exited ${r.code}`);
-  const host = endpointHost(r.stdout.trim().split('\n').pop());
-  if (!host) throw new PlatformReadError('neonctl connection-string returned no readable host');
-  return host;
+  const url = r.stdout.trim().split('\n').pop()?.trim() ?? '';
+  if (!endpointHost(url)) {
+    throw new PlatformReadError('neonctl connection-string returned no readable host');
+  }
+  return url;
+}
+
+/** The branch's endpoint host (`neonctl connection-string`), the URL itself discarded. */
+export async function readBranchHost(exec: Exec, project: string, branch: string): Promise<string> {
+  return endpointHost(await branchConnectionString(exec, project, branch))!;
 }

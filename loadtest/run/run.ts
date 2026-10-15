@@ -74,6 +74,10 @@ import {
 } from './fly';
 import {
   deleteManifest,
+  deletePoints,
+  hasVolume,
+  REMOTE_POINTS,
+  VOLUME_MOUNT,
   download,
   FETCHED_FILES,
   GENERATOR_REGION,
@@ -96,6 +100,7 @@ import {
   upload,
   type GeneratorRef,
 } from './generator';
+import { startRecorders, type CaptureDeps } from '../capture';
 import { copiedFrom, readBranch, readBranchHost } from './neon';
 import { generatorProbe, pinLoop, type Probe } from './pinned';
 import {
@@ -174,6 +179,9 @@ export const OPTIONS = {
     'FLY_API_TOKEN',
     'STAGING_BASE_URL',
     'STAGING_ALLOWED_HOST',
+    // Optional (MOTIR-8683): without the key the Neon endpoint readings are unmeasured.
+    'LOADTEST_NEON_API_KEY',
+    'LOADTEST_NEON_API_URL',
   ],
   /** Required beside the flags (LOADTEST_STAGING_APP is the fallback for --app). */
   requiredEnv: [
@@ -216,6 +224,8 @@ export interface RunDeps {
   probe?: (g: GeneratorRef) => Probe;
   /** Invoke the report on a run directory; its exit code, or null when there is no report command. */
   report?: (runDir: string) => Promise<number | null>;
+  /** Stand-ins for the run-window recorders' I/O (MOTIR-8683). */
+  capture?: CaptureDeps;
   timeouts?: Partial<{
     generatorStartMs: number;
     readBackMs: number;
@@ -539,6 +549,12 @@ export async function runLoadTest(argv: readonly string[], deps: RunDeps): Promi
         `${mismatch} — re-run the provisioning step that bakes loadtest/k6/build.sh's binary into the generator image`,
       );
     }
+    if (!(await hasVolume(generator))) {
+      throw new Stop(
+        EXIT.platform,
+        `generator ${generator.id} has no volume mounted at ${VOLUME_MOUNT}; k6's point file is written there (provisioning creates it)`,
+      );
+    }
     await writeRunRecord(runDir, record);
 
     // ── 5. Read N back, and abort on a mismatch ─────────────────────────────
@@ -692,22 +708,36 @@ export async function runLoadTest(argv: readonly string[], deps: RunDeps): Promi
     const short = manifestShortfall(manifest, resolved);
     if (short) throw new Stop(EXIT.refused, `the seed is short of ${short}`);
 
+    // ── 8½. Start the run-window recorders (MOTIR-8683) ─────────────────────
+    const recorders = await startRecorders({
+      app,
+      outDir: runDir,
+      exec: deps.exec,
+      env,
+      project,
+      branch: branchName,
+      branchId: branch.branchId,
+      now: deps.now,
+      log,
+      deps: deps.capture,
+    });
+
     // ── 9. k6 on the generator ──────────────────────────────────────────────
     const scriptPath = join(runDir, 'run.sh');
     await writeFile(scriptPath, runScript());
     try {
-      await prepareRemote(generator);
-      await upload(generator, join(deps.cwd, 'loadtest/k6'), `${REMOTE_RUN_DIR}/k6`, {
-        recursive: true,
-      });
-      await upload(generator, join(runDir, 'profile.resolved.json'), REMOTE_PROFILE);
-      await upload(generator, scriptPath, REMOTE_SCRIPT);
-      await upload(generator, manifestPath, REMOTE_MANIFEST, { mode: '0600' });
-      await startDetached(generator);
-    } catch (err) {
-      throw new Stop(EXIT.k6, `k6 could not be started: ${(err as Error).message}`);
-    }
-    try {
+      try {
+        await prepareRemote(generator);
+        await upload(generator, join(deps.cwd, 'loadtest/k6'), `${REMOTE_RUN_DIR}/k6`, {
+          recursive: true,
+        });
+        await upload(generator, join(runDir, 'profile.resolved.json'), REMOTE_PROFILE);
+        await upload(generator, scriptPath, REMOTE_SCRIPT);
+        await upload(generator, manifestPath, REMOTE_MANIFEST, { mode: '0600' });
+        await startDetached(generator);
+      } catch (err) {
+        throw new Stop(EXIT.k6, `k6 could not be started: ${(err as Error).message}`);
+      }
       log(`k6 started on ${generator.id}; polling every ${Math.round(t.pollMs / 1000)} s`);
       const until = deps.now().getTime() + (resolved.timing.maxSeconds + 600) * 1000;
       let seen = 0;
@@ -740,6 +770,11 @@ export async function runLoadTest(argv: readonly string[], deps: RunDeps): Promi
       record.manifestDeleted = await deleteManifest(generator).catch(() => false);
       if (record.manifestDeleted !== true)
         log(`⚠️ the manifest may still be on ${generator.id} at ${REMOTE_MANIFEST}`);
+      if (!(await deletePoints(generator).catch(() => false))) {
+        log(`⚠️ the point file may still be on ${generator.id} at ${REMOTE_POINTS}`);
+      }
+      const captured = await recorders.stop();
+      record.capture = captured;
     }
 
     // ── 10. Read the platform again at the end ──────────────────────────────
