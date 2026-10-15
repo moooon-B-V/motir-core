@@ -120,6 +120,7 @@ test('an agent builds a card through a wrong HOW, and its discrepancy is where y
 
   await chapter('It files a bug it found on the way, and the run records it', async () => {
     const created = await callMotirTool<{ identifier: string }>(agent, CREATE_WORK_ITEM_TOOL_NAME, {
+      projectKey: 'RDS',
       kind: 'bug',
       title: 'The export header drops its last column',
       descriptionMd: 'Found while building the card; unrelated to it.',
