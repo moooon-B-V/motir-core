@@ -58,6 +58,7 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { generateProjectName } from '@/lib/projects/projectNameGenerator';
 
 // Projects service — business logic for the Project entity. Owns all
 // $transaction calls, the membership gate, identifier/slug derivation +
@@ -132,7 +133,7 @@ function normalizePublicTags(raw: string[]): string[] {
   return tags;
 }
 
-function deriveIdentifierBase(name: string): string {
+export function deriveIdentifierBase(name: string): string {
   const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (cleaned.length === 0) return IDENTIFIER_FALLBACK;
   const base = cleaned.slice(0, IDENTIFIER_MAX_LENGTH);
@@ -175,7 +176,7 @@ function identifierWithSuffix(base: string, suffix: number): string {
   return `${base.slice(0, keep)}${suffixStr}`;
 }
 
-function slugify(name: string): string {
+export function slugify(name: string): string {
   const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -587,6 +588,25 @@ export const projectsService = {
    * Each slug/identifier-collision retry opens a FRESH transaction, because a
    * P2002 poisons the current one; the lock is re-taken and the count re-read
    * on every attempt, so the idempotency survives the retries too.
+   *
+   * ⚠️ A COLLISION CLIMBS A THREE-RUNG LADDER (Story MOTIR-8239 · MOTIR-8528).
+   * A taken candidate — a unique violation or a reserved retired key, which
+   * the loop cannot tell apart and does not need to — advances it:
+   *
+   *   1. a FRESH draw, for every attempt but the last, with that draw's name,
+   *      identifier and slug derived together — so the name, the key and the
+   *      address keep describing the same words. A suffixed key would make the
+   *      key disagree with the name the person reads.
+   *   2. once the draws are spent, the LAST drawn name with the shipped
+   *      numeric identifier suffix and random slug suffix. The seeding still
+   *      COMPLETES — an exhausted draw is a degraded success, never an error —
+   *      and it is recorded as ONE structured `console.warn` naming the
+   *      workspace and the name, so it is a fact somebody can find.
+   *   3. `IdentifierCollisionError`, only when that suffixed candidate is held
+   *      as well — no candidate the loop knows is free.
+   *
+   * `createProject` keeps its own suffix-only loop: a name a person typed is
+   * never redrawn.
    */
   async ensureDefaultProject(input: {
     workspaceId: string;
@@ -594,9 +614,19 @@ export const projectsService = {
   }): Promise<ProjectDTO | null> {
     await projectsService.assertMembership(input.actorUserId, input.workspaceId);
 
-    // The default project is named for its WORKSPACE. Not for the user (a
-    // second workspace's default would carry the first one's owner) and not
-    // "Untitled" (which reads as a placeholder nobody chose).
+    // The default project carries a GENERATED, deliberately random-looking
+    // name — "quiet-harbor-4821" (Story MOTIR-8239) — so the person can see it
+    // is a placeholder and renames it in project settings. Not the workspace's
+    // name (a project named after the workspace that holds it reads as a
+    // duplicate, and a second project then needs a name the first one took),
+    // and not the user's (a second workspace's default would carry the first
+    // one's owner). It is drawn ONCE per seeding, before the retry loop, and
+    // the identifier and slug are derived from the drawn name, so all three
+    // handles agree.
+    //
+    // ⚠️ The workspace read is KEPT although its name is no longer used: it is
+    // the existence-and-membership probe that turns a vanished workspace into
+    // a NotAMemberError before any write.
     //
     // ⚠️ Read BOUND. `workspace` is a tenant-root table with no public arm, so
     // an unbound `findById` compares the policy against NULL and answers null
@@ -608,16 +638,19 @@ export const projectsService = {
       (tx) => workspaceRepository.findByIdInTx(input.workspaceId, tx),
     );
     if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
-    const name = workspace.name.trim();
-    const identifierBase = deriveIdentifierBase(name);
-    const slugBase = slugify(name);
-
-    let identifier = identifierBase;
-    let slug = slugBase;
+    // The name this attempt inserts. Re-drawn on a collision (rung 1), so it is
+    // a per-attempt local rather than the first draw's.
+    let name = generateProjectName();
+    let identifier = deriveIdentifierBase(name);
+    let slug = slugify(name);
+    let suffixed = false;
     let lastIdentifier = identifier;
 
     for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
       lastIdentifier = identifier;
+      // Set only when THIS call's insert ran — an idempotent return of an
+      // existing project is not an exhausted draw.
+      let inserted = false;
       try {
         const project = await withWorkspaceContext(
           { userId: input.actorUserId, workspaceId: input.workspaceId },
@@ -642,7 +675,7 @@ export const projectsService = {
               return enterable ?? null;
             }
 
-            return insertProjectWithSeedsInTx(
+            const created = await insertProjectWithSeedsInTx(
               {
                 workspaceId: input.workspaceId,
                 name,
@@ -652,18 +685,43 @@ export const projectsService = {
               },
               tx,
             );
+            inserted = true;
+            return created;
           },
         );
+        if (inserted && suffixed) {
+          // Rung 2 landed: record the degraded completion. A warning, not an
+          // error — the person still gets a project and lands where they meant
+          // to — and console is this codebase's diagnostic channel.
+          console.warn('[projectsService.ensureDefaultProject] generated-name draws exhausted', {
+            workspaceId: input.workspaceId,
+            name,
+            identifier,
+            slug,
+          });
+        }
         return project ? toProjectDTO(project) : null;
       } catch (err) {
         if (isUniqueViolation(err) || err instanceof ReservedIdentifierSentinel) {
-          identifier = identifierWithSuffix(identifierBase, attempt + 1);
-          slug = `${slugBase}-${randomSlugSuffix()}`;
+          if (attempt + 1 < RETRY_ATTEMPTS - 1) {
+            // Rung 1 — a fresh draw, all three handles derived from it.
+            name = generateProjectName();
+            identifier = deriveIdentifierBase(name);
+            slug = slugify(name);
+          } else {
+            // Rung 2 — the draws are spent: the last drawn name with the
+            // shipped suffixes. Should this candidate be held too, the loop
+            // ends and rung 3 throws below.
+            identifier = identifierWithSuffix(deriveIdentifierBase(name), 1);
+            slug = `${slugify(name)}-${randomSlugSuffix()}`;
+            suffixed = true;
+          }
           continue;
         }
         throw err;
       }
     }
+    // Rung 3 — every candidate the ladder knows is held.
     throw new IdentifierCollisionError(lastIdentifier);
   },
 

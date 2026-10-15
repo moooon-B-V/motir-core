@@ -202,7 +202,10 @@ describe('8.8.29 — last-active project seam (write actions ↔ read resolver)'
     // …and it is the NEW workspace's own project, not the seed workspace's.
     const seeded = await projectsService.getActiveProject(user.id, created.id);
     expect(pointer).toBe(seeded!.id);
-    expect(seeded!.name).toBe('Fresh');
+    // MOTIR-8239 — the seeded project carries a generated, random-looking
+    // name, not the new workspace's.
+    expect(seeded!.name).toMatch(/^[a-z]+-[a-z]+-[1-9][0-9]{3}$/);
+    expect(seeded!.name).not.toBe('Fresh');
   });
 
   it('sync invariant — after a project switch, the global and membership pointers agree', async () => {
