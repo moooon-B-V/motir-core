@@ -2614,6 +2614,10 @@ card**, not a nicety.
 
 ### D2 — `add` ONLY. A `modify` may not rewrite a committed card's list
 
+> **Overturned by AMENDMENT 27 (MOTIR-8668).** A `modify` now carries `patch.todos`, which REPLACES the
+> list; the cost this D names is kept visible instead of forbidden. Read on for the original reasoning,
+> which AMENDMENT 27 answers.
+
 `PlanItemPatch` (`lib/dto/plans.ts:220`) gains NO `todos` key, and `PLAN_ITEM_PATCH_KEYS` with its
 compile-time exhaustiveness guard (`lib/dto/plans.ts:350-380`) is untouched.
 
@@ -4323,3 +4327,40 @@ reasoning; what it changed:
 
 Unchanged: the revision backstop (it keeps its own lease-age window), the target-lock leases, the
 value of `PLAN_STALLED_AFTER_MS`, and motir-ai.
+
+---
+
+## AMENDMENT 27 — a `modify` REPLACES a committed card's steps: `patch.todos` (MOTIR-8668, 2026-10-15)
+
+AMENDMENT 14 D2 kept the step list off the patch. The cost of that rule turned out to land on the
+cards it was protecting: a re-plan that finds a `manual` card with no steps, or with the wrong ones,
+had no way to give it steps on the plan a person approves. The planner had to leave the card stepless
+or route around the plan with `add_work_item_todo` calls nobody reviews, and a `manual` card without
+steps is the card a person cannot act on.
+
+**§1 — the key.** `PlanItemPatch.todos` is `ProposedTodoInput[] | null`, the `add` path's shape. It
+is a REPLACEMENT, never a merge or a delta: at approve the target's list becomes exactly the array, in
+order, with no row ticked, and every prior row is deleted. Absent leaves the list alone; `[]` or
+`null` clears it. Applied by `applyModify` through the repository (approve is ONE transaction), with
+the `add` path's normalizers and executor seed (the step's own executor, else the card's executor as
+the patch leaves it, else `human`), and recorded in the revision as the `todos` cell
+`workItemTodosService` writes (`{ added, removed }`). D2's `todosAdd` / `todosRemove` delta stays
+rejected: a re-plan states the list it wants, and a merge would have to decide what a ticked row
+means in the new order.
+
+**§2 — the rules it is held to.** The rows meet the store's caps (`validateProposedTodos`, at the
+append and the correction). A non-empty list on a container is refused: by `INVALID_PROPOSAL` at the
+append and the correction, judged on the target's projected kind (a re-kind in the same patch
+counts), and as the new grammar reason `todos_on_container` at the close and approve, for a target
+re-kinded after the append. `todos` is NOT a mark key, so a `modify` of a `done` / `cancelled` card
+that carries it is refused `PLAN_TARGET_IMMUTABLE`.
+
+**§3 — the cost D2 named is SHOWN, not hidden.** D2's objection was that ticked rows are a person's
+progress and the loss would be silent under one approval. Both read surfaces now state it on the
+proposal: the review emits a `todos` change row whose FROM side is the live count with its ticked
+count (`5 (2 ✓)`) and whose TO side is the new steps, numbered; `get_plan` prints
+`todos: N steps (replaces M, K ticked)`. The peek's `todos` field stays `add`-only (D6): it shows what
+approve will write for a NEW card, and the live list is still never substituted for it.
+
+**Not in scope.** motir-ai's `MODIFY_PATCH_KEYS` mirror and the planners' rules that would make use
+of the key; a plan authored there cannot propose a replacement until it learns it.

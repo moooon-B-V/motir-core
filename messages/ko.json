@@ -235,6 +235,7 @@
     "noteShowLess": "간단히 보기",
     "field_description": "설명",
     "field_explanation": "근거",
+    "field_todos": "단계",
     "field_links": "종속성",
     "field_parent": "상위 항목",
     "field_targetRepo": "저장소",

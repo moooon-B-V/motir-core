@@ -292,13 +292,13 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     },
     todos: {
       addOnly:
-        'AMENDMENT 14 D2 — a `modify` patch carries NO `todos` (`patchSchema` declares none and ' +
-        '`applyModify` writes only PLAN_ITEM_PATCH_KEYS), so on any op but `add` there is no ' +
-        'proposed side at all. And the target side must NOT be substituted for it the way the ' +
-        "MOTIR-4143 rail fields substitute theirs: a committed card's list is a person's " +
-        'PROGRESS — ticked rows — so reporting it here would show work somebody already did on ' +
-        'the surface that says what approve will WRITE, which is the one confusion this whole ' +
-        'story exists to remove.',
+        'AMENDMENT 27 (MOTIR-8668, overturning AMENDMENT 14 D2) — a `modify` patch MAY carry ' +
+        '`todos` now, and it REPLACES the list, so the review shows it as a `todos` CHANGE row ' +
+        '(`buildChanges`: the live count with its ticked count → the new steps). The peek field ' +
+        'stays `add`-only all the same: the target side must NOT be substituted for it the way ' +
+        "the MOTIR-4143 rail fields substitute theirs, because a committed card's list is a " +
+        "person's PROGRESS — ticked rows — and reporting it here would show work somebody " +
+        'already did on the surface that says what approve will WRITE.',
     },
     planningProvenance: {
       addOnly:
@@ -563,6 +563,7 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     estimateMinutes: { row: 'estimateMinutes' },
     // A leaf's DIFFICULTY (MOTIR-6133 carries it, MOTIR-6137 renders it).
     difficulty: { row: 'difficulty' },
+    todos: { row: 'todos' },
     // The two this bug was filed about.
     targetRepo: { row: 'targetRepo' },
     // The SET spellings of the SAME axis (bug MOTIR-4904) land on the same row.

@@ -235,6 +235,7 @@
     "noteShowLess": "Afficher moins",
     "field_description": "Description",
     "field_explanation": "Explication",
+    "field_todos": "Étapes",
     "field_links": "Dépendances",
     "field_parent": "Parent",
     "field_targetRepo": "Dépôt",

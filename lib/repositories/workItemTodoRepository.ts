@@ -112,6 +112,15 @@ export const workItemTodoRepository = {
   },
 
   /**
+   * Delete EVERY to-do on one card — the first half of a plan `modify`'s list
+   * REPLACEMENT (MOTIR-8668). Returns how many rows went.
+   */
+  async deleteByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const r = await tx.workItemTodo.deleteMany({ where: { workItemId } });
+    return r.count;
+  },
+
+  /**
    * How many of a card's to-dos exist and how many are ticked, in ONE query.
    *
    * ⚠️ Read inside the WRITE's transaction, never after it. The tick path
