@@ -555,11 +555,15 @@ test('the canvas follows the planner while a plan is written, stops when the rea
     });
 
     await chapter('The plan page never drives — read as a Visitor', async () => {
-      // A sibling plan, still being written, on the project made public.
+      // A sibling plan, still being written, on the project made public. The
+      // first plan still holds every card it planned until someone decides it,
+      // so the sibling plans two stories of its own.
+      const s3 = await addPlanProgressStory(seed, 'Plan page reading');
+      const s4 = await addPlanProgressStory(seed, 'Plan page sharing');
       const siblingTitle = 'Agent plan — the page reads it';
       const siblingId = await mcpCreatePlan(agent, seed, siblingTitle);
-      const [c1] = await mcpAdd(agent, siblingId, [C1], seed.storyId);
-      const [c2] = await mcpAdd(agent, siblingId, [C2], s2.id);
+      const [c1] = await mcpAdd(agent, siblingId, [C1], s3.id);
+      const [c2] = await mcpAdd(agent, siblingId, [C2], s4.id);
       await mcpStep(agent, siblingId, 'page-1', 'author', ref(c1!));
 
       await signIn(page, visitor.email, PLAN_PROGRESS_PASSWORD);
