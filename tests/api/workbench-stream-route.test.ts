@@ -18,10 +18,13 @@ import { spyOnJobDispatch } from '../helpers/jobs';
 //   · THE GATE RUNS BEFORE THE STREAM OPENS, so a refusal is a real status with
 //     a JSON body and NO frame — a stream that opened and then errored would
 //     satisfy a test that only checked the status.
-//   · A DISCONNECT STOPS THE POLL. There is no terminal state here, so `cancel()`
-//     is the only thing that ever ends this stream; a loop that ignores it
-//     re-reads the database every second for a reader who has closed the tab,
-//     for ever, and nothing anywhere goes red.
+//   · A DISCONNECT ENDS THE SESSION. There is no terminal state here, so
+//     `cancel()` is the only thing that ever ends this stream; a session that
+//     ignores it stays subscribed and keeps re-reading the database for a reader
+//     who has closed the tab, for ever, and nothing anywhere goes red.
+//   · A WRITE IS HEARD BY PUSH. Since MOTIR-8729 nothing polls: a committed
+//     write fires the live-signal trigger, the process's real listener hub hears
+//     it, and the stream re-reads. These tests drive that whole path for real.
 //   · REPLAYING A CURSOR IS HARMLESS. The cursor names a STATE rather than a
 //     position, which is what replaces the run stream's
 //     `@@unique([dispatchRunId, seq])`, and the only way to show it is to
@@ -39,13 +42,16 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
 });
 
 const { GET } = await import('@/app/api/workbench/stream/route');
-const { WORKBENCH_STREAM_POLL_MS, WORKBENCH_STREAM_HEARTBEAT_MS, WORKBENCH_STREAM_FRAME } =
-  await import('@/app/api/workbench/stream/route');
+const routeModule = await import('@/app/api/workbench/stream/route');
 const {
-  GET: getRunStream,
-  DISPATCH_RUN_STREAM_POLL_MS,
-  DISPATCH_RUN_STREAM_HEARTBEAT_MS,
-} = await import('@/app/api/dispatch-runs/[id]/stream/route');
+  WORKBENCH_STREAM_BACKSTOP_MS,
+  WORKBENCH_STREAM_COALESCE_MS,
+  WORKBENCH_STREAM_HEARTBEAT_MS,
+  WORKBENCH_STREAM_FRAME,
+} = routeModule;
+const { GET: getRunStream, DISPATCH_RUN_STREAM_HEARTBEAT_MS } =
+  await import('@/app/api/dispatch-runs/[id]/stream/route');
+const { getLiveSignalHub } = await import('@/lib/live/liveSignalHub');
 const { dispatchRunService } = await import('@/lib/services/dispatchRunService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { projectsService } = await import('@/lib/services/projectsService');
@@ -71,9 +77,30 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  await getLiveSignalHub().stop();
   await db.$disconnect();
   await adminDb.$disconnect();
 });
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Wait until `condition` holds, or fail naming what was awaited. */
+async function until(condition: () => boolean, what: string, budgetMs = 8_000): Promise<void> {
+  const deadline = Date.now() + budgetMs;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await sleep(20);
+  }
+}
+
+/**
+ * Wait until the process's listener is LISTENING. A write that commits before
+ * then is not lost — the connect's catch-up read picks it up — but waiting makes
+ * each test exercise the path it names rather than the catch-up.
+ */
+async function listening(): Promise<void> {
+  await until(() => getLiveSignalHub().connected, 'the live-signal listener to connect');
+}
 
 function req(path: string): Request {
   return new Request(`${BASE}${path}`);
@@ -204,11 +231,17 @@ describe('THE CONVENTION — asserted against the SHIPPED route, not against a l
     }
   });
 
-  it('polls and heartbeats on the SAME intervals the shipped route uses', () => {
-    // Read from the shipped route's own exported constants. Two copies of `1_000`
-    // agree today; these cannot disagree tomorrow without somebody seeing it.
-    expect(WORKBENCH_STREAM_POLL_MS).toBe(DISPATCH_RUN_STREAM_POLL_MS);
+  it('heartbeats on the SAME interval the shipped route uses', () => {
+    // Read from the shipped route's own exported constant. Two copies of
+    // `15_000` agree today; these cannot disagree tomorrow without somebody
+    // seeing it.
     expect(WORKBENCH_STREAM_HEARTBEAT_MS).toBe(DISPATCH_RUN_STREAM_HEARTBEAT_MS);
+  });
+
+  it('has no poll interval any more — only a coalescing window and a backstop (MOTIR-8729)', () => {
+    expect('WORKBENCH_STREAM_POLL_MS' in routeModule).toBe(false);
+    expect(WORKBENCH_STREAM_COALESCE_MS).toBe(250);
+    expect(WORKBENCH_STREAM_BACKSTOP_MS).toBe(60_000);
   });
 });
 
@@ -257,8 +290,7 @@ describe('THE FRAMES', () => {
   it('writes a frame when something moves WHILE the reader is connected', async () => {
     const res = await GET(req('/api/workbench/stream'));
     const reading = readFrames(res, 2, 8_000);
-    // After the opening frame, and inside the poll interval.
-    await new Promise((resolve) => setTimeout(resolve, WORKBENCH_STREAM_POLL_MS / 2));
+    await listening();
     await card('Arrived while they were looking');
 
     const { frames } = await reading;
@@ -304,35 +336,28 @@ describe('THE RESUME CONTRACT', () => {
   });
 });
 
-describe('A DISCONNECT STOPS THE POLL — the only thing that ever ends this stream', () => {
-  it('stops calling the watermark read once the reader has gone', async () => {
+describe('A DISCONNECT ENDS THE SESSION — the only thing that ever ends this stream', () => {
+  it('unsubscribes and stops re-reading once the reader has gone', async () => {
     const spy = vi.spyOn(workbenchWatermarkService, 'read');
-    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const hub = getLiveSignalHub();
+    const before = hub.subscriberCount;
 
     const res = await GET(req('/api/workbench/stream'));
     const reader = res.body!.getReader();
     await reader.read(); // the opening frame
-    // Let it poll, so the assertion is about a loop that WAS running rather than
-    // one that never started.
-    await sleep(WORKBENCH_STREAM_POLL_MS * 2);
-    const whileConnected = spy.mock.calls.length;
-    expect(whileConnected).toBeGreaterThan(1);
+    expect(hub.subscriberCount).toBe(before + 1);
+    await listening();
+    // A write while connected IS re-read, so the assertion below is about a
+    // session that was live rather than one that never started.
+    await card('Seen while connected');
+    await until(() => spy.mock.calls.length > 1, 'the re-read a write causes');
 
     await reader.cancel();
-
-    // ⚠️ THE ASSERTION IS THAT THE COUNT STOPS GROWING, MEASURED AFTER A DRAIN —
-    // not that it stops growing instantly. Two things make an instant assertion
-    // wrong here, and the first cost a green run's worth of confusion before it
-    // was understood: a poll already IN FLIGHT when `cancel()` landed completes
-    // normally, and the spy is on a MODULE, so any stream an earlier test in
-    // this file opened contributes its own last in-flight poll too. Both drain
-    // within one poll interval. What must never happen is the count continuing
-    // to climb, which is what an ignored `cancel()` looks like — for ever, on a
-    // stream with no terminal state to end it instead.
-    await sleep(WORKBENCH_STREAM_POLL_MS * 2);
+    expect(hub.subscriberCount).toBe(before);
     const settled = spy.mock.calls.length;
-    await sleep(WORKBENCH_STREAM_POLL_MS * 3);
 
+    await card('Filed after the reader left');
+    await sleep(WORKBENCH_STREAM_COALESCE_MS * 4);
     expect(spy.mock.calls.length).toBe(settled);
   });
 });
@@ -343,35 +368,34 @@ describe('A DISCONNECT STOPS THE POLL — the only thing that ever ends this str
 // already closed, so `cancel()` never runs, and the only thing that knows the
 // reader has gone is `req.signal`. These drive the route the way that departure
 // reaches it — the signal aborts and the body is NEVER cancelled.
-describe('A DEPARTURE THE STREAM IS NEVER TOLD ABOUT STILL STOPS THE POLL', () => {
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  it('stops polling when the request aborts, with the body left uncancelled', async () => {
+describe('A DEPARTURE THE STREAM IS NEVER TOLD ABOUT STILL ENDS THE SESSION', () => {
+  it('unsubscribes when the request aborts, with the body left uncancelled', async () => {
     const spy = vi.spyOn(workbenchWatermarkService, 'read');
+    const hub = getLiveSignalHub();
+    const before = hub.subscriberCount;
     const leave = new AbortController();
 
     const res = await GET(new Request(`${BASE}/api/workbench/stream`, { signal: leave.signal }));
     const reader = res.body!.getReader();
     await reader.read(); // the opening frame
-    await sleep(WORKBENCH_STREAM_POLL_MS * 2);
-    expect(spy.mock.calls.length).toBeGreaterThan(1);
+    expect(hub.subscriberCount).toBe(before + 1);
 
     leave.abort();
 
-    // The same drain-then-hold measurement as the `cancel()` case above, for the
-    // same two reasons. Before MOTIR-8568 this count climbed by one a second for
-    // as long as the process lived.
-    await sleep(WORKBENCH_STREAM_POLL_MS * 2);
-    const settled = spy.mock.calls.length;
-    await sleep(WORKBENCH_STREAM_POLL_MS * 3);
-    expect(spy.mock.calls.length).toBe(settled);
+    expect(hub.subscriberCount).toBe(before);
+    await listening();
+    await card('Filed after the reader left');
+    await sleep(WORKBENCH_STREAM_COALESCE_MS * 4);
+    expect(spy.mock.calls.length).toBe(1);
 
     // And the stream ENDS rather than hanging open with nobody writing to it.
     let done = false;
     while (!done) ({ done } = await reader.read());
   });
 
-  it('opens no stream at all for a reader who left while the first read was in flight', async () => {
+  it('opens no stream for a reader who left while the first read was in flight', async () => {
+    const hub = getLiveSignalHub();
+    const before = hub.subscriberCount;
     const leave = new AbortController();
     const actual = workbenchWatermarkService.read.bind(workbenchWatermarkService);
     const spy = vi
@@ -385,49 +409,59 @@ describe('A DEPARTURE THE STREAM IS NEVER TOLD ABOUT STILL STOPS THE POLL', () =
     const res = await GET(new Request(`${BASE}/api/workbench/stream`, { signal: leave.signal }));
     expect(res.status).toBe(204);
     expect(res.body).toBeNull();
+    expect(hub.subscriberCount).toBe(before);
 
-    await sleep(WORKBENCH_STREAM_POLL_MS * 3);
+    await listening();
+    await card('Filed after the reader left');
+    await sleep(WORKBENCH_STREAM_COALESCE_MS * 4);
     expect(spy.mock.calls.length).toBe(1);
+  });
+
+  it('never subscribes for a reader whose request had already aborted', async () => {
+    const subscribe = vi.spyOn(getLiveSignalHub(), 'subscribe');
+    const leave = new AbortController();
+    leave.abort();
+
+    const res = await GET(new Request(`${BASE}/api/workbench/stream`, { signal: leave.signal }));
+
+    expect(res.status).toBe(204);
+    expect(subscribe).not.toHaveBeenCalled();
   });
 });
 
-describe('A MID-STREAM FAILURE is a terminal `error` FRAME, never a status', () => {
-  it('writes the frame the shipped contract specifies once the headers have gone', async () => {
-    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+describe('A RE-READ THAT FAILS after the stream opened is logged, and the stream stays open', () => {
+  it('writes no error frame and the next write is still delivered', async () => {
     // The first read succeeds — it is the one that happens BEFORE the stream is
-    // constructed, and it is what makes a refusal a real status. Everything
-    // after it is inside an open response, where the only thing left to say is
-    // a frame.
+    // constructed, and it is what makes a refusal a real status. The second
+    // fails; the third is real again.
     let call = 0;
     // ⚠️ THE ORIGINAL IS CAPTURED BEFORE THE SPY REPLACES IT. `vi.importActual`
     // hands back the same service object this spy patched, so calling through it
-    // re-enters the mock — the first read then throws too, and the test fails
-    // for the opposite reason to the one it is about.
+    // re-enters the mock.
     const real = workbenchWatermarkService.read.bind(workbenchWatermarkService);
     vi.spyOn(workbenchWatermarkService, 'read').mockImplementation(async (...args) => {
       call += 1;
-      if (call === 1) return real(...args);
-      throw new Error('the database went away');
+      if (call === 2) throw new Error('the database went away');
+      return real(...args);
     });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const res = await GET(req('/api/workbench/stream'));
     expect(res.status).toBe(200);
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let text = '';
-    const deadline = Date.now() + 6_000;
-    while (!text.includes('event: error') && Date.now() < deadline) {
-      const chunk = await Promise.race([
-        reader.read(),
-        sleep(deadline - Date.now()).then(() => ({ done: true, value: undefined }) as const),
-      ]);
-      if (chunk.done || !chunk.value) break;
-      text += decoder.decode(chunk.value, { stream: true });
-    }
-    await reader.cancel();
+    const reading = readFrames(res, 2, 10_000);
+    await listening();
 
-    expect(text).toContain('event: error');
-    expect(text).toContain('INTERNAL_ERROR');
-    expect(text).toContain('the database went away');
+    await card('The read of this one fails');
+    await until(() => call >= 2, 'the failing re-read');
+    await sleep(WORKBENCH_STREAM_COALESCE_MS);
+    await card('This one is delivered');
+
+    const { frames } = await reading;
+    expect(frames.map((f) => f.event)).toEqual([WORKBENCH_STREAM_FRAME, WORKBENCH_STREAM_FRAME]);
+    expect(frames[1]!.data.moved).toContain('toDo');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[workbench-stream] re-read failed'),
+      'the database went away',
+    );
   });
 });
