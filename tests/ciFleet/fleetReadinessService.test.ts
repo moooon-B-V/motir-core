@@ -10,6 +10,7 @@ import {
 } from '@/lib/services/fleetReadinessService';
 import type { FleetJobInventory, FleetInventoryJob } from '@/lib/ciFleet/fleetJobInventoryTypes';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -591,6 +592,145 @@ describe('image_coverage', () => {
   });
 });
 
+describe('the reads that can fail, and the remaining shapes', () => {
+  /** Answer one path from `override`, every other from the world's fake. */
+  function overrideFetch(path: string, override: () => Response | Promise<Response>): void {
+    const inner = globalThis.fetch;
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) =>
+      new URL(String(url)).pathname === path ? override() : inner(url, init),
+    );
+  }
+
+  it('a refused visibility read ⇒ the three conditions that need the private set are unknown', async () => {
+    world.visibility.delete('web');
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expect(result.ready).toBe(false);
+    for (const key of ['app_repositories', 'delivery_attributable', 'image_coverage']) {
+      expect(cond(result, key)).toMatchObject({
+        state: 'unknown',
+        reasonCode: 'read_failed',
+        params: { status: 404 },
+      });
+      expect(cond(result, key).message).toContain('GitHub answered HTTP 404');
+    }
+    expect(cond(result, 'runner_group').state).toBe('met');
+  });
+
+  it('a visibility read that fails with no GitHub status reads as unreachable, and leaks nothing', async () => {
+    overrideFetch(`/repos/${ORG}/api`, () => {
+      // A response whose `ok` getter throws: an error that is none of GitHub's.
+      return {
+        get ok(): boolean {
+          throw new TypeError('the private detail');
+        },
+        json: async () => ({}),
+      } as unknown as Response;
+    });
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expect(cond(result, 'app_repositories')).toMatchObject({
+      state: 'unknown',
+      params: { status: null },
+    });
+    expect(cond(result, 'app_repositories').message).toContain('GitHub could not be reached');
+    expect(JSON.stringify(result)).not.toContain('the private detail');
+  });
+
+  it('a failed installation-repositories read ⇒ app_repositories unknown, the rest met', async () => {
+    overrideFetch('/installation/repositories', () => json(502, { message: 'Bad Gateway' }));
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expectOnly(result, 'app_repositories', 'unknown');
+    expect(cond(result, 'app_repositories').params).toEqual({ status: 502 });
+  });
+
+  it('MIRRORED installation whose row sits in another workspace ⇒ other_workspace', async () => {
+    world.installationId = MIRROR_INSTALLATION;
+    const real = githubRepoRepository.findByInstallationAndRepoId.bind(githubRepoRepository);
+    vi.spyOn(githubRepoRepository, 'findByInstallationAndRepoId').mockImplementation(
+      async (installationId, repoId, tx) => {
+        const row = await real(installationId, repoId, tx);
+        return row && repoId === String(repoIds.get('api'))
+          ? { ...row, workspaceId: 'another-workspace' }
+          : row;
+      },
+    );
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expectOnly(result, 'delivery_attributable', 'unmet');
+    expect(cond(result, 'delivery_attributable').params).toMatchObject({
+      path: 'mirrored',
+      failures: [{ repository: `${ORG}/api`, reason: 'other_workspace' }],
+    });
+    expect(cond(result, 'delivery_attributable').message).toContain(
+      'a mirror row in another workspace',
+    );
+  });
+
+  it('UNMIRRORED installation whose one row sits in another workspace ⇒ other_workspace', async () => {
+    const real = githubRepoRepository.listByRepoId.bind(githubRepoRepository);
+    vi.spyOn(githubRepoRepository, 'listByRepoId').mockImplementation(async (repoId, tx) => {
+      const rows = await real(repoId, tx);
+      return repoId === String(repoIds.get('web'))
+        ? rows.map((r) => ({ ...r, workspaceId: 'another-workspace' }))
+        : rows;
+    });
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expectOnly(result, 'delivery_attributable', 'unmet');
+    expect(cond(result, 'delivery_attributable').params).toMatchObject({
+      path: 'unmirrored',
+      failures: [{ repository: `${ORG}/web`, reason: 'other_workspace' }],
+    });
+  });
+
+  it('an attribution read that throws ⇒ delivery_attributable unknown, naming only the error class', async () => {
+    const spy = vi.spyOn(githubRepoRepository, 'listByRepoId');
+    spy.mockRejectedValueOnce(new RangeError('the private detail'));
+    const first = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expectOnly(first, 'delivery_attributable', 'unknown');
+    expect(cond(first, 'delivery_attributable')).toMatchObject({ reasonCode: 'read_failed' });
+    expect(cond(first, 'delivery_attributable').message).toContain(': RangeError.');
+    expect(JSON.stringify(first)).not.toContain('the private detail');
+
+    spy.mockRejectedValueOnce('not an error');
+    const second = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expect(cond(second, 'delivery_attributable').message).toContain(': read failed.');
+  });
+
+  it('a runner-group read that throws ⇒ runner_group unknown, naming only the error class', async () => {
+    const spy = vi.spyOn(projectRunnerGroupService, 'readForOrg');
+    spy.mockRejectedValueOnce(new SyntaxError('the private detail'));
+    const first = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expectOnly(first, 'runner_group', 'unknown');
+    expect(cond(first, 'runner_group')).toMatchObject({ reasonCode: 'read_failed' });
+    expect(cond(first, 'runner_group').message).toContain('(SyntaxError)');
+    expect(JSON.stringify(first)).not.toContain('the private detail');
+
+    spy.mockRejectedValueOnce(42);
+    const second = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    expect(cond(second, 'runner_group').message).toContain('(read failed)');
+  });
+
+  it('two private repositories missing from the manifest are named in the plural', async () => {
+    const inv = inventory();
+    delete inv.repos[`${ORG}/web`];
+    delete inv.repos[`${ORG}/api`];
+    const result = await fleetReadinessService.readinessFor(target(), { inventory: inv });
+    expectOnly(result, 'image_coverage', 'unmet');
+    expect(cond(result, 'image_coverage')).toMatchObject({
+      reasonCode: 'not_inventoried',
+      params: { repositories: [`${ORG}/api`, `${ORG}/web`] },
+    });
+    expect(cond(result, 'image_coverage').message).toContain('are not in the fleet job inventory');
+    expect(cond(result, 'image_coverage').message).toContain('their jobs');
+  });
+
+  it('one job not runnable is named in the singular', async () => {
+    const result = await fleetReadinessService.readinessFor(target(), {
+      inventory: inventory({ web: [job('lint', { verdict: 'needs-image', missing: [] })] }),
+    });
+    expect(cond(result, 'image_coverage').message).toMatch(/^1 job cannot run/);
+    expect(cond(result, 'image_coverage').message).toContain('lint (needs-image)');
+  });
+});
+
 describe('the boundary', () => {
   it('throws FleetReadinessTargetNotFoundError for a project that does not exist', async () => {
     await expect(
@@ -621,6 +761,13 @@ describe('the boundary', () => {
     } catch {
       out = ''; // git grep exits 1 when nothing matches
     }
-    expect(out).toBe('');
+    // A COMMENT may name what the code refuses to do — the service's own header
+    // says it has no `isMeta` — so only code lines are judged (MOTIR-8716: this
+    // grep matched that comment and was red from the commit that added it).
+    const codeHits = out
+      .split('\n')
+      .filter((line) => line !== '')
+      .filter((line) => !/^[^:]+:\d+:\s*(\/\/|\*|\/\*)/.test(line));
+    expect(codeHits).toEqual([]);
   });
 });

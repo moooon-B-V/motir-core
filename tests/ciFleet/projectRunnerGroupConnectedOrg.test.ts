@@ -6,7 +6,8 @@ import {
   projectRunnerGroupService,
   RunnerGroupNotProvisionedError,
 } from '@/lib/services/projectRunnerGroupService';
-import { runnerGroupNameFor } from '@/lib/github/runnerGroups';
+import { runnerGroupClient, runnerGroupNameFor } from '@/lib/github/runnerGroups';
+import { repoVisibilityClient } from '@/lib/github/repoVisibility';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
@@ -374,6 +375,61 @@ describe('handoff and deletion', () => {
     });
     expect(connectedGroups.groups.size).toBe(0);
     expect(await adminDb.projectRunnerGroup.count()).toBe(0);
+  });
+});
+
+describe('the failure edges (MOTIR-8716)', () => {
+  it('requireRunnerGroupIdFor the provisioning org with no group names that org', async () => {
+    const fx = await makeWorkItemFixture();
+    const err = await projectRunnerGroupService
+      .requireRunnerGroupIdFor(targetOf(fx), MOTIR_ORG)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RunnerGroupNotProvisionedError);
+    expect((err as RunnerGroupNotProvisionedError).org).toBe(MOTIR_ORG);
+    expect((err as Error).message).toContain(`in ${MOTIR_ORG}`);
+  });
+
+  it('a connected-org group GitHub will not delete is delete_failed, and its row stays for a retry', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepos(fx, ['motir-core']);
+    visibility.set('motir-core', true);
+    await projectRunnerGroupService.syncForProject(targetOf(fx));
+    const groupId = connectedGroups.onlyGroup().id;
+    connectedGroups.failWith(500, 5);
+
+    const result = await projectRunnerGroupService.deleteForProject(targetOf(fx));
+    expect(result.connectedOrgs).toEqual([
+      expect.objectContaining({
+        org: CONNECTED_ORG,
+        outcome: 'delete_failed',
+        runnerGroupId: groupId,
+      }),
+    ]);
+    expect(await adminDb.projectRunnerGroup.count()).toBe(1);
+    expect(connectedGroups.groups.size).toBe(1);
+  });
+
+  it('a failure that is not an Error is reported as unknown, on delete and on sync', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepos(fx, ['motir-core']);
+    visibility.set('motir-core', true);
+    await projectRunnerGroupService.syncForProject(targetOf(fx));
+
+    vi.spyOn(repoVisibilityClient, 'isPrivate').mockRejectedValueOnce('not an error');
+    const synced = await projectRunnerGroupService.syncForProject(targetOf(fx));
+    expect(synced.connectedOrgs).toEqual([
+      { org: CONNECTED_ORG, outcome: 'sync_pending', detail: 'unknown' },
+    ]);
+
+    const real = runnerGroupClient.deleteGroup.bind(runnerGroupClient);
+    vi.spyOn(runnerGroupClient, 'deleteGroup').mockImplementation(async (id, target) => {
+      if (target) throw 'not an error either';
+      return real(id, target);
+    });
+    const deleted = await projectRunnerGroupService.deleteForProject(targetOf(fx));
+    expect(deleted.connectedOrgs).toEqual([
+      expect.objectContaining({ org: CONNECTED_ORG, outcome: 'delete_failed', detail: 'unknown' }),
+    ]);
   });
 });
 

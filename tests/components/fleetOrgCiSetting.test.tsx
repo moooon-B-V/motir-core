@@ -379,3 +379,183 @@ describe('FleetOrgCiSetting', () => {
     expect(screen.getByTestId('fleet-readiness').textContent).toContain('Checked again');
   });
 });
+
+describe('FleetOrgCiSetting — the remaining states (MOTIR-8716)', () => {
+  const enabledState = (over: Partial<FleetOrgCiStateDTO> = {}) =>
+    state({
+      enabled: true,
+      variable: { state: 'present', value: 'motir-runner', visibility: 'private' },
+      ...over,
+    });
+
+  it('stored OFF while GitHub still holds the variable is drift', () => {
+    render(state({ variable: { state: 'present', value: 'motir-runner', visibility: 'private' } }));
+    expect(screen.getByTestId('fleet-org-ci-drift').textContent).toContain(
+      'Stored off, but GitHub disagrees.',
+    );
+  });
+
+  it('a setting nobody has changed says so; an unreadable variable gives its status or says unreachable', () => {
+    render(state({ updatedBy: null, updatedAt: null, lastReason: null }));
+    expect(screen.getByTestId('fleet-org-ci-last-changed').textContent).toBe('Never changed');
+    cleanup();
+    render(state({ variable: { state: 'unknown', status: 502 } }));
+    expect(screen.getByTestId('fleet-org-ci-variable').textContent).toBe(
+      "Couldn't read MOTIR_RUNNER on acme-ci — GitHub answered HTTP 502.",
+    );
+    cleanup();
+    render(state({ variable: { state: 'unknown', status: null } }));
+    expect(screen.getByTestId('fleet-org-ci-variable').textContent).toBe(
+      "Couldn't read MOTIR_RUNNER on acme-ci — GitHub could not be reached.",
+    );
+  });
+
+  it('a recorded change with no time and no reason still names who', () => {
+    render(state({ updatedAt: null, lastReason: null }));
+    expect(screen.getByTestId('fleet-org-ci-last-changed').textContent).toContain(
+      'by ops@example.test,  — “”',
+    );
+  });
+
+  it('with no met repository list the line is left out and the ON confirm counts none', async () => {
+    const unmetRepos: FleetReadinessCondition = {
+      key: 'app_repositories',
+      state: 'unmet',
+      reasonCode: 'repositories_not_granted',
+      params: { org: 'acme-ci', missing: ['acme-ci/api'] },
+      message: 'x',
+    };
+    const coverageUnknown: FleetReadinessCondition = {
+      key: 'image_coverage',
+      state: 'unknown',
+      reasonCode: 'read_failed',
+      params: { status: 500 },
+      message: 'x',
+    };
+    const s = state({}, { app_repositories: unmetRepos, image_coverage: coverageUnknown });
+    // Marked ready by hand so the ON switch is not blocked: the confirm is what is read.
+    render({ ...s, readiness: { ...s.readiness, ready: true } });
+    expect(screen.queryByText('Repositories')).toBeNull();
+    const dialog = await openConfirm();
+    expect(dialog.textContent).toContain('0 repositories');
+  });
+
+  it('falls back to image_coverage’s list, and keeps a name with no owner as it is', () => {
+    const notReached: FleetReadinessCondition = {
+      key: 'app_repositories',
+      state: 'met',
+      reasonCode: 'all_reachable',
+      params: { repositories: [] },
+      message: 'x',
+    };
+    const covered: FleetReadinessCondition = {
+      key: 'image_coverage',
+      state: 'met',
+      reasonCode: 'all_runnable',
+      params: { repositories: ['bare-name', 'acme-ci/api'] },
+      message: 'x',
+    };
+    render(state({}, { app_repositories: notReached, image_coverage: covered }));
+    expect(screen.getByText('Repositories').nextElementSibling?.textContent).toContain('bare-name');
+  });
+
+  it('a job that cannot be hosted gives its reason, or none', () => {
+    const coverage: FleetReadinessCondition = {
+      key: 'image_coverage',
+      state: 'unmet',
+      reasonCode: 'jobs_not_runnable',
+      params: {
+        jobs: [
+          { ...job(1), verdict: 'cannot-host', reason: 'runs-on macos-latest' },
+          { ...job(2), verdict: 'cannot-host', reason: null },
+          'not a job',
+        ],
+      },
+      message: 'x',
+    };
+    render(state({}, { image_coverage: coverage }));
+    const items = within(screen.getByTestId('fleet-uncovered-jobs')).getAllByRole('listitem');
+    expect(items.map((i) => i.textContent)).toEqual([
+      "gateway · w1.yml · job1 — can't be hosted: runs-on macos-latest",
+      "gateway · w2.yml · job2 — can't be hosted: ",
+    ]);
+  });
+
+  it('a suspended App gives its date, and a condition key it does not know is shown as the key', () => {
+    const suspended: FleetReadinessCondition = {
+      key: 'app_installed',
+      state: 'unmet',
+      reasonCode: 'app_suspended',
+      params: { org: 'acme-ci', suspendedAt: '2026-10-01T00:00:00Z' },
+      message: 'x',
+    };
+    render(
+      state(
+        {},
+        {
+          app_installed: suspended,
+          kill_switch: {
+            key: 'some_future_key' as FleetReadinessKey,
+            state: 'unknown',
+            reasonCode: 'a_future_code',
+            params: {},
+            message: 'The future, in English.',
+          },
+        },
+      ),
+    );
+    expect(screen.getByTestId('fleet-condition-app_installed').textContent).toContain(
+      'suspended since Oct 1, 2026',
+    );
+    const future = screen.getByTestId('fleet-condition-some_future_key');
+    expect(future.textContent).toContain('some_future_key');
+    expect(future.textContent).toContain('The future, in English.');
+  });
+
+  it('turning OFF reports done off; an OFF that GitHub refuses says “Not turned off”', async () => {
+    setFleetOrgCiAction.mockResolvedValueOnce({ ok: true, outcome: 'changed' });
+    render(enabledState());
+    await flipWith('back to hosted');
+    expect(setFleetOrgCiAction).toHaveBeenCalledWith('proj_1', 'acme-ci', false, 'back to hosted');
+    expect(screen.getByTestId('fleet-org-ci-answer').textContent).toBe(
+      'Turned off. New jobs go back to GitHub-hosted runners.',
+    );
+    cleanup();
+    setFleetOrgCiAction.mockResolvedValueOnce({
+      ok: false,
+      code: 'GITHUB_WRITE_FAILED',
+      org: 'acme-ci',
+      status: 500,
+      operation: 'delete',
+    });
+    render(enabledState());
+    await flipWith('x');
+    expect(screen.getByTestId('fleet-org-ci-answer').textContent).toContain('Not turned off');
+  });
+
+  it('unchanged while asking OFF says already off', async () => {
+    setFleetOrgCiAction.mockResolvedValueOnce({ ok: true, outcome: 'unchanged', enabled: false });
+    render(enabledState());
+    await flipWith('x');
+    expect(screen.getByTestId('fleet-org-ci-answer').textContent).toContain(
+      'Already off — nothing changed.',
+    );
+  });
+
+  it('Re-check refreshes the server read', () => {
+    render(state());
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape closes the confirm, discarding the reason', async () => {
+    render(state());
+    const dialog = await openConfirm();
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'half typed' } });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    const again = await openConfirm();
+    expect((within(again).getByLabelText(/Reason/) as HTMLInputElement).value).toBe('');
+    expect(setFleetOrgCiAction).not.toHaveBeenCalled();
+  });
+});

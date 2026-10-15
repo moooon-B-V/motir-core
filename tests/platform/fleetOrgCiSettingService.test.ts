@@ -57,6 +57,11 @@ vi.mock('@/lib/platform/auth', async (importOriginal) => {
 const { fleetOrgCiSettingService: service } =
   await import('@/lib/services/fleetOrgCiSettingService');
 const { fleetReadinessService } = await import('@/lib/services/fleetReadinessService');
+const { findProvisioningInstallationId, RepoProvisioningApiError } =
+  await import('@/lib/github/repoProvisioning');
+const { RepoVisibilityApiError, repoVisibilityClient } =
+  await import('@/lib/github/repoVisibility');
+const { actionsVariableClient } = await import('@/lib/github/actionsVariables');
 
 interface World {
   variable: { value: string; visibility: string } | null;
@@ -90,7 +95,7 @@ function installGitHub(): void {
         });
       }
       const repo = /^\/repos\/([^/]+)\/([^/]+)$/.exec(u.pathname);
-      if (repo) return json(200, { private: repo[2] !== 'site' });
+      if (repo) return json(200, { private: !repo[2]!.startsWith('site') });
       if (u.pathname.startsWith(`/orgs/${ORG}/actions/variables`)) {
         world.calls.push(method);
         if (method === 'GET') {
@@ -200,7 +205,7 @@ async function connectRepo(owner: string, name: string): Promise<void> {
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
-      role: (['web', 'api', 'mobile', 'shared'] as const)[seq % 4]!,
+      role: (['web', 'api', 'mobile', 'shared', 'infra', 'other'] as const)[seq % 6]!,
       name,
       seedSource: SEED_SOURCE_PLATFORM_STARTER,
       state: 'connected',
@@ -560,6 +565,100 @@ describe('getState', () => {
       state: 'unknown',
       status: 503,
     });
+  });
+});
+
+describe('the remaining edges (MOTIR-8716)', () => {
+  const lookup = vi.mocked(findProvisioningInstallationId);
+  const defaultLookup = async (org: string) => (org.toLowerCase() === ORG ? INSTALLATION : null);
+  afterEach(() => {
+    lookup.mockImplementation(defaultLookup);
+  });
+
+  it('offers several connected orgs sorted by org, skips one without the App and one with only public repositories', async () => {
+    await connectRepo('Zeta-Org', 'zeta-api');
+    await connectRepo('beta-org', 'beta-api');
+    await connectRepo('no-app-org', 'quiet-api');
+    await connectRepo('public-org', 'site-docs');
+    const ids: Record<string, string> = { [ORG]: '1001', 'beta-org': '1002', 'zeta-org': '1003' };
+    lookup.mockImplementation(async (org: string) =>
+      org.toLowerCase() === 'no-app-org' ? null : (ids[org.toLowerCase()] ?? '1009'),
+    );
+    const targets = await service.listTargets(superadmin);
+    expect(targets.map((t) => [t.org, t.installationId])).toEqual([
+      [ORG, '1001'],
+      ['beta-org', '1002'],
+      ['Zeta-Org', '1003'],
+    ]);
+  });
+
+  it('with no provisioning org configured, every connected org is a candidate', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', '');
+    lookup.mockImplementation(async (org: string) => (org === ORG ? INSTALLATION : '1004'));
+    const targets = await service.listTargets(superadmin);
+    expect(targets.map((t) => t.org).sort()).toEqual([ORG, PROVISIONING_ORG]);
+    await expect(
+      service.setEnabled(superadmin, { projectId: fx.projectId, org: '   ' }, true, 'x'),
+    ).rejects.toBeInstanceOf(FleetOrgCiTargetUnknownError);
+  });
+
+  it('a GitHub failure finding the installation is a read error carrying its status', async () => {
+    lookup.mockRejectedValueOnce(new RepoProvisioningApiError(503, 'unavailable'));
+    const err = await service.listTargets(superadmin).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FleetOrgCiGithubWriteError);
+    expect(err).toMatchObject({ org: ORG, status: 503, operation: 'read' });
+  });
+
+  it('a non-GitHub failure finding the installation is re-thrown as it is', async () => {
+    const boom = new RangeError('not GitHub');
+    lookup.mockRejectedValueOnce(boom);
+    await expect(service.listTargets(superadmin)).rejects.toBe(boom);
+  });
+
+  it('a visibility read GitHub refuses is a read error; any other failure is re-thrown', async () => {
+    const spy = vi.spyOn(repoVisibilityClient, 'isPrivate');
+    spy.mockRejectedValueOnce(new RepoVisibilityApiError(404, 'Not Found'));
+    await expect(service.listTargets(superadmin)).rejects.toMatchObject({
+      status: 404,
+      operation: 'read',
+    });
+    const boom = new TypeError('not GitHub');
+    spy.mockRejectedValueOnce(boom);
+    await expect(service.listTargets(superadmin)).rejects.toBe(boom);
+  });
+
+  it('a stored row nobody is recorded against names no updater', async () => {
+    await adminDb.platformFleetOrgCi.create({
+      data: { projectId: fx.projectId, org: ORG, enabled: true, lastReason: 'seeded' },
+    });
+    const state = await service.getState(superadmin, pair());
+    expect(state).toMatchObject({ enabled: true, updatedBy: null, lastReason: 'seeded' });
+  });
+
+  it('getState re-throws a failure reading the variable that is not GitHub’s', async () => {
+    const boom = new Error('not GitHub');
+    vi.spyOn(actionsVariableClient, 'getOrgVariable').mockRejectedValueOnce(boom);
+    await expect(service.getState(superadmin, pair())).rejects.toBe(boom);
+  });
+
+  it('a reason that is not a string is a missing reason', async () => {
+    await expect(
+      service.setEnabled(superadmin, pair(), true, undefined as unknown as string),
+    ).rejects.toBeInstanceOf(MissingAuditReasonError);
+    expect(world.calls).toEqual([]);
+  });
+
+  it('setEnabled re-throws non-GitHub failures of the read and of the write, writing nothing', async () => {
+    const readBoom = new Error('read: not GitHub');
+    vi.spyOn(actionsVariableClient, 'getOrgVariable').mockRejectedValueOnce(readBoom);
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toBe(readBoom);
+
+    const writeBoom = new Error('write: not GitHub');
+    vi.spyOn(actionsVariableClient, 'ensureOrgVariable').mockRejectedValueOnce(writeBoom);
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toBe(writeBoom);
+    expect(writes()).toEqual([]);
+    expect(await storedRow()).toBeNull();
+    expect(await auditRows()).toHaveLength(0);
   });
 });
 
