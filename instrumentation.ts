@@ -71,6 +71,12 @@
 //     registered BEFORE the repos seam and answers only the repositories its
 //     control names — see that module's header (MOTIR-5572).
 //
+//   - E2E_TEST_GITHUB_FLEET_ORG_CI=1 → lib/test-github-fleet-org-ci-mock answers the
+//     GitHub calls behind /admin/fleet-settings (the org's App installation, its
+//     repositories, their visibility, the workflow commit, the org's MOTIR_RUNNER
+//     variable) for the orgs its control file names, so the fleet settings journey
+//     (MOTIR-8717) reads a real readiness verdict and flips the real setting.
+//
 //   - E2E_TEST_GITHUB_REPOS=1 → lib/test-github-repos-mock intercepts the
 //     repo-PROVISIONING and COLLABORATOR calls to api.github.com (create, the
 //     readiness read, the CI stub, the admin invite), so the repository-set
