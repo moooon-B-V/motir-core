@@ -458,6 +458,9 @@ describe('needs_replan offer — the stored, resolved offer (MOTIR-8689)', () =>
       targetResolution: 'as_asked',
       declinedAt: null,
       declinedById: null,
+      confirmedAt: null,
+      confirmedById: null,
+      confirmedSessionId: null,
     });
     const bodies = await commentOn(card.id);
     expect(bodies).toHaveLength(1);

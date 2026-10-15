@@ -16,6 +16,9 @@ const offer = (over: Partial<GuideReplanOffer> = {}): GuideReplanOffer => ({
   targetResolution: 'guided_card',
   declinedAt: null,
   declinedById: null,
+  confirmedAt: null,
+  confirmedById: null,
+  confirmedSessionId: null,
   ...over,
 });
 
@@ -60,6 +63,26 @@ describe('replanOfferStateOf', () => {
   });
 });
 
+describe('replanOfferStateOf — confirmed (MOTIR-8691)', () => {
+  const confirmed = offer({
+    confirmedAt: '2026-10-15T00:00:00.000Z',
+    confirmedById: 'u',
+    confirmedSessionId: 's1',
+  });
+
+  it('reads a confirmed offer as confirmed, and it STAYS confirmed once a later offer arrives', () => {
+    expect(replanOfferStateOf([reply('a1', confirmed)], 'a1')).toBe('confirmed');
+    expect(replanOfferStateOf([reply('a1', confirmed), reply('a2', offer())], 'a1')).toBe(
+      'confirmed',
+    );
+  });
+
+  it('ranks confirmed above declined', () => {
+    const both = offer({ ...confirmed, declinedAt: '2026-10-15T00:00:00.000Z' });
+    expect(replanOfferStateOf([reply('a1', both)], 'a1')).toBe('confirmed');
+  });
+});
+
 describe('latestUndecidedReplanOffer', () => {
   it('is the latest offer while undecided', () => {
     const o = offer();
@@ -67,6 +90,12 @@ describe('latestUndecidedReplanOffer', () => {
       turnId: 'a2',
       offer: o,
     });
+  });
+
+  it('is null when the latest offer is confirmed', () => {
+    expect(
+      latestUndecidedReplanOffer([reply('a1', offer({ confirmedSessionId: 's1' }))]),
+    ).toBeNull();
   });
 
   it('is null when there is no offer, or the latest one is declined', () => {

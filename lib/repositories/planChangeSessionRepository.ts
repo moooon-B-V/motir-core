@@ -94,7 +94,9 @@ function endedWithWaitingPlanForOwnerWhere(args: {
 // app-level scope (a cross-tenant project id returns null → 404, never 403).
 export const planChangeSessionRepository = {
   /** Create a session. `seedGateId` is set ONLY by a seeded first turn
-   *  (`planChangeSessionsService.startSeededWithFirstTurn`, AMENDMENT 17 §9). */
+   *  (`planChangeSessionsService.startSeededWithFirstTurn`, AMENDMENT 17 §9), and
+   *  `seedGuideTurnId` ONLY by a guide-seeded one (`startGuideSeededWithFirstTurn`,
+   *  MOTIR-8691). At most one of the two is set (the `one_seed` CHECK). */
   async create(
     data: Prisma.PlanChangeSessionUncheckedCreateInput,
     tx: Prisma.TransactionClient,
@@ -288,6 +290,23 @@ export const planChangeSessionRepository = {
         createdById: userId,
         endedAt: null,
       },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /** The guide-seeded twin of {@link findSeededForUser} (MOTIR-8691): this member's
+   *  OWN most recent session seeded by the guide reply turn `seedGuideTurnId`,
+   *  open OR ended, newest first. Served by the
+   *  `(seed_guide_turn_id, created_by_id, last_activity_at)` index. */
+  async findSeededByGuideTurnForUser(
+    projectId: string,
+    seedGuideTurnId: string,
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: { projectId, workspaceId, seedGuideTurnId, createdById: userId },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     });
   },

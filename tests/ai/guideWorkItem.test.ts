@@ -572,6 +572,9 @@ describe('readGuideTurnRecord', () => {
       targetResolution: 'as_asked',
       declinedAt: null,
       declinedById: null,
+      confirmedAt: null,
+      confirmedById: null,
+      confirmedSessionId: null,
     };
     const base = { actions: [VALID.needs_replan], outcomes: [{ outcome: 'landed' }] };
     expect(readGuideTurnRecord({ ...base, replanOffer: offer })?.replanOffer).toEqual(offer);
@@ -585,6 +588,9 @@ describe('readGuideTurnRecord', () => {
       targetResolution: 'none',
       declinedAt: null,
       declinedById: null,
+      confirmedAt: null,
+      confirmedById: null,
+      confirmedSessionId: null,
     });
     // A record with no offer reads exactly as before; a malformed offer drops
     // alone, the actions still read.
@@ -595,6 +601,7 @@ describe('readGuideTurnRecord', () => {
       { ...offer, targetResolution: 'sideways' },
       { ...offer, targetKey: 7 },
       { ...offer, declinedAt: 7 },
+      { ...offer, confirmedSessionId: 7 },
     ]) {
       const read = readGuideTurnRecord({ ...base, replanOffer: bad });
       expect(read?.replanOffer ?? null).toBeNull();

@@ -626,6 +626,12 @@ export interface GuideReplanOffer {
   targetResolution: GuideReplanTargetResolution;
   declinedAt: string | null;
   declinedById: string | null;
+  /** Set when a planning session was started from this offer (MOTIR-8691), in the
+   *  same transaction as the session. `confirmedSessionId` is the session the
+   *  guide's request was sent into. Absent on a stored offer reads as null. */
+  confirmedAt: string | null;
+  confirmedById: string | null;
+  confirmedSessionId: string | null;
 }
 
 /** The `guide_turn` column on an assistant turn: the validated actions, each
@@ -654,11 +660,17 @@ function readReplanOffer(value: unknown): GuideReplanOffer | null {
   const targetKey = nullableString(value['targetKey']);
   const declinedAt = nullableString(value['declinedAt']);
   const declinedById = nullableString(value['declinedById']);
+  const confirmedAt = nullableString(value['confirmedAt']);
+  const confirmedById = nullableString(value['confirmedById']);
+  const confirmedSessionId = nullableString(value['confirmedSessionId']);
   if (
     requestedTargetKey === undefined ||
     targetKey === undefined ||
     declinedAt === undefined ||
-    declinedById === undefined
+    declinedById === undefined ||
+    confirmedAt === undefined ||
+    confirmedById === undefined ||
+    confirmedSessionId === undefined
   ) {
     return null;
   }
@@ -670,6 +682,9 @@ function readReplanOffer(value: unknown): GuideReplanOffer | null {
     targetResolution: targetResolution as GuideReplanTargetResolution,
     declinedAt,
     declinedById,
+    confirmedAt,
+    confirmedById,
+    confirmedSessionId,
   };
 }
 

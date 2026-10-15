@@ -24,6 +24,7 @@ import {
   PlanChangeRunPauseNotFoundError,
   PlanChangeRunPausePlanDecidedError,
   PlanChangeRunPauseShapeError,
+  GuideReplanOfferAlreadyConfirmedError,
   GuideReplanOfferNotFoundError,
   GuideReplanOfferNotOpenError,
   PlanChangeRunPauseTurnMismatchError,
@@ -96,6 +97,12 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   if (err instanceof PlanChangeRunPausePlanDecidedError) {
     return NextResponse.json(
       { code: err.code, error: err.message, planId: err.planId, planStatus: err.planStatus },
+      { status: 409 },
+    );
+  }
+  if (err instanceof GuideReplanOfferAlreadyConfirmedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, sessionId: err.sessionId },
       { status: 409 },
     );
   }

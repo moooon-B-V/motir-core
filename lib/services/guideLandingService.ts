@@ -541,6 +541,9 @@ async function landOne(
         targetResolution,
         declinedAt: null,
         declinedById: null,
+        confirmedAt: null,
+        confirmedById: null,
+        confirmedSessionId: null,
       };
       return landed();
     }

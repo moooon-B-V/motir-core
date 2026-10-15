@@ -9154,6 +9154,15 @@ model PlanChangeSession {
   /// session of the SAME seed. SetNull — a gate row that goes leaves the
   /// conversation intact and unseeded.
   seedGateId          String?                   @map("seed_gate_id")
+  /// The GUIDE REPLY TURN whose re-plan offer SEEDED this session (Story MOTIR-8684 ·
+  /// MOTIR-8691; decision MOTIR-8685): the `assistant` turn of a guide conversation
+  /// that holds the offer. Written ONLY at creation, by the guide-seeded first turn
+  /// (`planChangeSessionsService.startGuideSeededWithFirstTurn`), and never changed;
+  /// NULL on every other session, and on a session the guide's request was sent
+  /// into because the person already held the target. EXCLUSIVE with `seedGateId`
+  /// (the `plan_change_session_one_seed` CHECK). SetNull — a turn that goes leaves
+  /// the conversation intact and unseeded.
+  seedGuideTurnId     String?                   @map("seed_guide_turn_id")
   /// When the session ENDED (AMENDMENT 23 §1). **A session is OPEN ⟺ this is
   /// NULL.** An ended session is never resumed and accepts no turn. Written only
   /// by the one end operation, together with `endReason` and `endedById`.
@@ -9226,27 +9235,28 @@ model PlanChangeSession {
   createdAt           DateTime                  @default(now()) @map("created_at")
   updatedAt           DateTime                  @updatedAt @map("updated_at")
 
-  workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy   User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  seedGate    ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
-  endedBy     User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
-  copiedFrom  PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
-  copies      PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
-  turns       PlanChangeTurn[]
+  workspace     Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  seedGate      ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
+  seedGuideTurn PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
+  endedBy       User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  copiedFrom    PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
+  copies        PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
+  turns         PlanChangeTurn[]
   /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
   /// Cascade: a deleted thread takes its mailbox with it.
-  mailbox     PlanChangeMailboxEntry[]
+  mailbox       PlanChangeMailboxEntry[]
   /// The planner's mid-run PAUSES on this thread's runs (MOTIR-8007). Cascade.
-  runPauses   PlanChangeRunPause[]
+  runPauses     PlanChangeRunPause[]
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
-  targetLocks PlanTargetLock[]
+  targetLocks   PlanTargetLock[]
   /// The plans this conversation produced (AMENDMENT 17 §5) — many plans to one
   /// session: a refine or a revision writes a successor plan on the SAME
   /// session, never a new one.
-  plans       Plan[]
+  plans         Plan[]
 
   /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
   /// this adds no integrity constraint of its own — it exists solely to make
@@ -9264,6 +9274,9 @@ model PlanChangeSession {
   /// The SEEDED-session read (AMENDMENT 17 §9): "this member's most recent
   /// session seeded by this gate" — `findSeededForUser`.
   @@index([seedGateId, createdById, lastActivityAt])
+  /// The GUIDE-SEEDED-session read (MOTIR-8691): "this member's most recent
+  /// session seeded by this guide offer" — `findSeededByGuideTurnForUser`.
+  @@index([seedGuideTurnId, createdById, lastActivityAt])
   /// The TO RESUME read (Story MOTIR-7905): "this member's failed-waiting sessions",
   /// newest failure first.
   @@index([workspaceId, createdById, failedAt])
@@ -9442,7 +9455,7 @@ model PlanChangeTurn {
   authorId              String?                @map("author_id")
   createdAt             DateTime               @default(now()) @map("created_at")
 
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
   /// not at `session_id` alone, so a turn can only ever attach to a session IN ITS
   /// OWN WORKSPACE. This is the structural half of the tenancy guarantee: RLS
@@ -9452,8 +9465,10 @@ model PlanChangeTurn {
   /// use, wedging their thread (a cross-tenant DoS). Referencing the pair makes
   /// that row nonexistent rather than merely invisible, and unlike a policy it
   /// also holds for BYPASSRLS/superuser connections.
-  session   PlanChangeSession @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  author    User?             @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  session            PlanChangeSession   @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  /// The planning sessions seeded by the re-plan offer this turn holds (MOTIR-8691).
+  seededPlanSessions PlanChangeSession[] @relation("PlanChangeSessionSeedGuideTurn")
+  author             User?               @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   @@unique([sessionId, seq])
   @@index([sessionId, seq])
