@@ -235,6 +235,7 @@
     "noteShowLess": "Minder tonen",
     "field_description": "Beschrijving",
     "field_explanation": "Toelichting",
+    "field_todos": "Stappen",
     "field_links": "Afhankelijkheden",
     "field_parent": "Bovenliggend",
     "field_targetRepo": "Repository",

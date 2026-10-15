@@ -110,6 +110,10 @@ export interface ProposalNode {
     /** A re-judged DIFFICULTY (MOTIR-6133) — refused when the TARGET's
      *  PROJECTED kind is a container (`difficulty_on_container`). */
     difficulty?: string | null;
+    /** A REPLACEMENT step list (MOTIR-8668 · AMENDMENT 27) — refused when the
+     *  TARGET's PROJECTED kind is a container and the list is non-empty
+     *  (`todos_on_container`). The rows' caps are the proposal doors'. */
+    todos?: unknown[] | null;
     /** A RE-KIND of the target (bug MOTIR-8192 · AMENDMENT 25) — judged against
      *  the projected tree by {@link assertKindChangesLegal}, and the kind every
      *  other placement question in this gate reads for the target. */
@@ -411,6 +415,31 @@ function assertProposedSubjectValid(item: ProposalNode): void {
       `Proposal ${item.id} proposes subject "${String(subject)}", which is not a well-formed subject. ${describeSubjectShape()}`,
     );
   }
+}
+
+/**
+ * A `modify`'s replacement STEP LIST on a container, refused at APPROVE
+ * (MOTIR-8668 · AMENDMENT 27) — the twin of {@link assertDifficultyOnLeaf} for
+ * the path the proposal doors cannot see: a target re-kinded to a container
+ * after the append. `isContainerKind` reads `TYPEABLE_KINDS`, the leaf set the
+ * doors' `validateProposedTodos` reads, so the two cannot disagree. An empty list or a
+ * `null` (a clear) is never refused, and a target that resolves to nothing is
+ * left to `materialize`.
+ */
+function assertTodosOnLeaf(
+  item: ProposalNode,
+  liveById: ValidatePlanProposalsInput['liveById'],
+): void {
+  if (item.op !== 'modify' || !item.workItemId) return;
+  const todos = item.patch?.todos;
+  if (!Array.isArray(todos) || todos.length === 0) return;
+  const target = liveById.get(item.workItemId);
+  if (!target || !isContainerKind(target.kind)) return;
+  throw new PlanGrammarError(
+    'todos_on_container',
+    item.id,
+    `${describeSubject(item, liveById)} replaces the steps of a \`${target.kind}\`, which is a container: its steps are its children. The plan's author must drop \`patch.todos\` or send \`[]\`.`,
+  );
 }
 
 /**
@@ -1980,6 +2009,9 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //     cannot see (a target re-kinded after the append). A property of the
   //     proposal plus the one row it names, so it sits with the grammar.
   for (const item of items) assertDifficultyOnLeaf(item, projectedLiveById);
+  // 3b-ter. A `modify`'s replacement STEPS on a container (MOTIR-8668), on the
+  //     same projected target kind and for the same reason.
+  for (const item of items) assertTodosOnLeaf(item, projectedLiveById);
 
   // 3c. The RE-PARENT a `modify` may now propose (MOTIR-3859) — tenancy, cycle,
   //     depth, the kind matrix, and the terminal-parent refusal, in that order.

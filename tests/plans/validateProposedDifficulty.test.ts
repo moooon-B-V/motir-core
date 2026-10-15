@@ -119,7 +119,7 @@ describe('ONE validator module serves every proposal door (MOTIR-6133)', () => {
     ['the append — add + modify membership', 'function validateProposal(p: ProposalInput)', 2],
     [
       "the append — a modify's container half",
-      'async function assertModifyDifficultiesLegalAtAppend(',
+      'async function assertModifyLeafFieldsLegalAtAppend(',
       1,
     ],
     // MOTIR-8175 split the edit's in-transaction half out of `editAddProposal`
@@ -141,7 +141,7 @@ describe('ONE validator module serves every proposal door (MOTIR-6133)', () => {
 
   it('the append runs the modify container half — the helper is actually called', () => {
     const body = bodyOf(PLANS_SERVICE, 'async addProposals(');
-    expect(body).toContain('await assertModifyDifficultiesLegalAtAppend(');
+    expect(body).toContain('await assertModifyLeafFieldsLegalAtAppend(');
     expect(body).toContain('proposals.forEach(validateProposal)');
   });
 
