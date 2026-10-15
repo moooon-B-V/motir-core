@@ -70,7 +70,7 @@ concurrency:
 jobs:
   release:
     name: Publish @motir/cli
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.2–1.4 min across four runs → 10 (~7x, the short-job floor).
     timeout-minutes: 10
     env:

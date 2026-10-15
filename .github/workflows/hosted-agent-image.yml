@@ -69,7 +69,7 @@ env:
 jobs:
   hosted-agent-image:
     name: Build, prove, publish
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # No run on record yet — this lane is new (MOTIR-687). The floor is set from
     # its nearest neighbour, `sandbox-images.yml`'s base job (observed 2.8–8.3
     # min), which builds a larger image than this one: 25 min, ~3x its worst.

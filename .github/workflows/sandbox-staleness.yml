@@ -52,7 +52,7 @@ permissions:
 jobs:
   staleness:
     name: Is the published image still what main says it is?
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # NO HEALTHY run on record — every scheduled run back to 2026-08-23 FAILS,
     # in about 0.5 min, on the staleness assertion itself. That verdict is
     # true and is tracked as MOTIR-3850; it is not an infrastructure fault and

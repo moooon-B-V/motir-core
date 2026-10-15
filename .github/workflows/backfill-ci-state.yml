@@ -48,7 +48,7 @@ concurrency:
 jobs:
   backfill:
     name: Recompute WorkItem.ciState for every card with pull requests
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # MEASURED (MOTIR-5765): the first production run — run 35447518741, a dry
     # run, 2026-09-19 — was CANCELLED by the old 10-minute ceiling. Setup took
     # ~1.5 min; the sweep then ran ~9 min over ~1,957 candidate cards (one

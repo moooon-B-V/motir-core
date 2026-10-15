@@ -54,7 +54,7 @@ env:
 jobs:
   runner-image:
     name: Build, assert, prove
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.7–5.4 min across ten runs of both callers → 20 (~3.7x on the
     # worst, 5.38 min on ci.yml run 33218152057).
     #
