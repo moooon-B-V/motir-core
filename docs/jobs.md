@@ -1071,6 +1071,12 @@ exception found six months later by someone comparing lanes is a bug report. If 
 window is ever wanted instead, that is its own decision and it needs the window's
 number and where the number came from.
 
+**Since MOTIR-8540 the horizon is 30 days, not forever.** The daily
+`system.job-queue-retention` pass deletes `succeeded` queue rows older than
+`JOB_QUEUE_RETENTION_MS`, and a deleted row no longer holds its key. Why that is
+safe for every key in use, and the rule for a dedup that must outlive the
+window, is `docs/decisions/job-queue-foundation.md` §17.
+
 **A DLQ replay is not affected on either lane.** `lib/jobs/dlq.ts` re-shapes the
 key to `{original}:replay:{dlqId}` before re-emitting, on the Inngest arm AND the
 engine arm. The engine arm had nothing to be dropped by until dedup existed;
@@ -1169,7 +1175,7 @@ correction is worth stating rather than deleting.
 ### The registered schedules
 
 This is every id `jobSchedules()` (`lib/jobs/schedules.ts`) returns, with its cron —
-31 jobs. The cron is the definition's; a reason for the time a job runs lives in
+32 jobs. The cron is the definition's; a reason for the time a job runs lives in
 its own header in `lib/jobs/definitions/`, not here.
 
 **The cadence rule.** A `system.*` job that fires more than once an hour fires on
@@ -1224,6 +1230,7 @@ cluster bought nothing. The why is
 | `system.code-graph-offboard-sweep`       | `0 5 * * *`  |
 | `system.data-export-expiry-sweep`        | `30 5 * * *` |
 | `system.job-run-reap`                    | `0 6 * * *`  |
+| `system.job-queue-retention`             | `15 6 * * *` |
 | `system.dispatch-run-sweep`              | `30 6 * * *` |
 | `system.dlq-standing-depth-sweep`        | `0 7 * * *`  |
 | `system.organization-retention-purge`    | `30 7 * * *` |

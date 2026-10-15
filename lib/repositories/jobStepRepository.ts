@@ -63,6 +63,18 @@ export const jobStepRepository = {
     return r.count;
   },
 
+  /**
+   * Delete every step of a SET of runs — the batched sibling of `deleteByRun`,
+   * for the queue retention pass (Story MOTIR-8540). `job_step.run_id` cascades
+   * from `job_queue`, so this is redundant with the run delete that follows it,
+   * and correct either way; it also reports how many steps a pass removed.
+   */
+  async deleteByRuns(runIds: string[], tx: Prisma.TransactionClient): Promise<number> {
+    if (runIds.length === 0) return 0;
+    const r = await tx.jobStep.deleteMany({ where: { runId: { in: runIds } } });
+    return r.count;
+  },
+
   /** Count a run's steps of one kind. A cheap assertion surface for the tests and the dashboard. */
   async countByRunAndKind(
     runId: string,

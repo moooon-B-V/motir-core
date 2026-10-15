@@ -127,10 +127,14 @@ describe('a request NAMING a tab keeps the shipped parallel read', () => {
     },
   );
 
-  it('?tab=approvals reads the counts, members and workflow together, and its rows inside the tab', async () => {
+  // AMENDED by MOTIR-8573 (Story MOTIR-8539): To approve renders no work-item
+  // row, so the members and the workflow it used to read beside the counts were
+  // never used. The page now reads the counts alone there; its rows are still
+  // read inside the tab.
+  it('?tab=approvals reads the counts, and its rows inside the tab', async () => {
     const page = WorkbenchPage({ searchParams: Promise.resolve({ tab: 'approvals' }) });
     await settleStarts();
-    expect([...started].sort()).toEqual(['getWorkflow', 'listMembers', 'tabCounts']);
+    expect([...started].sort()).toEqual(['tabCounts']);
     release();
     await expect(page).resolves.toBeTruthy();
   });

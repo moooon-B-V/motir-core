@@ -9,7 +9,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react';
-import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
+import { useRequestWorkbenchReread } from '@/lib/workbench/workbenchReread';
 import { shallowReplace } from '@/lib/navigation/shallowUrl';
 import { OVERLAY_PARAM_NAMES } from '@/lib/planning/launcher';
 import { useTranslations } from 'next-intl';
@@ -100,15 +100,18 @@ import {
 // in-place diff, and the confirm-to-persist bar between them.
 //
 // PAGE STATE AFTER A MUTATION (`motir-core/CLAUDE.md`): an approve commits work
-// items, which changes two kinds of surface. The canvas is a CLIENT ISLAND that
-// seeds its level once — `router.refresh()` cannot reach it — so it gets an
-// explicit refetch trigger (`treeVersion`, folded into the canvas's diff key);
-// the server-rendered surfaces behind this overlay (counts, headers, the backlog
-// underneath) take the `router.refresh()`. Both, because both apply.
-// The refresh is the shell's COORDINATED one (bug MOTIR-6640): on the Workbench
-// the live stream nudges a refresh for the same approve, and two overlapping
-// refreshes can make Next fall back to a full document load. That load drops
-// the decided plan this overlay keeps after an approve.
+// items. The canvas is a CLIENT ISLAND that seeds its level once, so it gets an
+// explicit refetch trigger (`treeVersion`, folded into the canvas's diff key), and
+// the plan review is re-read and merged by identity (`usePlanChangeConversation`).
+// The Workbench behind this overlay — the surface whose counts move — re-reads
+// its own window when asked (`useRequestWorkbenchReread`, Story MOTIR-8539 ·
+// MOTIR-8576). NOTHING REFRESHES THE ROUTE, on the approve, the restart or the
+// session end. That retires the coordinated refresh this host used to take (bug
+// MOTIR-6640): it existed because the live stream's refresh and this one could
+// overlap and make Next fall back to a full document load, which dropped the
+// decided plan. Neither refresh exists any more, so there is nothing to overlap;
+// the Workbench's reread goes through its one in-flight read, so a stream nudge
+// and an approve's request collapse into one.
 //
 // OPENS BEFORE ITS DATA (Bug MOTIR-2069): the frame — back bar, project name,
 // the two-pane split, the whole conversation rail — waits on NOTHING. The host
@@ -289,7 +292,7 @@ function PlanWorkspaceHost({
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const tPlanReview = useTranslations('planReview');
-  const refresh = useCoordinatedRefresh();
+  const requestWorkbenchReread = useRequestWorkbenchReread();
 
   // ── THE SURFACE SEED (MOTIR-7050) ───────────────────────────────────────────
   // What the door that opened this workspace handed it besides its address: the
@@ -419,7 +422,7 @@ function PlanWorkspaceHost({
   const close = performClose;
 
   // Bumped on every approve: the committed tree is new data, so the canvas island
-  // must refetch its level (the server-rendered surfaces take the refresh below).
+  // must refetch its level (and the Workbench behind is asked to re-read).
   const [treeVersion, setTreeVersion] = useState(0);
   // ⚠️ *Confirm & add* CLOSES FROM HERE, not from the `await` (MOTIR-4731). This
   // callback fires on a SUCCESSFUL approve and on nothing else, so it is the one
@@ -430,12 +433,12 @@ function PlanWorkspaceHost({
   const closeAfterApproveRef = useRef(false);
   const onApproved = useCallback(() => {
     setTreeVersion((v) => v + 1);
-    refresh();
+    requestWorkbenchReread();
     if (!closeAfterApproveRef.current) return;
     closeAfterApproveRef.current = false;
     setGuardOpen(false);
     closeBypassingGuard();
-  }, [refresh, closeBypassingGuard]);
+  }, [requestWorkbenchReread, closeBypassingGuard]);
   const report = useOptionalReport();
   // PLAN SOMETHING NEW swapped the overlay onto a new session (MOTIR-7650): an
   // address that NAMED the old session now names the new one, so a reload opens
@@ -450,39 +453,24 @@ function PlanWorkspaceHost({
     return true;
   }, []);
   // …and the ended session gave its cards back, so the canvas island re-reads them
-  // at their prior status and the server-rendered surfaces take the refresh — the
-  // end effect below cannot see this end, because the session id changed with it.
+  // at their prior status and the Workbench behind is asked to re-read — the end
+  // effect below cannot see this end, because the session id changed with it.
   //
-  // ⚠️ THE REFRESH WAITS FOR THE ADDRESS (bug MOTIR-8212). Next turns a
-  // `history.replaceState` into a router navigation of its own, so a refresh
-  // dispatched in the same tick is a SECOND navigation overlapping the first —
-  // the shape `coordinatedRefresh.tsx` documents (MOTIR-6640), which the
-  // coordinator cannot see because only one of the two goes through it. Under
-  // load the pair mismatches twice and Next hard-reloads the page, and the
-  // reload aborts whatever the overlay has in flight: on the CARRY that is the
-  // carried turn's submit (two merge-queue traces show it ERR_ABORTED ~100ms
-  // after the swap, followed by a document load of the new address). So when the
-  // address was rewritten, the refresh runs once the router has COMMITTED it —
-  // `launch.sessionId` naming the new session is that signal — and not before.
-  const refreshAfterAddressRef = useRef<string | null>(null);
+  // ⚠️ THE ADDRESS IS REWRITTEN WITH NOTHING BESIDE IT (MOTIR-8576). Bug MOTIR-8212
+  // was a route refresh dispatched in the same tick as this `shallowReplace`: Next
+  // turns the `history.replaceState` into a router navigation of its own, the two
+  // overlapped, and under load Next hard-reloaded the page and aborted the carried
+  // turn's submit. The fix then was to hold the refresh until the router committed
+  // the address. The refresh is gone now, so the wait went with it: a Workbench
+  // reread is a `fetch`, not a navigation, and cannot overlap one.
   const onRestarted = useCallback(
     (sessionId: string) => {
       setTreeVersion((v) => v + 1);
-      if (replaceSessionAddress(sessionId)) {
-        refreshAfterAddressRef.current = sessionId;
-        return;
-      }
-      refresh();
+      replaceSessionAddress(sessionId);
+      requestWorkbenchReread();
     },
-    [replaceSessionAddress, refresh],
+    [replaceSessionAddress, requestWorkbenchReread],
   );
-  const addressedSessionId = launch.sessionId ?? null;
-  useEffect(() => {
-    const awaited = refreshAfterAddressRef.current;
-    if (awaited === null || addressedSessionId !== awaited) return;
-    refreshAfterAddressRef.current = null;
-    refresh();
-  }, [addressedSessionId, refresh]);
   const {
     state,
     send,
@@ -509,7 +497,7 @@ function PlanWorkspaceHost({
     sessionIsResume,
     seedGateId,
     // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
-    // refetch tick — the one surface `router.refresh()` cannot reach.
+    // refetch tick — the one surface a route refresh cannot reach.
     onTriageChanged: report?.notifySubmissionsChanged,
     onRestarted,
   });
@@ -554,8 +542,8 @@ function PlanWorkspaceHost({
     if (!before || before.id === null || before.id !== endSessionId) return;
     if (before.endedAt !== null || endedAt === null) return;
     setTreeVersion((v) => v + 1);
-    refresh();
-  }, [endSessionId, endedAt, refresh]);
+    requestWorkbenchReread();
+  }, [endSessionId, endedAt, requestWorkbenchReread]);
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
   // rail never has to know how a turn is scoped.

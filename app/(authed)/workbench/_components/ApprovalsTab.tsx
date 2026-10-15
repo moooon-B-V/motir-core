@@ -23,6 +23,10 @@ import { ApprovalsList } from './ApprovalsList';
 // `tests/navigation/loading-boundary-guard.test.ts` keeps it that way. The
 // boundary belongs INSIDE the page, below the reads that decide who may see it.
 //
+// ⚠️ THIS READ IS THE FIRST PAINT ONLY (Story MOTIR-8539 · MOTIR-8581). After it,
+// the list's rows come from the Workbench's one window read — the same response
+// that sets the strip's counts — so nothing here is re-run to update them.
+//
 // ⚠️ SCOPED TO THIS TAB. The other four tabs keep the page's existing shape
 // untouched — this card's boundary is the Approvals tab, and making all five
 // suspend would be a page-shell change it is scoped away from.

@@ -64,6 +64,19 @@ interface TabSpec {
   count: number;
 }
 
+/** The `workbench` messages the strip reads — what either translator must answer. */
+export type WorkbenchTabStripMessage =
+  | 'tabs.label'
+  | 'tabs.toApprove'
+  | 'tabs.planning'
+  | 'tabs.toFix'
+  | 'tabs.toResume'
+  | 'tabs.inProgress'
+  | 'tabs.toDo'
+  | 'tabs.recentlyFinished'
+  | 'tabs.watching';
+
+/** The server's strip: the first paint, and every surface that renders it statically. */
 export async function WorkbenchTabs({
   active,
   counts,
@@ -72,7 +85,24 @@ export async function WorkbenchTabs({
   counts: HomeTabCountsDto;
 }) {
   const t = await getTranslations('workbench');
+  return <WorkbenchTabStrip active={active} counts={counts} t={(key) => t(key)} />;
+}
 
+/**
+ * The strip itself, synchronous and directive-free, so the server's
+ * {@link WorkbenchTabs} and the live view's client strip (Story MOTIR-8539 ·
+ * MOTIR-8574, whose counts are client state) draw ONE markup. Each passes its own
+ * translator: `getTranslations` on the server, `useTranslations` in the client.
+ */
+export function WorkbenchTabStrip({
+  active,
+  counts,
+  t,
+}: {
+  active: WorkbenchTab;
+  counts: HomeTabCountsDto;
+  t: (key: WorkbenchTabStripMessage) => string;
+}) {
   // Strip order is the design's (`design-notes.md` § 21, MOTIR-5216), and it is
   // the order a person's attention should run in when agents do the work: what
   // is waiting on YOUR decision first — an unmade decision holds up somebody

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, FolderX, RotateCw } from 'lucide-react';
 
@@ -309,7 +309,8 @@ function SupersedesRow({ refs }: { refs: NonNullable<PlanReviewItemDto['supersed
   );
 }
 
-function ProposalRow({
+/** A proposal row, memoised for the same reason as `PlanItemNode` (MOTIR-8575). */
+const ProposalRow = memo(function ProposalRow({
   item,
   outcome,
   onOpen,
@@ -494,7 +495,7 @@ function ProposalRow({
       </div>
     </li>
   );
-}
+});
 
 export interface PlanProposalListProps {
   items: PlanReviewItemDto[];
