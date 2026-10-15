@@ -26,6 +26,37 @@ import type { RateLimitScope } from '@/lib/rateLimit/keys';
 /** The code a rate-limited app-level response carries. */
 export const RATE_LIMITED_CODE = 'RATE_LIMITED';
 
+// ── THE RETRYABLE REFUSAL CONTRACT (MOTIR-8600) ─────────────────────────────
+// Every rate-limit refusal an agent can meet carries a whole-number
+// `retryAfterSeconds` in a field a client reads WITHOUT parsing a sentence, and
+// every HTTP refusal also sends `Retry-After` with the same number. The number
+// always comes from `retryAfterSeconds(decision)` (floored at 1); no surface
+// recomputes it. The four surfaces, and where each carries it:
+//
+//   - MCP transport 429 (`mcpRateLimitedResponse`, `lib/rateLimit/mcpGuard.ts`):
+//     `error.data = { code: 'RATE_LIMITED', retryAfterSeconds, … }`.
+//   - A billable MCP tool's `isError` result (`billableToolDenial`,
+//     `lib/mcp/rateLimitGate.ts`): `structuredContent = { code: 'RATE_LIMITED',
+//     retryAfterSeconds }`.
+//   - An app-level 429, the job-token routes included (`rateLimitedResponse`,
+//     below): `{ code: 'RATE_LIMITED', error, retryAfterSeconds }`.
+//   - `/api/v1` 429 (`withV1Route`): `{ code: 'RATE_LIMIT_EXCEEDED', error,
+//     retryAfterSeconds }`. v1 KEEPS its published code — changing a v1 `code`
+//     is breaking under `public-api-conventions.md` §8, and the field and header
+//     are the additive halves §8 permits (ADR §6, 2026-10-14 amendment).
+//
+// The prose sentences stay for the person watching; nothing may parse them.
+// The upload throttle (`RateLimitError`, `lib/blob/errors.ts`) is deliberately
+// outside this contract: it carries `RATE_LIMITED` and no seconds, so a client
+// treats a `RATE_LIMITED` without `retryAfterSeconds` as retryable after its own
+// default.
+
+/** The machine-read half of every app-level rate-limit refusal (MOTIR-8600). */
+export interface RateLimitRefusalFields {
+  code: typeof RATE_LIMITED_CODE;
+  retryAfterSeconds: number;
+}
+
 /**
  * Paths that are NEVER rate-limited, however they are reached.
  *
@@ -63,18 +94,34 @@ export function rateLimitResponseHeaders(decision: RateLimitDecision): Record<st
   return headers;
 }
 
-/** The 429 itself — `{ code, error }` + `Retry-After` + `X-RateLimit-*`. */
+/**
+ * The 429 itself — `{ code, error, retryAfterSeconds }` + `Retry-After` +
+ * `X-RateLimit-*`. The body's `retryAfterSeconds` and the `Retry-After` header
+ * are the same number (MOTIR-8600).
+ */
 export function rateLimitedResponse(
   decision: RateLimitDecision,
   extraHeaders?: Record<string, string>,
 ): NextResponse {
   const retryAfter = retryAfterSeconds(decision);
+  const fields: RateLimitRefusalFields = { code: RATE_LIMITED_CODE, retryAfterSeconds: retryAfter };
   return NextResponse.json(
     {
-      code: RATE_LIMITED_CODE,
+      code: fields.code,
       error: `Too many requests. Retry in ${retryAfter} second${retryAfter === 1 ? '' : 's'}.`,
+      retryAfterSeconds: fields.retryAfterSeconds,
     },
-    { status: 429, headers: { ...extraHeaders, ...rateLimitResponseHeaders(decision) } },
+    {
+      status: 429,
+      // `Retry-After` is re-stated from the SAME computed value as the body
+      // field, so a second boundary ticking between two reads of the clock
+      // cannot make the header and the field disagree.
+      headers: {
+        ...extraHeaders,
+        ...rateLimitResponseHeaders(decision),
+        'Retry-After': String(retryAfter),
+      },
+    },
   );
 }
 
@@ -87,6 +134,15 @@ export function rateLimitedResponse(
  * deliberate: skipping the remaining limbs on the first refusal would let an
  * attacker keep one bucket artificially cool by ensuring another always refuses
  * first.
+ *
+ * ⚠️ That spend-all rule is for the caller's OWN limbs. A SHARED ceiling — the
+ * workspace's `agent:workspace` bucket (Story MOTIR-8548) — follows the
+ * opposite rule, own-then-shared ({@link spendOwnThenShared}): it is spent only
+ * once the caller's own limb has admitted the request. A caller refused by its
+ * own budget is already stopped, and charging the ceiling for it would let one
+ * looping agent, throttled on its own bucket, drain the budget every other agent
+ * of the workspace shares. Nobody can keep a bucket cool this way: the own limb
+ * is spent unconditionally, and the ceiling only ever counts admitted requests.
  */
 export interface RateLimitLimb {
   scope: RateLimitScope;
@@ -113,14 +169,67 @@ function tightest(decisions: RateLimitDecision[]): RateLimitDecision {
  * two of them should not pay two sequential round trips for one request.
  */
 export async function enforceRateLimit(limbs: RateLimitLimb[]): Promise<RateLimitVerdict> {
-  const decisions = await Promise.all(
-    limbs.map((limb) => consumeSharedRateLimit(limb.key, limb.budget)),
-  );
-  const refused = decisions.find((d) => !d.allowed);
-  const worst = tightest(decisions);
+  const { refused, tightest: worst } = await spendLimbs(limbs);
   return {
     response: refused ? rateLimitedResponse(refused) : null,
     headers: rateLimitResponseHeaders(worst),
+  };
+}
+
+/**
+ * Spend every limb CONCURRENTLY and return the raw decisions' verdict: the
+ * first refusing limb (or `null`) and the tightest limb, whose numbers the
+ * `X-RateLimit-*` headers report.
+ *
+ * Extracted from {@link enforceRateLimit} (MOTIR-8601) for the surfaces that
+ * shape their OWN refusal — the MCP transport's JSON-RPC 429 and `/api/v1`'s
+ * typed error — and so need the decisions rather than a `NextResponse`. Every
+ * limb is spent even when another refuses, for the reason the limb type states.
+ */
+export async function spendLimbs(
+  limbs: RateLimitLimb[],
+): Promise<{ refused: RateLimitDecision | null; tightest: RateLimitDecision }> {
+  const decisions = await Promise.all(
+    limbs.map((limb) => consumeSharedRateLimit(limb.key, limb.budget)),
+  );
+  return { refused: decisions.find((d) => !d.allowed) ?? null, tightest: tightest(decisions) };
+}
+
+/**
+ * Spend the caller's OWN limb, then — only if it admitted — the SHARED ceiling
+ * (MOTIR-8610, the own-then-shared rule on {@link RateLimitLimb}).
+ *
+ * A refusal by `own` is returned as both `refused` and `tightest`, and `shared`
+ * is never touched: a caller stopped by its own budget costs the workspace
+ * nothing. Otherwise `shared` is spent and decides `refused`; the headers report
+ * the tighter of the two.
+ */
+export async function spendOwnThenShared(
+  own: RateLimitLimb,
+  shared: RateLimitLimb,
+): Promise<{ refused: RateLimitDecision | null; tightest: RateLimitDecision }> {
+  const ownDecision = await consumeSharedRateLimit(own.key, own.budget);
+  if (!ownDecision.allowed) return { refused: ownDecision, tightest: ownDecision };
+  const sharedDecision = await consumeSharedRateLimit(shared.key, shared.budget);
+  return {
+    refused: sharedDecision.allowed ? null : sharedDecision,
+    tightest: tightest([ownDecision, sharedDecision]),
+  };
+}
+
+/**
+ * {@link spendOwnThenShared} as a {@link RateLimitVerdict}: the refusal is the
+ * app-level 429 {@link rateLimitedResponse} writes, so it carries the retryable
+ * contract like every other.
+ */
+export async function enforceRateLimitOwnThenShared(
+  own: RateLimitLimb,
+  shared: RateLimitLimb,
+): Promise<RateLimitVerdict> {
+  const { refused, tightest: worst } = await spendOwnThenShared(own, shared);
+  return {
+    response: refused ? rateLimitedResponse(refused) : null,
+    headers: rateLimitResponseHeaders(refused ?? worst),
   };
 }
 

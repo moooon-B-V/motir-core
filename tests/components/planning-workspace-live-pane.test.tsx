@@ -487,7 +487,12 @@ describe('the arrivals count — its root form and its several-levels form (§23
   it('at the ROOT the row renders the root crumb and the pill only — no Back', async () => {
     const next = mountHost(live([]), undefined, true);
     await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
-    expect(screen.queryByRole('navigation', { name: /breadcrumb/i })).toBeNull();
+    // The row is up at the root from the first read because the follow status
+    // lives in it (MOTIR-8594; Part XXVIII §28.3) — and it holds nothing else.
+    const atRoot = screen.getByRole('navigation', { name: /breadcrumb/i });
+    expect(within(atRoot).queryByRole('button', { name: /back/i })).toBeNull();
+    expect(screen.getByTestId('canvas-follow-state').getAttribute('data-follow')).toBe('on');
+    expect(screen.queryByTestId('canvas-arrivals-offer')).toBeNull();
 
     next(live([P1]));
     const pill = await screen.findByTestId('canvas-arrivals-offer');
@@ -527,7 +532,10 @@ describe('follow-once vs never-jump (§23.8)', () => {
     expect(screen.queryByTestId('canvas-follow-offer')).toBeNull();
   });
 
-  it('after the reader has navigated, the first proposal’s follow is DECLINED into the offer', async () => {
+  // ⚠️ SUPERSEDED while generating by Part XXVIII §28.2 (MOTIR-8594): the reader's
+  // navigation turns FOLLOWING off, the declined-follow offer is not armed, and
+  // *Follow the planner* is the trip back. The pill keeps counting as shipped.
+  it('after the reader has navigated, following is OFF: no declined offer, the Follow the planner button, the pill', async () => {
     const next = mountHost(live([]));
     await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
     fireEvent.keyDown(node(EPIC_ID)!, { key: 'Enter' });
@@ -535,12 +543,16 @@ describe('follow-once vs never-jump (§23.8)', () => {
     await waitFor(() => expect(node(BUG_ID)).not.toBeNull());
     expect(activeCrumb()).toBe('MOTIR-2200 · The agent loop');
 
+    expect(screen.getByTestId('canvas-follow-planner').getAttribute('data-follow')).toBe('off');
+
     next(live([P1]));
-    const offer = await screen.findByTestId('canvas-follow-offer');
-    expect(offer.textContent).toContain('MOTIR-3070');
+    const pill = await screen.findByTestId('canvas-arrivals-offer');
+    expect(pill.textContent).toContain('MOTIR-3070');
     expect(activeCrumb()).toBe('MOTIR-2200 · The agent loop');
-    // The offer wins the one slot; the arrivals pill is not drawn beside it.
-    expect(screen.queryByTestId('canvas-arrivals-offer')).toBeNull();
+    expect(screen.queryByTestId('canvas-follow-offer')).toBeNull();
+    // The follow control is the rightmost member of the trips group.
+    const trips = screen.getByTestId('canvas-bar-trips');
+    expect(trips.lastElementChild?.getAttribute('data-testid')).toBe('canvas-follow-planner');
   });
 });
 

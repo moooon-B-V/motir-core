@@ -1,8 +1,8 @@
 import 'server-only';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
-import { resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import {
   ONBOARDING_SUBSTRATE_ITEM_CAP,
   type OnboardingSubstrate,
@@ -30,10 +30,17 @@ import {
 // planner's judgement (motir-ai, MOTIR-4758), and whether a step may be skipped
 // is the step machine's. This module answers a question of fact and stops there.
 //
-// Layered per `CLAUDE.md`: a service composing EXISTING repository reads and
-// `resolveWorkspaceConnectedRepos`. No Prisma outside a repository, and no new query — the
-// connection half is `resolveWorkspaceConnectedRepos`'s and the indexed half is the same
-// `job_run` ledger read the wizard's INDEX step already waits on.
+// Layered per `CLAUDE.md`: a service composing EXISTING repository reads and the
+// migrate gate's own resolution. No Prisma outside a repository, and no new query.
+//
+// ⚠️ THE CONNECTION HALF IS ORGANISATION-TIER (MOTIR-8481), the same
+// `githubInstallationService.resolveOrganizationConnectedRepos` the migrate
+// wizard's CONNECT gate answers from (MOTIR-8480). It used to be the workspace's
+// own grant, so a project whose ORGANISATION connected code from a sibling
+// workspace was let through the gate and then grounded on "no code connected" by
+// every surface that reads this. The INDEXED half stays workspace-keyed: it is the
+// resolution's `indexed`, joined from the same `job_run` ledger read the wizard's
+// INDEX step waits on and the gate's kick fills for this workspace.
 
 // ⚠️ THE SHAPE MOVED TO `lib/dto/` (MOTIR-4768) and is re-exported here, so no
 // caller moved. It had to: the plan window RENDERS this substrate, and
@@ -70,27 +77,18 @@ export async function readOnboardingSubstrate(
     withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findByProject(projectId, { take: itemCap + 1 }, tx),
     ),
-    resolveWorkspaceConnectedRepos({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
+    resolveConnectedRepos(ctx),
   ]);
 
   const itemCountTruncated = items.length > itemCap;
-  const connectedRefs = code?.repos.map((r) => r.repoRef) ?? [];
 
-  // The INDEXED half — only worth a round trip when something is connected.
-  const indexedRefs =
-    connectedRefs.length === 0
-      ? []
-      : await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-          jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
-        );
-
-  // ⚠️ ORDER IS THE MIRROR'S, and it is left alone deliberately: the reading
+  // ⚠️ ORDER IS THE RESOLUTION'S, and it is left alone deliberately: the reading
   // state renders one row per repository, and a surface whose rows reshuffle
   // between two renders of the same project reads as something changing when
-  // nothing has.
-  const repositories = connectedRefs.map((ref) => ({
-    ref,
-    indexed: indexedRefs.includes(ref),
+  // nothing has. Its empty set is `undefined` — normalised, exactly as before.
+  const repositories = (code?.repos ?? []).map((repo) => ({
+    ref: repo.repoRef,
+    indexed: repo.indexed,
   }));
 
   return {
@@ -102,6 +100,20 @@ export async function readOnboardingSubstrate(
     repositoryConnected: repositories.length > 0,
     repositoryIndexed: repositories.some((repo) => repo.indexed),
   };
+}
+
+/** The connection half — the organisation derived from the WORKSPACE row, never
+ *  from a request, then the migrate gate's own resolution. */
+async function resolveConnectedRepos(ctx: { userId: string; workspaceId: string }) {
+  const organizationId = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => resolveOrganizationId(ctx.workspaceId, tx),
+  );
+  return githubInstallationService.resolveOrganizationConnectedRepos({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    organizationId,
+  });
 }
 
 export const onboardingSubstrateService = { readOnboardingSubstrate };

@@ -5,7 +5,8 @@ import baseConfig from './vitest.config';
 // platform staff), its integration gate MOTIR-7610: the request record and its
 // org route (MOTIR-7605), the staff email (7606), the Contact-sales form and its
 // browser client (7607), the console service and actions (7608), and the console
-// pages (7609).
+// pages (7609). The Contact-sales form and its browser client were removed
+// with the Enterprise card (MOTIR-7598); the request API and console stay.
 //
 // ⚠️ MEASURED: the files the story's code cards ADDED. NOT measured: the shared
 // files the story extended by a few lines each — the billing / platform mappers,
@@ -34,7 +35,6 @@ export default defineConfig({
       'tests/billing/enterprise-request-email-template.test.ts',
       'tests/billing/enterprise-request-notify.test.ts',
       'tests/billing/enterprise-request-service.test.ts',
-      'tests/components/BillingContactSales.test.tsx',
       'tests/components/admin-shell-enterprise-requests.test.tsx',
       'tests/components/enterprise-requests-console.test.tsx',
       'tests/platform/enterpriseRequestActions.test.ts',
@@ -54,10 +54,8 @@ export default defineConfig({
         'lib/services/platformEnterpriseRequestService.ts',
         'lib/repositories/enterpriseRequestRepository.ts',
         'lib/emailTemplates/enterpriseRequestReceived.tsx',
-        'lib/billing/enterpriseRequestClient.ts',
         'lib/dto/platformEnterpriseRequest.ts',
         'app/api/organizations/[[]orgId]/billing/enterprise-request/route.ts',
-        'app/*/settings/organization/billing/_components/ContactSalesDialog.tsx',
         'app/*/admin/enterprise-requests/actions.ts',
         'app/*/admin/enterprise-requests/page.tsx',
         'app/*/admin/enterprise-requests/[[]id]/page.tsx',
@@ -82,18 +80,8 @@ export default defineConfig({
         },
         'lib/repositories/enterpriseRequestRepository.ts': FULL,
         'lib/emailTemplates/enterpriseRequestReceived.tsx': FULL,
-        'lib/billing/enterpriseRequestClient.ts': FULL,
         'lib/dto/platformEnterpriseRequest.ts': FULL,
         'app/api/organizations/[[]orgId]/billing/enterprise-request/route.ts': FULL,
-        // The arms left are guards a render cannot reach: a count already
-        // refused before the send, and the send button's own disabled state
-        // shielding the in-flight re-press.
-        'app/*/settings/organization/billing/_components/ContactSalesDialog.tsx': {
-          statements: 97,
-          branches: 93,
-          functions: 100,
-          lines: 100,
-        },
         'app/*/admin/enterprise-requests/actions.ts': FULL,
         'app/*/admin/enterprise-requests/page.tsx': FULL,
         'app/*/admin/enterprise-requests/[[]id]/page.tsx': FULL,

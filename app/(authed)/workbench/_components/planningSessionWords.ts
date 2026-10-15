@@ -12,13 +12,14 @@ import { OUT_OF_CREDITS_CODE } from '@/lib/planning/planEditsClient';
 // newer motir-ai wrote before this build learned it — reads as the `internal` sentence rather
 // than leaking the raw code to a person.
 
-/** The six stable reason codes a failed attempt records. */
+/** The seven stable reason codes a failed attempt records. */
 export const RESUME_REASON_CODES = [
   'rate_limited',
   'out_of_credits',
   'model_unavailable',
   'token_expired',
   'prompt_too_large',
+  'job_failed',
   'internal',
 ] as const;
 export type ResumeReasonCode = (typeof RESUME_REASON_CODES)[number];
@@ -91,6 +92,11 @@ export function resumeRefusalKeyOf(
     case 'NOT_SESSION_OWNER':
       return 'notOwner';
     case 'PLAN_NOT_RESUMABLE':
+    // motir-ai refused the resume at submit (`validation_error` → `MotirAiBadRequestError`, which
+    // the route answers as a 502): a job it cannot continue — a conversation that no longer
+    // reads, or nothing to re-ask. It answered; it was not unreachable, and a retry changes
+    // nothing, so it must not read as the outage `unavailable` says it was (MOTIR-8570).
+    case 'MOTIR_AI_BAD_REQUEST':
       return 'notResumable';
     default:
       return 'unavailable';

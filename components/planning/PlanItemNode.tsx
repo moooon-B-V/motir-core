@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus, Replace } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   CrossBlockedFlag,
@@ -162,7 +163,12 @@ function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>)
  *  `planned` — which is every rendering that shipped before MOTIR-3161. */
 export type PlanItemOutcome = 'accepted' | 'declined';
 
-export function PlanItemNode({
+/**
+ * A proposal on the canvas, memoised (Story MOTIR-8539 · MOTIR-8575): a plan
+ * snapshot is merged by identity (`mergePlanReview`), so an unchanged proposal
+ * keeps its `item` object and this node does not re-render on a re-read.
+ */
+export const PlanItemNode = memo(function PlanItemNode({
   item,
   outcome = null,
   crossBlocked = false,
@@ -387,7 +393,7 @@ export function PlanItemNode({
       }
     />
   );
-}
+});
 
 /** The remove's reason on ONE line — the node is a glance; the list row and the
  *  peek carry it in full, and so does `title` here. Written by the planner for

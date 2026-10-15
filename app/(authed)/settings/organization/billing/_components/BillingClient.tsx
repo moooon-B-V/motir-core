@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useFormatter, useLocale, useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -32,9 +32,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
-import type { BillingStatusDTO, EnterpriseRequestDTO } from '@/lib/dto/billing';
-import { fetchOpenEnterpriseRequest } from '@/lib/billing/enterpriseRequestClient';
-import { ContactSalesDialog, type ContactSalesContext } from './ContactSalesDialog';
+import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { AiPlanCatalogEntry, BillingCadence } from '@/lib/billing/catalog';
 import { ciLineFigures, type CiLineVariant } from './ciFigures';
 import { searchLineFigures } from './searchFigures';
@@ -101,9 +99,6 @@ export interface BillingClientProps {
   /** The org's member count (resolved server-side) — the seat count for the
    *  seat preview + the panel-6 seat calc (one seat per member, ADR §3). */
   memberCount: number;
-  /** What the Enterprise Contact-sales form shows read-only (MOTIR-7607), read
-   *  on the server; null for a viewer who cannot send a request. */
-  contactSales?: ContactSalesContext | null;
 }
 
 type View = 'home' | 'plans' | 'seats';
@@ -117,12 +112,7 @@ type LoadState = 'loading' | 'idle' | 'error' | 'forbidden';
 // Checkout / Portal sessions are started over the same boundary and the browser
 // redirects to the returned hosted URL. The PAYWALL (panel 7) is the sibling
 // 8.1.8; this card never renders it.
-export function BillingClient({
-  orgId,
-  orgName,
-  memberCount,
-  contactSales = null,
-}: BillingClientProps) {
+export function BillingClient({ orgId, orgName, memberCount }: BillingClientProps) {
   const t = useTranslations('billing');
   const { toast } = useToast();
   const [data, setData] = useState<BillingStatusDTO | null>(null);
@@ -133,35 +123,9 @@ export function BillingClient({
   // tier may still be settling — show a pending note until the refetch confirms).
   const [returnBanner, setReturnBanner] = useState<'success' | 'cancel' | null>(null);
   const seq = useRef(0);
-  // The org's OPEN Enterprise request (MOTIR-7607): null when none is open,
-  // undefined when it could not be read (a member's 403, a failed read) — the
-  // Enterprise card then offers Contact sales, and the server's one-open-per-org
-  // rule (409) still stands behind it.
-  const [enterpriseRequest, setEnterpriseRequest] = useState<
-    EnterpriseRequestDTO | null | undefined
-  >(undefined);
-  const enterpriseSeq = useRef(0);
-
-  // Re-read the open request from the server — after a send, and after a 409 —
-  // so the card shows "Request sent" because the server says so, not because
-  // the client assumed it (the page-state-after-mutation contract).
-  const refreshEnterpriseRequest = useCallback(async () => {
-    const mySeq = ++enterpriseSeq.current;
-    const request = await fetchOpenEnterpriseRequest(orgId);
-    if (mySeq === enterpriseSeq.current) setEnterpriseRequest(request);
-    return request;
-  }, [orgId]);
-
   const load = useCallback(async () => {
     const mySeq = ++seq.current;
     setState('loading');
-    // The open request is read ALONGSIDE the billing status, so the Enterprise
-    // card paints its final control in the same render as the rest.
-    const enterpriseRead = (async () => {
-      const myEnterpriseSeq = ++enterpriseSeq.current;
-      const request = await fetchOpenEnterpriseRequest(orgId);
-      return { request, current: () => myEnterpriseSeq === enterpriseSeq.current };
-    })();
     try {
       const res = await fetch(`/api/organizations/${orgId}/billing`);
       if (mySeq !== seq.current) return;
@@ -174,9 +138,7 @@ export function BillingClient({
         return;
       }
       const body = (await res.json()) as BillingStatusDTO;
-      const enterprise = await enterpriseRead;
       if (mySeq !== seq.current) return;
-      if (enterprise.current()) setEnterpriseRequest(enterprise.request);
       setData(body);
       setState('idle');
     } catch {
@@ -326,12 +288,6 @@ export function BillingClient({
     portal,
     redirecting,
   } as const;
-  const enterprise: EnterpriseContactProps = {
-    orgId,
-    context: contactSales,
-    request: enterpriseRequest ?? null,
-    refresh: refreshEnterpriseRequest,
-  };
 
   return (
     <div className="flex flex-col gap-5" aria-busy={state === 'loading'}>
@@ -359,13 +315,7 @@ export function BillingClient({
         <HomeView {...shared} goPlans={() => setView('plans')} goSeats={() => setView('seats')} />
       ) : null}
       {view === 'plans' ? (
-        <PlansView
-          {...shared}
-          orgId={orgId}
-          reload={load}
-          enterprise={enterprise}
-          back={() => setView('home')}
-        />
+        <PlansView {...shared} orgId={orgId} reload={load} back={() => setView('home')} />
       ) : null}
       {view === 'seats' ? <SeatsView {...shared} back={() => setView('home')} /> : null}
     </div>
@@ -385,15 +335,6 @@ interface SharedViewProps {
   checkout: (priceLookupKey: string, quantity?: number) => void;
   portal: () => void;
   redirecting: boolean;
-}
-
-/** What the Enterprise card's Contact sales needs (MOTIR-7607). */
-export interface EnterpriseContactProps {
-  orgId: string;
-  context: ContactSalesContext | null;
-  /** The org's open request, or null (none open, or unknown). */
-  request: EnterpriseRequestDTO | null;
-  refresh: () => Promise<EnterpriseRequestDTO | null | undefined>;
 }
 
 export { fmt };
@@ -1505,12 +1446,10 @@ function PlansView({
   checkout,
   portal,
   redirecting,
-  enterprise,
   back,
   orgId,
   reload,
 }: SharedViewProps & {
-  enterprise: EnterpriseContactProps;
   back: () => void;
   orgId: string;
   /** Re-read the billing status — after a change of plan (MOTIR-8399). */
@@ -1546,6 +1485,14 @@ function PlansView({
   // motir-ai's direction guards use.
   const currentPool = aiPlans.find((p) => p.key === tier?.key)?.allotment?.credits ?? null;
   const planChangeLocked = holdsPlan && !canManage;
+  // The cards are the PAID plans (MOTIR-7598): Free is not a plan to choose but
+  // the one-time trial grant, said in the strip above the row, and a price-less
+  // plan has no card (Enterprise is gone — MOTIR-7592).
+  const paidPlans = aiPlans.filter((p) => p.key !== 'free' && p.prices);
+  // The org is on the one-time trial: its tier is the catalog's `free` grant and
+  // it holds no paid plan. The strip reads the same balance and grant the home
+  // line's meter reads.
+  const onTrial = !holdsPlan && tier?.key === 'free';
 
   return (
     <>
@@ -1567,7 +1514,7 @@ function PlansView({
         </p>
       </header>
 
-      {tier && subscription.status ? (
+      {tier && tier.key !== 'free' && subscription.status ? (
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -1627,6 +1574,8 @@ function PlansView({
         ) : null}
       </div>
 
+      {onTrial ? <FreeTrialStrip left={balance} granted={allotment} t={t} /> : null}
+
       {planChangeLocked ? (
         <p
           id={reasonId}
@@ -1641,10 +1590,11 @@ function PlansView({
           the row's natural width the container scrolls horizontally (scroll-snap)
           rather than wrapping — the tiers stay one comparable ladder (design 8.1.21). */}
       <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5">
-        {aiPlans.map((plan) => (
+        {paidPlans.map((plan, i) => (
           <PlanCard
             key={plan.key}
             plan={plan}
+            previous={paidPlans[i - 1] ?? null}
             cadence={cadence}
             currentKey={tier?.key ?? null}
             status={subscription.status}
@@ -1658,17 +1608,6 @@ function PlansView({
             describedBy={planChangeLocked ? reasonId : undefined}
             openChange={(kind) => setChange({ kind, planKey: plan.key })}
             t={t}
-            contactSales={
-              plan.prices ? null : (
-                <EnterpriseContactControl
-                  enterprise={enterprise}
-                  canManage={canManage}
-                  orgName={orgName}
-                  planName={tier?.name ?? null}
-                  t={t}
-                />
-              )
-            }
           />
         ))}
       </div>
@@ -1711,6 +1650,7 @@ function PlansView({
 
 function PlanCard({
   plan,
+  previous,
   cadence,
   currentKey,
   status,
@@ -1724,9 +1664,10 @@ function PlanCard({
   describedBy,
   openChange,
   t,
-  contactSales,
 }: {
   plan: AiPlanCatalogEntry;
+  /** The paid plan one rung below, or null for the first — the ladder line's base. */
+  previous: AiPlanCatalogEntry | null;
   cadence: BillingCadence;
   currentKey: string | null;
   status: AiStatus;
@@ -1744,8 +1685,6 @@ function PlanCard({
   describedBy: string | undefined;
   openChange: (kind: 'upgrade' | 'downgrade') => void;
   t: T;
-  /** The Enterprise card's control (MOTIR-7607) — rendered for the price-less plan. */
-  contactSales: React.ReactNode;
 }) {
   const locale = useLocale();
   const isCurrent = currentKey === plan.key && status !== null && status !== 'canceled';
@@ -1759,21 +1698,12 @@ function PlanCard({
     ) : null;
 
   // Price block by cadence (per-month-equivalent for annual, dollar savings).
+  // Only paid plans reach a card (PlansView filters), so `prices` is set.
+  const prices = plan.prices!;
   let priceBlock: React.ReactNode;
-  if (plan.key === 'free') {
-    priceBlock = (
-      <div>
-        <span className="font-serif text-2xl text-(--el-text)">{t('plans.freePrice')}</span>{' '}
-        <span className="font-sans text-xs text-(--el-text-muted)">{t('plans.once')}</span>
-      </div>
-    );
-  } else if (!plan.prices) {
-    priceBlock = (
-      <span className="font-serif text-2xl text-(--el-text)">{t('plans.customPrice')}</span>
-    );
-  } else if (cadence === 'annual') {
-    const annual = plan.prices.annual.amountUsd;
-    const monthly = plan.prices.monthly.amountUsd;
+  if (cadence === 'annual') {
+    const annual = prices.annual.amountUsd;
+    const monthly = prices.monthly.amountUsd;
     const perMo = Math.round(annual / 12);
     const save = monthly * 12 - annual;
     priceBlock = (
@@ -1794,8 +1724,8 @@ function PlanCard({
       </div>
     );
   } else {
-    const monthly = plan.prices.monthly.amountUsd;
-    const annual = plan.prices.annual.amountUsd;
+    const monthly = prices.monthly.amountUsd;
+    const annual = prices.annual.amountUsd;
     const save = monthly * 12 - annual;
     priceBlock = (
       <div>
@@ -1817,14 +1747,6 @@ function PlanCard({
         {t('plans.ctaCurrent')}
       </Button>
     );
-  } else if (plan.key === 'free') {
-    cta = (
-      <Button variant="secondary" size="sm" disabled className="w-full">
-        {t('plans.ctaTrialUsed')}
-      </Button>
-    );
-  } else if (!plan.prices) {
-    cta = contactSales;
   } else if (holdsPlan) {
     // The action slot is the upgrade path's (MOTIR-8399): a higher plan upgrades
     // now, a lower one is scheduled for the period end, and the plan a downgrade
@@ -1866,7 +1788,7 @@ function PlanCard({
       cta = null;
     }
   } else {
-    const priceKey = plan.prices[cadence].priceLookupKey;
+    const priceKey = prices[cadence].priceLookupKey;
     cta = (
       <Button
         variant={isRecommended ? 'primary' : 'secondary'}
@@ -1887,21 +1809,11 @@ function PlanCard({
   // "Everything in {prev}, plus" lead shows only on tiers that name a `prev`.
   const tierBase = `plans.tiers.${plan.key}`;
   const features = (t.raw(`${tierBase}.features`) as string[] | undefined) ?? [];
-  const featuresOff =
-    plan.key === 'free'
-      ? ((t.raw('plans.tiers.free.featuresOff') as string[] | undefined) ?? [])
-      : [];
   const hasPrev = plan.key === 'pro' || plan.key === 'max' || plan.key === 'max_x2';
-  // The bundled Motir seat (8.1.22): every PAID plan includes its catalog count of
-  // tracker seats at no charge (MOTIR-8394 reads it, never a typed 1); Free states
-  // the absence.
+  // The bundled Motir seat (8.1.22): every paid plan includes its catalog count of
+  // tracker seats at no charge (MOTIR-8394 reads it, never a typed 1).
   const seatIncluded = plan.includedTrackerSeats > 0;
-  const seatText = seatIncluded
-    ? t('plans.seatIncluded', { count: plan.includedTrackerSeats })
-    : !plan.prices
-      ? t('plans.seatNone')
-      : t('plans.seatCustom');
-  const seatOff = !seatIncluded;
+  const ladder = ladderLine(plan, previous, t);
 
   return (
     <div
@@ -1944,29 +1856,32 @@ function PlanCard({
         {t(`${tierBase}.useCase`)}
       </p>
       {priceBlock}
-      <p className="font-sans text-sm font-semibold text-(--el-text-strong)">
-        {plan.allotment
-          ? t(
-              plan.allotment.cadence === 'one_time'
-                ? 'plans.creditsAllotmentOneTime'
-                : 'plans.creditsAllotment',
-              { n: fmt(plan.allotment.credits, locale) },
-            )
-          : t('plans.customPool')}
-      </p>
+      {plan.allotment ? (
+        <p className="font-sans text-sm font-semibold text-(--el-text-strong)">
+          {t(
+            plan.allotment.cadence === 'one_time'
+              ? 'plans.creditsAllotmentOneTime'
+              : 'plans.creditsAllotment',
+            { n: fmt(plan.allotment.credits, locale) },
+          )}
+        </p>
+      ) : null}
+      {/* the ladder line (MOTIR-7598): how this pool relates to the rung below */}
+      {ladder ? (
+        <p data-testid="plan-ladder" className="font-sans text-[11.5px] text-(--el-text-secondary)">
+          {ladder}
+        </p>
+      ) : null}
       {/* bundled Motir seat (8.1.22) */}
-      <p
-        data-testid={seatIncluded ? 'plan-included-seat' : undefined}
-        className={`flex items-center gap-1.5 font-sans text-xs ${
-          seatOff ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)'
-        }`}
-      >
-        <Users
-          className={`h-3.5 w-3.5 shrink-0 ${seatOff ? 'text-(--el-text-faint)' : 'text-(--el-accent-on-surface)'}`}
-          aria-hidden
-        />
-        {seatText}
-      </p>
+      {seatIncluded ? (
+        <p
+          data-testid="plan-included-seat"
+          className="flex items-center gap-1.5 font-sans text-xs text-(--el-text-secondary)"
+        >
+          <Users className="h-3.5 w-3.5 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
+          {t('plans.seatIncluded', { count: plan.includedTrackerSeats })}
+        </p>
+      ) : null}
       {/* cumulative feature list */}
       <ul className="flex flex-col gap-1.5 font-sans text-xs text-(--el-text-secondary)">
         {hasPrev ? (
@@ -1981,135 +1896,58 @@ function PlanCard({
             <span>{f}</span>
           </li>
         ))}
-        {featuresOff.map((f, i) => (
-          <li key={`off-${i}`} className="flex items-start gap-1.5 text-(--el-text-secondary)">
-            <X className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>{f}</span>
-          </li>
-        ))}
       </ul>
       {cta ? <div className="mt-auto pt-1">{cta}</div> : null}
     </div>
   );
 }
 
-// The Enterprise card's Contact sales (Story MOTIR-7602 · Subtask MOTIR-7607;
-// design `billing--contact-sales.mock.html` panel 2). It used to be a
-// `mailto:` link, live for everyone; it is now one of four controls:
-//   (a) a manager, no open request → Contact sales, opening the request form;
-//   (b) a member (no `manageBilling`) → the same button DISABLED, its reason
-//       said under it as visible text (a disabled button takes no focus, so a
-//       tooltip would be unreachable), wired as its `aria-describedby`;
-//   (c) an open request, manager → "Request sent · {date}" on mint, opening
-//       that request read-only;
-//   (d) an open request, member → the same words as a plain line.
-// The dialog is mounted only while open, so each opening starts from the
-// state it is opened in (the form, or the open request).
-//
-// ⚠️ (b) and (d) are drawn and built, but the plans screen is reached today
-// only through manager-gated buttons (② Change plan, the CI paused decision),
-// so a member does not land here in the shipped flow. They are exported for
-// the component test that pins them, and so they hold if a member path opens.
-export function EnterpriseContactControl({
-  enterprise,
-  canManage,
-  orgName,
-  planName,
-  t,
-}: {
-  enterprise: EnterpriseContactProps;
-  canManage: boolean;
-  orgName: string;
-  planName: string | null;
-  t: T;
-}) {
-  const [open, setOpen] = useState(false);
-  const format = useFormatter();
-  const reasonId = useId();
-  const { request } = enterprise;
-  const sentLabel = request
-    ? t('contactSales.sentChip', {
-        date: format.dateTime(new Date(request.createdAt), {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-          timeZone: 'UTC',
-        }),
-      })
-    : null;
+// The ladder line (MOTIR-7598; design billing § MOTIR-7596): the first paid rung
+// says every plan prices a credit the same; each later rung says how many times
+// the rung below's pool it holds. The multiple is computed from the catalog's
+// pools, never typed, and shown only when it is whole — a fractional "2.5×"
+// would read as a different price per credit, which it is not.
+export function ladderLine(
+  plan: AiPlanCatalogEntry,
+  previous: AiPlanCatalogEntry | null,
+  t: T,
+): string | null {
+  if (!previous) return t('plans.ladder.first');
+  const pool = plan.allotment?.credits;
+  const below = previous.allotment?.credits;
+  if (!pool || !below) return null;
+  const multiple = pool / below;
+  if (!Number.isInteger(multiple)) return null;
+  return t('plans.ladder.multiple', { multiple, plan: previous.name });
+}
 
-  let control: React.ReactNode;
-  if (request && !canManage) {
-    control = (
-      <p className="flex w-full items-center justify-center gap-1.5 rounded-(--radius-badge) bg-(--el-tint-mint) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)">
-        <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        {sentLabel}
-      </p>
-    );
-  } else if (request) {
-    control = (
-      <Button
-        variant="secondary"
-        size="sm"
-        className="w-full border-transparent bg-(--el-tint-mint) text-(--el-text-strong) hover:bg-(--el-tint-mint)"
-        aria-haspopup="dialog"
-        leftIcon={<Check className="h-4 w-4" />}
-        onClick={() => setOpen(true)}
-      >
-        {sentLabel}
-      </Button>
-    );
-  } else if (!canManage) {
-    control = (
-      <div className="flex flex-col gap-1.5">
-        <Button
-          variant="secondary"
-          size="sm"
-          className="w-full"
-          disabled
-          aria-describedby={reasonId}
-        >
-          {t('contactSales.contact')}
-        </Button>
-        <p
-          id={reasonId}
-          className="flex items-start gap-1.5 font-sans text-[11.5px] leading-snug text-(--el-text-secondary)"
-        >
-          <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-          <span>{t('contactSales.memberReason', { org: orgName })}</span>
-        </p>
-      </div>
-    );
-  } else {
-    control = (
-      <Button
-        variant="secondary"
-        size="sm"
-        className="w-full"
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-      >
-        {t('contactSales.contact')}
-      </Button>
-    );
-  }
-
+// The free-trial strip (MOTIR-7598; design billing § MOTIR-7596, revision 2).
+// Free is not a plan: an org on the one-time trial grant is told so in one
+// bordered line above the card row — how much of the grant is left, or that it
+// is spent — instead of being shown a Free card to "choose".
+function FreeTrialStrip({ left, granted, t }: { left: number; granted: number; t: T }) {
+  const locale = useLocale();
+  const remaining = Math.max(0, left);
+  const spent = remaining === 0;
   return (
-    <>
-      {control}
-      {open ? (
-        <ContactSalesDialog
-          open
-          onOpenChange={setOpen}
-          orgId={enterprise.orgId}
-          orgName={orgName}
-          planName={planName}
-          context={enterprise.context}
-          openRequest={request}
-          onRequestChanged={enterprise.refresh}
-        />
-      ) : null}
-    </>
+    <p
+      data-testid="plan-free-trial"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) font-sans text-[12.5px] text-(--el-text-secondary)"
+    >
+      <Pill
+        className={`border-transparent text-(--el-text-strong) ${spent ? 'bg-(--el-surface)' : 'bg-(--el-tint-sky)'}`}
+      >
+        {spent ? t('plans.trial.pillUsed') : t('plans.trial.pill')}
+      </Pill>
+      <span>
+        {spent
+          ? `${t('plans.trial.spent', { n: fmt(granted, locale) })} ${t('plans.trial.pickPlan')}`
+          : `${t('plans.trial.left', {
+              left: fmt(remaining, locale),
+              n: fmt(granted, locale),
+            })} ${t('trial.note')}`}
+      </span>
+    </p>
   );
 }
 

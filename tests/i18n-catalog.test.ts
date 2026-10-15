@@ -212,8 +212,6 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — the tenant page’s Fleet card, which shows the last stop’s reason',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — the tenant page’s Fleet card, whose counts were re-read',
-    'billing.contactSales.sent.body':
-      'UI panel — the Enterprise plan card, which shows the open request (MOTIR-7607)',
   },
   zh: {
     'platformAdmin.monitoring.subtitle':
@@ -222,8 +220,6 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
-    'billing.contactSales.sent.body':
-      'UI panel — Enterprise 卡片 is the plan card on Billing & plans, not a work item',
   },
 };
 
@@ -407,6 +403,12 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
       'disclosure verb on a To resume gate line — opens the approval overlay; the line names the gate kind, not a type',
     'issueViews.provenanceSourceManual':
       'provenance ORIGIN chip on the item detail rail — framed by FieldCard label "Planning"/"Implementation"',
+    // The machine-translation VERB (Story MOTIR-7735 · MOTIR-8122; design MOTIR-8112) —
+    // a different part of speech from the `translate` TYPE (localisation WORK), as
+    // the clipboard `copy` entries are from `copy`. It is the one button in the
+    // bar labelled "Translation" under the title, with "into {language}" beside it.
+    'itemTranslation.translate':
+      'button verb in the item translation bar — "Translate" + "into {language}" beside it',
 
     // The approval frame's BAND-1 KIND for a decision gate (MOTIR-5678; design
     // `design/github` §27). The same sense as the type — it names the DECISION card's
@@ -442,6 +444,13 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     'auth.twoFactor.verify': 'button verb — submits the 2FA code',
     'settings.publicAddress.domains.addModal.verify': 'button verb — checks the domain DNS record',
     'roadmap.canvas.origin.validate': 'button verb — validates the canvas origin',
+    // `翻译` is the `translate` TYPE noun and also the machine-translation verb and
+    // its group's name (MOTIR-8122): the bar under the item title, read as one
+    // control beside "译为{language}".
+    'itemTranslation.translate':
+      'button verb in the item translation bar — translates this item, beside its target language',
+    'itemTranslation.groupLabel':
+      'the translation bar’s accessible group name — names the control, not a work item type',
     // The en twins above, same reasons.
     'codeHealth.convention.defaultRepo': 'repo fallback name on Code health',
     'onboarding.generation.designLabel': 'field label in the onboarding baseline card',
@@ -597,7 +606,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
   zh: {
     'email.enterpriseRequestReceived.noNeeds':
       'question — an optional question on the Enterprise contact form, not a work item',
-    'billing.contactSales.sent.body': 'UI panel — the Enterprise plan card on the billing page',
     'device.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'planReview.actionError': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'errors.serverError.pageBody': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
@@ -851,26 +859,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'email.enterpriseRequestReceived.openRequest':
       "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.sentChip':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.subtitle':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.facts.heading':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.send':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.refused.open.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.refused.open.action':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.refused.network.body':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.sent.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.sent.body':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
-    'billing.contactSales.request.title':
-      "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'platformAdmin.users.log.action.enterprise_request.transition':
       "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'platformAdmin.enterpriseRequests.subtitle':
@@ -968,8 +956,6 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
   },
   it: {
-    'billing.contactSales.refused.open.body': 'browser tab — "from another tab"',
-    'billing.contactSales.refused.open.bodyNoDate': 'browser tab — "from another tab"',
     'settings.publicAddress.subdomain.open': 'browser tab — "open in a new tab"',
     'workbench.group.count': 'UI tab — a Workbench tab, "on this tab" (MOTIR-8016)',
     'workbench.group.context': 'UI tab — a Workbench tab, "not on this tab" (MOTIR-8016)',

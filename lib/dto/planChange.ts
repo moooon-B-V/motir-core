@@ -346,6 +346,7 @@ export type PlanSessionFailureReasonDto =
   | 'model_unavailable'
   | 'token_expired'
   | 'prompt_too_large'
+  | 'job_failed'
   | 'internal';
 
 /** A failed attempt waiting to resume — see {@link PlanChangeSessionDto.failure}. */

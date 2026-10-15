@@ -42,7 +42,7 @@ describe('failureRecord — parsing never throws, mapping is total', () => {
     ['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits'],
     ['MOTIR_AI_UNAUTHORIZED', 'token_expired'],
     ['MOTIR_AI_UNAVAILABLE', 'model_unavailable'],
-    ['MOTIR_AI_JOB_FAILED', 'model_unavailable'],
+    ['MOTIR_AI_JOB_FAILED', 'job_failed'],
     ['MOTIR_AI_BAD_REQUEST', 'model_unavailable'],
     ['SOMETHING_NEW', 'internal'],
   ])('maps %s to %s', (code, reason) => {

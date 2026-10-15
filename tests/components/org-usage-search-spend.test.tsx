@@ -72,6 +72,9 @@ function dto(over: Partial<OrgUsageDTO> = {}): OrgUsageDTO {
       attributedSpend: 246,
       unattributedSpend: 66,
     },
+    // The Translation line's block (MOTIR-8117), reported so its card does not
+    // add an "Unavailable" label beside the search figures these cases count.
+    translation: { totalSpend: 0, monthSpend: 0 },
     hasUsage: true,
     ...over,
   } as unknown as OrgUsageDTO;
@@ -237,7 +240,8 @@ describe('the search summary figures', () => {
     expect(screen.getByText(sum.searchAttributed)).toBeTruthy();
     // ⚠️ The org-level figure says so; the ones that narrow say the opposite.
     // Without this the middle figure not moving under a drill reads as broken.
-    expect(screen.getAllByText(sum.scopeOrg).length).toBe(1);
+    // Two org-level figures since MOTIR-8117: the search total and Translation.
+    expect(screen.getAllByText(sum.scopeOrg).length).toBe(2);
     expect(screen.getAllByText(sum.scopeFollows).length).toBeGreaterThanOrEqual(3);
   });
 

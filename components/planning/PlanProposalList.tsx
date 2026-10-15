@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, FolderX, RotateCw } from 'lucide-react';
 
@@ -309,7 +309,8 @@ function SupersedesRow({ refs }: { refs: NonNullable<PlanReviewItemDto['supersed
   );
 }
 
-function ProposalRow({
+/** A proposal row, memoised for the same reason as `PlanItemNode` (MOTIR-8575). */
+const ProposalRow = memo(function ProposalRow({
   item,
   outcome,
   onOpen,
@@ -494,7 +495,7 @@ function ProposalRow({
       </div>
     </li>
   );
-}
+});
 
 export interface PlanProposalListProps {
   items: PlanReviewItemDto[];
@@ -554,6 +555,14 @@ export function PlanProposalList({
     proposal: null,
     key: null,
   });
+  // WHILE THE PLAN IS WRITTEN the open peek follows the live item by its
+  // `planItemId` (MOTIR-8595), so a field that arrives mid-view reaches it. A
+  // proposal withdrawn mid-view keeps its last copy: closing is the reader's act.
+  // Off `live` it is the copy taken at open, as shipped.
+  const peekedProposal =
+    live && peeked.proposal
+      ? (items.find((i) => i.planItemId === peeked.proposal?.planItemId) ?? peeked.proposal)
+      : peeked.proposal;
   // ⚠️ FOCUS RETURN IS EXPLICIT HERE, and it is not redundant with the modal's own
   // (MOTIR-4022). The dialog is mounted INSIDE this list, so closing it unmounts
   // the dialog in the same commit that re-renders the rows — and the restore the
@@ -669,7 +678,8 @@ export function PlanProposalList({
           (MOTIR-3161, bug MOTIR-4471). Each renders nothing when its half is null, so
           only one is ever open. */}
       <ProposalPeek
-        item={peeked.proposal}
+        item={peekedProposal}
+        live={live}
         outcome={outcome}
         onClose={closePeek}
         onOpenProposal={openProposalById}

@@ -74,6 +74,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // profile as the ink guards — one whole-tree parse, no database, nothing
   // rendered — and it imports nothing from `lib/` or `app/`.
   'tests/theme/modalScrollContainer.test.ts',
+  // ── tests/guards/ — the follow-and-typewriter mount pins (MOTIR-8596) ─────
+  // Its own `readdirSync` over `app/` and `components/`, text-matching the JSX
+  // sites that may pass `followMode` / `typeIn` / render `TypeInText`. No
+  // database, nothing imported from `lib/` or `app/`.
+  'tests/guards/follow-and-typewriter-mounts.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —
@@ -413,6 +418,14 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `trackServerWork`. It opens no database; its scanner imports only
   // `typescript` and `node:*`.
   'tests/mcp/mcp-route-tracked-guard.test.ts',
+  // ── tests/architecture/ — no route refresh on a live path (MOTIR-8578) ─────
+  // Walks the static import graph from the Workbench, approval and planning
+  // live-update roots (~540 files) and parses each through the compiler API. It
+  // opens no database; its scanner imports only `typescript` and `node:*`.
+  'tests/architecture/no-refresh-on-live-paths.test.ts',
+  // MOTIR-8418 — Story MOTIR-8413's at-work sweeps: static reads of its enumerated
+  // surface (`tests/helpers/atWorkStorySurface.ts`), no render and no database.
+  'tests/planning/atWorkSurfaceGuards.test.ts',
 ] as const;
 
 /**
@@ -460,6 +473,12 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
     'wire. Its call-site walk over lib/ is DB-free and rides along; splitting it ' +
     'out would separate a presence check from the value check the file says in ' +
     'its own header cannot substitute for it.',
+  'tests/inProcessState/guards.test.ts':
+    'imports @/lib/db and ../helpers/adminDb — the story gate of MOTIR-8547 ' +
+    '(MOTIR-8619) pairs its inventory and file-walk guards with case 9, which ' +
+    'writes a moved row through the app client and reads it through a second ' +
+    'client of the same database. The walk and the write are one gate over one ' +
+    'list of moved rows, so they stay in one file.',
   'tests/integration/ai/planningSubmitCarriesOnboardingFlag.test.ts':
     'imports @/lib/db, ../../helpers/adminDb and ../../fixtures — it drives the ' +
     'migrate wizard through migrateOnboardingService against real Postgres (a ' +

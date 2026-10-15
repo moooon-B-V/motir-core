@@ -139,7 +139,8 @@ describe('the Max ×2 plan card', () => {
     await screen.findByText('Motir AI — plans & subscription');
 
     const names = cardHeaders().map((el) => el.textContent);
-    expect(names).toEqual(['Free', 'Standard', 'Pro', 'Max', 'Max ×2']);
+    // Free is the trial grant, not a card (MOTIR-7598).
+    expect(names).toEqual(['Standard', 'Pro', 'Max', 'Max ×2']);
 
     const maxX2 = within(card('Max ×2'));
     expect(maxX2.getByText('60,000 credits / mo')).toBeTruthy();
@@ -204,7 +205,7 @@ describe('an org that already holds a live AI plan', () => {
 });
 
 describe('the included-seat line', () => {
-  it('shows on Standard, Pro, Max and Max ×2 from the catalog count, and not on Free', async () => {
+  it('shows on Standard, Pro, Max and Max ×2 from the catalog count, and there is no Free card', async () => {
     await openPlans(status());
     await screen.findByText('Motir AI — plans & subscription');
     for (const name of ['Standard', 'Pro', 'Max', 'Max ×2']) {
@@ -212,7 +213,7 @@ describe('the included-seat line', () => {
         '1 Motir seat',
       );
     }
-    expect(within(card('Free')).queryByTestId('plan-included-seat')).toBeNull();
+    expect(cardHeaders().map((el) => el.textContent)).not.toContain('Free');
   });
 
   it('follows the catalog count, never a typed 1', async () => {

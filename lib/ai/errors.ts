@@ -314,6 +314,20 @@ export function planChangeRefusalOf(p: Problem): MotirAiPlanChangeRefusedError |
   return reason ? new MotirAiPlanChangeRefusedError(reason, p.detail ?? p.title) : null;
 }
 
+/**
+ * A FAILED JOB's terminal problem, mapped (MOTIR-8569). The same as
+ * {@link errorFromProblem} except for `ai_job_failed`, which a job's terminal error
+ * means *the handler ran and refused* — so it is a {@link MotirAiJobFailedError},
+ * not the {@link MotirAiUnavailableError} a synchronous `ai_job_failed` response
+ * still maps to. Read as unavailable, a planning session that died on a core
+ * read-back was recorded as `model_unavailable` and told the person the AI
+ * provider was down, with the detail prefixed "motir-ai is unavailable:".
+ */
+export function jobErrorFromProblem(p: Problem): MotirAiError {
+  if (p.code === 'ai_job_failed') return new MotirAiJobFailedError(p.detail ?? p.title, p);
+  return errorFromProblem(p);
+}
+
 export function errorFromProblem(p: Problem): MotirAiError {
   switch (p.code) {
     case 'service_unauthorized':

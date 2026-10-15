@@ -12,7 +12,7 @@
 // the plan). A new surface imports these two functions; it does not grow a
 // third derivation.
 //
-// The account is TWO HALVES on purpose:
+// The account is TWO HALVES on purpose, and a THIRD thing read off them:
 //   1. a SNAPSHOT, built on the server and independent of time — the resolved
 //      steps (each with its PHRASE, its target's title and canvas node id),
 //      "N of M authored", the plan's start, its last activity, and the server
@@ -23,6 +23,25 @@
 //      elapsed keep moving between 2.5 s polls (and across a dropped one), so
 //      they cannot be frozen into the server's answer. A ticking client calls it
 //      with `serverNow(…)`; the server calls it with server time.
+//   3. the AT-WORK STATE (Story MOTIR-8413 · MOTIR-8415; design
+//      `design/ai-chat/design-notes.md` § "Motir at work"), a pure function of
+//      (reading | null, failing) — whether Motir is writing right now, and which
+//      cards it is writing, for the two things that MOVE while it does: the
+//      drafted card's cue and the Motir mark. It WIDENS `PlanProgressState` with
+//      the two facts a reading cannot express — `settled` (no snapshot: the plan
+//      is no longer `generating`) and `reconnecting` (the poll's reads are
+//      failing) — and gates the steps for motion. That gate is NOT
+//      `liveSteps.length > 0`: while a read fails the clock HOLDS `liveSteps`,
+//      so the words and the static cue keep standing while the motion stops.
+//
+//      | input                                   | state          | atWork | steps            |
+//      | --------------------------------------- | -------------- | ------ | ---------------- |
+//      | `failing`                               | `reconnecting` | false  | `[]`             |
+//      | `reading === null`                      | `settled`      | false  | `[]`             |
+//      | `stalled`                               | `stalled`      | false  | `[]`             |
+//      | `resuming`                              | `resuming`     | false  | `[]`             |
+//      | `starting`                              | `starting`     | true   | `[]` (none exist) |
+//      | `working` · `writing`                   | same value     | true   | `liveSteps`      |
 //
 // PURE AND ISOMORPHIC: no `db`, no `Date.now()` default, no React, no copy. The
 // words a phrase reads as are the design's copy keys (`PLAN_STEP_PHRASE_MESSAGE_KEY`),
@@ -422,4 +441,70 @@ export function readPlanProgress(
  */
 export function serverNow(observedAt: string, receivedAtMs: number, clientNowMs: number): number {
   return Date.parse(observedAt) + Math.max(0, clientNowMs - receivedAtMs);
+}
+
+// ── The at-work state ─────────────────────────────────────────────────────────
+
+/**
+ * The reading's state WIDENED by what the reading cannot say: `settled` (there is
+ * no snapshot, because the plan is no longer `generating`) and `reconnecting`
+ * (the poll's reads are failing). The reading's own values keep their names.
+ */
+export type PlanAtWorkState = PlanProgressState | 'settled' | 'reconnecting';
+
+export interface PlanAtWorkReading {
+  state: PlanAtWorkState;
+  /** Whether Motir is writing right now — what lets the cue and the mark MOVE. */
+  atWork: boolean;
+  /** The steps whose cards may move: the reading's `liveSteps` while at work, else `[]`. */
+  steps: PlanProgressStep[];
+}
+
+/**
+ * Whether each state moves. TOTAL over {@link PlanAtWorkState}, so a value added
+ * to `PlanProgressState` is a compile error here until somebody decides whether
+ * it moves, rather than falling silently into `writing`.
+ */
+export const PLAN_AT_WORK_MOVES: Record<PlanAtWorkState, boolean> = {
+  starting: true,
+  working: true,
+  writing: true,
+  stalled: false,
+  resuming: false,
+  settled: false,
+  reconnecting: false,
+};
+
+/**
+ * THE AT-WORK STATE — the one rule both the drafted card and the Motir mark read
+ * (header, part 3). `failing` wins over everything (the shipped marker's own
+ * precedence), then a null reading is `settled`, then the reading's state. It
+ * never mutates `reading`: a surface still reads the held `liveSteps` for its
+ * words and its static cue. Reporting a state is not an instruction to animate —
+ * whether motion plays stays the surface's opt-in and the CSS reduced-motion gate.
+ */
+export function readPlanAtWork(
+  reading: PlanProgressReading | null,
+  opts: { failing?: boolean } = {},
+): PlanAtWorkReading {
+  const state = atWorkStateOf(reading, opts.failing === true);
+  const atWork = PLAN_AT_WORK_MOVES[state];
+  return { state, atWork, steps: atWork && reading ? [...reading.liveSteps] : [] };
+}
+
+function atWorkStateOf(reading: PlanProgressReading | null, failing: boolean): PlanAtWorkState {
+  if (failing) return 'reconnecting';
+  if (reading === null) return 'settled';
+  switch (reading.state) {
+    case 'starting':
+    case 'working':
+    case 'writing':
+    case 'stalled':
+    case 'resuming':
+      return reading.state;
+    default: {
+      const unhandled: never = reading.state;
+      return unhandled;
+    }
+  }
 }

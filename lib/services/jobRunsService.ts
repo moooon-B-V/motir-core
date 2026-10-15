@@ -136,6 +136,30 @@ export const JOB_RUN_PURGE_BATCH_SIZE = 1000;
  */
 export const JOB_RUN_PURGE_MAX_BATCHES = 50;
 
+/**
+ * How long a SUCCEEDED `job_queue` row is kept before the queue retention pass
+ * deletes it (Story MOTIR-8540). Thirty days, and it is not only a disk bound:
+ * it is the DEDUP HORIZON of the queue's three unique keys — `(event_id,
+ * job_id)`, `(job_id, scheduled_for)` and the partial `(job_id,
+ * idempotency_key)` — because a key deduplicates only while a row carrying it
+ * exists. `docs/decisions/job-queue-foundation.md` records that narrowing. It is
+ * a separate constant from `JOB_RUN_RETENTION_MS` on purpose: the two windows
+ * answer different questions, and either may have to move on its own.
+ */
+export const JOB_QUEUE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** `job_queue` rows deleted per batch by the queue retention pass. Each batch is its own transaction. */
+export const JOB_QUEUE_PURGE_BATCH_SIZE = 1000;
+
+/**
+ * Batches per queue retention pass, in EACH of its two phases. Capped like
+ * `JOB_RUN_PURGE_MAX_BATCHES`: 100 batches is 100 000 `job_queue` rows a day,
+ * well above what the scheduled jobs write, so steady state keeps up and the
+ * first backlog (~266k succeeded rows) drains over a few daily ticks rather than
+ * in one long pass.
+ */
+export const JOB_QUEUE_PURGE_MAX_BATCHES = 100;
+
 export const jobRunsService = {
   /**
    * Insert the `running` row at job start; returns the persisted DTO, or `null`

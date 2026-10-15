@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
+  type ProjectRoadmapCanvasProps,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import {
@@ -129,9 +130,17 @@ export interface PlanReviewCanvasProps {
   /** Forwarded verbatim to the foundation — see its own contract. Together with
    *  `readerHasNavigated` this is how a swapped-in canvas declines a follow rather
    *  than yanking the reader, and how the bar comes to offer it. */
-  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  followTo?: ProjectRoadmapCanvasProps['followTo'];
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followMode`. */
+  followMode?: ProjectRoadmapCanvasProps['followMode'];
+  /** MOTIR-8593 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `onReaderNavigated`. */
+  onReaderNavigated?: ProjectRoadmapCanvasProps['onReaderNavigated'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followControl`. */
+  followControl?: ProjectRoadmapCanvasProps['followControl'];
+  /** MOTIR-8594 — forwarded verbatim; see `ProjectRoadmapCanvas`'s `followLevelId`. */
+  followLevelId?: ProjectRoadmapCanvasProps['followLevelId'];
   onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**
    * The plan is being WRITTEN and this canvas is drawing it live (MOTIR-6300;
@@ -162,6 +171,14 @@ export interface PlanReviewCanvasProps {
    * page draws them too. Absent / `null` → no cue, and the canvas is unchanged.
    */
   liveSteps?: readonly PlanProgressStep[] | null;
+  /**
+   * The steps that may MOVE a card (Story MOTIR-8413 · MOTIR-8416) —
+   * `readPlanAtWork(...).steps`, empty whenever Motir is not at work (a dropped
+   * read, a stall, a resume, a settled plan). A DRAFTING cue whose node one of
+   * them names is marked `moving`; a laying cue never moves. Presence stays
+   * `liveSteps`'s: this only says which drawn cues move.
+   */
+  movingSteps?: readonly PlanProgressStep[] | null;
 }
 
 export function PlanReviewCanvas({
@@ -175,10 +192,15 @@ export function PlanReviewCanvas({
   followTo = null,
   onFollowDeclined,
   readerHasNavigated = false,
+  followMode,
+  onReaderNavigated,
+  followControl,
+  followLevelId,
   onLevelChange,
   live = false,
   offerPlanElsewhere = false,
   liveSteps = null,
+  movingSteps = null,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -230,6 +252,14 @@ export function PlanReviewCanvas({
     proposal: null,
     key: null,
   });
+  // WHILE THE PLAN IS WRITTEN the open peek follows the live item by its
+  // `planItemId` (MOTIR-8595), so a field that arrives mid-view reaches it. A
+  // proposal withdrawn mid-view keeps its last copy: closing is the reader's act.
+  // Off `live` it is the copy taken at open, as shipped.
+  const peekedProposal =
+    live && peeked.proposal
+      ? (items.find((i) => i.planItemId === peeked.proposal?.planItemId) ?? peeked.proposal)
+      : peeked.proposal;
   const byNodeId = useMemo(() => new Map(items.map((i) => [i.nodeId, i])), [items]);
   // node id → its identifier, accumulated as levels load. A ref, not state: it is
   // a lookup the View handler reads, never something a render depends on.
@@ -563,6 +593,13 @@ export function PlanReviewCanvas({
     () => (liveSteps ? inFlightCues(items, liveSteps, proposedWord) : null),
     [items, liveSteps, proposedWord],
   );
+  const moving = useMemo(
+    () =>
+      movingSteps && movingSteps.length > 0
+        ? inFlightCues(items, movingSteps, proposedWord).cues
+        : null,
+    [items, movingSteps, proposedWord],
+  );
   const nodeCues = useMemo<ReadonlyMap<string, NodeCue> | null>(() => {
     if (!cueState) return null;
     const out = new Map<string, NodeCue>();
@@ -570,12 +607,17 @@ export function PlanReviewCanvas({
       out.set(
         nodeId,
         kind === 'drafting'
-          ? { kind, label: tCue('draftingName'), text: tCue('drafting') }
+          ? {
+              kind,
+              label: tCue('draftingName'),
+              text: tCue('drafting'),
+              ...(moving?.get(nodeId) === 'drafting' ? { moving: true } : {}),
+            }
           : { kind, label: tCue('layingName'), text: tCue('laying') },
       );
     }
     return out;
-  }, [cueState, tCue]);
+  }, [cueState, moving, tCue]);
 
   // ── A CHANGE TO THE LEVEL ITSELF (bug MOTIR-6223; design MOTIR-6241) ───────
   // `mergePlanLevel` frames the nodes ON a level, and the level the reader stands
@@ -633,6 +675,10 @@ export function PlanReviewCanvas({
         followTo={followTo}
         onFollowDeclined={onFollowDeclined}
         readerHasNavigated={readerHasNavigated}
+        followMode={followMode}
+        onReaderNavigated={onReaderNavigated}
+        followControl={followControl}
+        followLevelId={followLevelId}
         onLevelChange={onLevelChange}
         // The level the reviewer is standing on FOLLOWS its container through
         // approve, rather than being left addressed by an id that has stopped
@@ -710,7 +756,8 @@ export function PlanReviewCanvas({
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the
           ordinary work-item peek below, unchanged. */}
       <ProposalPeek
-        item={peeked.proposal}
+        item={peekedProposal}
+        live={live}
         outcome={outcome}
         onClose={closePeek}
         onOpenProposal={openProposalById}

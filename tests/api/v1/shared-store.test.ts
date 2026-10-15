@@ -15,6 +15,7 @@ import {
 import {
   RATE_LIMIT_STORE_ENV,
   __resetSharedRateLimitStoreForTest,
+  __setSharedRateLimitStoreForTest,
   resolveRateLimitBackend,
   sharedRateLimitStore,
 } from '@/lib/rateLimit/store';
@@ -242,7 +243,14 @@ describe('TWO STORE CLIENTS enforce ONE window — the defect this card closes',
     expect(
       await rateLimitCounterRepository.findCountUnsafe(keyFor(caller), BigInt(windowStart)),
     ).toBe(3);
-    expect(await rateLimitCounterRepository.countAllUnsafe()).toBe(1);
+    // ONE row for the token's key, whichever client wrote. Counted per KEY: the
+    // workspace ceiling every authenticated v1 request also spends (MOTIR-8601)
+    // keeps its own row, on its own window.
+    const rows = await adminDb.$queryRawUnsafe<Array<{ n: number }>>(
+      `SELECT count(*)::int AS n FROM "rate_limit_counter" WHERE key = $1`,
+      keyFor(caller),
+    );
+    expect(rows[0]?.n).toBe(1);
   });
 
   it('does NOT pool two tokens of the same user into one budget', async () => {
@@ -492,8 +500,14 @@ describe('the shared counter stays ATOMIC and time-bounded under the wrapper', (
 
     expect((await GET(req(caller.headers))).status).toBe(200);
     // Two rows for one token: the old window's and the new one's. The sweep
-    // (MOTIR-1165) is what eventually removes the first.
-    expect(await rateLimitCounterRepository.countAllUnsafe()).toBe(2);
+    // (MOTIR-1165) is what eventually removes the first. Counted for the token's
+    // KEY: the workspace ceiling the request also spends (MOTIR-8601) keeps rows
+    // of its own on its own window.
+    const rows = await adminDb.$queryRawUnsafe<Array<{ n: number }>>(
+      `SELECT count(*)::int AS n FROM "rate_limit_counter" WHERE key = $1`,
+      keyFor(caller),
+    );
+    expect(rows[0]?.n).toBe(2);
   });
 });
 
@@ -527,6 +541,10 @@ describe('a shared store in the request path still FAILS OPEN', () => {
     const TIMEOUT_MS = 50;
     vi.spyOn(rateLimitService, 'increment').mockReturnValue(new Promise<number>(() => {}));
     setRateLimitStore(createPostgresRateLimitStore({ timeoutMs: TIMEOUT_MS }));
+    // The workspace ceiling (MOTIR-8601) counts through the SHARED store, which
+    // the hung service hangs too — so it gets the same short deadline, or the
+    // request waits out `beforeEach`'s generous test pin instead.
+    __setSharedRateLimitStoreForTest(createPostgresRateLimitStore({ timeoutMs: TIMEOUT_MS }));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const caller = await createV1Caller();
 

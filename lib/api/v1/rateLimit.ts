@@ -57,9 +57,17 @@ export const DEFAULT_RATE_LIMIT = 60;
 /** Window length when the environment sets none — 60 requests per minute. */
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 
-/** 429 — the token's budget for the current window is spent. */
+/**
+ * 429 — the token's budget for the current window is spent.
+ *
+ * Its `code` stays `RATE_LIMIT_EXCEEDED`: that is the published v1 contract, and
+ * changing a v1 code is breaking under ADR §8. MOTIR-8600 adds the two ADDITIVE
+ * halves of the retryable-refusal contract (`lib/rateLimit/guard.ts`): the
+ * numeric `retryAfterSeconds` this error carries into the body, and the
+ * `Retry-After` header the wrapper stamps beside it.
+ */
 export class RateLimitExceededError extends ApiV1Error {
-  constructor(retryAfterSeconds: number) {
+  constructor(readonly retryAfterSeconds: number) {
     super(
       'RATE_LIMIT_EXCEEDED',
       429,

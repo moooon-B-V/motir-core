@@ -28,6 +28,7 @@ import {
   RateLimitError,
   ResponseShapeError,
   PermissionError,
+  type RateLimitWaitNotice,
 } from './errors.js';
 
 // The `/api/v1` TRANSPORT CORE (Story 11.5 · Subtask 11.5.3 — MOTIR-2211),
@@ -63,6 +64,68 @@ export interface V1TransportOptions {
   fetchImpl?: typeof fetch;
   /** Now, for the 429 hint's relative arithmetic. */
   now?: () => Date;
+  /** How a 429 wait sleeps. A `setTimeout` promise unless a test injects one. */
+  sleep?: (ms: number) => Promise<void>;
+  /** The jitter added to each wait, in ms (`0–999` by default). */
+  jitterMs?: () => number;
+  /** Told about each wait. Defaults to one line on STDERR, so `--json` stays parseable. */
+  onRateLimitWait?: (notice: RateLimitWaitNotice) => void;
+  /**
+   * The total seconds one call may spend waiting out 429s before it throws
+   * `RateLimitError`. Defaults to `MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS`, else
+   * {@link DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS}.
+   */
+  rateLimitMaxWaitSeconds?: number;
+}
+
+// ── A 429 IS A PAUSE, NOT A FAILURE (MOTIR-8602, Story MOTIR-8548) ──────────
+// `withV1Route` spends the rate limit and throws BEFORE it runs the handler, so
+// a 429 means nothing was written: re-sending the identical request is its first
+// execution, not a second one. That is why the retry is drawn exactly at 429 and
+// never extended to a 5xx or a network failure, either of which may have written
+// before failing. (A claim is idempotent besides: one the caller already holds
+// answers `mine`.) The bound is wall-clock seconds waited per call, not a count:
+// the server names seconds, and one fixed window can ask for up to 60 of them.
+
+/** The total seconds one call waits out 429s before giving up, by default. */
+export const DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS = 300;
+
+/** The wait when a 429 names no usable duration at all. */
+export const DEFAULT_RATE_LIMIT_RETRY_SECONDS = 10;
+
+/** The environment override for {@link DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS}. */
+export const RATE_LIMIT_MAX_WAIT_ENV = 'MOTIR_CLI_RATE_LIMIT_MAX_WAIT_SECONDS';
+
+/** The configured bound: the env value when it is a non-negative number, else the default. */
+export function rateLimitMaxWaitFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env[RATE_LIMIT_MAX_WAIT_ENV];
+  if (raw === undefined || raw.trim() === '') return DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS;
+}
+
+/**
+ * How long a 429 asks the client to wait, in whole seconds (floored at 1):
+ * the body's numeric `retryAfterSeconds`, else a positive integer `Retry-After`,
+ * else `x-ratelimit-reset` minus now, else {@link DEFAULT_RATE_LIMIT_RETRY_SECONDS}.
+ *
+ * It never reads the `error` sentence — the machine fields are the contract.
+ */
+export function readRetryAfterSeconds(response: Response, parsedBody: unknown, now: Date): number {
+  const fromBody =
+    typeof parsedBody === 'object' && parsedBody !== null
+      ? (parsedBody as { retryAfterSeconds?: unknown }).retryAfterSeconds
+      : undefined;
+  if (typeof fromBody === 'number' && Number.isFinite(fromBody)) {
+    return Math.max(1, Math.ceil(fromBody));
+  }
+  const header = response.headers.get('retry-after')?.trim();
+  if (header !== undefined && /^\d+$/.test(header)) return Math.max(1, Number(header));
+  const reset = Number(response.headers.get('x-ratelimit-reset'));
+  if (Number.isFinite(reset) && reset > 0) {
+    return Math.max(1, Math.ceil(reset - now.getTime() / 1000));
+  }
+  return DEFAULT_RATE_LIMIT_RETRY_SECONDS;
 }
 
 /** The path parameters an operation takes, from the generated document. */
@@ -237,6 +300,10 @@ export class V1Transport {
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => Date;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly jitterMs: () => number;
+  private readonly onRateLimitWait: (notice: RateLimitWaitNotice) => void;
+  private readonly rateLimitMaxWaitSeconds: number;
   /** The skew probe's latch: `undefined` until it has run, then its verdict. */
   private skewVerdict: IncompatibleServerError | null | undefined;
 
@@ -245,6 +312,16 @@ export class V1Transport {
     this.token = opts.token;
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.now = opts.now ?? (() => new Date());
+    this.sleep = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.jitterMs = opts.jitterMs ?? (() => Math.floor(Math.random() * 1000));
+    this.onRateLimitWait =
+      opts.onRateLimitWait ?? ((notice) => process.stderr.write(`${this.waitLine(notice)}\n`));
+    this.rateLimitMaxWaitSeconds = opts.rateLimitMaxWaitSeconds ?? rateLimitMaxWaitFromEnv();
+  }
+
+  /** The default notice, one line, for stderr. */
+  waitLine(n: RateLimitWaitNotice): string {
+    return `Rate limited by ${this.serverUrl}; waiting ${n.waitSeconds}s before retrying ${n.operationId} (attempt ${n.attempt}, ${n.waitedSeconds}s of ${n.maxWaitSeconds}s used).`;
   }
 
   /** The absolute URL one operation's call goes to. */
@@ -306,39 +383,31 @@ export class V1Transport {
     const url = this.buildUrl(operationId, input);
 
     let response: Response;
-    try {
-      response = await this.fetchImpl(url, {
-        method: row.method,
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          Accept: 'application/json',
-          // ⚠️ THE VERSION RIDES AT THE TRANSPORT, ON ITS OWN FIELD (MOTIR-4974).
-          //
-          // Here rather than per-operation because one site then covers every
-          // server-bound call this CLI makes — a per-tool field would have to be
-          // remembered by each new operation, and the one it was forgotten on
-          // would be the one a stale client used.
-          //
-          // ⚠️ AND IT IS A NEW FIELD, NOT THE OLD ONE. The CLI used to send
-          // `motir-cli/<version>` as the dispatch HARNESS; MOTIR-2447 removed
-          // that because it overwrote the agent name and model the run itself
-          // had recorded (MOTIR-2419). Version is telemetry about the CLIENT,
-          // harness/model is provenance about the WORK — re-using that field
-          // would re-open MOTIR-2419 in a diff that looked like one line.
-          [CLIENT_VERSION_HEADER]: CLI_VERSION,
-          ...(input.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        },
-        ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+    let parsed: unknown;
+    let waited = 0;
+    for (let attempt = 1; ; attempt += 1) {
+      ({ response, parsed } = await this.send(url, row.method, input));
+      if (response.status !== 429) break;
+      const wait = readRetryAfterSeconds(response, parsed, this.now());
+      if (waited + wait > this.rateLimitMaxWaitSeconds) {
+        const reset = Number(response.headers.get('x-ratelimit-reset'));
+        throw new RateLimitError(
+          Number.isFinite(reset) && reset > 0 ? reset : undefined,
+          this.now(),
+          waited,
+        );
+      }
+      this.onRateLimitWait({
+        operationId,
+        waitSeconds: wait,
+        attempt,
+        waitedSeconds: waited,
+        maxWaitSeconds: this.rateLimitMaxWaitSeconds,
       });
-    } catch (err) {
-      throw new CliError(
-        `Could not reach ${this.serverUrl}: ${err instanceof Error ? err.message : String(err)}.`,
-        { hint: 'Check the server URL and run `motir doctor`.' },
-      );
+      // Jitter, so N loops sharing a token do not all re-fire on one boundary.
+      await this.sleep(wait * 1000 + this.jitterMs());
+      waited += wait;
     }
-
-    const rawBody = await response.text();
-    const parsed = rawBody === '' ? undefined : safeJson(rawBody);
 
     if (!response.ok) throw await this.mapFailure(operationId, response, parsed);
 
@@ -378,6 +447,48 @@ export class V1Transport {
     // `parsed` is narrowed by the guard above — no cast, which is the whole
     // point of parsing instead of casting.
     return parsed;
+  }
+
+  /** Put one request on the wire and read its body — no status handling. */
+  private async send(
+    url: string,
+    method: string,
+    input: { body?: unknown },
+  ): Promise<{ response: Response; parsed: unknown }> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          Accept: 'application/json',
+          // ⚠️ THE VERSION RIDES AT THE TRANSPORT, ON ITS OWN FIELD (MOTIR-4974).
+          //
+          // Here rather than per-operation because one site then covers every
+          // server-bound call this CLI makes — a per-tool field would have to be
+          // remembered by each new operation, and the one it was forgotten on
+          // would be the one a stale client used.
+          //
+          // ⚠️ AND IT IS A NEW FIELD, NOT THE OLD ONE. The CLI used to send
+          // `motir-cli/<version>` as the dispatch HARNESS; MOTIR-2447 removed
+          // that because it overwrote the agent name and model the run itself
+          // had recorded (MOTIR-2419). Version is telemetry about the CLIENT,
+          // harness/model is provenance about the WORK — re-using that field
+          // would re-open MOTIR-2419 in a diff that looked like one line.
+          [CLIENT_VERSION_HEADER]: CLI_VERSION,
+          ...(input.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+      });
+    } catch (err) {
+      throw new CliError(
+        `Could not reach ${this.serverUrl}: ${err instanceof Error ? err.message : String(err)}.`,
+        { hint: 'Check the server URL and run `motir doctor`.' },
+      );
+    }
+
+    const rawBody = await response.text();
+    return { response, parsed: rawBody === '' ? undefined : safeJson(rawBody) };
   }
 
   /**

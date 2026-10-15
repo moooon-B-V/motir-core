@@ -122,13 +122,21 @@ describe('ONE validator module serves every proposal door (MOTIR-6133)', () => {
       'async function assertModifyDifficultiesLegalAtAppend(',
       1,
     ],
-    ['the deepen / human edit', 'async function editAddProposal(', 1],
+    // MOTIR-8175 split the edit's in-transaction half out of `editAddProposal`
+    // so the Sharpen write-back can apply several edits under one lock; the
+    // validator call moved with it, and every edit door reaches it from there.
+    ['the deepen / human edit', 'async function applyAddProposalEdit(', 1],
     ['the correction — merged add + modify patch', 'async correctProposal(', 2],
   ];
 
   it.each(DOORS)('%s calls validateProposedDifficulty', (_door, signature, calls) => {
     const body = bodyOf(PLANS_SERVICE, signature);
     expect(body.match(/validateProposedDifficulty\(/g) ?? []).toHaveLength(calls);
+  });
+
+  it('the deepen / human edit runs its in-transaction half — the helper is actually called', () => {
+    const body = bodyOf(PLANS_SERVICE, 'async function editAddProposal(');
+    expect(body.match(/applyAddProposalEdit\(/g) ?? []).toHaveLength(1);
   });
 
   it('the append runs the modify container half — the helper is actually called', () => {

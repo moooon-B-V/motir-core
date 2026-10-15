@@ -7,6 +7,7 @@ import {
   PLANNING_TAB_CEILING,
   workbenchPlanningService,
 } from '@/lib/services/workbenchPlanningService';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 import { PlanningList } from './PlanningList';
 import { PlanningEmptyAction } from './PlanningEmptyAction';
 
@@ -20,6 +21,10 @@ import { PlanningEmptyAction } from './PlanningEmptyAction';
 // `design/shell/design-notes.md`'s navigation-pending grammar). A `loading.tsx` is
 // the WRONG instrument and not merely a different one: a route boundary can flush
 // the response head before the page's gate has run, which is why this repo has none.
+//
+// ⚠️ THIS READ IS THE FIRST PAINT ONLY (Story MOTIR-8539 · MOTIR-8581). After it,
+// the list's rows come from the Workbench's one window read — the same response
+// that sets the strip's counts — so nothing here is re-run to update them.
 //
 // ⚠️ PAGE 1 ONLY, AT THE CEILING (§ 36.10). The tab has no pager, so there is no
 // `page` to honour: it reads the newest {@link PLANNING_TAB_CEILING} rows and lets
@@ -36,10 +41,14 @@ export async function PlanningTab({
   projectName: string;
 }) {
   const t = await getTranslations('workbench');
-  const page = await workbenchPlanningService.listMyPlansBeingWritten(ctx, {
-    page: 1,
-    limit: PLANNING_TAB_CEILING,
-  });
+  // Labelled here, not by the page: this renders inside a `<Suspense>` after the
+  // page function has returned, outside its label (MOTIR-8553).
+  const page = await withRequestLabel({ route: 'workbench' }, () =>
+    workbenchPlanningService.listMyPlansBeingWritten(ctx, {
+      page: 1,
+      limit: PLANNING_TAB_CEILING,
+    }),
+  );
 
   return (
     <PlanningList

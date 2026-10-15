@@ -15,6 +15,8 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
 const push = vi.fn();
 const refresh = vi.fn();
+/** The window re-read the list is handed (MOTIR-8574) — what a moved row now calls. */
+const reread = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn(), refresh }),
   usePathname: () => '/workbench',
@@ -30,6 +32,7 @@ afterEach(() => {
   cleanup();
   push.mockReset();
   refresh.mockReset();
+  reread.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -142,6 +145,7 @@ function list(
       tab={opts.tab ?? 'to-fix'}
       pagination={{ total: opts.total ?? rows.length, page: opts.page ?? 1, pageSize: 25 }}
       empty={EMPTY}
+      reread={reread}
     />
   );
 }
@@ -581,7 +585,8 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
       model: 'sonnet',
       mode: 'continue',
     });
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reread).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
 
     // The re-read: the continue opened a run, the reason cleared, the server drops it.
     view.rerender(list([FOUR[0]!]));
@@ -610,7 +615,8 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
     await act(async () => {
       fireEvent.click(button);
     });
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reread).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
     expect(screen.getByTestId('continue-hosted-refused-taken').textContent).toContain('Lee K.');
 
     view.rerender(list([FOUR[0]!]));
@@ -627,7 +633,7 @@ describe('To fix — Continue hosted on a dead-run row (§ 31, MOTIR-6882)', () 
     await act(async () => {
       fireEvent.click(button);
     });
-    expect(refresh).not.toHaveBeenCalled();
+    expect(reread).not.toHaveBeenCalled();
     const line = fixLine('M-14');
     expect(within(line).getByTestId('continue-hosted-refused-outOfCredits')).toBeTruthy();
     expect(within(line).getByText('motir continue M-14')).toBeTruthy();

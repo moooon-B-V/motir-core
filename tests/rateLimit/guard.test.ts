@@ -126,9 +126,11 @@ describe('the 429 is spec-correct', () => {
       Math.floor(Date.now() / 1000),
     );
 
-    const body = (await res!.json()) as { code: string; error: string };
+    const body = (await res!.json()) as { code: string; error: string; retryAfterSeconds: number };
     expect(body.code).toBe(RATE_LIMITED_CODE);
     expect(body.error).toMatch(/Retry in \d+ seconds?\./);
+    // The machine-read field and the header are one number (MOTIR-8600).
+    expect(body.retryAfterSeconds).toBe(retryAfter);
   });
 
   it('pluralizes Retry-After copy correctly at one second', () => {

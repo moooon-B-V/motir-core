@@ -1,9 +1,15 @@
 'use client';
 
-import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useRef,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { cn } from '../../utils/cn';
-import { useFullscreenElement } from '../../utils/fullscreen';
+import { usePortalContainer } from '../../utils/fullscreen';
 
 /**
  * Popover — anchored, click-outside-dismissable, focus-managed floating
@@ -83,12 +89,22 @@ const PopoverContent = forwardRef<
   ref,
 ) {
   // Into the element in native full screen while there is one, else <body>
-  // (MOTIR-7658 — the browser paints nothing outside a full-screen element).
-  const fullscreenElement = useFullscreenElement();
+  // (MOTIR-7658 — the browser paints nothing outside a full-screen element),
+  // unless that element is inside this panel (MOTIR-8560).
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const setContentRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      contentRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+  const fullscreenContainer = usePortalContainer(contentRef);
   return (
-    <RadixPopover.Portal container={fullscreenElement ?? undefined}>
+    <RadixPopover.Portal container={fullscreenContainer ?? undefined}>
       <RadixPopover.Content
-        ref={ref}
+        ref={setContentRef}
         align={align}
         sideOffset={sideOffset}
         // `data-surface` lets a surface-material style (glassmorphism) frost

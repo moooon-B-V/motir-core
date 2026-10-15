@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import { isValidElement, memo, useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -14,7 +14,6 @@ import { usePeekRowClick } from '../../items/_components/IssueQuickView';
 import { IssueListPager } from '../../items/_components/IssueListPager';
 import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import { HostedModelsProvider } from '@/components/hosted/HostedModelsProvider';
-import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 import { INDENT_PX } from '@/components/ui/TreeTable';
 import { useLiveRows } from './useLiveRows';
 import { ContextMarker, GroupChevron, GroupCount, GroupSlot } from './WorkbenchGroupRow';
@@ -175,6 +174,29 @@ function useHeldMembers(members: WorkbenchRowView[]): {
   };
 }
 
+/**
+ * A To resume member's change since the run stopped (Bug MOTIR-8458; § 39.2): *Added
+ * since the run stopped* is the neutral chip, *Re-scoped* the lavender tint the entry uses
+ * nowhere else. Text inside the member's row, never its own tab stop; the title truncates
+ * first and the chip never does.
+ */
+function ResumeChangeChip({ change }: { change: 'added' | 'rescoped' }) {
+  const t = useTranslations('workbench');
+  return (
+    <span
+      data-resume-change={change}
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-(--radius-badge) border px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] leading-[1.3] font-medium whitespace-nowrap',
+        change === 'added'
+          ? 'border-(--el-chip-border) bg-(--el-chip-bg) text-(--el-text-secondary)'
+          : 'border-transparent bg-(--el-tint-lavender) text-(--el-text-strong)',
+      )}
+    >
+      {change === 'added' ? t('toResume.member.added') : t('toResume.member.rescoped')}
+    </span>
+  );
+}
+
 function EntryMembers({
   head,
   members,
@@ -196,6 +218,8 @@ function EntryMembers({
   if (rows.length === 0) return null;
   const folded = rows.length - MEMBERS_SHOWN;
   const shown = open || folded <= 0 ? rows : rows.slice(0, MEMBERS_SHOWN);
+  // § 39.2: what the fold hides that the run never touched, beside the button.
+  const foldedAdded = rows.slice(MEMBERS_SHOWN).filter((m) => m.resumeChange === 'added').length;
   return (
     <>
       <ul
@@ -219,7 +243,7 @@ function EntryMembers({
                 aria-label={`${m.identifier} ${m.title}`}
                 className="absolute inset-0 rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               />
-              <span className="flex min-w-0 items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2 max-md:flex-wrap max-md:gap-y-0.5">
                 <IssueTypeIcon type={m.kind} className="h-3.5 w-3.5 shrink-0" />
                 <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
                   {m.identifier}
@@ -232,6 +256,7 @@ function EntryMembers({
                 >
                   {m.title}
                 </span>
+                {m.resumeChange ? <ResumeChangeChip change={m.resumeChange} /> : null}
               </span>
               <span className="hidden min-w-0 items-center md:flex">
                 <span className="truncate text-xs text-(--el-text-secondary)">
@@ -268,13 +293,21 @@ function EntryMembers({
           >
             {open ? t('toFix.entry.showFewer') : t('toFix.entry.showMore', { count: folded })}
           </button>
+          {!open && foldedAdded > 0 ? (
+            <span
+              data-testid={`workbench-fix-members-added-${head.identifier}`}
+              className="ml-2.5 text-xs text-(--el-text-secondary)"
+            >
+              {t('toResume.fold.added', { count: foldedAdded })}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </>
   );
 }
 
-function WorkbenchRow({
+function WorkbenchRowImpl({
   row,
   showFinished,
   arrived = false,
@@ -297,7 +330,7 @@ function WorkbenchRow({
   held?: boolean;
   /** The session's user, for a Continue hosted refusal that names them. */
   viewerId?: string | null;
-  /** A Continue hosted press started, or found the row stale: re-read the page. */
+  /** A Continue hosted press started, or found the row stale: re-read the window. */
   onContinueStarted?: () => void;
   /**
    * A GROUPED work tab's row (§ 36): what leads the title — the group's chevron or the
@@ -536,6 +569,54 @@ function WorkbenchRow({
   );
 }
 
+type WorkbenchRowProps = Parameters<typeof WorkbenchRowImpl>[0];
+
+/** Whether two elements draw the same thing: same type and key, props equal by value. */
+function sameElement(a: ReactNode, b: ReactNode): boolean {
+  if (a === b) return true;
+  if (!isValidElement(a) || !isValidElement(b)) return false;
+  if (a.type !== b.type || a.key !== b.key) return false;
+  const left = a.props as Record<string, unknown>;
+  const right = b.props as Record<string, unknown>;
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length) return false;
+  return keys.every(
+    (key) =>
+      // A handler is re-created every render and calls the same state setter for
+      // the same row (`toggleGroup(id)`), so it is not what makes two draws differ.
+      (typeof left[key] === 'function' && typeof right[key] === 'function') ||
+      Object.is(left[key], right[key]),
+  );
+}
+
+/**
+ * `React.memo`'s comparator for a row (Story MOTIR-8539 · MOTIR-8574): every prop
+ * by identity, except `group`, which a parent builds fresh each render and is
+ * compared by what it draws. With `mergeRowsByIdentity` keeping an unchanged
+ * row's object, a re-read that moved nothing re-renders no row, and one that
+ * changed a row re-renders that row only.
+ */
+function sameRowProps(prev: WorkbenchRowProps, next: WorkbenchRowProps): boolean {
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)]) as Set<
+    keyof WorkbenchRowProps
+  >;
+  for (const key of keys) {
+    if (key === 'group') continue;
+    if (!Object.is(prev[key], next[key])) return false;
+  }
+  const a = prev.group ?? null;
+  const b = next.group ?? null;
+  if (a === null || b === null) return a === b;
+  return (
+    a.child === b.child &&
+    a.head === b.head &&
+    sameElement(a.lead, b.lead) &&
+    sameElement(a.count ?? null, b.count ?? null)
+  );
+}
+
+const WorkbenchRow = memo(WorkbenchRowImpl, sameRowProps);
+
 /**
  * A Watching GROUP band — what is moving, then what is waiting.
  *
@@ -589,6 +670,8 @@ function splitWatchingGroups(rows: WorkbenchRowView[]): {
 
 /** A stable empty default — `useLiveRows` compares its input by identity. */
 const NO_SESSIONS: ToResumePlanningSessionDto[] = [];
+/** A list mounted without a window (a test, a fixture) re-reads nothing. */
+const NO_REREAD = (): void => {};
 
 /** The three tabs that draw their items under a runnable container (§ 36). */
 const GROUPED_TABS: ReadonlySet<WorkbenchTab> = new Set(['todo', 'in-progress', 'finished']);
@@ -700,6 +783,7 @@ export function WorkbenchList({
   empty,
   viewerId = null,
   planningSessions = NO_SESSIONS,
+  reread = NO_REREAD,
 }: {
   rows: WorkbenchRowView[];
   label: string;
@@ -722,10 +806,14 @@ export function WorkbenchList({
    * pager (`pagination.total` counts both) and the same single empty state.
    */
   planningSessions?: ToResumePlanningSessionDto[];
+  /**
+   * Re-read the window now — what a verb that moved a row calls (Continue, a fix,
+   * a resumed session). `useWorkbenchWindow`'s, never a route refresh (MOTIR-8574).
+   */
+  reread?: () => void;
 }) {
   const t = useTranslations('workbench');
   const router = useRouter();
-  const refresh = useCoordinatedRefresh();
   const showFinished = tab === 'finished';
   // TO FIX (§ 30) draws the fix line, and it is the one work tab that marks a HELD
   // row: it names something the READER must do, like To approve, so it takes To
@@ -831,7 +919,7 @@ export function WorkbenchList({
                 entry={entry}
                 arrived={liveSessions.arrivedIds.has(entry.sessionId)}
                 held={liveSessions.heldIds.has(entry.sessionId)}
-                onSettled={refresh}
+                onSettled={reread}
               />
             ))}
           </div>
@@ -930,7 +1018,7 @@ export function WorkbenchList({
                 withResumeLine={isToResume}
                 held={holds && live.heldIds.has(row.id)}
                 viewerId={viewerId}
-                onContinueStarted={refresh}
+                onContinueStarted={reread}
               />
             ))}
           </div>

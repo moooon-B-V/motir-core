@@ -70,7 +70,10 @@ export function ContentSectionCard({
           : 'shadow-(--shadow-card)'
       }
       header={
-        <div className="flex items-center gap-2">
+        // `flex-wrap` (MOTIR-8122; design MOTIR-8112 § Where each field's mark
+        // sits): a translation mark in `headerExtra` wraps instead of pushing
+        // Edit out at 390 px.
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-(--el-text) font-sans text-base font-semibold">{title}</h2>
           {subtitle ? (
             <span className="font-sans text-sm text-(--el-text-secondary)">— {subtitle}</span>

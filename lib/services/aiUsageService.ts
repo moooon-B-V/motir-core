@@ -91,6 +91,7 @@ function emptyDto(args: {
     // with no accessible project). Zero is the true answer, so say zero — a
     // spurious "unavailable" would send the reader looking for an outage.
     search: { totalSpend: 0, monthSpend: 0 },
+    translation: { totalSpend: 0, monthSpend: 0 },
     searchRuns: {
       runs: [],
       page: args.page,
@@ -282,7 +283,18 @@ export const aiUsageService = {
       // fetch failure becomes an authoritative-looking "you spent nothing".
       search: raw.search ?? null,
       searchRuns: raw.searchRuns ?? null,
-      hasUsage: raw.totalSpend > 0 || raw.recentRuns.total > 0,
+      // The same `?? null` rule, for translation spend (MOTIR-8117).
+      translation: raw.translation ?? null,
+      // Translation spend is kept OUT of `totalSpend` and `recentRuns` by motir-ai
+      // (MOTIR-8126), so without its own term an org whose only spend is
+      // translation reads "No usage yet" and never sees its Translation line
+      // (MOTIR-8488). It counts at ORG scope only: it is org-level, and at a
+      // drill level it would hide the empty state of every project with no
+      // usage of its own — the reason search spend is left out (see `UsageDTO`).
+      hasUsage:
+        raw.totalSpend > 0 ||
+        raw.recentRuns.total > 0 ||
+        (scope === 'org' && (raw.translation?.totalSpend ?? 0) > 0),
     };
   },
 };

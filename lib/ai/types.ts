@@ -5,6 +5,7 @@
 // receives.
 
 import type { GuideContext } from '@/lib/ai/guideWorkItem';
+import type { TranslateJobInput } from '@/lib/ai/translate';
 
 export const ENVELOPE_VERSION = 'v1' as const;
 
@@ -105,6 +106,22 @@ export const JOB_KINDS = [
   // `context.guideContext`. It returns ONE `guideTurn` and writes nothing; core
   // lands its actions (MOTIR-7470). Mirror of the closed motir-ai enum.
   'guide_work_item',
+  // `sharpen_turn` (Task MOTIR-1101 — MOTIR-8176 handler / MOTIR-8181 dispatch) —
+  // ONE turn of a Sharpen grilling session on a plan or one work item. Core
+  // submits one per person action (`aiSharpenService`), carrying the scope, the
+  // transcript, the STORED settled answers and assumptions and the action as
+  // `context.sharpen`. It returns ONE `sharpenTurn`; at a session end the handler
+  // itself writes the settled answers back through `PUT
+  // /api/internal/ai/plan-sharpening`. Mirror of the closed motir-ai enum.
+  'sharpen_turn',
+  // `translate` (Story MOTIR-7735 — MOTIR-8116 handler / MOTIR-8119 client) — a
+  // reader's on-demand Translate press: core sends ONE target language and the
+  // field texts that need it as `context.translate` (`requestTranslation`,
+  // lib/ai/translateClient.ts), and motir-ai answers one text per `fieldRef` as
+  // the typed `translations` result, priced in the `translation` lane. It writes
+  // nothing; core keeps the answer (the translation door). Mirror of the closed
+  // motir-ai enum (the open-core boundary).
+  'translate',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -226,6 +243,88 @@ export interface BugAnalysisContext {
   confidentialTerms?: string[];
 }
 
+/** The four grilling branches a Sharpen question belongs to (motir-ai's closed set). */
+export type GrillingBranch = 'workflow' | 'alternative' | 'non_happy' | 'technical_thread';
+
+/** What the person did on a Sharpen turn. `start` opens a session. */
+export type SharpenAction = 'start' | 'answer' | 'own_words' | 'skip' | 'you_decide' | 'stop';
+
+/** One pickable reading of a Sharpen question; ids are assigned by motir-ai's code. */
+export interface SharpenReading {
+  id: string;
+  label: string;
+  detail: string;
+  recommended: boolean;
+}
+
+/** The one question a Sharpen turn asks. */
+export interface SharpenQuestion {
+  id: string;
+  text: string;
+  topic: GrillingBranch;
+  /** The prior answer this question narrows from, or null. */
+  because: string | null;
+  /** `technical_thread` only: the person's own words that raised it. */
+  quote: string | null;
+  readings: SharpenReading[];
+}
+
+/** An answer the PERSON settled. */
+export interface SettledAnswer {
+  questionId: string;
+  question: string;
+  answer: string;
+  topic: GrillingBranch;
+  readingId: string | null;
+  source: 'person';
+}
+
+/** An assumption the PLANNER recorded for a skipped or "you decide" question. */
+export interface SharpenAssumption {
+  questionId: string;
+  question: string;
+  recommendation: string;
+  why: string;
+  source: 'planner';
+}
+
+/** `context.sharpen` — one Sharpen turn as a `sharpen_turn` job reads it. */
+export interface SharpenJobContext {
+  scope: { kind: 'plan' | 'work_item'; ref: string };
+  /** The transcript so far, oldest first, EXCLUDING the action below. */
+  turns: { role: 'person' | 'planner'; action: SharpenAction | null; body: string }[];
+  settled: SettledAnswer[];
+  assumptions: SharpenAssumption[];
+  /** The question the action answers; null for `start`. */
+  pendingQuestion: SharpenQuestion | null;
+  action: SharpenAction;
+  /** `answer` only. */
+  readingId?: string;
+  /** `own_words` only. */
+  text?: string;
+  /** The planning RUN this session stands inside (MOTIR-8450 producer ↔
+   *  MOTIR-8451 consumer). ABSENT — never `null`, never `{}` — when there is no
+   *  run: a plan with no conversation behind it, or a card outside any run. */
+  run?: SharpenRunContext | null;
+}
+
+/** `context.sharpen.run` — what the run is planning and which card it is
+ *  planning, read from stored state. The shared wire contract: motir-ai declares
+ *  the identical shape and refuses a `run` that does not match it. */
+export interface SharpenRunContext {
+  /** The plan the run is writing. */
+  planId: string;
+  /** The person's own turn bodies of the run's conversation, in order,
+   *  verbatim. Never empty — a run with no person turn sends no `run`. */
+  requests: string[];
+  /** The run's ANCHOR card (its conversation's `targetKeys[0]`); `null` on a
+   *  project-wide run. The key is always present. */
+  card: { key: string; title: string } | null;
+  /** The plan's stored sharpened requirement, narrowed to its six fields;
+   *  absent when the plan carries none. */
+  requirement?: SubmittedRequirement;
+}
+
 export interface JobContextBag {
   prompt?: string | null;
   rootItemKey?: string | null;
@@ -320,6 +419,16 @@ export interface JobContextBag {
   // temporary list) and the conversation so far, read fresh per turn. Built by
   // `buildGuideContext` (lib/ai/guideWorkItem.ts), whose type is the wire shape.
   guideContext?: GuideContext;
+  // The ONE Sharpen turn a `sharpen_turn` job takes (Task MOTIR-1101 · MOTIR-8181
+  // producer ↔ MOTIR-8176 consumer) — the wire shape motir-ai's `parseSharpenInput`
+  // reads. Built from the session's STORED state, never from a client body.
+  sharpen?: SharpenJobContext;
+  // The ONE translation batch a `translate` job takes (Story MOTIR-7735 ·
+  // MOTIR-8119 producer ↔ MOTIR-8116 consumer) — the reader's target language and
+  // the `{ fieldRef, text }` fields to translate into it, in the order the answer
+  // comes back. Built by `requestTranslation` (lib/ai/translateClient.ts), whose
+  // `TranslateJobInput` (lib/ai/translate.ts) is the wire shape.
+  translate?: TranslateJobInput;
   // The work-item context a `generate_explanation` job (8.8.11) drafts an
   // explanation FROM — the title / description / type / parent the "Draft with
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
@@ -583,6 +692,15 @@ export interface ResultEnvelope {
   // MOTIR-7463) — that kind only. Typed `unknown` for the same reason: untrusted
   // model output, read only through `parseGuideTurn` (lib/ai/guideWorkItem.ts).
   guideTurn?: unknown;
+  // The ONE Sharpen turn a `sharpen_turn` job produced (Task MOTIR-1101 ·
+  // MOTIR-8176) — that kind only. Typed `unknown` for the same reason: untrusted
+  // model output, read only through `parseSharpenTurn` (lib/ai/sharpenTurn.ts).
+  sharpenTurn?: unknown;
+  // The translated texts a `translate` job produced (Story MOTIR-7735 ·
+  // MOTIR-8116) — that kind only, one `{ fieldRef, text }` per field sent. Typed
+  // `unknown` for the same reason as `authoredBug`: untrusted model output, read
+  // only through `parseTranslations` (lib/ai/translate.ts).
+  translations?: unknown;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
@@ -741,6 +859,20 @@ export interface RawUsageResponse {
    */
   agentMachine?: RawUsageAgentSpend;
   agentStorage?: RawUsageAgentSpend;
+  /**
+   * Translation spend (Story MOTIR-7735 · motir-ai MOTIR-8126) — org-level like
+   * `search`, this month and all time, and EXCLUDED by motir-ai from every AI
+   * figure above (`totalSpend`, `monthSpend`, `monthlyHistory`, the per-model
+   * breakdown and the run log's credits). Optional for the same ROLLING-DEPLOY
+   * reason as `search`: `undefined` means UNAVAILABLE, never zero.
+   */
+  translation?: RawUsageTranslationSpend;
+}
+
+/** `GET /v1/usage` — the organisation's translation spend (MOTIR-8126). */
+export interface RawUsageTranslationSpend {
+  totalSpend: number;
+  monthSpend: number;
 }
 
 /** `GET /v1/usage` — one agent charge kind's org-level spend (MOTIR-6915). */

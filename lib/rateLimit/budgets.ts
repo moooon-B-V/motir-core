@@ -84,6 +84,31 @@ export const DEFAULT_AI_RATE_LIMIT = 30;
 export const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
+ * The JOB-TOKEN read-backs a running planning job makes (`/api/internal/ai/*`,
+ * MOTIR-8423). The money is spent at motir-ai's model provider, which a job's
+ * credits already stop (MOTIR-7719), so this ceiling only has to bound a runaway
+ * loop — not meter a walk. One walk reads dozens of times a minute and one person
+ * runs several at once (measured: 59, 132 and 86 reads in consecutive minutes), so
+ * the 30/min interactive allowance failed a plan whose target read fell on the
+ * wrong second.
+ *
+ * ⚠️ PER JOB since MOTIR-8604 (Story MOTIR-8548): `MOTIR_AI_INTERNAL_RATE_LIMIT`
+ * sizes ONE job's bucket (`ai:job`, keyed on the token's `jobKey`), so two jobs of
+ * one person each get it and a runaway job cannot drain its siblings. A token
+ * minted before the `jobKey` claim (MOTIR-8599) falls back to the old
+ * `(workspace, user)` bucket at this same budget. Every read-back also spends the
+ * workspace's shared agent ceiling (`DEFAULT_AGENT_WORKSPACE_RATE_LIMIT`).
+ *
+ * The arithmetic: 600/min = 10 reads/s per job, ~4.5× the highest measured
+ * minute (132). A MOTIR-7719 walk of ~64 required reads uses about a tenth of
+ * it. Fifty concurrent jobs of one workspace at their measured ~100/min fit
+ * inside the 12 000 ceiling with MCP traffic beside them. The story's sizing
+ * task confirms it.
+ */
+export const DEFAULT_AI_INTERNAL_RATE_LIMIT = 600;
+export const DEFAULT_AI_INTERNAL_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
  * GENERATION: the same money, a much bigger unit of it (MOTIR-2597).
  *
  * A chat turn is one sentence in and one reply out. A plan generation, a story
@@ -119,13 +144,39 @@ export const DEFAULT_AI_GENERATE_RATE_LIMIT_WINDOW_MS = 60_000;
  * logical CLI operation is already several POSTs (an `initialize`, an
  * `initialized` notification, then the call), a `motir run` makes tens of them,
  * and a 429 in the middle of an unattended run is an outage of the product, not
- * a defence of it. 300/min (5/s sustained) leaves every real client an order of
- * magnitude of headroom while still bounding a runaway retry loop — which is a
- * different number from "what is comfortable for a human", because no human is
- * on this surface at all.
+ * a defence of it. No human is on this surface at all, so the number is not
+ * "what is comfortable for a human".
+ *
+ * ⚠️ PER AGENT, not per person (MOTIR-8601). The bucket is keyed on the
+ * presented CREDENTIAL's fingerprint, so `MOTIR_MCP_RATE_LIMIT` is a budget per
+ * credential: the tenth MCP client one person runs gets the same allowance as
+ * the first. It was per `(workspace, user)` at 300/min until Story MOTIR-8548,
+ * which is what starved several concurrent agents of one person. What minting a
+ * credential must not widen is held by the workspace ceiling below, not here.
+ *
+ * The arithmetic: 600/min = 10/s per agent, twice the old whole-user 300. A
+ * `motir run` makes tens of POSTs a minute (`initialize` + notification + call
+ * per operation), so one agent keeps an order of magnitude of headroom while a
+ * runaway retry loop is still bounded. A starting value: the story's sizing
+ * task confirms or moves it from its runs.
  */
-export const DEFAULT_MCP_RATE_LIMIT = 300;
+export const DEFAULT_MCP_RATE_LIMIT = 600;
 export const DEFAULT_MCP_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * The per-WORKSPACE agent-volume ceiling (`agent:workspace`, MOTIR-8601) — one
+ * bucket every agent-volume request in a workspace spends beside its own
+ * per-agent limb: every MCP request and every authenticated `/api/v1` request.
+ * Minting another credential adds a per-agent bucket and NO ceiling, so this is
+ * the number a tenant cannot buy past.
+ *
+ * The arithmetic: 12 000/min = 200 req/s per workspace — 20 agents at their full
+ * 600/min, or 200 agents at a steady 60/min. That is ≈ 40 % of one `app`
+ * instance's ~500 req/s target (MOTIR-8536), so one tenant cannot take an
+ * instance alone. A starting value the sizing task confirms or moves.
+ */
+export const DEFAULT_AGENT_WORKSPACE_RATE_LIMIT = 12_000;
+export const DEFAULT_AGENT_WORKSPACE_RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
  * Attachment uploads, per signed-in user. The numbers are the ones the
@@ -237,6 +288,16 @@ export function aiBudget(): RateLimitBudget {
   );
 }
 
+/** The job-token read-backs of a running planning job — see `DEFAULT_AI_INTERNAL_RATE_LIMIT`. */
+export function aiInternalBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_AI_INTERNAL_RATE_LIMIT',
+    'MOTIR_AI_INTERNAL_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_AI_INTERNAL_RATE_LIMIT,
+    DEFAULT_AI_INTERNAL_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
 /** The job-SUBMITTING `/api/ai/*` surfaces — generation, expansion, re-plan, audit. */
 export function aiGenerateBudget(): RateLimitBudget {
   return budget(
@@ -247,13 +308,23 @@ export function aiGenerateBudget(): RateLimitBudget {
   );
 }
 
-/** The MCP transport — every `POST /api/mcp`, per token owner + workspace. */
+/** The MCP transport — every `POST /api/mcp`, per presented credential (MOTIR-8601). */
 export function mcpBudget(): RateLimitBudget {
   return budget(
     'MOTIR_MCP_RATE_LIMIT',
     'MOTIR_MCP_RATE_LIMIT_WINDOW_MS',
     DEFAULT_MCP_RATE_LIMIT,
     DEFAULT_MCP_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** The per-workspace agent-volume ceiling — see `DEFAULT_AGENT_WORKSPACE_RATE_LIMIT`. */
+export function agentWorkspaceBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_AGENT_WORKSPACE_RATE_LIMIT',
+    'MOTIR_AGENT_WORKSPACE_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_AGENT_WORKSPACE_RATE_LIMIT,
+    DEFAULT_AGENT_WORKSPACE_RATE_LIMIT_WINDOW_MS,
   );
 }
 

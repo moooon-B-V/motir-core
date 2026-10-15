@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} クレジットは実行に紐付いていません",
       "searchUnavailable": "現在、検索の数値を表示できません。検索の課金は引き続き行われています。これは表示の問題であり、請求の問題ではありません。",
       "searchUnavailableValue": "利用不可",
+      "translationThisMonth": "今月の翻訳使用量",
+      "translationAllTime": "累計 {n} クレジット",
+      "translationNone": "翻訳の使用量はまだありません",
+      "translationUnavailable": "現在、翻訳の数値を表示できません。これは表示の問題であり、請求の問題ではありません。",
+      "translationUnavailableValue": "利用不可",
       "scopeFollows": "この対象範囲に連動",
       "scopeOrg": "組織全体",
       "internalBilling": "内部請求"
@@ -6375,20 +6380,19 @@
       "chooseSub": "シートとは別に請求される、組織単位の月間クレジットプールです。どの組織でも購入でき、有料の Motir シートプランは不要です。おすすめは Pro です。",
       "current": "現在のプラン",
       "recommended": "おすすめ",
-      "trialUsed": "トライアル使用済み",
       "creditsAllotment": "月 {n} クレジット",
       "creditsAllotmentOneTime": "{n} クレジット · 1 回限り",
+      "ladder": {
+        "first": "どのプランもクレジット単価は同じ",
+        "multiple": "{plan} の {multiple} 倍のクレジット · クレジット単価は同じ"
+      },
       "perMoEquiv": "月額 ${n}",
       "annualSub": "年払い · 年額 ${yr}",
       "annualSave": "年 ${n} お得",
       "monthlySub": "年額 ${yr} · 年払いで ${n} お得",
-      "freePrice": "無料",
-      "customPrice": "要相談",
-      "once": "1 回",
       "ctaChoose": "{plan} を選択",
       "ctaUpgrade": "{plan} にアップグレード",
       "ctaCurrent": "現在のプラン",
-      "ctaTrialUsed": "トライアル使用済み",
       "upgrade": {
         "cta": "{plan}にアップグレード",
         "disabledReason": "プランを変更できるのはオーナーと管理者のみです",
@@ -6452,50 +6456,37 @@
       },
       "footer": "年払い(Stripe のデフォルト)の料金を表示しています。比較するには上で「月払い」に切り替えてください。税金はチェックアウト時に自動で適用されます。クレジットは内部的な利用枠であり、表示価格は AI プランの料金で、Stripe から {org} 組織に請求されます。Motir のシートは別途請求されます。Motir プランの画面で管理してください。",
       "seatIncluded": "+ Motir シート {count, plural, other {# つ}} · 作業項目数の上限なし",
-      "seatNone": "Motir シートなし · 項目数の上限 250",
-      "seatCustom": "Motir シート込み(カスタム)",
-      "customPool": "カスタムのクレジットプール",
       "everythingIn": "{prev} のすべての機能に加えて",
       "tiers": {
-        "free": {
-          "useCase": "Motir AI のお試しに。",
-          "features": ["すべてのエージェントを 1 回だけお試し"],
-          "featuresOff": ["毎月の補充なし · チャージ不可"]
-        },
         "standard": {
-          "useCase": "詳細な計画と、エージェントのお試しに。",
-          "features": [
-            "プロジェクト全体を詳細に計画",
-            "クレジットは毎月補充 · 従量制のチャージ",
-            "エージェントタスクを試せる余裕"
-          ]
+          "useCase": "Motir AI プランナーでプロジェクトを計画します。",
+          "features": ["プロジェクト全体を詳細に計画", "クレジットは毎月更新 · いつでも追加購入"]
         },
         "pro": {
-          "useCase": "詳細な計画と、本格的なエージェント作業に。",
+          "useCase": "Standard の全機能に加えて、より高性能な計画モデル。",
           "prev": "Standard",
           "features": [
-            "実際のタスクでコーディングエージェントを実行",
-            "負荷の高い実行に備えていつでもチャージ"
+            "計画に、より高性能なモデルを利用可能",
+            "作業の種類ごとに計画モデルを切り替え"
           ]
         },
         "max": {
-          "useCase": "詳細な計画と、大量のエージェント作業に。",
+          "useCase": "Pro の全機能に加えて、計画済みの作業をエージェントに任せる余裕。",
           "prev": "Pro",
-          "features": ["継続的なエージェント作業にも十分な余裕", "忙しいチームにも対応できる処理量"]
+          "features": ["計画済みの作業をエージェントに自動で割り当てる余裕"]
         },
         "max_x2": {
-          "useCase": "詳細な計画と、Max の 2 倍のエージェント作業に。",
+          "useCase": "Max の 2 倍の量。",
           "prev": "Max",
-          "features": [
-            "Max の 2 倍の月間クレジットプール",
-            "複数のエージェントを同時に動かせる余裕"
-          ]
-        },
-        "enterprise": {
-          "useCase": "カスタムの利用量と、組織の管理機能。",
-          "prev": "Max",
-          "features": ["請求書払いと SSO", "専任サポート"]
+          "features": ["Max の 2 倍の月間クレジットプール"]
         }
+      },
+      "trial": {
+        "pill": "無料トライアル",
+        "pillUsed": "無料トライアル使用済み",
+        "left": "トライアルクレジット残り {left} / {n} · 1 回限り。",
+        "spent": "{n} のトライアルクレジットをすべて使用しました。",
+        "pickPlan": "計画を続けるには、Motir AI の月額プランを選んでください。"
       }
     },
     "topup": {
@@ -6574,120 +6565,6 @@
     "internalBilling": {
       "badge": "社内請求",
       "note": "この組織は顧客とまったく同じように請求され、その後補填されます。以下の数値はすべて実際のもので、残高は差し引きゼロになります。"
-    },
-    "contactSales": {
-      "contact": "営業担当に問い合わせる",
-      "sentChip": "リクエスト送信済み · {date}",
-      "memberReason": "営業担当に問い合わせできるのは {org} のオーナーと管理者のみです。",
-      "title": "営業担当に問い合わせる — Enterprise",
-      "subtitle": "Motir で何を実行したいかをお知らせください。すべてのリクエストをプラットフォームスタッフが確認し、直接ご返信します。",
-      "facts": {
-        "heading": "リクエストと一緒に送信される情報",
-        "organization": "組織",
-        "requestedBy": "リクエスト者",
-        "currentPlan": "現在のプラン",
-        "repositories": "接続済みのリポジトリ"
-      },
-      "optionalNote": "メモ以外の項目はすべて任意です。",
-      "fields": {
-        "cardsPerDay": "1 日あたりの作業項目数(目安)",
-        "cardsPerDayPlaceholder": "例: 40",
-        "parallelAgents": "並列エージェント数",
-        "parallelAgentsPlaceholder": "例: 8",
-        "agentPath": "使用するエージェント",
-        "autonomy": "どのように実行しますか?",
-        "startWhen": "いつ開始しますか?",
-        "teamSize": "チーム規模",
-        "choose": "選択…",
-        "contact": "ご希望の連絡先",
-        "contactHelp": "アカウントのメールアドレスです。別の方に返信を受け取ってほしい場合は変更してください。",
-        "note": "メモ",
-        "required": "必須",
-        "notePlaceholder": "Motir にチームのために何をしてほしいですか?リポジトリ、セキュリティ、時期について知っておくべきことがあればお書きください。"
-      },
-      "agentPath": {
-        "hosted": {
-          "label": "Motir のホスト型エージェント",
-          "hint": "Motir のモデルで実行します。"
-        },
-        "own": {
-          "label": "自社のエージェント",
-          "hint": "Claude Code、Codex などのエージェントを自社の認証情報で、Motir のクラウド上で実行します。"
-        },
-        "both": {
-          "label": "両方",
-          "hint": "両方を組み合わせて使います。"
-        }
-      },
-      "autonomy": {
-        "autonomous_lead": {
-          "label": "24 時間、自律的に",
-          "hint": "自律型リード: Motir が計画・実行・修復を行い、チームは承認ゲートで判断します。"
-        },
-        "volume_only": {
-          "label": "自分たちで開始する大量の実行",
-          "hint": "各実行はチームが開始します。"
-        },
-        "unsure": {
-          "label": "まだ決めていない",
-          "hint": ""
-        }
-      },
-      "startWhen": {
-        "now": "今すぐ",
-        "within_month": "1 か月以内",
-        "within_quarter": "四半期以内",
-        "exploring": "情報収集中"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "cancel": "キャンセル",
-      "send": "リクエストを送信",
-      "sending": "送信中…",
-      "close": "閉じる",
-      "done": "完了",
-      "errors": {
-        "note": "メモを入力してください。Motir にチームのために何をしてほしいかをお書きください。",
-        "number": "1 以上の整数を入力してください。"
-      },
-      "refused": {
-        "open": {
-          "title": "この組織には未完了のリクエストがすでにあります。",
-          "body": "{date} に別のタブまたは別の管理者から送信されています。新たな送信は行われていません。",
-          "bodyNoDate": "別のタブまたは別の管理者から送信されています。新たな送信は行われていません。",
-          "action": "リクエストを表示"
-        },
-        "forbidden": {
-          "title": "{org} の営業担当に問い合わせることはできません。",
-          "body": "問い合わせできるのはオーナーと管理者のみです。このページの読み込み後にロールが変更された可能性があります。組織の管理者にお問い合わせください。"
-        },
-        "network": {
-          "title": "Motir に接続できませんでした。",
-          "body": "何も送信されていません。接続を確認して、もう一度送信してください。入力内容は保持されています。"
-        }
-      },
-      "sent": {
-        "title": "リクエストを送信しました",
-        "body": "プラットフォームスタッフから <b>{contact}</b> に返信が届きます。リクエストが完了するまで、Enterprise プランの欄には「営業担当に問い合わせる」の代わりにこのリクエストが表示されます。"
-      },
-      "request": {
-        "title": "Enterprise のリクエスト",
-        "subtitle": "{date} に {name} さんが送信。",
-        "subtitleNoName": "{date} に送信。",
-        "state": "状態",
-        "asked": "お伝えいただいた内容",
-        "unset": "未回答",
-        "reply": "プラットフォームスタッフが <b>{contact}</b> に返信します。追加の情報は、そのメールへの返信でお知らせください。",
-        "status": {
-          "received": "受付済み",
-          "in_conversation": "やり取り中",
-          "offer_sent": "オファー送付済み"
-        }
-      }
     }
   },
   "draftWithAi": {
@@ -7139,6 +7016,7 @@
       "repos_updated": "リポジトリへのアクセスを更新しました。Motir は GitHub で選択したリポジトリを読み取ります。ここで完了させる作業はほかにありません。",
       "install_unbound": "Motir GitHub App は GitHub にインストールされましたが、このワークスペースからではないため、まだ接続されていません。接続するには、ここからインストールを開始してください。",
       "install_expired": "GitHub での操作中にインストールリンクの有効期限が切れました。問題は発生していません。設定からもう一度始めてください。",
+      "install_requested": "Motir GitHub App のインストールのリクエストは、GitHub アカウントのオーナーの承認を待っています。失敗したものはありません。オーナーが承認すると反映されます。",
       "install_forbidden": "このインストールを開始したワークスペースのメンバーではないため、何も接続されていません。",
       "install_provider_error": "Motir は App の接続を完了するために GitHub に接続できませんでした。もう一度お試しください。",
       "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。",
@@ -8202,6 +8080,24 @@
       "onlyStarterAnon": "再開できるのは開始した本人またはプロジェクトマネージャーのみです。",
       "failureLine": "この計画への直前の変更を反映できませんでした · {when}",
       "failureLineAgain": "直前の変更を再び反映できませんでした · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "質問攻め",
+        "helpName": "質問攻めとは？",
+        "popover": {
+          "title": "質問攻め",
+          "body1": "計画する前に、Motir AI が何を求めているかを一度に一つずつ質問します。どう動くべきか、同じことを行う別の方法、そしてうまくいかないときに何が起きるかです。",
+          "body2": "各質問にはいくつかの回答候補があり、一つが推奨です。どれでもスキップでき、プランナーに任せることも、いつでも止めることもできます。",
+          "body3": "決まった内容は計画の要件に書き込まれ、計画はそこから始まります。"
+        },
+        "hint": "次のメッセージで質問が始まります。"
+      }
+    },
+    "follow": {
+      "following": "プランナーを追従中",
+      "resume": "プランナーを追従",
+      "resumedAnnouncement": "プランナーの追従を再開しました"
     }
   },
   "codeHealth": {
@@ -8623,8 +8519,8 @@
       "body": "Motir は GitHub で接続したリポジトリを読み込み、プロジェクト全体のコードを 1 つのマップにまとめます。",
       "gitlabNote": "GitLab の接続は近日対応予定です。",
       "checking": "接続済みのリポジトリを確認しています…",
-      "missingTitle": "接続済みのリポジトリはまだありません",
-      "missingHint": "新しいタブで GitHub を接続してください。Motir が接続を自動で検知するので、ここで確認する必要はありません。",
+      "missingTitle": "GitHub を接続したら、すぐにここへ戻ります",
+      "missingHint": "GitHub が新しいタブで 1 分ほど開きます。そこで行うことは次のとおりです。戻ってきたとき、このステップはそのまま待っています。",
       "connectCta": "GitHub を接続",
       "newTab": "（新しいタブで開きます）",
       "waitingTitle": "GitHub を待っています",
@@ -8634,7 +8530,55 @@
       "detectedHint": "Motir が読み込めるリポジトリです。続行するとインデックス作成が始まります。",
       "listLabel": "接続済みのリポジトリ",
       "continue": "続行",
-      "manage": "GitHub でリポジトリを管理"
+      "manage": "GitHub でリポジトリを管理",
+      "preflightAccount": "Motir GitHub App をインストールする GitHub アカウントを選びます。自分のアカウントか、所属している GitHub の組織です。",
+      "preflightRepositories": "すべてのリポジトリか、選択したリポジトリだけかを選びます。これは後から GitHub で変更できます。",
+      "preflightAccess": "App が求めるアクセスを承認します。App はコードとプルリクエストの読み取りと変更、およびチェック、デプロイ、Issues、マージキュー、メタデータ、セキュリティイベントの読み取りができます。",
+      "preflightReturn": "GitHub からこのステップにそのまま戻り、接続したリポジトリが表示されます。",
+      "preflightCta": "GitHub を接続",
+      "ownerPendingTitle": "オーナーの承認を待っています",
+      "ownerPendingHint": "選択した GitHub アカウントのオーナーが Motir GitHub App を承認する必要があります。リクエストはオーナーに届いています。問題は発生しておらず、失われたものもありません。承認されるとすぐにオンボーディングに反映されます。",
+      "alreadyConnectedTitle": "この組織はすでに接続されています",
+      "alreadyConnectedHint": "Motir はすでにこれらのリポジトリを読み込めるため、インストールするものはありません。",
+      "alreadyConnectedAddMore": "GitHub でリポジトリを追加",
+      "noReposTitle": "GitHub は接続されましたが、リポジトリは接続されていません",
+      "noReposHint": "インストールは完了しましたが、この組織で Motir が使えるリポジトリはまだありません。リポジトリが選択されなかったか、選択したリポジトリがここに接続できない状態です（たとえば、すでに別の組織に属している場合）。",
+      "cancelledTitle": "インストールが完了しませんでした",
+      "cancelledHint": "GitHub での操作を終える前に戻ってきました。問題は発生していません。何も接続されておらず、失われたものもありません。準備ができたらもう一度お試しください。",
+      "tryAgainCta": "もう一度試す",
+      "changeReposCta": "GitHub でリポジトリを選択",
+      "starting": "GitHub を開いています…",
+      "ownerPendingOpenCta": "GitHub を開く",
+      "readFailedTitle": "Motir は今、接続を確認できませんでした",
+      "readFailedHint": "GitHub で行った操作は失われていません。このタブに戻ったときに、このステップがもう一度確認します。今すぐ確認することもできます。",
+      "recheckCta": "もう一度確認",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "接続済み",
+        "alreadyConnected": "すでに接続済み",
+        "chooseRepos": "リポジトリを選択",
+        "ownerPending": "オーナーを待っています",
+        "expired": "リンクの期限切れ",
+        "notConnected": "未接続"
+      },
+      "outcome": {
+        "install_expiredTitle": "GitHub での操作中にリンクの有効期限が切れました",
+        "install_expiredHint": "問題は発生しておらず、何も接続されていません。このステップからもう一度お試しください。",
+        "install_forbiddenTitle": "このワークスペースは接続できません",
+        "install_forbiddenHint": "このインストールは、あなたがメンバーではないワークスペースから開始されたため、何も接続されていません。そのワークスペースの管理者が GitHub を接続できます。",
+        "install_provider_errorTitle": "Motir は GitHub との接続を完了できませんでした",
+        "install_provider_errorHint": "何も接続されていません。しばらくしてからもう一度お試しください。",
+        "install_errorTitle": "Motir はこのインストールを確認できませんでした",
+        "install_errorHint": "GitHub からの戻りリンクを検証できなかったため、何も接続されていません。このステップからもう一度お試しください。",
+        "select_reposTitle": "この組織のリポジトリを選択してください",
+        "select_reposHint": "この GitHub アカウントはすでに別の組織で使われています。そのリポジトリのうち、この組織が使えるものを選択してください。",
+        "repo_unavailableTitle": "リポジトリがすでに別の場所で接続されています",
+        "repo_unavailableHint": "選択したリポジトリの 1 つがすでに別の組織に属しているため、ここには追加されませんでした。GitHub で別のリポジトリを選択してください。",
+        "installation_not_accessibleTitle": "Motir はその GitHub アカウントをリンクできません",
+        "installation_not_accessibleHint": "あなたの GitHub ユーザーからこのインストールが見えないため、何もリンクされていません。GitHub アカウントのオーナーがアクセス権を付与できます。",
+        "not_configuredTitle": "このデプロイでは GitHub が設定されていません",
+        "not_configuredHint": "この Motir のデプロイにはまだ GitHub App がないため、ここから GitHub を接続できません。デプロイの運用者が設定できます。"
+      }
     },
     "index": {
       "eyebrow": "ステップ 2/2 · セットアップ",
@@ -9203,7 +9147,8 @@
         "couldNot": "何も起動されず、料金も発生していません。{repair}",
         "changes_requested": "何も再開されません。先に {key} が手直しされ、その次のバージョンで再び確認が求められます。この実行は待機を続けます。",
         "declined": "何も再開されません。これによって解放されるはずだった作業には新しい計画が必要です。{key} を再計画するか、{head} を「未着手」にして最初からやり直してください。",
-        "overturned": "何も再開されません。承認が無効になったため、実行は {key} についての新しい判断を待ちます。"
+        "overturned": "何も再開されません。承認が無効になったため、実行は {key} についての新しい判断を待ちます。",
+        "reshaped": "再開時には変更後のストーリーが引き継がれます。"
       },
       "back": {
         "changes_requested": "{kind}が差し戻されました · <b>{name}</b> が変更を依頼 — 「{note}」",
@@ -9236,7 +9181,26 @@
         "repository_not_writable": "プロジェクトの設定でリポジトリを再接続してから「続行」を押してください。",
         "card_not_ready": "{key} をブロックしているものを解消するか、「進行中」に戻してから「続行」を押してください。"
       },
-      "copyAria": "{key} の再開コマンドをコピー"
+      "copyAria": "{key} の再開コマンドをコピー",
+      "member": {
+        "added": "実行停止後に追加",
+        "rescoped": "範囲変更"
+      },
+      "fold": {
+        "added": "実行停止後に {count} 件追加"
+      },
+      "reshaped": {
+        "one": "計画 <plan>{title}</plan> <aside>（<when></when>に承認）</aside>が実行停止後にこのストーリーを変更しました: <b>{counts}</b>",
+        "many": "実行停止後、<b>{count, plural, other {# 件の計画}}</b>がこのストーリーを変更しました",
+        "planLine": "計画 <plan>{title}</plan> <aside>（<when></when>に承認）</aside>: {counts}",
+        "showPlans": "計画を表示",
+        "hidePlans": "計画を隠す",
+        "added": "{n} 件追加",
+        "changed": "{n} 件変更",
+        "removed": "{n} 件削除",
+        "separator": "、",
+        "label": "実行停止後に {key} を変更した計画"
+      }
     },
     "planning": {
       "scope": "<project>{name}</project> であなたが依頼し、まだ作成中の計画です。他のメンバーが依頼した計画は<link>計画ページ</link>にあります。",
@@ -9287,6 +9251,7 @@
         "model_unavailable": "AIプロバイダーが利用できなかったため",
         "token_expired": "AIプロバイダーとの接続の有効期限が切れたため",
         "prompt_too_large": "プランのコンテキストがモデルの上限を超えたため",
+        "job_failed": "計画ジョブが失敗したため",
         "internal": "こちら側で問題が発生したため"
       },
       "refusal": {
@@ -14252,5 +14217,88 @@
       "unavailable": "利用できない作業項目",
       "unavailableTitle": "この作業項目は削除されたか、あなたには表示されません。"
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "質問中 · 質問 {n}",
+      "recommended": "推奨",
+      "recommendedName": "{label}（推奨）",
+      "somethingElse": "別の回答…",
+      "skip": "スキップ",
+      "youDecide": "おまかせ",
+      "stop": "質問をやめる",
+      "ownWordsPlaceholder": "自分の言葉で回答…",
+      "composerPlaceholder": "または自分の回答を入力…",
+      "because": "「{answer}」を選んだので…",
+      "yourThread": "あなたの話題",
+      "youSaid": "あなたの発言：「{words}」"
+    },
+    "markers": {
+      "opening": "質問攻めがオンです。計画の前に一度に一つずつ質問します。回答を選ぶ、スキップする、いつでもやめる、のいずれもできます。",
+      "skipped": "スキップしました。この点はプランナーが仮定します。",
+      "completed": "聞くべきことはすべて聞きました。",
+      "nothingToAsk": "聞くことはありません。計画できるだけ明確です。今から計画を書きます。",
+      "stopped": "質問を止めました。",
+      "stoppedNoAnswer": "回答する前に質問を止めました。何も書き込まれていません。"
+    },
+    "summary": {
+      "title": "決まったこと",
+      "counts": "{answers, plural, other {回答 # 件}} · {assumptions, plural, other {プランナーの仮定 # 件}}",
+      "groups": {
+        "behaviour": "動作",
+        "scopeEdge": "スコープの境界",
+        "constraints": "制約",
+        "acceptance": "受け入れ",
+        "assumptions": "仮定"
+      },
+      "youAnswered": "あなたの回答",
+      "plannersAssumption": "プランナーの仮定",
+      "writing": "回答を計画の要件と <item></item> に書き込んでいます…",
+      "writingPlanOnly": "回答を計画の要件に書き込んでいます…",
+      "written": "計画の要件と <item></item> に書き込みました。",
+      "writtenPlanOnly": "計画の要件に書き込みました。",
+      "failed": "回答は書き込まれませんでした。回答はここに残っています。",
+      "copy": "回答をコピー"
+    },
+    "error": "その質問は届きませんでした。これまでの回答は保持されています。もう一度お試しください。",
+    "retry": "再試行"
+  },
+  "itemTranslation": {
+    "groupLabel": "翻訳",
+    "translate": "翻訳",
+    "translating": "翻訳しています…",
+    "showOriginal": "原文を表示",
+    "showTranslation": "翻訳を表示",
+    "retry": "再試行",
+    "hintInto": "{language}に翻訳",
+    "hintTranslated": "{language}に翻訳しました",
+    "hintShowingOriginal": "原文を表示しています",
+    "hintPartial": "{language}に翻訳しました · {n, plural, other {# 件のフィールドを翻訳できませんでした}}",
+    "failedItem": "この作業項目を翻訳できませんでした。料金は発生していません。",
+    "noCredits": "翻訳には AI クレジットが必要です。料金は発生していません。",
+    "noCreditsMember": "組織のオーナーまたは管理者が追加できます。",
+    "addCredits": "クレジットを追加",
+    "markTranslatedFrom": "{language}から翻訳",
+    "markTranslated": "翻訳済み",
+    "markTranslating": "翻訳しています…",
+    "markEdited": "編集済み · 翻訳しています…",
+    "markFailed": "翻訳されていません。料金は発生していません。",
+    "markPrefix": "{field}：",
+    "fieldTitle": "タイトル",
+    "fieldDescription": "説明",
+    "fieldExplanation": "解説",
+    "fieldTodo": "ToDo",
+    "fieldInstructions": "手順",
+    "retryTitle": "タイトルの翻訳を再試行",
+    "retryDescription": "説明の翻訳を再試行",
+    "retryExplanation": "解説の翻訳を再試行",
+    "retryTodo": "ToDo の翻訳を再試行",
+    "retryInstructions": "手順の翻訳を再試行",
+    "liveTranslating": "{language}に翻訳しています…",
+    "liveTranslated": "{language}に翻訳しました。",
+    "liveShowingOriginal": "原文を表示しています。",
+    "liveFailedCount": "{n, plural, other {# 件のフィールドを翻訳できませんでした。}}",
+    "liveNoCredits": "翻訳には AI クレジットが必要です。",
+    "liveEdited": "{field}が編集され、再度翻訳されました。"
   }
 }

@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
-import { renderWithIntl } from '../helpers/renderWithIntl';
-import type { MigrateOnboardingDto } from '@/lib/dto/migrateOnboarding';
+import { enMessages, renderWithIntl } from '../helpers/renderWithIntl';
+import type {
+  MigrateConnectOutcome,
+  MigrateConnectStateDto,
+  MigrateOnboardingDto,
+} from '@/lib/dto/migrateOnboarding';
 
 // MOTIR-8254 — the migrate wizard on the vibe layout, as one page to finish
 // onboarding (`design/onboarding-migrate/` § 2026-10-12, Revisions 1–6). These
@@ -45,6 +49,26 @@ function makeRun(overrides: Partial<MigrateOnboardingDto> = {}): MigrateOnboardi
   };
 }
 
+/** The connect step's own read (MOTIR-8472); the step's states are
+ *  `onboarding-connect-step.test.tsx`'s to prove. */
+function connectState(
+  outcome: MigrateConnectOutcome,
+  repoRefs: string[] = [],
+): MigrateConnectStateDto {
+  return {
+    organizationId: 'org-1',
+    installation: { bound: repoRefs.length > 0, accounts: [] },
+    repositories: repoRefs.map((repoRef) => ({
+      provider: 'github',
+      repoRef,
+      defaultBranch: 'main',
+    })),
+    outcome,
+    snapshot: 'mcs1.cnVuLTE',
+  };
+}
+const NOT_CONNECTED_TITLE = enMessages.onboardingMigrate.connect.missingTitle;
+
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;
 function fakeFetch(handler: Handler) {
   const spy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
@@ -71,8 +95,7 @@ describe('the first screen', () => {
   it('with one project, starts the run on arrival and opens on Connect under the full hero', async () => {
     const calls = fakeFetch((url) => {
       if (url === '/api/onboarding/migrate') return json(makeRun());
-      if (url.endsWith('/index-status'))
-        return json({ repos: [], indexedCount: 0, total: 0, hasRunning: false, allIndexed: false });
+      if (url.endsWith('/connect-state')) return json(connectState('not_started'));
       return json({}, 404);
     });
     const { container } = renderWithIntl(
@@ -88,7 +111,7 @@ describe('the first screen', () => {
     // No Start panel is ever painted: Connect's Checking line shows at once.
     expect(screen.queryByRole('group', { name: /Which project/ })).toBeNull();
     expect(screen.getByText('Checking for connected repositories…')).toBeTruthy();
-    expect(await screen.findByText('No repositories connected yet')).toBeTruthy();
+    expect(await screen.findByText(NOT_CONNECTED_TITLE)).toBeTruthy();
     expect(calls.mock.calls.some(([u]) => String(u) === '/api/onboarding/migrate')).toBe(true);
     expect(
       container.querySelector('[data-onboarding-hero]')?.getAttribute('data-onboarding-hero'),
@@ -98,8 +121,7 @@ describe('the first screen', () => {
   it('with two projects, offers the choice with the open one picked, and switches before it starts', async () => {
     fakeFetch((url) => {
       if (url === '/api/onboarding/migrate') return json(makeRun({ projectId: 'p2' }));
-      if (url.endsWith('/index-status'))
-        return json({ repos: [], indexedCount: 0, total: 0, hasRunning: false, allIndexed: false });
+      if (url.endsWith('/connect-state')) return json(connectState('not_started'));
       return json({}, 404);
     });
     renderWithIntl(
@@ -120,7 +142,7 @@ describe('the first screen', () => {
       fireEvent.click(cta);
     });
     expect(setActiveProjectAction).toHaveBeenCalledWith('p2');
-    expect(await screen.findByText('No repositories connected yet')).toBeTruthy();
+    expect(await screen.findByText(NOT_CONNECTED_TITLE)).toBeTruthy();
   });
 });
 
@@ -141,14 +163,7 @@ describe('the bar', () => {
 describe('Connect notices the connection by itself (Revision 1)', () => {
   it('shows the connected repositories and Continue, with no "I have connected" button', async () => {
     fakeFetch((url) => {
-      if (url.endsWith('/index-status'))
-        return json({
-          repos: [{ repoRef: 'acme/web', provider: 'github', status: 'queued' }],
-          indexedCount: 0,
-          total: 1,
-          hasRunning: true,
-          allIndexed: false,
-        });
+      if (url.endsWith('/connect-state')) return json(connectState('connected', ['acme/web']));
       return json({}, 404);
     });
     renderWithIntl(
@@ -160,20 +175,22 @@ describe('Connect notices the connection by itself (Revision 1)', () => {
     expect(screen.queryByText("I've connected my repos")).toBeNull();
   });
 
-  it('opens GitHub settings in a new tab and waits for it', async () => {
+  it('starts the GitHub install from this step in a new tab, and waits for it (MOTIR-8475)', async () => {
     fakeFetch((url) =>
-      url.endsWith('/index-status')
-        ? json({ repos: [], indexedCount: 0, total: 0, hasRunning: false, allIndexed: false })
-        : json({}, 404),
+      url.endsWith('/connect-state') ? json(connectState('not_started')) : json({}, 404),
     );
+    const open = vi.spyOn(window, 'open').mockReturnValue({ opener: null } as unknown as Window);
     renderWithIntl(
       <MigrateWizard initialRun={makeRun()} projectName="Quiet Harbor" userInitial="Y" />,
     );
-    const link = await screen.findByRole('link', { name: /Connect GitHub/ });
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('href')).toBe('/settings/organization/git');
-    fireEvent.click(link);
+    const start = await screen.findByRole('button', { name: /Connect GitHub/ });
+    fireEvent.click(start);
+    expect(open).toHaveBeenCalledWith('/api/github/install/start', '_blank');
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
     expect(screen.getByText('Waiting for GitHub')).toBeTruthy();
+    open.mockRestore();
   });
 });
 

@@ -1,6 +1,7 @@
+import { createHmac } from 'node:crypto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { authenticateJobRequest, JobAuthError } from '@/lib/ai/jobAuth';
-import { mintJobToken } from '@/lib/ai/jobToken';
+import { mintJobToken, verifyJobToken } from '@/lib/ai/jobToken';
 
 // Pure unit test (no DB): the §4a service bearer + §4b job-token gate.
 // BETTER_AUTH_SECRET is set by vitest.config; we set CORE_CALLBACK_SECRET here.
@@ -107,4 +108,53 @@ describe('authenticateJobRequest', () => {
       authenticateJobRequest(req({ authorization: 'Bearer anything', 'x-motir-job-token': token })),
     ).toThrowError(JobAuthError);
   });
+});
+
+// MOTIR-8599 — the gate surfaces the token's per-job key for the limiter.
+describe('authenticateJobRequest — the jobKey (MOTIR-8599)', () => {
+  function signRaw(payload: Record<string, unknown>): string {
+    const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const sig = createHmac('sha256', process.env['BETTER_AUTH_SECRET']!)
+      .update(b64)
+      .digest('base64url');
+    return `${b64}.${sig}`;
+  }
+  const now = () => Math.floor(Date.now() / 1000);
+  const base = () => ({
+    sub: 'user_1',
+    workspaceId: 'ws_1',
+    projectId: 'pj_1',
+    iat: now(),
+    exp: now() + 60,
+  });
+
+  it("returns the token's jobKey", () => {
+    const token = mintJobToken(claims);
+    const auth = authenticateJobRequest(
+      req({ authorization: `Bearer ${SECRET}`, 'x-motir-job-token': token }),
+    );
+    expect(auth.jobKey).toBe(verifyJobToken(token)!.jobKey);
+    expect(auth.jobKey).toBeTruthy();
+  });
+
+  it('returns null for a pre-change token that carries no key', () => {
+    const auth = authenticateJobRequest(
+      req({ authorization: `Bearer ${SECRET}`, 'x-motir-job-token': signRaw(base()) }),
+    );
+    expect(auth.jobKey).toBeNull();
+    expect(auth.ctx).toEqual({ userId: 'user_1', workspaceId: 'ws_1' });
+  });
+
+  it.each([[''], [42], [null]])(
+    'returns null for a malformed key (%j) — never trusted as a bucket',
+    (jobKey) => {
+      const auth = authenticateJobRequest(
+        req({
+          authorization: `Bearer ${SECRET}`,
+          'x-motir-job-token': signRaw({ ...base(), jobKey }),
+        }),
+      );
+      expect(auth.jobKey).toBeNull();
+    },
+  );
 });

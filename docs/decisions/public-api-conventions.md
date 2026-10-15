@@ -381,6 +381,13 @@ Postgres is a denial-of-service surface.
 - **A limiter-store failure MUST NOT fail the request.** Degrade to allowing the
   call and log it. An outage in the limiter must not take the API down.
 
+_Amended 2026-10-14 (MOTIR-8600): the 429 now also carries a `Retry-After`
+header and a numeric `retryAfterSeconds` in its body, the same whole number of
+seconds in both. Both are additive under §8. The code stays
+`RATE_LIMIT_EXCEEDED`: changing a published `code` is breaking (§4), so v1 keeps
+it while Motir's agent surfaces carry `RATE_LIMITED`. The contract shared by all
+four agent-reachable refusals is written in `lib/rateLimit/guard.ts`._
+
 **The counter is SHARED across instances** (closed 2026-08-10 by MOTIR-2037).
 `60` means 60 on the whole deployment, not 60 per machine. The counter lives
 behind a small store interface whose default is the **Postgres counter table**

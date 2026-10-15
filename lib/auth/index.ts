@@ -36,6 +36,7 @@ import {
 } from './twoFactorConfig';
 import { PASSKEY_RESIDENT_KEY, PASSKEY_RP_NAME, PASSKEY_USER_VERIFICATION } from './passkeyConfig';
 import { hash, verify } from './passwords';
+import { createBetterAuthRateLimitStorage } from '@/lib/rateLimit/betterAuthStorage';
 import { mcpOAuthPolicy } from './mcpOAuthPolicy';
 import { localeSync } from './localeSync';
 import { localeFromRequestHeaders } from '@/lib/i18n/seedLocale';
@@ -235,8 +236,17 @@ export const authOptions: BetterAuthOptions & {
   // sets it, so the limiter stays fully active in prod. The flag is opt-in
   // (default: limiter on) so a prod box with NODE_ENV unset can't accidentally
   // ship with rate limiting off.
+  //
+  // WHERE THE BUCKETS LIVE (MOTIR-8613). better-auth 1.7.7's
+  // `dist/context/create-context.mjs` defaults the storage to
+  // `options.rateLimit?.storage || (options.secondaryStorage ? "secondary-storage" : "memory")`
+  // — with neither set, a module-level Map per process, so every limit was
+  // `max × machines` on the Fly pool. `customStorage` is read before any of
+  // those, and `lib/rateLimit/betterAuthStorage.ts` points it at the shared
+  // Postgres counter every app-level limiter uses.
   rateLimit: {
     enabled: process.env['E2E_DISABLE_RATE_LIMIT'] !== '1',
+    customStorage: createBetterAuthRateLimitStorage(),
     customRules: {
       '/request-password-reset': {
         window: 3600,

@@ -15,11 +15,10 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 //    verb that will be refused;
 //  * a submit reaches the `revise_plan` route and returns the reader to a
 //    clearly IN-FLIGHT state, with Approve HELD and the reason in real text;
-//  * ⚠️ the ASYNC LANDING routes each surface to its own mechanism — the
-//    island's own state through a REFETCH, the server-rendered surfaces through
-//    `router.refresh()`. Assuming the refresh covers both is the recurring bug
-//    the page-state contract exists to prevent, and a client island seeded by
-//    `useState(initialProps)` is exactly what it cannot reach;
+//  * ⚠️ the ASYNC LANDING files the fresh review through the island's own
+//    REFETCH and refreshes nothing (MOTIR-8576): a revision leaves the plan
+//    `planned`, so no surface only the server renders has moved, and a client
+//    island seeded by `useState(initialProps)` is what a refresh cannot reach;
 //  * a REFUSED revision surfaces the reason in place and leaves the plan
 //    readable and approvable.
 
@@ -219,7 +218,7 @@ describe('IN FLIGHT — Approve is HELD, and the reason is real text', () => {
 });
 
 describe('⚠️ the ASYNC LANDING — each surface routed to its own mechanism', () => {
-  it('REFETCHES the island AND `router.refresh()`es the server surfaces, once, when it lands', async () => {
+  it('REFETCHES the island when it lands, clears the running band, and refreshes nothing', async () => {
     vi.useFakeTimers();
     try {
       // Starts held…
@@ -238,18 +237,46 @@ describe('⚠️ the ASYNC LANDING — each surface routed to its own mechanism'
         await vi.advanceTimersByTimeAsync(3000);
       });
 
-      // The island's OWN state came through the refetch — `router.refresh()`
-      // cannot reach a `useState(initialProps)` seed, which is the whole reason
-      // both mechanisms run. Asserted SYNCHRONOUSLY: `act` already flushed the
-      // effects the tick queued, and `waitFor` runs on real timers, so mixing
-      // the two is how this assertion hangs rather than fails.
+      // The island's OWN state came through the refetch. Asserted SYNCHRONOUSLY:
+      // `act` already flushed the effects the tick queued, and `waitFor` runs on
+      // real timers, so mixing the two is how this assertion hangs rather than fails.
       expect(screen.queryByTestId('plan-revision-running')).toBeNull();
-      // …and the server-rendered surfaces came through the refresh.
-      expect(mocks.refresh).toHaveBeenCalled();
+      // …and nothing re-ran the page under the reader (MOTIR-8576).
+      expect(mocks.refresh).not.toHaveBeenCalled();
       // Approve is live again.
       expect((screen.getByRole('button', { name: /Approve/ }) as HTMLButtonElement).disabled).toBe(
         false,
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a poll that finds it still running keeps the band; a failed one retries next tick', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.fetchPlanReview.mockResolvedValue(review({ revision: RUNNING }));
+      render({ revision: RUNNING });
+
+      // Still running: the band stays.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByTestId('plan-revision-running')).toBeTruthy();
+
+      // A dropped read changes nothing, and the poll keeps going.
+      mocks.fetchPlanReview.mockRejectedValueOnce(new Error('offline'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByTestId('plan-revision-running')).toBeTruthy();
+
+      mocks.fetchPlanReview.mockResolvedValue(review({ revision: null }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.queryByTestId('plan-revision-running')).toBeNull();
+      expect(mocks.refresh).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

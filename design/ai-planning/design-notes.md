@@ -2,39 +2,40 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                                         | Files                                                     | Card                 | Section    |
-| ----------------------------------------------- | --------------------------------------------------------- | -------------------- | ---------- |
-| The Plans surface                               | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I     |
-| AI **sprint** planning                          | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II    |
-| **Who authored a plan**                         | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III   |
-| **The status tag's place**                      | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV    |
-| A proposal on its parent's **roadmap level**    | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V     |
-| A proposal **READ view**                        | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V     |
-| A **decided** plan's node treatments            | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI    |
-| What the pane holds **after approve**           | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI    |
-| The Plans list **tabbed by status**             | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII   |
-| The plan detail's **List ↔ Canvas** switcher    | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII  |
-| What a **generating** plan offers               | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII  |
-| The plan canvas **at arrival**                  | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX    |
-| **Show changes** on the plan canvas             | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX    |
-| The timeline's **CONTENT events**               | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X     |
-| The **FIFTH plan status** on every surface      | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI    |
-| **Revising a plan under review**                | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII   |
-| **The plan detail, refined**                    | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII  |
-| **The shipped peek in PROPOSAL mode**           | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV   |
-| **The PROPOSED to-do list in the peek**         | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV    |
-| **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI   |
-| **A proposal FILED into a folder**              | **`plan-folder-placement.mock.html`** + `.png`            | MOTIR-5406           | Part XVII  |
-| **Folders as LEVELS on the planning canvases**  | **`plan-folder-levels.mock.html`**                        | MOTIR-5793           | Part XVIII |
-| **A card MOVED under a proposed parent**        | **`plan-review--surgical-edits.mock.html`**               | MOTIR-6053           | Part XIX   |
-| **A leaf's DIFFICULTY on the plan review**      | **`plan-review--difficulty.mock.html`**                   | MOTIR-6134           | Part XX    |
-| **The surface's List \| Canvas for a plan**     | **`plan-review--surface-views.mock.html`**                | MOTIR-6184           | Part XXI   |
-| **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII  |
-| **The plan drawn as it is written**             | **`plan-review--live-drawing.mock.html`**                 | MOTIR-6294           | Part XXIII |
-| **A Plans row NAMES its refused work item**     | **`plans-sessions--seeded.mock.html`**                    | MOTIR-6206           | § at end   |
-| **Approve, while it runs**                      | **`plan-review--approve-progress.mock.html`**             | MOTIR-5248           | Part XXV   |
-| **A plan being written: progress and cues**     | **`plan-review--live-progress.mock.html`**                | MOTIR-7821           | Part XXVI  |
-| **A plan resumed after a lost machine**         | **`plan-review--live-progress--resuming.mock.html`**      | MOTIR-8306           | Part XXVII |
+| Surface                                         | Files                                                     | Card                 | Section     |
+| ----------------------------------------------- | --------------------------------------------------------- | -------------------- | ----------- |
+| The Plans surface                               | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I      |
+| AI **sprint** planning                          | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II     |
+| **Who authored a plan**                         | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III    |
+| **The status tag's place**                      | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV     |
+| A proposal on its parent's **roadmap level**    | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V      |
+| A proposal **READ view**                        | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V      |
+| A **decided** plan's node treatments            | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI     |
+| What the pane holds **after approve**           | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI     |
+| The Plans list **tabbed by status**             | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII    |
+| The plan detail's **List ↔ Canvas** switcher    | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII   |
+| What a **generating** plan offers               | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII   |
+| The plan canvas **at arrival**                  | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX     |
+| **Show changes** on the plan canvas             | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX     |
+| The timeline's **CONTENT events**               | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X      |
+| The **FIFTH plan status** on every surface      | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI     |
+| **Revising a plan under review**                | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII    |
+| **The plan detail, refined**                    | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII   |
+| **The shipped peek in PROPOSAL mode**           | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV    |
+| **The PROPOSED to-do list in the peek**         | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV     |
+| **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI    |
+| **A proposal FILED into a folder**              | **`plan-folder-placement.mock.html`** + `.png`            | MOTIR-5406           | Part XVII   |
+| **Folders as LEVELS on the planning canvases**  | **`plan-folder-levels.mock.html`**                        | MOTIR-5793           | Part XVIII  |
+| **A card MOVED under a proposed parent**        | **`plan-review--surgical-edits.mock.html`**               | MOTIR-6053           | Part XIX    |
+| **A leaf's DIFFICULTY on the plan review**      | **`plan-review--difficulty.mock.html`**                   | MOTIR-6134           | Part XX     |
+| **The surface's List \| Canvas for a plan**     | **`plan-review--surface-views.mock.html`**                | MOTIR-6184           | Part XXI    |
+| **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII   |
+| **The plan drawn as it is written**             | **`plan-review--live-drawing.mock.html`**                 | MOTIR-6294           | Part XXIII  |
+| **A Plans row NAMES its refused work item**     | **`plans-sessions--seeded.mock.html`**                    | MOTIR-6206           | § at end    |
+| **Approve, while it runs**                      | **`plan-review--approve-progress.mock.html`**             | MOTIR-5248           | Part XXV    |
+| **A plan being written: progress and cues**     | **`plan-review--live-progress.mock.html`**                | MOTIR-7821           | Part XXVI   |
+| **A plan resumed after a lost machine**         | **`plan-review--live-progress--resuming.mock.html`**      | MOTIR-8306           | Part XXVII  |
+| **Following the planner, and fields typing in** | **`plan-review--follow-the-planner.mock.html`**           | MOTIR-8591           | Part XXVIII |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
 published design results too (`list_designs` with `pathPrefix: design/ai-planning/`): a result that
@@ -3720,6 +3721,10 @@ Measurement at `deviceScaleFactor: 1`; the PNG is re-exported with the shipped
 
 # Part XIV — The SHIPPED peek in PROPOSAL MODE: the per-op header, the CHANGED marker, the explanation with no page to defer to, and what an un-materialized `add` cannot show (MOTIR-4182 / Story MOTIR-4181)
 
+> **Amended by Part XXVIII §28.6 (MOTIR-8591, 2026-10-15).** On the planning overlay while a plan is
+> `generating`, a title, description or explanation that was empty when this peek opened TYPES IN when
+> it arrives. Its layout, its empty treatment and every other row of this Part are unchanged.
+
 **Its OWN asset**: `design/ai-planning/peek-proposal-mode.mock.html` + `peek-proposal-mode.png`, plus
 this section. Part V §3 — which decided that a proposal is READ with the shipped quick view — stays
 exactly as drawn; this Part is what that decision becomes once BOTH doors use it and all three ops
@@ -6591,6 +6596,11 @@ MOTIR-6071. `ACME-42`, `ACME-44`, `ACME-47` and `ACME-60` are sample keys.
 
 # Part XXIII — the plan DRAWN AS IT IS WRITTEN: the generating pane, its motion, and the hand-over (MOTIR-6294 · Story MOTIR-6158 — `plan-review--live-drawing.mock.html`)
 
+> **Superseded in part by Part XXVIII (MOTIR-8591, 2026-10-15).** On the planning overlay while a
+> plan is `generating`, this Part's _the canvas never moves after the reader navigates_ (§23.8) is
+> replaced by _follow while on; the person's navigation turns following off; Follow the planner asks
+> again_. Outside `generating` this Part stands as written. Read Part XXVIII §28.2 before §23.7–23.8.
+
 **The asset:** one DELTA mock, `design/ai-planning/plan-review--live-drawing.mock.html`, eleven sheets.
 No `.png` (AMENDMENT 4).
 
@@ -7904,6 +7914,8 @@ measures it before shipping and, if it fails, adds an `--el-cue` token rather th
 - Any pause, cancel, ETA or percentage (story scope).
 - A notification when a plan is proposed.
 
+**Amended for the drafting cue's colour and motion (MOTIR-8414, 2026-10-14):** `design/ai-chat/design-notes.md` § _⭐ Motir at work — the drafted card turns warm orange, pops and breathes, and one Motir mark in the rail breathes with it_ (`design/ai-chat/planning-workspace--at-work.mock.html`) gives the drafted card its own colour (`--el-drafting` / `--el-drafting-surface`, Motir's warm orange and peach), makes it pop and breathe while Motir is at work, and amends §26.6 and §26.8 C2 / C8 / C10 for that cue; read the two together.
+
 # Part XXVII — a plan RESUMED BY ITSELF after its machine was lost: the _Resuming_ state of the progress line, its tail, its popover, its rail line, and when it turns _Stalled_ (MOTIR-8306 · Story MOTIR-8301 — `plan-review--live-progress--resuming.mock.html`, DATED 2026-10-12)
 
 **Design system — the files read and the verdict.** `package.json` depends on
@@ -8218,3 +8230,309 @@ the Workbench namespace).
 - A notification, a cancel control, an ETA.
 - The minutes between a machine dying and its job being reaped: the line reads as it does today
   (_Being written_, and _Stalled_ if the last write was long enough ago), because nothing knows yet.
+
+---
+
+# Part XXVIII — FOLLOWING THE PLANNER on the overlay canvas, and fields that TYPE IN in the proposal quick view (MOTIR-8591 · Story MOTIR-8590 — `plan-review--follow-the-planner.mock.html`, DATED 2026-10-15)
+
+**Design system, identified first.** Read `package.json` (depends on `@motir/design-system`,
+`workspace:*`) and `app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`). Both hold,
+so the verdict is **(a) ON MOTIR DESIGN**, package **v0.15.1** (`packages/design-system/package.json`).
+The project's axes are per person (`app/layout.tsx` stamps the reader's `data-style` / `data-palette`
+/ `data-type`; a signed-out reader gets none), so the board renders at the package defaults
+(`warm-editorial` · `motir` · `motir`), which is what a Visitor sees. The package exports
+`@motir/design-system/mock`, and the board is built with its `renderMock`. Every part on this surface
+is product-local, so the board composes those parts' **real emitted markup**:
+
+| part                                                                                   | kind                    | reason                                                                              |
+| -------------------------------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------- |
+| `PlanProposalViews` → `PlanReviewCanvas` → `ProjectRoadmapCanvas` (the breadcrumb bar) | product-local component | the planning canvas pane and its bar, where the control lives                       |
+| `PlanProgressLineView` (the pane header)                                               | product-local component | the progress line, cited and not changed                                            |
+| `IssueQuickViewPanel` in proposal mode (opened by `ProposalPeek`)                      | product-local component | the Part XIV peek, where fields type in                                             |
+| the follow control (`canvas-follow-state` / `canvas-follow-planner`)                   | product-local component | NEW, composed from the shipped follow offer's markup; nothing to add to the package |
+| the typing copy (`data-typewriter`)                                                    | product-local component | NEW, a wrapper around the peek's own field elements                                 |
+
+Nothing is proposed for `@motir/design-system`. One product-local token is added (§28.6).
+
+**The number.** _Part XXVIII_ is free. Checked on 2026-10-15 against this file's index (Part XXVII,
+MOTIR-8306, is the last row) and its headings (`grep -n "^# Part" design-notes.md`: XXVII is the last),
+and against the area's published results (`list_designs { projectKey: "MOTIR", pathPrefix:
+"design/ai-planning/" }`, paged to the end: the newest is MOTIR-8306's Part XXVII, MOTIR-6628's
+published result holds XXIV, and nothing is published past XXVII).
+
+**A DELTA.** Base: `plan-review--live-drawing.mock.html` (Part XXIII, the generating pane) and
+`peek-proposal-mode.mock.html` (Part XIV, the proposal quick view). Neither mock is edited. Neighbour,
+drawn but not changed: the drafted card's orange cue, pop and breath (`design/ai-chat/design-notes.md`
+§ _Motir at work_, MOTIR-8414, shipped by MOTIR-8413 in motir-core#3588).
+
+**Asset:** [`plan-review--follow-the-planner.mock.html`](./plan-review--follow-the-planner.mock.html).
+
+| Panel  | What it shows                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------------ |
+| A1–A12 | Table A, one panel per row, each with the four trips it offers                                   |
+| B1–B4  | The driven move: old level → crossfade → new level, then two moves one poll apart on a time axis |
+| C0     | The access path to the quick view (a card on the canvas)                                         |
+| C1–C6  | Table C: empty at open, arrival and typing, several fields in order, the long body, at once, AT  |
+| D1–D2  | Dark: A1, A4, A6, B3, the compact button, C3 and C1                                              |
+
+## 28.0 Rendered before drawn
+
+Every pane is the emitted markup of `PlanProposalViews` with `live`, `preserveCanvasLevel` and a
+progress snapshot, and every peek the emitted markup of `IssueQuickViewPanel` in proposal mode, at
+motir-core `65a97b655`, captured through `tests/helpers/renderWithIntl` → `container.innerHTML` (en, and
+zh where the panel says so), one capture per state. The delta is applied to those captures and to
+nothing else. What the render showed:
+
+- **The bar has ONE trip slot today, and while generating it holds only the pill.** The slot is
+  `declined ?? elsewhereOffer` and, failing both, the arrivals / in-flight pill
+  (`ProjectRoadmapCanvas.tsx`, `const offer` / `liveSlot`). The overlay passes `elsewhereOffer` only
+  when `!live` (`PlanReviewCanvas.tsx`, `offerPlanElsewhere && !live`), so while a plan is written the
+  elsewhere offer never arms.
+- **The shipped pill already names the planner's level when the person has navigated away.** With the
+  canvas on ACME-1 and the planner drafting under ACME-2, the bar reads _1 being drafted in ACME-2 · Go
+  there_ (panel A4, top). That is exactly the trip **Follow the planner** offers, so the two would sit
+  side by side saying the same thing. §28.2 decides it.
+- **`locate-fixed` is taken.** It is the canvas's own _Locate the next of this plan's items_ control in
+  the bottom cluster. The follow control therefore uses lucide `navigation`, the map convention for
+  "follow me".
+- **At the narrowest split (384px canvas) the shipped pill already crushes the crumbs** to a single
+  letter, because it is `shrink-0` (panel A10, left). That is pre-existing and filed as bug
+  MOTIR-8646 (§28.11, flag 3); the compact control below does not make it worse.
+- **The follow move's transition is a literal, not a token:** `transition-opacity duration-[180ms]
+motion-reduce:transition-none` on the level wrapper (`ProjectRoadmapCanvas.tsx`, the `PlanningCanvas`
+  `className`), exactly as the follow-once design specified it (_a 180ms opacity crossfade_).
+
+## 28.1 The rule, in one sentence
+
+**On the planning overlay, while the plan is `generating`, the canvas FOLLOWS the planner: each new
+driven step that names a level moves the canvas there, the person's first navigation turns following
+OFF, and _Follow the planner_ turns it back ON.** Following starts ON when the overlay opens on a
+generating plan. It is view state: it writes nothing, so a Visitor has it exactly as a member does.
+
+## 28.2 The SUPERSESSION record — dated 2026-10-15
+
+**What is replaced.** On the planning overlay, while the plan is `generating` only:
+
+| shipped rule                                                                                                           | where it is recorded                                                                              | replaced by                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `followTo` is honoured **at most once per mount** (MOTIR-6161)                                                         | `design/ai-chat/design-notes.md` § _The canvas ARRIVES INSIDE…_ (MOTIR-6159), § _The FOLLOW-MOVE_ | each NEW driven key is honoured while following is ON                                |
+| **never after the reader has navigated**; a declined request becomes _Plan is in {identifier} · Go there_ (MOTIR-6161) | the same section, § _The person who NAVIGATED FIRST_                                              | navigation turns following OFF; _Follow the planner_ asks again and turns it back ON |
+| the canvas **never jumps** after the reader navigates (MOTIR-6300)                                                     | Part XXIII §23.7–23.8                                                                             | it still never jumps while following is OFF; it is driven only while following is ON |
+
+**What is NOT dropped.**
+
+- **Outside `generating`** (the conversation before a plan, a proposed plan, the plan page) the one-shot
+  triggers keep their meaning: one move per mount, never after navigation, and the declined-follow offer
+  with its words.
+- **While generating, the arrivals count** (§23.7) keeps counting exactly as shipped, and the canvas
+  never moves FOR an arrival. Only the driven step moves it.
+- **The follow move itself**: its crossfade, its reduced-motion form and its announcement are reused
+  for every driven move (§28.4).
+- **MOTIR-6161 and MOTIR-6300 are `done` and are not edited.** They are the record of what was decided
+  then. The three earlier records carry a one-line pointer to this Part.
+
+## 28.3 Table A — the canvas pane's bar, per state
+
+A "trip" is any control that moves the canvas to where the plan is. **The bar's right end becomes ONE
+trips group** (`data-testid="canvas-bar-trips"`, `ml-auto flex shrink-0 items-center gap-1.5`): the
+shipped pill (its own `ml-auto` dropped, since the group carries it), then the follow control, which
+is always the rightmost so it never jumps when the pill comes and goes.
+
+**The trip rule:** while generating, **the declined-follow offer is not armed** (Follow the planner is
+that trip now), **the elsewhere offer stays unarmed** (shipped), and **the pill is HIDDEN whenever its
+_Go there_ would land on the level _Follow the planner_ goes to**. Its count keeps counting underneath
+and the pill returns as soon as the two destinations differ. So no row offers two controls to one place.
+
+| state                                                                                           | the follow control (drawn form)                                                                                                                                                    | pill · _Go there_                                                                           | declined-follow offer   | elsewhere offer       | the canvas                                                            | panel |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------- | --------------------- | --------------------------------------------------------------------- | ----- |
+| `generating`, ON, a driven step with a level                                                    | **the following status**: `navigation` glyph `--el-accent-on-surface` + _Following the planner_; no border, no fill, not a button                                                  | shows only for OTHER off-level steps; the driven card is on the canvas, so never this level | not armed               | not armed             | moves to the driven level on each new driven step                     | A1    |
+| `generating`, ON, no driven level (settle, top-level lay, drafting-new, a node off the plan)    | the following status, unchanged                                                                                                                                                    | shipped                                                                                     | not armed               | not armed             | stays put                                                             | A2    |
+| `generating`, ON, several steps in flight                                                       | the following status                                                                                                                                                               | counts the OTHER in-flight steps, shipped words                                             | not armed               | not armed             | holds the first step's level until it ends                            | A3    |
+| `generating`, OFF (the person navigated)                                                        | **the _Follow the planner_ button**: the follow offer's markup with the `navigation` glyph in place of the dot                                                                     | HIDDEN when it lands on the driven level (the usual case), else shipped                     | not armed               | not armed             | stays where the person put it                                         | A4    |
+| `generating`, OFF, already standing on the driven level                                         | **the button still shows**; pressing it moves nothing and only re-arms following                                                                                                   | shipped (it cannot name the level the person stands on)                                     | not armed               | not armed             | stays                                                                 | A5    |
+| `stalled` (past `PLAN_STALLED_AFTER_MS`)                                                        | ON: the status; OFF: the button. **The glyph drops to `--el-text-faint`** (decorative, `aria-hidden`): armed, idle. No live step, so a press only re-arms                          | shipped (it may name the HELD card, which is not the button's trip)                         | not armed               | not armed             | nothing moves; keeps its place                                        | A6    |
+| the poll `failing` (Reconnecting)                                                               | the same idle form as `stalled`                                                                                                                                                    | shipped                                                                                     | not armed               | not armed             | nothing moves; keeps its place                                        | A7    |
+| the plan leaves `generating` (planned · approved · declined / discarded · failed · judged dead) | **GONE.** Leaving form: the shipped `canvas-fade-out` keyframe on `var(--transition-fast)` / `var(--canvas-ease-exit)`; under reduce, removed at the next paint                    | shipped non-generating behaviour                                                            | shipped meaning returns | arms again as shipped | never moves on its own again                                          | A8    |
+| the List view active                                                                            | **not shown**: it lives in the canvas bar, which the List hides. There is nothing to press in List                                                                                 | —                                                                                           | —                       | —                     | the hidden canvas keeps following, silently; the List is never driven | A9    |
+| the canvas pane narrower than `32rem` (the narrowest split is 384px)                            | **compact**: the glyph alone. The status keeps its label `sr-only`; the button is a `--height-control` square with `aria-label` and a native `title`. The label is never truncated | shipped                                                                                     | not armed               | not armed             | —                                                                     | A10   |
+| a Visitor on a public project                                                                   | the same control; following is view state and writes nothing                                                                                                                       | shipped                                                                                     | not armed               | not armed             | as for anyone                                                         | A11   |
+| `prefers-reduced-motion: reduce`                                                                | every row above, static: no leaving fade                                                                                                                                           | static                                                                                      | —                       | —                     | the move is instant                                                   | A12   |
+
+**What counts as the person navigating** (turns following OFF): a crumb, Back, a drill into a card,
+a search jump, the canvas level picker, and **the pill's own _Go there_**, because that is the person
+choosing a level. A driven move, the hand-over at the end of generation and a pane swap are not.
+
+**Why the ON state is a status and not a toggle.** A control that is always present would offer, while
+following, only a way to switch the feature off, and moving the canvas already does that. So ON is
+state, and only OFF is a button.
+
+**Why the pill is hidden rather than muted.** Muting it would need the pill's words without _· Go
+there_, which is a new string for words that belong to MOTIR-7820. Hiding changes no words, and the
+moment the person presses _Follow the planner_ they stand on that level, which clears its arrivals
+anyway (shipped `visitLevel`).
+
+## 28.4 B — a driven level move
+
+**It is the shipped follow move, unchanged:** the 180ms opacity crossfade on the LEVEL wrapper
+(`transition-opacity duration-[180ms] motion-reduce:transition-none`, set and released by
+`followFade`), the breadcrumb appending without animation, and the announcement. No new transition,
+no slide, no zoom. The canvas remounts per level (`key={level:…}`), so arriving plays no card ENTRY
+motion.
+
+**The sequence (panels B1–B3):** (1) the old level, its drafted card breathing; (2) the crossfade, while
+the new level's drafted card shows its **static** orange cue (wash, solid ring, rest scale); (3) at the
+crossfade's `transitionend`, the card's cue takes up the shipped pop, then the breath.
+
+**The move and the breath never animate the same element and never overlap.** The crossfade animates
+the level wrapper's `opacity`; the pop and breath animate the node box's `scale` and the ring's
+`box-shadow`. On a level entered by a driven move, the canvas withholds `data-cue-motion="at-work"`
+until the crossfade's `transitionend`, so the pop starts when the crossfade has ended. Under reduced
+motion there is neither, so there is nothing to gate.
+
+**Two moves one poll apart (B4), judged at real size.** One move reads as calm. A pair 2.5s apart
+(`POLL_MS`) is acceptable. A sustained run of steps that each end within one poll swaps the whole level
+every poll, and the person never finishes reading a level: that reads as restless. **This is recorded
+as flag 1 for MOTIR-8594**, and no dwell rule is invented here.
+
+## 28.5 D — copy and the live region
+
+| key                                            | `en`                          | `zh`               | where                                                        |
+| ---------------------------------------------- | ----------------------------- | ------------------ | ------------------------------------------------------------ |
+| `planningWorkspace.follow.following`           | `Following the planner`       | `正在跟随规划器`   | the ON status (and its `sr-only` label when compact)         |
+| `planningWorkspace.follow.resume`              | `Follow the planner`          | `跟随规划器`       | the OFF button (and its `aria-label` / `title` when compact) |
+| `planningWorkspace.follow.resumedAnnouncement` | `Following the planner again` | `已重新跟随规划器` | the live region, when a press moves nothing                  |
+
+**Reused, not re-keyed:** `planningWorkspace.arrival.movedAnnouncement` (_Showing work inside
+{target}_ / _正在显示 {target} 内的工作_) is the announcement for **a driven move** and for **a press
+that moves the canvas**. No string is added for the typewriter. (`规划器` is the catalogue's existing
+word for the planner, e.g. `detailsNoSteps`.)
+
+## 28.6 C — fields type in, in the proposal quick view
+
+Only in the peek opened from the overlay's canvas while the plan is `generating`. The plan page's peek
+(`PlanDetail`) never types, and no peek opens by itself.
+
+| case                                                                                   | what it shows                                                                                                                                                                                                                                     | panel |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| a field EMPTY / null / absent when the quick view opened, arriving on a later snapshot | **types in**                                                                                                                                                                                                                                      | C2–C4 |
+| which fields type                                                                      | **title, description, explanation** type. **Type, Executor, Priority, Story points, Estimate, Difficulty appear** at once: each is a short token or a pill, and a pill spelled out letter by letter reads as a glitch, not as writing             | C2    |
+| several fields arriving on one snapshot                                                | **one after another, in reading order: title → description → explanation.** The rail scalars on that snapshot appear immediately and do not wait. A field waiting its turn shows the shipped empty treatment                                      | C2–C3 |
+| a long body                                                                            | **pace** `--typewriter-char-interval` per character; **cap** `calc(var(--transition-slow) * 3)` per field. A field longer than cap ÷ pace types faster, so it always lands within the cap. Three capped fields together stay inside one `POLL_MS` | C4    |
+| the unwritten field before it arrives                                                  | the shipped empty treatment, cited and not redrawn: _No description yet._ / _No explanation yet._, `text-sm italic --el-text-secondary` (Part XIV)                                                                                                | C1    |
+| a field that already had a value at open                                               | shows at once                                                                                                                                                                                                                                     | C5    |
+| an already-shown value that changes                                                    | shows at once, never typed. A field typing or queued whose value changes is shown final at once                                                                                                                                                   | C5    |
+| the quick view closed while typing, then reopened                                      | everything at once: what types is decided per OPEN, against the fields that were empty when that open began                                                                                                                                       | C5    |
+| `prefers-reduced-motion: reduce`                                                       | the value simply appears                                                                                                                                                                                                                          | C5    |
+| assistive tech                                                                         | hears the final value once, never per character (§28.7)                                                                                                                                                                                           | C6    |
+
+**How a field types, so nothing reflows when it lands.** The typing copy is the field's own rendered
+element (the `h2`, `TranslatableMarkdown`, `MarkdownView`) cloned with its text nodes cut at the
+cursor, so a list item or a bold run appears as its text arrives inside its real block. A static 2px
+caret (`w-0.5`, `h-[1em]`, `--el-accent-on-surface`, `aria-hidden`) sits at the cursor. It does not
+blink: a blink is a loop. When the field lands, the copy and the caret are removed and the final
+element is shown. The two have the same layout, so nothing moves.
+
+**The ONE new token**, in `app/globals.css` `:root` beside `--canvas-ease-enter` / `--canvas-ease-exit`
+(product-local; the peek is product-local):
+
+| token                        | value  | why no existing token expresses it                                                                                                                                                                                                                                       |
+| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--typewriter-char-interval` | `12ms` | the motion tokens are durations for a whole transition (`--transition-fast` / `-duration` / `-slow`); a per-character interval is an order of magnitude under the smallest of them. About 83 characters a second: faster than reading, slow enough to be seen as writing |
+
+The cap reuses `--transition-slow`, so it follows a `[data-style]` that re-paces motion. No easing is
+added (a typewriter is linear in characters).
+
+## 28.7 Accessibility
+
+| element                         | disposition                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the following status            | plain text in the bar's `nav`; NOT a live region, because the bar is read on demand. Its glyph is `aria-hidden`; the faint idle glyph is decorative, which is the one use `--el-text-faint` is allowed                                                                                                                                      |
+| the _Follow the planner_ button | a native `button` named by its label (or `aria-label` when compact). On press it becomes the status, so **focus moves to the canvas** (`role="application"`, already focusable): the place the person is now looking                                                                                                                        |
+| a driven move                   | announced through the SHIPPED `canvas-follow-live` region (`role="status"`, polite), with `movedAnnouncement`, **once per LEVEL change**. A new step on the same level says nothing. No second `aria-live` region is added                                                                                                                  |
+| a press                         | `movedAnnouncement` when it moves the canvas, else `resumedAnnouncement`, through the same region                                                                                                                                                                                                                                           |
+| following turning OFF           | not announced: it is the person's own act                                                                                                                                                                                                                                                                                                   |
+| the List view                   | the hidden canvas copy is `inert` + `aria-hidden` (shipped), so its moves announce nothing                                                                                                                                                                                                                                                  |
+| a typed field                   | the typing copy is `aria-hidden`. The shipped final element is in the tree from the moment the field ARRIVES, `sr-only` while the copy types, and it is the SAME node when it lands, so a screen reader never meets a partial value and nothing is re-announced. No `aria-live` is added: the peek is a dialog the person reads, not a feed |
+| contrast                        | the status and button label are `--el-text-secondary` (≥ 6.18:1 on every surface); the glyph is `--el-accent-on-surface` (a graphic, 3:1); the caret is a graphic                                                                                                                                                                           |
+
+## 28.8 Token and shape roles
+
+| element            | colour                                                                                                                   | shape                                                                          | motion                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| trips group        | —                                                                                                                        | `gap-1.5` (layout)                                                             | —                                                                          |
+| following status   | label `--el-text-secondary`; glyph `--el-accent-on-surface` (idle: `--el-text-faint`)                                    | `--spacing-control-x/y`                                                        | leaves on `canvas-fade-out`, `--transition-fast`, `--canvas-ease-exit`     |
+| Follow the planner | `--el-card` on `--el-border`; label `--el-text-secondary`, hover `--el-text`; glyph as above; focus `--focus-ring-color` | `--radius-control`, `--spacing-control-x/y`; compact `size-(--height-control)` | the same leave                                                             |
+| the driven move    | —                                                                                                                        | —                                                                              | the shipped follow crossfade, unchanged                                    |
+| the typing caret   | `--el-accent-on-surface`                                                                                                 | `w-0.5` · `h-[1em]`                                                            | none (static)                                                              |
+| the typewriter     | —                                                                                                                        | —                                                                              | `--typewriter-char-interval`, capped at `calc(var(--transition-slow) * 3)` |
+
+No raw colour, no new easing and no new dependency in either `package.json`.
+
+## 28.9 How the asset was produced
+
+A temporary vitest harness rendered the shipped components in happy-dom with stubbed roadmap reads
+(`ACME-1 Account access` › `ACME-2 Sign-in page` / `ACME-3 Password reset`, four proposals, author steps
+on `ACME-2` and `ACME-3`), applied the delta to the captured DOM (the trips group, the follow control
+built with lucide `Navigation`, the hidden pill, the typing copies), and wrote one capture per state. A
+temporary script handed the captures to `renderMock` with the shipped canvas rules copied verbatim from
+`app/globals.css` and the delta's rules. Board-only liberties, labelled in the stylesheet: the canvas
+world is offset and scaled to 0.85, mid-motion frames are sampled statically (the crossfade at 40%, the
+leaving fade at 50%), and `.board-reduced` stands for the media query. Every panel was screenshotted in
+Chromium and looked at in light and dark. Both temporary files were deleted; the design lane
+(`vitest --config vitest.design.config.ts`) is green over the asset.
+
+## 28.10 GIVES / TAKES
+
+- **MOTIR-8592** (the driven-step derivation) — **TAKES** what it must produce: the driven step and
+  its level, ordered as the snapshot's steps, holding the first step's level until that step ends, and
+  null for a step with no level. This Part draws the outcome only.
+- **MOTIR-8593** (the canvas) — **TAKES** the move's transition unchanged; honouring each NEW follow key
+  while following is ON; reporting the person's navigation (crumb, Back, drill, search jump, level pick,
+  the pill's _Go there_) apart from its own moves; withholding `data-cue-motion` until the crossfade's
+  `transitionend` on a driven arrival; announcing per level change only; and the one-shot meaning
+  outside `generating`.
+- **MOTIR-8594** (the host) — **TAKES** Table A verbatim: following ON at open on a generating plan, the
+  trips group, the status and the button with their idle and compact forms, the trip rule (declined
+  offer not armed while generating; the pill hidden when its trip equals the follow trip), focus to the
+  canvas on press, the leaving form, the copy and live-region text of §28.5, and flag 1.
+- **MOTIR-8595** (the typewriter) — **TAKES** Table C verbatim: which fields type, the order, the pace
+  token and the cap, the clone-and-cut rendering, the caret, the per-open memory, and the AT mechanism
+  of §28.7.
+- **MOTIR-8596** (the coverage gate) — **TAKES** the surface: `ProjectRoadmapCanvas`,
+  `PlanReviewCanvas`, `PlanProposalViews`, `PlanningWorkspaceHost`, `ProposalPeek` /
+  `IssueQuickViewPanel`, the new derivation, the token in `app/globals.css`, and the three message keys.
+- **MOTIR-8597** (the E2E) — **TAKES** the `data-testid`s (`canvas-bar-trips`, `canvas-follow-state`
+  with `data-follow`, `canvas-follow-planner`, `data-typewriter="typing" | "waiting" | "final"`,
+  `canvas-follow-live`) and the click path: open a generating plan, watch a driven move, drill away,
+  press _Follow the planner_, open a proposal and watch a field type in.
+- **MOTIR-8413 / MOTIR-8414** (Motir at work) — **TAKE nothing.** The cue's colour, pop, breath and
+  leaving form are reused as they ship. The only touch is MOTIR-8593 delaying the pop on a level entered
+  by a driven move, which changes when it starts and not what it is.
+- **MOTIR-6161** (follow-once) — **TAKES · SUPERSEDED in part**, §28.2. Stays `done`.
+- **MOTIR-6300** (never-jump) — **TAKES · SUPERSEDED in part**, §28.2. Stays `done`.
+- **MOTIR-7820** (progress and cues) — its pill words are kept. This Part only decides when the pill
+  hides.
+
+## 28.11 Planning flags
+
+1. **Sustained driven moves read as restless (B4) → MOTIR-8594.** When steps end within one poll
+   several times in a row, the canvas swaps level every `POLL_MS`. A dwell or batching rule is the
+   host's to propose; none is drawn here.
+2. **The follow crossfade is a literal (`duration-[180ms]`), not a theme token.** It is reused
+   unchanged, as the card requires; it does not flip with `[data-style]`. Tokenising it would change
+   shipped motion, so it is left as found.
+3. **At the narrowest split the shipped pill crushes the crumbs** (A10, `shrink-0` on the pill), before
+   this delta adds anything. Filed as bug MOTIR-8646; this Part's compact form does not depend
+   on it.
+4. **The canvas must know the follow destination to hide the pill.** Today the slot is computed inside
+   `ProjectRoadmapCanvas`, so MOTIR-8593 / MOTIR-8594 pass the driven level in beside `followTo`.
+
+## 28.12 What Part XXVIII does NOT draw or decide
+
+- Which step is driven and how its level is computed (MOTIR-8592); how the canvas honours a key
+  (MOTIR-8593); the poll.
+- The cue's colour, pop, breath and leaving form (MOTIR-8413), and the arrivals / in-flight words
+  (MOTIR-7820).
+- The plan page (`PlanDetail`): never driven, never typing. The List view's own content. An
+  auto-opened quick view. A typewriter anywhere but the overlay's proposal quick view.
+- A dwell rule between driven moves (flag 1).

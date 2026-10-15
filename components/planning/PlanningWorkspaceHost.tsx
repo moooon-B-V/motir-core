@@ -9,7 +9,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react';
-import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
+import { useRequestWorkbenchReread } from '@/lib/workbench/workbenchReread';
 import { shallowReplace } from '@/lib/navigation/shallowUrl';
 import { OVERLAY_PARAM_NAMES } from '@/lib/planning/launcher';
 import { useTranslations } from 'next-intl';
@@ -26,6 +26,10 @@ import {
 import type { PlanApproveProgressView } from '@/components/planning/PlanApproveProgress';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
+import { FollowPlannerControl } from '@/components/planning/FollowPlannerControl';
+import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
+import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
+import { drivenFollowRequest, nextDrivenStep, type DrivenStep } from '@/lib/planning/plannerDrive';
 import { GuideWorkspaceHost } from '@/components/planning/GuideWorkspaceHost';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
 import {
@@ -100,15 +104,18 @@ import {
 // in-place diff, and the confirm-to-persist bar between them.
 //
 // PAGE STATE AFTER A MUTATION (`motir-core/CLAUDE.md`): an approve commits work
-// items, which changes two kinds of surface. The canvas is a CLIENT ISLAND that
-// seeds its level once — `router.refresh()` cannot reach it — so it gets an
-// explicit refetch trigger (`treeVersion`, folded into the canvas's diff key);
-// the server-rendered surfaces behind this overlay (counts, headers, the backlog
-// underneath) take the `router.refresh()`. Both, because both apply.
-// The refresh is the shell's COORDINATED one (bug MOTIR-6640): on the Workbench
-// the live stream nudges a refresh for the same approve, and two overlapping
-// refreshes can make Next fall back to a full document load. That load drops
-// the decided plan this overlay keeps after an approve.
+// items. The canvas is a CLIENT ISLAND that seeds its level once, so it gets an
+// explicit refetch trigger (`treeVersion`, folded into the canvas's diff key), and
+// the plan review is re-read and merged by identity (`usePlanChangeConversation`).
+// The Workbench behind this overlay — the surface whose counts move — re-reads
+// its own window when asked (`useRequestWorkbenchReread`, Story MOTIR-8539 ·
+// MOTIR-8576). NOTHING REFRESHES THE ROUTE, on the approve, the restart or the
+// session end. That retires the coordinated refresh this host used to take (bug
+// MOTIR-6640): it existed because the live stream's refresh and this one could
+// overlap and make Next fall back to a full document load, which dropped the
+// decided plan. Neither refresh exists any more, so there is nothing to overlap;
+// the Workbench's reread goes through its one in-flight read, so a stream nudge
+// and an approve's request collapse into one.
 //
 // OPENS BEFORE ITS DATA (Bug MOTIR-2069): the frame — back bar, project name,
 // the two-pane split, the whole conversation rail — waits on NOTHING. The host
@@ -289,7 +296,8 @@ function PlanWorkspaceHost({
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const tPlanReview = useTranslations('planReview');
-  const refresh = useCoordinatedRefresh();
+  const tFollow = useTranslations('planningWorkspace.follow');
+  const requestWorkbenchReread = useRequestWorkbenchReread();
 
   // ── THE SURFACE SEED (MOTIR-7050) ───────────────────────────────────────────
   // What the door that opened this workspace handed it besides its address: the
@@ -419,7 +427,7 @@ function PlanWorkspaceHost({
   const close = performClose;
 
   // Bumped on every approve: the committed tree is new data, so the canvas island
-  // must refetch its level (the server-rendered surfaces take the refresh below).
+  // must refetch its level (and the Workbench behind is asked to re-read).
   const [treeVersion, setTreeVersion] = useState(0);
   // ⚠️ *Confirm & add* CLOSES FROM HERE, not from the `await` (MOTIR-4731). This
   // callback fires on a SUCCESSFUL approve and on nothing else, so it is the one
@@ -430,12 +438,12 @@ function PlanWorkspaceHost({
   const closeAfterApproveRef = useRef(false);
   const onApproved = useCallback(() => {
     setTreeVersion((v) => v + 1);
-    refresh();
+    requestWorkbenchReread();
     if (!closeAfterApproveRef.current) return;
     closeAfterApproveRef.current = false;
     setGuardOpen(false);
     closeBypassingGuard();
-  }, [refresh, closeBypassingGuard]);
+  }, [requestWorkbenchReread, closeBypassingGuard]);
   const report = useOptionalReport();
   // PLAN SOMETHING NEW swapped the overlay onto a new session (MOTIR-7650): an
   // address that NAMED the old session now names the new one, so a reload opens
@@ -450,39 +458,24 @@ function PlanWorkspaceHost({
     return true;
   }, []);
   // …and the ended session gave its cards back, so the canvas island re-reads them
-  // at their prior status and the server-rendered surfaces take the refresh — the
-  // end effect below cannot see this end, because the session id changed with it.
+  // at their prior status and the Workbench behind is asked to re-read — the end
+  // effect below cannot see this end, because the session id changed with it.
   //
-  // ⚠️ THE REFRESH WAITS FOR THE ADDRESS (bug MOTIR-8212). Next turns a
-  // `history.replaceState` into a router navigation of its own, so a refresh
-  // dispatched in the same tick is a SECOND navigation overlapping the first —
-  // the shape `coordinatedRefresh.tsx` documents (MOTIR-6640), which the
-  // coordinator cannot see because only one of the two goes through it. Under
-  // load the pair mismatches twice and Next hard-reloads the page, and the
-  // reload aborts whatever the overlay has in flight: on the CARRY that is the
-  // carried turn's submit (two merge-queue traces show it ERR_ABORTED ~100ms
-  // after the swap, followed by a document load of the new address). So when the
-  // address was rewritten, the refresh runs once the router has COMMITTED it —
-  // `launch.sessionId` naming the new session is that signal — and not before.
-  const refreshAfterAddressRef = useRef<string | null>(null);
+  // ⚠️ THE ADDRESS IS REWRITTEN WITH NOTHING BESIDE IT (MOTIR-8576). Bug MOTIR-8212
+  // was a route refresh dispatched in the same tick as this `shallowReplace`: Next
+  // turns the `history.replaceState` into a router navigation of its own, the two
+  // overlapped, and under load Next hard-reloaded the page and aborted the carried
+  // turn's submit. The fix then was to hold the refresh until the router committed
+  // the address. The refresh is gone now, so the wait went with it: a Workbench
+  // reread is a `fetch`, not a navigation, and cannot overlap one.
   const onRestarted = useCallback(
     (sessionId: string) => {
       setTreeVersion((v) => v + 1);
-      if (replaceSessionAddress(sessionId)) {
-        refreshAfterAddressRef.current = sessionId;
-        return;
-      }
-      refresh();
+      replaceSessionAddress(sessionId);
+      requestWorkbenchReread();
     },
-    [replaceSessionAddress, refresh],
+    [replaceSessionAddress, requestWorkbenchReread],
   );
-  const addressedSessionId = launch.sessionId ?? null;
-  useEffect(() => {
-    const awaited = refreshAfterAddressRef.current;
-    if (awaited === null || addressedSessionId !== awaited) return;
-    refreshAfterAddressRef.current = null;
-    refresh();
-  }, [addressedSessionId, refresh]);
   const {
     state,
     send,
@@ -509,7 +502,7 @@ function PlanWorkspaceHost({
     sessionIsResume,
     seedGateId,
     // A debug turn that filed a bug into Triage (MOTIR-7049) bumps the inbox's
-    // refetch tick — the one surface `router.refresh()` cannot reach.
+    // refetch tick — the one surface a route refresh cannot reach.
     onTriageChanged: report?.notifySubmissionsChanged,
     onRestarted,
   });
@@ -554,8 +547,8 @@ function PlanWorkspaceHost({
     if (!before || before.id === null || before.id !== endSessionId) return;
     if (before.endedAt !== null || endedAt === null) return;
     setTreeVersion((v) => v + 1);
-    refresh();
-  }, [endSessionId, endedAt, refresh]);
+    requestWorkbenchReread();
+  }, [endSessionId, endedAt, requestWorkbenchReread]);
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
   // rail never has to know how a turn is scoped.
@@ -710,6 +703,132 @@ function PlanWorkspaceHost({
   const paneReview = liveReview ?? (showsProposed ? review : null) ?? state.discardedReview ?? null;
   const paneLive = liveReview !== null;
   const paneDiscarded = !paneLive && !showsProposed && paneReview !== null;
+
+  // ── FOLLOW THE PLANNER (Story MOTIR-8590 · Subtask MOTIR-8594; design Part XXVIII) ──
+  //
+  // While the pane is LIVE the canvas is DRIVEN by the planner: the host holds the
+  // step it follows (`nextDrivenStep`, held across polls — `null` keeps the hold,
+  // so a stalled or failing read leaves the canvas where it is), a FOLLOWING flag,
+  // and an `epoch` the *Follow the planner* button bumps so the same level is asked
+  // for again. Following starts ON the first time a plan is seen live, turns OFF on
+  // the person's own navigation (`onReaderNavigated` — never `onLevelChange`, which
+  // a driven move also fires), and the whole of it ends when the plan leaves
+  // `generating`: the control plays its leaving fade, and a plan that was watched
+  // live asks the canvas for nothing afterwards (§28.2 — the one-shot triggers keep
+  // their meaning only for a plan that was never driven).
+  //
+  // ⚠️ FLAG 1 (§28.4) is NOT answered here: a sustained run of steps that each end
+  // within one poll moves the canvas every poll. No dwell rule is invented; the
+  // design leaves that call to whoever judges it at real size.
+  //
+  // ONE progress clock for the pane: the same reading drives the progress line, the
+  // canvas cues and the driven step, so the canvas never follows a step the words
+  // have stopped naming (Part XXVI §26.4).
+  const paneReading = usePlanProgressReading(paneReview?.progress ?? null, {
+    failing: state.liveFailing,
+  });
+  const paneId = paneReview?.id ?? null;
+  const [drive, setDrive] = useState<{
+    planId: string | null;
+    /** The pane was LIVE when this plan was first seen — only then is it driven. */
+    watchedLive: boolean;
+    live: boolean;
+    on: boolean;
+    epoch: number;
+    held: DrivenStep | null;
+    /** The request the last press asked for: it alone carries the resumed words. */
+    resumeKey: string | null;
+    leaving: boolean;
+  }>(() => ({
+    planId: paneId,
+    watchedLive: paneLive,
+    live: paneLive,
+    on: paneLive,
+    epoch: 0,
+    held: null,
+    resumeKey: null,
+    leaving: false,
+  }));
+  const drivenNow = useMemo(
+    () =>
+      paneLive && paneReview && paneReading && drive.planId === paneReview.id
+        ? nextDrivenStep(drive.held, paneReading.liveSteps, paneReview.items, proposedWord)
+        : null,
+    [paneLive, paneReview, paneReading, drive.planId, drive.held, proposedWord],
+  );
+  // Derived state, folded in render (the paneTick shape above).
+  if (drive.planId !== paneId) {
+    setDrive({
+      planId: paneId,
+      watchedLive: paneLive,
+      live: paneLive,
+      on: paneLive,
+      epoch: 0,
+      held: null,
+      resumeKey: null,
+      leaving: false,
+    });
+  } else if (drive.live !== paneLive) {
+    setDrive({ ...drive, live: paneLive, leaving: drive.watchedLive && !paneLive });
+  } else if (
+    drivenNow !== null &&
+    (drivenNow.id !== drive.held?.id ||
+      drivenNow.levelId !== drive.held?.levelId ||
+      drivenNow.trail.length !== drive.held?.trail.length)
+  ) {
+    setDrive({ ...drive, held: drivenNow });
+  }
+  const drivenPane = drive.planId === paneId && drive.watchedLive;
+  const drivenRequest = useMemo(() => {
+    const request = drivenFollowRequest(drive.held, drive.epoch);
+    if (request && request.key === drive.resumeKey) {
+      return { ...request, announce: tFollow('resumedAnnouncement'), focus: true };
+    }
+    return request;
+  }, [drive.held, drive.epoch, drive.resumeKey, tFollow]);
+  // What the pane's canvas is asked for: the driven step while live and following
+  // — until a step names a level, the shipped arrival (§23.8, one key, so granted
+  // once); NOTHING once a plan watched live has left `generating`; else the one-shot.
+  const paneFollowTo: ProjectRoadmapCanvasProps['followTo'] = drivenPane
+    ? paneLive && drive.on
+      ? (drivenRequest ?? followTo)
+      : null
+    : followTo;
+  const paneRef = useRef<HTMLDivElement>(null);
+  const followReaderNavigated = useCallback(() => {
+    setDrive((d) => (d.on ? { ...d, on: false } : d));
+  }, []);
+  const followPlanner = useCallback(() => {
+    setDrive((d) => {
+      const epoch = d.epoch + 1;
+      return {
+        ...d,
+        on: true,
+        epoch,
+        resumeKey: drivenFollowRequest(d.held, epoch)?.key ?? null,
+      };
+    });
+    // §28.7: the press hands focus to the canvas, which is where the result is.
+    // With a driven step the canvas does it (`focus` on the request below), once
+    // the level is drawn; with none nothing moves, so the canvas in view takes it.
+    if (!drive.held) {
+      paneRef.current?.querySelector<HTMLElement>('[role="application"]')?.focus();
+    }
+  }, [drive.held]);
+  const followLeft = useCallback(() => {
+    setDrive((d) => (d.leaving ? { ...d, leaving: false } : d));
+  }, []);
+  const followIdle = paneReading?.state === 'stalled' || state.liveFailing;
+  const followControl =
+    drivenPane && (paneLive || drive.leaving) ? (
+      <FollowPlannerControl
+        following={drive.on}
+        idle={followIdle}
+        leaving={!paneLive}
+        onLeft={followLeft}
+        onFollow={followPlanner}
+      />
+    ) : undefined;
   // ⚠️ A NAMED session is opened to show its plan (bug MOTIR-6289) — a To-approve row
   // or a Plans row writes `planSession`. Until the conversation has read whether a plan
   // is pending, the pane is its skeleton, NOT the roadmap: drawing `PlanChangeCanvas`
@@ -958,7 +1077,10 @@ function PlanWorkspaceHost({
               draw, and its skeleton and empty statement fill the same box as a drawn
               level. */}
           <div
-            className="relative min-h-0 flex-1 overflow-hidden"
+            ref={paneRef}
+            // The pane's width is what the follow control reads to go compact
+            // (§28.3 A10: below 32rem the glyph alone).
+            className="@container/plan-pane relative min-h-0 flex-1 overflow-hidden"
             style={{ '--canvas-foot-inset': PLAN_CONFIRM_BAR_HEIGHT } as CSSProperties}
           >
             {paneReview !== null ? (
@@ -992,7 +1114,16 @@ function PlanWorkspaceHost({
                     ? initialCanvasTrail
                     : null)
                 }
-                followTo={followTo}
+                followTo={paneFollowTo}
+                // While live the canvas is driven (MOTIR-8594): every new key is
+                // honoured, and the person's own navigation turns following off.
+                followMode={drivenPane && paneLive ? 'whileOn' : undefined}
+                onReaderNavigated={drivenPane && paneLive ? followReaderNavigated : undefined}
+                followControl={followControl}
+                followLevelId={
+                  drivenPane && paneLive && drive.held ? drive.held.levelId : undefined
+                }
+                progressReading={paneReading}
                 readerHasNavigated={readerHasNavigated}
                 onCanvasLevelChange={noteReaderLevel}
                 live={paneLive}

@@ -7,10 +7,7 @@ import type { ReactNode } from 'react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { HOME_FINISHED_WINDOW_DAYS, HOME_PAGE_SIZE, homeService } from '@/lib/services/homeService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { workflowsService } from '@/lib/services/workflowsService';
-import type { HomeActorContext } from '@/lib/services/homeService';
-import type { HomePageDto } from '@/lib/dto/home';
+import { workbenchWindowService } from '@/lib/services/workbenchWindowService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
@@ -18,13 +15,12 @@ import { parseWorkbenchTab, workbenchTabHref } from '@/lib/workbench/tab';
 import { resolveWorkbenchLanding, workbenchLandingHref } from '@/lib/workbench/landing';
 import { parsePage } from '@/lib/issues/issueListView';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
-import { WorkbenchTabs } from './_components/WorkbenchTabs';
-import { WorkbenchReconnecting } from './_components/WorkbenchLive';
-import { WorkbenchList } from './_components/WorkbenchList';
+import { WorkbenchLiveView } from './_components/WorkbenchLiveView';
 import { ApprovalsTab } from './_components/ApprovalsTab';
 import { PlanningTab } from './_components/PlanningTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 
 // `/workbench` — the signed-in landing surface (Story MOTIR-2649 · MOTIR-2653,
 // renamed and split by lifecycle in Story MOTIR-4777 · MOTIR-4782), per
@@ -73,49 +69,6 @@ const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
   approvals: 'tabs.toApprove',
   planning: 'tabs.planning',
 };
-
-/**
- * The ONE read this render needs, chosen by tab.
- *
- * Four tabs each have their own service method — the partition is the READ's
- * (MOTIR-4781), not a filter applied to a shared list here.
- *
- * ⚠️ THE FIFTH IS NOT HERE, and its absence is the point (MOTIR-4794). To
- * approve reads `approvalGatesService.listAwaitingMe`, whose rows are GATES
- * rather than work items — a different DTO, a different list — and it does that
- * read inside `<ApprovalsTab>` rather than in this function, so the page can
- * mount a `<Suspense>` between its gate and that content. Window 2 of
- * `design/shell/design-notes.md`'s navigation-pending grammar: *"an in-page
- * `<Suspense>` placed AFTER the page's gate"*. Calling it here would put the
- * await back in the page's own `Promise.all`, where nothing can suspend around
- * it.
- */
-function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promise<HomePageDto> {
-  switch (tab) {
-    case 'todo':
-      return homeService.listToDo(ctx, { page });
-    case 'in-progress':
-      return homeService.listInProgress(ctx, { page });
-    case 'to-fix':
-      return homeService.listToFix(ctx, { page });
-    case 'to-resume':
-      return homeService.listToResume(ctx, { page });
-    case 'finished':
-      return homeService.listRecentlyFinished(ctx, { page });
-    case 'watching':
-      return homeService.listWatching(ctx, { page });
-    case 'approvals':
-      // Read by `<ApprovalsTab>` instead — see the note above. This arm is
-      // unreachable: the render branches on the tab before calling this.
-      return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
-    case 'planning':
-      // Read by `<PlanningTab>`, for the same reason and in the same shape
-      // (MOTIR-7831): its rows are PLANS, not work items — a different DTO and a
-      // different list — and it awaits inside its own component so a `<Suspense>`
-      // can sit between the page's gate and it. Unreachable, like the arm above.
-      return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
-  }
-}
 
 /**
  * An empty tab's drawn state — glyph, copy, and an action only where one helps.
@@ -247,11 +200,21 @@ function ListPending() {
   );
 }
 
-export default async function WorkbenchPage({
-  searchParams,
-}: {
+type WorkbenchPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+};
+
+/**
+ * Every transaction the page's own reads open is recorded as `workbench`
+ * (MOTIR-8553). The tabs that read inside their own `<Suspense>` render after
+ * this function returns, outside its async context, so `<ApprovalsTab>` and
+ * `<PlanningTab>` set the same label themselves.
+ */
+export default async function WorkbenchPage(props: WorkbenchPageProps) {
+  return withRequestLabel({ route: 'workbench' }, () => renderWorkbenchPage(props));
+}
+
+async function renderWorkbenchPage({ searchParams }: WorkbenchPageProps) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -313,22 +276,18 @@ export default async function WorkbenchPage({
   // does for Approvals.
   const isPlanning = tab === 'planning';
 
-  const [window, counts, members, workflow] = await Promise.all([
-    // The Approvals tab's rows are read inside `<ApprovalsTab>` so a boundary
-    // can sit around them; this window stays empty for it and is not rendered.
-    isApprovals || isPlanning
-      ? Promise.resolve<HomePageDto>({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE })
-      : readTab(tab, ctx, page),
-    homeService.tabCounts(ctx),
-    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
-    // ONE workflow, for the one project the page reads. This surface used to
-    // resolve a workflow PER PROJECT ON THE PAGE, because two projects can spell
-    // the same lifecycle differently — rent it was paying on a boundary it
-    // should not have crossed. Narrowing to the active project retires it.
-    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
-  ]);
+  // ⚠️ ONE PAIRING (Story MOTIR-8539 · MOTIR-8573): a work-item tab's window and
+  // the strip's counts come from `workbenchWindowService.read`, the same call
+  // `GET /api/workbench/window` answers from, so the first paint and a client
+  // re-read cannot be paired differently. To approve and Planning read their
+  // first paint inside their own `<Suspense>` below (MOTIR-4794), so here they
+  // need the counts alone; after it, their rows ride the same client re-read as
+  // the strip (MOTIR-8581).
+  const { counts, window } = await workbenchWindowService.readFirstPaint(ctx, { tab, page });
 
-  const rows = toWorkbenchRowViews(window.items, workflow, members, tab === 'watching');
+  const rows = window
+    ? toWorkbenchRowViews(window.page.items, window.workflow, window.members, tab === 'watching')
+    : [];
 
   return (
     <div data-testid={WORKBENCH_TESTID} className="flex flex-col gap-6">
@@ -341,49 +300,45 @@ export default async function WorkbenchPage({
         </div>
       </header>
 
-      {/* ⚠️ THE HOST IS IN THE SHELL, NOT HERE (Story MOTIR-5238 · MOTIR-5242,
-          MOVED by MOTIR-5245's E2E finding). `app/(authed)/layout.tsx` mounts
-          `<WorkbenchLive>` above both this page and the approval overlay, because
-          the overlay is mounted once at layout level and a provider here could
-          not reach it — see that component's own header. Everything below reads
-          the signal through the context; nothing here opens a connection, and a
-          nudge is still the `router.refresh()` that re-reads the window and the
-          counts through the SAME `Promise.all` above, so they land in one page
-          state (§ 21's rule, and § 26's amendment to it). */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <WorkbenchTabs active={tab} counts={counts} />
-          {/* Beside the strip at `≥ md`, and BELOW it at `< md` — the strip
-                already scrolls at that width, and a chip inside a scrolling
-                track is a chip that can be scrolled out of sight (§ 26). */}
-          <WorkbenchReconnecting />
-        </div>
+      {/* ⚠️ THE STRIP AND THE LIST ARE LIVE FROM CLIENT STATE (Story MOTIR-8539 ·
+          MOTIR-8574). `<WorkbenchLiveView>` is seeded with this render's window
+          and counts and, on a nudge, re-reads both from `GET
+          /api/workbench/window` — the same `workbenchWindowService.read` above —
+          and sets them in one update, so they never disagree (§ 21, § 26) and
+          nothing refreshes the route. The host that holds the stream is in the
+          shell (`app/(authed)/layout.tsx`, MOTIR-5242 / MOTIR-5245).
 
-        {/* The window caption — a bounded list that does not say what bounds it
-            reads as a list that is missing things, and the second sentence is
-            there because the first raises the question it answers. It sits above
-            the EMPTY state too: "nothing finished this week" is the same claim
-            about the same window. */}
-        {tab === 'finished' ? (
-          <p className="text-xs text-(--el-text-secondary)">
-            {t('finishedWindow', { days: HOME_FINISHED_WINDOW_DAYS })}
-          </p>
-        ) : null}
-
-        {/* ⚠️ AN EMPTY TAB RENDERS ITS EMPTY STATE AND NOTHING ELSE — no list
-            box, and NO PAGER (`design/workbench/` Panel 10). "A pager on every
-            tab", read literally, would put `Showing 0–0 of 0` under an empty
-            state: a second, quieter way of saying what the empty state has just
-            said in a sentence.
-
-            ⚠️ THE BRANCH MOVED INSIDE THE LIST (Story MOTIR-5238 · MOTIR-5245)
-            and the rule is unchanged: an empty tab still draws this and only
-            this, and the pager still lives below the list's own early return.
-            What changed is WHO decides — the list is mounted the whole time and
-            draws the empty state as one of its states, because a component that
-            did not exist until the first row landed could not know that the row
-            had ARRIVED, and the arrival into an empty tab is the one a reader is
-            most certainly watching. The E2E found it; § 26 Panel 1 draws it. */}
+          ⚠️ AN EMPTY TAB RENDERS ITS EMPTY STATE AND NOTHING ELSE — no list box
+          and NO PAGER (`design/workbench/` Panel 10). The list draws it as one
+          of its states, because a component that did not exist until the first
+          row landed could not know the row had ARRIVED (MOTIR-5245, § 26
+          Panel 1). */}
+      <WorkbenchLiveView
+        tab={tab}
+        page={page}
+        rows={rows}
+        pagination={{
+          total: window?.page.total ?? 0,
+          page: window?.page.page ?? 1,
+          pageSize: window?.page.pageSize ?? HOME_PAGE_SIZE,
+        }}
+        planningSessions={tab === 'to-resume' ? (window?.page.planningSessions ?? []) : []}
+        counts={counts}
+        label={t(TAB_LABEL_KEY[tab])}
+        caption={
+          /* The window caption — a bounded list that does not say what bounds it
+             reads as a list that is missing things. It sits above the EMPTY state
+             too: "nothing finished this week" is the same claim about the same
+             window. */
+          tab === 'finished' ? (
+            <p className="text-xs text-(--el-text-secondary)">
+              {t('finishedWindow', { days: HOME_FINISHED_WINDOW_DAYS })}
+            </p>
+          ) : null
+        }
+        empty={<EmptyTab tab={tab} />}
+        viewerId={ctx.userId}
+      >
         {isApprovals ? (
           /* ⚠️ WINDOW 2, and it is INSIDE the page rather than a `loading.tsx`.
              `design/shell/design-notes.md`'s navigation-pending grammar is
@@ -404,18 +359,8 @@ export default async function WorkbenchPage({
           <Suspense fallback={<ListPending />}>
             <PlanningTab ctx={ctx} projectName={ctx.project.name} />
           </Suspense>
-        ) : (
-          <WorkbenchList
-            rows={rows}
-            label={t(TAB_LABEL_KEY[tab])}
-            tab={tab}
-            pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
-            empty={<EmptyTab tab={tab} />}
-            viewerId={ctx.userId}
-            planningSessions={tab === 'to-resume' ? (window.planningSessions ?? []) : []}
-          />
-        )}
-      </div>
+        ) : null}
+      </WorkbenchLiveView>
 
       {/* The quick-view peek — the SAME `?peek=` island /items, /ready and the
           board mount. Opening a row here is not a different interaction, so it

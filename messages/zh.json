@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} 积分未归属到任何运行",
       "searchUnavailable": "暂时无法获取搜索数据。你的搜索仍在正常计费——这是显示问题，不是计费问题。",
       "searchUnavailableValue": "暂无数据",
+      "translationThisMonth": "本月翻译花费",
+      "translationAllTime": "累计 {n} 积分",
+      "translationNone": "尚未产生翻译花费",
+      "translationUnavailable": "暂时无法获取翻译数据。受影响的只是显示，计费不受影响。",
+      "translationUnavailableValue": "暂无数据",
       "scopeFollows": "随当前范围变化",
       "scopeOrg": "整个组织",
       "internalBilling": "内部计费"
@@ -6375,20 +6380,19 @@
       "chooseSub": "按组织的每月额度池，与席位分开计费。任何组织都可购买 —— 无需付费的 Motir 席位套餐。Pro 是推荐的锚定套餐。",
       "current": "当前",
       "recommended": "推荐",
-      "trialUsed": "试用已用",
       "creditsAllotment": "{n} 额度 / 月",
       "creditsAllotmentOneTime": "{n} 额度 · 一次性",
+      "ladder": {
+        "first": "每个套餐的额度单价相同",
+        "multiple": "{plan} 的 {multiple} 倍额度 · 额度单价相同"
+      },
       "perMoEquiv": "${n} / 月",
       "annualSub": "按年计费 · ${yr} / 年",
       "annualSave": "每年省 ${n}",
       "monthlySub": "${yr} / 年 · 改按年再省 ${n}",
-      "freePrice": "免费",
-      "customPrice": "定制",
-      "once": "一次性",
       "ctaChoose": "选择 {plan}",
       "ctaUpgrade": "升级到 {plan}",
       "ctaCurrent": "当前套餐",
-      "ctaTrialUsed": "试用已用",
       "upgrade": {
         "cta": "升级到 {plan}",
         "disabledReason": "仅所有者和管理员可更改套餐",
@@ -6452,40 +6456,34 @@
       },
       "footer": "当前显示按年计费（Stripe 默认）—— 可在上方切换到按月对比。结账时自动计税。额度是内部用量配额；所示价格为 AI 套餐费用，由 Stripe 向 {org} 组织收取。你的 Motir 席位单独计费 —— 请在 Motir 套餐页面管理。",
       "seatIncluded": "+ {count, plural, other {# 个 Motir 席位}} · 工作项不受上限",
-      "seatNone": "无 Motir 席位 · 250 个工作项上限",
-      "seatCustom": "包含 Motir 席位（定制）",
-      "customPool": "定制额度池",
       "everythingIn": "包含 {prev} 的全部，另加",
       "tiers": {
-        "free": {
-          "useCase": "试用 Motir AI。",
-          "features": ["每种智能体各体验一次"],
-          "featuresOff": ["不按月刷新 · 无加购"]
-        },
         "standard": {
-          "useCase": "详细规划，外加少量智能体额度。",
-          "features": ["详细规划整个项目", "额度按月刷新 · 可加购", "可尝试智能体任务"]
+          "useCase": "用 Motir AI 规划器规划你的项目。",
+          "features": ["详细规划整个项目", "额度每月刷新 · 随时加购"]
         },
         "pro": {
-          "useCase": "详细规划，外加真正的智能体工作。",
+          "useCase": "Standard 的全部，外加更强的规划模型。",
           "prev": "Standard",
-          "features": ["用智能体处理真实任务", "需要时随时加购"]
+          "features": ["启用更强的规划模型", "按工作类型切换规划模型"]
         },
         "max": {
-          "useCase": "详细规划，外加大量智能体工作。",
+          "useCase": "Pro 的全部，外加把规划好的工作交给智能体的余量。",
           "prev": "Pro",
-          "features": ["充足的持续智能体工作余量", "满足繁忙团队的吞吐"]
+          "features": ["留有余量，自动把规划好的工作派给智能体"]
         },
         "max_x2": {
-          "useCase": "详细规划，外加两倍于 Max 的智能体工作。",
+          "useCase": "Max 的两倍用量。",
           "prev": "Max",
-          "features": ["两倍于 Max 的每月额度池", "可同时运行多个智能体的余量"]
-        },
-        "enterprise": {
-          "useCase": "定制用量，外加组织管控。",
-          "prev": "Max",
-          "features": ["开票计费与 SSO", "专属支持"]
+          "features": ["两倍于 Max 的每月额度池"]
         }
+      },
+      "trial": {
+        "pill": "免费试用",
+        "pillUsed": "免费试用已用完",
+        "left": "剩余 {left} / {n} 试用额度 · 一次性。",
+        "spent": "{n} 试用额度已全部用完。",
+        "pickPlan": "请选择按月的 Motir AI 套餐以继续规划。"
       }
     },
     "topup": {
@@ -6564,120 +6562,6 @@
     "internalBilling": {
       "badge": "内部计费",
       "note": "该组织与客户完全一样计费，随后被补偿——下方每个数字都是真实的，余额净额为零。"
-    },
-    "contactSales": {
-      "contact": "联系销售",
-      "sentChip": "已发送请求 · {date}",
-      "memberReason": "只有 {org} 的所有者和管理员可以联系销售。",
-      "title": "联系销售 —— Enterprise",
-      "subtitle": "告诉我们你希望 Motir 运行什么。平台团队会阅读每一条请求，并直接回复你。",
-      "facts": {
-        "heading": "随请求一并发送",
-        "organization": "组织",
-        "requestedBy": "发起人",
-        "currentPlan": "当前套餐",
-        "repositories": "已连接的仓库"
-      },
-      "optionalNote": "除备注外，以下各项均为选填。",
-      "fields": {
-        "cardsPerDay": "每天大约多少个工作项",
-        "cardsPerDayPlaceholder": "例如 40",
-        "parallelAgents": "并行智能体数量",
-        "parallelAgentsPlaceholder": "例如 8",
-        "agentPath": "使用哪些智能体",
-        "autonomy": "希望如何运行？",
-        "startWhen": "打算何时开始？",
-        "teamSize": "团队规模",
-        "choose": "请选择…",
-        "contact": "最佳联系方式",
-        "contactHelp": "你的账户邮箱。如需由他人接收回复，可修改。",
-        "note": "备注",
-        "required": "必填",
-        "notePlaceholder": "你希望 Motir 为团队做什么？关于仓库、安全或时间安排，有什么需要我们了解的。"
-      },
-      "agentPath": {
-        "hosted": {
-          "label": "Motir 托管的智能体",
-          "hint": "运行在 Motir 的模型上。"
-        },
-        "own": {
-          "label": "我们自己的智能体",
-          "hint": "Claude Code、Codex 或其他智能体，使用我们自己的凭据，运行在 Motir 云中。"
-        },
-        "both": {
-          "label": "两者都用",
-          "hint": "各用一部分。"
-        }
-      },
-      "autonomy": {
-        "autonomous_lead": {
-          "label": "全天候自主运行",
-          "hint": "自主负责人：Motir 负责规划、运行与修复，团队在审批关口做决定。"
-        },
-        "volume_only": {
-          "label": "由我们发起的大量运行",
-          "hint": "每次运行由团队发起。"
-        },
-        "unsure": {
-          "label": "还不确定",
-          "hint": ""
-        }
-      },
-      "startWhen": {
-        "now": "现在",
-        "within_month": "一个月内",
-        "within_quarter": "一个季度内",
-        "exploring": "只是了解一下"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "cancel": "取消",
-      "send": "发送请求",
-      "sending": "正在发送…",
-      "close": "关闭",
-      "done": "完成",
-      "errors": {
-        "note": "请填写备注——告诉我们你希望 Motir 为团队做什么。",
-        "number": "请输入不小于 1 的整数。"
-      },
-      "refused": {
-        "open": {
-          "title": "你的组织已有一条未关闭的请求。",
-          "body": "它于 {date} 从另一个标签页或由另一位管理员发送。本次没有发送新的请求。",
-          "bodyNoDate": "它由另一个标签页或另一位管理员发送。本次没有发送新的请求。",
-          "action": "查看该请求"
-        },
-        "forbidden": {
-          "title": "你无法为 {org} 联系销售。",
-          "body": "只有所有者和管理员可以。自本页加载后你的角色可能已变更——请联系组织管理员。"
-        },
-        "network": {
-          "title": "无法连接 Motir。",
-          "body": "没有发送任何内容。请检查网络后重新发送——你填写的内容已保留。"
-        }
-      },
-      "sent": {
-        "title": "请求已发送",
-        "body": "平台团队会回复至 <b>{contact}</b>。在请求关闭前，Enterprise 卡片会显示该请求，而不是“联系销售”。"
-      },
-      "request": {
-        "title": "你的 Enterprise 请求",
-        "subtitle": "{name} 于 {date} 发送。",
-        "subtitleNoName": "于 {date} 发送。",
-        "state": "状态",
-        "asked": "你告诉我们的",
-        "unset": "未填写",
-        "reply": "平台团队会回复至 <b>{contact}</b>。如需补充，请直接回复他们的邮件。",
-        "status": {
-          "received": "已收到",
-          "in_conversation": "沟通中",
-          "offer_sent": "已发报价"
-        }
-      }
     }
   },
   "draftWithAi": {
@@ -7129,6 +7013,7 @@
       "repos_updated": "仓库访问权限已更新。Motir会读取你在GitHub上选择的仓库，无需再做任何操作。",
       "install_unbound": "已在GitHub上安装Motir GitHub App，但安装并非从此工作区发起，因此尚未与它关联。请从这里重新发起安装以完成关联。",
       "install_expired": "安装链接在你停留GitHub期间已过期。并未出错——请从设置中重新开始。",
+      "install_requested": "你安装 Motir GitHub App 的请求正在等待该 GitHub 账号的所有者批准。并未出错——所有者批准后，Motir 会自动接上。",
       "install_forbidden": "你不是发起此次安装的工作区的成员，因此未连接任何内容。",
       "install_provider_error": "Motir无法连接GitHub以完成App的关联，请重试。",
       "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。",
@@ -8192,6 +8077,24 @@
       "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
       "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
       "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "追问我",
+        "helpName": "什么是追问我？",
+        "popover": {
+          "title": "追问我",
+          "body1": "开始规划前，Motir AI 会一次只问一件事，问清楚你想要的东西：它应该怎样运作、做同一件事的其他方式，以及出错时会发生什么。",
+          "body2": "每一问都有几个可选答案，其中一个是推荐答案。可以跳过任意一问、让规划者决定，或随时停止。",
+          "body3": "你确定下来的内容会写入计划的需求，规划从这里开始。"
+        },
+        "hint": "你的下一条消息会开始追问。"
+      }
+    },
+    "follow": {
+      "following": "正在跟随规划者",
+      "resume": "跟随规划者",
+      "resumedAnnouncement": "已重新跟随规划者"
     }
   },
   "codeHealth": {
@@ -8613,8 +8516,8 @@
       "body": "Motir 会读取你在 GitHub 上连接的仓库，为整个项目建立一张代码地图。",
       "gitlabNote": "GitLab 连接即将推出。",
       "checking": "正在检查已连接的仓库……",
-      "missingTitle": "还没有连接任何仓库",
-      "missingHint": "在新标签页中连接 GitHub。Motir 会自己发现连接，这里不需要你确认。",
+      "missingTitle": "你去连接 GitHub，然后直接回到这里",
+      "missingHint": "GitHub 会在新标签页中打开，大约需要一分钟。下面是你在那里要做的事；你回来时，这一步仍在等你。",
       "connectCta": "连接 GitHub",
       "newTab": "（在新标签页中打开）",
       "waitingTitle": "正在等待 GitHub",
@@ -8624,7 +8527,55 @@
       "detectedHint": "这些是 Motir 可以读取的仓库。继续后开始索引。",
       "listLabel": "已连接的仓库",
       "continue": "继续",
-      "manage": "在 GitHub 上管理仓库"
+      "manage": "在 GitHub 上管理仓库",
+      "preflightAccount": "选择要安装 Motir GitHub App 的 GitHub 账号：你自己的账号，或你所属的某个 GitHub 组织。",
+      "preflightRepositories": "选择全部仓库，或只选择你指定的仓库。之后你可以在 GitHub 上更改。",
+      "preflightAccess": "批准该 App 申请的访问权限：它可以读取和修改代码与拉取请求，并读取检查、部署、议题、合并队列、元数据和安全事件。",
+      "preflightReturn": "GitHub 会把你直接带回这一步，并显示你连接的仓库。",
+      "preflightCta": "连接 GitHub",
+      "ownerPendingTitle": "正在等待所有者批准",
+      "ownerPendingHint": "你选择的 GitHub 账号需要由它的所有者批准 Motir GitHub App。你的请求已发给他们，没有出错，也没有丢失任何内容。他们一批准，引导流程就会接着进行。",
+      "alreadyConnectedTitle": "此组织已经连接",
+      "alreadyConnectedHint": "Motir 已经可以读取这些仓库，因此无需安装。",
+      "alreadyConnectedAddMore": "在 GitHub 上添加仓库",
+      "noReposTitle": "GitHub 已连接，但还没有连接任何仓库",
+      "noReposHint": "安装已完成，但此组织还没有 Motir 可以使用的仓库。可能是没有选择任何仓库，也可能是所选仓库无法在这里连接，例如它们已经属于另一个组织。",
+      "cancelledTitle": "安装没有完成",
+      "cancelledHint": "你在 GitHub 上完成之前就回来了。并未出错：没有连接任何内容，也没有丢失任何内容。准备好后随时重试。",
+      "tryAgainCta": "重试",
+      "changeReposCta": "在 GitHub 上选择仓库",
+      "starting": "正在打开 GitHub……",
+      "ownerPendingOpenCta": "打开 GitHub",
+      "readFailedTitle": "Motir 暂时无法检查连接",
+      "readFailedHint": "你在 GitHub 上做的一切都不会丢失。回到这个标签页时，此步骤会再次检查，你也可以现在检查。",
+      "recheckCta": "再次检查",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "已连接",
+        "alreadyConnected": "已经连接",
+        "chooseRepos": "选择仓库",
+        "ownerPending": "等待所有者",
+        "expired": "链接已过期",
+        "notConnected": "未连接"
+      },
+      "outcome": {
+        "install_expiredTitle": "你停留在 GitHub 期间，链接已过期",
+        "install_expiredHint": "并未出错，也没有连接任何内容。请从这一步重试。",
+        "install_forbiddenTitle": "你无法连接此工作区",
+        "install_forbiddenHint": "此次安装是从你不是其成员的工作区发起的，因此没有连接任何内容。该工作区的管理员可以连接 GitHub。",
+        "install_provider_errorTitle": "Motir 未能完成与 GitHub 的连接",
+        "install_provider_errorHint": "没有连接任何内容。请稍后重试。",
+        "install_errorTitle": "Motir 无法确认此次安装",
+        "install_errorHint": "无法验证从 GitHub 返回的链接，因此没有连接任何内容。请从这一步重试。",
+        "select_reposTitle": "为此组织选择仓库",
+        "select_reposHint": "另一个组织已经在使用这个 GitHub 账号，所以请选择此组织可以使用其中哪些仓库。",
+        "repo_unavailableTitle": "某个仓库已在别处连接",
+        "repo_unavailableHint": "所选仓库中有一个已属于另一个组织，因此未在此添加。请在 GitHub 上选择其他仓库。",
+        "installation_not_accessibleTitle": "Motir 无法为你关联该 GitHub 账号",
+        "installation_not_accessibleHint": "你的 GitHub 用户看不到此安装，因此没有关联任何内容。该 GitHub 账号的所有者可以为你开通访问权限。",
+        "not_configuredTitle": "此部署尚未设置 GitHub",
+        "not_configuredHint": "此 Motir 部署还没有 GitHub App，所以无法在这里连接 GitHub。运行此部署的人可以完成设置。"
+      }
     },
     "index": {
       "eyebrow": "第 2 步，共 2 步 · 设置",
@@ -9193,7 +9144,8 @@
         "couldNot": "没有启动任何机器，也没有产生任何费用。{repair}",
         "changes_requested": "不会继续。{key} 需先修改；新版本会再次请求审批，此运行继续等待。",
         "declined": "不会继续。该审批原本放行的工作需要重新规划——重新规划 {key}，或将 {head} 设为待办以重新开始。",
-        "overturned": "不会继续。该批准已不再有效，此运行将等待对 {key} 的新决定。"
+        "overturned": "不会继续。该批准已不再有效，此运行将等待对 {key} 的新决定。",
+        "reshaped": "继续时将带上调整后的故事。"
       },
       "back": {
         "changes_requested": "{kind}被退回 · <b>{name}</b> 要求修改 ——“{note}”",
@@ -9226,7 +9178,26 @@
         "repository_not_writable": "在项目设置中重新连接代码仓库后按“继续”。",
         "card_not_ready": "解除 {key} 的阻塞或将其移回进行中后按“继续”。"
       },
-      "copyAria": "复制 {key} 的继续命令"
+      "copyAria": "复制 {key} 的继续命令",
+      "member": {
+        "added": "运行停止后新增",
+        "rescoped": "范围已变更"
+      },
+      "fold": {
+        "added": "运行停止后新增 {count} 项"
+      },
+      "reshaped": {
+        "one": "计划 <plan>{title}</plan><aside>（<when></when>批准）</aside>在运行停止后调整了此故事：<b>{counts}</b>",
+        "many": "运行停止后，<b>{count, plural, other {# 个计划}}</b>调整了此故事",
+        "planLine": "计划 <plan>{title}</plan><aside>（<when></when>批准）</aside>：{counts}",
+        "showPlans": "显示计划",
+        "hidePlans": "收起计划",
+        "added": "新增 {n} 项",
+        "changed": "变更 {n} 项",
+        "removed": "移除 {n} 项",
+        "separator": "，",
+        "label": "运行停止后调整了 {key} 的计划"
+      }
     },
     "planning": {
       "scope": "你在 <project>{name}</project> 中发起、仍在编写的计划。其他人发起的计划请见<link>计划页</link>。",
@@ -9277,6 +9248,7 @@
         "model_unavailable": "AI 服务暂不可用",
         "token_expired": "与 AI 服务的连接已过期",
         "prompt_too_large": "计划的上下文对该模型来说过大",
+        "job_failed": "规划任务执行失败",
         "internal": "我们这边出了故障"
       },
       "refusal": {
@@ -14242,5 +14214,88 @@
       "unavailable": "不可用的工作项",
       "unavailableTitle": "该工作项已删除，或你无权查看。"
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "提问 · 第 {n} 问",
+      "recommended": "推荐",
+      "recommendedName": "{label}（推荐）",
+      "somethingElse": "其他答案…",
+      "skip": "跳过",
+      "youDecide": "你来决定",
+      "stop": "停止追问",
+      "ownWordsPlaceholder": "用自己的话回答…",
+      "composerPlaceholder": "或者输入你自己的答案…",
+      "because": "因为你选择了“{answer}”…",
+      "yourThread": "你的话题",
+      "youSaid": "你说过：“{words}”"
+    },
+    "markers": {
+      "opening": "追问我已开启：规划前一次只问一件事。选择一个答案、跳过，或随时停止。",
+      "skipped": "已跳过：规划者会自行假设这一点。",
+      "completed": "我需要问的都问完了。",
+      "nothingToAsk": "没有需要问的：这已经足够清楚，可以规划了。我现在开始写计划。",
+      "stopped": "你停止了追问。",
+      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。"
+    },
+    "summary": {
+      "title": "你确定的内容",
+      "counts": "{answers, plural, other {# 个回答}} · {assumptions, plural, other {# 个规划者假设}}",
+      "groups": {
+        "behaviour": "行为",
+        "scopeEdge": "范围边界",
+        "constraints": "约束",
+        "acceptance": "验收",
+        "assumptions": "假设"
+      },
+      "youAnswered": "你的回答",
+      "plannersAssumption": "规划者的假设",
+      "writing": "正在把你的回答写入计划的需求和 <item></item>…",
+      "writingPlanOnly": "正在把你的回答写入计划的需求…",
+      "written": "已写入计划的需求和 <item></item>。",
+      "writtenPlanOnly": "已写入计划的需求。",
+      "failed": "你的回答没有写入。它们仍保留在这里。",
+      "copy": "复制回答"
+    },
+    "error": "这一问没有送达。你目前的回答都已保留，请重试。",
+    "retry": "重试"
+  },
+  "itemTranslation": {
+    "groupLabel": "翻译",
+    "translate": "翻译",
+    "translating": "正在翻译…",
+    "showOriginal": "显示原文",
+    "showTranslation": "显示译文",
+    "retry": "重试",
+    "hintInto": "译为{language}",
+    "hintTranslated": "已译为{language}",
+    "hintShowingOriginal": "正在显示原文",
+    "hintPartial": "已译为{language} · {n, plural, other {# 个字段无法翻译}}",
+    "failedItem": "无法翻译此工作项。未产生任何费用。",
+    "noCredits": "翻译需要 AI 额度。未产生任何费用。",
+    "noCreditsMember": "组织所有者或管理员可以补充额度。",
+    "addCredits": "补充额度",
+    "markTranslatedFrom": "译自{language}",
+    "markTranslated": "已翻译",
+    "markTranslating": "正在翻译…",
+    "markEdited": "已编辑 · 正在翻译…",
+    "markFailed": "未翻译。未产生任何费用。",
+    "markPrefix": "{field}：",
+    "fieldTitle": "标题",
+    "fieldDescription": "描述",
+    "fieldExplanation": "说明",
+    "fieldTodo": "待办",
+    "fieldInstructions": "操作说明",
+    "retryTitle": "重试翻译标题",
+    "retryDescription": "重试翻译描述",
+    "retryExplanation": "重试翻译说明",
+    "retryTodo": "重试翻译待办",
+    "retryInstructions": "重试翻译操作说明",
+    "liveTranslating": "正在译为{language}…",
+    "liveTranslated": "已译为{language}。",
+    "liveShowingOriginal": "正在显示原文。",
+    "liveFailedCount": "{n, plural, other {# 个字段无法翻译。}}",
+    "liveNoCredits": "翻译需要 AI 额度。",
+    "liveEdited": "{field}已编辑并重新翻译。"
   }
 }

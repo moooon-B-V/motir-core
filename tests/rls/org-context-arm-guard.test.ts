@@ -287,6 +287,22 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'linked organisation), because the stamp names only the first organisation an account ' +
       'was linked to.',
   },
+  'lib/services/githubInstallationService.ts#boundInstallationRows': {
+    tables: ['github_installation', 'github_installation_org_link'],
+    source: 'scan',
+    why:
+      "MOTIR-8472 / MOTIR-8480 — the migrate wizard's connect step: is any GitHub " +
+      'installation bound to the run`s organisation, and which of its repositories may the ' +
+      'connect→index gate use? The same union `listOrganizationInstallations` reads (the ' +
+      'installations STAMPED with the organisation, plus its `github_installation_org_link` ' +
+      'rows joined to their installation), so the same arms admit it: ' +
+      '`github_installation_org_read`, `github_installation_org_link_org_read` and ' +
+      '`github_installation_linked_org_read`. The organisation is resolved from the actor`s ' +
+      'WORKSPACE row in the same transaction, never from the request. Its caller ' +
+      '`listOrganizationRepoRows` then reads `github_repo` in that org-bound transaction, which ' +
+      '`github_repo_org_read` (MOTIR-4677) admits; the succeeded-index ledger it joins is ' +
+      'workspace-keyed and read under the workspace context the transaction already carries.',
+  },
   'lib/services/githubAccountDisconnectService.ts#loadOwnLink': {
     tables: [
       'github_installation',

@@ -1,11 +1,11 @@
 'use client';
 
-import { forwardRef, type ReactNode } from 'react';
+import { forwardRef, useRef, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../utils/cn';
-import { useFullscreenElement } from '../../utils/fullscreen';
+import { usePortalContainer } from '../../utils/fullscreen';
 
 /**
  * Modal — accessible dialog wrapping @radix-ui/react-dialog.
@@ -119,7 +119,9 @@ export interface ModalProps extends VariantProps<typeof contentVariants> {
    * The element the dialog portals into. Defaults to the element in NATIVE full
    * screen while there is one (`document.fullscreenElement` — the browser paints
    * nothing outside it, so a body-portalled dialog would open invisibly,
-   * MOTIR-7658), else `document.body`. Pass `null` to force `document.body`.
+   * MOTIR-7658), else `document.body` — unless that element is inside the
+   * dialog itself, where the dialog stays put (MOTIR-8560). Pass `null` to force
+   * `document.body`.
    */
   container?: Element | null;
 }
@@ -140,9 +142,12 @@ function ModalRoot({
   dialogLabel = 'Dialog',
   container,
 }: ModalProps) {
-  const fullscreenElement = useFullscreenElement();
+  // The dialog's own content: a full-screen element inside it (a `<video>`'s
+  // native full-screen button) must not pull the dialog into itself (MOTIR-8560).
+  const contentRef = useRef<HTMLDivElement>(null);
+  const fullscreenContainer = usePortalContainer(contentRef);
   // `undefined` lets Radix fall back to `document.body`.
-  const portalContainer = container === undefined ? (fullscreenElement ?? undefined) : container;
+  const portalContainer = container === undefined ? (fullscreenContainer ?? undefined) : container;
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal container={portalContainer}>
@@ -165,6 +170,7 @@ function ModalRoot({
           worse for screen-reader users than declaring the dialog has none.
         */}
         <Dialog.Content
+          ref={contentRef}
           className={cn(contentVariants({ size }), className)}
           // `data-surface` lets a surface-material style (glassmorphism) frost
           // the dialog panel — see globals.css's material layer.

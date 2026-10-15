@@ -6134,6 +6134,11 @@
       "searchUnattributed": "{n} créditos não atribuídos a uma execução",
       "searchUnavailable": "Os números de pesquisa não estão disponíveis no momento. Suas pesquisas continuam sendo cobradas — isto é a exibição, não o faturamento.",
       "searchUnavailableValue": "Indisponível",
+      "translationThisMonth": "Gasto com tradução, este mês",
+      "translationAllTime": "{n} créditos no total",
+      "translationNone": "Nada gasto com tradução ainda",
+      "translationUnavailable": "Os números de tradução não estão disponíveis no momento. Isto é a exibição, não o faturamento.",
+      "translationUnavailableValue": "Indisponível",
       "scopeFollows": "Segue este escopo",
       "scopeOrg": "Organização inteira",
       "internalBilling": "Faturamento interno"
@@ -6375,20 +6380,19 @@
       "chooseSub": "Um conjunto mensal de créditos da organização, cobrado separadamente das licenças. Qualquer organização pode comprá-lo — não é necessário um plano pago de licenças do Motir. O Pro é a opção recomendada.",
       "current": "Atual",
       "recommended": "Recomendado",
-      "trialUsed": "Teste usado",
       "creditsAllotment": "{n} créditos / mês",
       "creditsAllotmentOneTime": "{n} créditos · uma única vez",
+      "ladder": {
+        "first": "Mesmo preço por crédito em todos os planos",
+        "multiple": "{multiple}× os créditos do {plan} · mesmo preço por crédito"
+      },
       "perMoEquiv": "${n} / mês",
       "annualSub": "cobrado anualmente · ${yr} / ano",
       "annualSave": "Economize ${n}/ano",
       "monthlySub": "${yr} / ano · Economize ${n} no plano anual",
-      "freePrice": "Gratuito",
-      "customPrice": "Personalizado",
-      "once": "uma única vez",
       "ctaChoose": "Escolher {plan}",
       "ctaUpgrade": "Fazer upgrade para {plan}",
       "ctaCurrent": "Plano atual",
-      "ctaTrialUsed": "Teste usado",
       "upgrade": {
         "cta": "Fazer upgrade para {plan}",
         "disabledReason": "Só proprietários e administradores podem alterar o plano",
@@ -6452,53 +6456,40 @@
       },
       "footer": "A cobrança anual (o padrão do Stripe) é a exibida — mude para Mensal acima para comparar. Os impostos são aplicados automaticamente no checkout. Créditos são uma cota interna de uso; o preço exibido é o valor do plano de IA, cobrado pelo Stripe da organização {org}. Suas licenças do Motir são cobradas separadamente — gerencie-as na tela do plano Motir.",
       "seatIncluded": "+ {count, plural, one {# licença do Motir} other {# licenças do Motir}} · itens de trabalho sem limite",
-      "seatNone": "Sem licença do Motir · cota de item de trabalho: 250",
-      "seatCustom": "Licenças do Motir incluídas (personalizado)",
-      "customPool": "Conjunto de créditos personalizado",
       "everythingIn": "Tudo do {prev}, e mais",
       "tiers": {
-        "free": {
-          "useCase": "Para experimentar o Motir AI.",
-          "features": ["Uma amostra única de cada agente"],
-          "featuresOff": ["Sem renovação mensal · sem recargas"]
-        },
         "standard": {
-          "useCase": "Planejamento detalhado, mais uma amostra de agente.",
+          "useCase": "Planeje seus projetos com o planejador do Motir AI.",
           "features": [
             "Planeje o projeto inteiro, em detalhes",
-            "Créditos renovados mensalmente · recargas medidas",
-            "Espaço para experimentar tarefas de agente"
+            "Os créditos renovam todo mês · recarregue quando quiser"
           ]
         },
         "pro": {
-          "useCase": "Planejamento detalhado, mais trabalho real de agente.",
+          "useCase": "Standard, mais modelos mais fortes para planejamento.",
           "prev": "Standard",
           "features": [
-            "Execute o agente de código em tarefas reais",
-            "Recarregue a qualquer momento para execuções mais pesadas"
+            "Modelos mais fortes habilitados para planejamento",
+            "Troque o modelo de planejamento para cada tipo de trabalho"
           ]
         },
         "max": {
-          "useCase": "Planejamento detalhado, mais trabalho intenso de agente.",
+          "useCase": "Pro, mais folga para passar o trabalho planejado ao agente.",
           "prev": "Pro",
-          "features": [
-            "Folga para trabalho contínuo de agentes",
-            "Capacidade para uma equipe movimentada"
-          ]
+          "features": ["Folga para enviar automaticamente o trabalho planejado ao agente"]
         },
         "max_x2": {
-          "useCase": "Planejamento detalhado, mais trabalho de agente no dobro do volume do Max.",
+          "useCase": "Max, com o dobro do volume.",
           "prev": "Max",
-          "features": [
-            "O dobro do pacote mensal de créditos do Max",
-            "Espaço para vários agentes rodando ao mesmo tempo"
-          ]
-        },
-        "enterprise": {
-          "useCase": "Volume personalizado, mais controles da organização.",
-          "prev": "Max",
-          "features": ["Cobrança por fatura e SSO", "Suporte dedicado"]
+          "features": ["O dobro do pacote mensal de créditos do Max"]
         }
+      },
+      "trial": {
+        "pill": "Teste gratuito",
+        "pillUsed": "Teste gratuito usado",
+        "left": "Restam {left} de {n} créditos de teste · únicos.",
+        "spent": "Todos os {n} créditos de teste foram usados.",
+        "pickPlan": "Escolha um plano mensal do Motir AI para continuar planejando."
       }
     },
     "topup": {
@@ -6577,120 +6568,6 @@
     "internalBilling": {
       "badge": "Cobrança interna",
       "note": "Esta organização é cobrada exatamente como um cliente e depois ressarcida — todos os números abaixo são reais, e o saldo se compensa a zero."
-    },
-    "contactSales": {
-      "contact": "Falar com vendas",
-      "sentChip": "Solicitação enviada · {date}",
-      "memberReason": "Só proprietários e administradores de {org} podem falar com vendas.",
-      "title": "Falar com vendas — Enterprise",
-      "subtitle": "Conte o que você quer que o Motir execute. A equipe da plataforma lê cada solicitação e responde diretamente a você.",
-      "facts": {
-        "heading": "Enviado com sua solicitação",
-        "organization": "Organização",
-        "requestedBy": "Solicitado por",
-        "currentPlan": "Plano atual",
-        "repositories": "Repositórios conectados"
-      },
-      "optionalNote": "Tudo abaixo é opcional, exceto a mensagem.",
-      "fields": {
-        "cardsPerDay": "Item de trabalho por dia, aproximadamente",
-        "cardsPerDayPlaceholder": "ex.: 40",
-        "parallelAgents": "Agentes em paralelo",
-        "parallelAgentsPlaceholder": "ex.: 8",
-        "agentPath": "Quais agentes",
-        "autonomy": "Como deve funcionar?",
-        "startWhen": "Quando você começaria?",
-        "teamSize": "Tamanho da equipe",
-        "choose": "Escolher…",
-        "contact": "Melhor forma de falar com você",
-        "contactHelp": "O e-mail da sua conta. Altere se outra pessoa deve receber a resposta.",
-        "note": "Mensagem",
-        "required": "Obrigatório",
-        "notePlaceholder": "O que o Motir deve fazer pela sua equipe? Qualquer coisa que devemos saber sobre seus repositórios, segurança ou prazos."
-      },
-      "agentPath": {
-        "hosted": {
-          "label": "Os agentes hospedados do Motir",
-          "hint": "Rodam nos modelos do Motir."
-        },
-        "own": {
-          "label": "Nossos próprios agentes",
-          "hint": "Claude Code, Codex ou outro agente com nossa própria credencial, na nuvem do Motir."
-        },
-        "both": {
-          "label": "Ambos",
-          "hint": "Um pouco de cada."
-        }
-      },
-      "autonomy": {
-        "autonomous_lead": {
-          "label": "24 horas por dia, por conta própria",
-          "hint": "O líder autônomo: o Motir planeja, executa e corrige, e sua equipe decide nos pontos de aprovação."
-        },
-        "volume_only": {
-          "label": "Um grande volume de execuções que nós iniciamos",
-          "hint": "Sua equipe inicia cada execução."
-        },
-        "unsure": {
-          "label": "Ainda não sei",
-          "hint": ""
-        }
-      },
-      "startWhen": {
-        "now": "Agora",
-        "within_month": "Em até um mês",
-        "within_quarter": "Em até um trimestre",
-        "exploring": "Só explorando"
-      },
-      "teamSize": {
-        "size_1_10": "1–10",
-        "size_11_50": "11–50",
-        "size_51_200": "51–200",
-        "size_201_plus": "201+"
-      },
-      "cancel": "Cancelar",
-      "send": "Enviar solicitação",
-      "sending": "Enviando…",
-      "close": "Fechar",
-      "done": "Concluído",
-      "errors": {
-        "note": "Adicione uma mensagem — conte o que você quer que o Motir faça pela sua equipe.",
-        "number": "Informe um número inteiro igual ou maior que 1."
-      },
-      "refused": {
-        "open": {
-          "title": "Sua organização já tem uma solicitação em aberto.",
-          "body": "Ela foi enviada em {date}, de outra aba ou por outro administrador. Nada novo foi enviado.",
-          "bodyNoDate": "Ela foi enviada de outra aba ou por outro administrador. Nada novo foi enviado.",
-          "action": "Ver a solicitação"
-        },
-        "forbidden": {
-          "title": "Você não pode falar com vendas em nome de {org}.",
-          "body": "Só proprietários e administradores podem. Sua função pode ter mudado desde que esta página foi carregada — peça a um administrador da organização."
-        },
-        "network": {
-          "title": "Não foi possível acessar o Motir.",
-          "body": "Nada foi enviado. Verifique sua conexão e envie de novo — o que você escreveu foi mantido."
-        }
-      },
-      "sent": {
-        "title": "Solicitação enviada",
-        "body": "A equipe da plataforma vai responder para <b>{contact}</b>. Até a solicitação ser encerrada, o bloco Enterprise a mostra no lugar de Falar com vendas."
-      },
-      "request": {
-        "title": "Sua solicitação Enterprise",
-        "subtitle": "Enviada em {date} por {name}.",
-        "subtitleNoName": "Enviada em {date}.",
-        "state": "Status",
-        "asked": "O que você nos contou",
-        "unset": "Não informado",
-        "reply": "A equipe da plataforma responde para <b>{contact}</b>. Para acrescentar algo, responda ao e-mail deles.",
-        "status": {
-          "received": "Recebida",
-          "in_conversation": "Em conversa",
-          "offer_sent": "Proposta enviada"
-        }
-      }
     }
   },
   "draftWithAi": {
@@ -7142,6 +7019,7 @@
       "repos_updated": "Acesso aos repositórios atualizado. O Motir lê os repositórios que você selecionou no GitHub — não há mais nada a concluir aqui.",
       "install_unbound": "O Motir GitHub App foi instalado no GitHub, mas não a partir deste espaço de trabalho, então ainda não está conectado a ele. Inicie a instalação por aqui para conectá-lo.",
       "install_expired": "O link de instalação expirou enquanto você estava no GitHub. Nada está quebrado — comece de novo pelas Configurações.",
+      "install_requested": "Sua solicitação para instalar o Motir GitHub App está aguardando um proprietário da conta do GitHub. Nada falhou — ela é retomada assim que ele aprovar.",
       "install_forbidden": "Você não é membro do espaço de trabalho a partir do qual esta instalação foi iniciada, então nada foi conectado.",
       "install_provider_error": "O Motir não conseguiu contatar o GitHub para concluir a conexão do App. Tente novamente.",
       "install_error": "Não foi possível concluir a configuração do GitHub App. Tente instalar novamente.",
@@ -8205,6 +8083,24 @@
       "onlyStarterAnon": "Somente quem a iniciou ou um gerente do projeto pode retomá-la.",
       "failureLine": "Sua última alteração neste plano não pôde ser feita · {when}",
       "failureLineAgain": "Sua última alteração não pôde ser feita de novo · {when}"
+    },
+    "grill": {
+      "control": {
+        "label": "Me questione",
+        "helpName": "O que é Me questione?",
+        "popover": {
+          "title": "Me questione",
+          "body1": "Antes de planejar, o Motir AI pergunta o que você quer, uma pergunta por vez: como deve funcionar, as outras formas de fazer a mesma coisa e o que acontece quando algo dá errado.",
+          "body2": "Cada pergunta tem algumas respostas para escolher, uma recomendada. Pule qualquer uma, deixe o planejador decidir ou pare quando quiser.",
+          "body3": "O que você definir é escrito no requisito do plano, e o planejamento começa a partir disso."
+        },
+        "hint": "Sua próxima mensagem inicia as perguntas."
+      }
+    },
+    "follow": {
+      "following": "Seguindo o planejador",
+      "resume": "Seguir o planejador",
+      "resumedAnnouncement": "Seguindo o planejador novamente"
     }
   },
   "codeHealth": {
@@ -8626,8 +8522,8 @@
       "body": "O Motir lê os repositórios que você conecta no GitHub e monta um único mapa do código em todo o projeto.",
       "gitlabNote": "A conexão com o GitLab chega em breve.",
       "checking": "Verificando repositórios conectados…",
-      "missingTitle": "Nenhum repositório conectado ainda",
-      "missingHint": "Conecte o GitHub em uma nova aba. O Motir percebe a conexão sozinho, então não há nada para confirmar aqui.",
+      "missingTitle": "Você conecta o GitHub e volta logo em seguida",
+      "missingHint": "O GitHub abre em uma nova aba por cerca de um minuto. Veja o que acontece lá; esta etapa estará esperando quando você voltar.",
       "connectCta": "Conectar o GitHub",
       "newTab": "(abre em uma nova aba)",
       "waitingTitle": "Aguardando o GitHub",
@@ -8637,7 +8533,55 @@
       "detectedHint": "Estes são os repositórios que o Motir pode ler. A indexação começa quando você continuar.",
       "listLabel": "Repositórios conectados",
       "continue": "Continuar",
-      "manage": "Gerenciar repositórios no GitHub"
+      "manage": "Gerenciar repositórios no GitHub",
+      "preflightAccount": "Escolha a conta do GitHub em que o Motir GitHub App será instalado: sua própria conta ou uma organização do GitHub da qual você faz parte.",
+      "preflightRepositories": "Escolha todos os repositórios ou apenas os que você selecionar. Você pode mudar isso depois no GitHub.",
+      "preflightAccess": "Aprove o acesso que o App solicita. Ele pode ler e alterar código e pull requests, e ler checks, implantações, Issues, filas de merge, metadados e eventos de segurança.",
+      "preflightReturn": "O GitHub traz você de volta direto para esta etapa, que mostra os repositórios que você conectou.",
+      "preflightCta": "Conectar o GitHub",
+      "ownerPendingTitle": "Aguardando a aprovação de um proprietário",
+      "ownerPendingHint": "Um proprietário da conta do GitHub que você escolheu precisa aprovar o Motir GitHub App. Sua solicitação está com ele: nada deu errado e nada foi perdido. A configuração continua assim que ele aprovar.",
+      "alreadyConnectedTitle": "Esta organização já está conectada",
+      "alreadyConnectedHint": "O Motir já pode ler estes repositórios, então não há nada para instalar.",
+      "alreadyConnectedAddMore": "Adicionar repositórios no GitHub",
+      "noReposTitle": "O GitHub está conectado, mas nenhum repositório está",
+      "noReposHint": "A instalação terminou, mas esta organização ainda não tem nenhum repositório que o Motir possa usar. Ou nenhum foi escolhido, ou os escolhidos não podem ser conectados aqui, por exemplo porque já pertencem a outra organização.",
+      "cancelledTitle": "A instalação não foi concluída",
+      "cancelledHint": "Você voltou antes de concluir no GitHub. Nada deu errado: nada foi conectado e nada foi perdido. Tente de novo quando quiser.",
+      "tryAgainCta": "Tentar de novo",
+      "changeReposCta": "Escolher repositórios no GitHub",
+      "starting": "Abrindo o GitHub…",
+      "ownerPendingOpenCta": "Abrir o GitHub",
+      "readFailedTitle": "O Motir não conseguiu verificar a conexão agora",
+      "readFailedHint": "Nada do que você fez no GitHub se perdeu. Esta etapa verifica de novo quando você voltar a esta aba, ou agora mesmo.",
+      "recheckCta": "Verificar de novo",
+      "providerGithub": "GitHub",
+      "pill": {
+        "connected": "Conectado",
+        "alreadyConnected": "Já conectado",
+        "chooseRepos": "Escolher repositórios",
+        "ownerPending": "Aguardando um proprietário",
+        "expired": "Link expirado",
+        "notConnected": "Não conectado"
+      },
+      "outcome": {
+        "install_expiredTitle": "O link do GitHub expirou enquanto você estava lá",
+        "install_expiredHint": "Nada deu errado, e nada foi conectado. Tente de novo a partir desta etapa.",
+        "install_forbiddenTitle": "Você não pode conectar este espaço de trabalho",
+        "install_forbiddenHint": "Esta instalação foi iniciada em um espaço de trabalho do qual você não é membro, então nada foi conectado. Um administrador do espaço de trabalho pode conectar o GitHub.",
+        "install_provider_errorTitle": "O Motir não conseguiu concluir a conexão com o GitHub",
+        "install_provider_errorHint": "Nada foi conectado. Tente de novo em instantes.",
+        "install_errorTitle": "O Motir não conseguiu confirmar esta instalação",
+        "install_errorHint": "Não foi possível verificar o link de retorno do GitHub, então nada foi conectado. Tente de novo a partir desta etapa.",
+        "select_reposTitle": "Escolha os repositórios desta organização",
+        "select_reposHint": "Outra organização já usa esta conta do GitHub, então escolha quais dos repositórios dela esta organização pode usar.",
+        "repo_unavailableTitle": "Um repositório já está conectado em outro lugar",
+        "repo_unavailableHint": "Um dos repositórios escolhidos já pertence a outra organização, então não foi adicionado aqui. Escolha outros repositórios no GitHub.",
+        "installation_not_accessibleTitle": "O Motir não pode vincular essa conta do GitHub para você",
+        "installation_not_accessibleHint": "Seu usuário do GitHub não consegue ver esta instalação, então nada foi vinculado. Um proprietário da conta do GitHub pode dar acesso a você.",
+        "not_configuredTitle": "O GitHub não está configurado nesta implantação",
+        "not_configuredHint": "Esta implantação do Motir ainda não tem um GitHub App, então não é possível conectar o GitHub aqui. Quem administra a implantação pode configurá-lo."
+      }
     },
     "index": {
       "eyebrow": "Etapa 2 de 2 · Configuração",
@@ -9206,7 +9150,8 @@
         "couldNot": "Nada foi iniciado e nada foi cobrado. {repair}",
         "changes_requested": "Nada é retomado. {key} é refeito primeiro; a próxima versão dele pergunta de novo, e esta execução continua aguardando.",
         "declined": "Nada é retomado. O trabalho que isto liberaria precisa de um novo plano — replaneje {key} ou defina {head} como A fazer para recomeçar.",
-        "overturned": "Nada é retomado. A aprovação não vale mais, então a execução aguarda uma nova decisão sobre {key}."
+        "overturned": "Nada é retomado. A aprovação não vale mais, então a execução aguarda uma nova decisão sobre {key}.",
+        "reshaped": "Retomar levará a história reorganizada."
       },
       "back": {
         "changes_requested": "{kind} devolvido · alterações solicitadas por <b>{name}</b> — “{note}”",
@@ -9239,7 +9184,26 @@
         "repository_not_writable": "Reconecte o repositório nas configurações do projeto e depois pressione Continuar.",
         "card_not_ready": "Resolva o que bloqueia {key} ou mova-o de volta para Em andamento e depois pressione Continuar."
       },
-      "copyAria": "Copiar o comando de retomada de {key}"
+      "copyAria": "Copiar o comando de retomada de {key}",
+      "member": {
+        "added": "Adicionado desde que a execução parou",
+        "rescoped": "Escopo alterado"
+      },
+      "fold": {
+        "added": "+{count} adicionados desde que a execução parou"
+      },
+      "reshaped": {
+        "one": "O plano <plan>{title}</plan> <aside>(aprovado <when></when>)</aside> reorganizou esta história depois que a execução parou: <b>{counts}</b>",
+        "many": "<b>{count, plural, one {# plano reorganizou} other {# planos reorganizaram}}</b> esta história desde que a execução parou",
+        "planLine": "Plano <plan>{title}</plan> <aside>(aprovado <when></when>)</aside>: {counts}",
+        "showPlans": "Mostrar planos",
+        "hidePlans": "Ocultar planos",
+        "added": "{n} adicionados",
+        "changed": "{n} alterados",
+        "removed": "{n} removidos",
+        "separator": ", ",
+        "label": "Planos que reorganizaram {key} depois que sua execução parou"
+      }
     },
     "planning": {
       "scope": "Planos que você pediu em <project>{name}</project> e que ainda estão sendo escritos. Os planos pedidos por outras pessoas ficam na <link>página Planos</link>.",
@@ -9290,6 +9254,7 @@
         "model_unavailable": "o provedor de IA estava indisponível",
         "token_expired": "a conexão com o provedor de IA expirou",
         "prompt_too_large": "o contexto do plano era grande demais para o modelo",
+        "job_failed": "a tarefa de planejamento falhou",
         "internal": "algo deu errado do nosso lado"
       },
       "refusal": {
@@ -14255,5 +14220,88 @@
       "unavailable": "Item de trabalho indisponível",
       "unavailableTitle": "Este item de trabalho foi excluído, ou você não pode vê-lo."
     }
+  },
+  "sharpen": {
+    "question": {
+      "label": "perguntando · pergunta {n}",
+      "recommended": "Recomendada",
+      "recommendedName": "{label} (recomendada)",
+      "somethingElse": "Outra coisa…",
+      "skip": "Pular",
+      "youDecide": "Você decide",
+      "stop": "Parar as perguntas",
+      "ownWordsPlaceholder": "Responda com suas próprias palavras…",
+      "composerPlaceholder": "Ou digite sua própria resposta…",
+      "because": "Como você escolheu “{answer}”…",
+      "yourThread": "Seu tema",
+      "youSaid": "Você disse: “{words}”"
+    },
+    "markers": {
+      "opening": "Me questione está ativado: uma pergunta por vez antes de planejar. Escolha uma resposta, pule ou pare quando quiser.",
+      "skipped": "Pulada: o planejador vai assumir esta.",
+      "completed": "Isso é tudo o que eu precisava perguntar.",
+      "nothingToAsk": "Não tenho nada a perguntar: isso está claro o bastante para planejar. Vou escrever o plano agora.",
+      "stopped": "Você parou as perguntas.",
+      "stoppedNoAnswer": "Você parou as perguntas antes de qualquer resposta. Nada foi escrito."
+    },
+    "summary": {
+      "title": "O que você definiu",
+      "counts": "{answers, plural, one {# resposta} other {# respostas}} · {assumptions, plural, one {# suposição do planejador} other {# suposições do planejador}}",
+      "groups": {
+        "behaviour": "Comportamento",
+        "scopeEdge": "Limite do escopo",
+        "constraints": "Restrições",
+        "acceptance": "Aceitação",
+        "assumptions": "Suposições"
+      },
+      "youAnswered": "Sua resposta",
+      "plannersAssumption": "Suposição do planejador",
+      "writing": "Escrevendo suas respostas no requisito do plano e em <item></item>…",
+      "writingPlanOnly": "Escrevendo suas respostas no requisito do plano…",
+      "written": "Escrito no requisito do plano e em <item></item>.",
+      "writtenPlanOnly": "Escrito no requisito do plano.",
+      "failed": "Suas respostas não foram escritas. Elas continuam aqui.",
+      "copy": "Copiar respostas"
+    },
+    "error": "Essa pergunta não chegou. Suas respostas até agora foram mantidas — tente de novo.",
+    "retry": "Tentar de novo"
+  },
+  "itemTranslation": {
+    "groupLabel": "Tradução",
+    "translate": "Traduzir",
+    "translating": "Traduzindo…",
+    "showOriginal": "Mostrar original",
+    "showTranslation": "Mostrar tradução",
+    "retry": "Tentar novamente",
+    "hintInto": "para {language}",
+    "hintTranslated": "Traduzido para {language}",
+    "hintShowingOriginal": "Mostrando o original",
+    "hintPartial": "Traduzido para {language} · {n, plural, one {# campo não pôde ser traduzido} other {# campos não puderam ser traduzidos}}",
+    "failedItem": "Não foi possível traduzir este item de trabalho. Nada foi cobrado.",
+    "noCredits": "A tradução precisa de créditos de IA. Nada foi cobrado.",
+    "noCreditsMember": "Um proprietário ou administrador da organização pode adicioná-los.",
+    "addCredits": "Adicionar créditos",
+    "markTranslatedFrom": "Traduzido de {language}",
+    "markTranslated": "Traduzido",
+    "markTranslating": "Traduzindo…",
+    "markEdited": "Editado · traduzindo…",
+    "markFailed": "Não traduzido. Nada foi cobrado.",
+    "markPrefix": "{field}: ",
+    "fieldTitle": "Título",
+    "fieldDescription": "Descrição",
+    "fieldExplanation": "Explicação",
+    "fieldTodo": "Tarefa",
+    "fieldInstructions": "Instruções",
+    "retryTitle": "Tentar traduzir o título novamente",
+    "retryDescription": "Tentar traduzir a descrição novamente",
+    "retryExplanation": "Tentar traduzir a explicação novamente",
+    "retryTodo": "Tentar traduzir a tarefa novamente",
+    "retryInstructions": "Tentar traduzir as instruções novamente",
+    "liveTranslating": "Traduzindo para {language}…",
+    "liveTranslated": "Traduzido para {language}.",
+    "liveShowingOriginal": "Mostrando o original.",
+    "liveFailedCount": "{n, plural, one {# campo não pôde ser traduzido.} other {# campos não puderam ser traduzidos.}}",
+    "liveNoCredits": "A tradução precisa de créditos de IA.",
+    "liveEdited": "{field} foi editado e traduzido novamente."
   }
 }

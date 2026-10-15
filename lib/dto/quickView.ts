@@ -1,3 +1,4 @@
+import type { ReaderTranslationDTO } from '@/lib/dto/workItemTranslation';
 import type { HeldTransitionDTO, PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
@@ -68,6 +69,13 @@ export type QuickViewSprintOption = Pick<SprintDto, 'id' | 'name' | 'state' | 's
 
 /** The serializable payload the peek renders (a condensed slice of the detail read). */
 export interface QuickViewData {
+  /**
+   * The reader's TRANSLATION offer (Story MOTIR-7735 · MOTIR-8122) — whether the
+   * quick view offers Translate, per field, and whether its no-credit message may
+   * link to adding credit. `null` when the read failed; absent on a Visitor's peek
+   * and on a proposal, which offer nothing.
+   */
+  translation?: ReaderTranslationDTO | null;
   /**
    * The status moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528), read by
    * `approvalGatesService.listHeldTransitions` — the peek's status field draws

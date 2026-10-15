@@ -5,10 +5,12 @@ import { verifyMcpToken } from '@/lib/mcp/auth';
 import { answerClientAbort } from '@/lib/mcp/clientAbort';
 import { answerMalformedBody } from '@/lib/mcp/malformedBody';
 import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
+import { tokenFingerprint } from '@/lib/api/v1/bearer';
 import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { PROTECTED_RESOURCE_METADATA_PATH } from '@/lib/oauth/config';
 import { OrganizationSuspendedError } from '@/lib/organizations/errors';
+import { withRequestLabel } from '@/lib/monitoring/requestLabel';
 
 // The Motir MCP server (Story 7.8 · Subtask 7.8.4) — one streamable-HTTP
 // endpoint exposing the PM core to AI agents and the CLI (7.9), all of which
@@ -51,7 +53,8 @@ import { OrganizationSuspendedError } from '@/lib/organizations/errors';
 // (`registerMcpTools(…, meterBillableTools)` → `lib/mcp/rateLimitGate.ts`), so
 // spend is metered per TOOL rather than per request. Both use the shared store
 // and the shipped guards; `lib/rateLimit/mcpGuard.ts` carries the key-axis
-// reasoning (user + workspace, like `/api/ai/*` — NOT the PAT fingerprint).
+// reasoning: VOLUME per presented credential plus a per-workspace ceiling
+// (MOTIR-8601), MONEY per user + workspace like `/api/ai/*`.
 
 export const runtime = 'nodejs';
 // Readiness + work-item state flip constantly; never serve a cached MCP body.
@@ -91,7 +94,12 @@ const parsedHandler = answerMalformedBody(baseHandler);
  * refused at it.
  */
 async function limitedHandler(req: Request): Promise<Response> {
-  const { refusal, headers } = await enforceMcpRateLimit(contextFromAuthInfo(req.auth));
+  // The credential is fingerprinted HERE and the plaintext goes no further.
+  const token = req.auth?.token;
+  const { refusal, headers } = await enforceMcpRateLimit(
+    contextFromAuthInfo(req.auth),
+    token ? tokenFingerprint(token) : null,
+  );
   if (refusal) return refusal;
   return stampRateLimitHeaders(await parsedHandler(req), headers);
 }
@@ -147,4 +155,13 @@ async function handler(req: Request): Promise<Response> {
   return res;
 }
 
-export { handler as GET, handler as POST, handler as DELETE };
+/**
+ * Every transaction of an MCP request is recorded as `route="mcp"` (MOTIR-8553):
+ * the token verify and session resolution here with no tool, and each tool
+ * call's own work under its tool, which the registry's per-tool wrapper sets.
+ */
+async function labelledHandler(req: Request): Promise<Response> {
+  return withRequestLabel({ route: 'mcp' }, () => handler(req));
+}
+
+export { labelledHandler as GET, labelledHandler as POST, labelledHandler as DELETE };

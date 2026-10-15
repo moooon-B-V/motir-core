@@ -10,6 +10,7 @@ import {
   ChevronsUpDown,
   Coins,
   Info,
+  Languages,
   Search,
   Eye,
   Lock,
@@ -29,6 +30,7 @@ import {
   searchUsageFigures,
   type FigureScope,
 } from './searchUsage';
+import { translationUsageFigures } from './translationUsage';
 
 const RUN_LOG_PAGE_SIZE = 10;
 const LOW_BALANCE_FRACTION = 0.1; // a balance under 10% of the allotment is "low"
@@ -362,6 +364,46 @@ function ScopeTag({ scope, t }: { scope: FigureScope; t: T }) {
   );
 }
 
+// The TRANSLATION line (Story MOTIR-7735 · MOTIR-8117). Its own card beside the
+// search figures, because motir-ai keeps translation spend OUT of every AI
+// figure on this page. Org-level like the search total — the same scope tag — so
+// a drill does not read as narrowing it. Unavailable is an em-dash and a line
+// saying so; nothing spent is a zero and a line saying so: opposite messages,
+// drawn differently.
+function TranslationSpendCard({ data, t }: { data: OrgUsageDTO; t: T }) {
+  const locale = useLocale();
+  const figures = translationUsageFigures(data);
+  const unavailable = figures.variant === 'unavailable';
+  return (
+    <Card data-usage-translation={figures.variant}>
+      <span className="flex items-center gap-1.5 font-sans text-xs font-medium text-(--el-text-muted)">
+        <Languages className="h-4 w-4" aria-hidden />
+        {t('summary.translationThisMonth')}
+      </span>
+      <div className="mt-2 font-sans text-lg font-semibold text-(--el-text)">
+        {unavailable ? (
+          <span
+            className="font-medium tracking-wide text-(--el-text-secondary)"
+            aria-label={t('summary.translationUnavailableValue')}
+          >
+            &mdash;
+          </span>
+        ) : (
+          t('summary.credits', { n: fmt(figures.monthSpend ?? 0, locale) })
+        )}
+      </div>
+      <p className="mt-1 font-sans text-xs text-(--el-text-secondary)">
+        {unavailable
+          ? t('summary.translationUnavailable')
+          : figures.variant === 'none'
+            ? t('summary.translationNone')
+            : t('summary.translationAllTime', { n: fmt(figures.totalSpend ?? 0, locale) })}
+      </p>
+      <ScopeTag scope="organization" t={t} />
+    </Card>
+  );
+}
+
 function SummaryPanel({
   data,
   remainingPct,
@@ -560,6 +602,8 @@ function SummaryPanel({
             </Card>
           </>
         ) : null}
+
+        <TranslationSpendCard data={data} t={t} />
       </div>
 
       {search?.figuresUnavailable ? (

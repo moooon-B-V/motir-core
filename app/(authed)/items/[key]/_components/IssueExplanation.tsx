@@ -1,6 +1,8 @@
 import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
-import { MarkdownView } from '@/components/ui/MarkdownView';
+import { fieldRef } from '@/lib/translation/fieldRefs';
+import { FieldTranslationMark } from './translation/FieldTranslationMark';
+import { TranslatableMarkdown } from './translation/TranslatableFields';
 import { Pill } from '@/components/ui/Pill';
 import type { WorkItemExplanationSourceDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { PageRefMap } from '@/lib/dto/pages';
@@ -43,16 +45,22 @@ export function IssueExplanation({
       subtitle={t('explanationGloss')}
       editHref={editHref}
       headerExtra={
-        explanationSource === 'ai_draft' ? (
-          <Pill tone="neutral">
-            <Sparkles className="h-3 w-3" aria-hidden />
-            {t('aiDrafted')}
-          </Pill>
-        ) : null
+        <>
+          {explanationSource === 'ai_draft' ? (
+            <Pill tone="neutral">
+              <Sparkles className="h-3 w-3" aria-hidden />
+              {t('aiDrafted')}
+            </Pill>
+          ) : null}
+          {/* The translation mark, after the AI-drafted pill when both show
+              (MOTIR-8122). Nothing without a translation provider. */}
+          <FieldTranslationMark fieldRef={fieldRef.explanation()} field="explanation" />
+        </>
       }
     >
       {explanationMd ? (
-        <MarkdownView
+        <TranslatableMarkdown
+          fieldRef={fieldRef.explanation()}
           value={explanationMd}
           aria-label={t('issueExplanationAria')}
           workItemRefs={workItemRefs}

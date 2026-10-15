@@ -107,9 +107,15 @@ describe('the shell refreshes through ONE coordinator', () => {
   });
 
   it('never refreshes the router directly from the nudge or the approve', () => {
-    expect(liveHost).toContain('useCoordinatedRefresh');
+    // MOTIR-8574: the live host refreshes NOTHING now — a nudge on the Workbench
+    // is the view's own window read — so it holds neither a refresh nor the
+    // coordinator. MOTIR-8576: nor does the planning host — an approve asks the
+    // Workbench to re-read itself.
+    expect(liveHost).not.toContain('useCoordinatedRefresh');
     expect(liveHost).not.toMatch(/router\.refresh\(/);
-    expect(planningHost).toContain('useCoordinatedRefresh');
+    expect(liveHost).not.toMatch(/window\.location/);
+    expect(planningHost).not.toContain('useCoordinatedRefresh');
     expect(planningHost).not.toMatch(/router\.refresh\(/);
+    expect(planningHost).toContain('useRequestWorkbenchReread');
   });
 });

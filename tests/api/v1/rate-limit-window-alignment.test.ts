@@ -456,6 +456,13 @@ describe('fixed-window alignment lives in ONE place', () => {
         'assertion that something was allowed red; only a REFUSAL is exposed to the ' +
         'race, and this file asserts none. (MOTIR-3016)',
     ],
+    [
+      'tests/two-instance/globalSetup.ts',
+      'Not a test: the lane’s globalSetup only HANDS the budget to the two `next start` ' +
+        'processes it spawns, through their env. Every case that spends that budget is ' +
+        'in `tests/two-instance/limits.spec.ts`, which calls `waitForWindowHeadroom` ' +
+        'before each accumulating sequence. (MOTIR-8616, MOTIR-8617)',
+    ],
   ]);
 
   it('derives the budget SHAPE from lib/ (a guard over an empty shape proves nothing)', () => {
@@ -631,9 +638,24 @@ describe('fixed-window alignment lives in ONE place', () => {
 
   /**
    * Files that read the counter and legitimately never depend on which cell
-   * their calls landed in. Empty is the honest state: every current reader aligns.
+   * their calls landed in. Each entry is a reader whose counted calls run on an injected clock.
    */
-  const COUNTER_READ_EXEMPT: ReadonlyMap<string, string> = new Map();
+  const COUNTER_READ_EXEMPT: ReadonlyMap<string, string> = new Map([
+    [
+      'tests/inProcessState/guards.test.ts',
+      'Every call it counts runs on an INJECTED clock (`now: () => T`, a fixed instant ' +
+        '15 minutes into an hour window), never the wall clock, so all of them land in ' +
+        'the one window that instant names and no boundary can fall between them. ' +
+        '(MOTIR-8619)',
+    ],
+    [
+      'tests/rateLimit/betterAuthStorage.test.ts',
+      'Every call it counts runs on an INJECTED clock (`machine(() => t)` with `t` a ' +
+        'fixed instant the case chooses inside its window), never the wall clock; the one ' +
+        'case that crosses a boundary does so on purpose by advancing `t`. The row it ' +
+        'reads back is addressed by that same instant. (MOTIR-8613)',
+    ],
+  ]);
 
   it('derives the counter read methods from lib/ (a guard over no readers proves nothing)', () => {
     expect(counterReadMethods()).toEqual(['countAllUnsafe', 'findCountUnsafe']);

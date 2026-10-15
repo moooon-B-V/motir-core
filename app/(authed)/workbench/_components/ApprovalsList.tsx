@@ -1,11 +1,14 @@
 'use client';
 
+import { memo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { ApprovalRow, APPROVALS_GRID_TEMPLATE } from '@/components/approvals/ApprovalRow';
+import { keepIfEqual, mergeRowsByIdentity, structurallyEqual } from '@/lib/workbench/mergeRows';
+import type { WorkbenchApprovalsWindowDto } from '@/lib/dto/workbench';
 import { useLiveRows } from './useLiveRows';
+import { useTabWindowContent } from './useTabWindowContent';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
-import type { ReactNode } from 'react';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), built to
 // `design/workbench/approvals-row.mock.html` and its § 20 in
@@ -24,7 +27,62 @@ import type { ReactNode } from 'react';
 // ceiling, and when that bites, ONE line under the last row says so and points at
 // the Approvals room, which lists every one with its own pager.
 
+//
+// ⚠️ LIVE IN PLACE (Story MOTIR-8539 · Subtask MOTIR-8581). The server's read is
+// the first paint; after it, the rows come from the window the Workbench's one
+// read answered (`useTabWindowContent`) — the same response that set the strip's
+// To approve count — merged by `gateId`, so an unchanged answer re-renders nothing
+// and a changed one re-renders only the rows it changed.
+
 const GRID_TEMPLATE = APPROVALS_GRID_TEMPLATE;
+
+type Ceiling = { shown: number; total: number } | null;
+
+interface ApprovalsContent {
+  rows: ApprovalQueueRowDto[];
+  ceiling: Ceiling;
+}
+
+/** The tab's content out of a window answer — the same shape `<ApprovalsTab>` hands in. */
+function contentOf(window: WorkbenchApprovalsWindowDto): ApprovalsContent {
+  const { queue } = window;
+  return {
+    rows: queue.items,
+    ceiling: queue.truncated ? { shown: queue.items.length, total: queue.total } : null,
+  };
+}
+
+function mergeContent(prev: ApprovalsContent, next: ApprovalsContent): ApprovalsContent {
+  const rows = mergeRowsByIdentity(prev.rows, next.rows, (row) => row.gateId);
+  const ceiling = keepIfEqual(prev.ceiling, next.ceiling);
+  return rows === prev.rows && ceiling === prev.ceiling ? prev : { rows, ceiling };
+}
+
+/** One row, re-rendered only when its gate, its held state or its `New` mark moved. */
+const LiveApprovalRow = memo(function LiveApprovalRow({
+  row,
+  held,
+  arrived,
+}: {
+  row: ApprovalQueueRowDto;
+  held: boolean;
+  arrived: boolean;
+}) {
+  return (
+    <ApprovalRow
+      // ⚠️ A HELD ROW IS STILL RENDERED — § 26's rule, and the one thing
+      // a naive live list gets wrong: the read returns only `awaiting`
+      // gates, so a row somebody else decided is simply absent from the
+      // next one, and removing it is § 20's settled rule being overturned
+      // by a mechanism rather than by a decision.
+      record={{ section: held ? 'held' : 'awaiting', row }}
+      arrived={arrived}
+      // The tab lists only the questions routed to its reader (`listAwaitingMe`),
+      // which is what the manual-work row's *is waiting on you* says (§ 33.2).
+      routedToReader
+    />
+  );
+});
 
 export function ApprovalsList({
   rows,
@@ -38,7 +96,7 @@ export function ApprovalsList({
    * Set when the read's ceiling CUT the set: how many rows are shown and how many
    * are waiting. `null` — the ordinary case — draws nothing.
    */
-  ceiling: { shown: number; total: number } | null;
+  ceiling: Ceiling;
   /**
    * What an empty tab shows — rendered HERE rather than instead of this
    * component (Story MOTIR-5238 · MOTIR-5245's E2E finding).
@@ -57,11 +115,13 @@ export function ApprovalsList({
   empty: ReactNode;
 }) {
   const t = useTranslations('workbench.approvals');
+  const seed = useSeed(rows, ceiling);
+  const { content } = useTabWindowContent('approvals', seed, contentOf, mergeContent);
   // THE LIVE RULE, for the one tab § 20's settled-row decision is about
   // (Story MOTIR-5238 · MOTIR-5242). The reset key is the "next load" § 26
-  // names: a `router.refresh()` keeps the address and holds its rows. With no
-  // pager there is one window, so the key is constant (MOTIR-5998).
-  const live = useLiveRows(rows, 'approvals', (row) => row.gateId);
+  // names: a re-read keeps the address and holds its rows. With no pager there is
+  // one window, so the key is constant (MOTIR-5998).
+  const live = useLiveRows(content.rows, 'approvals', (row) => row.gateId);
 
   // ⚠️ `live.rows`, NOT `rows` — a HELD row keeps the list non-empty, so a queue
   // the reader has just emptied does not flip to the empty state underneath the
@@ -97,23 +157,16 @@ export function ApprovalsList({
         </div>
         <div role="rowgroup">
           {live.rows.map((row) => (
-            <ApprovalRow
+            <LiveApprovalRow
               key={row.gateId}
-              // ⚠️ A HELD ROW IS STILL RENDERED — § 26's rule, and the one thing
-              // a naive live list gets wrong: the read returns only `awaiting`
-              // gates, so a row somebody else decided is simply absent from the
-              // next one, and removing it is § 20's settled rule being overturned
-              // by a mechanism rather than by a decision.
-              record={{ section: live.heldIds.has(row.gateId) ? 'held' : 'awaiting', row }}
+              row={row}
+              held={live.heldIds.has(row.gateId)}
               arrived={live.arrivedIds.has(row.gateId)}
-              // The tab lists only the questions routed to its reader (`listAwaitingMe`),
-              // which is what the manual-work row's *is waiting on you* says (§ 33.2).
-              routedToReader
             />
           ))}
         </div>
       </div>
-      {ceiling === null ? null : (
+      {content.ceiling === null ? null : (
         /* THE CEILING LINE (§ 28, DECISION 5) — a note, never an alert: nothing is
            wrong, the list is merely long. The strip's count stays the true total,
            which is why this line has to say how many are shown. */
@@ -122,8 +175,8 @@ export function ApprovalsList({
           className="flex flex-wrap items-center gap-x-1 border-t border-(--el-border) bg-(--el-surface-soft) px-4 py-2.5 text-xs text-(--el-text-secondary)"
         >
           {t.rich('ceiling', {
-            shown: ceiling.shown,
-            total: ceiling.total,
+            shown: content.ceiling.shown,
+            total: content.ceiling.total,
             link: (chunks) => (
               <Link
                 href="/approvals"
@@ -137,4 +190,15 @@ export function ApprovalsList({
       )}
     </div>
   );
+}
+
+/** The server's props as one seed object, kept while they are structurally the same. */
+function useSeed(rows: ApprovalQueueRowDto[], ceiling: Ceiling): ApprovalsContent {
+  const [seed, setSeed] = useState<ApprovalsContent>(() => ({ rows, ceiling }));
+  if (seed.rows !== rows || !structurallyEqual(seed.ceiling, ceiling)) {
+    const next = { rows, ceiling };
+    setSeed(next);
+    return next;
+  }
+  return seed;
 }

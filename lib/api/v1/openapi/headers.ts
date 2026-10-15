@@ -89,10 +89,24 @@ export const V1_RATE_LIMIT_HEADERS: readonly V1HeaderComponent[] = [
     name: 'X-RateLimit-Reset',
     wireName: 'x-ratelimit-reset',
     description:
-      'Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can.',
+      'Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant.',
     schema: z.string().regex(/^\d+$/),
   },
 ];
+
+/**
+ * `Retry-After` — on the 429 ONLY (MOTIR-8600), so it is not in the shared list
+ * every response carries. Whole seconds, equal to the body's `retryAfterSeconds`.
+ * Additive under ADR §8 (§6's 2026-10-14 amendment): before it, a client read
+ * `X-RateLimit-Reset` alone, which still works.
+ */
+export const V1_RETRY_AFTER_HEADER: V1HeaderComponent = {
+  name: 'Retry-After',
+  wireName: 'retry-after',
+  description:
+    'Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only.',
+  schema: z.string().regex(/^\d+$/),
+};
 
 /**
  * Every header the shared layer declares, in document order.

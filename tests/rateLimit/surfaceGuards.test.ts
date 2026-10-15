@@ -11,7 +11,11 @@ import {
 } from '@/lib/rateLimit/authGuard';
 import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 import { enforcePublicReadRateLimit } from '@/lib/rateLimit/publicReadGuard';
-import { enforceAiRateLimit, enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
+import {
+  enforceAiRateLimit,
+  enforceInternalServiceRateLimit,
+  enforceJobReadRateLimit,
+} from '@/lib/rateLimit/aiGuard';
 import {
   enforceMcpRateLimit,
   MCP_RATE_LIMITED_JSONRPC_CODE,
@@ -23,6 +27,8 @@ import {
   DEFAULT_AI_RATE_LIMIT,
   DEFAULT_AI_GENERATE_RATE_LIMIT,
   DEFAULT_MCP_RATE_LIMIT,
+  agentWorkspaceBudget,
+  mcpBudget,
 } from '@/lib/rateLimit/budgets';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { JobAuthError, JobRateLimitedError } from '@/lib/ai/jobAuth';
@@ -78,6 +84,7 @@ const BUDGET_ENVS = [
   'MOTIR_AI_RATE_LIMIT',
   'MOTIR_AI_GENERATE_RATE_LIMIT',
   'MOTIR_MCP_RATE_LIMIT',
+  'MOTIR_AGENT_WORKSPACE_RATE_LIMIT',
 ] as const;
 
 const WINDOW_ENVS = BUDGET_ENVS.map((name) => `${name}_WINDOW_MS`);
@@ -393,7 +400,10 @@ describe('the AI surface', () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
-    expect(await enforceAiRateLimit(ctx, 'ai:internal')).toBeNull();
+    // The job-token read-back door (per job since MOTIR-8604; a keyless token
+    // keeps the user bucket) is not the chat bucket.
+    expect(await enforceJobReadRateLimit({ ctx, jobKey: null })).toBeNull();
+    expect(await enforceJobReadRateLimit({ ctx, jobKey: 'job-a' })).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).not.toBeNull();
   });
 
@@ -495,9 +505,11 @@ describe('the tenant-LESS internal routes (service-bearer gated)', () => {
   it('does not share a bucket with the job-token internal calls', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
     expect(await enforceInternalServiceRateLimit(withBearer('secret-a'))).toBeNull();
-    // A job-token caller in the same scope keys on workspace+user, so its bucket
-    // is untouched by the credential one.
-    expect(await enforceAiRateLimit({ userId: 'u', workspaceId: 'w' }, 'ai:internal')).toBeNull();
+    // A job-token caller keys on its job (or, keyless, on workspace+user), so its
+    // bucket is untouched by the credential one.
+    const c = { userId: 'u', workspaceId: 'w' };
+    expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).toBeNull();
+    expect(await enforceJobReadRateLimit({ ctx: c, jobKey: 'job-a' })).toBeNull();
   });
 });
 
@@ -538,14 +550,16 @@ describe('the internal-AI error mapper', () => {
 
 describe('the MCP transport surface', () => {
   const ctx = { userId: 'mcp_user', workspaceId: 'mcp_ws' };
+  /** A presented credential's fingerprint — the per-agent key (MOTIR-8601). */
+  const FP = 'fp-mcp-agent';
 
   it('refuses the (N+1)-th request with a 429 + Retry-After + X-RateLimit-*', async () => {
     process.env['MOTIR_MCP_RATE_LIMIT'] = '2';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
-    expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
-    expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(ctx, FP)).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(ctx, FP)).refusal).toBeNull();
 
-    const { refusal } = await enforceMcpRateLimit(ctx);
+    const { refusal } = await enforceMcpRateLimit(ctx, FP);
     expect(refusal).not.toBeNull();
     expect(refusal!.status).toBe(429);
     expect(Number(refusal!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
@@ -560,8 +574,8 @@ describe('the MCP transport surface', () => {
     // (`StreamableHTTPError(status, text)`), so a parseable envelope serves both.
     process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
-    await enforceMcpRateLimit(ctx);
-    const { refusal } = await enforceMcpRateLimit(ctx);
+    await enforceMcpRateLimit(ctx, FP);
+    const { refusal } = await enforceMcpRateLimit(ctx, FP);
 
     expect(refusal!.headers.get('content-type')).toContain('application/json');
     const body = await refusal!.json();
@@ -589,7 +603,7 @@ describe('the MCP transport surface', () => {
 
   it('stamps the budget headers on an ALLOWED request too, so a client can pace itself', async () => {
     process.env['MOTIR_MCP_RATE_LIMIT'] = '5';
-    const { refusal, headers } = await enforceMcpRateLimit(ctx);
+    const { refusal, headers } = await enforceMcpRateLimit(ctx, FP);
     expect(refusal).toBeNull();
     expect(headers['x-ratelimit-limit']).toBe('5');
     expect(headers['x-ratelimit-remaining']).toBe('4');
@@ -597,16 +611,68 @@ describe('the MCP transport surface', () => {
     expect(headers['Retry-After']).toBeUndefined();
   });
 
-  it('keys on USER + WORKSPACE, not on the PAT fingerprint', async () => {
-    // The AC's axis check, and the reason for it: a token fingerprint would hand
-    // every newly-minted PAT a fresh budget, and minting one is self-service. The
-    // guard is not even given a token, so a fingerprint cannot leak into the key.
+  it('keys VOLUME on the presented CREDENTIAL, not on the person (MOTIR-8601)', async () => {
+    // The inverse of the case this replaced ("keys on USER + WORKSPACE, not on
+    // the PAT fingerprint"). That argument is about the MONEY half and still
+    // holds there (`ai:generate`, below); on the volume half it starved one
+    // person's concurrent agents of a single bucket. What minting a credential
+    // must not widen is now held by the workspace ceiling (next case).
     process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
-    expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w1' })).refusal).toBeNull();
-    expect((await enforceMcpRateLimit({ userId: 'u2', workspaceId: 'w1' })).refusal).toBeNull();
-    expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w2' })).refusal).toBeNull();
-    expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w1' })).refusal).not.toBeNull();
+    const u1w1 = { userId: 'u1', workspaceId: 'w1' };
+    // Two credentials of ONE person in ONE workspace: two budgets.
+    expect((await enforceMcpRateLimit(u1w1, 'fp-a')).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(u1w1, 'fp-b')).refusal).toBeNull();
+    // One credential in two workspaces: two budgets.
+    expect(
+      (await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w2' }, 'fp-a')).refusal,
+    ).toBeNull();
+    // And each credential is still limited on its own.
+    expect((await enforceMcpRateLimit(u1w1, 'fp-a')).refusal).not.toBeNull();
+    expect((await enforceMcpRateLimit(u1w1, 'fp-b')).refusal).not.toBeNull();
+  });
+
+  it('holds every credential of a workspace under ONE shared ceiling', async () => {
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '100';
+    process.env['MOTIR_AGENT_WORKSPACE_RATE_LIMIT'] = '3';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+    const w1 = { userId: 'u1', workspaceId: 'w1' };
+    for (const fp of ['fp-1', 'fp-2', 'fp-3']) {
+      expect((await enforceMcpRateLimit(w1, fp)).refusal).toBeNull();
+    }
+    // A fourth credential is a fresh per-agent bucket and NO fresh ceiling.
+    const { refusal } = await enforceMcpRateLimit(w1, 'fp-4');
+    expect(refusal).not.toBeNull();
+    expect(refusal!.status).toBe(429);
+    expect(Number(refusal!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+    const body = await refusal!.json();
+    expect(body).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: MCP_RATE_LIMITED_JSONRPC_CODE, data: { code: 'RATE_LIMITED' } },
+    });
+    expect(body.error.data.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+    // Another workspace has its own ceiling.
+    expect(
+      (await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w2' }, 'fp-1')).refusal,
+    ).toBeNull();
+  });
+
+  it('never leaves a call with no credential unlimited — it shares the person bucket', async () => {
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '2';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+    expect((await enforceMcpRateLimit(ctx, null)).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(ctx, null)).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(ctx, null)).refusal).not.toBeNull();
+  });
+
+  it('reports the TIGHTER of its two limbs on an allowed request', async () => {
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '50';
+    process.env['MOTIR_AGENT_WORKSPACE_RATE_LIMIT'] = '5';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+    const { refusal, headers } = await enforceMcpRateLimit(ctx, FP);
+    expect(refusal).toBeNull();
+    expect(headers['x-ratelimit-limit']).toBe('5');
+    expect(headers['x-ratelimit-remaining']).toBe('4');
   });
 
   it('is its OWN bucket — an exhausted MCP budget leaves chat and generation alone', async () => {
@@ -614,10 +680,21 @@ describe('the MCP transport surface', () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '5';
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '5';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
-    expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
-    expect((await enforceMcpRateLimit(ctx)).refusal).not.toBeNull();
+    expect((await enforceMcpRateLimit(ctx, FP)).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(ctx, FP)).refusal).not.toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+  });
+
+  it('defaults to 600 per agent and 12 000 per workspace, and a typo falls back', () => {
+    delete process.env['MOTIR_MCP_RATE_LIMIT'];
+    delete process.env['MOTIR_AGENT_WORKSPACE_RATE_LIMIT'];
+    expect(mcpBudget().limit).toBe(600);
+    expect(agentWorkspaceBudget().limit).toBe(12_000);
+    process.env['MOTIR_MCP_RATE_LIMIT'] = 'lots';
+    process.env['MOTIR_AGENT_WORKSPACE_RATE_LIMIT'] = '-1';
+    expect(mcpBudget().limit).toBe(600);
+    expect(agentWorkspaceBudget().limit).toBe(12_000);
   });
 
   it('defaults FAR looser than the browser budgets — the caller here is a script', async () => {
@@ -634,7 +711,7 @@ describe('the MCP transport surface', () => {
     process.env[RATE_LIMIT_DISABLE_ENV] = '1';
     process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
     for (let i = 0; i < 4; i += 1) {
-      expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
+      expect((await enforceMcpRateLimit(ctx, FP)).refusal).toBeNull();
     }
   });
 
@@ -724,6 +801,8 @@ describe('the routes are actually WIRED to the guards', () => {
     // route is exactly how this surface came to be unlimited in the first place,
     // so it fails HERE now rather than in production.
     ['app/api/mcp/route.ts', 'enforceMcpRateLimit'],
+    // …keyed on the presented credential, fingerprinted (MOTIR-8601).
+    ['app/api/mcp/route.ts', 'tokenFingerprint'],
     // …and the dispatch-seam half: the route asks for it, the registry applies it.
     ['app/api/mcp/route.ts', 'registerMcpTools(server, contextFromExtra, grantFromExtra, true)'],
     ['lib/mcp/registry.ts', 'rateLimitedServer'],
@@ -783,6 +862,9 @@ describe('the routes are actually WIRED to the guards', () => {
     // target is a PLAN id rather than a work-item key, which changes nothing
     // about what it costs: it dispatches a model job.
     'app/api/ai/revise/route.ts',
+    // The SHARPEN door (Task MOTIR-1101 · MOTIR-8181): open, answer, skip,
+    // you-decide and stop each submit a `sharpen_turn` model job.
+    'app/api/ai/sharpen/route.ts',
     // A change forwarded after the walk finished becomes ONE revision job, so it
     // spends provider money like the revise door it reuses (MOTIR-7997).
     'app/api/ai/plan-change/session/late-changes/route.ts',
@@ -835,6 +917,10 @@ describe('the routes are actually WIRED to the guards', () => {
     // The revision stream RELAYS a job already paid for at its submit door —
     // the same reason every other `[jobId]/stream` in this list is here.
     'app/api/ai/revise/[jobId]/stream/route.ts',
+    // Sharpen's session READ and its settle (MOTIR-8181): a database read, and a
+    // job read back and stored — the guide settle precedent exactly.
+    'app/api/ai/sharpen/[sessionId]/route.ts',
+    'app/api/ai/sharpen/settle/route.ts',
   ];
 
   async function aiRoutes(): Promise<string[]> {
@@ -1049,5 +1135,29 @@ describe('the routes are actually WIRED to the guards', () => {
       [...readFileSync(file, 'utf8').matchAll(/_TOOL_NAME = '([a-z_]+)'/g)].map((m) => m[1]),
     );
     for (const tool of MCP_BILLABLE_TOOLS) expect(declaredEverywhere).toContain(tool);
+  });
+});
+
+describe('a planning job’s job-token reads draw their own, larger budget (MOTIR-8423)', () => {
+  // Since MOTIR-8604 the door is `enforceJobReadRateLimit`; a keyless token is
+  // the pre-change `ai:internal` user bucket these cases pinned.
+  it('ai:internal is NOT metered by the interactive MOTIR_AI_RATE_LIMIT', async () => {
+    process.env['MOTIR_AI_RATE_LIMIT'] = '1';
+    const c = { userId: 'u-8423', workspaceId: 'w-8423' };
+    for (let i = 0; i < 5; i++) {
+      expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).toBeNull();
+    }
+  });
+
+  it('and is still bounded by MOTIR_AI_INTERNAL_RATE_LIMIT', async () => {
+    process.env['MOTIR_AI_INTERNAL_RATE_LIMIT'] = '1';
+    try {
+      await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+      const c = { userId: 'u-8423b', workspaceId: 'w-8423b' };
+      expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).toBeNull();
+      expect(await enforceJobReadRateLimit({ ctx: c, jobKey: null })).not.toBeNull();
+    } finally {
+      delete process.env['MOTIR_AI_INTERNAL_RATE_LIMIT'];
+    }
   });
 });

@@ -222,24 +222,27 @@ an OAuth access token.
 
 ## Rate limits
 
-`POST /api/mcp` is metered on **two** budgets, keyed on the token owner **+ the
-token's workspace** — not on the token itself. Minting a second token does not
-buy a second allowance; that is the point, because the expensive half of this
-surface shares its counter with Motir's own UI.
+`POST /api/mcp` is metered on **three** budgets. The request volume is counted
+**per credential**, so each agent you run gets its own allowance, and also
+against one **ceiling per workspace** that every agent in it shares. The AI
+generation budget is counted per token owner **+ workspace**, because it shares
+its counter with Motir's own UI. Minting another token adds an agent allowance;
+it adds no workspace ceiling and no generation allowance.
 
-| What is spent                      | On                                                                    | Default        | Env                                           |
-| ---------------------------------- | --------------------------------------------------------------------- | -------------- | --------------------------------------------- |
-| **Requests** (`mcp:call`)          | every request, whatever it asks for                                   | 300 per minute | `MOTIR_MCP_RATE_LIMIT` / `_WINDOW_MS`         |
-| **AI generations** (`ai:generate`) | `expand_item`, `submit_plan_session` — the tools that run a model job | 10 per minute  | `MOTIR_AI_GENERATE_RATE_LIMIT` / `_WINDOW_MS` |
+| What is spent                             | On                                                                    | Default           | Env                                               |
+| ----------------------------------------- | --------------------------------------------------------------------- | ----------------- | ------------------------------------------------- |
+| **Requests** (`mcp:call`)                 | every request, per credential (token or OAuth connection)             | 600 per minute    | `MOTIR_MCP_RATE_LIMIT` / `_WINDOW_MS`             |
+| **Workspace ceiling** (`agent:workspace`) | every request, shared by every agent in the workspace (`/api/v1` too) | 12 000 per minute | `MOTIR_AGENT_WORKSPACE_RATE_LIMIT` / `_WINDOW_MS` |
+| **AI generations** (`ai:generate`)        | `expand_item`, `submit_plan_session` — the tools that run a model job | 10 per minute     | `MOTIR_AI_GENERATE_RATE_LIMIT` / `_WINDOW_MS`     |
 
-Reads, transitions and sprint writes only ever spend the first budget: an agent
+Reads, transitions and sprint writes only ever spend the first two budgets: an agent
 polling `next_ready` is not metered as if it were generating a plan. The two
 job-submitting tools spend **both**, and their generation budget is the same one
 the "Expand" and plan buttons in the Motir UI draw from.
 
 **How a refusal arrives**, in the two shapes:
 
-- **Over the request budget** — HTTP **429** with `Retry-After` and the
+- **Over the request budget or the workspace ceiling** — HTTP **429** with `Retry-After` and the
   `X-RateLimit-Limit` / `-Remaining` / `-Reset` triple, and a JSON-RPC error body:
 
   ```json
@@ -252,7 +255,7 @@ the "Expand" and plan buttons in the Motir UI draw from.
       "data": {
         "code": "RATE_LIMITED",
         "retryAfterSeconds": 27,
-        "limit": 300,
+        "limit": 600,
         "remaining": 0,
         "resetAt": 1754835600
       }
@@ -264,8 +267,9 @@ the "Expand" and plan buttons in the Motir UI draw from.
   posting JSON-RPC directly can read `error.data` and back off precisely.
 
 - **Over the generation budget** — an ordinary tool **error result**
-  (`isError: true`) whose text carries `RATE_LIMITED` and the retry seconds. The
-  request itself succeeded, so it comes back as a normal `tools/call` response.
+  (`isError: true`) whose text carries `RATE_LIMITED` and the retry seconds, and
+  whose `structuredContent` is `{ "code": "RATE_LIMITED", "retryAfterSeconds": n }`.
+  The request itself succeeded, so it comes back as a normal `tools/call` response.
 
 The `X-RateLimit-*` headers ride **every** response, not only the refusals, so a
 client can pace itself before it hits the wall.

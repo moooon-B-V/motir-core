@@ -2234,6 +2234,16 @@ export default defineConfig({
         'lib/planning/planDestination.ts',
         'components/planning/PlanDestinationTag.tsx',
 
+        // Story MOTIR-8590 · Subtask MOTIR-8596 — FOLLOW THE PLANNER. The driven-step
+        // derivation, the follow control, the typewriter's pure half, the field
+        // that types and the live reduced-motion read: each new with the story,
+        // each GATED in `thresholds` below, measured first.
+        'lib/planning/plannerDrive.ts',
+        'components/planning/FollowPlannerControl.tsx',
+        'lib/planning/typeIn.ts',
+        'components/planning/TypeInText.tsx',
+        'lib/hooks/usePrefersReducedMotion.ts',
+
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
         // The story's decision code, in one place: what a pull request delivers
         // (`changeRequestWorkItems`), what a green build promotes (`ciPromotion`),
@@ -3164,6 +3174,22 @@ export default defineConfig({
         'components/onboarding/OnboardingTopBar.tsx',
         'app/**/onboarding/how-it-works/page.tsx',
         'app/**/onboarding/direction/\\[tier\\]/page.tsx',
+        // ── Story MOTIR-8537 · the observability path (MOTIR-8556) ──
+        // Every module the story's five code cards added, plus the two monitoring
+        // modules they changed that had no entry. Pinned in `thresholds` below at
+        // the level the existing `lib/monitoring/*` entries carry (branches /
+        // functions / lines 90, read at e855430). `scripts/pg-top-statements.ts`
+        // is the CLI entry and stays out, as `generate-mcp-tool-schemas.ts` does
+        // beside its gated `generateMcpToolSchemas.ts`.
+        'lib/monitoring/config.ts',
+        'lib/monitoring/serverInit.ts',
+        'lib/monitoring/transactionSpan.ts',
+        'lib/monitoring/requestLabel.ts',
+        'lib/monitoring/requestDbTiming.ts',
+        'lib/monitoring/metricsServer.ts',
+        'lib/mcp/toolTracing.ts',
+        'scripts/pgTopStatements.ts',
+        'scripts/pgTopStatementsQuery.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -4993,6 +5019,23 @@ export default defineConfig({
         // shape of the gap this card exists to close.
         'lib/rateLimit/mcpGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/rateLimit/fixedWindow.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8547 — Better-Auth's adapter onto the shared counter (MOTIR-8613)
+        // and the boot guard on the `memory` store (MOTIR-8614). Measured at
+        // 100 / 100 / 100 / 100 against their own specs plus the story gate
+        // (`tests/rateLimit/storyGate.test.ts`, MOTIR-8619).
+        'lib/rateLimit/betterAuthStorage.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/storeGuard.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8548 · MOTIR-8607 — the per-workspace agent ceiling, the one NEW
+        // module of the story's motir-core children. MEASURED on this branch against the
+        // story's own specs (`tests/integration/rateLimit/agentRateLimitStoryGate.test.ts`
+        // plus the children's suites): 100 / 100 / 100 / 100 (lines / functions /
+        // branches / statements), then pinned at the project floor.
+        'lib/rateLimit/workspaceCeiling.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
         'lib/services/rateLimitService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/rateLimitCounterRepository.ts': {
           branches: 90,
@@ -6378,6 +6421,18 @@ export default defineConfig({
         // clear of the pin it already carried).
         'lib/planning/planDestination.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanDestinationTag.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8590 · Subtask MOTIR-8596 — follow the planner (see `include`).
+        // Measured with the story's unit floors and its integration gate:
+        //   plannerDrive.ts             100 branch · 100 fn · 100 lines
+        //   FollowPlannerControl.tsx    100 branch · 100 fn · 100 lines
+        //   typeIn.ts                  97.9 branch · 100 fn · 100 lines
+        //   TypeInText.tsx             91.9 branch · 100 fn · 100 lines
+        //   usePrefersReducedMotion.ts  100 branch · 100 fn · 100 lines
+        'lib/planning/plannerDrive.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/FollowPlannerControl.tsx': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/typeIn.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/TypeInText.tsx': { branches: 90, functions: 90, lines: 90 },
+        'lib/hooks/usePrefersReducedMotion.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch
@@ -7192,6 +7247,16 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-8537 · MOTIR-8556 — see `include` above.
+        'lib/monitoring/config.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/serverInit.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/transactionSpan.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/requestLabel.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/requestDbTiming.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/monitoring/metricsServer.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/toolTracing.ts': { branches: 90, functions: 90, lines: 90 },
+        'scripts/pgTopStatements.ts': { branches: 90, functions: 90, lines: 90 },
+        'scripts/pgTopStatementsQuery.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-8238 · MOTIR-8256 — measured above (`include`), pinned at the floor.
         'components/onboarding/layout/OnboardingBrandBar.tsx': {
           lines: 90,

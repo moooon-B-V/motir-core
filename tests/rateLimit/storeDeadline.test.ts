@@ -326,6 +326,23 @@ function assertsRefusalAgainstSharedStore(file: string): boolean {
  */
 const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
   [
+    'tests/rateLimit/storeGuard.test.ts',
+    'Its refusals are the BOOT GUARD’s (`assertRateLimitStoreAllowed`, ' +
+      '`lib/rateLimit/storeGuard.ts`, MOTIR-8614): a pure function of the env it is handed, ' +
+      'throwing `MemoryRateLimitStoreRefusedError` for a production build configured with ' +
+      'the `memory` store. It reaches `lib/rateLimit/store.ts` only to check the re-export; ' +
+      'no request is made, no budget is spent and no increment runs.',
+  ],
+  [
+    'tests/two-instance/limits.spec.ts',
+    'Its 429s come from two `next start` PROCESSES the lane spawns (MOTIR-8617), each ' +
+      'resolving its own shared store from its own env — a store this test process ' +
+      'cannot pin, because nothing it sets reaches another process. The deadline those ' +
+      'servers count at is the production 250 ms, and the lane accepts that on purpose: ' +
+      'it measures the deployed configuration. The exposure is one spec file against one ' +
+      'otherwise idle database in its own CI job, not a contended shard.',
+  ],
+  [
     'tests/agentInstances/agentInstanceUnits.test.ts',
     'Its 429s are not rate limits: they are `mapAgentInstanceError`’s status for the ' +
       'agent lane’s CAPS (`AgentInstanceStartRefusedError` `user_cap`, `fleet_busy`, ' +

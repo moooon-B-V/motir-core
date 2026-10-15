@@ -1,8 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlanReview, fetchPlanReviewSince } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import { mergePlanReview } from '@/lib/planning/mergePlanReview';
+import { useLiveSignal, useLiveSignalSource, type LiveTopic } from '@/lib/live/liveSignal';
+import { POLL_MS } from '@/lib/live/sources/planPollSource';
 
 // THE generating-plan poll (Subtask MOTIR-6295) — the ONE place a `generating`
 // Plan is watched while it is being written. Lifted out of the two effects that
@@ -18,10 +21,16 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 //
 // ⚠️ SNAPSHOT SEMANTICS. `PlanItem` carries no `updatedAt`, and the plan's
 // `lastActivityAt` (MOTIR-7822) says only WHEN something last happened, not WHAT —
-// so there is no delta to merge, and each response REPLACES the review whole
-// (its `lastActivityAt` and `inFlightSteps` included). A proposal withdrawn
-// between two ticks disappears on the next one and cannot come back from a
-// cache. Responses are applied in ISSUE order: a monotonic sequence drops any
+// so there is no delta on the wire, and each response is the WHOLE truth (its
+// `lastActivityAt` and `inFlightSteps` included). A proposal withdrawn between two
+// ticks disappears on the next one and cannot come back from a cache.
+//
+// ⚠️ AND IT IS MERGED BY IDENTITY, NOT FILED WHOLE (Story MOTIR-8539 ·
+// MOTIR-8575). `mergePlanReview` keeps every previous object the new snapshot
+// equals, so an unchanged proposal keeps its object and its rendered node. An
+// answer that changes NOTHING is not applied at all — no `version`, no
+// `onSnapshot` — and `version` moves only when the proposals did, so the plan tree
+// is handed no new props for a read that moved nothing it draws. Responses are applied in ISSUE order: a monotonic sequence drops any
 // response older than the last one applied, so a slow early read can never
 // overwrite a later snapshot. A failed or aborted tick keeps the last snapshot
 // and simply retries on the next.
@@ -52,12 +61,19 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 // longer `generating`, when `planId` changes, or on unmount. A `null` planId is
 // "nothing to watch".
 //
+// ⚠️ THE CADENCE COMES THROUGH THE LIVE-SIGNAL SEAM (Story MOTIR-8539 · Subtask
+// MOTIR-8572). The interval is `lib/live/sources/planPollSource.ts`'s, and a tick
+// arrives as a `plan` signal from `useLiveSignal`; `refresh()` asks the source
+// to `trigger` a FORCED signal. Everything above this paragraph is the READ
+// POLICY and stays here, because it is not a transport: a different source
+// (a test's fake, the push story's) drives the same reads by the same rules.
+//
 // It draws NOTHING. Callers decide what a snapshot means: `onSnapshot` fires
 // with every applied response, in the same tick it lands, for callers whose own
 // state must move with it (the plan page's `review`, the reveal's `items`).
 
-/** The generating-plan poll cadence. */
-export const POLL_MS = 2500;
+/** The generating-plan poll cadence — owned by the seam's plan source, re-exported here. */
+export { POLL_MS };
 
 /** A read still out after this long is abandoned so the poll can read again (MOTIR-8102). */
 export const STALL_MS = 15_000;
@@ -72,15 +88,23 @@ export interface GeneratingPlanPollOptions {
   /** Read once immediately, before the first interval (default `true`). The plan
    *  page seeds from the server read, so it waits a full interval, as it always has. */
   immediate?: boolean;
-  /** Called with every APPLIED snapshot (a stale or failed read never reaches it). */
-  onSnapshot?: (review: PlanReviewDto) => void;
+  /**
+   * Called with every APPLIED snapshot that changed something (a stale, failed or
+   * identical read never reaches it), MERGED into the previous one — so a consumer
+   * that stores it keeps the kept references. The second argument says whether the
+   * proposals moved, and which (MOTIR-8575).
+   */
+  onSnapshot?: (
+    review: PlanReviewDto,
+    change: { itemsChanged: boolean; changedItemIds: ReadonlySet<string> },
+  ) => void;
 }
 
 export interface GeneratingPlanPoll {
   /** The latest applied snapshot of the plan being polled, or `null` before the
    *  first one (and whenever `planId` is `null`). */
   review: PlanReviewDto | null;
-  /** Bumped on every applied snapshot. */
+  /** Bumped on every applied snapshot whose proposals changed (MOTIR-8575). */
   version: number;
   /** `true` after {@link FAILING_AFTER} consecutive failed reads; `false` again on
    *  the next success. The last good snapshot is kept throughout. */
@@ -89,6 +113,9 @@ export interface GeneratingPlanPoll {
    *  is being polled. */
   refresh: () => void;
 }
+
+/** A topic no subscription is ever made for (`enabled` is false whenever it is used). */
+const IDLE_TOPIC: LiveTopic = { kind: 'plan', planId: '' };
 
 interface Snapshot {
   planId: string;
@@ -111,6 +138,8 @@ export function useGeneratingPlanPoll(
     onSnapshotRef.current = opts.onSnapshot;
   });
   const tickRef = useRef<((force?: boolean) => void) | null>(null);
+  // The plan a snapshot STOPPED (no longer `generating`): its cadence unsubscribes.
+  const [stoppedPlanId, setStoppedPlanId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!planId) return;
@@ -121,12 +150,13 @@ export function useGeneratingPlanPoll(
     // The version of the last FULL snapshot applied, and how many unchanged answers followed it.
     let heldVersion: string | null = null;
     let unchangedRun = 0;
+    // The snapshot held for THIS plan — what the next full answer merges into.
+    let held: PlanReviewDto | null = null;
     // Each read's controller, with when it started: a tick skips while one is out.
     const inFlight = new Map<AbortController, number>();
 
     const stop = () => {
       stopped = true;
-      clearInterval(handle);
       for (const ctrl of inFlight.keys()) ctrl.abort();
       inFlight.clear();
       if (tickRef.current === tick) tickRef.current = null;
@@ -169,13 +199,23 @@ export function useGeneratingPlanPoll(
             unchangedRun += 1;
             return;
           }
-          const review = answer;
-          heldVersion = review.reviewVersion ?? null;
+          heldVersion = answer.reviewVersion ?? null;
           unchangedRun = 0;
-          setSnapshot({ planId, review });
-          setVersion((v) => v + 1);
-          onSnapshotRef.current?.(review);
-          if (review.status !== 'generating') stop();
+          const merged = mergePlanReview(held, answer);
+          const review = merged.review;
+          if (review !== held) {
+            held = review;
+            setSnapshot({ planId, review });
+            if (merged.itemsChanged) setVersion((v) => v + 1);
+            onSnapshotRef.current?.(review, {
+              itemsChanged: merged.itemsChanged,
+              changedItemIds: merged.changedItemIds,
+            });
+          }
+          if (review.status !== 'generating') {
+            stop();
+            setStoppedPlanId(planId);
+          }
         })
         .catch(() => {
           // Best-effort — the last snapshot stands and the next tick retries. A
@@ -190,13 +230,39 @@ export function useGeneratingPlanPoll(
     };
 
     tickRef.current = tick;
-    const handle = setInterval(() => tick(), POLL_MS);
     if (immediate) tick();
     return stop;
   }, [planId, immediate]);
 
+  // The cadence, from the seam: each signal is "time to look", and a FORCED one
+  // is the explicit `refresh()` below. The tick decides whether looking reads.
+  const topic = useMemo<LiveTopic | null>(
+    () => (planId ? { kind: 'plan', planId } : null),
+    [planId],
+  );
+  useLiveSignal(topic ?? IDLE_TOPIC, (signal) => tickRef.current?.(signal.forced === true), {
+    enabled: topic !== null && stoppedPlanId !== planId,
+  });
+
+  // ⚠️ `refresh` IS STABLE FOR THE HOOK'S LIFETIME, as it was before the seam: the
+  // source and topic are read through refs. A caller may hold it in an effect's
+  // deps (`usePlanGeneration`'s `start`, which `GenerationFlow` auto-starts on), and
+  // an identity that moved with `planId` re-ran that effect when the plan settled,
+  // starting generation over again.
+  const source = useLiveSignalSource();
+  const sourceRef = useRef(source);
+  const topicRef = useRef(topic);
+  useEffect(() => {
+    sourceRef.current = source;
+    topicRef.current = topic;
+  });
   const refresh = useCallback(() => {
-    tickRef.current?.(true);
+    const current = topicRef.current;
+    if (!current || !tickRef.current) return;
+    // A source that cannot be nudged still reads now: the read policy is ours.
+    const live = sourceRef.current;
+    if (live.trigger) live.trigger(current);
+    else tickRef.current(true);
   }, []);
 
   const current = planId && snapshot && snapshot.planId === planId ? snapshot.review : null;
