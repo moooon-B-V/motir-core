@@ -43,7 +43,7 @@ const inputSchema = {
 
 /** Compact human summary — the four questions, one line each. */
 export function summarizeProjectState(state: ProjectStateDto): string {
-  const { project, planningGate, code, repoSet, onboarding } = state;
+  const { project, planningGate, code, repoSet, onboarding, contentLanguage } = state;
   const established =
     planningGate === 'workspace'
       ? `established (onboarding ran ${project.onboardingRanAt})`
@@ -74,6 +74,7 @@ export function summarizeProjectState(state: ProjectStateDto): string {
     ...repoLines,
     setLine,
     onboardingLine,
+    `Content language: ${contentLanguage}`,
   ].join('\n');
 }
 
@@ -111,7 +112,9 @@ export function registerGetProjectState(
         'ESTABLISHED (the onboarding marker, via the same gate the planning surfaces read); is ' +
         'a GitHub App INSTALLED and which repositories are granted; is each of those repos ' +
         'code-INDEXED or still pending; what is the project’s own repository SET; and where ' +
-        'its onboarding run stopped (or null if it never had one). Read-only — it reports ' +
+        'its onboarding run stopped (or null if it never had one). It also returns the ' +
+        'organisation’s CONTENT LANGUAGE (`contentLanguage`), the language work content is ' +
+        'written in. Read-only — it reports ' +
         'state, it never changes it. A project with nothing configured returns a well-formed ' +
         '"nothing configured" answer, never an error, so "there is no code" is ' +
         'distinguishable from "I could not look". Honors the same access checks as the UI; ' +

@@ -239,8 +239,13 @@ test('four projects, four destinations', async ({ page, chapter, beat, acceptanc
 
     // ⚠️ AND NO ROW NAMES A DIRECTION TIER. `discovery` is the identifier; what a
     // user reads is what they are being asked (MOTIR-4757, MOTIR-4755 rev 2).
+    //
+    // EDITED IN PLACE (MOTIR-8772): the wizard no longer asks the questions step
+    // at all. Mo's approved design (MOTIR-8767 revision A) ends onboarding at the
+    // Import step with Enter Motir and drafts no plan, so the rail stopped
+    // listing "A few questions". The assertion that no tier is named stands.
     const rail = page.getByRole('navigation', { name: /migration/i });
-    await expect(rail).toContainText('A few questions');
+    await expect(rail).not.toContainText('A few questions');
     await expect(rail).not.toContainText(/discovery|vision|Pre-plan/i);
     await beat();
   });

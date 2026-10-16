@@ -5,6 +5,12 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   streamJob: vi.fn(),
 }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
+// The tenant languages (MOTIR-8741), mocked for the same reason as the org: a
+// SYNTHETIC ProjectContext has no org or user rows behind it. The real reads are
+// covered by `planSubmitLanguages.test.ts`.
+vi.mock('@/lib/ai/tenantLanguages', () => ({
+  resolveTenantLanguages: vi.fn(async () => ({ contentLanguage: 'ja', personLanguage: 'ko' })),
+}));
 // MOTIR-4604: the plan-edit submits now resolve the PLANNING code context — the
 // grant list plus each repo's freshness verdict, reason and in-flight flag. These
 // suites are about the ENVELOPE, so `undefined` (no connected repo) keeps every
@@ -176,6 +182,8 @@ describe('aiPlanEditsService.submitAugment', () => {
         workspaceId: 'ws_1',
         projectId: 'pj_1',
         projectKey: 'MOTIR',
+        contentLanguage: 'ja',
+        personLanguage: 'ko',
       },
       expect.objectContaining({ prompt: 'add a login flow', code: expect.any(Object) }),
       { userId: 'user_1' },

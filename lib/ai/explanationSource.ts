@@ -1,4 +1,5 @@
 import type { WorkItemExplanationSourceDto } from '@/lib/dto/workItems';
+import { isLocale, type Locale } from '@/lib/i18n/locales';
 
 // The "Draft with AI" provenance rule (8.8.12), shared by the create modal and
 // the edit form so both classify a drafted explanation identically. It is a
@@ -34,4 +35,34 @@ export function explanationSourceForSave(
 // session and hasn't been edited.
 export function isUntouchedAiDraft(currentValue: string, draftBaseline: string | null): boolean {
   return explanationSourceForSave(currentValue, draftBaseline) === 'ai_draft';
+}
+
+// The LANGUAGE to persist with the explanation (Story MOTIR-7734 · MOTIR-8744) —
+// the draft's own, on the same rule as the source above: only when there is a
+// draft this session, the editor still holds text, and the draft's frame named a
+// language. An edited draft keeps the draft's language (a human edit's language
+// is not detected). Otherwise `undefined`: the caller omits it, and the write
+// door records the organisation's content language.
+export function explanationLanguageForSave(
+  currentValue: string,
+  draftBaseline: string | null,
+  draftLanguage: Locale | null,
+): Locale | undefined {
+  if (draftBaseline === null) return undefined;
+  if (currentValue.trim().length === 0) return undefined;
+  return draftLanguage ?? undefined;
+}
+
+// The SERVER ACTIONS' whitelist for that language (MOTIR-8744): the one key the
+// browser may send is `languages.explanation`, kept only when it is one of the
+// eleven locales and the explanation holds text. A forged `title` or
+// `description` language, or any other value, never reaches the write door.
+export function explanationLanguageFromClient(
+  languages: { explanation?: unknown } | undefined,
+  explanationMd: string | null | undefined,
+): { languages: { explanation: Locale } } | Record<string, never> {
+  const explanation = languages?.explanation;
+  if (typeof explanation !== 'string' || !isLocale(explanation)) return {};
+  if (!explanationMd?.trim()) return {};
+  return { languages: { explanation } };
 }

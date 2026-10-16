@@ -49,16 +49,18 @@ export interface ImportWizardProps {
   /**
    * Run INSIDE the migrate wizard's Import step (MOTIR-8254, design
    * `design/onboarding-migrate/` § Revision 6, Panels 4a–4f): no heading of its
-   * own (the wizard's step head names it), Skip import in the Connect step's
-   * Cancel slot, and Continue on the finished state instead of View imported
-   * backlog. Omitted, the importer renders as its own page's work band.
+   * own (the wizard's step head names it), an optional Skip in the Connect
+   * step's Cancel slot, and Continue on the finished state instead of View
+   * imported backlog. Omitted, the importer renders as its own page's work band.
    */
   embedded?: ImportWizardEmbed;
 }
 
 export interface ImportWizardEmbed {
-  skipLabel: string;
-  onSkip: () => void;
+  /** The Connect step's Cancel slot. The migrate wizard leaves it out since its
+   *  own footer carries Enter Motir (MOTIR-8772, § Revision A). */
+  skipLabel?: string;
+  onSkip?: () => void;
   continueLabel: string;
   onContinue: () => void;
   /** The host is mid-request (skip / continue) — its controls disable. */
@@ -188,7 +190,7 @@ export function ImportWizard({
           justConnectedFailed={justConnected?.failed ?? false}
           onNext={goToMap}
           cancel={
-            embedded ? (
+            embedded?.onSkip ? (
               <Button variant="ghost" onClick={embedded.onSkip} disabled={embedded.busy}>
                 {embedded.skipLabel}
               </Button>

@@ -8539,7 +8539,12 @@
       "answeredGroup": "Votre projet y a déjà répondu",
       "answeredMeta": "Motir a lu votre code et vos éléments de travail",
       "discoveryStep": "Quelques questions",
-      "directionGroup": "Votre orientation"
+      "directionGroup": "Votre orientation",
+      "subtitle": "L’indexation et l’import tournent en arrière-plan. Entrez dans Motir quand vous voulez.",
+      "background": "En arrière-plan · {detail}",
+      "backgroundInProgress": "En cours",
+      "backgroundQueued": "En file d’attente",
+      "backgroundFailed": "Échec"
     },
     "common": {
       "back": "Retour",
@@ -8633,7 +8638,9 @@
       "perRepo": "Par dépôt",
       "state": {
         "indexed": "Indexé",
-        "queued": "En file d'attente"
+        "queued": "En file d'attente",
+        "indexing": "En cours",
+        "failed": "Échec"
       },
       "callout": "Motir déduit vos conventions et un bilan de santé du code (ainsi que tout plan) de l'ensemble du projet ; il a donc besoin que chaque dépôt soit indexé — Suivant reste désactivé jusqu'à ce que tous les dépôts soient terminés.",
       "completeTitle": "Graphe de code construit",
@@ -8643,11 +8650,13 @@
     "import": {
       "eyebrow": "Facultatif · Import et planification",
       "heading": "Importer votre Backlog existant",
-      "body": "Vous suivez déjà votre travail dans Jira, Linear, GitHub, Plane ou un fichier CSV ? Importez-le dans ce projet — vous examinerez un aperçu de simulation avant toute écriture. Passez cette étape si vous n'avez aucun Backlog à importer.",
+      "body": "Importez depuis Jira, Linear ou Plane, ou entrez dans Motir et faites-le plus tard. Un import se poursuit en arrière-plan.",
       "reconcile": "Lorsque vous générerez ensuite un plan, Motir rapprochera les deux pour éviter tout doublon.",
       "skip": "Passer l'import",
       "bodyInline": "Vous suivez déjà votre travail dans Jira, Linear, GitHub, Plane ou un fichier CSV ? Importez-le ici même. Vous examinez un aperçu de simulation avant toute écriture. Passez cette étape si vous n'avez aucun Backlog à importer.",
-      "continue": "Continuer"
+      "continue": "Continuer",
+      "running": "Import depuis {source} · {done} éléments de travail jusqu’ici",
+      "runningBody": "Cela continue en arrière-plan. Vous n’avez pas besoin d’attendre."
     },
     "decision": {
       "eyebrow": "Configuration terminée",
@@ -8673,6 +8682,26 @@
       "readyTitle": "Votre premier plan est prêt",
       "readyBody": "{count, plural, one {# élément est rédigé} other {# éléments sont rédigés}} pour {project}. Rien n'est définitif tant que vous ne l'avez pas approuvé.",
       "readyCta": "Examiner votre plan"
+    },
+    "indexing": {
+      "doneTitle": "{repos} indexé",
+      "repoCount": "{count, plural, one {# dépôt} other {# dépôts}}",
+      "aggregateTail": "{done} sur {total} terminés",
+      "failedTail": "{count} en échec",
+      "detailBody": "Cela continue en arrière-plan. Vous pouvez entrer dans Motir dès maintenant ; rien n’attend que ce soit terminé.",
+      "rowFailed": "Motir n’a pas pu indexer ce dépôt. Rien de ce que vous avez fait n’est perdu.",
+      "checkConnection": "Vérifier la connexion",
+      "close": "Fermer",
+      "retrying": "Nouvelle tentative…",
+      "refusedNotConnected": "Ce dépôt n’est plus connecté au projet. Vérifiez la connexion, puis réessayez.",
+      "refusedTooLarge": "Ce dépôt est trop volumineux pour que Motir l’indexe.",
+      "retryError": "Motir n’a pas pu relancer l’opération. Réessayez dans un instant.",
+      "importHeading": "Import des éléments de travail",
+      "importProgress": "{done} jusqu’ici"
+    },
+    "enter": {
+      "cta": "Entrer dans Motir",
+      "hint": "L’indexation et l’import éventuel se poursuivent une fois entré."
     }
   },
   "repositorySet": {

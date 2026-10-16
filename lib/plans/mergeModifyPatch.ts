@@ -1,5 +1,6 @@
 import { PLAN_ITEM_PATCH_KEYS, type PlanItemPatch } from '@/lib/dto/plans';
 import { DuplicatePlanTargetError, type PlanTargetOp } from '@/lib/plans/errors';
+import { mergeProposalLanguages } from '@/lib/plans/validateProposedLanguages';
 
 // A second `modify` of one committed card MERGES into the plan's one `modify`
 // (MOTIR-6051 · `agent-authored-plans.md` AMENDMENT 18 §2). PURE: the append
@@ -63,6 +64,16 @@ export function mergeModifyPatch(
     if (keptAdds.length > 0) merged[addKey] = keptAdds;
     if (keptRemoves.length > 0) merged[removeKey] = keptRemoves;
   }
+
+  // The LANGUAGES annotation (MOTIR-8743) — outside the constant, folded per key:
+  // the incoming patch's statement wins key by key, and a field it rewrites
+  // without naming a language drops the earlier patch's claim about that field.
+  const languages = mergeProposalLanguages(
+    (existing ?? {}).languages,
+    incoming ?? {},
+    (incoming ?? {}).languages,
+  );
+  if (languages) merged.languages = languages;
 
   return merged as PlanItemPatch;
 }

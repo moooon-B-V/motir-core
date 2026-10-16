@@ -65,6 +65,9 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   supersedesRemove: [],
   supersededByAdd: [],
   supersededByRemove: [],
+  // The language each rewritten text field was written in (MOTIR-8743) — an
+  // annotation on the body fields, so it moves no rail row.
+  languages: {},
 };
 
 describe('the proposal envelope’s SETTABLE rail-field set (MOTIR-4183)', () => {

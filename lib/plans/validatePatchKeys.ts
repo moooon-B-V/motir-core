@@ -18,7 +18,9 @@ import { InvalidProposalError } from '@/lib/plans/errors';
 // refusing it at approve would put the author's old mistake in front of the
 // reviewer, who cannot fix it.
 
-const KNOWN: ReadonlySet<string> = new Set(PLAN_ITEM_PATCH_KEYS);
+// `languages` (MOTIR-8743) annotates the text keys beside it; it is outside the
+// constant (it changes nothing by itself) and validated on its own.
+const KNOWN: ReadonlySet<string> = new Set([...PLAN_ITEM_PATCH_KEYS, 'languages']);
 
 /**
  * Refuse a `modify` patch carrying any key {@link PLAN_ITEM_PATCH_KEYS} does not

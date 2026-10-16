@@ -35,7 +35,10 @@ export default async function DashboardPage() {
   if (!session) redirect('/sign-in');
 
   const ctx = await getWorkspaceContext();
-  if (!ctx) redirect('/sign-in');
+  // No active workspace — the active org has none (MOTIR-8777). The no-project
+  // landing sends the reader to that org, never `/sign-in`, which would bounce a
+  // signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // No active project: the reader can enter none of the workspace's projects
   // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would

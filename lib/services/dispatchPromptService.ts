@@ -28,6 +28,9 @@ import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { toOrgContentLanguage } from '@/lib/workItems/contentLanguage';
+import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
 import {
@@ -406,6 +409,7 @@ export const dispatchPromptService = {
       errorEvidence,
       ownRefusal,
       obsoleteNeighbours,
+      contentLanguage,
     ] = await allSettledOrThrow([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -473,6 +477,14 @@ export const dispatchPromptService = {
       resolveObsoleteNeighbours(item, project.identifier, ctx.workspaceId).catch(
         () => [] as ObsoleteNeighbour[],
       ),
+      // The organisation's CONTENT LANGUAGE (MOTIR-8745) — the language any work
+      // item or to-do the agent writes is written in. No refusal path: a language
+      // that could not be read never stops a dispatch; it falls back to the default.
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+      )
+        .then(toOrgContentLanguage)
+        .catch((): Locale => defaultLocale),
     ]);
 
     // …and its RUN TARGET's, when this card is a leg of a run launched against
@@ -509,6 +521,7 @@ export const dispatchPromptService = {
       errorEvidence,
       changesRequested,
       obsoleteNeighbours,
+      contentLanguage,
       continueFrom,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,

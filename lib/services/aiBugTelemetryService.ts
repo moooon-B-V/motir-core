@@ -7,6 +7,7 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import { metaProjectKey } from '@/lib/ai/systemPrincipal';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -120,6 +121,12 @@ export const aiBugTelemetryService = {
       userId: trigger.actorId,
       workspaceId: trigger.workspaceId,
     });
+    // The two languages (MOTIR-8742) with NO person: an automatic analysis answers
+    // nobody, and the person who filed the bug is not who it writes to.
+    const languages = await resolveTenantLanguages({
+      workspaceId: trigger.workspaceId,
+      userId: null,
+    });
     const tenant = {
       organizationId,
       isMeta,
@@ -127,6 +134,7 @@ export const aiBugTelemetryService = {
       workspaceId: trigger.workspaceId,
       projectId: bug.projectId,
       projectKey,
+      ...languages,
     };
 
     // May this project's planner record what it got wrong (MOTIR-3350)? An

@@ -257,6 +257,27 @@ export interface SubmittedJob {
   /** A `translate` submit's `context.translate` (MOTIR-8119) — what was sent, and
    *  what the default success echoes back. */
   translate?: { targetLanguage: string; fields: { fieldRef: string; text: string }[] };
+  /**
+   * The two LANGUAGES the envelope's tenant carried (Story MOTIR-7734 · MOTIR-8750):
+   * the organisation's content language and the requesting person's saved account
+   * language (`''` when no person started the job). Recorded off `tenant` as sent,
+   * so a spec proves which languages a planner would have been told to write in.
+   * Absent when the tenant named none.
+   */
+  contentLanguage?: string;
+  personLanguage?: string;
+}
+
+/**
+ * What the next `generate_explanation` job streams (Story MOTIR-7734 · MOTIR-8750):
+ * the draft, as `token` frames and then motir-ai's terminal `explanation` frame
+ * `{ explanationMd, language }` — the frame `useExplanationDraft` reads the draft's
+ * language off. `language` absent ⇒ the frame names none, as an older motir-ai's
+ * does. With NO entry declared the stream is the general `search`, `done`, as before.
+ */
+export interface GenerateExplanationJobOutcome {
+  explanationMd: string;
+  language?: string;
 }
 
 export interface AiJobsFixture {
@@ -296,6 +317,9 @@ export interface AiJobsFixture {
   /** The `plan` run outcomes, CONSUMED IN ORDER — one per planning submit that
    *  is not a routing run, the last repeating (MOTIR-7645). */
   plan?: PlanJobOutcome[];
+  /** The `generate_explanation` drafts, CONSUMED IN ORDER — one per submit, the
+   *  last repeating (MOTIR-8750). */
+  generateExplanation?: GenerateExplanationJobOutcome[];
   /** Appended to by the mock: the job kind of every submit, in order — and
    *  whether it carried a repository set (`context.code`), which is how a walk
    *  shows a CODE-BLIND project's dispatch went without one (MOTIR-5853). */
@@ -350,6 +374,7 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
       ...(snapshot.runReadable !== undefined ? { runReadable: snapshot.runReadable } : {}),
       ...(kind === 'plan' && snapshot.planId !== undefined ? { planId: snapshot.planId } : {}),
       ...(translate ? { translate } : {}),
+      ...tenantLanguagesOf(rawBody),
     };
     f.submitted = [...(f.submitted ?? []), entry];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
@@ -421,6 +446,47 @@ function submitCarriesCode(rawBody: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** The tenant's two languages a submit body carried, each only when it is a string. */
+function tenantLanguagesOf(rawBody: string): { contentLanguage?: string; personLanguage?: string } {
+  try {
+    const tenant = (JSON.parse(rawBody) as { tenant?: Record<string, unknown> }).tenant ?? {};
+    const content = tenant['contentLanguage'];
+    const person = tenant['personLanguage'];
+    return {
+      ...(typeof content === 'string' ? { contentLanguage: content } : {}),
+      ...(typeof person === 'string' ? { personLanguage: person } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** The draft for the `n`-th `generate_explanation` job, the last repeating; null when none
+ *  is declared. */
+function explanationOutcomeAt(n: number): GenerateExplanationJobOutcome | null {
+  const queue = readFixture().generateExplanation ?? [];
+  if (queue.length === 0) return null;
+  return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** A declared draft as motir-ai streams it: two `token` deltas, then the terminal
+ *  `explanation` frame, the `succeeded` status and the close. */
+function explanationStream(draft: GenerateExplanationJobOutcome): string {
+  const half = Math.ceil(draft.explanationMd.length / 2);
+  const frame = (event: string, data: unknown) =>
+    `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  return [
+    frame('token', { text: draft.explanationMd.slice(0, half) }),
+    frame('token', { text: draft.explanationMd.slice(half) }),
+    frame('explanation', {
+      explanationMd: draft.explanationMd,
+      ...(draft.language !== undefined ? { language: draft.language } : {}),
+    }),
+    frame('status', { status: 'succeeded' }),
+    frame('done', {}),
+  ].join('');
 }
 
 /** The author outcome for the `n`-th `author_bug` job, with the last entry repeating. */
@@ -694,6 +760,18 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
     .intercept({ path: (p) => /^\/v1\/jobs\/[^/]+\/stream(\?|$)/.test(p), method: 'GET' })
     .reply((req) => {
       const id = decodeURIComponent(req.path.split('?')[0]!.split('/').slice(-2)[0]!);
+      // A declared `generate_explanation` draft (MOTIR-8750) streams its tokens and its
+      // terminal `explanation` frame; with none declared the reply below is unchanged.
+      const explained = kindOf(id);
+      const draft =
+        explained.kind === 'generate_explanation' ? explanationOutcomeAt(explained.index) : null;
+      if (draft) {
+        return {
+          statusCode: 200,
+          data: explanationStream(draft),
+          responseOptions: { headers: { 'content-type': 'text/event-stream' } },
+        };
+      }
       // A planning run the fixture declared FAILED ends the way motir-ai ends a
       // dead run: a terminal `status: failed` frame, then the close.
       const stop = planRunFails(id) ? planOutcomeAt(kindOf(id).index).walkStop : undefined;
