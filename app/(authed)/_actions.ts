@@ -179,7 +179,12 @@ export async function switchOrganizationAction(organizationId: string): Promise<
   // pinned — the shell shows the org with no workspace switcher.
   const workspaces = await workspacesService.listUserWorkspaces(session.user.id);
   const firstInOrg = workspaces.find((w) => w.organizationId === organizationId);
-  if (firstInOrg) {
+  if (!firstInOrg) {
+    // MOTIR-8777 — CLEAR the old pin, exactly as `createOrganizationAction`
+    // does. Left in place it names the PREVIOUS org's workspace, whose org
+    // outranks this cookie in the shell, and the switch does nothing.
+    cookieStore.delete(WORKSPACE_COOKIE_NAME);
+  } else {
     cookieStore.set(WORKSPACE_COOKIE_NAME, firstInOrg.id, COOKIE_OPTIONS);
 
     // 8.8.28 — the org switch re-points the active workspace; record THAT

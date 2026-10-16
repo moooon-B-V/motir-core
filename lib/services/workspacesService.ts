@@ -745,16 +745,27 @@ export const workspacesService = {
    * `userName` seeds the default workspace name on the self-heal path;
    * when the caller has no session object on hand it is read off the user
    * row before backfilling.
+   *
+   * `cookieOrganizationId` is the org cookie (`motir.org`) — the org the user
+   * last chose (MOTIR-8777). It is consulted only when no workspace cookie pin
+   * wins: if it names an organization the user belongs to that has NO workspace
+   * at all, this returns `null` — the user is in that org with no workspace —
+   * instead of falling back to (or self-healing) a workspace of ANOTHER org,
+   * which would make the shell name that other org and turn the org switch into
+   * a no-op. An org that has workspaces keeps the fallback below unchanged.
    */
   async resolveActiveWorkspace(
     userId: string,
     cookieWorkspaceId: string | null,
     userName?: string,
     contentLanguage?: Locale,
+    cookieOrganizationId?: string | null,
   ): Promise<string | null> {
     // Set when the cookie names a workspace the user holds NO membership in —
     // the one case a second, workspace-bound read is needed (below).
     let cookieWithoutMembership = false as boolean;
+    // Set when the workspace cookie pin resolved — the org cookie is then moot.
+    let pinWon = false as boolean;
     // The first SUSPENDED organization a DEFAULT candidate fell in (MOTIR-748).
     // A default (last-active, first-by-createdAt) that lands in a suspended org
     // falls through to the user's next accessible workspace — a member of two
@@ -790,6 +801,7 @@ export const workspacesService = {
             pinned &&
             (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
           ) {
+            pinWon = true;
             return pinned.workspaceId;
           }
           cookieWithoutMembership = !pinned;
@@ -839,6 +851,20 @@ export const workspacesService = {
       if (access?.reachesEveryWorkspace) return cookieWorkspaceId;
     }
 
+    // THE ACTIVE ORG MAY HAVE NO WORKSPACE (MOTIR-8777). No workspace pin won,
+    // so everything below would land the user in a workspace of whichever org
+    // the default picks — or mint one. When the org cookie names an org the
+    // user belongs to that has no workspace, they are in THAT org with no
+    // workspace: answer `null`, and the shell shows the org on its own. Read
+    // only on this fallback path, so a request with a valid pin pays nothing.
+    if (
+      !pinWon &&
+      cookieOrganizationId &&
+      (await this.isEmptyOrganizationOfMember(userId, cookieOrganizationId))
+    ) {
+      return null;
+    }
+
     if (existing) return existing;
     // Every workspace the user holds sits in a suspended organization: refuse
     // with the suspension, never self-heal a default workspace around it.
@@ -851,6 +877,30 @@ export const workspacesService = {
       contentLanguage,
     });
     return workspace.id;
+  },
+
+  /**
+   * Whether `organizationId` names an organization the user is a member of that
+   * holds NO workspace at all (MOTIR-8777) — the state a freshly created org is
+   * in, and one the org switcher must be able to enter. `false` for a
+   * non-member (a stale or forged org cookie), so the caller keeps its default.
+   *
+   * The count runs under the org GUC, bound only after the membership read has
+   * proved the id is the user's own org (`bindOrganizationContext`'s rule): a
+   * workspace the user is not a member of is otherwise invisible to them, and
+   * an Owner's org with workspaces they joined none of is NOT empty.
+   */
+  async isEmptyOrganizationOfMember(userId: string, organizationId: string): Promise<boolean> {
+    return withUserContext(userId, async (tx) => {
+      const membership = await organizationMembershipRepository.findByOrgAndUserInTx(
+        organizationId,
+        userId,
+        tx,
+      );
+      if (!membership) return false;
+      await bindOrganizationContext(tx, organizationId);
+      return (await workspaceRepository.countByOrganization(organizationId, tx)) === 0;
+    });
   },
 
   /**
