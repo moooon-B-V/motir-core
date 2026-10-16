@@ -33,6 +33,7 @@ function makeRun(overrides: Partial<MigrateOnboardingDto> = {}): MigrateOnboardi
     generateJobId: null,
     importSkipped: false,
     importCompleted: false,
+    latestImport: null,
     createdAt: '2026-07-27T00:00:00.000Z',
     updatedAt: '2026-07-27T00:00:00.000Z',
     ...overrides,

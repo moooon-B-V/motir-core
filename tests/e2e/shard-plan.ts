@@ -707,6 +707,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // bin-packer. Re-measure from the first green CI run that includes it.
   'mcp-tool-hints.spec.ts': 8.0,
   'migrate-index-fleet.spec.ts': 26.7,
+  // MOTIR-8774 — a brand-new spec, ESTIMATED rather than measured: three tests,
+  // each a sign-up, a project and the migrate walk to Import, the shape
+  // `migrate-index-fleet.spec.ts` (26.7 s) runs, plus Enter Motir's navigation.
+  // Rounded UP, because under-estimating unbalances the bin-packer. Re-measure
+  // from the first green CI run that includes it.
+  'migrate-nonblocking-index.spec.ts': 35.0,
   'modal-scroll-container.spec.ts': 6.0,
   'multi-tenant-isolation.spec.ts': 2.5,
   'navigation-instant.spec.ts': 8.0,

@@ -175,8 +175,8 @@ export async function stubDiscoveryApi(
 export interface RepoStatus {
   provider: string;
   repoRef: string;
-  /** 'indexed' or 'pending' — drives the per-repo badge + Next gate. */
-  status: 'indexed' | 'pending';
+  /** The per-repo state the index read reports (MOTIR-8768). */
+  status: 'indexed' | 'queued' | 'indexing' | 'failed';
 }
 
 export function makeRun(overrides: Record<string, unknown> = {}) {
@@ -193,6 +193,7 @@ export function makeRun(overrides: Record<string, unknown> = {}) {
     generateJobId: null,
     importSkipped: false,
     importCompleted: false,
+    latestImport: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
@@ -204,8 +205,9 @@ export function makeIndexStatus(repos: RepoStatus[]) {
   return {
     repos,
     indexedCount: indexed,
+    failedCount: repos.filter((r) => r.status === 'failed').length,
     total: repos.length,
-    hasRunning: repos.some((r) => r.status === 'pending'),
+    hasRunning: repos.some((r) => r.status === 'indexing'),
     allIndexed: indexed === repos.length,
   };
 }
@@ -224,9 +226,9 @@ export interface MigrateStubs {
 export async function stubMigrateRoutes(page: Page): Promise<MigrateStubs> {
   let step: string = 'connect';
   const repos: RepoStatus[] = [
-    { provider: 'github', repoRef: 'acme/web', status: 'pending' },
-    { provider: 'github', repoRef: 'acme/api', status: 'pending' },
-    { provider: 'github', repoRef: 'acme/shared', status: 'pending' },
+    { provider: 'github', repoRef: 'acme/web', status: 'queued' },
+    { provider: 'github', repoRef: 'acme/api', status: 'queued' },
+    { provider: 'github', repoRef: 'acme/shared', status: 'queued' },
   ];
   let allIndexed = false;
 
@@ -249,7 +251,8 @@ export async function stubMigrateRoutes(page: Page): Promise<MigrateStubs> {
       const next: Record<string, string> = {
         connect: 'index',
         index: 'import',
-        import: 'audit_convention',
+        // The wizard ends at Import (MOTIR-8246, design MOTIR-8767 revision A).
+        import: 'done',
         audit_convention: 'discovery',
         discovery: 'generate',
         generate: 'review',
@@ -261,6 +264,7 @@ export async function stubMigrateRoutes(page: Page): Promise<MigrateStubs> {
         status: 200,
         json: makeRun({
           step,
+          ...(step === 'done' ? { status: 'completed' } : {}),
           codeGraphReady: pastSetup,
           importSkipped: !['connect', 'index', 'import'].includes(step),
           connectedRepoRef: 'acme/web',
@@ -269,16 +273,23 @@ export async function stubMigrateRoutes(page: Page): Promise<MigrateStubs> {
       return;
     }
 
-    // POST .../skip-import — skip the optional import step
+    // POST .../skip-import — skip the optional import step, which ends the run
     if (method === 'POST' && url.includes('/skip-import')) {
-      step = 'audit_convention';
+      step = 'done';
       await route.fulfill({
         status: 200,
-        json: makeRun({
-          step: 'audit_convention',
-          importSkipped: true,
-          codeGraphReady: true,
-        }),
+        json: makeRun({ step: 'done', status: 'completed', importSkipped: true }),
+      });
+      return;
+    }
+
+    // POST .../enter — Enter Motir from Index or Import (MOTIR-8770): the run
+    // completes and the index keeps going.
+    if (method === 'POST' && url.includes('/enter')) {
+      step = 'done';
+      await route.fulfill({
+        status: 200,
+        json: makeRun({ step: 'done', status: 'completed', connectedRepoRef: 'acme/web' }),
       });
       return;
     }

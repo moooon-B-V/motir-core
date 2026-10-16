@@ -95,6 +95,64 @@ async function boundInstallationRows(
   return rows;
 }
 
+/** One of an organisation's connected repositories, as the migrate wizard and
+ *  the planning envelope read it. */
+export interface OrganizationRepoRow {
+  repoRef: string;
+  owner: string;
+  name: string;
+  provider: string;
+  defaultBranch: string;
+  installationRef: string;
+  indexed: boolean;
+}
+
+/** A connected repository's index POINTER and size refusal — the facts the
+ *  migrate wizard's per-repo index state is derived from (MOTIR-8768), keyed by
+ *  ref. No ledger read: the caller resolves the pointer against its own. */
+export interface OrganizationRepoIndexPointer {
+  repoRef: string;
+  indexingRunId: string | null;
+  indexRefusedAt: Date | null;
+}
+
+/** The organisation's connected repositories, de-duplicated by `owner/name`, in
+ *  installation then repository order — the half of
+ *  {@link githubInstallationService.listOrganizationRepoRows} that reads no
+ *  ledger, on the caller's transaction so a context without a user can run it. */
+async function organizationGithubReposIn(
+  workspaceId: string,
+  organizationId: string,
+  tx: Prisma.TransactionClient,
+): Promise<Array<{ repo: GithubRepo; installationRef: string }>> {
+  // The workspace's OWN grant first, then the organisation's bound set. First
+  // so the run's first repository — the ref the gate records — is the one
+  // the workspace-tier read picked for the same world. Included at all so
+  // the result is a superset of that read by construction, even for a
+  // workspace grant whose row predates its organisation stamp.
+  const own = await githubInstallationRepository.findByWorkspaceId(workspaceId, tx);
+  const bound = await boundInstallationRows(organizationId, tx);
+  const installations = own
+    ? [own, ...bound.filter((installation) => installation.id !== own.id)]
+    : bound;
+  const seen = new Set<string>();
+  const repos: Array<{ repo: GithubRepo; installationRef: string }> = [];
+  for (const installation of installations) {
+    const rows = await githubRepoRepository.listByInstallationAndOrg(
+      installation.id,
+      organizationId,
+      tx,
+    );
+    for (const repo of rows) {
+      const ref = `${repo.owner}/${repo.name}`;
+      if (seen.has(ref)) continue;
+      seen.add(ref);
+      repos.push({ repo, installationRef: installation.installationId });
+    }
+  }
+  return repos;
+}
+
 export const githubInstallationService = {
   /**
    * Persist an installation and reconcile its selected repos (WRITE path — the
@@ -955,45 +1013,11 @@ export const githubInstallationService = {
     userId: string;
     workspaceId: string;
     organizationId: string;
-  }): Promise<
-    Array<{
-      repoRef: string;
-      owner: string;
-      name: string;
-      provider: string;
-      defaultBranch: string;
-      installationRef: string;
-      indexed: boolean;
-    }>
-  > {
+  }): Promise<OrganizationRepoRow[]> {
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
-        // The workspace's OWN grant first, then the organisation's bound set. First
-        // so the run's first repository — the ref the gate records — is the one
-        // the workspace-tier read picked for the same world. Included at all so
-        // the result is a superset of that read by construction, even for a
-        // workspace grant whose row predates its organisation stamp.
-        const own = await githubInstallationRepository.findByWorkspaceId(ctx.workspaceId, tx);
-        const bound = await boundInstallationRows(ctx.organizationId, tx);
-        const installations = own
-          ? [own, ...bound.filter((installation) => installation.id !== own.id)]
-          : bound;
-        const seen = new Set<string>();
-        const repos: Array<{ repo: GithubRepo; installationRef: string }> = [];
-        for (const installation of installations) {
-          const rows = await githubRepoRepository.listByInstallationAndOrg(
-            installation.id,
-            ctx.organizationId,
-            tx,
-          );
-          for (const repo of rows) {
-            const ref = `${repo.owner}/${repo.name}`;
-            if (seen.has(ref)) continue;
-            seen.add(ref);
-            repos.push({ repo, installationRef: installation.installationId });
-          }
-        }
+        const repos = await organizationGithubReposIn(ctx.workspaceId, ctx.organizationId, tx);
         // One ledger read for the whole set, and only when there IS a set — the
         // shape `resolveWorkspaceConnectedRepos` uses.
         const indexedRefs =
@@ -1014,6 +1038,44 @@ export const githubInstallationService = {
         });
       },
     );
+  },
+
+  /**
+   * The same connected set's index POINTERS (MOTIR-8768): each repository's
+   * `indexingRunId` and size refusal, which neither the planning-envelope shape
+   * nor the installation DTO carries. Reads no ledger, so a caller that already
+   * holds one (the project-state read pins a single ledger read) adds none.
+   */
+  async listOrganizationRepoIndexPointers(ctx: {
+    userId: string;
+    workspaceId: string;
+    organizationId: string;
+  }): Promise<OrganizationRepoIndexPointer[]> {
+    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) =>
+      (await organizationGithubReposIn(ctx.workspaceId, ctx.organizationId, tx)).map(
+        ({ repo }) => ({
+          repoRef: `${repo.owner}/${repo.name}`,
+          indexingRunId: repo.indexingRunId,
+          indexRefusedAt: repo.indexRefusedAt,
+        }),
+      ),
+    );
+  },
+
+  /**
+   * THE SAME CONNECTED SET, FOR A CALLER WITH NO ACTING USER — the migrate index
+   * sweep (MOTIR-8768), whose exit predicate must answer from the set the wizard's
+   * own exit check reads, not from a second definition of "connected". A cron
+   * tick has no user to bind, so the read runs in the system context the sweep's
+   * discovery scan already uses; the organisation is derived from the stored
+   * workspace row, never taken from input. Refs only — nothing else leaves it.
+   */
+  async listOrganizationConnectedRepoRefsAsSystem(workspaceId: string): Promise<string[]> {
+    return withSystemContext(async (tx) => {
+      const organizationId = await resolveOrganizationId(workspaceId, tx);
+      const repos = await organizationGithubReposIn(workspaceId, organizationId, tx);
+      return repos.map(({ repo }) => `${repo.owner}/${repo.name}`);
+    });
   },
 
   /**
