@@ -8536,3 +8536,23 @@ Chromium and looked at in light and dark. Both temporary files were deleted; the
 - The plan page (`PlanDetail`): never driven, never typing. The List view's own content. An
   auto-opened quick view. A typewriter anywhere but the overlay's proposal quick view.
 - A dwell rule between driven moves (flag 1).
+
+## ⭐ The guide-seeded Plans row (MOTIR-8686, 2026-10-15)
+
+**Story MOTIR-8684. A DELTA** on `plans-sessions--seeded.mock.html` panel 1 and on `ai-chat/planning-workspace--pick-seed.mock.html` sheet 3 (the pick row). The mock is **`design/ai-planning/plans-sessions--guide-seeded.mock.html`**; it holds the new row beside the two shipped ones and edits neither.
+
+A planning session started by **Confirm** on the guide's re-plan offer (the decision MOTIR-8685 (published as a Motir page; it amends A3.9 (b) of `docs/decisions/guide-turn-files.md`), its table _The target-wrong verdict, in full after this decision_) is a real session and is reachable from Plans like the refusal- and pick-seeded kinds. Its row is the shipped session row, markup unchanged. What differs is the seed link: **From the guide on {KEY}**, opening the **guided** card (the manual work item the person was walking through), not the row's anchor. The row title is the session's anchor (the target the re-plan was aimed at, resolved forward when needed). The row itself reopens the session; the first turn is withheld from the list and the session is hidden from a Visitor exactly as a gate seed's. A long title truncates as the pick row's label does; the full name is on the link's accessible name (_Open ACME-31, the work item Motir AI was guiding you through when it offered this re-plan_).
+
+| Element         | Primitive            | Colour                                                    | Shape                                                       |
+| --------------- | -------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
+| Row             | session row          | `--el-surface`, `--el-border`, hover `--el-border-strong` | `--radius-card`, `--spacing-control-x/y`, `--shadow-subtle` |
+| Seed link       | underlined text link | `--el-text-secondary`, underline `--el-border-strong`     | `--radius-control`                                          |
+| Plan state chip | `Pill`               | `--el-chip-bg`, `--el-text-secondary`                     | `--radius-badge`                                            |
+
+### Copy
+
+| Key                | en                      | zh                  | Owner               |
+| ------------------ | ----------------------- | ------------------- | ------------------- |
+| `plans.seed.guide` | From the guide on {KEY} | 来自对 {KEY} 的引导 | session memory card |
+
+Owned by the session memory card ([MOTIR-8697](motir:cmv9rgb6z0018hvoimygo28if) for the row; [MOTIR-8691](motir:cmv9rgayp000whvoiaxsj1gr3) for the data it reads).

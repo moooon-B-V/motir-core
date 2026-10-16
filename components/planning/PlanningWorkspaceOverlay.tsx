@@ -26,6 +26,8 @@ import {
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import { fetchPlanningSeed } from '@/lib/planning/planningSeedClient';
+import { useGuideOfferSeed } from '@/components/planning/useGuideOfferSeed';
+import { GUIDE_AUTO_SEND_PREFIX, guideWorkspaceLaunch } from '@/lib/planning/guideOfferLaunch';
 import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
@@ -289,13 +291,20 @@ export function PlanningWorkspaceOverlay({
     return () => controller.abort();
   }, [open, gateId]);
   const settledSeed = seed !== null && seed.gateId === gateId ? seed : null;
-  const waitingForSeed = gateId === null ? false : settledSeed === null;
+  // ── THE GUIDE-OFFER SEED (Story MOTIR-8684 · MOTIR-8693) ─────────────────────
+  // The same window, addressed by the offer's turn id: read while the skeleton shows,
+  // `null` while pending, and a silent project fall-back for any seed it cannot place.
+  const offerId = launch?.from === 'guide-offer' ? (launch.guideTurnId ?? null) : null;
+  const guideSeed = useGuideOfferSeed(open, offerId);
+  const waitingForSeed =
+    (gateId !== null && settledSeed === null) || (offerId !== null && guideSeed === null);
 
   // The launch the WORKSPACE sees. A seeded one is resolved to the `work-item`
   // re-plan it is, on the refused card, so it goes through the SAME anchor read
   // and the SAME host mount — and arrives where any item launch arrives. The
   // gate's id is never part of it: nothing below the overlay can show one.
   const workspaceLaunch = useMemo<PlanningLaunch | null>(() => {
+    if (launch?.from === 'guide-offer') return guideWorkspaceLaunch(guideSeed);
     if (launch === null || launch.from !== 'refused-gate') return launch;
     if (settledSeed === null || settledSeed.kind === 'fallback') return PROJECT_LAUNCH;
     const resumed = settledSeed.kind === 'resume' ? { sessionId: settledSeed.sessionId } : {};
@@ -319,7 +328,7 @@ export function PlanningWorkspaceOverlay({
       repoKey: null,
       ...resumed,
     };
-  }, [launch, settledSeed]);
+  }, [launch, settledSeed, guideSeed]);
   const anchorKey = workspaceLaunch?.itemKey ?? null;
 
   // The current address, as the reader's browser has it — the thing Close writes
@@ -668,6 +677,19 @@ export function PlanningWorkspaceOverlay({
           key: `start:${settled.target.identifier}`,
         }
       : null;
+  // A GUIDE OFFER's request is SENT once for the person, exactly as a pick's is — and
+  // only once its target RESOLVED for this viewer. A seed with a session is a named
+  // reopen: it sends nothing, and the *from a guide* framing still shows.
+  const guideSend = guideSeed?.kind === 'seeded' && settled?.target ? guideSeed : null;
+  const guideResume = guideSeed?.kind === 'resume' ? guideSeed : null;
+  // The offer was confirmed elsewhere (the server's `409 GUIDE_REPLAN_OFFER_CONFIRMED`):
+  // return to the session it started — the shipped named-reopen address.
+  const reopenConfirmedOffer = (sessionId: string) => {
+    if (anchorKey === null) return;
+    shallowPush(
+      withPlanningOverlay(currentHref, { kind: 'work-item', itemKey: anchorKey, sessionId }),
+    );
+  };
   // The follow-up framing rides a pick's first open AND its resume.
   const followUp =
     settledSeed !== null && settledSeed.kind !== 'fallback' && settledSeed.intent === 'plan'
@@ -793,8 +815,19 @@ export function PlanningWorkspaceOverlay({
             ? { autoSendTurn: seededSend.firstTurn, seedGateId: seededSend.gateId }
             : {})}
           {...(startSend ? { autoSendTurn: startSend.turn, autoSendKey: startSend.key } : {})}
+          {...(guideSend
+            ? {
+                autoSendTurn: guideSend.firstTurn,
+                autoSendKey: `${GUIDE_AUTO_SEND_PREFIX}${guideSend.offerId}`,
+                seedGuideTurnId: guideSend.offerId,
+                guideOrigin: guideSend.guide,
+                extraInitialTargets: guideSend.extraTargets,
+                onGuideOfferConfirmed: reopenConfirmedOffer,
+              }
+            : {})}
+          {...(guideResume ? { guideOrigin: guideResume.guide } : {})}
           {...(followUp ? { followUp } : {})}
-          {...(resumedSeed ? { sessionIsResume: true } : {})}
+          {...(resumedSeed || guideResume ? { sessionIsResume: true } : {})}
           initialCanvasTrail={settled?.trail}
         />
       )}
@@ -831,6 +864,11 @@ function launchContext(launch: PlanningLaunch): PlanningLaunchContext {
   // card it resolved to — so a reload keeps seeding (or resuming) from the gate.
   if (launch.from === 'refused-gate' && launch.gateId) {
     return { kind: 'refused-gate', gateId: launch.gateId };
+  }
+  // …and so does a guide offer's: the turn id, never the card it resolved to, so a
+  // vetoed Back and a reload re-read the seed rather than a resolved card.
+  if (launch.from === 'guide-offer' && launch.guideTurnId) {
+    return { kind: 'guide-offer', guideTurnId: launch.guideTurnId };
   }
   return { kind: 'project', hasPlan: launch.mode === 'replan' ? true : undefined };
 }

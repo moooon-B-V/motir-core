@@ -54,6 +54,7 @@ import { AccountDeletionBanner } from './_components/AccountDeletionBanner';
 import { OrganizationClosingBanner } from './_components/OrganizationClosingBanner';
 import {
   isWorkspaceTierRevealed,
+  preferredOrganizationId,
   scopeWorkspacesToActiveOrg,
 } from '@/lib/workspaces/tierDisclosure';
 import { AI_PLANNING_REQUIREMENT, satisfiesRequirement } from '@/lib/settings/projectNavAccess';
@@ -202,7 +203,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   const activeWorkspaceModel = ctx
     ? (workspaceModels.find((w) => w.id === ctx.workspaceId) ?? null)
     : null;
-  const preferredOrgId = activeWorkspaceModel?.organizationId ?? orgCookie;
+  // The ONE rule for "the active org" — `resolveActiveOrganizationAsShell` and
+  // every org settings pane compose the same helper (MOTIR-8776).
+  const preferredOrgId = preferredOrganizationId(activeWorkspaceModel, orgCookie);
   const currentOrg = await organizationsService.resolveActiveOrganization(
     session.user.id,
     preferredOrgId,
