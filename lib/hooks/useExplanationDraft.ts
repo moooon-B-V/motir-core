@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
+import { isLocale, type Locale } from '@/lib/i18n/locales';
 
 // The client side of "Draft with AI" (Subtask 8.8.12): submits a
 // `generate_explanation` job to /api/ai/explanation and streams the drafted
@@ -48,6 +49,11 @@ export interface UseExplanationDraft {
   // classifier (explanationSourceForSave) keys off this to mark ai_draft vs
   // user_edited.
   draftBaseline: string | null;
+  // The language the draft was written in, from the terminal `explanation`
+  // frame (MOTIR-8744) — null until a frame names one of the eleven locales (an
+  // older motir-ai names none). Saved with the explanation by
+  // `explanationLanguageForSave`; replaced by a regenerate, cleared by `reset`.
+  draftLanguage: Locale | null;
   start: () => void;
   stop: () => void;
   dismissError: () => void;
@@ -67,6 +73,7 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
   const [phase, setPhase] = useState<DraftPhase>('idle');
   const [error, setError] = useState<DraftError | null>(null);
   const [draftBaseline, setDraftBaseline] = useState<string | null>(null);
+  const [draftLanguage, setDraftLanguage] = useState<Locale | null>(null);
 
   // Latest callbacks via refs so `start` stays stable and never streams into a
   // stale editor setter.
@@ -91,6 +98,7 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
     setError(null);
     setPhase('idle');
     setDraftBaseline(null);
+    setDraftLanguage(null);
   }, []);
 
   const start = useCallback(() => {
@@ -102,7 +110,17 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
     // Clear the editor so the draft fills it cleanly (Regenerate replaces the
     // previous draft); the streamed tokens then accumulate from empty.
     let accumulated = '';
+    // The new draft's language, once its frame names one — a regenerate starts
+    // over, so the old draft's language never outlives its text.
+    let language: Locale | null = null;
+    setDraftLanguage(null);
     onTextRef.current('');
+    // What the draft settles to on every exit — finished, stopped or failed —
+    // so the text kept and the language it was written in travel together.
+    const settle = () => {
+      setDraftBaseline(accumulated.length > 0 ? accumulated : null);
+      setDraftLanguage(accumulated.length > 0 ? language : null);
+    };
 
     void (async () => {
       try {
@@ -150,6 +168,8 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
                 accumulated = md;
                 onTextRef.current(accumulated);
               }
+              const lang = (data as { language?: unknown })?.language;
+              language = typeof lang === 'string' && isLocale(lang) ? lang : null;
             } else if (event === 'error') {
               const d = (data as { code?: unknown; message?: unknown }) ?? {};
               failure = new DraftFailure(
@@ -162,7 +182,7 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
         }
 
         // The text generated so far is kept either way (design 3B).
-        setDraftBaseline(accumulated.length > 0 ? accumulated : null);
+        settle();
         if (failure) {
           setError({ code: failure.code, message: failure.message });
           setPhase('error');
@@ -172,14 +192,14 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
       } catch (err) {
         if (controller.signal.aborted) {
           // User pressed Stop — keep whatever streamed in, drop back to idle.
-          setDraftBaseline(accumulated.length > 0 ? accumulated : null);
+          settle();
           setPhase('idle');
         } else if (err instanceof DraftFailure) {
-          setDraftBaseline(accumulated.length > 0 ? accumulated : null);
+          settle();
           setError({ code: err.code, message: err.message });
           setPhase('error');
         } else {
-          setDraftBaseline(accumulated.length > 0 ? accumulated : null);
+          settle();
           setError({
             code: 'MOTIR_AI_UNAVAILABLE',
             message: err instanceof Error ? err.message : 'Drafting failed.',
@@ -197,6 +217,7 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
     isDrafting: phase === 'drafting',
     error,
     draftBaseline,
+    draftLanguage,
     start,
     stop,
     dismissError,

@@ -9,6 +9,7 @@ import { TOOL_SCOPES } from '@/lib/mcp/scopes';
 import { GET_PROJECT_STATE_TOOL_NAME } from '@/lib/mcp/tools/getProjectState';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { organizationContentLanguageService } from '@/lib/services/organizationContentLanguageService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -502,5 +503,46 @@ describe('get_project_state — the human summary', () => {
     const fx = await makeWorkItemFixture();
     const state = stateOf(await callTool(fx.ctx, fx.projectIdentifier.toLowerCase()));
     expect(state.project.key).toBe(fx.projectIdentifier);
+  });
+});
+
+describe('get_project_state — the organisation’s content language (MOTIR-8746)', () => {
+  async function inLanguage(language: string): Promise<WorkItemFixture> {
+    const fx = await makeWorkItemFixture();
+    await adminDb.organization.update({
+      where: { id: await organizationIdOf(fx.workspaceId) },
+      data: { contentLanguage: language },
+    });
+    return fx;
+  }
+
+  it.each([['en'], ['ja'], ['zh']])(
+    'an `%s` organisation reports its code in the DTO and the summary',
+    async (language) => {
+      const fx = await inLanguage(language);
+      const res = await callTool(fx.ctx, fx.projectIdentifier);
+      expect(stateOf(res).contentLanguage).toBe(language);
+      expect(JSON.stringify(res.content)).toContain(`Content language: ${language}`);
+    },
+  );
+
+  it('after the organisation’s language changes, the next read reports the new value', async () => {
+    const fx = await inLanguage('en');
+    expect(stateOf(await callTool(fx.ctx, fx.projectIdentifier)).contentLanguage).toBe('en');
+    await organizationContentLanguageService.changeContentLanguage({
+      organizationId: await organizationIdOf(fx.workspaceId),
+      actorUserId: fx.ctx.userId,
+      language: 'ja',
+    });
+    expect(stateOf(await callTool(fx.ctx, fx.projectIdentifier)).contentLanguage).toBe('ja');
+  });
+
+  it('the tool description mentions the content language', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const { tools } = await client.listTools();
+    await client.close();
+    const tool = tools.find((t) => t.name === GET_PROJECT_STATE_TOOL_NAME);
+    expect(tool!.description).toContain('CONTENT LANGUAGE');
   });
 });

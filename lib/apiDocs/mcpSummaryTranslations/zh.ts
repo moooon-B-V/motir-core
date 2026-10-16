@@ -214,9 +214,9 @@ export const zh: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      '一个项目的规划前置条件：是否已建立、代码是否已连接、是否已索引、repo 是否已设置，供规划之前查看。',
+      '一个项目的规划前置条件：是否已建立、代码是否已连接、是否已索引、repo 是否已设置，以及其组织的内容语言，供规划之前查看。',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:

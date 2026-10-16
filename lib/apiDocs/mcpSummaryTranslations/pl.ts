@@ -238,9 +238,9 @@ export const pl: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'Warunki wstępne planowania w Projekcie — ustanowiony, kod podłączony, zaindeksowany, repozytorium ustawione — zanim zaczniesz planować.',
+      'Warunki wstępne planowania w Projekcie — ustanowiony, kod podłączony, zaindeksowany, repozytorium ustawione — oraz język treści organizacji, zanim zaczniesz planować.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:

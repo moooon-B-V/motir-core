@@ -68,6 +68,14 @@ describe('aiBugTelemetryService.dispatchOutwardAnalysis', () => {
       fx.ctx,
     );
 
+    // MOTIR-8742: a zh organisation, and a filer who saved English — whose language
+    // the automatic analysis must NOT take.
+    await adminDb.organization.update({
+      where: { id: fx.workspace.organizationId },
+      data: { contentLanguage: 'zh' },
+    });
+    await adminDb.user.update({ where: { id: fx.ownerId }, data: { locale: 'en' } });
+
     const out = await aiBugTelemetryService.dispatchOutwardAnalysis({
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -87,6 +95,9 @@ describe('aiBugTelemetryService.dispatchOutwardAnalysis', () => {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
       projectKey: 'ACME',
+      // No person: an automatic analysis answers nobody (MOTIR-8742).
+      contentLanguage: 'zh',
+      personLanguage: '',
     });
     expect(actor).toEqual({ userId: fx.ownerId });
 

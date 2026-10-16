@@ -225,7 +225,9 @@ export const PATCH_KEY_RAIL_ROW = {
   supersedesRemove: 'supersedes',
   supersededByAdd: 'supersededBy',
   supersededByRemove: 'supersededBy',
-} satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
+  // `languages` (MOTIR-8743) is no row and no key here: it annotates the text
+  // keys above, outside `PLAN_ITEM_PATCH_KEYS`, and changes nothing by itself.
+} satisfies Record<Exclude<keyof PlanItemPatch, 'languages'>, PlanItemChangeField | null>;
 
 /**
  * The rail rows a `modify` CAN move — the denominator of the peek's count line.

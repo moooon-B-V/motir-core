@@ -6,6 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // resolveTenantOrg (covered by tenantOrg.test.ts).
 vi.mock('@/lib/ai/motirAiClient', () => ({ submitJob: vi.fn(), streamJob: vi.fn() }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
+// …and the two languages (MOTIR-8742): resolved for real against Postgres in
+// `tests/ai/tenantLanguages.test.ts`; here the question is only WHOSE they are and
+// that they reach the tenant.
+vi.mock('@/lib/ai/tenantLanguages', () => ({ resolveTenantLanguages: vi.fn() }));
 // …and the project gate (MOTIR-2357). These cases drive a SYNTHETIC ProjectContext
 // with no rows behind it, so the real `ai:plan` assert would 404 on the project id
 // and prove nothing about the job envelope they are here for. The gate itself is
@@ -18,6 +22,7 @@ vi.mock('@/lib/services/projectAccessService', () => ({
 import { aiExplanationService } from '@/lib/services/aiExplanationService';
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -37,6 +42,10 @@ describe('aiExplanationService.submitExplanationDraft', () => {
       organizationId: 'org_1',
       isMeta: false,
       internalBilling: false,
+    });
+    vi.mocked(resolveTenantLanguages).mockResolvedValue({
+      contentLanguage: 'ja',
+      personLanguage: 'ko',
     });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
   });
@@ -70,6 +79,8 @@ describe('aiExplanationService.submitExplanationDraft', () => {
         workspaceId: 'ws_1',
         projectId: 'pj_1',
         projectKey: 'MOTIR',
+        contentLanguage: 'ja',
+        personLanguage: 'ko',
       },
       {
         explanation: {
@@ -81,6 +92,13 @@ describe('aiExplanationService.submitExplanationDraft', () => {
       },
       { userId: 'user_1' },
     );
+  });
+
+  it('sends the REQUESTER’s language: the person who asked for the draft', async () => {
+    await aiExplanationService.submitExplanationDraft({ title: 'Standalone task' }, ctx);
+    expect(resolveTenantLanguages).toHaveBeenCalledWith({ workspaceId: 'ws_1', userId: 'user_1' });
+    const tenant = vi.mocked(submitJob).mock.calls[0]![1];
+    expect(tenant).toMatchObject({ contentLanguage: 'ja', personLanguage: 'ko' });
   });
 
   it('omits the parent (null) when no parent key/title is given, defaulting optional fields to null', async () => {

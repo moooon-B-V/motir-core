@@ -1,6 +1,7 @@
 import type { ProjectContext } from '@/lib/projects';
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError } from '@/lib/ai/errors';
@@ -191,6 +192,9 @@ function tenantFor(
   organizationId: string,
   isMeta: boolean,
   internalBilling: boolean,
+  // The two languages (MOTIR-8742): the org's content language and the language
+  // of the person who typed the turn.
+  languages: Awaited<ReturnType<typeof resolveTenantLanguages>>,
 ) {
   return {
     organizationId,
@@ -199,6 +203,8 @@ function tenantFor(
     workspaceId: ctx.workspaceId,
     projectId: ctx.projectId,
     projectKey: ctx.project.identifier,
+    contentLanguage: languages.contentLanguage,
+    personLanguage: languages.personLanguage,
   };
 }
 
@@ -219,6 +225,10 @@ async function submitConversationJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  const languages = await resolveTenantLanguages({
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+  });
   // The CODE half (MOTIR-7922): the same planning producer the plan-edit submits
   // use (`aiPlanEditsService`), on THIS one submit so it covers both `ask_project`
   // and `debug_bug`. motir-ai offers its code-graph tools only when
@@ -236,9 +246,12 @@ async function submitConversationJob(
     ...(run ? { run } : {}),
     ...(code ? { code } : {}),
   };
-  return submitJob(kind, tenantFor(ctx, organizationId, isMeta, internalBilling), context, {
-    userId: ctx.userId,
-  });
+  return submitJob(
+    kind,
+    tenantFor(ctx, organizationId, isMeta, internalBilling, languages),
+    context,
+    { userId: ctx.userId },
+  );
 }
 
 function submitAsk(
