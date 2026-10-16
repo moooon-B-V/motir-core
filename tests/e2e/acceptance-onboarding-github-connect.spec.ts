@@ -117,11 +117,30 @@ async function expectCopy(
  *  run, which is saved at `connect`. Returns the run's id. `expectLanguage` is
  *  the guard that the language took. */
 async function signInAs(page: Page, seed: ConnectJourneySeed, lang: Lang): Promise<string> {
+  await pinNoInstalledAccounts(page);
   await signIn(page, seed.email, CONNECT_JOURNEY_PASSWORD);
   await setReaderLanguage(page, seed.email, lang);
   const run = await startRun(page.request);
   expect(run.step).toBe('connect');
   return run.id;
+}
+
+/**
+ * THE WORLD THIS WALK RECORDS: no account the Motir App is installed on is
+ * offered to this person. Story MOTIR-8245 later put the accounts the App is
+ * already installed on ahead of the pre-flight, read from
+ * `GET /api/organizations/{orgId}/github/accounts`; with no GitHub identity that
+ * read answers `identity_required` and the step offers a GitHub sign-in in the
+ * pre-flight's place. This walk is about the install round trip, so its world is
+ * pinned to "signed in, and nothing installed you can see" (`ok` with no
+ * accounts), where the step draws exactly what it drew when this was recorded.
+ * The accounts journey is `acceptance-onboarding-connect-existing-installation.spec.ts`'s.
+ */
+async function pinNoInstalledAccounts(page: Page): Promise<void> {
+  await page.route('**/api/organizations/*/github/accounts', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await route.fulfill({ status: 200, json: { state: 'ok', accounts: [] } });
+  });
 }
 
 async function expectLanguage(page: Page, lang: Lang): Promise<void> {
