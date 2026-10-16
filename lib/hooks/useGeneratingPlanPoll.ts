@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPlanReview, fetchPlanReviewSince } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { mergePlanReview } from '@/lib/planning/mergePlanReview';
-import { useLiveSignal, useLiveSignalSource, type LiveTopic } from '@/lib/live/liveSignal';
+import {
+  useLiveSignal,
+  useLiveSignalSource,
+  type LiveSignal,
+  type LiveTopic,
+} from '@/lib/live/liveSignal';
 import { POLL_MS } from '@/lib/live/sources/planPollSource';
 
 // THE generating-plan poll (Subtask MOTIR-6295) — the ONE place a `generating`
@@ -61,12 +66,22 @@ import { POLL_MS } from '@/lib/live/sources/planPollSource';
 // longer `generating`, when `planId` changes, or on unmount. A `null` planId is
 // "nothing to watch".
 //
-// ⚠️ THE CADENCE COMES THROUGH THE LIVE-SIGNAL SEAM (Story MOTIR-8539 · Subtask
-// MOTIR-8572). The interval is `lib/live/sources/planPollSource.ts`'s, and a tick
-// arrives as a `plan` signal from `useLiveSignal`; `refresh()` asks the source
-// to `trigger` a FORCED signal. Everything above this paragraph is the READ
-// POLICY and stays here, because it is not a transport: a different source
-// (a test's fake, the push story's) drives the same reads by the same rules.
+// ⚠️ THE CADENCE IS A PLAN FRAME ON THE TAB'S ONE STREAM (Story MOTIR-8542 ·
+// Subtask MOTIR-8732), through the live-signal seam (MOTIR-8572). Under the
+// shell's provider a `plan` signal arrives when the server saw the plan's review
+// version move, on reconnect catch-up, and as the stream's 60 s `full` backstop;
+// `refresh()` asks the source to `trigger` a FORCED signal. The 2.5 s interval
+// survives in two places only: as the no-provider fallback
+// (`lib/live/sources/planPollSource.ts`, whose ticks are marked `cadence`), and as
+// the ONE retry a failed read schedules when nothing else is coming. Everything
+// above this paragraph is the READ POLICY and stays here, because it is not a
+// transport.
+//
+// ⚠️ A PUSH SIGNAL IS NEVER DROPPED. A cadence tick that finds a read out may be
+// skipped, because the next tick catches up. A push signal has no next tick, so
+// one that finds a read out marks the plan DIRTY and exactly one more read runs
+// when that read settles — otherwise a frame landing mid-read would leave the
+// snapshot stale until the backstop. A `full` signal reads without `?since=`.
 //
 // It draws NOTHING. Callers decide what a snapshot means: `onSnapshot` fires
 // with every applied response, in the same tick it lands, for callers whose own
@@ -137,7 +152,8 @@ export function useGeneratingPlanPoll(
   useEffect(() => {
     onSnapshotRef.current = opts.onSnapshot;
   });
-  const tickRef = useRef<((force?: boolean) => void) | null>(null);
+  // A signal from the seam, or `undefined` for a read NOW (a source that cannot be nudged).
+  const tickRef = useRef<((signal?: LiveSignal) => void) | null>(null);
   // The plan a snapshot STOPPED (no longer `generating`): its cadence unsubscribes.
   const [stoppedPlanId, setStoppedPlanId] = useState<string | null>(null);
 
@@ -154,16 +170,30 @@ export function useGeneratingPlanPoll(
     let held: PlanReviewDto | null = null;
     // Each read's controller, with when it started: a tick skips while one is out.
     const inFlight = new Map<AbortController, number>();
+    // A push signal that found a read out: one more read when it settles (full if any asked).
+    let dirty = false;
+    let dirtyFull = false;
+    // Whether a timer cadence drives this poll — then a failure needs no retry of its own.
+    let cadenced = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearRetry = () => {
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      retryTimer = null;
+    };
 
     const stop = () => {
       stopped = true;
+      clearRetry();
+      dirty = false;
       for (const ctrl of inFlight.keys()) ctrl.abort();
       inFlight.clear();
       if (tickRef.current === tick) tickRef.current = null;
     };
 
-    // `force` is an explicit `refresh()`: it reads even over one in flight.
-    const tick = (force = false) => {
+    // `force` is an explicit `refresh()`: it reads even over one in flight. A push
+    // signal (`push`) that finds a read out marks the plan dirty instead of being
+    // lost; `full` skips `?since=`.
+    const tick = (force = false, mode: { push?: boolean; full?: boolean } = {}) => {
       if (stopped) return;
       if (!force) {
         // A read out past the stall bound is abandoned, so a hung request cannot freeze the cadence.
@@ -175,14 +205,23 @@ export function useGeneratingPlanPoll(
           }
         }
         // Still a read out: do not start another behind it (MOTIR-8102).
-        if (inFlight.size > 0) return;
+        if (inFlight.size > 0) {
+          if (mode.push) {
+            dirty = true;
+            if (mode.full) dirtyFull = true;
+          }
+          return;
+        }
       }
+      clearRetry();
       const seq = ++issued;
       const ctrl = new AbortController();
       inFlight.set(ctrl, Date.now());
       // A forced read, a first read and the periodic backstop are FULL; the rest ask "changed since?".
       const since =
-        !force && heldVersion && unchangedRun < FULL_READ_EVERY - 1 ? heldVersion : null;
+        !force && !mode.full && heldVersion && unchangedRun < FULL_READ_EVERY - 1
+          ? heldVersion
+          : null;
       void (
         since
           ? fetchPlanReviewSince(planId, since, ctrl.signal)
@@ -223,13 +262,35 @@ export function useGeneratingPlanPoll(
           if (stopped || seq <= applied) return;
           failures += 1;
           if (failures >= FAILING_AFTER) setFailingFor(planId);
+          // With no cadence, nothing else would read again until the next frame:
+          // retry once, so `failing` still reports a plan that cannot be read.
+          if (!cadenced && retryTimer === null) {
+            retryTimer = setTimeout(() => {
+              retryTimer = null;
+              tick(false, { push: true });
+            }, POLL_MS);
+          }
         })
         .finally(() => {
           inFlight.delete(ctrl);
+          if (dirty && !stopped && inFlight.size === 0) {
+            const full = dirtyFull;
+            dirty = false;
+            dirtyFull = false;
+            tick(false, { push: true, full });
+          }
         });
     };
 
-    tickRef.current = tick;
+    tickRef.current = (signal) => {
+      if (!signal) return tick(true);
+      if (signal.cadence) {
+        // A timer drives this poll: its next tick is the retry.
+        cadenced = true;
+        clearRetry();
+      }
+      tick(signal.forced === true, { push: !signal.cadence, full: signal.full === true });
+    };
     if (immediate) tick();
     return stop;
   }, [planId, immediate]);
@@ -240,7 +301,7 @@ export function useGeneratingPlanPoll(
     () => (planId ? { kind: 'plan', planId } : null),
     [planId],
   );
-  useLiveSignal(topic ?? IDLE_TOPIC, (signal) => tickRef.current?.(signal.forced === true), {
+  useLiveSignal(topic ?? IDLE_TOPIC, (signal) => tickRef.current?.(signal), {
     enabled: topic !== null && stoppedPlanId !== planId,
   });
 
@@ -262,7 +323,7 @@ export function useGeneratingPlanPoll(
     // A source that cannot be nudged still reads now: the read policy is ours.
     const live = sourceRef.current;
     if (live.trigger) live.trigger(current);
-    else tickRef.current(true);
+    else tickRef.current();
   }, []);
 
   const current = planId && snapshot && snapshot.planId === planId ? snapshot.review : null;

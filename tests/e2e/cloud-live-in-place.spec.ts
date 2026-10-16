@@ -19,6 +19,7 @@ import {
 import { BURST_CARD_TITLE, driveWriteBurst, seedBurstCard } from './_helpers/write-burst';
 import { agentSession } from './_helpers/agent-authored-plan-seed';
 import {
+  nudgePlan,
   seedPlanProgress,
   PLAN_PROGRESS_PASSWORD,
   type PlanProgressSeed,
@@ -32,7 +33,6 @@ import {
   UPDATE_PLAN_ITEM_TOOL_NAME,
   WITHDRAW_PLAN_PROPOSAL_TOOL_NAME,
 } from '@/lib/mcp/tools/authorPlan';
-import { POLL_MS } from '@/lib/hooks/useGeneratingPlanPoll';
 import { WORKBENCH_TABS, workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import type { WorkbenchWindowDto } from '@/lib/dto/workbench';
 import type { HomeTabCountsDto } from '@/lib/dto/home';
@@ -108,8 +108,8 @@ const BURST = 50;
 const QUIET_MS = 5_000;
 /** A server render or a first read on the cloud lane's production build. */
 const FIRST_PAINT_MS = 60_000;
-/** The plan surface's poll, eight of them — the card's "one full read" of quiet. */
-const PLAN_QUIET_MS = 8 * POLL_MS + 1_000;
+/** Eight unchanged re-reads of the plan — the card's "one full read" of quiet. */
+const PLAN_QUIET_READS = 8;
 
 const rows: RefreshCountRow[] = [];
 
@@ -789,12 +789,18 @@ test.describe('plans, under a second actor', () => {
       }
       await expect(peek).toBeVisible();
 
-      // Eight quiet polls of a plan still being written: zero DOM mutations.
+      // Eight quiet re-reads of a plan still being written: zero DOM mutations. Under push
+      // (MOTIR-8542) the surface reads only when the plan's row changes, so each read is
+      // driven by a no-op touch of the plan and awaited, not left to a timer.
       await recordMutations(proposalList(page), 'plan-tree');
       const quietFrom = ticks();
-      await page.waitForTimeout(PLAN_QUIET_MS);
-      expect(ticks() - quietFrom, 'the poll kept reading through the quiet').toBeGreaterThanOrEqual(
-        7,
+      for (let i = 0; i < PLAN_QUIET_READS; i += 1) {
+        const read = planPolled(page, planId, () => true);
+        await nudgePlan(planId);
+        await read;
+      }
+      expect(ticks() - quietFrom, 'the plan kept reading through the quiet').toBeGreaterThanOrEqual(
+        PLAN_QUIET_READS,
       );
       expect(await mutationsOf(page, 'plan-tree')).toBe(0);
       expect((await counter.read()).rscRefetches).toBe(0);

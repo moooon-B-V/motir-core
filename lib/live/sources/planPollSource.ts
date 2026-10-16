@@ -13,6 +13,15 @@ import type { LiveSignal, LiveSignalListener, LiveSignalSource, LiveTopic } from
 // One interval per subscription, as each hook instance had its own before the
 // seam. `trigger` is the hook's explicit `refresh()` — a FORCED signal to every
 // subscriber of that plan.
+//
+// ⚠️ THE NO-PROVIDER FALLBACK NOW (Story MOTIR-8542 · Subtask MOTIR-8732). Under
+// the shell's `WorkbenchLive` provider the plan topic is served by `plan` frames
+// on the tab's one stream (`workbenchStreamSource.ts`), and no timer runs. This
+// cadence remains for a surface with no provider above it — the onboarding
+// reveal, mounted outside `app/(authed)/layout.tsx` — and as the
+// `DEFAULT_LIVE_SOURCE` every test without a provider reads. Its ticks carry
+// `cadence: true`, so the hook knows another tick is coming and neither queues a
+// follow-up read nor schedules a failure retry on top of it.
 
 /** The generating-plan poll cadence. */
 export const POLL_MS = 2500;
@@ -25,7 +34,7 @@ const seqByPlan = new Map<string, number>();
 function emit(topic: PlanTopic, listener: LiveSignalListener, forced: boolean): void {
   const seq = (seqByPlan.get(topic.planId) ?? 0) + 1;
   seqByPlan.set(topic.planId, seq);
-  const signal: LiveSignal = forced ? { topic, seq, forced: true } : { topic, seq };
+  const signal: LiveSignal = forced ? { topic, seq, forced: true } : { topic, seq, cadence: true };
   listener(signal);
 }
 

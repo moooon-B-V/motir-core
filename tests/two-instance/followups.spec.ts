@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, inject, it } from 'vitest';
 import { CLI_CLIENT_ID } from '@/lib/cliDevice/constants';
-import { WORKBENCH_STREAM_FRAME, WORKBENCH_STREAM_POLL_MS } from '@/app/api/workbench/stream/route';
+import {
+  WORKBENCH_STREAM_COALESCE_MS,
+  WORKBENCH_STREAM_FRAME,
+} from '@/app/api/workbench/stream/route';
 import { clientFor, type InstanceName } from './harness';
 import {
   ORIGIN,
@@ -317,7 +320,7 @@ describe('(e) a write on B reaches a workbench stream held on A', () => {
     };
   }
 
-  it(`delivers a ${WORKBENCH_STREAM_FRAME} frame on A within the poll cadence plus a margin`, async () => {
+  it(`delivers a ${WORKBENCH_STREAM_FRAME} frame on A within the coalescing window plus a margin`, async () => {
     const member = await seedMember('stream');
     const token = await seedToken(member);
     const cookie = await signIn(app, 'A', member);
@@ -344,11 +347,12 @@ describe('(e) a write on B reaches a workbench stream held on A', () => {
       expectDifferentProcesses(stream, created.res);
       expect(created.body.result?.['isError'], toolText(created.body.result)).not.toBe(true);
 
-      // One poll of the stream after the write lands, plus 3 s for the read and
-      // the write's own commit under a loaded runner. A frame later than that is
-      // a stream that did not hear the write, not a slow one.
+      // One coalescing window after the write's notification lands on A (it is
+      // pushed across processes through Postgres, MOTIR-8729), plus 3 s for the
+      // read and the write's own commit under a loaded runner. A frame later than
+      // that is a stream that did not hear the write, not a slow one.
       const MARGIN_MS = 3_000;
-      const frame = await reader.next(WORKBENCH_STREAM_POLL_MS + MARGIN_MS);
+      const frame = await reader.next(WORKBENCH_STREAM_COALESCE_MS + MARGIN_MS);
       expect(frame?.event).toBe(WORKBENCH_STREAM_FRAME);
       expect((frame?.data as { moved: string[] }).moved.length).toBeGreaterThan(0);
     } finally {

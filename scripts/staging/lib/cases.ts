@@ -67,8 +67,12 @@ export interface Credentials {
   readonly origin: string;
 }
 
-/** The workbench stream's cadence — `app/api/workbench/stream/route.ts`, pinned by a test. */
-export const WORKBENCH_STREAM_POLL_MS = 1_000;
+/**
+ * The workbench stream's coalescing window — `app/api/workbench/stream/route.ts`,
+ * pinned by a test. A write is pushed (MOTIR-8729), so a frame follows it after
+ * this window plus one read.
+ */
+export const WORKBENCH_STREAM_COALESCE_MS = 250;
 export const WORKBENCH_STREAM_FRAME = 'watermark';
 /** The CLI's device-flow client id — `lib/cliDevice/constants.ts`, pinned by a test. */
 export const CLI_CLIENT_ID = 'motir-cli';
@@ -838,7 +842,7 @@ export async function caseDeviceFlow(ctx: CaseContext, session: Session): Promis
   );
 }
 
-/** (e) a write on B reaches a workbench stream held on A within the poll cadence plus a margin. */
+/** (e) a write on B reaches a workbench stream held on A within the coalescing window plus a margin. */
 export async function caseStream(ctx: CaseContext, session: Session): Promise<CaseResult> {
   const stream = await send(ctx, 'A', '/api/workbench/stream', {
     headers: { cookie: session.cookie },
@@ -875,10 +879,10 @@ export async function caseStream(ctx: CaseContext, session: Session): Promise<Ca
       title: `two-machine-check stream ${randomUUID()}`,
     });
     const MARGIN_MS = 3_000;
-    const frame = await next(WORKBENCH_STREAM_POLL_MS + MARGIN_MS);
+    const frame = await next(WORKBENCH_STREAM_COALESCE_MS + MARGIN_MS);
     check(
       frame?.event === WORKBENCH_STREAM_FRAME,
-      `no ${WORKBENCH_STREAM_FRAME} frame within the cadence plus margin`,
+      `no ${WORKBENCH_STREAM_FRAME} frame within the coalescing window plus margin`,
     );
     check(
       ((frame?.data as { moved?: string[] } | null)?.moved ?? []).length > 0,
