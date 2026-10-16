@@ -39,6 +39,8 @@ import type {
   MigrateConnectStateDto,
 } from '@/lib/dto/migrateOnboarding';
 import { StepHead } from './StepHead';
+import { ExistingAccounts, existingAccountsShown } from './ExistingAccounts';
+import { useInstalledAccounts } from './useInstalledAccounts';
 
 // THE CONNECT STEP (Story MOTIR-8241 · MOTIR-8475), built on
 // `design/onboarding-migrate/` Revision 7 (MOTIR-8469) and its delta mock
@@ -90,8 +92,10 @@ export type ConnectFailedStatus =
  *   - `read` — the report defers to the read, which alone knows whether usable
  *     repositories exist (`installed`, `repos_updated`, `select_repos`). The
  *     identity-grant statuses (`connected`, `denied`, `state_error`, `error`)
- *     never return to this step — the OAuth grant does not start here — so a
- *     hand-typed one is ignored the same way.
+ *     come back from the GitHub sign-in the accounts list offers (MOTIR-8762);
+ *     they say nothing about the install, so they defer to the read too — the
+ *     accounts read re-reads on that arrival, and `IDENTITY_DECLINED` below is
+ *     the one thing a refused sign-in changes.
  *   - `owner_pending` — `setup_action=request`: an owner must approve.
  *   - `install_cancelled` — `install_unbound` from this step's own state: GitHub
  *     came back with nothing installed (a `deny`), which is the cancelled panel's
@@ -136,6 +140,10 @@ export function connectReportFrom(raw: string | null | undefined): ConnectReport
   if (meaning === 'owner_pending' || meaning === 'install_cancelled') return { kind: meaning };
   return { kind: 'failed', status: meaning };
 }
+
+/** A sign-in that came back refused or unfinished: the identity prompt stays up
+ *  with one benign line (Revision 8, 2o.iv) — never a danger tone. */
+const IDENTITY_DECLINED: ReadonlySet<string> = new Set(['denied', 'state_error', 'error']);
 
 /** The send phase — client-only, invisible to both producers. */
 type SendPhase = 'idle' | 'starting' | 'waiting';
@@ -259,6 +267,15 @@ export function ConnectPanel({
   const [report, setReport] = useState<ConnectReport | null>(() =>
     connectReportFrom(searchParams.get('github')),
   );
+  // Revision 8: the accounts the App is already installed on (MOTIR-8762).
+  const accounts = useInstalledAccounts(read?.organizationId ?? null);
+  const [identitySkipped, setIdentitySkipped] = useState(false);
+  const [identityDeclined] = useState(() =>
+    IDENTITY_DECLINED.has(searchParams.get('github') ?? ''),
+  );
+  // The account the person picked — the repository picker behind it is
+  // MOTIR-8763's; this card records the pick and goes no further.
+  const [, setPickedInstallation] = useState<string | null>(null);
 
   const phaseRef = useRef<SendPhase>('idle');
   const beforeRef = useRef<string | null>(null);
@@ -394,6 +411,22 @@ export function ConnectPanel({
   };
 
   const state = connectStepState({ hasRun: runId !== null, read, readFailed, phase, report });
+  const retry = () => {
+    void readNow('retry');
+    accounts.reload();
+  };
+  const existing =
+    read !== null && existingAccountsShown(accounts.state, identitySkipped) ? (
+      <ExistingAccounts
+        state={accounts.state}
+        identitySkipped={identitySkipped}
+        identityDeclined={identityDeclined}
+        onSkipIdentity={() => setIdentitySkipped(true)}
+        onRetry={accounts.reload}
+        onPickAccount={(installationRef) => setPickedInstallation(installationRef)}
+        onInstall={send}
+      />
+    ) : null;
   const account = read?.installation.accounts[0];
   const manageUrl = manageUrlFor(account);
   const repos = read?.repositories ?? [];
@@ -416,8 +449,9 @@ export function ConnectPanel({
             report={report}
             repos={repos}
             manageUrl={manageUrl}
+            existing={existing}
             onSend={send}
-            onRetry={() => void readNow('retry')}
+            onRetry={retry}
           />
         </div>
       </Card>
@@ -475,6 +509,7 @@ function ConnectBody({
   report,
   repos,
   manageUrl,
+  existing,
   onSend,
   onRetry,
 }: {
@@ -482,6 +517,10 @@ function ConnectBody({
   report: ConnectReport | null;
   repos: MigrateConnectStateDto['repositories'];
   manageUrl: string | null;
+  /** The already-installed accounts (Revision 8), or null when they add nothing
+   *  — an empty list, a skipped sign-in. When present it OWNS the install
+   *  control (its install row), so a state drops its own install button. */
+  existing: ReactNode | null;
   onSend: () => void;
   onRetry: () => void;
 }) {
@@ -505,6 +544,24 @@ function ConnectBody({
     case 'preflight':
     case 'starting':
     case 'install_cancelled':
+      // 2l / 2t.iii: the list leads; a cancel keeps its line below it, and the
+      // list's install row is the retry.
+      if (existing && state !== 'starting') {
+        return (
+          <>
+            {existing}
+            {state === 'install_cancelled' ? (
+              <StatusBlock
+                glyph={<Undo2 className="size-4" />}
+                title={t('cancelledTitle')}
+                hint={t('cancelledHint')}
+              />
+            ) : null}
+            {gitlabNote}
+          </>
+        );
+      }
+      // No accounts (2n), or the press is out: the shipped pre-flight.
       return (
         <>
           {state === 'install_cancelled' ? (
@@ -581,12 +638,14 @@ function ConnectBody({
             hint={state === 'connected' ? t('detectedHint') : t('alreadyConnectedHint')}
           />
           <RepoList repos={repos} />
+          {state === 'already_connected' ? existing : null}
         </>
       );
 
     case 'no_repositories_selected':
       return (
         <>
+          {existing}
           <StatusBlock
             pill={{ tone: GITHUB_BANNER_TONE.select_repos, label: t('pill.chooseRepos') }}
             glyph={<FolderX className="size-4" />}
@@ -595,7 +654,7 @@ function ConnectBody({
           />
           {manageUrl ? (
             <ChooseReposLink href={manageUrl} />
-          ) : (
+          ) : existing ? null : (
             <SendButton onSend={onSend} label={t('preflightCta')} />
           )}
           {gitlabNote}
@@ -605,23 +664,26 @@ function ConnectBody({
     case 'owner_pending':
       return (
         <>
+          {existing}
           <StatusBlock
             pill={{ tone: GITHUB_BANNER_TONE.install_requested, label: t('pill.ownerPending') }}
             glyph={<Hourglass className="size-4" />}
             title={t('ownerPendingTitle')}
             hint={t('ownerPendingHint')}
           />
-          <span>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onSend}
-              rightIcon={<ArrowUpRight className="size-4" />}
-            >
-              {t('ownerPendingOpenCta')}
-              <span className="sr-only"> {t('newTab')}</span>
-            </Button>
-          </span>
+          {existing ? null : (
+            <span>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={onSend}
+                rightIcon={<ArrowUpRight className="size-4" />}
+              >
+                {t('ownerPendingOpenCta')}
+                <span className="sr-only"> {t('newTab')}</span>
+              </Button>
+            </span>
+          )}
         </>
       );
 
@@ -653,6 +715,10 @@ function ConnectBody({
           />
           {action === 'chooseRepos' && manageUrl ? (
             <ChooseReposLink href={manageUrl} />
+          ) : action && existing ? (
+            // 2r.ii: the line stays above whatever the accounts read gives, and
+            // the list's install row is the way forward.
+            existing
           ) : action === 'tryAgain' ? (
             <SendButton onSend={onSend} label={t('tryAgainCta')} />
           ) : action ? (
@@ -676,6 +742,7 @@ function ConnectBody({
               {t('recheckCta')}
             </Button>
           </span>
+          {existing}
           {gitlabNote}
         </>
       );
