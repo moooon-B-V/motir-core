@@ -167,7 +167,17 @@ test.describe('live updates reach an open page by server push', () => {
     const log = attachLiveNetworkLog(page);
     await page.goto('/workbench?tab=todo');
     await expect(rowOf(page, start)).toBeVisible();
-    await expect.poll(() => log.eventStreams().length, { message: 'the stream opened' }).toBe(1);
+    // ⚠️ The sign-in landing (another Workbench tab) can open ITS stream while
+    // this navigation is still pending, so the log may hold that one too. It
+    // ends when the landing document goes; this page's stream is the one left
+    // open, and every count below starts from it.
+    await expect
+      .poll(() => log.streams().filter((r) => r.ended === null).length, {
+        message: 'only this page’s stream is left',
+      })
+      .toBe(1);
+    await expect.poll(() => log.openStreams().length, { message: 'the stream opened' }).toBe(1);
+    const first = log.openStreams()[0]!.seq;
     const opened = log.mark();
     await setLoadMarker(page, 'live-push');
     await watchForReconnecting(page);
@@ -181,7 +191,7 @@ test.describe('live updates reach an open page by server push', () => {
       // CASE 1 — fast-forward the window: every timer due in it fires.
       window = log.mark();
       await page.clock.runFor(QUIET_WINDOW_MS);
-      expect(log.eventStreams().length, 'text/event-stream connections').toBe(1);
+      expect(log.eventStreams(first).length, 'text/event-stream connections').toBe(1);
       expect(log.streams(window), 'no new stream request').toEqual([]);
       expect(log.repeated(window), 'requests seen twice in the window').toEqual([]);
       await expectSameDocument(page, log, opened, 'live-push');
@@ -204,7 +214,7 @@ test.describe('live updates reach an open page by server push', () => {
       // CASE 3.
       const arrived = await writeAssigned(seed, ARRIVES_TITLE);
       await expect(rowOf(page, arrived)).toBeVisible({ timeout: 30_000 });
-      expect(log.eventStreams().length).toBe(1);
+      expect(log.eventStreams(first).length).toBe(1);
       await expectSameDocument(page, log, opened, 'live-push');
     });
     await beat();
@@ -308,8 +318,12 @@ test.describe('live updates reach an open page by server push', () => {
     // The log starts with the page the spec reads; the bounce's own stream is not it.
     const log = attachLiveNetworkLog(page);
     await page.goto(`${overlay.pathname}${overlay.search}`);
+    // The planning overlay is MODAL, so the approval stacked over it sits outside
+    // its accessibility tree; it is found with the hidden elements included and
+    // then asserted on screen.
     const dialog = page.getByRole('dialog', {
       name: `${en.workbench.approvals.kind.design_result} for ${seed.designKey}`,
+      includeHidden: true,
     });
     await expect(dialog).toBeVisible();
     // AUTHORITATIVE: the live connection is the one WATCHING the plan.
