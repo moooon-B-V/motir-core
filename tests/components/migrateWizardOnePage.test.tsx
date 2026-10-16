@@ -440,13 +440,10 @@ describe('the Import step ends onboarding with Enter Motir (MOTIR-8772)', () => 
     expect(rail.querySelectorAll('[aria-current="step"]')).toHaveLength(0);
   });
 
-  it('leaves the Index step by itself once an index exists', async () => {
-    const calls = fakeFetch((url, init) => {
-      if (url.endsWith('/index-status')) return json(indexStatus('queued'));
-      if (url.endsWith('/advance') && init?.method === 'POST')
-        return json(makeRun({ step: 'import', connectedRepoRef: 'acme/widgets' }));
-      return json({}, 404);
-    });
+  it('the Index step does not wait: Next opens while the index is still queued', async () => {
+    fakeFetch((url) =>
+      url.endsWith('/index-status') ? json(indexStatus('queued')) : json({}, 404),
+    );
     renderWithIntl(
       <MigrateWizard
         initialRun={makeRun({ step: 'index', connectedRepoRef: 'acme/widgets' })}
@@ -454,9 +451,11 @@ describe('the Import step ends onboarding with Enter Motir (MOTIR-8772)', () => 
         userInitial="Y"
       />,
     );
-    expect(await screen.findByRole('button', { name: 'Enter Motir' })).toBeTruthy();
-    const advances = calls.mock.calls.filter(([u]) => String(u).endsWith('/advance'));
-    expect(advances).toHaveLength(1);
+    const next = (await screen.findByRole('button', {
+      name: /Next: import your work/,
+    })) as HTMLButtonElement;
+    await screen.findByText('0 of 1 repositories done');
+    expect(next.disabled).toBe(false);
   });
 
   it('renders in Chinese', async () => {

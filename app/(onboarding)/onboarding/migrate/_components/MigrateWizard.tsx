@@ -293,18 +293,6 @@ export function MigrateWizard({
   );
   const showIndicator = run !== null && run.step !== 'connect' && run.step !== 'index';
 
-  // THE INDEX STEP IS NOT A STOP (MOTIR-8768): the run may leave it once an
-  // index exists in any state, so the wizard moves on by itself the first time
-  // the read shows one. A refused move (409) leaves the Index panel up, whose
-  // Next stays available; this never asks twice for the same run.
-  const autoAdvancedFrom = useRef<string | null>(null);
-  useEffect(() => {
-    if (run?.step !== 'index' || !indexStatus || indexStatus.total === 0) return;
-    if (autoAdvancedFrom.current === run.id) return;
-    autoAdvancedFrom.current = run.id;
-    void advance();
-  }, [run, indexStatus, advance]);
-
   // A started import runs in the background (§ Revision A): while the run
   // reports one, re-read the run so its count and its end reach the page.
   const importing = run !== null && importRunning(run.latestImport);
@@ -895,7 +883,9 @@ function IndexPanel({
       <PanelFoot
         nextLabel={t('index.next')}
         onNext={() => void onAdvance()}
-        // Not a stop (MOTIR-8768): the step can be left once an index exists.
+        // NOT A STOP (MOTIR-8768): the run may leave the step once an index
+        // exists in any state, so Next opens with the first repository listed,
+        // indexed or not. The progress keeps going in the bar's chip.
         nextDisabled={total === 0}
         busy={busy}
       />
