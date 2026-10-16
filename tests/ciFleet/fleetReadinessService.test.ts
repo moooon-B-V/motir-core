@@ -6,9 +6,11 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import {
   fleetReadinessService,
   FleetReadinessTargetNotFoundError,
+  requestsFleetRunner,
   type FleetReadiness,
 } from '@/lib/services/fleetReadinessService';
 import type { FleetJobInventory, FleetInventoryJob } from '@/lib/ciFleet/fleetJobInventoryTypes';
+import checkedInInventory from '@/lib/ciFleet/fleetJobInventory.json';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -141,10 +143,13 @@ async function connectRepos(names: string[]): Promise<void> {
   }
 }
 
+// What a job that follows the switch asks for (MOTIR-8813: only such a job counts).
+const SEAM = "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}";
+
 function job(jobId: string, overrides: Partial<FleetInventoryJob> = {}): FleetInventoryJob {
   return {
     jobId,
-    runsOn: 'ubuntu-latest',
+    runsOn: SEAM,
     triggers: ['push'],
     verdict: 'runnable',
     missing: [],
@@ -530,12 +535,12 @@ describe('delivery_attributable, on both of the intake’s paths', () => {
 });
 
 describe('image_coverage', () => {
-  it('lists EVERY job that is not runnable', async () => {
+  it('lists EVERY job that requests the fleet and is not runnable', async () => {
     const result = await fleetReadinessService.readinessFor(target(), {
       inventory: inventory({
         api: [
           job('build', { verdict: 'needs-image', missing: ['gh'] }),
-          job('mac', { verdict: 'cannot-host', reason: 'runs-on macos-latest' }),
+          job('arm', { verdict: 'cannot-host', reason: 'arm64 only' }),
           job('ok'),
         ],
       }),
@@ -546,14 +551,59 @@ describe('image_coverage', () => {
       params: {
         jobs: [
           { repoRef: `${ORG}/api`, jobId: 'build', verdict: 'needs-image', missing: ['gh'] },
-          {
-            repoRef: `${ORG}/api`,
-            jobId: 'mac',
-            verdict: 'cannot-host',
-            reason: 'runs-on macos-latest',
-          },
+          { repoRef: `${ORG}/api`, jobId: 'arm', verdict: 'cannot-host', reason: 'arm64 only' },
         ],
       },
+    });
+  });
+
+  it('a job that never requests the fleet does not count, and is named as GitHub-hosted (MOTIR-8813)', async () => {
+    const result = await fleetReadinessService.readinessFor(target(), {
+      inventory: inventory({
+        api: [
+          job('mac', {
+            runsOn: 'macos-latest',
+            verdict: 'cannot-host',
+            reason: 'runs-on macos-latest',
+          }),
+          job('pinned', {
+            runsOn: 'ubuntu-latest',
+            verdict: 'needs-image',
+            missing: ['binfmt-misc'],
+          }),
+          job('ok'),
+        ],
+      }),
+    });
+    expect(result.ready).toBe(true);
+    expect(cond(result, 'image_coverage')).toMatchObject({
+      state: 'met',
+      reasonCode: 'all_runnable',
+      params: {
+        githubHostedJobs: [
+          { repoRef: `${ORG}/api`, workflow: '.github/workflows/ci.yml', jobId: 'mac' },
+          { repoRef: `${ORG}/api`, workflow: '.github/workflows/ci.yml', jobId: 'pinned' },
+        ],
+      },
+    });
+  });
+
+  it('the same job asking for the fleet label outright still counts (MOTIR-8813)', async () => {
+    const result = await fleetReadinessService.readinessFor(target(), {
+      inventory: inventory({
+        web: [
+          job('img', {
+            runsOn: ['self-hosted', 'motir-runner'],
+            verdict: 'needs-image',
+            missing: ['binfmt-misc'],
+          }),
+        ],
+      }),
+    });
+    expectOnly(result, 'image_coverage', 'unmet');
+    expect(cond(result, 'image_coverage')).toMatchObject({
+      reasonCode: 'jobs_not_runnable',
+      params: { jobs: [{ repoRef: `${ORG}/web`, jobId: 'img' }], githubHostedJobs: [] },
     });
   });
 
@@ -728,6 +778,46 @@ describe('the reads that can fail, and the remaining shapes', () => {
     });
     expect(cond(result, 'image_coverage').message).toMatch(/^1 job cannot run/);
     expect(cond(result, 'image_coverage').message).toContain('lint (needs-image)');
+  });
+});
+
+describe('requestsFleetRunner (MOTIR-8813)', () => {
+  it.each([
+    [SEAM, true],
+    ['${{ vars.MOTIR_RUNNER }}', true],
+    ['motir-runner', true],
+    ['MOTIR-RUNNER', true],
+    [['self-hosted', 'motir-runner'], true],
+    [[SEAM], true],
+    [{ group: 'g', labels: ['motir-runner'] }, true],
+    [{ group: 'g', labels: 'motir-runner' }, true],
+    ['ubuntu-latest', false],
+    [['ubuntu-latest'], false],
+    ['macos-latest', false],
+    ['windows-latest', false],
+    [{ group: 'g' }, false],
+    [null, false],
+    [undefined, false],
+  ])('%j ⇒ %s', (runsOn, expected) => {
+    expect(requestsFleetRunner(runsOn)).toBe(expected);
+  });
+});
+
+describe('the checked-in manifest (MOTIR-8813)', () => {
+  it("the fleet-bound gap in project MOTIR's private repositories is exactly the binfmt image job", () => {
+    const gaps = Object.values(checkedInInventory.repos)
+      .filter((r) => r.visibility === 'private')
+      .flatMap((r) =>
+        r.workflows.flatMap((w) =>
+          w.jobs
+            .filter((j) => requestsFleetRunner(j.runsOn))
+            .filter((j) => j.verdict !== 'runnable' || j.missing.includes('unverified'))
+            .map((j) => `${r.repoRef} ${w.path} ${j.jobId} ${j.missing.join(',')}`),
+        ),
+      );
+    expect(gaps).toEqual([
+      'moooon-B-V/motir-gateway .github/workflows/docker-image.yml push_to_registries binfmt-misc',
+    ]);
   });
 });
 

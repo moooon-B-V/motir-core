@@ -4,6 +4,16 @@
 **Manifest:** [`lib/ciFleet/fleetJobInventory.json`](../../lib/ciFleet/fleetJobInventory.json)
 (read by the readiness verdict, MOTIR-8713; flipped tool by tool by the image card, MOTIR-8710)
 
+**Re-measured 2026-10-16 (MOTIR-8813):** motir-ai, motir-gateway and motir-meta at
+their `main` heads, after the seam pull requests (motir-ai#760, motir-gateway#105,
+motir-meta#624) changed only `runs-on:` lines. No job, workflow or verdict changed.
+Each job's `runsOn` now reads the seam expression, except motir-gateway's
+`macos-release` and `windows-release`, which stay GitHub-hosted on purpose. The
+readiness verdict counts only jobs whose `runsOn` can resolve to the fleet, so
+those two no longer hold the switch off. The one fleet-bound gap left in the
+private set is motir-gateway `docker-image.yml · push_to_registries`
+(`binfmt-misc`).
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the
