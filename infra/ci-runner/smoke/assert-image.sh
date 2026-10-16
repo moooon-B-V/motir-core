@@ -144,6 +144,16 @@ else
   fail "the entrypoint does not exec run.sh --jitconfig"
 fi
 
+# `setpriv` keeps root's environment, so the drop must hand the runner its own
+# HOME / USER / LOGNAME or every step inherits `HOME=/root` (MOTIR-8820).
+for assignment in HOME=/home/runner USER=runner LOGNAME=runner; do
+  if grep -qE "exec setpriv .*env .*${assignment} .*run\.sh --jitconfig" <<<"${entry_joined}"; then
+    ok "the privilege drop sets ${assignment}"
+  else
+    fail "the privilege drop does not set ${assignment} — steps would inherit root's"
+  fi
+done
+
 if code_of "${DOCKERFILE}" | grep -q 'RUNNER_ALLOW_RUNASROOT'; then
   fail "RUNNER_ALLOW_RUNASROOT is set — the runner must drop to the unprivileged 'runner' user"
 else
@@ -185,6 +195,23 @@ if inspect 'test -x /home/runner/actions-runner/run.sh'; then
   ok "run.sh is present and executable"
 else
   fail "run.sh is missing — the JIT path has nothing to exec"
+fi
+
+# The environment a job step actually gets (MOTIR-8820). Every check above runs
+# as root; this one runs through the entrypoint's OWN drop — the same `setpriv`
+# flags and the same `env` assignments, read from the entrypoint BAKED INTO THE
+# IMAGE rather than restated — and does what `actions/checkout` does first: write
+# global git config. An image built without the assignments fails here.
+drop_env=$(inspect 'cat /usr/local/bin/motir-ci-runner-entrypoint' \
+  | sed -e 's/[[:space:]]*#.*$//' | tr '\n' ' ' | sed 's/\\ / /g' \
+  | grep -oE 'exec setpriv .*run\.sh' | grep -oE '(HOME|USER|LOGNAME)=[^ ]+' | tr '\n' ' ' || true)
+as_runner=$(inspect "setpriv --reuid=runner --regid=runner --init-groups env ${drop_env} \
+  bash -c 'id -un; echo \"\$HOME\"; git config --global user.name probe && git config --global --get user.name'" 2>&1 || true)
+if [ "${as_runner}" = "$(printf 'runner\n/home/runner\nprobe')" ]; then
+  ok "a step runs as runner with HOME=/home/runner and can write global git config"
+else
+  printf '%s\n' "${as_runner}" | sed 's/^/        | /' >&2
+  fail "a step after the privilege drop is not runner with a writable HOME=/home/runner"
 fi
 
 # The derived toolchain, checked as present rather than assumed.
