@@ -7545,7 +7545,9 @@
         "aria": "{key} openen, het werkitem dat dit gesprek opnieuw plant",
         "pickLabel": "Vervolg op <mono>{key}</mono>",
         "chose": "koos {label}",
-        "pickAria": "{key} openen, de keuze waarop dit gesprek het vervolg is (koos {label})"
+        "pickAria": "{key} openen, de keuze waarop dit gesprek het vervolg is (koos {label})",
+        "guideLabel": "Uit de gids voor <mono>{key}</mono>",
+        "guideAria": "{key} openen, het werkitem waar Motir AI je doorheen leidde toen het deze herplanning voorstelde"
       },
       "end": {
         "failed": "Gesloten · de poging is mislukt · {time}",
@@ -7975,6 +7977,16 @@
     "followUpCard": {
       "label": "Vervolg op een keuze"
     },
+    "guideSeed": {
+      "chip": "uit een gids",
+      "lead": "Geopend op {target} vanuit de gids van Motir AI over {guided}.",
+      "card": "Uit een gids",
+      "cardBy": "Bevestigd door {who} · {when}",
+      "justNow": "zojuist",
+      "you": "jij",
+      "status": "In planning",
+      "offerClosed": "Dit herplanningsvoorstel is niet meer open. Ga terug naar de gids om te zien hoe het ervoor staat."
+    },
     "guide": {
       "openedFrom": "Geopend vanuit {key}",
       "reading": "{key} en de takenlijst lezen…",
@@ -8006,7 +8018,8 @@
       "errors": {
         "notManual": "Motir AI begeleidt een persoon bij handmatig werk, en dit werkitem is voor een agent, dus hier valt niets te begeleiden.",
         "closed": "Dit werkitem is klaar of gearchiveerd, dus er valt niets meer te begeleiden.",
-        "forbidden": "Je hebt toestemming nodig om dit werkitem te bewerken en om met Motir AI te plannen om erdoorheen begeleid te worden."
+        "forbidden": "Je hebt toestemming nodig om dit werkitem te bewerken en om met Motir AI te plannen om erdoorheen begeleid te worden.",
+        "offerClosed": "Dit voorstel is al beslist, dus het kan niet meer worden gewijzigd. Laad het werkitem opnieuw om te zien hoe het ervoor staat."
       },
       "youTicked": "Je hebt stap {n} op de lijst afgevinkt",
       "youUnticked": "Je hebt stap {n} op de lijst weer opengezet",
@@ -8061,6 +8074,32 @@
         "typeText": "Tekst",
         "typeMarkdown": "Markdown",
         "typeFile": "Bestand"
+      },
+      "offer": {
+        "label": "Herplanningsverzoek",
+        "target": "Gericht op",
+        "targetElsewhere": "De herplanning begint bij {key}, niet bij dit werkitem.",
+        "resolved": "{done} is klaar, dus de herplanning begint bij {open}.",
+        "noTarget": "Er is geen open werkitem om de herplanning vanaf te starten.",
+        "confirm": "Bevestigen",
+        "confirming": "Starten…",
+        "openSession": "Open de planningssessie",
+        "decline": "Afwijzen",
+        "declining": "Afwijzen…",
+        "showAll": "Alles tonen",
+        "showLess": "Minder tonen",
+        "confirmHelp": "Opent de planning van Motir AI voor {key} met dit verzoek erbij. Dit kost credits.",
+        "declineHelp": "Sluit dit voorstel. Er wordt niets gepland.",
+        "replaced": "Vervangen door een nieuwer voorstel",
+        "started": "Herplanning gestart",
+        "startedBy": "Bevestigd · {when}",
+        "declined": "Afgewezen",
+        "declinedBy": "Afgewezen · {when}",
+        "recorded": "Vastgelegd op het werkitem",
+        "resumeAt": "Loop mij erdoorheen gaat verder bij stap {n}.",
+        "walkStopped": "De wandeling is gestopt.",
+        "cannotPlan": "Je kunt hier geen planning starten — vraag het iemand die dat wel kan, of deel dit verzoek.",
+        "noAi": "Motir AI is hier niet ingesteld, dus de planning kan niet starten. Je kunt dit verzoek nog wel delen."
       }
     },
     "restart": {

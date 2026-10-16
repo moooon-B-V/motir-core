@@ -1,8 +1,5 @@
 import { cache } from 'react';
-import { cookies } from 'next/headers';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
-import { organizationsService } from '@/lib/services/organizationsService';
-import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import type { PublicProjectOverviewDto } from '@/lib/dto/publicProjects';
 
 // Request-scoped public-projects read helpers (Story 6.12 · Subtask 6.12.11).
@@ -17,16 +14,3 @@ export const getPublicOverview = cache(
   (identifier: string, actorUserId: string | null): Promise<PublicProjectOverviewDto> =>
     publicProjectsService.getOverview(identifier, actorUserId),
 );
-
-// The signed-in viewer's active organization NAME — for the submit form's
-// "Submitted as {name} ({org})" attribution hint (design Panel 4). Resolved from
-// the active-org cookie (re-validated against membership, falling back to the
-// user's first org), exactly as the shell does; `cache()`-wrapped so the three
-// button instances share one resolution. Returns null when the viewer has no
-// org (the hint then degrades to name-only).
-export const getActiveOrgName = cache(async (userId: string): Promise<string | null> => {
-  const store = await cookies();
-  const pinned = store.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
-  const active = await organizationsService.resolveActiveOrganization(userId, pinned);
-  return active?.organization.name ?? null;
-});

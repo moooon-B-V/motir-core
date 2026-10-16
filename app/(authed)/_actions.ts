@@ -7,6 +7,7 @@ import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { projectsService } from '@/lib/services/projectsService';
+import { resolveActiveOrganizationAsShell } from '@/lib/workspaces/tierDisclosure.server';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { EntitlementExceededError } from '@/lib/billing/errors';
@@ -68,8 +69,9 @@ export type CreateWorkspaceResult =
 /**
  * Create a new workspace under the ACTIVE organization and switch to it (Story
  * 6.10.5 — the org menu's "New workspace" entry, the discoverable path to
- * reveal tier 2). The active org comes from the org cookie (resolved + membership-
- * re-validated by the service); passing its id makes `createWorkspace` nest the
+ * reveal tier 2). The active org is the one the shell names
+ * (`resolveActiveOrganizationAsShell` — the active workspace's org, else the org
+ * cookie, membership-re-validated by the service); passing its id makes `createWorkspace` nest the
  * new workspace under it rather than minting a fresh org (the 6.10.4 org-aware
  * create path). Returns the new workspace summary so the client can reflect it
  * before router.refresh() re-renders the server tree.
@@ -84,12 +86,12 @@ export async function createWorkspaceAction(name: string): Promise<CreateWorkspa
   const trimmed = name.trim();
   if (!trimmed) throw new Error('EMPTY_NAME');
 
+  // The org the SHELL names — the active workspace's org, the org cookie only as
+  // the fallback (MOTIR-8778). The cookie alone is written only by the org menu,
+  // so after a workspace move it can name the OTHER org, and the new workspace
+  // (with its billing and members) would land in a tenant the header does not show.
+  const { currentOrg: activeOrg } = await resolveActiveOrganizationAsShell(session.user.id);
   const cookieStore = await cookies();
-  const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
-  const activeOrg = await organizationsService.resolveActiveOrganization(
-    session.user.id,
-    orgCookie,
-  );
 
   // MOTIR-5130 — the §4.4 cap (`entitlementsService.assertWithinWorkspaceCap`)
   // throws a TYPED `EntitlementExceededError` carrying the plan's limit and the

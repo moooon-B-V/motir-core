@@ -6,6 +6,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { manualWorkGateService } from '@/lib/services/manualWorkGateService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { GUIDE_BUGS_PER_CONVERSATION } from '@/lib/ai/guideWorkItem';
@@ -54,6 +55,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { POST: guide } = await import('@/app/api/ai/guide/route');
 const { POST: guideSettle } = await import('@/app/api/ai/guide/settle/route');
+const { POST: declineOffer } = await import('@/app/api/ai/guide/offer/decline/route');
 const { POST: askSettle } = await import('@/app/api/ai/ask/settle/route');
 const { guideBugFilingService } = await import('@/lib/services/guideBugFilingService');
 const { guideLandingService } = await import('@/lib/services/guideLandingService');
@@ -75,6 +77,7 @@ interface Settled {
   session: PlanChangeSessionDto;
   record?: {
     outcomes: Array<{ type: string; outcome: string; reason?: string; workItemKey?: string }>;
+    replanOffer?: Record<string, unknown> | null;
   };
 }
 
@@ -407,6 +410,241 @@ describe('needs_replan (A3.9 (b))', () => {
     expect((await workItemsService.getWorkItem(card.id, fx.ctx)).title).toBe(
       'Rotate the signing key',
     );
+  });
+});
+
+describe('needs_replan offer — the stored, resolved offer (MOTIR-8689)', () => {
+  /** A manual card under a story under an epic, all on a workflow status. */
+  async function chain() {
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Email' });
+    const story = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Sending',
+      parentId: epic.id,
+    });
+    const card = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Rotate the signing key',
+      type: 'manual',
+      executor: 'human',
+      parentId: story.id,
+    });
+    for (const w of [epic, story, card]) {
+      await adminDb.workItem.update({ where: { id: w.id }, data: { status: 'todo' } });
+    }
+    return { epic, story, card };
+  }
+
+  const offer = (targetKey?: string | null) => ({
+    type: 'needs_replan',
+    reason: 'The story is wrong',
+    requestMd: 'Re-plan the story',
+    ...(targetKey === undefined ? {} : { targetKey }),
+  });
+
+  const commentOn = async (id: string) =>
+    (await adminDb.comment.findMany({ where: { workItemId: id } })).map((c) => c.bodyMd);
+
+  it('an open target stands as asked, is stored on the reply, and reads back', async () => {
+    const { story, card } = await chain();
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [offer(story.identifier)]);
+    expect(outcomesOf(settled)).toEqual([['needs_replan', 'landed']]);
+    expect(settled.record?.replanOffer).toEqual({
+      reason: 'The story is wrong',
+      requestMd: 'Re-plan the story',
+      requestedTargetKey: story.identifier,
+      targetKey: story.identifier,
+      targetResolution: 'as_asked',
+      declinedAt: null,
+      declinedById: null,
+      confirmedAt: null,
+      confirmedById: null,
+      confirmedSessionId: null,
+    });
+    const bodies = await commentOn(card.id);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toContain(`Re-plan offered on: ${story.identifier}`);
+    // It survives a fresh read of the thread.
+    const reread = await planChangeSessionsService.getById(activeCtx.current!, opened.session.id);
+    expect(reread.turns.at(-1)?.guide?.replanOffer?.targetKey).toBe(story.identifier);
+  });
+
+  it('no named target plans on the guided card', async () => {
+    const { card } = await chain();
+    const settled = await settleWith(await open(card.identifier), [offer(null)]);
+    expect(settled.record?.replanOffer).toMatchObject({
+      requestedTargetKey: null,
+      targetKey: card.identifier,
+      targetResolution: 'guided_card',
+    });
+  });
+
+  it('an unknown key falls back to the guided card and keeps only the key the guide wrote', async () => {
+    const { card } = await chain();
+    const settled = await settleWith(await open(card.identifier), [offer('NOPE-999')]);
+    expect(settled.record?.replanOffer).toMatchObject({
+      requestedTargetKey: 'NOPE-999',
+      targetKey: card.identifier,
+      targetResolution: 'guided_card',
+    });
+  });
+
+  it('a done target resolves to the nearest not-done ancestor, parent first', async () => {
+    const { epic, story, card } = await chain();
+    await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'done' } });
+    const settled = await settleWith(await open(card.identifier), [offer(story.identifier)]);
+    expect(settled.record?.replanOffer).toMatchObject({
+      requestedTargetKey: story.identifier,
+      targetKey: epic.identifier,
+      targetResolution: 'nearest_open_ancestor',
+    });
+  });
+
+  it('a done target with every ancestor done offers no target, and the comment says so', async () => {
+    const { epic, story, card } = await chain();
+    await adminDb.workItem.update({ where: { id: epic.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'done' } });
+    const settled = await settleWith(await open(card.identifier), [offer(story.identifier)]);
+    expect(settled.record?.replanOffer).toMatchObject({
+      targetKey: null,
+      targetResolution: 'none',
+    });
+    expect((await commentOn(card.id))[0]).toContain('No open work item to re-plan on');
+  });
+
+  it('a reason-only needs_replan stores no offer and comments exactly as before', async () => {
+    const { card } = await chain();
+    const settled = await settleWith(await open(card.identifier), [
+      { type: 'needs_replan', reason: 'The target moved' },
+    ]);
+    // The record carries the field, empty: `replanOffer: null` is "no offer".
+    expect(settled.record?.replanOffer).toBeNull();
+    const bodies = await commentOn(card.id);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).not.toContain('Re-plan offered on');
+  });
+
+  it('a second offer in the same turn is skipped, the first stands', async () => {
+    const { story, epic, card } = await chain();
+    const settled = await settleWith(await open(card.identifier), [
+      offer(story.identifier),
+      offer(epic.identifier),
+    ]);
+    expect(outcomesOf(settled)).toEqual([
+      ['needs_replan', 'landed'],
+      ['needs_replan', 'skipped'],
+    ]);
+    expect(settled.record?.replanOffer?.targetKey).toBe(story.identifier);
+  });
+});
+
+describe('Decline a re-plan offer — POST /api/ai/guide/offer/decline (MOTIR-8689)', () => {
+  const offerAction = (targetKey: string) => ({
+    type: 'needs_replan',
+    reason: 'The story is wrong',
+    requestMd: 'Re-plan the story',
+    targetKey,
+  });
+
+  const decline = (sessionId: string, turnId: string) =>
+    declineOffer(post('/api/ai/guide/offer/decline', { sessionId, turnId }));
+
+  async function offered(opts: { rows?: string[] } = {}) {
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Sending' });
+    const card = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Rotate the signing key',
+      type: 'manual',
+      executor: 'human',
+      parentId: parent.id,
+    });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'todo' } });
+    await adminDb.workItem.update({ where: { id: parent.id }, data: { status: 'todo' } });
+    if (opts.rows) await addRows(card.id, opts.rows);
+    const opened = await open(card.identifier);
+    const settled = await settleWith(opened, [offerAction(parent.identifier)]);
+    const turn = settled.session.turns.find((t) => t.role === 'assistant')!;
+    return { card, parent, opened, settled, turnId: turn.id };
+  }
+
+  it('stamps the decision and writes nothing else: no turn, no job, no change to the card', async () => {
+    const { card, opened, turnId } = await offered();
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    const turnsBefore = await adminDb.planChangeTurn.count({
+      where: { sessionId: opened.session.id },
+    });
+    const jobsBefore = submitJobMock.mock.calls.length;
+
+    const res = await decline(opened.session.id, turnId);
+    expect(res.status).toBe(200);
+    const dto = (await res.json()) as PlanChangeSessionDto;
+    const offer = dto.turns.find((t) => t.id === turnId)?.guide?.replanOffer;
+    expect(offer?.declinedAt).toEqual(expect.any(String));
+    expect(offer?.declinedById).toBe(fx.ownerId);
+
+    expect(await adminDb.planChangeTurn.count({ where: { sessionId: opened.session.id } })).toBe(
+      turnsBefore,
+    );
+    expect(submitJobMock.mock.calls.length).toBe(jobsBefore);
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(after.status).toBe(before.status);
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it('is idempotent: a second decline answers 200 and rewrites nothing', async () => {
+    const { opened, turnId } = await offered();
+    await decline(opened.session.id, turnId);
+    const first = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turnId } });
+    const res = await decline(opened.session.id, turnId);
+    expect(res.status).toBe(200);
+    const second = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: turnId } });
+    expect(second.guideTurn).toEqual(first.guideTurn);
+  });
+
+  it('refuses a superseded offer with 409 GUIDE_REPLAN_OFFER_NOT_OPEN', async () => {
+    const { parent, opened, turnId } = await offered();
+    const next1 = await next(opened.session.id, 'No, the story is the problem.');
+    await settleWith(next1, [offerAction(parent.identifier)]);
+    const res = await decline(opened.session.id, turnId);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('GUIDE_REPLAN_OFFER_NOT_OPEN');
+  });
+
+  it('answers 404 alike for a turn with no offer, an unknown turn and another member’s session', async () => {
+    const { card, opened } = await offered();
+    const reply = opened.session.turns.find((t) => t.role === 'user')!;
+    for (const turnId of [reply.id, 'no-such-turn']) {
+      const res = await decline(opened.session.id, turnId);
+      expect(res.status).toBe(404);
+    }
+    const other = await createTestUser();
+    session.current = { user: { id: other.id, email: other.email, name: 'Other' } };
+    activeCtx.current = { ...activeCtx.current!, userId: other.id };
+    const assistant = (
+      await adminDb.planChangeTurn.findMany({ where: { sessionId: opened.session.id } })
+    ).find((t) => t.role === 'assistant');
+    expect(assistant).toBeDefined();
+    expect((await decline(opened.session.id, assistant!.id)).status).toBe(404);
+    expect(card.id).toBeTruthy();
+  });
+
+  it('answers 400 without a sessionId or turnId', async () => {
+    expect((await declineOffer(post('/api/ai/guide/offer/decline', { turnId: 'x' }))).status).toBe(
+      400,
+    );
+    expect(
+      (await declineOffer(post('/api/ai/guide/offer/decline', { sessionId: 'x' }))).status,
+    ).toBe(400);
+  });
+
+  it('after a decline, Guide me through resumes the same conversation', async () => {
+    // The door resumes a walk only on a card with to-do rows (a card with none
+    // starts fresh, by design), so the walk this declines on has its rows.
+    const { card, opened, turnId } = await offered({ rows: ['Rotate the key', 'Verify'] });
+    await decline(opened.session.id, turnId);
+    const again = await open(card.identifier);
+    expect(again.session.id).toBe(opened.session.id);
   });
 });
 

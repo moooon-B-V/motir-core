@@ -1,5 +1,6 @@
 'use client';
 
+import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CopyableSessionDto,
@@ -515,6 +516,8 @@ function narrationFrom(
 
 const NO_NARRATION = { narration: null, narrationKept: null } as const;
 
+export { GUIDE_OFFER_CLOSED };
+
 export interface StalePlanState {
   planId: string;
   finishedCards: StalePlanFinishedCard[];
@@ -788,6 +791,20 @@ export interface UsePlanChangeConversationOptions {
    */
   seedGateId?: string | null;
   /**
+   * The GUIDE OFFER a seeded planning start comes from (Story MOTIR-8684 · MOTIR-8693).
+   * It behaves as {@link seedGateId} does — the mount opens nothing, and the FIRST send
+   * (the one with no session yet) carries it — and is never set beside it. Its three
+   * refusals end the send without a retry:
+   *  · `409 GUIDE_REPLAN_OFFER_CONFIRMED { sessionId }` — the offer already started a
+   *    session; {@link UsePlanChangeConversationOptions.onGuideOfferConfirmed} is told
+   *    which, and nothing more is sent;
+   *  · `409 GUIDE_REPLAN_OFFER_NOT_OPEN` and `422 SEED_NOT_APPLICABLE` — the offer is
+   *    closed: `errorCode` becomes {@link GUIDE_OFFER_CLOSED} and nothing is retried.
+   */
+  seedGuideTurnId?: string | null;
+  /** The offer was already confirmed: the session id to return to. */
+  onGuideOfferConfirmed?: (sessionId: string) => void;
+  /**
    * A debug turn FILED a new bug into Triage (MOTIR-7049 — the settle's
    * `landing.createdInTriage`). The triage inbox is a client island that
    * refetches only on `ReportProvider`'s `submissionsChangedAt` tick, which the
@@ -888,6 +905,25 @@ export function refusalCodeOf(
     : null;
 }
 
+/** The session a guide-seeded send was answered `409 GUIDE_REPLAN_OFFER_CONFIRMED` with
+ *  (MOTIR-8693) — the offer already started it — or `null` for any other answer. */
+export function guideOfferConfirmedSession(err: unknown): string | null {
+  if (!(err instanceof PlanEditsClientError) || err.code !== 'GUIDE_REPLAN_OFFER_CONFIRMED') {
+    return null;
+  }
+  const id = ((err.body ?? {}) as Partial<Record<string, unknown>>).sessionId;
+  return typeof id === 'string' && id !== '' ? id : null;
+}
+
+/** `GUIDE_OFFER_CLOSED` for the two answers that end a guide-seeded send with its offer
+ *  no longer open — declined or superseded, or a scope the offer does not fit — else null. */
+export function guideOfferClosedCode(err: unknown): string | null {
+  if (!(err instanceof PlanEditsClientError)) return null;
+  return err.code === 'GUIDE_REPLAN_OFFER_NOT_OPEN' || err.code === 'SEED_NOT_APPLICABLE'
+    ? GUIDE_OFFER_CLOSED
+    : null;
+}
+
 /** Whether a thread has ENDED (AMENDMENT 23 §1) — read from the server's row. */
 export function sessionEnded(session: PlanChangeSessionDto | null | undefined): boolean {
   return Boolean(session?.endedAt);
@@ -931,6 +967,8 @@ export function usePlanChangeConversation({
   sessionId = null,
   sessionIsResume = false,
   seedGateId = null,
+  seedGuideTurnId = null,
+  onGuideOfferConfirmed,
   onTriageChanged,
   onRestarted,
 }: UsePlanChangeConversationOptions = {}) {
@@ -941,6 +979,13 @@ export function usePlanChangeConversation({
   // deterministic, so re-sending the same seed could only fail the same way, and
   // the person's words should still be sendable as an ordinary re-plan.
   const seedRef = useRef(seedGateId);
+  // The guide offer the first send carries (MOTIR-8693). Spent by ANY answer from the
+  // server — a refusal is deterministic, so the same seed could only fail the same way.
+  const guideSeedRef = useRef(seedGuideTurnId);
+  const guideConfirmedCbRef = useRef(onGuideOfferConfirmed);
+  // A guide-seeded send is in flight (or just refused): only then does `SEED_NOT_APPLICABLE`
+  // mean *this offer is closed*; for a gate seed it stays the generic failure.
+  const guideSendRef = useRef(false);
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
   // The entrance's anchor, read by callbacks that must not be re-created when it
@@ -1004,6 +1049,7 @@ export function usePlanChangeConversation({
     approvedCbRef.current = onApproved;
     restartedCbRef.current = onRestarted;
     triageChangedRef.current = onTriageChanged;
+    guideConfirmedCbRef.current = onGuideOfferConfirmed;
     anchorRef.current = anchorId;
   });
 
@@ -1273,7 +1319,7 @@ export function usePlanChangeConversation({
               copyable: null,
               targetHeld: null,
             }))
-          : seedGateId
+          : seedGateId || seedGuideTurnId
             ? // A SEEDED re-plan opens EMPTY (MOTIR-6210): the first turn sits
               // unsent in the composer, and no resumable conversation is read —
               // the seeded send starts its own session, or returns to one of the
@@ -1370,7 +1416,7 @@ export function usePlanChangeConversation({
       }
     })();
     return () => controller.abort();
-  }, [anchorId, sessionId, sessionIsResume, seedGateId]);
+  }, [anchorId, sessionId, sessionIsResume, seedGateId, seedGuideTurnId]);
 
   /**
    * STREAM a plan-edit job to its end, then file what it proposed — the tail of
@@ -1586,6 +1632,23 @@ export function usePlanChangeConversation({
         void followPlan(null, controller.signal);
         return;
       }
+      const guideSent = guideSendRef.current;
+      guideSendRef.current = false;
+      const confirmedSession = guideOfferConfirmedSession(err);
+      if (confirmedSession !== null) {
+        // The offer already started a session: nothing more is sent, no error is
+        // drawn, and the overlay returns to that session (MOTIR-8693).
+        setState((s) => ({
+          ...s,
+          phase: s.review ? 'review' : 'idle',
+          progress: null,
+          acts: withoutReading(s.acts),
+          errorCode: null,
+          outOfCredits: false,
+        }));
+        guideConfirmedCbRef.current?.(confirmedSession);
+        return;
+      }
       const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
       const held = targetHeldFrom(err);
       setState((s) => ({
@@ -1594,7 +1657,10 @@ export function usePlanChangeConversation({
         progress: null,
         // A refused correction must not leave its `reading` line behind (MOTIR-7924).
         acts: withoutReading(s.acts),
-        errorCode: gated || held ? null : (refusalCodeOf(err) ?? 'FAILED'),
+        errorCode:
+          gated || held
+            ? null
+            : ((guideSent ? guideOfferClosedCode(err) : null) ?? refusalCodeOf(err) ?? 'FAILED'),
         outOfCredits: gated,
         ...(held ? { targetHeld: held } : {}),
       }));
@@ -2751,8 +2817,10 @@ export function usePlanChangeConversation({
         const heldSession = stateRef.current.session?.id ?? null;
         // The seed rides ONLY the send that has no session yet (MOTIR-6210).
         const seed = heldSession ? null : seedRef.current;
+        const guideSeed = heldSession ? null : guideSeedRef.current;
+        if (guideSeed) guideSendRef.current = true;
         await run(anchor, (signal) =>
-          seed
+          guideSeed
             ? submitContextualPlan(
                 anchor.anchorId,
                 body,
@@ -2760,21 +2828,47 @@ export function usePlanChangeConversation({
                 signal,
                 isAnswer,
                 heldSession,
-                seed,
-              ).catch((err: unknown) => {
-                if (err instanceof PlanEditsClientError && err.code === 'SEED_NOT_APPLICABLE') {
-                  seedRef.current = null;
-                }
-                throw err;
-              })
-            : submitContextualPlan(
-                anchor.anchorId,
-                body,
-                anchor.targetKeys,
-                signal,
-                isAnswer,
-                heldSession,
-              ),
+                null,
+                guideSeed,
+              )
+                .then((sent) => {
+                  guideSendRef.current = false;
+                  return sent;
+                })
+                .catch((err: unknown) => {
+                  // A refusal is deterministic, so the seed is spent; an outage is not, and
+                  // the person's next send must still carry it.
+                  if (
+                    guideOfferClosedCode(err) !== null ||
+                    guideOfferConfirmedSession(err) !== null
+                  ) {
+                    guideSeedRef.current = null;
+                  }
+                  throw err;
+                })
+            : seed
+              ? submitContextualPlan(
+                  anchor.anchorId,
+                  body,
+                  anchor.targetKeys,
+                  signal,
+                  isAnswer,
+                  heldSession,
+                  seed,
+                ).catch((err: unknown) => {
+                  if (err instanceof PlanEditsClientError && err.code === 'SEED_NOT_APPLICABLE') {
+                    seedRef.current = null;
+                  }
+                  throw err;
+                })
+              : submitContextualPlan(
+                  anchor.anchorId,
+                  body,
+                  anchor.targetKeys,
+                  signal,
+                  isAnswer,
+                  heldSession,
+                ),
         );
         return;
       }

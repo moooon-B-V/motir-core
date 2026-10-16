@@ -56,6 +56,15 @@ export const GUIDE_ROWS_MAX = 100;
 export const GUIDE_CONTEXT_TURNS_MAX = 40;
 /** The longest prompt for the person's LOCAL agent (motir-ai: 2 000; A3.9 (a)). */
 export const GUIDE_AGENT_PROMPT_MAX = 2_000;
+/** The longest re-plan request the guide writes on a `needs_replan` offer
+ *  (MOTIR-8685; motir-ai: 4 000). It is sent verbatim as the planner's first turn. */
+export const GUIDE_REPLAN_REQUEST_MAX = 4_000;
+/** The most ancestors the context carries for the guided card, root → parent; when
+ *  capped, the NEAREST survive (the tree is capped at 4 levels, so a real chain
+ *  never reaches this). */
+export const GUIDE_ANCESTORS_MAX = 8;
+/** A work-item key as the guide names a re-plan target: `<PROJECT>-<n>`. */
+const GUIDE_TARGET_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,31}-\d{1,9}$/;
 
 // ── Out: the context core sends ────────────────────────────────────────────────
 
@@ -95,12 +104,27 @@ export interface GuideContext {
      *  card (MOTIR-7800) — so the model cites a known bug instead of filing it
      *  again. A `file_bug` whose title matches one is refused with its key. */
     openBugs: GuideOpenBug[];
+    /** The card's ancestors, root → parent, in the same project (MOTIR-8685).
+     *  Empty for a root or folder-filed card. */
+    ancestors: GuideContextAncestor[];
   };
   todos: { temporary: boolean; rows: GuideContextRow[] };
   turns: GuideContextTurn[];
   /** The CURRENT (latest `user`) turn's files, resolved (`guide-turn-files.md`
    *  A3.4). Absent when the turn carried none. */
   files?: GuideContextFile[];
+}
+
+/** One ancestor of the guided card, root → parent (MOTIR-8685: so the guide can
+ *  choose the parent as the re-plan target, and know when an ancestor is finished).
+ *  `statusCategory` is the status's CATEGORY in the project's workflow, never its
+ *  literal key. */
+export interface GuideContextAncestor {
+  key: string;
+  title: string;
+  type: string | null;
+  status: string | null;
+  statusCategory: string | null;
 }
 
 /** A known, not-done bug linked `relates_to` the guided card. */
@@ -122,6 +146,8 @@ export interface GuideCardInput {
   pullRequests: ReadonlyArray<{ url: string | null; state: string | null }>;
   /** The open bugs related to the card; absent reads as none. */
   openBugs?: readonly GuideOpenBug[];
+  /** The card's ancestors, root → parent; absent reads as none. */
+  ancestors?: readonly GuideContextAncestor[];
 }
 
 export interface GuideRowInput {
@@ -158,6 +184,14 @@ export function buildGuideContext(
       openBugs: (card.openBugs ?? [])
         .slice(0, GUIDE_ROWS_MAX)
         .map((b) => ({ key: b.key, title: b.title, status: b.status })),
+      // Root → parent; when capped, the NEAREST ancestors survive.
+      ancestors: (card.ancestors ?? []).slice(-GUIDE_ANCESTORS_MAX).map((a) => ({
+        key: a.key,
+        title: a.title,
+        type: a.type,
+        status: a.status,
+        statusCategory: a.statusCategory,
+      })),
     },
     todos: {
       temporary: opts.temporary === true && rows.length > 0,
@@ -224,8 +258,11 @@ export type GuideAction =
   // Writes nothing to the card; recorded on the conversation, like `current_step`.
   | { type: 'local_agent_prompt'; rowId: string; prompt: string }
   // A3.9 (b): the change asked for would alter the card's TARGET. Edits nothing;
-  // landed like `cannot_do`, as a comment on the guided card.
-  | { type: 'needs_replan'; reason: string }
+  // landed like `cannot_do`, as a comment on the guided card. MOTIR-8685 widens it
+  // to a RE-PLAN OFFER: `requestMd` is the re-plan request the guide wrote and
+  // `targetKey` the work item it chose to re-plan (none ⇒ the guided card). A
+  // reason-only `needs_replan` (the shipped shape) still parses and offers nothing.
+  | { type: 'needs_replan'; reason: string; requestMd?: string; targetKey?: string }
   // MOTIR-7800 (decision MOTIR-7798 Q3): file ONE confirmed defect as a `bug`, as
   // the person. No kind and no project field: the landing hard-wires both.
   // `explanationMd` is written at birth by the same create; null means none.
@@ -458,8 +495,20 @@ function parseAction(raw: unknown, i: number): GuideAction {
       return out;
     }
     case 'cannot_do':
-    case 'needs_replan':
       return { type, reason: reason() };
+    case 'needs_replan': {
+      const base = { type, reason: reason() } as const;
+      const requestMd = optText(raw, 'requestMd', GUIDE_REPLAN_REQUEST_MAX, where);
+      const targetKey = optText(raw, 'targetKey', 50, where);
+      if (targetKey !== null && !GUIDE_TARGET_KEY_PATTERN.test(targetKey)) {
+        throw new InvalidGuideTurnError(`${where}.targetKey`, 'must be a work-item key');
+      }
+      return {
+        ...base,
+        ...(requestMd !== null ? { requestMd } : {}),
+        ...(targetKey !== null ? { targetKey } : {}),
+      };
+    }
     case 'local_agent_prompt': {
       const v = raw['prompt'];
       if (typeof v !== 'string' || v.trim().length === 0) {
@@ -552,12 +601,91 @@ export interface GuideActionOutcome {
   workItemKey?: string;
 }
 
+/** How the landing arrived at an offer's target (MOTIR-8689). */
+export type GuideReplanTargetResolution =
+  | 'as_asked'
+  | 'guided_card'
+  | 'nearest_open_ancestor'
+  | 'none';
+
+const REPLAN_RESOLUTIONS: readonly GuideReplanTargetResolution[] = [
+  'as_asked',
+  'guided_card',
+  'nearest_open_ancestor',
+  'none',
+];
+
+/** The re-plan offer a `needs_replan` lands as, stored on the guide reply turn.
+ *  `requestedTargetKey` is what the guide asked for, verbatim; `targetKey` is what
+ *  the offer will plan on (null only with `targetResolution: 'none'`). */
+export interface GuideReplanOffer {
+  reason: string;
+  requestMd: string;
+  requestedTargetKey: string | null;
+  targetKey: string | null;
+  targetResolution: GuideReplanTargetResolution;
+  declinedAt: string | null;
+  declinedById: string | null;
+  /** Set when a planning session was started from this offer (MOTIR-8691), in the
+   *  same transaction as the session. `confirmedSessionId` is the session the
+   *  guide's request was sent into. Absent on a stored offer reads as null. */
+  confirmedAt: string | null;
+  confirmedById: string | null;
+  confirmedSessionId: string | null;
+}
+
 /** The `guide_turn` column on an assistant turn: the validated actions, each
- *  one's outcome (same order), and whether the walk was on a temporary list. */
+ *  one's outcome (same order), whether the walk was on a temporary list, and the
+ *  re-plan offer it landed, if any (absent reads as null). */
 export interface GuideTurnRecord {
   actions: GuideAction[];
   outcomes: GuideActionOutcome[];
   temporary: boolean;
+  replanOffer?: GuideReplanOffer | null;
+}
+
+function nullableString(v: unknown): string | null | undefined {
+  if (v === null || v === undefined) return null;
+  return typeof v === 'string' ? v : undefined;
+}
+
+/** A stored offer, narrowed field by field. A malformed one reads as null; the
+ *  rest of the record still reads. */
+function readReplanOffer(value: unknown): GuideReplanOffer | null {
+  if (!isRecord(value)) return null;
+  const { reason, requestMd, targetResolution } = value;
+  if (typeof reason !== 'string' || typeof requestMd !== 'string') return null;
+  if (!REPLAN_RESOLUTIONS.includes(targetResolution as GuideReplanTargetResolution)) return null;
+  const requestedTargetKey = nullableString(value['requestedTargetKey']);
+  const targetKey = nullableString(value['targetKey']);
+  const declinedAt = nullableString(value['declinedAt']);
+  const declinedById = nullableString(value['declinedById']);
+  const confirmedAt = nullableString(value['confirmedAt']);
+  const confirmedById = nullableString(value['confirmedById']);
+  const confirmedSessionId = nullableString(value['confirmedSessionId']);
+  if (
+    requestedTargetKey === undefined ||
+    targetKey === undefined ||
+    declinedAt === undefined ||
+    declinedById === undefined ||
+    confirmedAt === undefined ||
+    confirmedById === undefined ||
+    confirmedSessionId === undefined
+  ) {
+    return null;
+  }
+  return {
+    reason,
+    requestMd,
+    requestedTargetKey,
+    targetKey,
+    targetResolution: targetResolution as GuideReplanTargetResolution,
+    declinedAt,
+    declinedById,
+    confirmedAt,
+    confirmedById,
+    confirmedSessionId,
+  };
 }
 
 /**
@@ -588,7 +716,14 @@ export function readGuideTurnRecord(value: unknown): GuideTurnRecord | null {
         : {}),
     };
   });
-  return { actions, outcomes, temporary: value['temporary'] === true };
+  // Present only when a well-formed offer is stored; absent reads as null.
+  const replanOffer = readReplanOffer(value['replanOffer']);
+  return {
+    actions,
+    outcomes,
+    temporary: value['temporary'] === true,
+    ...(replanOffer ? { replanOffer } : {}),
+  };
 }
 
 /** The id a temporary walk gives a step an `add_step` added — derived from where
