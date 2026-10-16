@@ -8582,6 +8582,58 @@
         "installation_not_accessibleHint": "Your GitHub user can't see this installation, so nothing was linked. An owner of the GitHub account can give you access.",
         "not_configuredTitle": "GitHub isn't set up on this deployment",
         "not_configuredHint": "This Motir deployment has no GitHub App yet, so GitHub can't be connected from here. Whoever runs the deployment can set it up."
+      },
+      "existing": {
+        "title": "Your GitHub accounts with the Motir App",
+        "hint": "The Motir App is already installed on these accounts. Pick one to connect its repositories here. You do not need to install again.",
+        "loading": "Looking for your GitHub accounts…",
+        "typeUser": "Personal account",
+        "typeOrg": "GitHub organisation",
+        "linkedHere": "Already linked to this organisation",
+        "pickCta": "Choose repositories",
+        "pickAria": "Choose repositories from {login}",
+        "installAnotherCta": "Install on another account",
+        "installAnotherHint": "Use this if the account you want is not listed.",
+        "loadErrorTitle": "We could not read your GitHub accounts",
+        "loadErrorHint": "Nothing was changed. Try again, or install on another account.",
+        "retryCta": "Try again",
+        "identity": {
+          "title": "Sign in with GitHub to find your installations.",
+          "hint": "Motir only checks which accounts the Motir App is installed on and which of them you can reach. You can skip this and install on a new account instead.",
+          "cta": "Sign in with GitHub",
+          "skipCta": "Skip and install instead",
+          "declinedHint": "GitHub did not sign you in, so nothing was changed. Try again, or skip and install instead."
+        },
+        "picker": {
+          "heading": "Repositories in {login}",
+          "hint": "Choose the repositories this organisation connects. Nothing is connected until you confirm.",
+          "fromInstallHint": "You chose an account the Motir App is already installed on. Choose which of its repositories this organisation connects.",
+          "loading": "Loading repositories…",
+          "available": "Available",
+          "connectedHere": "Connected here",
+          "connectedElsewhere": "Connected to another organisation",
+          "connectedElsewhereHint": "This repository can't be chosen here.",
+          "selectedCount": "{count, plural, one {# repository selected} other {# repositories selected}}",
+          "confirmCta": "{count, plural, one {Connect # repository} other {Connect # repositories}}",
+          "backCta": "Back to accounts",
+          "nothingLeftTitle": "Nothing left to connect from this account",
+          "nothingLeftHint": "Every repository here is already connected, to this organisation or to another one. To offer more, add repositories to the installation on GitHub.",
+          "nothingLeftCta": "Add repositories on GitHub"
+        },
+        "outcome": {
+          "linkedTitle": "Repositories connected",
+          "linkedHint": "Motir can now read the repositories you chose. Nothing else from this account was connected.",
+          "takenTitle": "A repository was taken while you were choosing",
+          "takenHint": "Another organisation connected {repos}. Nothing was connected. The list is updated, so choose again.",
+          "notAccessibleTitle": "You can no longer reach that account",
+          "notAccessibleHint": "GitHub no longer lets you see this installation, so it is removed from the list. Ask an owner of the GitHub account for access, or install on another account.",
+          "notAdminTitle": "Only an organisation admin can link an existing installation",
+          "notAdminHint": "Ask an admin of this organisation to link it, or install on another account yourself.",
+          "selectionRequiredTitle": "Choose at least one repository",
+          "selectionRequiredHint": "Nothing was connected. Tick the repositories you want, then confirm.",
+          "notVisibleTitle": "A repository is no longer in this installation",
+          "notVisibleHint": "Nothing was connected. The list is updated, so choose again."
+        }
       }
     },
     "index": {
