@@ -235,9 +235,9 @@ export const ja: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'プロジェクトの計画の前提条件(確立済みか、コードが接続されているか、インデックス済みか、リポジトリが設定されているか)。計画する前に確認します。',
+      'プロジェクトの計画の前提条件(確立済みか、コードが接続されているか、インデックス済みか、リポジトリが設定されているか)と、その組織のコンテンツ言語。計画する前に確認します。',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:
