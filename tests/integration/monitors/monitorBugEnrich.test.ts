@@ -264,7 +264,7 @@ describe('a monitor-filed bug is dispatched ONCE', () => {
     await adminDb.user.update({ where: { id: fx.ctx.userId }, data: { locale: 'en' } });
     const { event } = await file(target, 'binder-lang');
     await runJob(event);
-    const tenant = vi.mocked(submitJob).mock.calls[0]![1] as Record<string, unknown>;
+    const tenant = vi.mocked(submitJob).mock.calls[0]![1];
     expect(tenant).toMatchObject({
       workspaceId: fx.workspaceId,
       contentLanguage: 'zh',
