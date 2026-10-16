@@ -60,3 +60,22 @@ export async function resolveActiveOrganizationAsShell(userId: string): Promise<
   );
   return { currentOrg, workspaces };
 }
+
+/**
+ * THE ACTIVE ORGANISATION FOR AN ORG SETTINGS PANE — the shell's rule, and only
+ * the org (MOTIR-8776).
+ *
+ * ⚠️ NEVER `resolveActiveOrganization(userId, <the org cookie>)` on a page the
+ * shell frames. The cookie is written only by the org menu (switch / create),
+ * while every WORKSPACE move — the workspace switcher, a project link, creating
+ * a workspace — leaves it where it was. An account that owns two organisations
+ * therefore carries a cookie naming one while it works in the other, and a pane
+ * that reads the cookie alone shows, and WRITES to, the organisation the header
+ * does not name. The active workspace's org wins; the cookie is the fallback for
+ * a session with no workspace, exactly as `app/(authed)/layout.tsx` resolves it.
+ */
+export async function resolveActiveOrganizationForPane(
+  userId: string,
+): Promise<CurrentOrganizationDTO | null> {
+  return (await resolveActiveOrganizationAsShell(userId)).currentOrg;
+}

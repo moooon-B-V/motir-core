@@ -304,7 +304,7 @@ export const workItemDeliveryRepository = {
       where: { workItemId },
       select: {
         repo: { select: { name: true, defaultBranch: true } },
-        pullRequest: { select: { merged: true, baseRef: true } },
+        pullRequest: { select: { merged: true, baseRef: true, state: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -313,6 +313,7 @@ export const workItemDeliveryRepository = {
       repoDefaultBranch: r.repo.defaultBranch,
       merged: r.pullRequest.merged,
       baseRef: r.pullRequest.baseRef,
+      open: !r.pullRequest.merged && r.pullRequest.state === 'open',
     }));
   },
 

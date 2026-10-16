@@ -237,9 +237,9 @@ export const nl: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'De planningsvoorwaarden van een Project — vastgelegd, code gekoppeld, geïndexeerd, repository ingesteld — voordat je plant.',
+      'De planningsvoorwaarden van een Project — vastgelegd, code gekoppeld, geïndexeerd, repository ingesteld — en de inhoudstaal van de organisatie, voordat je plant.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:

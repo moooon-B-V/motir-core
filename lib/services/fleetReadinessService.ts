@@ -1,5 +1,6 @@
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
+import { isMotirFleetJob, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
 import inventoryManifest from '@/lib/ciFleet/fleetJobInventory.json';
 import type { FleetJobInventory, FleetInventoryRepo } from '@/lib/ciFleet/fleetJobInventoryTypes';
 import {
@@ -146,6 +147,26 @@ function failedRead(key: FleetReadinessKey, what: string, err: unknown): FleetRe
 }
 
 const fullName = (r: { owner: string; name: string }) => `${r.owner}/${r.name}`;
+
+/**
+ * Can a job's recorded `runs-on` resolve to the fleet? (MOTIR-8813)
+ *
+ * The switch moves a job only by writing `MOTIR_RUNNER`, so only a job that reads
+ * that variable — or names the fleet label outright — can land on a fleet
+ * machine. Any other job (`macos-latest`, a literal `ubuntu-latest`) stays on
+ * GitHub-hosted runners whether the switch is ON or OFF, so whether the image can
+ * run it says nothing about whether the fleet can serve the org's CI.
+ */
+export function requestsFleetRunner(runsOn: unknown): boolean {
+  if (typeof runsOn === 'string') {
+    return runsOn.includes(`vars.${MOTIR_RUNNER_VARIABLE}`) || isMotirFleetJob([runsOn]);
+  }
+  if (Array.isArray(runsOn)) return runsOn.some(requestsFleetRunner);
+  if (runsOn !== null && typeof runsOn === 'object' && 'labels' in runsOn) {
+    return requestsFleetRunner((runsOn as { labels: unknown }).labels);
+  }
+  return false;
+}
 
 export const fleetReadinessService = {
   async readinessFor(
@@ -598,6 +619,7 @@ async function imageCoverageCondition(
     missing: string[];
     reason: string | null;
   }> = [];
+  const githubHostedJobs: Array<{ repoRef: string; workflow: string; jobId: string }> = [];
 
   for (const repo of privateRepos) {
     const entry = byKey.get(fullName(repo).toLowerCase());
@@ -624,6 +646,14 @@ async function imageCoverageCondition(
     }
     for (const workflow of entry.workflows) {
       for (const job of workflow.jobs) {
+        if (!requestsFleetRunner(job.runsOn)) {
+          githubHostedJobs.push({
+            repoRef: entry.repoRef,
+            workflow: workflow.path,
+            jobId: job.jobId,
+          });
+          continue;
+        }
         if (job.verdict === 'runnable' && !job.missing.includes('unverified')) continue;
         jobs.push({
           repoRef: entry.repoRef,
@@ -645,7 +675,7 @@ async function imageCoverageCondition(
       'unmet',
       'not_inventoried',
       `${notInventoried.join(', ')} ${notInventoried.length === 1 ? 'is' : 'are'} not in the fleet job inventory, so nobody has checked the runner image can run ${notInventoried.length === 1 ? 'its' : 'their'} jobs. ${scope}`,
-      { repositories: notInventoried, jobs, stale },
+      { repositories: notInventoried, jobs, stale, githubHostedJobs },
     );
   }
   if (stale.length > 0) {
@@ -654,7 +684,7 @@ async function imageCoverageCondition(
       'unmet',
       'inventory_stale',
       `The workflows of ${stale.map((s) => s.repository).join(', ')} changed after the fleet job inventory measured them; re-run the inventory. ${scope}`,
-      { stale, jobs },
+      { stale, jobs, githubHostedJobs },
     );
   }
   if (jobs.length > 0) {
@@ -668,14 +698,14 @@ async function imageCoverageCondition(
             `${j.repoRef} ${j.workflow.split('/').pop()} ${j.jobId} (${j.verdict}${j.missing.length ? `: ${j.missing.join(', ')}` : ''})`,
         )
         .join('; ')}. ${scope}`,
-      { jobs },
+      { jobs, githubHostedJobs },
     );
   }
   return condition(
     'image_coverage',
     'met',
     'all_runnable',
-    `Every job in the project's private repositories can run on the fleet runner image. ${scope}`,
-    { repositories: privateRepos.map(fullName) },
+    `Every job the project's private repositories send to the fleet can run on the fleet runner image. ${scope}`,
+    { repositories: privateRepos.map(fullName), githubHostedJobs },
   );
 }

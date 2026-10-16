@@ -156,6 +156,17 @@ export async function backdatePlanActivity(planId: string, byMs: number): Promis
 }
 
 /**
+ * Touch a plan the way any planner write does, and change nothing a reader sees
+ * move (Story MOTIR-8542). A plan pane reads on a PUSH, never on a timer, so a
+ * spec that needs "the next read" while the planner is quiet must cause one:
+ * this bumps the plan's `lastActivityAt` to now, which fires the plan's live
+ * signal and, through the stream, exactly one read. Arm the response wait first.
+ */
+export async function nudgePlan(planId: string): Promise<void> {
+  await adminDb.plan.update({ where: { id: planId }, data: { lastActivityAt: new Date() } });
+}
+
+/**
  * Make the seed's project PUBLIC and seed an OUTSIDER to read it as a Visitor
  * (Story MOTIR-8060 · MOTIR-8068). The outsider belongs to an organisation of
  * their own — the reader `seedVisitorProject` describes — and has no membership

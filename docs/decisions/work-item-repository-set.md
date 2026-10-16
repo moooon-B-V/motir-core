@@ -1298,6 +1298,36 @@ person moving the status by hand released it.
   Development section keeps a placeholder row for it reading _Shipped without a pull request_; the
   dispatch payload carries it and the CLI names it as not holding the card.
 
+## Amendment 2026-10-16 (MOTIR-8811) — a SEVENTH delivery state: a repository a child delivered
+
+The MOTIR-7180 amendment above excused a repository whose leaves shipped with **no** change request.
+It said nothing about the commoner shape: a leaf that shipped through its **own** pull request,
+merged onto that repository's default branch, while the container's linked deliveries never touch
+that repository. The leaf was disqualified (it HAS a delivery), the container had no merge there,
+and the gate held the story at `deferred_incomplete_repo_set` with nothing left that could ever
+merge.
+
+| Evidence                                                                                                                                                                                                                                                                                             | Delivery state           | Holds the item? |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | --------------- |
+| would be `awaiting`, the item has **no open** change request in that repository, and the container's live leaves targeting it are **all** done-category, each either with no delivery or with a merge onto that repository's default branch and none still open — and at least one such merge exists | **`delivered_by_child`** | **no**          |
+
+- **A leaf's merge counts only where the container's own would.** Merged, onto the default branch of
+  the repository the reference names. An open pull request, a closed-unmerged one with no merged
+  sibling, or a merge onto a side branch leaves the leaf unsettled and the story held.
+- **A closed attempt beside a merged one does not hold.** A leaf that abandoned one pull request and
+  shipped through another settled the repository; holding on the abandoned attempt would be the
+  same unsatisfiable hold this amendment removes.
+- **The container's own OPEN pull request in that repository keeps `awaiting`.** The child's merge
+  does not excuse work the container still has in flight there.
+- **One derivation still.** `listLeafSettlementForContainer` counts both ways of settling;
+  `resolveExpectedRepos` names the word (one merge reached the trunk ⇒ `delivered_by_child`, none ⇒
+  `delivered_without_change_request`); the gate, `repoSetCompletionService` and the panel all read it
+  through `classifyRepoDelivery`. The panel draws the delivered glyph with a neutral _Delivered by a
+  child_ chip.
+- **The dispatch wire carries it as `delivered`.** The v1 `delivery` enum is validated strictly by
+  published CLIs, so a new member would fail every older client. To a dispatched agent the two mean
+  the same thing: nothing to do in that repository.
+
 ## Consequences
 
 - The completion gate acquires an EXPECTED side, which is the whole point: a card can

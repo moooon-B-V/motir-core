@@ -561,13 +561,18 @@ describe('2 · no refresh anywhere, and the reads stay bounded (criterion 1)', (
     await net.release(answer(START, counts({ toDo: 3 })));
     await probes[0]!.answer(gateRead());
     await reviews.answer(copy(generating([A, B, C])));
-    // The Workbench and the approval each owe ONE read for the burst behind them; the
-    // plan's poll skips a tick behind a read (MOTIR-8102) and owes none.
+    // Every surface owes ONE read for the burst behind it. The plan's poll used to
+    // skip a signal behind a read (MOTIR-8102), which was right for a timer tick; a
+    // pushed signal carries no `cadence` mark, so it is a change that must not be
+    // lost, and collapses into one follow-up (Story MOTIR-8542 · MOTIR-8732).
     expect(net.reads()).toHaveLength(2);
     expect(probes).toHaveLength(2);
-    expect(reviews.count() - reviewsBefore).toBe(1);
+    expect(reviews.count() - reviewsBefore).toBe(2);
+    // A signal while the follow-up is out adds nothing now, and one read after it.
     await fake.fire(PLAN_TOPIC);
     expect(reviews.count() - reviewsBefore).toBe(2);
+    await reviews.answer(copy(generating([A, B, C])));
+    expect(reviews.count() - reviewsBefore).toBe(3);
     expectNothingNavigated();
   });
 });

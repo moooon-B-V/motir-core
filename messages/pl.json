@@ -1736,7 +1736,8 @@
       "unknown": "Nieznany",
       "unestablished": "Nieutworzone",
       "excluded": "Pominięto",
-      "delivered_without_change_request": "Dostarczono bez pull requesta"
+      "delivered_without_change_request": "Dostarczono bez pull requesta",
+      "delivered_by_child": "Dostarczono przez element podrzędny"
     }
   },
   "comments": {
@@ -7289,11 +7290,13 @@
         "delivered": "Dostarczono",
         "unestablished": "Nie utworzono",
         "excluded": "Pominięto",
-        "delivered_without_change_request": "Dostarczono bez PR"
+        "delivered_without_change_request": "Dostarczono bez PR",
+        "delivered_by_child": "Dostarczono przez element podrzędny"
       },
       "repositoryNotCreated": "Repozytorium jeszcze nie utworzone",
       "repositorySkipped": "Pominięte w tym projekcie",
       "shippedWithoutPullRequest": "Dostarczono bez pull requesta",
+      "deliveredByChildPullRequest": "Dostarczono przez pull request podrzędnego elementu roboczego",
       "unlinkAria": "Usuń powiązanie z {target}",
       "unlinkConfirmBefore": "Usunąć powiązanie z",
       "unlinkConfirmAfter": "? Pull request na GitHubie pozostaje nietknięty — usuwane jest tylko powiązanie.",
@@ -8539,7 +8542,12 @@
       "answeredGroup": "Odpowiedź znaleziona już w projekcie",
       "answeredMeta": "Motir przeczytał kod i elementy robocze",
       "discoveryStep": "Kilka pytań",
-      "directionGroup": "Twój kierunek"
+      "directionGroup": "Twój kierunek",
+      "subtitle": "Indeksowanie i import działają w tle. Wejdź do Motir, kiedy chcesz.",
+      "background": "W tle · {detail}",
+      "backgroundInProgress": "W toku",
+      "backgroundQueued": "W kolejce",
+      "backgroundFailed": "Niepowodzenie"
     },
     "common": {
       "back": "Wstecz",
@@ -8633,7 +8641,9 @@
       "perRepo": "Według repozytorium",
       "state": {
         "indexed": "Zindeksowane",
-        "queued": "W kolejce"
+        "queued": "W kolejce",
+        "indexing": "W toku",
+        "failed": "Niepowodzenie"
       },
       "callout": "Motir wyprowadza konwencje i weryfikację kondycji kodu (oraz ewentualny plan) z całego projektu, więc potrzebuje zindeksowania każdego repozytorium — przycisk Dalej pozostaje nieaktywny, dopóki wszystkie repozytoria nie zostaną ukończone.",
       "completeTitle": "Graf kodu zbudowany",
@@ -8643,11 +8653,13 @@
     "import": {
       "eyebrow": "Opcjonalne · Import i planowanie",
       "heading": "Przenieś istniejący Backlog",
-      "body": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Zaimportuj ją do tego projektu — przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
+      "body": "Zaimportuj z Jira, Linear lub Plane albo wejdź do Motir i zrób to później. Import trwa dalej w tle.",
       "reconcile": "Gdy potem wygenerujesz plan, Motir uzgodni oba źródła, aby nic się nie zduplikowało.",
       "skip": "Pomiń import",
       "bodyInline": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Przenieś ją od razu tutaj. Przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
-      "continue": "Dalej"
+      "continue": "Dalej",
+      "running": "Import z {source} · dotąd elementów pracy: {done}",
+      "runningBody": "To trwa dalej w tle. Nie musisz czekać."
     },
     "decision": {
       "eyebrow": "Konfiguracja zakończona",
@@ -8673,6 +8685,26 @@
       "readyTitle": "Twój pierwszy plan jest gotowy",
       "readyBody": "{count, plural, one {# element przygotowano} few {# elementy przygotowano} many {# elementów przygotowano} other {# elementu przygotowano}} dla {project}. Nic nie jest ostateczne, dopóki tego nie zatwierdzisz.",
       "readyCta": "Przejrzyj plan"
+    },
+    "indexing": {
+      "doneTitle": "Zindeksowano {repos}",
+      "repoCount": "{count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}}",
+      "aggregateTail": "Gotowe: {done} z {total}",
+      "failedTail": "Nieudane: {count}",
+      "detailBody": "To trwa dalej w tle. Możesz już wejść do Motir; nic nie czeka na zakończenie.",
+      "rowFailed": "Motir nie mógł zindeksować tego repozytorium. Nic z tego, co zrobiłeś, nie przepadło.",
+      "checkConnection": "Sprawdź połączenie",
+      "close": "Zamknij",
+      "retrying": "Ponawianie…",
+      "refusedNotConnected": "To repozytorium nie jest już połączone z projektem. Sprawdź połączenie i spróbuj ponownie.",
+      "refusedTooLarge": "To repozytorium jest za duże, by Motir mógł je zindeksować.",
+      "retryError": "Motir nie mógł uruchomić tego ponownie. Spróbuj jeszcze raz za chwilę.",
+      "importHeading": "Import elementów pracy",
+      "importProgress": "Dotąd: {done}"
+    },
+    "enter": {
+      "cta": "Przejdź do Motir",
+      "hint": "Indeksowanie i ewentualny import trwają dalej po wejściu."
     }
   },
   "repositorySet": {
@@ -14471,7 +14503,9 @@
       "completed": "To wszystko, o co musiałem zapytać.",
       "nothingToAsk": "Nie mam pytań: to wystarczająco jasne, by planować. Teraz piszę plan.",
       "stopped": "Przerwano przepytywanie.",
-      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią. Nic nie zostało zapisane."
+      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią. Nic nie zostało zapisane.",
+      "handoffFailed": "Przepytaj mnie nie mogło zadać pytań, więc plan powstaje bez nich. Twoja prośba pozostaje taka, jak ją napisano.",
+      "handoffNoCredit": "Przepytaj mnie potrzebuje środków AI, aby zadać pytania, więc plan powstaje bez nich."
     },
     "summary": {
       "title": "Co ustalono",

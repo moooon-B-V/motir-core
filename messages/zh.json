@@ -1736,7 +1736,8 @@
       "unknown": "未知",
       "unestablished": "尚未创建",
       "excluded": "已跳过",
-      "delivered_without_change_request": "未经 PR 交付"
+      "delivered_without_change_request": "未经 PR 交付",
+      "delivered_by_child": "由子工作项交付"
     }
   },
   "comments": {
@@ -7283,11 +7284,13 @@
         "delivered": "已交付",
         "unestablished": "尚未创建",
         "excluded": "已跳过",
-        "delivered_without_change_request": "未经 PR 交付"
+        "delivered_without_change_request": "未经 PR 交付",
+        "delivered_by_child": "由子工作项交付"
       },
       "repositoryNotCreated": "仓库尚未创建",
       "repositorySkipped": "此项目已跳过",
       "shippedWithoutPullRequest": "未经拉取请求交付",
+      "deliveredByChildPullRequest": "由子工作项的拉取请求交付",
       "unlinkAria": "移除与 {target} 的关联",
       "unlinkConfirmBefore": "移除与",
       "unlinkConfirmAfter": " 的关联吗？GitHub 上的拉取请求不会受到影响——只会移除此关联。",
@@ -8533,7 +8536,12 @@
       "answeredGroup": "你的项目已经回答了",
       "answeredMeta": "Motir 读取了你的代码和工作项",
       "discoveryStep": "几个问题",
-      "directionGroup": "你的方向"
+      "directionGroup": "你的方向",
+      "subtitle": "索引和导入都在后台运行。你随时可以进入 Motir。",
+      "background": "在后台 · {detail}",
+      "backgroundInProgress": "进行中",
+      "backgroundQueued": "排队中",
+      "backgroundFailed": "失败"
     },
     "common": {
       "back": "返回",
@@ -8627,7 +8635,9 @@
       "perRepo": "按仓库",
       "state": {
         "indexed": "已索引",
-        "queued": "排队中"
+        "queued": "排队中",
+        "indexing": "进行中",
+        "failed": "失败"
       },
       "callout": "Motir 从整个项目推导编码规范和代码健康检查（以及任何计划），因此需要每个仓库都完成索引——在所有仓库完成前，下一步将保持禁用。",
       "completeTitle": "代码图谱已构建",
@@ -8637,11 +8647,13 @@
     "import": {
       "eyebrow": "可选 · 导入与规划",
       "heading": "导入你现有的工作项",
-      "body": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作项？将其导入此项目——写入前你会先预览试运行结果。没有工作项要导入则跳过。",
+      "body": "从 Jira、Linear 或 Plane 导入，或者先进入 Motir，以后再做。导入会在后台继续进行。",
       "reconcile": "随后生成计划时，Motir 会核对二者，避免重复。",
       "skip": "跳过导入",
       "bodyInline": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作？就在这里导入。写入任何内容之前，你会先查看试运行预览。没有工作项要导入就跳过这一步。",
-      "continue": "继续"
+      "continue": "继续",
+      "running": "正在从 {source} 导入 · 已处理 {done} 个工作项",
+      "runningBody": "它在后台继续运行，你不必等它完成。"
     },
     "decision": {
       "eyebrow": "设置完成",
@@ -8667,6 +8679,26 @@
       "readyTitle": "你的第一份计划已就绪",
       "readyBody": "已为 {project} 起草 {count, plural, other {# 个工作项}}。在你批准之前，一切都不是最终的。",
       "readyCta": "查看你的计划"
+    },
+    "indexing": {
+      "doneTitle": "已索引 {repos}",
+      "repoCount": "{count, plural, other {# 个仓库}}",
+      "aggregateTail": "已完成 {done} / {total}",
+      "failedTail": "{count} 个失败",
+      "detailBody": "它在后台继续运行。你现在就可以进入 Motir，没有任何步骤需要等它完成。",
+      "rowFailed": "Motir 没能索引这个仓库。你已完成的步骤都不会丢失。",
+      "checkConnection": "检查连接",
+      "close": "关闭",
+      "retrying": "正在重试……",
+      "refusedNotConnected": "这个仓库已不再连接到该项目。请先检查连接，再重试。",
+      "refusedTooLarge": "这个仓库太大，Motir 无法为它建立索引。",
+      "retryError": "Motir 没能重新开始。请稍后再试一次。",
+      "importHeading": "工作项导入",
+      "importProgress": "已处理 {done} 个"
+    },
+    "enter": {
+      "cta": "进入 Motir",
+      "hint": "进入之后，索引和导入会继续进行。"
     }
   },
   "repositorySet": {
@@ -14465,7 +14497,9 @@
       "completed": "我需要问的都问完了。",
       "nothingToAsk": "没有需要问的：这已经足够清楚，可以规划了。我现在开始写计划。",
       "stopped": "你停止了追问。",
-      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。"
+      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。",
+      "handoffFailed": "追问我没能提问，所以计划会在不提问的情况下写出。你的请求保持原样。",
+      "handoffNoCredit": "追问我需要AI额度才能提问，所以计划会在不提问的情况下写出。"
     },
     "summary": {
       "title": "你确定的内容",
@@ -14501,7 +14535,7 @@
     "hintShowingOriginal": "正在显示原文",
     "hintPartial": "已译为{language} · {n, plural, other {# 个字段无法翻译}}",
     "failedItem": "无法翻译此工作项。未产生任何费用。",
-    "noCredits": "翻译需要 AI 额度。未产生任何费用。",
+    "noCredits": "翻译需要AI额度。未产生任何费用。",
     "noCreditsMember": "组织所有者或管理员可以补充额度。",
     "addCredits": "补充额度",
     "markTranslatedFrom": "译自{language}",
@@ -14524,7 +14558,7 @@
     "liveTranslated": "已译为{language}。",
     "liveShowingOriginal": "正在显示原文。",
     "liveFailedCount": "{n, plural, other {# 个字段无法翻译。}}",
-    "liveNoCredits": "翻译需要 AI 额度。",
+    "liveNoCredits": "翻译需要AI额度。",
     "liveEdited": "{field}已编辑并重新翻译。"
   }
 }

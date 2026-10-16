@@ -9,9 +9,13 @@
  *
  * It resolves the project key ACROSS workspaces (operator tooling, the
  * `stampOnboardingRan` posture) and refuses an ambiguous or unknown key rather
- * than guessing. The sync bypasses the "App not installed" negative cache so a
- * just-installed App is seen at once.
+ * than guessing. A key is unique per WORKSPACE only — production holds two
+ * projects keyed MOTIR — so `--project-id` names one by primary key, and an
+ * ambiguous `--project` lists every candidate as the `--project-id` line to
+ * re-run with (MOTIR-8814). The sync bypasses the "App not installed" negative
+ * cache so a just-installed App is seen at once.
  */
+import type { Project } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
@@ -24,13 +28,42 @@ export interface SyncScriptResult {
   lines: string[];
 }
 
-function parseProjectKey(argv: readonly string[]): string | null {
+const USAGE = 'usage: --project <KEY> | --project-id <id>';
+
+function parseFlag(argv: readonly string[], flag: string): string | null {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
-    if (arg.startsWith('--project=')) return arg.slice('--project='.length) || null;
-    if (arg === '--project') return argv[i + 1] ?? null;
+    if (arg.startsWith(`${flag}=`)) return arg.slice(flag.length + 1) || null;
+    if (arg === flag) return argv[i + 1] ?? null;
   }
   return null;
+}
+
+type Resolved = { project: Project } | { refusal: SyncScriptResult };
+
+async function resolveProject(argv: readonly string[]): Promise<Resolved> {
+  const key = parseFlag(argv, '--project');
+  const id = parseFlag(argv, '--project-id');
+  if (!key === !id) return { refusal: { exitCode: 1, lines: [USAGE] } };
+  if (id) {
+    const project = await withSystemContext((tx) => projectRepository.findById(id, tx));
+    if (!project) return { refusal: { exitCode: 1, lines: [`no project has the id ${id}`] } };
+    return { project };
+  }
+  const matches = await withSystemContext((tx) => projectRepository.findAllByIdentifier(key!, tx));
+  if (matches.length === 1) return { project: matches[0]! };
+  if (matches.length === 0) {
+    return { refusal: { exitCode: 1, lines: [`no project has the key ${key}`] } };
+  }
+  return {
+    refusal: {
+      exitCode: 1,
+      lines: [
+        `${matches.length} projects share the key ${key}; refusing to guess`,
+        ...matches.map((p) => `  --project-id ${p.id}  (workspace ${p.workspaceId})`),
+      ],
+    },
+  };
 }
 
 /** One line per org: the provisioning org's pass, then each connected org. */
@@ -60,20 +93,9 @@ export function renderSyncOutcome(result: RunnerGroupSyncOutcome): SyncScriptRes
 export async function runSyncProjectRunnerGroups(
   argv: readonly string[],
 ): Promise<SyncScriptResult> {
-  const key = parseProjectKey(argv);
-  if (!key) return { exitCode: 1, lines: ['usage: --project <KEY>'] };
-  const matches = await withSystemContext((tx) => projectRepository.findAllByIdentifier(key, tx));
-  if (matches.length !== 1) {
-    return {
-      exitCode: 1,
-      lines: [
-        matches.length === 0
-          ? `no project has the key ${key}`
-          : `${matches.length} projects share the key ${key}; refusing to guess`,
-      ],
-    };
-  }
-  const project = matches[0]!;
+  const resolved = await resolveProject(argv);
+  if ('refusal' in resolved) return resolved.refusal;
+  const { project } = resolved;
   const result = await projectRunnerGroupService.syncForProject(
     { projectId: project.id, workspaceId: project.workspaceId },
     { bypassInstallationCache: true },

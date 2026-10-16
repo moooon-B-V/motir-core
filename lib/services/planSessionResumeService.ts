@@ -51,6 +51,8 @@ interface ResumeTarget {
   sessionId: string;
   planId: string;
   failedJobId: string;
+  /** The plan's starter (MOTIR-8741) — whose language the resumed walk speaks. */
+  starterUserId: string | null;
 }
 
 /**
@@ -118,7 +120,12 @@ async function precheck(pctx: ProjectContext, sessionId: string): Promise<Resume
       }
       throw new PlanNotResumableError(session.id);
     }
-    return { sessionId: session.id, planId: plan.id, failedJobId: session.failedJobId };
+    return {
+      sessionId: session.id,
+      planId: plan.id,
+      failedJobId: session.failedJobId,
+      starterUserId: plan.createdById,
+    };
   });
 }
 
@@ -247,7 +254,12 @@ async function precheckAutomatic(input: {
     if (!project) return { ok: false, reason: 'not_resumable' };
     return {
       ok: true,
-      target: { sessionId: session.id, planId: plan.id, failedJobId: session.failedJobId },
+      target: {
+        sessionId: session.id,
+        planId: plan.id,
+        failedJobId: session.failedJobId,
+        starterUserId: plan.createdById,
+      },
       starterCtx: {
         userId: session.createdById,
         workspaceId: input.workspaceId,
@@ -281,6 +293,7 @@ async function attemptAutomatic(
       target.planId,
       target.failedJobId,
       starterCtx,
+      target.starterUserId,
     ));
   } catch (err) {
     const code = (err as { code?: unknown } | null)?.code;
@@ -338,6 +351,7 @@ export const planSessionResumeService = {
       target.planId,
       target.failedJobId,
       pctx,
+      target.starterUserId,
     );
     await bind(pctx, target, jobId);
     const session = await planChangeSessionsService.getById(pctx, target.sessionId);

@@ -5,6 +5,15 @@
  *
  *   DATABASE_URL='<url>' pnpm tsx --tsconfig tsconfig.node.json \
  *     scripts/ci-fleet/sync-project-runner-groups.ts --project MOTIR
+ *
+ *   DATABASE_URL='<url>' pnpm tsx --tsconfig tsconfig.node.json \
+ *     scripts/ci-fleet/sync-project-runner-groups.ts --project-id <project id>
+ *
+ * `--project <KEY>` resolves the key across every workspace and refuses when
+ * none or more than one project carries it; the refusal lists each candidate as
+ * a `--project-id <id>  (workspace <id>)` line. A key is unique per workspace
+ * only, so `--project-id` is the unambiguous form (MOTIR-8814). Give exactly
+ * one of the two.
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
 import '../_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads

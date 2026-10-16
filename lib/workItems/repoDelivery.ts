@@ -70,7 +70,29 @@ export type RepoDeliveryState =
    * linked change request in that repository at all — so an open, unmerged,
    * closed or merged-elsewhere pull request keeps the state it had.
    */
-  | 'delivered_without_change_request';
+  | 'delivered_without_change_request'
+  /**
+   * The repository's work was DELIVERED BY A CHILD'S OWN CHANGE REQUEST
+   * (MOTIR-8811) — a container's live leaf cards that target it are all in a
+   * done-category status, and they shipped it through pull requests linked to
+   * THEM, at least one merged onto this repository's default branch, with none
+   * still open (leaves with no delivery at all may sit beside them, as in
+   * `delivered_without_change_request`). The standard cross-repository story:
+   * one subtask per repository, each with its own pull request.
+   *
+   * Does NOT hold the item — a merge reached the trunk, it is simply linked one
+   * level down. Holding on it made the gate unsatisfiable for every such story:
+   * the container's own linked set can never show a merge it was not linked to.
+   *
+   * Reached only from `awaiting`, only on evidence the caller computed from the
+   * leaves (`ExpectedRepo.deliveredByChild`), and only while the item has no
+   * OPEN change request of its own in that repository — so an `unknown` base on
+   * the item's own change request keeps its state, and so does work of its own
+   * there that has not landed. Its own word rather than
+   * `delivered`, because the panel draws `delivered` beside the pull-request row
+   * that proves it, and the item has no such row here.
+   */
+  | 'delivered_by_child';
 
 /** One repository of an item's set, with its delivery state and its position. */
 export interface RepoDelivery {
@@ -124,6 +146,13 @@ export interface ExpectedRepo {
    * `undefined` reads as `false`.
    */
   shippedWithoutChangeRequest?: boolean | undefined;
+  /**
+   * The item is a CONTAINER whose live leaf cards targeting this repository have
+   * ALL settled it, and at least one did so through its OWN linked change request
+   * merged onto this repository's default branch (MOTIR-8811) — computed by
+   * `resolveExpectedRepos` from the tree. `undefined` reads as `false`.
+   */
+  deliveredByChild?: boolean | undefined;
 }
 
 /** The row states in which a repository DOES NOT EXIST on the host yet. */
@@ -134,13 +163,14 @@ export function classifyRepoDelivery(
   linked: readonly LinkedChangeRequestCompletionFact[],
 ): RepoDelivery[] {
   return expected.map((entry, i) => {
-    const { repo, establishState, role, shippedWithoutChangeRequest } =
+    const { repo, establishState, role, shippedWithoutChangeRequest, deliveredByChild } =
       typeof entry === 'string'
         ? {
             repo: entry,
             establishState: undefined,
             role: undefined,
             shippedWithoutChangeRequest: undefined,
+            deliveredByChild: undefined,
           }
         : entry;
     // The row's own state decides FIRST, because it decides whether a pull
@@ -161,12 +191,19 @@ export function classifyRepoDelivery(
       ? 'delivered'
       : merged.some((f) => f.baseRef === null)
         ? 'unknown'
-        : // MOTIR-7180 — only from `awaiting`, and only with NO linked change
-          // request in this repository at all: one that exists, in any state,
-          // is the question this state must not answer for it.
-          shippedWithoutChangeRequest === true && inRepo.length === 0
-          ? 'delivered_without_change_request'
-          : 'awaiting';
+        : // MOTIR-8811 — only from `awaiting`: a child's own change request
+          // merged onto this repository's trunk. A merge, so the item's own
+          // closed or merged-elsewhere rows here do not take it back — an
+          // abandoned attempt is not work outstanding — but its own OPEN one
+          // does: work of the item's own there has not landed yet.
+          deliveredByChild === true && !inRepo.some((f) => f.open)
+          ? 'delivered_by_child'
+          : // MOTIR-7180 — only from `awaiting`, and only with NO linked change
+            // request in this repository at all: one that exists, in any state,
+            // is the question this state must not answer for it.
+            shippedWithoutChangeRequest === true && inRepo.length === 0
+            ? 'delivered_without_change_request'
+            : 'awaiting';
     return { repo, role, state, primary: i === 0 };
   });
 }

@@ -86,6 +86,10 @@ export interface LinkedChangeRequestCompletionFact {
   repoDefaultBranch: string;
   merged: boolean;
   baseRef: string | null;
+  /** Still OPEN on the host — neither merged nor closed (MOTIR-8811: an open
+   *  change request of the item's own keeps a repository from reading as
+   *  delivered by a child, because the item's own work there has not landed). */
+  open: boolean;
 }
 
 /** A PR row with the context the Development surface renders (MOTIR-1579):

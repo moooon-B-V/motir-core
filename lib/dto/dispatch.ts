@@ -48,7 +48,8 @@ export interface DispatchRepoDto {
    * What this repository has to show for itself
    * ({@link RepoDeliveryState} — `delivered` / `awaiting` / `unknown` /
    * `unestablished` / `excluded` / `delivered_without_change_request`), from
-   * the shared classifier
+   * the shared classifier — except `delivered_by_child`, which is sent as
+   * `delivered` (MOTIR-8811; `toDispatchDelivery`), from
    * `workItemsService.listRepoDelivery` that the completion gate and the item
    * detail panel both answer from.
    *
@@ -59,7 +60,7 @@ export interface DispatchRepoDto {
    * card on it, so it has no delivery state to report, and saying `awaiting`
    * would be a lie of precision.
    */
-  delivery: RepoDeliveryState | null;
+  delivery: Exclude<RepoDeliveryState, 'delivered_by_child'> | null;
 }
 
 /**

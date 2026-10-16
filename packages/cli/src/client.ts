@@ -2091,6 +2091,11 @@ export class MotirClient {
         // Same rule, same reason (MOTIR-4085): absent means no, so only the one
         // lane that HAS an auto-approving loop ever sends it.
         ...(opts.autoApproveReplan ? { autoApproveReplan: '1' } : {}),
+        // ALWAYS sent (MOTIR-8810): every run this CLI launches reads
+        // `$MOTIR_AGENT_REPORT` and posts its `unbuildable`, `discrepancy` and `stop`
+        // (`dispatchLeg.ts`), so the server may name that file as the route. A CLI
+        // that predates those posts sends nothing and is told to use the tool.
+        agentReport: '1',
         ...(opts.continueFrom ? { continueFrom: opts.continueFrom } : {}),
       },
     });

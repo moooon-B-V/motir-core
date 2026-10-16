@@ -24,6 +24,7 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { LatestRefusalDTO } from '@/lib/dto/approvalGate';
+import type { Locale } from '@/lib/i18n/locales';
 
 // The canonical DISPATCH-PROMPT grammar (Story 7.9 · MOTIR-1802) — the
 // open-core, deterministic rebuild of the cancelled 7.7.2 `generate_prompt` job.
@@ -462,6 +463,14 @@ export interface DispatchPromptSource {
    */
   errorEvidence?: MonitorIssueLinkDto[];
   /**
+   * The organisation's CONTENT LANGUAGE (Story MOTIR-7734 · MOTIR-8745) — the
+   * language any work item or to-do the agent writes through Motir is written in.
+   * Rendered as the WORK CONTENT LANGUAGE section. Omitted renders nothing, so a
+   * caller that does not pass it gets byte-identically the prompt it got before
+   * the field existed; a MANUAL item never renders it (no agent writes on it).
+   */
+  contentLanguage?: Locale;
+  /**
    * The LATEST REFUSALS this run must answer (Story MOTIR-6070 · MOTIR-6422; ADR
    * `approval-gates.md` §10h note 4) — for this card, and for its run target when the
    * run was launched against another item — each present only when that card's most
@@ -536,6 +545,21 @@ export interface DispatchPromptSource {
    * instead of cutting one. Absent for every fresh run.
    */
   continueFrom?: ContinueFromForPrompt | null;
+  /**
+   * Does the RUNNER that will launch the agent post what the agent writes into
+   * `$MOTIR_AGENT_REPORT` as `unbuildable`, `discrepancy` and `stop` (MOTIR-8810)?
+   * Only `true` renders those file routes; omitted means NO.
+   *
+   * ⚠️ NO IS THE DEFAULT BECAUSE THE CLI PEOPLE RUN DID NOT POST. `@motir/cli` 0.12.0
+   * sets `$MOTIR_AGENT_REPORT` and reads only `model` from it, so an agent told to
+   * put its unbuildable reason there lost it: no report, no planning bug, nothing to
+   * tell anyone. The `/api/v1` route passes `true` only when the client DECLARES the
+   * capability, which only a CLI that posts all three does. The MCP tool never does:
+   * nobody reading a prompt through it is the runner that would post. Without it the
+   * prompt routes the report through `report_unbuildable_target` and names neither
+   * NO MOTIR TOOLS file route. See {@link agentReportStep}.
+   */
+  runnerPostsAgentReport?: boolean;
 }
 
 /** The assembled prompt plus the workflow variant it ended up carrying. */
@@ -2486,15 +2510,20 @@ function buildThroughSteps(
     '     describes something STILL broken after this card is done is a defect: file',
     '     it as a bug first, by the defect branch that follows this section, and cite',
     "     its key in that point's why.",
-    '     NO MOTIR TOOLS? If the record_run_discrepancy tool is not available to you',
-    '     (a hosted run, or a run inside an agent, gives you none) and the',
-    '     environment variable MOTIR_AGENT_REPORT is set, put the same points into the',
-    '     JSON file at that path instead, as "discrepancy" beside "model":',
-    '',
-    '         {"model": "<as above>", "discrepancy": [{"planAsked": "…", "built": "…", "why": "…"}]}',
-    '',
-    '     and the run records them on the card and its run when you exit. Then the',
-    '     Deviations list says the run records them, and step 5 does not apply.',
+    // MOTIR-8810: only a runner that posts `discrepancy` may be named as the route.
+    ...(src.runnerPostsAgentReport !== true
+      ? []
+      : [
+          '     NO MOTIR TOOLS? If the record_run_discrepancy tool is not available to you',
+          '     (a hosted run, or a run inside an agent, gives you none) and the',
+          '     environment variable MOTIR_AGENT_REPORT is set, put the same points into the',
+          '     JSON file at that path instead, as "discrepancy" beside "model":',
+          '',
+          '         {"model": "<as above>", "discrepancy": [{"planAsked": "…", "built": "…", "why": "…"}]}',
+          '',
+          '     and the run records them on the card and its run when you exit. Then the',
+          '     Deviations list says the run records them, and step 5 does not apply.',
+        ]),
     ...finish,
     ...stated,
     '  5. If the call errors or is refused, still deliver. Write the exact line',
@@ -2612,21 +2641,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     `     ${permitted}`,
     `  3. Comment the finding on ${src.key}: what is false, and the evidence — the`,
     '     file you read, the command you ran, what it said.',
-    '  4. Report it. If the environment variable MOTIR_AGENT_REPORT is set, put the',
-    '     SAME text as your step-3 comment into the JSON file at that path, as',
-    '     "unbuildable" beside "model":',
-    '',
-    '         {"model": "<as above>", "unbuildable": "<the SAME text as your step-3 comment>"}',
-    '',
-    '     and the run makes the report for you when you exit — no Motir tool needed.',
-    '     If the variable is unset, report it with the report_unbuildable_target tool:',
-    '',
-    `         projectKey: ${src.projectKey}`,
-    `         targetKey:  ${src.key}`,
-    '         reason:     the SAME text as your step-3 comment',
-    '',
-    '     Either way it is one report. It spends nothing. It is safe to repeat: the',
-    '     server keeps one record per run. It returns nothing to act on.',
+    ...agentReportStep(src),
   ];
 
   // The switch. With re-planning disabled there is nothing to submit and nowhere
@@ -2635,7 +2650,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
   if (!policy.replan) {
     return [
       ...restructuring,
-      ...noToolsStop(policy),
+      ...(src.runnerPostsAgentReport === true ? noToolsStop(policy) : []),
       '  5. Stop, and leave the card In Progress. Do not move its status: this run',
       '     was launched without re-planning, so there is no plan to submit and no',
       '     decision for anyone to make yet. Your comment is the whole report:',
@@ -2646,7 +2661,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
 
   return [
     ...restructuring,
-    ...noToolsStop(policy),
+    ...(src.runnerPostsAgentReport === true ? noToolsStop(policy) : []),
     `  5. Move ${src.key} to Planning with the transition_status tool (key`,
     `     ${src.key}, status planning). That status is in the in-progress`,
     '     category, which is what actually takes the card out of the pickable set',
@@ -2691,6 +2706,54 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     nothing happened — no job was created and no credits were spent — so',
     '     re-submit once, WITHOUT the requirement. That is the only retry there is.',
     '  9. Stop. Do not pick up other work.',
+  ];
+}
+
+/**
+ * STOP step 4 — the report, routed by WHO WILL POST IT (MOTIR-8810).
+ *
+ * MOTIR-8698 made `$MOTIR_AGENT_REPORT` the route: the agent writes its reason there as
+ * `unbuildable` and the CLI posts it with the run's credential. That holds only for a CLI
+ * that does the posting. The published `@motir/cli` 0.12.0 predates it and reads `model`
+ * alone, so the deployed prompt sent every report it handled into a file nothing read.
+ *
+ * So the file route renders only when the runner said it posts (`runnerPostsAgentReport`,
+ * which the `/api/v1` route sets from the client's declaration); otherwise step 4 is the
+ * tool call it was before MOTIR-8698, word for word.
+ *
+ * ⚠️ THIS IS THE GUARD THE NEXT PROMPT CHANGE NEEDS TOO. A prompt that routes work through
+ * the runner is a contract with a CLI release, and the server is deployed before anyone
+ * installs that release. A new route the runner owns renders behind the client's own
+ * declaration, never on the assumption that the CLI on `main` is the CLI people run.
+ */
+function agentReportStep(src: DispatchPromptSource): string[] {
+  const call = [
+    '',
+    `         projectKey: ${src.projectKey}`,
+    `         targetKey:  ${src.key}`,
+    '         reason:     the SAME text as your step-3 comment',
+    '',
+  ];
+  if (src.runnerPostsAgentReport !== true) {
+    return [
+      '  4. Report it with the report_unbuildable_target tool:',
+      ...call,
+      '     It spends nothing. It is safe to repeat: the server keeps one record per',
+      '     run. It returns nothing to act on.',
+    ];
+  }
+  return [
+    '  4. Report it. If the environment variable MOTIR_AGENT_REPORT is set, put the',
+    '     SAME text as your step-3 comment into the JSON file at that path, as',
+    '     "unbuildable" beside "model":',
+    '',
+    '         {"model": "<as above>", "unbuildable": "<the SAME text as your step-3 comment>"}',
+    '',
+    '     and the run makes the report for you when you exit — no Motir tool needed.',
+    '     If the variable is unset, report it with the report_unbuildable_target tool:',
+    ...call,
+    '     Either way it is one report. It spends nothing. It is safe to repeat: the',
+    '     server keeps one record per run. It returns nothing to act on.',
   ];
 }
 
@@ -3267,6 +3330,46 @@ function errorEvidenceBlock(links: readonly MonitorIssueLinkDto[]): string[] {
     : [...section('ERROR EVIDENCE — what the monitor recorded for this work item', body), ''];
 }
 
+/** Each content language's English name, for the WORK CONTENT LANGUAGE section. */
+const LANGUAGE_NAMES: Record<Locale, string> = {
+  en: 'English',
+  zh: 'Chinese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  de: 'German',
+  fr: 'French',
+  es: 'Spanish',
+  it: 'Italian',
+  nl: 'Dutch',
+  pl: 'Polish',
+  pt: 'Portuguese',
+};
+
+/**
+ * The WORK CONTENT LANGUAGE section with its trailing separator (MOTIR-8745), or
+ * nothing when no language was passed or the item is MANUAL. A FACT stated to the
+ * agent, not an instruction to translate: the MCP door already records the
+ * organisation's language on what the agent writes.
+ */
+function contentLanguageBlock(src: DispatchPromptSource, manual: boolean): string[] {
+  const code = src.contentLanguage;
+  if (manual || code === undefined) return [];
+  return [
+    ...section('WORK CONTENT LANGUAGE', [
+      `This organisation writes its work content in ${LANGUAGE_NAMES[code]} (\`${code}\`).`,
+      'Any work item or to-do you write through Motir — a bug you file, an item you',
+      'create, a to-do you add — has its title, description, acceptance criteria,',
+      `explanation, and to-do text and notes written in ${LANGUAGE_NAMES[code]}, whatever`,
+      'language this card or the conversation is in.',
+      'Identifiers, file paths, code, commands, work item keys and quoted text keep',
+      'their original form.',
+      'The MCP door records that language for you: pass no language yourself unless',
+      'you deliberately write a field in another one.',
+    ]),
+    '',
+  ];
+}
+
 export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDispatchPrompt {
   const injections = src.injections ?? NO_INJECTIONS;
   const { body, acceptanceCriteria, contextRefs } = splitPlanBody(src.descriptionMd);
@@ -3357,6 +3460,9 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     '',
     ...section('CONTEXT', contextSection(src, body, contextRefs, injections)),
     '',
+    // The WORK CONTENT LANGUAGE (MOTIR-8745) sits between the card's context and
+    // its steps, and renders NOTHING when the caller passed no language.
+    ...contentLanguageBlock(src, manual),
     ...section('WHAT TO DO', whatToDo),
     '',
     ...section('ACCEPTANCE CRITERIA — every one must hold', acceptanceSection(acceptanceCriteria)),

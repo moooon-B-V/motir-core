@@ -1736,7 +1736,8 @@
       "unknown": "Onbekend",
       "unestablished": "Niet aangemaakt",
       "excluded": "Overgeslagen",
-      "delivered_without_change_request": "Opgeleverd zonder PR"
+      "delivered_without_change_request": "Opgeleverd zonder PR",
+      "delivered_by_child": "Opgeleverd via onderliggend item"
     }
   },
   "comments": {
@@ -7289,11 +7290,13 @@
         "delivered": "Opgeleverd",
         "unestablished": "Niet aangemaakt",
         "excluded": "Overgeslagen",
-        "delivered_without_change_request": "Opgeleverd zonder PR"
+        "delivered_without_change_request": "Opgeleverd zonder PR",
+        "delivered_by_child": "Opgeleverd via onderliggend item"
       },
       "repositoryNotCreated": "Repository nog niet aangemaakt",
       "repositorySkipped": "Overgeslagen voor dit project",
       "shippedWithoutPullRequest": "Opgeleverd zonder pull request",
+      "deliveredByChildPullRequest": "Opgeleverd via de pull request van een onderliggend werkitem",
       "unlinkAria": "De koppeling met {target} verwijderen",
       "unlinkConfirmBefore": "De koppeling verwijderen met",
       "unlinkConfirmAfter": "? De pull request op GitHub blijft onaangeroerd — alleen de koppeling verdwijnt.",
@@ -8539,7 +8542,12 @@
       "answeredGroup": "Al beantwoord door je project",
       "answeredMeta": "Motir heeft je code en je werkitems gelezen",
       "discoveryStep": "Een paar vragen",
-      "directionGroup": "Je richting"
+      "directionGroup": "Je richting",
+      "subtitle": "Indexeren en importeren lopen op de achtergrond. Open Motir wanneer je wilt.",
+      "background": "Op de achtergrond · {detail}",
+      "backgroundInProgress": "Bezig",
+      "backgroundQueued": "In de wachtrij",
+      "backgroundFailed": "Mislukt"
     },
     "common": {
       "back": "Terug",
@@ -8633,7 +8641,9 @@
       "perRepo": "Per repository",
       "state": {
         "indexed": "Geïndexeerd",
-        "queued": "In wachtrij"
+        "queued": "In wachtrij",
+        "indexing": "Bezig",
+        "failed": "Mislukt"
       },
       "callout": "Motir leidt je conventies + een codegezondheidscheck (en eventueel een plan) af uit het hele project, dus elke repo moet geïndexeerd zijn — Volgende blijft uitgeschakeld totdat elke repository klaar is.",
       "completeTitle": "Codegraaf gebouwd",
@@ -8643,11 +8653,13 @@
     "import": {
       "eyebrow": "Optioneel · Importeren en plannen",
       "heading": "Je bestaande Backlog meenemen",
-      "body": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Importeer het in dit project — je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
+      "body": "Importeer uit Jira, Linear of Plane, of open Motir en doe het later. Een import gaat op de achtergrond door.",
       "reconcile": "Als je daarna een plan genereert, brengt Motir de twee met elkaar in overeenstemming, zodat er niets dubbel komt.",
       "skip": "Import overslaan",
       "bodyInline": "Houd je al werk bij in Jira, Linear, GitHub, Plane of een CSV? Neem het hier direct mee. Je bekijkt eerst een voorbeeld van een proefrun voordat er iets wordt geschreven. Sla dit over als je geen Backlog hebt om mee te nemen.",
-      "continue": "Doorgaan"
+      "continue": "Doorgaan",
+      "running": "Importeren uit {source} · tot nu toe {done} werkitems",
+      "runningBody": "Dit gaat op de achtergrond door. Je hoeft er niet op te wachten."
     },
     "decision": {
       "eyebrow": "Inrichten voltooid",
@@ -8673,6 +8685,26 @@
       "readyTitle": "Je eerste plan is klaar",
       "readyBody": "{count, plural, one {# item is} other {# items zijn}} opgesteld voor {project}. Niets is definitief totdat je het goedkeurt.",
       "readyCta": "Je plan bekijken"
+    },
+    "indexing": {
+      "doneTitle": "{repos} geïndexeerd",
+      "repoCount": "{count, plural, one {# repository} other {# repository's}}",
+      "aggregateTail": "{done} van {total} klaar",
+      "failedTail": "{count} mislukt",
+      "detailBody": "Dit gaat op de achtergrond door. Je kunt Motir nu openen; niets wacht tot het klaar is.",
+      "rowFailed": "Motir kon deze repository niet indexeren. Niets van wat je hebt gedaan is verloren.",
+      "checkConnection": "Verbinding controleren",
+      "close": "Sluiten",
+      "retrying": "Opnieuw proberen…",
+      "refusedNotConnected": "Deze repository is niet meer met het project verbonden. Controleer de verbinding en probeer het opnieuw.",
+      "refusedTooLarge": "Deze repository is te groot voor Motir om te indexeren.",
+      "retryError": "Motir kon dat niet opnieuw starten. Probeer het zo nog eens.",
+      "importHeading": "Import van werkitems",
+      "importProgress": "{done} tot nu toe"
+    },
+    "enter": {
+      "cta": "Naar Motir",
+      "hint": "Indexeren en een eventuele import gaan door nadat je Motir opent."
     }
   },
   "repositorySet": {
@@ -14471,7 +14503,9 @@
       "completed": "Dat is alles wat ik moest vragen.",
       "nothingToAsk": "Ik heb niets te vragen: dit is duidelijk genoeg om te plannen. Ik schrijf nu het plan.",
       "stopped": "Je hebt het ondervragen gestopt.",
-      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven."
+      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven.",
+      "handoffFailed": "Ondervraag me kon zijn vragen niet stellen, dus het plan wordt zonder die vragen geschreven. Je verzoek blijft zoals je het schreef.",
+      "handoffNoCredit": "Ondervraag me heeft AI-tegoed nodig om zijn vragen te stellen, dus het plan wordt zonder die vragen geschreven."
     },
     "summary": {
       "title": "Wat je hebt vastgelegd",

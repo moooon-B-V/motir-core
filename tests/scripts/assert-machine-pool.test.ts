@@ -76,7 +76,7 @@ describe('the expectation is read out of the real fly.toml (MOTIR-3570)', () => 
     const config = parseFlyConfig(REAL_FLY_TOML);
     expect(config.groups).toEqual(['app', 'worker']);
     expect(config.httpGroups).toEqual(['app']);
-    expect(config.minMachinesRunning).toBe(2);
+    expect(config.minMachinesRunning).toBe(1);
   });
 
   it('is not confused by the `processes` key on a [[vm]] block', () => {
@@ -151,7 +151,7 @@ describe('what the configuration declares, per group', () => {
     // `started` count for it would be inventing a number the file does not have,
     // which is the stored-constant habit one level down.
     const expected = expectedShape(parseFlyConfig(REAL_FLY_TOML));
-    expect(expected.get('app')).toEqual({ exists: 1, running: 2 });
+    expect(expected.get('app')).toEqual({ exists: 1, running: 1 });
     expect(expected.get('worker')).toEqual({ exists: 1, running: 0 });
   });
 });
@@ -228,14 +228,15 @@ describe('the guard still FAILS on real drift — the deliberate negatives (MOTI
 
   it('an HTTP tier below its min_machines_running floor, at an UNCHANGED total', () => {
     // The failure a sum cannot see. Four machines before, four after; the web
-    // tier has halved. `min_machines_running = 2` is an availability decision
-    // (MOTIR-2785) and this is the only assertion that reads it.
-    const halved = PRODUCTION_POOL.map((m) =>
-      m['id'] === '7817663f103648' ? { ...m, state: 'stopped' } : m,
+    // tier has no machine running. `min_machines_running = 1` (one running, the
+    // spare suspended or stopped; MOTIR-2785 had 2) is an availability decision
+    // and this is the only assertion that reads it.
+    const noneRunning = PRODUCTION_POOL.map((m) =>
+      m['id'] === '7817663f103648' || m['id'] === '83d1300b7460e8' ? { ...m, state: 'stopped' } : m,
     );
-    const result = assertPool(REAL_FLY_TOML, halved);
+    const result = assertPool(REAL_FLY_TOML, noneRunning);
     expect(result.code).toBe(EXIT_DRIFT);
-    expect(result.findings.join('\n')).toMatch(/only 1 of its 2 machine\(s\) are started/);
+    expect(result.findings.join('\n')).toMatch(/only 0 of its 2 machine\(s\) are started/);
   });
 
   it('a group running on the platform that fly.toml never declared', () => {

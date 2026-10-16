@@ -519,4 +519,59 @@ describe('the one-shot script', () => {
       exitCode: 1,
     });
   });
+
+  // MOTIR-8814: a project key is unique per WORKSPACE only. Production holds two
+  // projects keyed MOTIR, so `--project MOTIR` refused with nothing the operator
+  // could re-run with.
+  describe('a key two workspaces share (MOTIR-8814)', () => {
+    async function twoTenantsKeyed(identifier: string) {
+      const ours = await makeWorkItemFixture({ name: 'Ours', identifier });
+      const theirs = await makeWorkItemFixture({ name: 'Theirs', identifier });
+      return { ours, theirs };
+    }
+
+    it('an ambiguous --project still refuses, naming each candidate’s id and workspace', async () => {
+      const { ours, theirs } = await twoTenantsKeyed('TWIN');
+      const result = await runSyncProjectRunnerGroups(['--project', 'TWIN']);
+      expect(result.exitCode).toBe(1);
+      expect(result.lines[0]).toBe('2 projects share the key TWIN; refusing to guess');
+      expect(result.lines.slice(1)).toEqual([
+        `  --project-id ${ours.projectId}  (workspace ${ours.workspaceId})`,
+        `  --project-id ${theirs.projectId}  (workspace ${theirs.workspaceId})`,
+      ]);
+      expect(calls).toHaveLength(0);
+    });
+
+    it('--project-id syncs exactly that project, printing the same per-org lines', async () => {
+      const { ours } = await twoTenantsKeyed('TWIN');
+      await connectRepos(ours, ['motir-core']);
+      visibility.set('motir-core', true);
+      for (const argv of [['--project-id', ours.projectId], [`--project-id=${ours.projectId}`]]) {
+        const result = await runSyncProjectRunnerGroups(argv);
+        expect(result.exitCode).toBe(0);
+        expect(result.lines).toHaveLength(2);
+        expect(result.lines[0]).toMatch(/^provisioning org: /);
+        expect(result.lines[1]).toMatch(new RegExp(`^${CONNECTED_ORG}: synced group=\\d+`));
+      }
+      const group = await adminDb.projectRunnerGroup.findFirstOrThrow({
+        where: { org: CONNECTED_ORG },
+      });
+      expect(group.projectId).toBe(ours.projectId);
+    });
+
+    it('an unknown --project-id refuses with exit 1 and names the id', async () => {
+      await expect(
+        runSyncProjectRunnerGroups(['--project-id', 'cm_no_such_project']),
+      ).resolves.toEqual({ exitCode: 1, lines: ['no project has the id cm_no_such_project'] });
+      expect(calls).toHaveLength(0);
+    });
+
+    it('refuses both flags at once, and neither', async () => {
+      const usage = { exitCode: 1, lines: ['usage: --project <KEY> | --project-id <id>'] };
+      await expect(runSyncProjectRunnerGroups([])).resolves.toEqual(usage);
+      await expect(
+        runSyncProjectRunnerGroups(['--project', 'TWIN', '--project-id', 'x']),
+      ).resolves.toEqual(usage);
+    });
+  });
 });

@@ -86,6 +86,7 @@ import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/co
 import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { folderRefId, isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
 import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
@@ -889,6 +890,40 @@ export const planReviewService = {
       markById: new Map(own.map((row) => [row.id, row.obsolescence ?? null])),
       todoCountById: counts,
     };
+  },
+
+  /**
+   * THE LIVE STREAM'S PLAN READ (Story MOTIR-8542 · MOTIR-8730): a watched plan's
+   * status and review version, for this reader — or `null`.
+   *
+   * ⚠️ `null` FOR EVERY REFUSAL AND FOR A PLAN THAT IS GONE, never an error. The
+   * stream writes a frame only for a version it read, so a plan the reader may
+   * not browse produces no frame, no error frame and no hint that it exists. The
+   * admission is the review read's own ({@link readerContextOf} then
+   * `plansService.admitPlanReader`), so the stream can never see a plan the review
+   * read would refuse. Any other error propagates.
+   */
+  async readReviewVersionForReader(
+    planId: string,
+    reader: ServiceContext | VisitorReadContext,
+  ): Promise<{ status: PlanStatus; reviewVersion: string } | null> {
+    try {
+      const ctx = await readerContextOf(planId, reader);
+      await plansService.admitPlanReader(planId, ctx);
+      const version = await readReviewVersion(planId, ctx);
+      return version ? { status: version.status, reviewVersion: version.token } : null;
+    } catch (err) {
+      // `ProjectNotFoundError` is how a project-bound token is refused a plan in
+      // another project — a refusal like the other two, so the same `null`.
+      if (
+        err instanceof PlanNotFoundError ||
+        err instanceof ProjectAccessDeniedError ||
+        err instanceof ProjectNotFoundError
+      ) {
+        return null;
+      }
+      throw err;
+    }
   },
 
   /**
