@@ -145,6 +145,9 @@ export interface TopNavProps {
   /** True on a Motir cloud build (`MOTIR_CLOUD`) — gates the org menu's
    *  "Billing & plans" row (Story 8.1.7). Resolved server-side in the layout. */
   cloudBilling: boolean;
+  /** Whether the account may create an organization (§4.5) — the org menu's
+   *  "Create organization" door (MOTIR-8779). Resolved server-side in the layout. */
+  canCreateOrganization?: boolean;
   /** Whether to show the "Plan with AI" hero launcher (MOTIR-1299) — the
    *  universal entrance to the AI planning workspace. True only when AI planning
    *  is configured (the cloud/self-host gate, `isMotirAiConfigured`) AND there's
@@ -167,6 +170,7 @@ export async function TopNav({
   buildInPublicProjectKey,
   buildingInPublic,
   cloudBilling,
+  canCreateOrganization = false,
   showPlanWithAi,
 }: TopNavProps) {
   const t = await getTranslations('shell');
@@ -270,6 +274,7 @@ export async function TopNav({
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
             cloudBilling={cloudBilling}
+            canCreateOrganization={canCreateOrganization}
             placement="bar"
             activeProject={activeProject}
             canCreateProject={canCreateProject}
