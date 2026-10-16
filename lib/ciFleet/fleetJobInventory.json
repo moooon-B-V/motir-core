@@ -683,9 +683,9 @@
     "moooon-B-V/motir-ai": {
       "repoRef": "moooon-B-V/motir-ai",
       "ref": "main",
-      "sha": "38bfab2a4f839aaad69c0562bf6dc646eeb99571",
+      "sha": "966ab405b635be9c03acf7bd8a7912223ee7521a",
       "visibility": "private",
-      "measuredAt": "2026-10-15T19:08:10Z",
+      "measuredAt": "2026-10-16T15:00:35Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
       "workflows": [
         {
@@ -693,7 +693,7 @@
           "jobs": [
             {
               "jobId": "lint",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -701,7 +701,7 @@
             },
             {
               "jobId": "build",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -709,7 +709,7 @@
             },
             {
               "jobId": "typecheck-ratchet",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -717,7 +717,7 @@
             },
             {
               "jobId": "smoke",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -725,7 +725,7 @@
             },
             {
               "jobId": "test",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -733,7 +733,7 @@
             },
             {
               "jobId": "coverage-a",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -741,7 +741,7 @@
             },
             {
               "jobId": "coverage-b",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -749,7 +749,7 @@
             },
             {
               "jobId": "coverage-c",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -757,7 +757,7 @@
             },
             {
               "jobId": "coverage-db-a",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -765,7 +765,7 @@
             },
             {
               "jobId": "coverage-db-b",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -773,7 +773,7 @@
             },
             {
               "jobId": "coverage-db-c",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -781,7 +781,7 @@
             },
             {
               "jobId": "coverage-db-d",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -789,7 +789,7 @@
             },
             {
               "jobId": "indexer-image",
-              "runsOn": ["ubuntu-latest"],
+              "runsOn": ["${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}"],
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -798,7 +798,7 @@
             },
             {
               "jobId": "deploy",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -806,7 +806,7 @@
             },
             {
               "jobId": "deploy-codegraph",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -814,7 +814,7 @@
             },
             {
               "jobId": "ci-complete",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -827,7 +827,7 @@
           "jobs": [
             {
               "jobId": "heal",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["schedule", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -840,7 +840,7 @@
           "jobs": [
             {
               "jobId": "indexer-image",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["workflow_call"],
               "verdict": "runnable",
               "missing": [],
@@ -853,7 +853,7 @@
           "jobs": [
             {
               "jobId": "gate",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push", "workflow_dispatch", "schedule"],
               "verdict": "runnable",
               "missing": [],
@@ -861,7 +861,7 @@
             },
             {
               "jobId": "guard-on-live-artifact",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push", "workflow_dispatch", "schedule"],
               "verdict": "runnable",
               "missing": [],
@@ -869,7 +869,7 @@
             },
             {
               "jobId": "guard-on-fixture",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push", "workflow_dispatch", "schedule"],
               "verdict": "runnable",
               "missing": [],
@@ -877,7 +877,7 @@
             },
             {
               "jobId": "coverage",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "merge_group", "push", "workflow_dispatch", "schedule"],
               "verdict": "runnable",
               "missing": [],
@@ -890,7 +890,7 @@
           "jobs": [
             {
               "jobId": "sync",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["workflow_run", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -903,7 +903,7 @@
           "jobs": [
             {
               "jobId": "version",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -911,7 +911,7 @@
             },
             {
               "jobId": "release",
-              "runsOn": ["ubuntu-latest"],
+              "runsOn": ["${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}"],
               "triggers": ["push", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -925,7 +925,7 @@
           "jobs": [
             {
               "jobId": "sweep",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["schedule", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -939,9 +939,9 @@
     "moooon-B-V/motir-gateway": {
       "repoRef": "moooon-B-V/motir-gateway",
       "ref": "main",
-      "sha": "996e4282ecab2cf5f2444a94f259088fcecf9b76",
+      "sha": "233c4da249a05802ba4f24416f30d675950167ef",
       "visibility": "private",
-      "measuredAt": "2026-10-15T19:08:10Z",
+      "measuredAt": "2026-10-16T15:00:35Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
       "workflows": [
         {
@@ -949,7 +949,7 @@
           "jobs": [
             {
               "jobId": "refresh",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["schedule", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -957,7 +957,7 @@
             },
             {
               "jobId": "failure_issue",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["schedule", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -970,7 +970,7 @@
           "jobs": [
             {
               "jobId": "unit_tests",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "pull_request"],
               "verdict": "runnable",
               "missing": [],
@@ -978,7 +978,7 @@
             },
             {
               "jobId": "opencode_e2e",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "pull_request"],
               "verdict": "runnable",
               "missing": [],
@@ -986,7 +986,7 @@
             },
             {
               "jobId": "provenance",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "pull_request"],
               "verdict": "runnable",
               "missing": [],
@@ -994,7 +994,7 @@
             },
             {
               "jobId": "commit_lint",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "pull_request"],
               "verdict": "runnable",
               "missing": [],
@@ -1002,7 +1002,7 @@
             },
             {
               "jobId": "commit_lint_push_path",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "pull_request"],
               "verdict": "runnable",
               "missing": [],
@@ -1015,7 +1015,7 @@
           "jobs": [
             {
               "jobId": "push_to_registries",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "workflow_dispatch"],
               "verdict": "needs-image",
               "missing": ["binfmt-misc"],
@@ -1028,7 +1028,7 @@
           "jobs": [
             {
               "jobId": "deploy",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["workflow_run", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -1041,7 +1041,7 @@
           "jobs": [
             {
               "jobId": "release",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -1068,7 +1068,7 @@
           "jobs": [
             {
               "jobId": "dispatch",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["push", "pull_request", "workflow_dispatch"],
               "verdict": "runnable",
               "missing": [],
@@ -1096,9 +1096,9 @@
     "moooon-B-V/motir-meta": {
       "repoRef": "moooon-B-V/motir-meta",
       "ref": "main",
-      "sha": "a7fd87b6dc6634b4477bec4366faeabbc5fd4e6e",
+      "sha": "f37c1f5e637311a49ef450cce71a1953c5b27dd0",
       "visibility": "private",
-      "measuredAt": "2026-10-15T19:08:10Z",
+      "measuredAt": "2026-10-16T15:00:35Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
       "workflows": [
         {
@@ -1106,7 +1106,7 @@
           "jobs": [
             {
               "jobId": "discover",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -1114,7 +1114,7 @@
             },
             {
               "jobId": "guard",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -1122,7 +1122,7 @@
             },
             {
               "jobId": "generated",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "push"],
               "verdict": "runnable",
               "missing": [],
@@ -1130,7 +1130,7 @@
             },
             {
               "jobId": "complete",
-              "runsOn": "ubuntu-latest",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
               "triggers": ["pull_request", "push"],
               "verdict": "runnable",
               "missing": [],
