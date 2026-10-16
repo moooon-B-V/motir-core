@@ -1,0 +1,301 @@
+{
+  "concepts": [
+    {
+      "concept": "epic",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "story",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "task",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "bug",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "subtask",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "orphan",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "status_todo",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "status_in_progress",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "status_done",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "status_cancelled",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "priority",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "no_priority",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "assignee",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "non_member_assignee",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "reporter",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "label",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "case_only_label_pair",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "comment",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "link_blocks",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "link_relates_to",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "link_duplicates",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "cross_epic_link",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "attachment",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "iteration",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "parent",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "created_at",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    },
+    {
+      "concept": "closed_at",
+      "jira": "TODO: written by MOTIR-8754",
+      "linear": "TODO: written by MOTIR-8754",
+      "plane": "TODO: written by MOTIR-8754",
+      "vendorField": {
+        "jira": "TODO: written by MOTIR-8754",
+        "linear": "TODO: written by MOTIR-8754",
+        "plane": "TODO: written by MOTIR-8754"
+      }
+    }
+  ]
+}

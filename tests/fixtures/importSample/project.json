@@ -1,0 +1,96 @@
+{
+  "name": "Harbor",
+  "people": [
+    {
+      "id": "P-1",
+      "name": "Ada Quill",
+      "email": "ada.quill@sample.motir.co",
+      "workspaceMember": true
+    },
+    {
+      "id": "P-2",
+      "name": "Bram Okonkwo-Vale",
+      "email": "bram.okonkwo-vale@sample.motir.co",
+      "workspaceMember": true
+    }
+  ],
+  "iterations": [
+    {
+      "id": "IT-1",
+      "name": "Harbor Sprint 1",
+      "state": "active",
+      "startDate": "2026-10-12",
+      "endDate": "2026-10-25"
+    }
+  ],
+  "items": [
+    {
+      "id": "F-1",
+      "kind": "epic",
+      "title": "Skeleton epic",
+      "descriptionMd": "",
+      "statusCategory": "in_progress",
+      "statusName": "In progress",
+      "priority": "high",
+      "assigneeId": "P-1",
+      "reporterId": "P-1",
+      "labels": [],
+      "comments": [],
+      "attachments": [],
+      "parentId": null,
+      "links": [],
+      "iterationId": null,
+      "createdAt": "2026-10-01T09:00:00Z",
+      "closedAt": null
+    },
+    {
+      "id": "F-2",
+      "kind": "story",
+      "title": "Skeleton story",
+      "descriptionMd": "",
+      "statusCategory": "in_progress",
+      "statusName": "In progress",
+      "priority": "medium",
+      "assigneeId": "P-2",
+      "reporterId": "P-1",
+      "labels": ["backend"],
+      "comments": [
+        {
+          "authorId": "P-2",
+          "body": "Started.",
+          "createdAt": "2026-10-02T10:00:00Z"
+        }
+      ],
+      "attachments": [],
+      "parentId": "F-1",
+      "links": [],
+      "iterationId": "IT-1",
+      "createdAt": "2026-10-01T10:00:00Z",
+      "closedAt": null
+    },
+    {
+      "id": "F-3",
+      "kind": "subtask",
+      "title": "Skeleton subtask",
+      "descriptionMd": "",
+      "statusCategory": "todo",
+      "statusName": "Backlog",
+      "priority": null,
+      "assigneeId": null,
+      "reporterId": null,
+      "labels": [],
+      "comments": [],
+      "attachments": [],
+      "parentId": "F-2",
+      "links": [
+        {
+          "type": "relates_to",
+          "targetId": "F-1"
+        }
+      ],
+      "iterationId": "IT-1",
+      "createdAt": "2026-10-01T11:00:00Z",
+      "closedAt": null
+    }
+  ]
+}

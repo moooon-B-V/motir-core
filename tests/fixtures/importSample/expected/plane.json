@@ -1,0 +1,12 @@
+{
+  "vendor": "plane",
+  "facts": [
+    {
+      "id": "PLANE-01",
+      "subject": "count:items",
+      "assertion": "TODO: written by MOTIR-8755",
+      "arrival": "must_arrive",
+      "reason": "TODO: written by MOTIR-8755"
+    }
+  ]
+}

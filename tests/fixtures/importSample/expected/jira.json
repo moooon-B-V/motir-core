@@ -1,0 +1,12 @@
+{
+  "vendor": "jira",
+  "facts": [
+    {
+      "id": "JIRA-01",
+      "subject": "count:items",
+      "assertion": "TODO: written by MOTIR-8755",
+      "arrival": "must_arrive",
+      "reason": "TODO: written by MOTIR-8755"
+    }
+  ]
+}
