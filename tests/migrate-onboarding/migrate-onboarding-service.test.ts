@@ -255,30 +255,54 @@ describe('migrateOnboardingService — connect step (GitHub grant)', () => {
   });
 });
 
-describe('migrateOnboardingService — index step (code-graph ledger poll)', () => {
-  it('blocks until the code-graph index job has succeeded, then advances', async () => {
+describe('migrateOnboardingService — index step is not a stop (MOTIR-8768)', () => {
+  it('advances while the index is still building, and marks the graph built only on success', async () => {
     const fx = await makeWorkItemFixture();
     const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await seedConnectedRepo(fx);
     await patchRun(fx, run.id, { step: 'index', connectedRepoRef: 'acme/widgets' });
 
-    await expect(migrateOnboardingService.advanceFromIndex(run.id, fx.ctx)).rejects.toBeInstanceOf(
-      MigrateOnboardingExitConditionError,
-    );
+    // No succeeded index yet: the run leaves `index`, the graph is NOT built.
+    const dto = await migrateOnboardingService.advanceFromIndex(run.id, fx.ctx);
+    expect(dto.step).toBe('import');
+    expect(dto.codeGraphReady).toBe(false);
+  });
 
+  it('a succeeded index behaves exactly as before: advances with codeGraphReady', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await seedConnectedRepo(fx);
+    await patchRun(fx, run.id, { step: 'index', connectedRepoRef: 'acme/widgets' });
     await seedSucceededIndexJob(fx, 'acme/widgets');
+
     const dto = await migrateOnboardingService.advanceFromIndex(run.id, fx.ctx);
     expect(dto.step).toBe('import');
     expect(dto.codeGraphReady).toBe(true);
   });
 
-  it('a succeeded index for a DIFFERENT repo does not satisfy the gate', async () => {
+  it('a succeeded index for a DIFFERENT repo does not mark this run’s graph built', async () => {
     const fx = await makeWorkItemFixture();
     const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await seedConnectedRepo(fx);
     await patchRun(fx, run.id, { step: 'index', connectedRepoRef: 'acme/widgets' });
     await seedSucceededIndexJob(fx, 'acme/other-repo');
+
+    const dto = await migrateOnboardingService.advanceFromIndex(run.id, fx.ctx);
+    expect(dto.step).toBe('import');
+    expect(dto.codeGraphReady).toBe(false);
+  });
+
+  it('blocks a ref that is not in the run’s connected set', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await seedConnectedRepo(fx, 'acme', 'other-repo');
+    await patchRun(fx, run.id, { step: 'index', connectedRepoRef: 'acme/widgets' });
+    await seedSucceededIndexJob(fx, 'acme/widgets');
+
     await expect(migrateOnboardingService.advanceFromIndex(run.id, fx.ctx)).rejects.toBeInstanceOf(
       MigrateOnboardingExitConditionError,
     );
+    expect((await migrateOnboardingService.getById(run.id, fx.ctx)).step).toBe('index');
   });
 });
 

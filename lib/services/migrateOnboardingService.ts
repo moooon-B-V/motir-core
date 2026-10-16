@@ -28,8 +28,17 @@ import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import type { JobCodeContext } from '@/lib/ai/codeContext';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
+import {
+  decideMigrateIndexExit,
+  deriveMigrateIndexRepoState,
+  type MigrateIndexExit,
+} from '@/lib/codeGraph/migrateIndexRepoState';
+import { deriveRefreshFailing } from '@/lib/codeGraph/refreshReason';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
-import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import {
+  githubInstallationService,
+  type OrganizationRepoIndexPointer,
+} from '@/lib/services/githubInstallationService';
 import { aiChatService } from '@/lib/services/aiChatService';
 import { aiConventionService } from '@/lib/services/aiConventionService';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
@@ -195,6 +204,24 @@ async function resolveRunConnectedRepos(ctx: {
   });
 }
 
+/** The index POINTERS of the set {@link resolveRunConnectedRepos} answers: the
+ *  index status read looks up each listed repository's pointer and size refusal
+ *  here, which the planning-envelope shape does not carry (MOTIR-8768). */
+async function resolveRunConnectedRepoIndexPointers(ctx: {
+  userId: string;
+  workspaceId: string;
+}): Promise<OrganizationRepoIndexPointer[]> {
+  const organizationId = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => resolveOrganizationId(ctx.workspaceId, tx),
+  );
+  return githubInstallationService.listOrganizationRepoIndexPointers({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    organizationId,
+  });
+}
+
 /** connect → index. Exit: the run's ORGANISATION has a connected repository
  *  (MOTIR-8480 — whichever of its workspaces connected it). The user connects the
  *  repo on GitHub; the wizard observes it.
@@ -313,22 +340,42 @@ function snapshotWitnessesDeparture(before: string | null | undefined, runId: st
   return Buffer.from(encoded, 'base64url').toString('utf8') === runId;
 }
 
-/** index → import. The index completed — advance to the optional import step. */
+/** index → import. NOT A STOP (Story MOTIR-8246 · MOTIR-8768): the run leaves
+ *  `index` as soon as its `connectedRepoRef` names a repository in its connected
+ *  set — the connect step enqueued that repository's index, so one exists in some
+ *  state, and the wizard shows its progress where it does not block. The patch
+ *  `{ codeGraphReady: true }` rides only a SUCCEEDED index, so the flag keeps
+ *  meaning "the graph is built" and generation still refuses without it
+ *  (MOTIR-933). `decideMigrateIndexExit` is the predicate; `runIndexSweep` answers
+ *  from the same one. */
 const INDEX: StepWiring = {
   from: 'index',
   to: 'import',
   async checkExit({ run, ctx }) {
     if (run.codeGraphReady) return { ready: true };
     if (!run.connectedRepoRef) return { ready: false };
-    const succeeded = await withWorkspaceContext(
+    const code = await resolveRunConnectedRepos(ctx);
+    const succeededRefs = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) =>
-        jobRunRepository.findSucceededCodeGraphIndex(ctx.workspaceId, run.connectedRepoRef!, tx),
+      (tx) => jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
     );
-    if (!succeeded) return { ready: false };
-    return { ready: true, patch: { codeGraphReady: true } };
+    return indexExitResult(
+      decideMigrateIndexExit({
+        codeGraphReady: run.codeGraphReady,
+        connectedRepoRef: run.connectedRepoRef,
+        connectedRefs: new Set((code?.repos ?? []).map((repo) => repo.repoRef)),
+        succeededRefs: new Set(succeededRefs),
+      }),
+    );
   },
 };
+
+/** The predicate's verdict as the step machine's exit result: the
+ *  `codeGraphReady` patch only when the graph is built. */
+function indexExitResult(exit: MigrateIndexExit): ExitResult {
+  if (!exit.ready) return { ready: false };
+  return exit.graphBuilt ? { ready: true, patch: { codeGraphReady: true } } : { ready: true };
+}
 
 /** import → audit_convention. OPTIONAL step — exit when the user either completed
  *  an import (a succeeded/partially_failed `Import` row exists for this project)
@@ -926,18 +973,28 @@ export const migrateOnboardingService = {
       }
 
       for (const [workspaceId, runs] of byWorkspace) {
-        const indexedRefs = new Set(
+        const succeededRefs = new Set(
           await withSystemContext((tx) =>
             jobRunRepository.listSucceededCodeGraphIndexRepoRefs(workspaceId, tx),
           ),
         );
+        // The connected set the wizard's own exit check reads, resolved without an
+        // acting user — the predicate below must answer from the same set.
+        const connectedRefs = new Set(
+          await githubInstallationService.listOrganizationConnectedRepoRefsAsSystem(workspaceId),
+        );
 
         for (const run of runs) {
-          // The SAME exit condition `INDEX.checkExit` applies: an already-observed
-          // `codeGraphReady`, or a succeeded index row for this run's repo.
-          const ready =
-            run.codeGraphReady || (!!run.connectedRepoRef && indexedRefs.has(run.connectedRepoRef));
-          if (!ready) continue;
+          // The SAME exit `INDEX.checkExit` applies (`decideMigrateIndexExit`): the
+          // run's repo is connected, whatever state its index is in; the graph is
+          // built only when a succeeded index carries its ref.
+          const exit = decideMigrateIndexExit({
+            codeGraphReady: run.codeGraphReady,
+            connectedRepoRef: run.connectedRepoRef,
+            connectedRefs,
+            succeededRefs,
+          });
+          if (!exit.ready) continue;
 
           try {
             // Phase 2 — the commit, in this run's OWN workspace context, through
@@ -951,7 +1008,7 @@ export const migrateOnboardingService = {
                   id: run.id,
                   workspaceId,
                   wiring: INDEX,
-                  patch: { codeGraphReady: true },
+                  patch: indexExitResult(exit).patch,
                   requireActive: true,
                   onPreconditionMiss: 'skip',
                 },
@@ -1080,13 +1137,13 @@ export const migrateOnboardingService = {
    * The Index step's live per-repo progress (Story 7.15 · MOTIR-934) — what the
    * wizard polls at `GET /api/onboarding/migrate/[id]/index-status`. Resolves the
    * run's ORGANISATION connected repo set (`resolveRunConnectedRepos`, the same
-   * resolution the CONNECT gate answers from — MOTIR-8480) and maps each repo to `indexed` (a succeeded
-   * `system.code-graph-index` run matches its `output.repoRef`) or `pending`, plus
+   * resolution the CONNECT gate answers from — MOTIR-8480) and maps each repo to
+   * `queued | indexing | indexed | failed` (`deriveMigrateIndexRepoState`, MOTIR-8768:
+   * the pointer-plus-ledger rule), with `failedCount`, plus
    * the aggregate `hasRunning` flag (a running index row exists — the ledger cannot
    * tie a running row to a specific repo, so the in-flight state is aggregate).
-   * `allIndexed` gates the wizard's Next button (stricter than the state machine's
-   * single-`connectedRepoRef` INDEX exit, which is fine — the wizard never enables
-   * Next before every repo is indexed). Browse-gated. Returns an empty `repos` list
+   * `allIndexed` says every repo is indexed; it no longer gates the step machine,
+   * whose INDEX exit leaves while the index is still building (MOTIR-8768). Browse-gated. Returns an empty `repos` list
    * (not an error) when no repo is connected yet — the wizard's Connect step
    * handles that state.
    */
@@ -1101,9 +1158,22 @@ export const migrateOnboardingService = {
     // gate let through has a list whose `allIndexed` can become true.
     const code = await resolveRunConnectedRepos(ctx);
     const repos = code?.repos ?? [];
+    // Each listed repository's index POINTER and size refusal (MOTIR-8768) — facts
+    // the planning-envelope shape does not carry, looked up by ref; the LIST stays
+    // the one resolution above. A ref with no row reads as no pointer: `queued`.
+    const pointers = new Map(
+      repos.length === 0
+        ? []
+        : (await resolveRunConnectedRepoIndexPointers(ctx)).map(
+            (row) => [row.repoRef, row] as const,
+          ),
+    );
 
     // One workspace-scoped transaction for all the job_run reads (the job_run RLS
-    // policy scopes them; the resolution opens its own).
+    // policy scopes them; the resolution opens its own). Each repo's state is the
+    // pointer-plus-ledger rule `codeContextService.readFacts` uses: a running or
+    // failed ledger row carries no `output.repoRef`, so `indexingRunId` is its
+    // only attribution.
     const { statuses, hasRunning } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
@@ -1111,29 +1181,41 @@ export const migrateOnboardingService = {
           ctx.workspaceId,
           tx,
         );
-        const mapped = await Promise.all(
-          repos.map(async (repo) => {
-            const succeeded = await jobRunRepository.findSucceededCodeGraphIndex(
-              ctx.workspaceId,
-              repo.repoRef,
-              tx,
-            );
-            return {
-              provider: repo.provider,
-              repoRef: repo.repoRef,
-              status: succeeded ? ('indexed' as const) : ('pending' as const),
-            };
-          }),
+        if (repos.length === 0) return { statuses: [], hasRunning: running !== null };
+        const succeededRefs = new Set(
+          await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
         );
+        const runningRunIds = new Set(
+          await jobRunRepository.listRunningCodeGraphIndexRunIds(ctx.workspaceId, tx),
+        );
+        const terminalRunIds = new Set(
+          await jobRunRepository.listTerminalCodeGraphRunIds(ctx.workspaceId, tx),
+        );
+        const mapped = repos.map((repo) => {
+          const pointer = pointers.get(repo.repoRef);
+          const indexingRunId = pointer?.indexingRunId ?? null;
+          return {
+            provider: repo.provider,
+            repoRef: repo.repoRef,
+            status: deriveMigrateIndexRepoState({
+              hasSucceededIndex: succeededRefs.has(repo.repoRef),
+              hasRunningIndex: indexingRunId !== null && runningRunIds.has(indexingRunId),
+              refreshFailing: deriveRefreshFailing({ indexingRunId, terminalRunIds }),
+              refusedForSize: (pointer?.indexRefusedAt ?? null) !== null,
+            }),
+          };
+        });
         return { statuses: mapped, hasRunning: running !== null };
       },
     );
 
     const indexedCount = statuses.filter((s) => s.status === 'indexed').length;
+    const failedCount = statuses.filter((s) => s.status === 'failed').length;
     const total = statuses.length;
     return {
       repos: statuses,
       indexedCount,
+      failedCount,
       total,
       hasRunning,
       allIndexed: total > 0 && indexedCount === total,

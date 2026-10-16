@@ -12,6 +12,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // THE MIGRATE-ONBOARDING INDEX SWEEP (MOTIR-2082) — against a REAL Postgres (the
 // motir-core convention). Nothing is mocked: the cross-workspace scan, the RLS
@@ -28,11 +29,14 @@ import { randomToken } from '../helpers/random';
 // What these lock:
 //   * the REPAIR — a wedged run whose repo has a succeeded index advances to
 //     `import`, persisting `codeGraphReady`;
+//   * NOT A STOP (MOTIR-8768) — a run whose connected repo's index is queued,
+//     running or failed advances too, WITHOUT `codeGraphReady`: the sweep answers
+//     from the same predicate as the wizard's own exit check;
 //   * WHERE IT STOPS — `index → import` and no further, and NEVER `importSkipped`
 //     (skipping the import is a user-owned product decision, not a job's);
-//   * WHAT IT LEAVES ALONE — other steps, non-`active` runs, runs with no
-//     succeeded index row, and runs with no connected repo at all;
-//   * TENANCY — a succeeded index in ANOTHER workspace does not advance a run;
+//   * WHAT IT LEAVES ALONE — other steps, non-`active` runs, runs whose ref is
+//     not in their connected set, and runs with no connected repo at all;
+//   * TENANCY — a succeeded index in ANOTHER workspace does not build a run's graph;
 //   * IDEMPOTENCE — a second tick over already-repaired state is a no-op;
 //   * CONCURRENCY — the row lock + the re-assert under it, driven by HOLDING the
 //     lock from the test body (never `Promise.all` + hope), and mutation-checked:
@@ -80,6 +84,51 @@ async function seedSucceededIndexJob(workspaceId: string, repoRef: string) {
   });
 }
 
+/** Connect `repoRef` to the fixture's workspace — the connected set the index
+ *  exit reads (an installation of the workspace's own, and the repo under it). */
+async function seedConnectedRepo(fx: WorkItemFixture, repoRef: string, indexingRunId?: string) {
+  const [owner, name] = repoRef.split('/') as [string, string];
+  const organizationId = await organizationIdOf(fx.workspaceId);
+  const inst = await adminDb.githubInstallation.create({
+    data: {
+      installationId: `inst-${randomToken(6)}`,
+      workspaceId: fx.workspaceId,
+      accountLogin: owner,
+      accountType: 'Organization',
+    },
+  });
+  await adminDb.githubRepo.create({
+    data: {
+      installationId: inst.id,
+      workspaceId: fx.workspaceId,
+      organizationId,
+      repoId: `repo-${randomToken(6)}`,
+      owner,
+      name,
+      defaultBranch: 'main',
+      archived: false,
+      ...(indexingRunId ? { indexingRunId } : {}),
+    },
+  });
+}
+
+/** Seed a non-succeeded index ledger row (no repoRef — only success writes one). */
+async function seedIndexJobIn(workspaceId: string, status: 'running' | 'failed' | 'abandoned') {
+  const row = await adminDb.jobRun.create({
+    data: {
+      workspaceId,
+      functionId: 'system.code-graph-index',
+      eventName: 'system.code-graph-index',
+      eventId: `evt-${randomToken()}`,
+      lane: 'engine',
+      attempt: 0,
+      status,
+      ...(status === 'running' ? {} : { finishedAt: new Date() }),
+    },
+  });
+  return row.id;
+}
+
 async function readRun(id: string) {
   const row = await adminDb.migrateOnboarding.findUniqueOrThrow({ where: { id } });
   return row;
@@ -100,6 +149,7 @@ describe('the index sweep repairs a wedged run', () => {
   it('advances an active run parked at index whose repo has a succeeded index', async () => {
     const fx = await makeWorkItemFixture();
     const run = await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' });
+    await seedConnectedRepo(fx, 'acme/widgets');
     await seedSucceededIndexJob(fx.workspaceId, 'acme/widgets');
 
     const summary = await migrateOnboardingService.runIndexSweep();
@@ -114,6 +164,7 @@ describe('the index sweep repairs a wedged run', () => {
   it('STOPS at import — it never skips the user-owned import decision', async () => {
     const fx = await makeWorkItemFixture();
     const run = await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' });
+    await seedConnectedRepo(fx, 'acme/widgets');
     await seedSucceededIndexJob(fx.workspaceId, 'acme/widgets');
 
     // Two ticks: the first advances to `import`, the second must find it there
@@ -145,22 +196,32 @@ describe('the index sweep repairs a wedged run', () => {
   });
 });
 
+describe('the index step is not a stop (MOTIR-8768)', () => {
+  it.each(['queued', 'running', 'failed', 'abandoned'] as const)(
+    'advances a run whose connected repo’s index is %s, without codeGraphReady',
+    async (state) => {
+      const fx = await makeWorkItemFixture();
+      const run = await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' });
+      const pointer = state === 'queued' ? undefined : await seedIndexJobIn(fx.workspaceId, state);
+      await seedConnectedRepo(fx, 'acme/widgets', pointer);
+
+      const summary = await migrateOnboardingService.runIndexSweep();
+
+      expect(summary).toEqual({ scanned: 1, advanced: 1, failed: 0 });
+      const after = await readRun(run.id);
+      expect(after.step).toBe('import');
+      // The flag still means "the graph is built" — generation keeps refusing.
+      expect(after.codeGraphReady).toBe(false);
+    },
+  );
+});
+
 describe('the index sweep leaves everything else alone', () => {
-  it('leaves a run at index whose repo has no succeeded index row', async () => {
+  it('leaves a run at index whose ref is not in its connected set', async () => {
     const fx = await makeWorkItemFixture();
     const run = await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' });
-    // A RUNNING index is not a succeeded one.
-    await adminDb.jobRun.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        functionId: 'system.code-graph-index',
-        eventName: 'system.code-graph-index',
-        eventId: 'evt-running',
-        lane: 'engine',
-        attempt: 0,
-        status: 'running',
-      },
-    });
+    await seedConnectedRepo(fx, 'acme/other');
+    await seedSucceededIndexJob(fx.workspaceId, 'acme/widgets');
 
     const summary = await migrateOnboardingService.runIndexSweep();
 
@@ -209,21 +270,24 @@ describe('the index sweep leaves everything else alone', () => {
     },
   );
 
-  it('does not let one workspace’s succeeded index advance another’s run', async () => {
-    // Same repo ref, two tenants: only the workspace that actually indexed it
-    // advances. The `workspaceId` filter is what keeps the cross-tenant scan from
+  it('does not let one workspace’s succeeded index build another’s graph', async () => {
+    // Same repo ref, two tenants, both connected: both leave `index` (the step is
+    // not a stop), but only the workspace that actually indexed it is marked
+    // built. The `workspaceId` filter is what keeps the cross-tenant scan from
     // becoming a cross-tenant SIGNAL.
     const indexed = await makeWorkItemFixture({ name: 'Indexed', identifier: 'IDX' });
     const bare = await makeWorkItemFixture({ name: 'Bare', identifier: 'BARE' });
     const indexedRun = await seedRun(indexed, { step: 'index', connectedRepoRef: 'acme/widgets' });
     const bareRun = await seedRun(bare, { step: 'index', connectedRepoRef: 'acme/widgets' });
+    await seedConnectedRepo(indexed, 'acme/widgets');
+    await seedConnectedRepo(bare, 'acme/widgets');
     await seedSucceededIndexJob(indexed.workspaceId, 'acme/widgets');
 
     const summary = await migrateOnboardingService.runIndexSweep();
 
-    expect(summary).toEqual({ scanned: 2, advanced: 1, failed: 0 });
-    expect((await readRun(indexedRun.id)).step).toBe('import');
-    expect((await readRun(bareRun.id)).step).toBe('index');
+    expect(summary).toEqual({ scanned: 2, advanced: 2, failed: 0 });
+    expect(await readRun(indexedRun.id)).toMatchObject({ step: 'import', codeGraphReady: true });
+    expect(await readRun(bareRun.id)).toMatchObject({ step: 'import', codeGraphReady: false });
   });
 });
 
@@ -237,6 +301,7 @@ describe('the index sweep scans across workspaces, in bounded pages', () => {
     const runs = [];
     for (const fx of fixtures) {
       runs.push(await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' }));
+      await seedConnectedRepo(fx, 'acme/widgets');
       await seedSucceededIndexJob(fx.workspaceId, 'acme/widgets');
     }
 
@@ -272,6 +337,7 @@ describe('the index sweep is concurrency-safe', () => {
   it('loses the race to a live wizard advance and NO-OPS instead of dragging the run backwards', async () => {
     const fx = await makeWorkItemFixture();
     const run = await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' });
+    await seedConnectedRepo(fx, 'acme/widgets');
     await seedSucceededIndexJob(fx.workspaceId, 'acme/widgets');
 
     // (1) The "wizard" takes the row lock and advances the run PAST import — the

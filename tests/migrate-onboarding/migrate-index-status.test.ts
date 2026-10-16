@@ -62,6 +62,7 @@ async function seedRepo(
   inst: { id: string; workspaceId: string | null },
   owner: string,
   name: string,
+  index: { indexingRunId?: string; indexRefusedAt?: Date } = {},
 ) {
   const rand = randomToken(6);
   if (!inst.workspaceId) throw new Error('seedRepo needs a workspace-bound installation');
@@ -75,6 +76,14 @@ async function seedRepo(
       name,
       defaultBranch: 'main',
       archived: false,
+      ...(index.indexingRunId ? { indexingRunId: index.indexingRunId } : {}),
+      ...(index.indexRefusedAt
+        ? {
+            indexRefusedAt: index.indexRefusedAt,
+            indexRefusedSizeBytes: 5n,
+            indexRefusedCapBytes: 4n,
+          }
+        : {}),
     },
   });
   return `${owner}/${name}`;
@@ -100,8 +109,17 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
 /** Seed a RUNNING `system.code-graph-index` job_run (no repoRef on a running
  *  row — the index job writes `output` only on success; this is the aggregate
  *  hasRunning signal). */
-async function seedRunningIndexJob(fx: WorkItemFixture) {
-  await adminDb.jobRun.create({
+async function seedRunningIndexJob(fx: WorkItemFixture): Promise<string> {
+  return seedIndexJobIn(fx, 'running');
+}
+
+/** Seed an index job_run in a given state, returning its id — what a repo's
+ *  `indexingRunId` pointer names. A non-succeeded row carries no repoRef. */
+async function seedIndexJobIn(
+  fx: WorkItemFixture,
+  status: 'running' | 'failed' | 'abandoned',
+): Promise<string> {
+  const row = await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -109,10 +127,12 @@ async function seedRunningIndexJob(fx: WorkItemFixture) {
       eventId: `evt-${randomToken()}`,
       lane: 'engine',
       attempt: 0,
-      status: 'running',
+      status,
+      ...(status === 'running' ? {} : { finishedAt: new Date() }),
       output: {},
     },
   });
+  return row.id;
 }
 
 beforeEach(async () => {
@@ -136,9 +156,10 @@ describe('migrateOnboardingService.getIndexStatus', () => {
     expect(status.indexedCount).toBe(0);
     expect(status.allIndexed).toBe(false);
     expect(status.hasRunning).toBe(false);
+    expect(status.failedCount).toBe(0);
   });
 
-  it('maps each connected repo to indexed/pending and gates on all', async () => {
+  it('maps each connected repo to indexed/queued and gates on all', async () => {
     const fx = await makeWorkItemFixture();
     const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
     const inst = await seedInstallation(fx);
@@ -155,7 +176,8 @@ describe('migrateOnboardingService.getIndexStatus', () => {
     const apiRow = status.repos.find((r) => r.repoRef === api);
     expect(webRow?.status).toBe('indexed');
     expect(webRow?.provider).toBe('github');
-    expect(apiRow?.status).toBe('pending');
+    expect(apiRow?.status).toBe('queued');
+    expect(status.failedCount).toBe(0);
   });
 
   it('flips allIndexed once every repo has a succeeded index run', async () => {
@@ -184,7 +206,40 @@ describe('migrateOnboardingService.getIndexStatus', () => {
     expect(status.total).toBe(1);
     expect(status.allIndexed).toBe(false);
     expect(status.hasRunning).toBe(true);
-    expect(status.repos[0]?.status).toBe('pending');
+    // The running row names no repo and this repo's pointer names no run — it is
+    // queued, while the aggregate flag still says something is in flight.
+    expect(status.repos[0]?.status).toBe('queued');
+  });
+
+  it('names all four states per repo from the pointer and the ledger (MOTIR-8768)', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    const inst = await seedInstallation(fx);
+    const runningId = await seedRunningIndexJob(fx);
+    const failedId = await seedIndexJobIn(fx, 'failed');
+    const abandonedId = await seedIndexJobIn(fx, 'abandoned');
+    const indexed = await seedRepo(inst, 'acme', 'indexed');
+    const indexing = await seedRepo(inst, 'acme', 'indexing', { indexingRunId: runningId });
+    const failed = await seedRepo(inst, 'acme', 'failed', { indexingRunId: failedId });
+    const crashed = await seedRepo(inst, 'acme', 'crashed', { indexingRunId: abandonedId });
+    const tooLarge = await seedRepo(inst, 'acme', 'large', { indexRefusedAt: new Date() });
+    const queued = await seedRepo(inst, 'acme', 'queued');
+    await seedSucceededIndexJob(fx, indexed);
+
+    const status = await migrateOnboardingService.getIndexStatus(run.id, fx.ctx);
+    const byRef = new Map(status.repos.map((r) => [r.repoRef, r.status]));
+    expect(byRef.get(indexed)).toBe('indexed');
+    expect(byRef.get(indexing)).toBe('indexing');
+    expect(byRef.get(failed)).toBe('failed');
+    // A crashed run leaves its pointer behind; `abandoned` is failed, never indexing.
+    expect(byRef.get(crashed)).toBe('failed');
+    expect(byRef.get(tooLarge)).toBe('failed');
+    expect(byRef.get(queued)).toBe('queued');
+    expect(status.total).toBe(6);
+    expect(status.indexedCount).toBe(1);
+    expect(status.failedCount).toBe(3);
+    expect(status.hasRunning).toBe(true);
+    expect(status.allIndexed).toBe(false);
   });
 
   it('throws NotFound for a bogus run id', async () => {

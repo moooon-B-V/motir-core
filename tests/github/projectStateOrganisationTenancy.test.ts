@@ -165,8 +165,8 @@ describe('`get_project_state` from a workspace that did NOT install the App', ()
     // guessing.
     expect(state.code.installed).toBe(true);
     expect(state.code.index.repos).toEqual([
-      { provider: 'github', repoRef: 'moooon/motir-ai', status: 'pending' },
-      { provider: 'github', repoRef: 'moooon/motir-core', status: 'pending' },
+      { provider: 'github', repoRef: 'moooon/motir-ai', status: 'queued' },
+      { provider: 'github', repoRef: 'moooon/motir-core', status: 'queued' },
     ]);
     expect(state.code.index.total).toBe(2);
   });

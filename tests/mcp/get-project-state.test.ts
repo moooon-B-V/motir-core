@@ -30,9 +30,9 @@ import { organizationIdOf } from '../helpers/organizationOf';
 //     well-formed, fully-populated verdict, never an error and never an omitted
 //     field. A planner has to be able to tell "no code" from "could not look";
 //     that distinction is the card's whole point.
-//  3. THE INDEX VERDICT IS THE LEDGER'S — indexed vs pending per repo, including
+//  3. THE INDEX VERDICT IS THE LEDGER'S — indexed vs queued per repo, including
 //     the MOTIR-1961 case (a repo connected before the index feature shipped has
-//     no succeeded run and must report `pending`, which is what was twice
+//     no succeeded run and must report `queued`, which is what was twice
 //     asserted away).
 //  4. THE ESTABLISHED VERDICT IS `resolvePlanningHostGate`'s — proven by moving
 //     the marker and watching the reported verdict follow, not by re-deriving it.
@@ -201,7 +201,14 @@ describe('get_project_state — a project with NOTHING configured', () => {
     // be able to distinguish it from "the read failed".
     expect(state.code).toEqual({
       installed: false,
-      index: { repos: [], indexedCount: 0, total: 0, hasRunning: false, allIndexed: false },
+      index: {
+        repos: [],
+        indexedCount: 0,
+        failedCount: 0,
+        total: 0,
+        hasRunning: false,
+        allIndexed: false,
+      },
     });
     expect(state.repoSet).toEqual([]);
     expect(state.onboarding).toBeNull();
@@ -250,7 +257,7 @@ describe('get_project_state — the onboarding verdict follows `resolvePlanningH
 });
 
 describe('get_project_state — the index verdict is the ledger`s', () => {
-  it('reports indexed vs pending per repo, with the aggregate in-flight flag', async () => {
+  it('reports indexed vs queued per repo, with the aggregate in-flight flag', async () => {
     const fx = await makeWorkItemFixture();
     const inst = await seedInstallation(fx);
     const indexed = await seedRepo(inst, 'moooon-B-V', 'motir-core');
@@ -264,7 +271,7 @@ describe('get_project_state — the index verdict is the ledger`s', () => {
     expect(state.code.index.repos).toEqual(
       expect.arrayContaining([
         { provider: 'github', repoRef: indexed, status: 'indexed' },
-        { provider: 'github', repoRef: pending, status: 'pending' },
+        { provider: 'github', repoRef: pending, status: 'queued' },
       ]),
     );
     expect(state.code.index.indexedCount).toBe(1);
@@ -274,7 +281,7 @@ describe('get_project_state — the index verdict is the ledger`s', () => {
     expect(state.code.index.allIndexed).toBe(false);
   });
 
-  it('a repo connected BEFORE the index feature shipped reports `pending`, not indexed (MOTIR-1961)', async () => {
+  it('a repo connected BEFORE the index feature shipped reports `queued`, not indexed (MOTIR-1961)', async () => {
     const fx = await makeWorkItemFixture();
     const inst = await seedInstallation(fx);
     // Connected, granted, present in the mirror — and with no index run of any
@@ -284,7 +291,7 @@ describe('get_project_state — the index verdict is the ledger`s', () => {
 
     const state = stateOf(await callTool(fx.ctx, fx.projectIdentifier));
     expect(state.code.index.repos).toEqual([
-      { provider: 'github', repoRef: 'moooon-B-V/motir-meta', status: 'pending' },
+      { provider: 'github', repoRef: 'moooon-B-V/motir-meta', status: 'queued' },
     ]);
     expect(state.code.index.indexedCount).toBe(0);
     expect(state.code.index.allIndexed).toBe(false);
@@ -323,7 +330,7 @@ describe('get_project_state — the index verdict is the ledger`s', () => {
     });
 
     const state = stateOf(await callTool(fx.ctx, fx.projectIdentifier));
-    expect(state.code.index.repos).toEqual([{ provider: 'github', repoRef, status: 'pending' }]);
+    expect(state.code.index.repos).toEqual([{ provider: 'github', repoRef, status: 'queued' }]);
   });
 });
 
@@ -486,7 +493,7 @@ describe('get_project_state — the human summary', () => {
     expect(text).toContain('established');
     expect(text).toContain('1/2 repos indexed');
     expect(text).toContain('an index is running');
-    expect(text).toContain('moooon-B-V/motir-ai · pending');
+    expect(text).toContain('moooon-B-V/motir-ai · queued');
     expect(text).toContain('Repository set: motir-core');
     expect(text).toContain('step index');
   });

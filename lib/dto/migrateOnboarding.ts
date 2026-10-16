@@ -100,11 +100,14 @@ export interface StartMigrateOnboardingInput {
   keptSteps?: MigrateOnboardingStepDto[];
 }
 
-/** One connected repository's index status, as the wizard's Index step renders
- *  it. `indexed` = a succeeded `system.code-graph-index` run matches this repo's
- *  `output.repoRef`; `pending` = not yet (queued or in flight — the ledger cannot
- *  distinguish per-repo, see `MigrateIndexStatusDto.hasRunning`). */
-export type MigrateIndexRepoStatusDto = 'indexed' | 'pending';
+/** One connected repository's index status (Story MOTIR-8246 · MOTIR-8768),
+ *  derived by `deriveMigrateIndexRepoState` from the pointer-plus-ledger facts:
+ *  `indexed` = a succeeded `system.code-graph-index` run carries this repo's
+ *  `output.repoRef`; `indexing` = the repo's `indexingRunId` names a `running`
+ *  row; `failed` = that pointer names a `failed` / `abandoned` row, or the repo
+ *  was refused for size; `queued` = anything else (enqueued, not yet claimed, or
+ *  paused for catch-up). */
+export type MigrateIndexRepoStatusDto = 'queued' | 'indexing' | 'indexed' | 'failed';
 
 /** One row in the Index step's per-repo list. */
 export interface MigrateIndexRepoDto {
@@ -120,11 +123,13 @@ export interface MigrateIndexRepoDto {
  * of them have a succeeded index run; `hasRunning` is the aggregate "an index is
  * in flight right now" flag (a running `system.code-graph-index` row exists — the
  * ledger cannot tie a running row to a specific repo, so the in-flight state is
- * aggregate, not per-repo). `allIndexed` gates the wizard's Next button.
+ * aggregate, not per-repo). `allIndexed` is true once every connected repo is
+ * indexed. `failedCount` of them read `failed` (MOTIR-8768).
  */
 export interface MigrateIndexStatusDto {
   repos: MigrateIndexRepoDto[];
   indexedCount: number;
+  failedCount: number;
   total: number;
   hasRunning: boolean;
   allIndexed: boolean;
