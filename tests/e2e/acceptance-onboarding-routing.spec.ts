@@ -204,7 +204,7 @@ test('four projects, four destinations', async ({ page, chapter, beat, acceptanc
     // kept-step strip, which is the apology this route owes.
     await expect(handOff(page)).toHaveAttribute('data-outcome', 'onboard_existing_project');
     await expect(handOff(page)).toContainText('still mostly the starter template');
-    await expect(handOff(page)).toContainText('A few questions');
+    await expect(handOff(page)).not.toContainText('A few questions');
     await beat();
 
     // ⚠️ THE SET REACHES THE RUN ON *START*, not on arrival, and the rail is the
