@@ -75,6 +75,9 @@ import {
   EmptyPlanChangeTurnError,
   GuideSessionNotPlannableError,
   PlanSessionAwaitingResumeError,
+  GuideReplanOfferAlreadyConfirmedError,
+  GuideReplanOfferNotFoundError,
+  GuideReplanOfferNotOpenError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -92,6 +95,7 @@ import {
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { endSession, endSessionWithin } from '@/lib/services/planSessionEndService';
+import { replanOfferOf, replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
 import { KEEP_PLANNING_MARKER_BODY, NEW_SESSION_CONFIRM_BODY } from '@/lib/planChange/restart';
 
 /**
@@ -781,6 +785,146 @@ async function resumeSeededOrStartWithin(
     takeOverFrom: predecessors,
   });
   return created.id;
+}
+
+/**
+ * The GUIDE-SEEDED start under the member's scope lock AND the guide session's row
+ * lock (MOTIR-8691; decision MOTIR-8685). Locks, in this order on every path:
+ *  1. the member's scope lock (as the gate path takes it), so two first turns for
+ *     one scope queue;
+ *  2. the guide conversation's row lock (the one Decline and the landing take), so
+ *     a Confirm racing a Decline or a newer offer serializes. Decline takes only
+ *     this one, so the order cannot invert.
+ * Then, under both, it asserts the offer is the caller's, the latest undecided one,
+ * and that its target is the scope; creates the stamped session (or lands on the
+ * caller's own open conversation that already holds the target); appends the turn
+ * ONCE; and marks the offer confirmed in the same transaction.
+ *
+ * Every refusal that tells a stranger something is the ONE
+ * {@link PlanSeedNotApplicableError}, so the cases cannot be told apart.
+ */
+async function confirmGuideOfferWithin(
+  pctx: ProjectContext,
+  scope: PlanChangeScope,
+  seedGuideTurnId: string,
+  body: string,
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<PlanChangeSession> {
+  await planChangeSessionRepository.lockScopeForUser(
+    pctx.projectId,
+    scope.scopeKey,
+    pctx.userId,
+    tx,
+  );
+  const notApplicable = () => new PlanSeedNotApplicableError(seedGuideTurnId);
+
+  const probe = await planChangeTurnRepository.findById(seedGuideTurnId, pctx.workspaceId, tx);
+  if (!probe) throw notApplicable();
+  const locked = await planChangeSessionRepository.lockById(probe.sessionId, tx);
+  if (!locked) throw notApplicable();
+  const guideSession = await planChangeSessionRepository.findByIdInProject(
+    probe.sessionId,
+    pctx.projectId,
+    pctx.workspaceId,
+    tx,
+  );
+  if (
+    !guideSession ||
+    guideSession.origin !== 'guide' ||
+    guideSession.createdById !== pctx.userId
+  ) {
+    throw notApplicable();
+  }
+  // Re-read the thread UNDER the lock: a landing or a decline may have committed
+  // between the probe and the lock.
+  const rows = await planChangeTurnRepository.listBySessionId(
+    guideSession.id,
+    pctx.workspaceId,
+    tx,
+  );
+  const turns = rows.map((t) => ({
+    id: t.id,
+    role: t.role,
+    guide: readGuideTurnRecord(t.guideTurn),
+  }));
+  const offer = replanOfferOf(turns, seedGuideTurnId);
+  if (!offer || offer.targetKey === null) throw notApplicable();
+  const targetKey = offer.targetKey.toUpperCase();
+  if (!scope.targetKeys.some((k) => k.toUpperCase() === targetKey)) throw notApplicable();
+
+  const state = replanOfferStateOf(turns, seedGuideTurnId);
+  if (state === 'confirmed') {
+    throw new GuideReplanOfferAlreadyConfirmedError(seedGuideTurnId, offer.confirmedSessionId!);
+  }
+  if (state !== 'undecided') throw new GuideReplanOfferNotOpenError(seedGuideTurnId);
+
+  // The caller's OWN open conversation that already holds the target is the
+  // session the request lands on (the take-back read): nothing is created and
+  // nothing is stamped on it.
+  const heldBy = await planChangeSessionRepository.findOpenHoldingForUser(
+    pctx.projectId,
+    scope.targetKeys,
+    pctx.userId,
+    pctx.workspaceId,
+    tx,
+  );
+  let sessionId: string;
+  if (heldBy) {
+    sessionId = heldBy.id;
+  } else {
+    const created = await planChangeSessionRepository.create(
+      {
+        workspaceId: pctx.workspaceId,
+        projectId: pctx.projectId,
+        createdById: pctx.userId,
+        scopeKey: scope.scopeKey,
+        targetKeys: scope.targetKeys,
+        origin: 'conversation',
+        seedGuideTurnId,
+        lastActivityAt: now,
+      },
+      tx,
+    );
+    sessionId = created.id;
+    const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
+      pctx.projectId,
+      scope.scopeKey,
+      pctx.userId,
+      pctx.workspaceId,
+      created.id,
+      tx,
+    );
+    await planTargetLockService.acquireForScopeWithin(created.id, scope.targetKeys, pctx, now, tx, {
+      takeOverFrom: predecessors,
+    });
+  }
+
+  const row = await appendWithin(
+    sessionId,
+    pctx,
+    { role: 'user', body, authorId: pctx.userId },
+    {},
+    tx,
+  );
+
+  // The confirmation, in the SAME transaction as the session and its turn.
+  const offerRow = rows.find((t) => t.id === seedGuideTurnId)!;
+  await planChangeTurnRepository.setGuideTurn(
+    offerRow.id,
+    pctx.workspaceId,
+    {
+      ...(offerRow.guideTurn as Record<string, unknown>),
+      replanOffer: {
+        ...offer,
+        confirmedAt: now.toISOString(),
+        confirmedById: pctx.userId,
+        confirmedSessionId: sessionId,
+      },
+    } as Prisma.InputJsonValue,
+    tx,
+  );
+  return row;
 }
 
 /** The end reasons whose CONVERSATION ALONE a new session may carry over
@@ -1825,6 +1969,88 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * A GUIDE-SEEDED first turn (Story MOTIR-8684 · MOTIR-8691; decision MOTIR-8685):
+   * Confirm on a guide's re-plan offer. `body` is the request the guide wrote,
+   * SENT once as the planner's first turn on the offer's target. See
+   * {@link confirmGuideOfferWithin} for the locks and the refusals.
+   *
+   * NEVER SENDS TWICE — unlike the gate path, which resumes a same-seed session and
+   * appends again, a confirmed offer is refused with
+   * {@link GuideReplanOfferAlreadyConfirmedError} carrying the session to open.
+   * `ai:plan`-gated: it writes.
+   */
+  async startGuideSeededWithFirstTurn(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    body: string,
+    seedGuideTurnId: string,
+  ): Promise<PlanChangeSessionDto> {
+    const trimmed = body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const row = await confirmGuideOfferWithin(pctx, scope, seedGuideTurnId, trimmed, now, tx);
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * The session a CONFIRMED guide offer started (MOTIR-8691): what the seed read
+   * reports and the rail returns to. Browse-gated; writes nothing, takes no lock.
+   * Answers for the offer's OWNER only — another member's offer, an undecided or
+   * declined one, and an unknown turn id all read `null`, never an error that names
+   * the difference. The offer's stored `confirmedSessionId` is read first; if it
+   * names nothing in this project, the stamped session is looked up instead.
+   */
+  async findGuideSeededSession(
+    pctx: ProjectContext,
+    seedGuideTurnId: string,
+  ): Promise<{ sessionId: string; open: boolean } | null> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
+    return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+      const turn = await planChangeTurnRepository.findById(seedGuideTurnId, pctx.workspaceId, tx);
+      if (!turn || turn.role !== 'assistant') return null;
+      const guideSession = await planChangeSessionRepository.findByIdInProject(
+        turn.sessionId,
+        pctx.projectId,
+        pctx.workspaceId,
+        tx,
+      );
+      if (
+        !guideSession ||
+        guideSession.origin !== 'guide' ||
+        guideSession.createdById !== pctx.userId
+      ) {
+        return null;
+      }
+      const offer = readGuideTurnRecord(turn.guideTurn)?.replanOffer;
+      if (!offer || offer.confirmedSessionId === null) return null;
+      const named = await planChangeSessionRepository.findByIdInProject(
+        offer.confirmedSessionId,
+        pctx.projectId,
+        pctx.workspaceId,
+        tx,
+      );
+      const found =
+        named ??
+        (await planChangeSessionRepository.findSeededByGuideTurnForUser(
+          pctx.projectId,
+          seedGuideTurnId,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        ));
+      return found ? { sessionId: found.id, open: found.endedAt === null } : null;
+    });
+  },
+
+  /**
    * The PUBLIC `open` doors' resume-or-start (MOTIR-6028) — `POST
    * /api/v1/projects/{key}/plan-session` and the MCP `open_plan_session`. The
    * caller's resumable session for the scope, or a NEW one, under the same lock
@@ -2417,6 +2643,74 @@ export const planChangeSessionsService = {
           tx,
         )) !== null,
     );
+  },
+
+  /**
+   * Decline a guide conversation's re-plan offer (MOTIR-8689; decision MOTIR-8685):
+   * stamps `declinedAt` / `declinedById` on the offer, under the session's row lock
+   * (the lock `claimGuideLanding` takes, so a decline serializes against a landing
+   * and against a later Confirm). Appends no turn, submits no job, plans nothing,
+   * spends nothing, and does not touch the work item.
+   *
+   *  - not the caller's own `guide` session, or no offer on that assistant turn ⇒
+   *    404, with nothing telling the cases apart;
+   *  - already `declined` ⇒ IDEMPOTENT: the thread comes back, nothing is written;
+   *  - `superseded` ⇒ `GuideReplanOfferNotOpenError`.
+   *
+   *  - `confirmed` (a planning session was started from it, MOTIR-8691) ⇒ also
+   *    `GuideReplanOfferNotOpenError`, writing nothing.
+   */
+  async declineGuideReplanOffer(
+    turnId: string,
+    pctx: ProjectContext,
+    address: PlanChangeSessionAddress,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, address);
+    if (session.origin !== 'guide' || session.createdById !== pctx.userId) {
+      throw new PlanChangeSessionNotFoundError(pctx.projectId);
+    }
+    await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const rows = await planChangeTurnRepository.listBySessionId(
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        const turns = rows.map((t) => ({
+          id: t.id,
+          role: t.role,
+          guide: readGuideTurnRecord(t.guideTurn),
+        }));
+        const state = replanOfferStateOf(turns, turnId);
+        if (state === null) throw new GuideReplanOfferNotFoundError(turnId);
+        if (state === 'declined') return;
+        // `superseded` and `confirmed` can no longer be declined.
+        if (state === 'superseded' || state === 'confirmed') {
+          throw new GuideReplanOfferNotOpenError(turnId);
+        }
+        const row = rows.find((t) => t.id === turnId)!;
+        const record = readGuideTurnRecord(row.guideTurn)!;
+        await planChangeTurnRepository.setGuideTurn(
+          row.id,
+          pctx.workspaceId,
+          // The stored JSON, with only the offer's decision changed: every other
+          // key of the column rides through untouched.
+          {
+            ...(row.guideTurn as Record<string, unknown>),
+            replanOffer: {
+              ...record.replanOffer!,
+              declinedAt: new Date().toISOString(),
+              declinedById: pctx.userId,
+            },
+          } as Prisma.InputJsonValue,
+          tx,
+        );
+      },
+    );
+    return planChangeSessionsService.getById(pctx, session.id);
   },
 
   /**

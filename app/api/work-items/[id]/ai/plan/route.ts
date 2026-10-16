@@ -105,6 +105,19 @@ export async function POST(
   const rawSeed = (body as { seedGateId?: unknown })?.seedGateId;
   const seedGateId =
     typeof rawSeed === 'string' && rawSeed.trim().length > 0 ? { seedGateId: rawSeed.trim() } : {};
+  // The GUIDE REPLY TURN a Confirm starts from (MOTIR-8691) — parsed exactly as the
+  // gate seed is, and EXCLUSIVE with it: two seeds name two different origins.
+  const rawGuideSeed = (body as { seedGuideTurnId?: unknown })?.seedGuideTurnId;
+  const seedGuideTurnId =
+    typeof rawGuideSeed === 'string' && rawGuideSeed.trim().length > 0
+      ? { seedGuideTurnId: rawGuideSeed.trim() }
+      : {};
+  if ('seedGateId' in seedGateId && 'seedGuideTurnId' in seedGuideTurnId) {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`seedGateId` and `seedGuideTurnId` are exclusive.' },
+      { status: 400 },
+    );
+  }
 
   try {
     const result = resubmit
@@ -118,6 +131,7 @@ export async function POST(
             targetKeys: parsed.targetKeys,
             ...sessionId,
             ...seedGateId,
+            ...seedGuideTurnId,
             prompt,
             // MOTIR-2226: read strictly — anything but `true` is "not an answer",
             // which is the disposition the transcript records forever after.

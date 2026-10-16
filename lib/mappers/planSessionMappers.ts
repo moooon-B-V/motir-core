@@ -27,6 +27,14 @@ function isSeedGateKind(kind: string | null): kind is PlanSessionSeedGateKindDto
  * could not open. The gate row gone (`SetNull`) reads the same: no seed.
  */
 function seedOf(row: PlanSessionListRow): PlanSessionSeedDto | null {
+  // A GUIDE seed (MOTIR-8697) — Confirm on a guide's re-plan offer. The same
+  // browse rule as a gate seed: the guided card resolves only while it is in the
+  // SESSION's project, so its key is never shown to a viewer who could not open
+  // it. It has no gate, so no gate kind and no chosen label.
+  if (row.seedGuideTurnId) {
+    if (!row.seedGuideCardInProject || !row.seedGuideCardKey) return null;
+    return { cardKey: row.seedGuideCardKey, gateKind: null, origin: 'guide', chosenLabel: null };
+  }
   if (!row.seedGateId || !row.seedCardInProject || !row.seedCardKey) return null;
   if (!isSeedGateKind(row.seedGateKind)) return null;
   // A PICK (MOTIR-6434): an approved choice with its stamped label. Anything else a
@@ -56,6 +64,9 @@ function seedOf(row: PlanSessionListRow): PlanSessionSeedDto | null {
  */
 function firstTurnOf(row: PlanSessionListRow): string | null {
   if (row.seedGateId && !row.seedCardInProject) return null;
+  // A guide-seeded session's first turn is the guide's re-plan request about the
+  // GUIDED card (MOTIR-8697) — withheld by the same rule, for the same reason.
+  if (row.seedGuideTurnId && !row.seedGuideCardInProject) return null;
   return row.firstTurn?.trim() || null;
 }
 
