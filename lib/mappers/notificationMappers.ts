@@ -48,14 +48,6 @@ function toNotificationData(raw: Notification['data']): NotificationData {
       repoRef: str(d.repoRef),
     };
   }
-  if (d.kind === 'plan_ready') {
-    return {
-      kind: 'plan_ready',
-      projectKey: str(d.projectKey),
-      projectName: str(d.projectName),
-      planId: str(d.planId),
-    };
-  }
   if (d.kind === 'transitioned') {
     return {
       kind: 'transitioned',

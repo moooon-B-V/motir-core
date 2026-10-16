@@ -37,9 +37,6 @@ export const NOTIFICATION_EVENT_TYPE = {
   /** GitHub REFUSED a collaborator invitation (MOTIR-5016 · Story MOTIR-5010).
    *  The first type whose subject is a PROJECT rather than a work item. */
   codeAccessRefused: 'code_access_refused',
-  /** A migrate run's first plan was drafted after the person left onboarding
-   *  (MOTIR-8775 · Story MOTIR-8246). The second PROJECT-subject type. */
-  planReady: 'plan_ready',
 } as const;
 
 export interface NotificationPreferenceEventTypeMeta {
@@ -94,13 +91,6 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
   // user's to turn off.
   {
     type: NOTIFICATION_EVENT_TYPE.codeAccessRefused,
-    settable: true,
-    defaults: { email: true, in_app: true },
-  },
-  // Appended for the same reason as the row above. The plan is the person's own
-  // and it is waiting on them, so both channels start on, like every row here.
-  {
-    type: NOTIFICATION_EVENT_TYPE.planReady,
     settable: true,
     defaults: { email: true, in_app: true },
   },

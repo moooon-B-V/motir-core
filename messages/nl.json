@@ -3247,10 +3247,6 @@
           "code_access_refused": {
             "label": "Codetoegang kon niet worden verleend",
             "desc": "Motir kon je geen toegang geven tot een repository die het voor je project heeft gemaakt."
-          },
-          "plan_ready": {
-            "label": "Je eerste plan is klaar",
-            "desc": "Motir heeft het eerste plan voor je project opgesteld nadat het je code had gelezen."
           }
         },
         "soon": "Binnenkort",
@@ -5395,8 +5391,7 @@
       "transitioned": "<s>{actor}</s> heeft <s>{key}</s> naar {status} verplaatst",
       "generic": "<s>{actor}</s> heeft <s>{key}</s> bijgewerkt",
       "genericNoKey": "<s>{actor}</s> heeft je een melding gestuurd",
-      "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen",
-      "planReady": "Je eerste plan voor <s>{project}</s> is klaar om te beoordelen"
+      "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen"
     }
   },
   "orgAdmin": {

@@ -3247,10 +3247,6 @@
           "code_access_refused": {
             "label": "No se pudo conceder el acceso al código",
             "desc": "Motir no pudo darte acceso a un repositorio que creó para tu proyecto."
-          },
-          "plan_ready": {
-            "label": "Tu primer plan está listo",
-            "desc": "Motir terminó de redactar el primer plan de tu proyecto después de leer tu código."
           }
         },
         "soon": "Próximamente",
@@ -5395,8 +5391,7 @@
       "transitioned": "<s>{actor}</s> ha movido <s>{key}</s> a {status}",
       "generic": "<s>{actor}</s> ha actualizado <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> te ha enviado una notificación",
-      "accessRefused": "El código de <s>{project}</s> está listo, pero aún no puedes abrirlo: prueba a enviar la invitación de nuevo",
-      "planReady": "Tu primer plan para <s>{project}</s> está listo para revisar"
+      "accessRefused": "El código de <s>{project}</s> está listo, pero aún no puedes abrirlo: prueba a enviar la invitación de nuevo"
     }
   },
   "orgAdmin": {

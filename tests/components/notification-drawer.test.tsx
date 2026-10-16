@@ -5,7 +5,6 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { NotificationsPageDTO } from '@/lib/dto/notifications';
 import en from '@/messages/en.json';
-import zh from '@/messages/zh.json';
 
 // NotificationDrawer (Subtask 5.7.5) — the Watching-tab regression guard for bug
 // 8.8.1. The tab was hardcoded `disabled` as the Story 5.4 seam; with 5.4
@@ -42,10 +41,7 @@ function pageDTO(over: Partial<NotificationsPageDTO> = {}): NotificationsPageDTO
   };
 }
 
-function renderDrawer(
-  page: NotificationsPageDTO = pageDTO(),
-  intl: { locale?: string; messages?: Record<string, unknown> } = {},
-) {
+function renderDrawer(page: NotificationsPageDTO = pageDTO()) {
   const fetchMock = vi.fn(
     async (_input: RequestInfo | URL) =>
       ({ ok: true, json: async () => page }) as unknown as Response,
@@ -56,7 +52,6 @@ function renderDrawer(
     <ToastProvider>
       <NotificationDrawer unreadCount={5} onCountChange={onCountChange} onNavigate={() => {}} />
     </ToastProvider>,
-    intl,
   );
   return { ...utils, fetchMock, onCountChange };
 }
@@ -163,52 +158,5 @@ describe('NotificationDrawer — the access-refused row', () => {
     // behalf and GitHub said no.
     const fallback = en.notifications.actorFallback;
     expect(row.textContent).not.toContain(fallback);
-  });
-});
-
-// ── THE PLAN-READY ROW (MOTIR-8775 · Story MOTIR-8246) ───────────────────────
-//
-// The second PROJECT-subject row: a migrate run's first plan was drafted after the
-// person left onboarding. No actor, and the destination is the plan's review page.
-
-describe('NotificationDrawer — the plan-ready row', () => {
-  const readyRow = () => ({
-    id: 'n-plan-ready',
-    type: 'plan_ready',
-    category: 'direct' as const,
-    readAt: null,
-    createdAt: new Date().toISOString(),
-    actor: null,
-    workItemId: null,
-    data: {
-      kind: 'plan_ready' as const,
-      projectKey: 'ACME',
-      projectName: 'Acme booking',
-      planId: 'plan_123',
-    },
-  });
-
-  it.each([
-    ['en', en],
-    ['zh', zh],
-  ] as const)('renders the catalog’s summary in %s, with no actor', async (locale, messages) => {
-    renderDrawer(pageDTO({ notifications: [readyRow()] as never, totalCount: 1 }), {
-      locale,
-      messages,
-    });
-
-    const expected = String(messages.notifications.summary.planReady)
-      .replace(/<\/?s>/g, '')
-      .replace('{project}', 'Acme booking');
-    const row = await screen.findByRole('link', { name: new RegExp('Acme booking') });
-    expect(row.textContent).toContain(expected);
-    expect(row.textContent).not.toContain(messages.notifications.actorFallback);
-  });
-
-  it('routes to the plan’s review page — the destination comes from the TYPE', async () => {
-    renderDrawer(pageDTO({ notifications: [readyRow()] as never, totalCount: 1 }));
-
-    const row = await screen.findByRole('link', { name: new RegExp('Acme booking') });
-    expect(row.getAttribute('href')).toBe('/plans/plan_123');
   });
 });
