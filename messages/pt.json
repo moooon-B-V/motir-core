@@ -8500,7 +8500,12 @@
       "answeredGroup": "Já respondido pelo seu projeto",
       "answeredMeta": "O Motir leu seu código e seus itens de trabalho",
       "discoveryStep": "Algumas perguntas",
-      "directionGroup": "Sua direção"
+      "directionGroup": "Sua direção",
+      "subtitle": "A indexação e a importação rodam em segundo plano. Entre no Motir quando quiser.",
+      "background": "Em segundo plano · {detail}",
+      "backgroundInProgress": "Em andamento",
+      "backgroundQueued": "Na fila",
+      "backgroundFailed": "Falhou"
     },
     "common": {
       "back": "Voltar",
@@ -8606,11 +8611,13 @@
     "import": {
       "eyebrow": "Opcional · Importar e planejar",
       "heading": "Traga seu Backlog existente",
-      "body": "Já acompanha trabalho no Jira, Linear, GitHub, Plane ou em um CSV? Importe para este projeto — você revisará uma prévia simulada antes que algo seja gravado. Pule esta etapa se não tiver Backlog para trazer.",
+      "body": "Importe do Jira, Linear ou Plane, ou entre no Motir e faça isso depois. Uma importação continua em segundo plano.",
       "reconcile": "Quando você depois gerar um plano, o Motir concilia os dois para que nada seja duplicado.",
       "skip": "Pular importação",
       "bodyInline": "Já acompanha trabalho no Jira, Linear, GitHub, Plane ou em um CSV? Traga para cá agora mesmo. Você revisa uma prévia simulada antes que algo seja gravado. Pule esta etapa se não tiver Backlog para trazer.",
-      "continue": "Continuar"
+      "continue": "Continuar",
+      "running": "Importando de {source} · {done} itens de trabalho até agora",
+      "runningBody": "Isso continua em segundo plano. Você não precisa esperar."
     },
     "decision": {
       "eyebrow": "Configuração concluída",
@@ -8652,6 +8659,10 @@
       "retryError": "O Motir não conseguiu recomeçar. Tente de novo daqui a pouco.",
       "importHeading": "Importação de itens de trabalho",
       "importProgress": "{done} até agora"
+    },
+    "enter": {
+      "cta": "Entrar no Motir",
+      "hint": "A indexação e qualquer importação continuam depois que você entrar."
     }
   },
   "repositorySet": {

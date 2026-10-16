@@ -8500,7 +8500,12 @@
       "answeredGroup": "Votre projet y a déjà répondu",
       "answeredMeta": "Motir a lu votre code et vos éléments de travail",
       "discoveryStep": "Quelques questions",
-      "directionGroup": "Votre orientation"
+      "directionGroup": "Votre orientation",
+      "subtitle": "L’indexation et l’import tournent en arrière-plan. Entrez dans Motir quand vous voulez.",
+      "background": "En arrière-plan · {detail}",
+      "backgroundInProgress": "En cours",
+      "backgroundQueued": "En file d’attente",
+      "backgroundFailed": "Échec"
     },
     "common": {
       "back": "Retour",
@@ -8606,11 +8611,13 @@
     "import": {
       "eyebrow": "Facultatif · Import et planification",
       "heading": "Importer votre Backlog existant",
-      "body": "Vous suivez déjà votre travail dans Jira, Linear, GitHub, Plane ou un fichier CSV ? Importez-le dans ce projet — vous examinerez un aperçu de simulation avant toute écriture. Passez cette étape si vous n'avez aucun Backlog à importer.",
+      "body": "Importez depuis Jira, Linear ou Plane, ou entrez dans Motir et faites-le plus tard. Un import se poursuit en arrière-plan.",
       "reconcile": "Lorsque vous générerez ensuite un plan, Motir rapprochera les deux pour éviter tout doublon.",
       "skip": "Passer l'import",
       "bodyInline": "Vous suivez déjà votre travail dans Jira, Linear, GitHub, Plane ou un fichier CSV ? Importez-le ici même. Vous examinez un aperçu de simulation avant toute écriture. Passez cette étape si vous n'avez aucun Backlog à importer.",
-      "continue": "Continuer"
+      "continue": "Continuer",
+      "running": "Import depuis {source} · {done} éléments de travail jusqu’ici",
+      "runningBody": "Cela continue en arrière-plan. Vous n’avez pas besoin d’attendre."
     },
     "decision": {
       "eyebrow": "Configuration terminée",
@@ -8652,6 +8659,10 @@
       "retryError": "Motir n’a pas pu relancer l’opération. Réessayez dans un instant.",
       "importHeading": "Import des éléments de travail",
       "importProgress": "{done} jusqu’ici"
+    },
+    "enter": {
+      "cta": "Entrer dans Motir",
+      "hint": "L’indexation et l’import éventuel se poursuivent une fois entré."
     }
   },
   "repositorySet": {

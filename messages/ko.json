@@ -8494,7 +8494,12 @@
       "answeredGroup": "프로젝트에서 이미 답을 찾음",
       "answeredMeta": "Motir가 코드와 작업 항목을 읽었습니다",
       "discoveryStep": "몇 가지 질문",
-      "directionGroup": "방향"
+      "directionGroup": "방향",
+      "subtitle": "인덱싱과 가져오기는 백그라운드에서 실행됩니다. 언제든 Motir에 들어갈 수 있습니다.",
+      "background": "백그라운드 · {detail}",
+      "backgroundInProgress": "진행 중",
+      "backgroundQueued": "대기 중",
+      "backgroundFailed": "실패"
     },
     "common": {
       "back": "뒤로",
@@ -8600,11 +8605,13 @@
     "import": {
       "eyebrow": "선택 사항 · 가져오기 및 계획",
       "heading": "기존 백로그 가져오기",
-      "body": "이미 Jira, Linear, GitHub, Plane 또는 CSV로 작업을 관리하고 있나요? 이 프로젝트로 가져오세요 — 기록하기 전에 시험 실행 미리보기를 검토합니다. 가져올 백로그가 없다면 건너뛰세요.",
+      "body": "Jira, Linear 또는 Plane에서 가져오거나, 먼저 Motir에 들어가서 나중에 하세요. 가져오기는 백그라운드에서 계속됩니다.",
       "reconcile": "이후 계획을 생성하면 Motir가 둘을 조정하여 중복되지 않게 합니다.",
       "skip": "가져오기 건너뛰기",
       "bodyInline": "이미 Jira, Linear, GitHub, Plane 또는 CSV로 작업을 관리하고 계신가요? 바로 여기서 가져오세요. 무엇이든 기록되기 전에 시험 실행 미리 보기를 검토합니다. 가져올 백로그가 없다면 이 단계를 건너뛰세요.",
-      "continue": "계속"
+      "continue": "계속",
+      "running": "{source}에서 가져오는 중 · 지금까지 작업 항목 {done}개",
+      "runningBody": "백그라운드에서 계속 진행됩니다. 끝날 때까지 기다리지 않아도 됩니다."
     },
     "decision": {
       "eyebrow": "설정 완료",
@@ -8646,6 +8653,10 @@
       "retryError": "Motir가 다시 시작하지 못했습니다. 잠시 후 다시 시도하세요.",
       "importHeading": "작업 항목 가져오기",
       "importProgress": "지금까지 {done}개"
+    },
+    "enter": {
+      "cta": "Motir 시작하기",
+      "hint": "들어간 뒤에도 인덱싱과 가져오기는 계속됩니다."
     }
   },
   "repositorySet": {

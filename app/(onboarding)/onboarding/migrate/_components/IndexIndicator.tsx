@@ -30,7 +30,7 @@ import { repoName, summariseIndex, type IndexSummary } from './indexSummary';
 /** How long the chip says "done" before it leaves the bar. */
 export const INDEX_DONE_LINGER_MS = 4000;
 
-const IMPORT_SOURCE_NAME: Record<MigrateLatestImportDto['source'], string> = {
+export const IMPORT_SOURCE_NAME: Record<MigrateLatestImportDto['source'], string> = {
   jira: 'Jira',
   linear: 'Linear',
   github: 'GitHub',
@@ -276,7 +276,7 @@ function StateGlyph({ state }: { state: IndexSummary['state'] }) {
 }
 
 /** The plan window's three-dot cue: pulsing while work runs, still when queued. */
-function Dots({ pulsing = false }: { pulsing?: boolean }) {
+export function Dots({ pulsing = false }: { pulsing?: boolean }) {
   return (
     <span className="inline-flex items-center gap-0.5" aria-hidden>
       {[0, 1, 2].map((i) => (

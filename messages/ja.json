@@ -8497,7 +8497,12 @@
       "answeredGroup": "プロジェクトからすでに回答済み",
       "answeredMeta": "Motir がコードと作業項目を読み取りました",
       "discoveryStep": "いくつかの質問",
-      "directionGroup": "方向性"
+      "directionGroup": "方向性",
+      "subtitle": "インデックス作成とインポートはバックグラウンドで実行されます。いつでも Motir に入れます。",
+      "background": "バックグラウンド · {detail}",
+      "backgroundInProgress": "進行中",
+      "backgroundQueued": "待機中",
+      "backgroundFailed": "失敗"
     },
     "common": {
       "back": "戻る",
@@ -8603,11 +8608,13 @@
     "import": {
       "eyebrow": "任意 · インポートと計画",
       "heading": "既存のバックログを取り込む",
-      "body": "すでに Jira、Linear、GitHub、Plane、CSV で作業を管理していますか? このプロジェクトにインポートしましょう。何かが書き込まれる前に、ドライランのプレビューを確認できます。取り込むバックログがなければスキップしてください。",
+      "body": "Jira、Linear、Plane からインポートするか、先に Motir に入って後で行えます。インポートはバックグラウンドで続きます。",
       "reconcile": "その後計画を生成すると、Motir が両者を調整し、重複が生じないようにします。",
       "skip": "インポートをスキップ",
       "bodyInline": "Jira、Linear、GitHub、Plane、CSV ですでに作業を管理していますか？ここで取り込めます。何かが書き込まれる前に、ドライランのプレビューを確認できます。取り込むバックログがなければ、この手順は飛ばしてください。",
-      "continue": "続行"
+      "continue": "続行",
+      "running": "{source} からインポート中 · これまでに {done} 件の作業項目",
+      "runningBody": "これはバックグラウンドで続きます。完了を待つ必要はありません。"
     },
     "decision": {
       "eyebrow": "セットアップ完了",
@@ -8649,6 +8656,10 @@
       "retryError": "Motir は再開できませんでした。少ししてからもう一度お試しください。",
       "importHeading": "作業項目のインポート",
       "importProgress": "これまでに {done} 件"
+    },
+    "enter": {
+      "cta": "Motir に入る",
+      "hint": "入った後も、インデックス作成とインポートは続きます。"
     }
   },
   "repositorySet": {

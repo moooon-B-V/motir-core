@@ -8500,7 +8500,12 @@
       "answeredGroup": "Odpowiedź znaleziona już w projekcie",
       "answeredMeta": "Motir przeczytał kod i elementy robocze",
       "discoveryStep": "Kilka pytań",
-      "directionGroup": "Twój kierunek"
+      "directionGroup": "Twój kierunek",
+      "subtitle": "Indeksowanie i import działają w tle. Wejdź do Motir, kiedy chcesz.",
+      "background": "W tle · {detail}",
+      "backgroundInProgress": "W toku",
+      "backgroundQueued": "W kolejce",
+      "backgroundFailed": "Niepowodzenie"
     },
     "common": {
       "back": "Wstecz",
@@ -8606,11 +8611,13 @@
     "import": {
       "eyebrow": "Opcjonalne · Import i planowanie",
       "heading": "Przenieś istniejący Backlog",
-      "body": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Zaimportuj ją do tego projektu — przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
+      "body": "Zaimportuj z Jira, Linear lub Plane albo wejdź do Motir i zrób to później. Import trwa dalej w tle.",
       "reconcile": "Gdy potem wygenerujesz plan, Motir uzgodni oba źródła, aby nic się nie zduplikowało.",
       "skip": "Pomiń import",
       "bodyInline": "Śledzisz już pracę w Jira, Linear, GitHubie, Plane lub pliku CSV? Przenieś ją od razu tutaj. Przed zapisaniem czegokolwiek przejrzysz podgląd próbny. Pomiń ten krok, jeśli nie masz Backlogu do przeniesienia.",
-      "continue": "Dalej"
+      "continue": "Dalej",
+      "running": "Import z {source} · dotąd elementów pracy: {done}",
+      "runningBody": "To trwa dalej w tle. Nie musisz czekać."
     },
     "decision": {
       "eyebrow": "Konfiguracja zakończona",
@@ -8652,6 +8659,10 @@
       "retryError": "Motir nie mógł uruchomić tego ponownie. Spróbuj jeszcze raz za chwilę.",
       "importHeading": "Import elementów pracy",
       "importProgress": "Dotąd: {done}"
+    },
+    "enter": {
+      "cta": "Przejdź do Motir",
+      "hint": "Indeksowanie i ewentualny import trwają dalej po wejściu."
     }
   },
   "repositorySet": {
