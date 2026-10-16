@@ -14,6 +14,12 @@
 #   loadtest/k6/build.sh                      -> loadtest/.out/k6
 #   LOADTEST_K6_BINARY=/opt/k6 loadtest/k6/build.sh
 #
+# The binary is always linux/amd64: the generator is a Fly machine, and a build on an arm64 Mac
+# otherwise yields an aarch64 binary that cannot run there (MOTIR-8674 built one). xk6's own flags
+# are `--os linux --arch amd64`, passed on both paths; `file` must say "ELF 64-bit ... x86-64".
+# A host that cannot execute it (macOS, or arm64 Linux) skips the `k6 version` check below and
+# prints it to run on the generator instead.
+#
 # Uses the grafana/xk6 image when a Docker daemon answers; otherwise needs `go`
 # and `xk6` on PATH (`go install go.k6.io/xk6/cmd/xk6@latest`, or `brew install xk6`).
 set -euo pipefail
@@ -32,7 +38,7 @@ module="${XK6_SSE_MODULE}@${XK6_SSE_VERSION}"
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo "building k6 ${K6_VERSION} with ${module} in grafana/xk6 -> ${out_dir}/${out_name}"
   (cd "$out_dir" && docker run --rm -u "$(id -u):$(id -g)" -v "${PWD}:/xk6" grafana/xk6 \
-    build "${K6_VERSION}" --with "${module}" --output "${out_name}")
+    build "${K6_VERSION}" --with "${module}" --os linux --arch amd64 --output "${out_name}")
 else
   missing=()
   command -v go >/dev/null 2>&1 || missing+=("go")
@@ -43,10 +49,14 @@ else
     exit 1
   fi
   echo "building k6 ${K6_VERSION} with ${module} using local xk6 -> ${out_dir}/${out_name}"
-  (cd "$out_dir" && xk6 build "${K6_VERSION}" --with "${module}" --output "${out_name}")
+  (cd "$out_dir" && xk6 build "${K6_VERSION}" --with "${module}" --os linux --arch amd64 --output "${out_name}")
 fi
 
-version="$("${out_dir}/${out_name}" version)"
+if ! version="$("${out_dir}/${out_name}" version 2>/dev/null)"; then
+  echo "built ${out_dir}/${out_name} (linux/amd64); this host cannot run it, so check"
+  echo "'k6 version' lists xk6-sse on the generator (step 23 of MOTIR-8674)"
+  exit 0
+fi
 echo "$version"
 if ! grep -q "xk6-sse" <<<"$version"; then
   echo "loadtest/k6/build.sh: the built binary does not list xk6-sse" >&2
