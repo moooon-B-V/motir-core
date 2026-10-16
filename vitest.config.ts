@@ -249,6 +249,13 @@ export default defineConfig({
         'app/**/admin/ideas/_components/IdeasUnavailable.tsx',
         'app/**/admin/ideas/_components/ideaListQuery.ts',
         'app/**/_components/AdminShell.tsx',
+        // Story MOTIR-8699 · MOTIR-8716 — the console's Fleet settings page (see the
+        // fleet block in this list for the whole set). Pinned at 90 in `thresholds`.
+        'app/**/admin/fleet-settings/actions.ts',
+        'app/**/admin/fleet-settings/page.tsx',
+        'app/**/admin/fleet-settings/_components/FleetOrgCiSetting.tsx',
+        'app/**/admin/fleet-settings/_components/FleetSettingsUnavailable.tsx',
+        'app/**/admin/fleet-settings/_components/fleetReadinessCopy.ts',
         'lib/ideas/consoleActor.ts',
         'lib/services/ideasAdminService.ts',
         'lib/services/ideasPublicService.ts',
@@ -1588,6 +1595,31 @@ export default defineConfig({
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
         'lib/jobs/definitions/ciRunnerFleet.ts',
+        // Story MOTIR-8699 · MOTIR-8716 — Motir CI on the fleet for a CONNECTED org:
+        // the org-target auth, the readiness verdict's GitHub reads, the org
+        // Actions-variable client, the runner-target resolver, the readiness and
+        // setting services with their repository and mapper, and the console's
+        // Fleet settings page. Every file the story touched that carries runtime
+        // code and was not already gated (runnerGroups, runnerJitConfig,
+        // repoProvisioning, the boot / provisioning / stop / runner-group services
+        // and the platform errors and audit actions already are). Left out on
+        // purpose: the type-only files (`lib/dto/fleetOrgCiSetting.ts`,
+        // `lib/ciFleet/fleetJobInventoryTypes.ts`, `fleetJobInventory.d.json.ts`)
+        // and the measured JSON manifest, which have no statements to gate; and the
+        // three shared repositories (`githubRepoRepository`, `projectRepoRepository`,
+        // `projectRepository`) and `app/(admin)/layout.tsx`, which gained one method
+        // or one label each and are measured by the whole suite rather than by this
+        // story. Pinned at the fleet's 90 floor below.
+        'lib/github/orgTarget.ts',
+        'lib/github/orgInstallation.ts',
+        'lib/github/actionsVariables.ts',
+        'lib/github/repoVisibility.ts',
+        'lib/ciFleet/runnerTarget.ts',
+        'lib/repositories/projectRunnerGroupRepository.ts',
+        'lib/services/fleetReadinessService.ts',
+        'lib/services/fleetOrgCiSettingService.ts',
+        'lib/repositories/platformFleetOrgCiRepository.ts',
+        'lib/mappers/fleetOrgCiSettingMappers.ts',
         // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
         // Gated for a different reason than the primitive above: the whole card
         // is a claim about what must NOT be on screen (no repository name, count,
@@ -5429,6 +5461,42 @@ export default defineConfig({
         'lib/repositories/ciLiveAccrualRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/ciLiveCharge.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/fleetAttributionService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8699 · MOTIR-8716 (see the include list).
+        'lib/github/orgTarget.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/orgInstallation.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/actionsVariables.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/repoVisibility.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/runnerTarget.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/projectRunnerGroupRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/fleetReadinessService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetOrgCiSettingService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/platformFleetOrgCiRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/fleetOrgCiSettingMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/admin/fleet-settings/actions.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/admin/fleet-settings/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/admin/fleet-settings/_components/FleetOrgCiSetting.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-settings/_components/FleetSettingsUnavailable.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-settings/_components/fleetReadinessCopy.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'lib/repositories/fleetMachineKillRepository.ts': {
           branches: 90,
           functions: 90,

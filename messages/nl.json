@@ -9340,7 +9340,8 @@
       "navPlanningLessons": "Planningslessen",
       "navIdeas": "Ideeën",
       "navEnterpriseRequests": "Enterprise-aanvragen",
-      "navRunModels": "Modellen voor gehoste runs"
+      "navRunModels": "Modellen voor gehoste runs",
+      "navFleetSettings": "Vlootinstellingen"
     },
     "nav": {
       "overview": "Overzicht",
@@ -9520,7 +9521,11 @@
             }
           },
           "fleet": {
-            "stop": "De vlootcontainers gestopt"
+            "stop": "De vlootcontainers gestopt",
+            "org_ci": {
+              "enable": "Vloot-CI ingeschakeld",
+              "disable": "Vloot-CI uitgeschakeld"
+            }
           },
           "enterprise_request": {
             "transition": "Een Enterprise-aanvraag verplaatst"
@@ -11446,6 +11451,186 @@
         "notPermitted": "Niet uitgevoerd — je staffrol staat dit niet toe. Er is niets gewijzigd.",
         "notFound": "Dit idee bestaat niet meer. Iemand heeft het verwijderd terwijl je de pagina open had.",
         "failed": "Er ging iets mis, dus er is niets gewijzigd. Probeer het opnieuw."
+      }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Beheer · Vlootinstellingen",
+      "title": "Vlootinstellingen",
+      "subtitle": "Hier beslist een superadmin wiens CI op de eigen machines van Motir draait. Elke wijziging vraagt om een reden en wordt in het auditlogboek geschreven.",
+      "empty": "Geen enkel project biedt vloot-CI aan — geen project van de meta-organisatie heeft een privérepository in een gekoppelde organisatie.",
+      "setting": {
+        "title": "CI van de privérepository's van Motir op de vloot draaien",
+        "pair": "Project {project} · GitHub-organisatie {org}",
+        "superadminOnly": "Alleen superadmin",
+        "explanation": "Aan: elke CI-job in de privérepository's van Motir op {org} vraagt het label {label} aan en draait op de gedeelde {fleet}-machines, toegerekend aan moooon B.V. Uit: ze draaien op door GitHub gehoste runners. In beide gevallen verandert er geen workflowbestand."
+      },
+      "state": {
+        "on": "Aan",
+        "off": "Uit"
+      },
+      "action": {
+        "turnOn": "Aanzetten",
+        "turnOff": "Uitzetten"
+      },
+      "blocked": "Kan pas aan als aan elke voorwaarde is voldaan.",
+      "offNeverBlocked": "Uitzetten wacht nooit op gereedheid.",
+      "meta": {
+        "lastChanged": "Laatst gewijzigd",
+        "changedBy": "door {email}, {when} — ‘{reason}’",
+        "neverChanged": "Nooit gewijzigd",
+        "auditLink": "Auditlogboek",
+        "variable": "GitHub-variabele",
+        "repositories": "Repository's"
+      },
+      "variable": {
+        "present": "{name} = {value} op {org} (privérepository's) — nieuwe jobs vragen de vloot aan.",
+        "absent": "{name} is niet ingesteld op {org} — jobs vallen terug op door GitHub gehoste runners.",
+        "unknown": "Kon {name} op {org} niet lezen — GitHub antwoordde met HTTP {status}.",
+        "unreachable": "Kon {name} op {org} niet lezen — GitHub was niet bereikbaar."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Opgeslagen als aan, maar GitHub is het er niet mee eens.",
+          "body": "{name} is niet ingesteld op {org}, dus nieuwe jobs draaien nog op door GitHub gehoste runners. Zet de instelling uit en weer aan om hem te schrijven."
+        },
+        "offPresent": {
+          "title": "Opgeslagen als uit, maar GitHub is het er niet mee eens.",
+          "body": "{name} is nog ingesteld op {org}, dus nieuwe jobs vragen nog de vloot aan. Zet de instelling aan en weer uit om hem te verwijderen."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# privérepository} other {# privérepository's}}, tijdens runtime gelezen uit de privérepository's van project {project} op {org}"
+      },
+      "monitoringLine": "De machines van Motir verschijnen onder moooon B.V. in Monitoring › Vloot",
+      "onCallout": {
+        "title": "De CI van Motir draait op de vloot.",
+        "link": "Monitoring › Vloot openen"
+      },
+      "degraded": {
+        "title": "Aan, maar niet gereed.",
+        "body": "Nieuwe jobs blijven in de wachtrij tot dit is opgelost of de instelling wordt uitgezet."
+      },
+      "readiness": {
+        "title": "Gereedheid",
+        "subtitle": "Negen voorwaarden, in de volgorde waarin een job ze tegenkomt. Een voorwaarde die niet gecontroleerd kon worden, telt als niet voldaan.",
+        "ready": "Gereed",
+        "readySub": "Aan alle {count} voorwaarden voldaan",
+        "notReady": "Niet gereed — {count, plural, one {# voorwaarde} other {# voorwaarden}} niet voldaan",
+        "unmetCount": "{count} niet voldaan",
+        "unknownCount": "{count} niet te controleren",
+        "checked": "Gecontroleerd {when}",
+        "checkedAgain": "Opnieuw gecontroleerd {when}",
+        "recheck": "Opnieuw controleren"
+      },
+      "mark": {
+        "met": "Voldaan",
+        "unmet": "Niet voldaan",
+        "unknown": "Niet te controleren"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Noodschakelaar van de vloot"
+        },
+        "app_installed": {
+          "label": "App geïnstalleerd"
+        },
+        "app_runner_permission": {
+          "label": "App-machtiging: zelf gehoste runners"
+        },
+        "app_variables_permission": {
+          "label": "App-machtiging: variabelen (schrijven)"
+        },
+        "workflow_job_subscription": {
+          "label": "Levering van workflow_job"
+        },
+        "app_repositories": {
+          "label": "App bereikt de repository's"
+        },
+        "delivery_attributable": {
+          "label": "Jobs toegerekend aan project {project}"
+        },
+        "runner_group": {
+          "label": "Runnergroep"
+        },
+        "image_coverage": {
+          "label": "Imagedekking"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "De noodschakelaar van de vloot staat aan ({variable}=0), dus er start geen vlootmachine. Een operator heft hem op of verhoogt hem.",
+        "app_not_installed": "De motir-studio-app is niet geïnstalleerd op {org}. Een eigenaar van {org} installeert hem.",
+        "app_suspended": "De motir-studio-app op {org} is opgeschort sinds {date}. Een eigenaar van {org} heft de opschorting op.",
+        "permission_missing": "De motir-studio-app op {org} heeft {permission}: geen, en heeft schrijfrechten nodig. Een eigenaar van {org} accepteert het machtigingsverzoek.",
+        "permission_insufficient": "De motir-studio-app op {org} heeft {permission}: {granted}, en heeft schrijfrechten nodig. Een eigenaar van {org} accepteert het machtigingsverzoek.",
+        "not_subscribed": "De app is niet geabonneerd op workflow_job-events, dus GitHub laat Motir nooit weten dat een job in de wachtrij staat. Wie de motir-studio-app beheert, abonneert hem in de instellingen van de app.",
+        "repositories_not_granted": "De installatie van de app op {org} bereikt {repositories} niet. Een eigenaar van {org} voegt ze toe aan de repositorytoegang van de installatie.",
+        "no_private_repositories": "Project {project} heeft geen privérepository in {org}, dus er is niets voor de vloot om te draaien.",
+        "not_attributable": "Een job in de wachtrij uit {repositories} zou niet aan project {project} worden toegerekend en zou dus in de wachtrij blijven tot GitHub hem laat verlopen. Koppel de repository opnieuw aan het project zodat de spiegelrij actueel is.",
+        "no_runner_group": "Project {project} heeft geen runnergroep in {org}. Een operator voert {script} --project {project} uit.",
+        "sync_pending": "De runnergroep van het project in {org} is niet gesynchroniseerd met de repository's. Een operator voert {script} --project {project} uit.",
+        "jobs_not_runnable": "{count, plural, one {# job kan} other {# jobs kunnen}} nog niet draaien op het runnerimage van de vloot. Wie het vlootimage onderhoudt, voegt de ontbrekende tool toe; een job die een ander besturingssysteem nodig heeft, blijft niet uitvoerbaar tot hij de privéset verlaat.",
+        "not_inventoried": "{repositories} {count, plural, one {staat} other {staan}} niet in de jobinventaris van de vloot, dus niemand heeft gecontroleerd of het runnerimage {count, plural, one {de jobs ervan} other {hun jobs}} kan draaien. Wie de inventaris onderhoudt, voert hem opnieuw uit.",
+        "inventory_stale": "De workflows van {repositories} zijn gewijzigd nadat de jobinventaris van de vloot ze heeft gemeten. Wie de inventaris onderhoudt, voert hem opnieuw uit.",
+        "read_failed": "Kon dit niet controleren: GitHub antwoordde met HTTP {status}. Telt als niet voldaan tot een controle slaagt.",
+        "read_unreachable": "Kon dit niet controleren: GitHub was niet bereikbaar. Telt als niet voldaan tot een controle slaagt.",
+        "read_failedNoStatus": "Kon dit niet controleren. Telt als niet voldaan tot een controle slaagt.",
+        "app_not_readable": "Kan pas worden gecontroleerd als de motir-studio-app op {org} is geïnstalleerd en leesbaar is."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — ontbreekt: {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — kan niet worden gehost: {reason}",
+        "more": "+{count} meer",
+        "scope": "Dit betreft het geïnventariseerde image dat uit main is gebouwd, niet het image dat productie start."
+      },
+      "confirm": {
+        "onTitle": "Vloot-CI aanzetten voor {org}?",
+        "onBody": "Uit → Aan. Elke nieuwe CI-job in {count, plural, one {# repository} other {# repository's}} draait op de vloot en wordt ten laste van de pool van moooon B.V. gebracht: {repositories}. Jobs die al draaien, eindigen waar ze begonnen.",
+        "offTitle": "Vloot-CI uitzetten voor {org}?",
+        "offBody": "Aan → Uit. Nieuwe jobs gaan terug naar door GitHub gehoste runners; jobs die al op de vloot draaien, eindigen daar. Uitzetten wacht nooit op gereedheid.",
+        "reasonLabel": "Reden — verplicht, wordt in het auditlogboek geschreven",
+        "reasonPlaceholderOn": "Waarom zet je dit aan?",
+        "reasonPlaceholderOff": "Waarom zet je dit uit?",
+        "reasonHint": "Zichtbaar voor elke operator die deze wijziging later leest. ‘Testen’ alleen zegt niets.",
+        "reasonHintEmpty": "De knop blijft uitgeschakeld tot er een reden is getypt — dezelfde regel die de server toepast.",
+        "cancel": "Annuleren",
+        "confirmOn": "Aanzetten",
+        "confirmOff": "Uitzetten"
+      },
+      "refused": {
+        "reasonMissing": "Niet {direction}: een reden is verplicht en wordt met deze wijziging in het auditlogboek geschreven. Er is niets veranderd.",
+        "alreadyOn": "Staat al aan — er is niets veranderd.",
+        "alreadyOff": "Staat al uit — er is niets veranderd.",
+        "alreadyBody": "Een andere superadmin heeft het eerst gewijzigd, dus er is niets geschreven en geen auditrij toegevoegd.",
+        "githubStatus": "Niet {direction}: GitHub weigerde {name} op {org} te {operation} (HTTP {status}).",
+        "githubUnreachable": "Niet {direction}: GitHub was niet bereikbaar om {name} op {org} te {operation}.",
+        "nothingChanged": "Er is niets veranderd: de instelling en de GitHub-variabele zijn zoals ze waren.",
+        "notReady": "Niet aangezet: de vloot was niet meer gereed nadat deze pagina was geladen.",
+        "notReadyList": "Nu niet voldaan: {conditions}. Er is niets veranderd. De gereedheid hieronder is opnieuw gecontroleerd.",
+        "notPermitted": "Niet gewijzigd: alleen een superadmin kan deze instelling wijzigen.",
+        "targetUnknown": "Niet gewijzigd: deze instelling wordt niet meer aangeboden voor dit project en deze organisatie. Laad de pagina opnieuw.",
+        "failed": "Niet {direction}: er ging iets mis. Laad de pagina opnieuw om de instelling te zien zoals hij nu is."
+      },
+      "done": {
+        "on": "Aangezet. Nieuwe jobs vragen vanaf nu de vloot aan.",
+        "off": "Uitgezet. Nieuwe jobs gaan terug naar door GitHub gehoste runners."
+      },
+      "direction": {
+        "on": "aangezet",
+        "off": "uitgezet"
+      },
+      "operation": {
+        "read": "lezen",
+        "set": "instellen",
+        "delete": "verwijderen"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Zelf gehoste runners",
+        "organization_actions_variables": "Variabelen"
+      },
+      "unavailable": {
+        "title": "Kon de vlootinstelling niet laden",
+        "body": "De instelling of de gereedheid ervan kon niet worden gelezen, dus er wordt geen status getoond en geen schakelaar aangeboden. Dit is een leesfout — er is niets veranderd en er wordt geen waarde geraden.",
+        "retry": "Opnieuw proberen"
       }
     }
   },

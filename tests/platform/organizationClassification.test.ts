@@ -115,7 +115,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     expect(rows[1]?.with_check).toContain('app.platform_staff');
   });
 
-  it('arms exactly the gate table, `organization`, the four estate tiers MOTIR-730 added, and the hosted-run model list', async () => {
+  it('arms exactly the gate table, `organization`, the four estate tiers MOTIR-730 added, the hosted-run model list and the fleet org CI switch', async () => {
     const rows = await adminDb.$queryRaw<{ tablename: string }[]>`
       SELECT DISTINCT "tablename"
       FROM pg_policies
@@ -131,7 +131,8 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // (`20261001200000_platform_staff_estate_read_arms`, asserted in
     // `platformReadService.test.ts`). `platform_run_model` and its
     // `platform_run_model_list` marker are MOTIR-7525's hosted-run model list —
-    // platform configuration, written solely from this tier. `enterprise_request`
+    // platform configuration, written solely from this tier, and so is
+    // `platform_fleet_org_ci`, MOTIR-8714's fleet org CI switch. `enterprise_request`
     // is MOTIR-7605's Contact-sales request, which staff list and move from the
     // console (MOTIR-7608); its tenant arm is the org's own.
     // The five `idea*`
@@ -154,6 +155,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'organization',
       'organization_membership',
       'platform_audit_log',
+      'platform_fleet_org_ci',
       'platform_run_model',
       'platform_run_model_list',
       'project',
