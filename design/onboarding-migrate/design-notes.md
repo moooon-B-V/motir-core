@@ -1982,3 +1982,107 @@ drawn there**; it is not in this story's scope.
   sentence here.
 - **MOTIR-8774 (E2E)** — **GIVES** the walk: A → B → C (done fades) → F → I, and G → E in English
   and Chinese.
+
+## Non-blocking index states — Revision A: enter Motir while indexing and importing run (2026-10-16 · MOTIR-8767 · Story MOTIR-8246)
+
+**Why this revision.** Mo sent the first version back on 2026-10-16:
+
+> we don't create a plan if we don't know what the user wants to build next. And i don't see why
+> the questions are asked, so "A few questions" can be removed. Give the user a button and the user
+> can enter the Motir even the indexing is not finished, and we don't let the user wait for the
+> work items import either, those 2 jobs can run in the background
+
+**Amends:** § _Non-blocking index states_ (above) and its delta mock
+[`index-nonblocking--delta.mock.html`](./index-nonblocking--delta.mock.html). **Delta mock:**
+[`index-nonblocking--enter-motir.mock.html`](./index-nonblocking--enter-motir.mock.html), built with
+the same generator parts as the first delta (`renderMock`, the package's real `Button` and `Card`,
+`BrandMark`, axes `warm-editorial` · `motir` · `motir`, light and dark per panel). Nothing is
+proposed for the design-system package. Where this revision and the section above disagree, this
+revision wins.
+
+### What changes
+
+- **The wizard ends at the Import step with one primary action, _Enter Motir_.** It is enabled
+  whatever the index reads (queued, in progress, indexed or failed) and whatever the import is doing.
+  It replaces _Skip for now_: entering without importing is skipping.
+- **The import runs in the background too.** Starting one no longer holds the step: the card shows
+  a status line for the running import, the source tiles go inert (`aria-disabled`, dimmed) while one
+  runs, and the rail shows _Import work items_ as a second background row beside _Index_.
+- **No plan is drafted in onboarding.** The rail's _Your direction_ group and its _A few questions_
+  step are removed, and so is everything that existed only to draft a plan: the generate-step notice
+  and its failed variant (panels F and G above), the drafting reference (H), and the plan-ready
+  moment in onboarding and in the drawer (I).
+- **The detail lists both background jobs.** Its body copy no longer mentions a plan, and while an
+  import runs it gains a _Work items import_ group under _Per repository_.
+
+**Unchanged from the section above:** the chip and its every look (panels A, C, D), the detail's
+per-repository rows, the failed state and its retry with every refusal (E), and the narrow layout (K),
+apart from the detail body copy, which every panel now reads from the new key below.
+
+### Panels (light AND dark each)
+
+| Panel | What it shows                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------------- |
+| A     | Import step after connect, nothing imported, index in progress: _Enter Motir_ is the primary.   |
+| B     | An import running (Jira, 40 of 120): status line, inert tiles, Import as a background rail row. |
+| C     | The chip's detail open with both jobs: the repository row and the _Work items import_ row.      |
+| D     | The index failed: the chip reads failed, _Enter Motir_ stays enabled.                           |
+| E     | Chinese: panel B and the detail at their longer length.                                         |
+
+### Per element — colour + shape role
+
+| Element                        | Colour                                                                | Shape                                                           |
+| ------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------- |
+| _Enter Motir_                  | `Button` primary (`--el-accent` fill, `--el-accent-text`)             | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x/y`          |
+| Hint beside it                 | `--el-text-secondary` on the card                                     | —                                                               |
+| Footer divider                 | `--el-border-soft`                                                    | —                                                               |
+| Import status line             | `--el-tint-sky` fill, `--el-text-strong` text, accent dots            | `--radius-control`, `--spacing-control-x`                       |
+| Inert source tiles             | unchanged inks, whole row at 60% opacity                              | unchanged                                                       |
+| Rail import background row     | as the Index background row: `--el-border` ring, dots, secondary meta | `--radius-control`                                              |
+| Detail _Work items import_ row | `--el-border-soft` border, `--el-text`; chip `--el-tint-sky` + strong | `--radius-control`; chip `--radius-badge`, `--spacing-chip-x/y` |
+
+Every text ink is `--el-text`, `--el-text-strong` or `--el-text-secondary`; nothing uses
+`--el-text-muted` or `--el-text-faint`.
+
+### Behaviour
+
+- **_Enter Motir_ finishes onboarding.** It completes the run (`step: 'done'`,
+  `status: 'completed'`, the terminal shape a walked run already has) and goes to the project. The
+  index and any import keep running; nothing about either job changes.
+- After entering, the index state is where shipped surfaces already show it (the plan window's
+  indexing banner, MOTIR-4825, and the repository settings). Nothing new is drawn inside the app.
+- The retry (MOTIR-8769's `POST …/index-retry`) is reached from the chip's detail exactly as before.
+
+### Slot → key (proposed — `messages/` is not edited here)
+
+| Slot                       | Key                                         | en                                                                                                          | zh                                                                                |
+| -------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Primary action             | `onboardingMigrate.enter.cta`               | Enter Motir                                                                                                 | 进入 Motir                                                                        |
+| Hint beside it             | `onboardingMigrate.enter.hint`              | Indexing and any import keep going after you enter.                                                         | 进入之后，索引和导入会继续进行。                                                  |
+| Rail subtitle              | `onboardingMigrate.rail.subtitle`           | Indexing and importing run in the background. Enter Motir whenever you like.                                | 索引和导入都在后台运行。你随时可以进入 Motir。                                    |
+| Import step body           | `onboardingMigrate.import.body`             | Import from Jira, Linear or Plane, or enter Motir and do it later. An import keeps going in the background. | 从 Jira、Linear 或 Plane 导入，或者先进入 Motir，以后再做。导入会在后台继续进行。 |
+| Import status line         | `onboardingMigrate.import.running`          | Importing from {source} · {done} of {total} work items                                                      | 正在从 {source} 导入 · 已完成 {done} / {total} 个工作项                           |
+| Import status line, second | `onboardingMigrate.import.runningBody`      | This keeps going in the background. You don't have to wait for it.                                          | 它在后台继续运行，你不必等它完成。                                                |
+| Detail body (replaces)     | `onboardingMigrate.indexing.detailBody`     | This keeps going in the background. You can enter Motir now; nothing waits for it to finish.                | 它在后台继续运行。你现在就可以进入 Motir，没有任何步骤需要等它完成。              |
+| Detail import group        | `onboardingMigrate.indexing.importHeading`  | Work items import                                                                                           | 工作项导入                                                                        |
+| Detail import row state    | `onboardingMigrate.indexing.importProgress` | {done} of {total}                                                                                           | {done} / {total}                                                                  |
+
+**Retired by this revision:** every `onboardingMigrate.generateWaiting.*` key and the plan-ready
+copy proposed above.
+
+### What this means for the code cards (for the re-plan Mo asked for)
+
+This revision removes plan generation from onboarding, so the story's cards that draft or announce a
+plan no longer match the design: MOTIR-8770 (start generation when the graph is built, notify plan
+ready), MOTIR-8772 (the generate-step notice and plan-ready notice), the `plan_ready` notification
+type already built under MOTIR-8775, and the parts of MOTIR-8773 / MOTIR-8774 that test them. Ending
+the wizard at Import, removing the discovery step and backgrounding the import are not covered by any
+card yet. MOTIR-8768 (the index step no longer waits) and MOTIR-8769 (retry) stand as built, and
+MOTIR-8771 (the chip and detail) stands with the detail changes above.
+
+### GIVES / TAKES
+
+- **GIVES** the wizard's end state as one primary action that never waits, and the detail's import
+  group.
+- **TAKES** the chip, detail, failed state and retry from § _Non-blocking index states_, and the
+  index and retry reads from MOTIR-8768 and MOTIR-8769.
