@@ -137,10 +137,21 @@ kill_timeout = "90s"
   #    inherits "skip launch", so a stopped blue yields a stopped green and no idle
   #    machine is woken. flyctl force-starts one green per process group ONLY when
   #    none in that group would start on its own; `app` has a running machine.
-  #  - A SUSPENDED SPARE IS NOT MENTIONED ANYWHERE. There is no suspend-specific
-  #    logic, so the likely outcome is a green copy that boots (two `app` machines
-  #    running after a deploy) which Fly's proxy then suspends again once idle. That
-  #    is a guess; it costs a few minutes of a second running machine, not an outage.
+  #  - A SUSPENDED SPARE IS NOT MENTIONED IN THE DOCS OR THE SOURCE, SO IT WAS RUN.
+  #    A throwaway Fly app (2026-10-16, destroyed afterwards) copied this shape: an
+  #    `app` group with an HTTP check, a check-less `worker` group, two `app`
+  #    machines with one SUSPENDED, `strategy = "bluegreen"`, `auto_stop_machines =
+  #    "suspend"`. A deploy of a new image, with a request every 0.4 s through it:
+  #      * 103 of 103 requests answered 200 across the ~64 s window (no gap);
+  #      * the check-less worker produced the `[WARN] … doesn't have healthchecks`
+  #        line and the deploy finished;
+  #      * the suspended spare WAS given a green copy, and that copy ended `stopped`
+  #        (not suspended) on the new image; one `app` machine running, one `app`
+  #        stopped, one worker, no old machines left. So the spare comes back COLD,
+  #        not from a snapshot, which also removes the stale-connection concern for
+  #        a machine freshly deployed (a later idle period re-suspends it).
+  #    NOT TESTED: the spare waking on `soft_limit` (nginx never reaches 60 in
+  #    flight), and a deploy of THIS app (a 2 GB Next.js image, a release command).
   #  - NO VOLUMES. Neither canary nor bluegreen works with volumes; this app has none.
   #  - ORDER: greens start (not registered for traffic) -> health -> uncordoned ->
   #    blues cordoned after 10 s -> stopped after another 10 s -> destroyed. Failure
@@ -152,13 +163,14 @@ kill_timeout = "90s"
   #    deploy and fails the job on a missing or stopped `app` machine, which is the
   #    net for both reports.
   #
-  # STILL UNVERIFIED HERE: that requests keep answering through a deploy, and what
-  # the suspended spare does. TRIGGER: the first deploy after this lands. Run
+  # STILL UNVERIFIED HERE: that THIS app's first deploy behaves like the test one
+  # (a much larger image, the release command). TRIGGER: the first deploy after this
+  # lands. Run
   #   while true; do curl -s -o /dev/null -w '%{http_code} ' \
   #     https://<app host>/api/health/ready; sleep 0.5; done
-  # through it; any non-200 means the gap is still there, and `fly machine list`
-  # afterwards should show one `app` image version. If it misbehaves, delete the
-  # `strategy` line and deploys return to `rolling`.
+  # through it; any non-200 means a gap, and `fly machine list` afterwards should
+  # show one `app` image version. If it misbehaves, delete the `strategy` line and
+  # deploys return to `rolling`.
   strategy = "bluegreen"
 
 [env]
