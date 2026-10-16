@@ -63,6 +63,13 @@ vi.mock('@/lib/services/organizationsService', async (importOriginal) => ({
 vi.mock('@/lib/services/twoFactorPolicyService', () => ({
   twoFactorPolicyService: { getOrganizationPolicy },
 }));
+// The pane resolves its org the SHELL's way (MOTIR-8776) — the active
+// workspace's org first, the org cookie as the fallback. That resolution has its
+// own real-Postgres suite (`tests/organizations/activeOrganizationForPane.test.ts`);
+// here it answers whatever `resolveActiveOrganization` is primed with.
+vi.mock('@/lib/workspaces/tierDisclosure.server', () => ({
+  resolveActiveOrganizationForPane: (userId: string) => resolveActiveOrganization(userId),
+}));
 // The Server Action the page hands the card. Importing the real module pulls
 // `next/cache` into a unit render; the page's contract is that it PASSES this
 // down, which the card's own suite covers.
