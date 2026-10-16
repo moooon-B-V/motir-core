@@ -815,3 +815,57 @@ describe('the per-tab unread count is category-scoped (bug 8.8.1)', () => {
     ).toBe(1);
   });
 });
+
+describe('a project-subject `plan_ready` row round-trips through notifyProjectEvent (MOTIR-8775)', () => {
+  const planReady = (j: Journey) => ({
+    workspaceId: j.fx.workspaceId,
+    recipientUserId: j.bo.id,
+    type: 'plan_ready',
+    category: 'direct' as const,
+    dedupeKey: 'plan_ready:plan_123',
+    data: {
+      kind: 'plan_ready' as const,
+      projectKey: 'ACME',
+      projectName: 'Acme booking',
+      planId: 'plan_123',
+    },
+  });
+
+  it('writes one row with no work item, and the feed reads it back as the plan_ready arm', async () => {
+    const j = await makeJourney();
+    expect(await notificationFanInService.notifyProjectEvent(planReady(j))).toBe(true);
+
+    const feed = await notificationsService.listNotifications({}, j.boCtx);
+    expect(feed.totalCount).toBe(1);
+    const row = feed.notifications[0]!;
+    expect(row.type).toBe('plan_ready');
+    expect(row.workItemId).toBeNull();
+    expect(row.actor).toBeNull();
+    expect(row.data).toEqual({
+      kind: 'plan_ready',
+      projectKey: 'ACME',
+      projectName: 'Acme booking',
+      planId: 'plan_123',
+    });
+  });
+
+  it('the same dedupe key writes no second row', async () => {
+    const j = await makeJourney();
+    await notificationFanInService.notifyProjectEvent(planReady(j));
+    await notificationFanInService.notifyProjectEvent(planReady(j));
+
+    expect((await notificationsService.listNotifications({}, j.boCtx)).totalCount).toBe(1);
+  });
+
+  it('with the in-app channel off it writes nothing', async () => {
+    const j = await makeJourney();
+    await notificationPreferencesService.setPreference(j.bo.id, {
+      eventType: 'plan_ready',
+      channel: 'in_app',
+      enabled: false,
+    });
+
+    expect(await notificationFanInService.notifyProjectEvent(planReady(j))).toBe(false);
+    expect((await notificationsService.listNotifications({}, j.boCtx)).totalCount).toBe(0);
+  });
+});

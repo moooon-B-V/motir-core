@@ -42,7 +42,8 @@ export interface NotificationActorDTO {
 export type NotificationData =
   | NotificationMentionedData
   | NotificationTransitionedData
-  | NotificationCodeAccessRefusedData;
+  | NotificationCodeAccessRefusedData
+  | NotificationPlanReadyData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -93,6 +94,24 @@ export interface NotificationCodeAccessRefusedData {
   projectName: string;
   /** The repository GitHub refused the invitation on, as `owner/name`. */
   repoRef: string;
+}
+
+/**
+ * A migrate run's first plan is ready to review (MOTIR-8775 · Story MOTIR-8246).
+ * The background generation drafts it once the code graph is built, which can be
+ * long after the person left onboarding — this row is how they hear of it.
+ *
+ * The second arm whose subject is a PROJECT: `workItemId` is null, and the drawer
+ * routes from the TYPE to the plan's review page.
+ */
+export interface NotificationPlanReadyData {
+  kind: 'plan_ready';
+  /** The project the plan was drafted for. */
+  projectKey: string;
+  /** The project's display name, for the summary line. */
+  projectName: string;
+  /** The drafted plan — the row's deep-link target. */
+  planId: string;
 }
 
 /**

@@ -69,6 +69,8 @@ describe('identity-hue element tokens map to their Tier-0 --color-* base', () =>
     '--el-notif-commented': '--color-info',
     '--el-notif-assigned': '--color-accent-green',
     '--el-notif-transitioned': '--color-accent-teal',
+    // The plan-ready row (MOTIR-8775): something the person waited on finished.
+    '--el-notif-plan-ready': '--color-success',
     // AI model dots (named family; deepseek decoupled from --el-type-subtask)
     '--el-model-opus': '--color-primary-fill',
     '--el-model-sonnet': '--color-info',

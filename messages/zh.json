@@ -3247,6 +3247,10 @@
           "code_access_refused": {
             "label": "无法授予代码访问权限",
             "desc": "Motir 无法让你访问它为你的项目创建的代码仓库。"
+          },
+          "plan_ready": {
+            "label": "你的第一份计划已就绪",
+            "desc": "Motir 读完你的代码后，已为你的项目起草好第一份计划。"
           }
         },
         "soon": "即将推出",
@@ -5391,7 +5395,8 @@
       "transitioned": "<s>{actor}</s> 将 <s>{key}</s> 移动到 {status}",
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
-      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请"
+      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
+      "planReady": "<s>{project}</s> 的第一份计划已可审阅"
     }
   },
   "orgAdmin": {

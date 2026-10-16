@@ -9,6 +9,7 @@ import {
   Bell,
   Check,
   GitPullRequest,
+  ListChecks,
   MessageSquare,
   UserCheck,
 } from 'lucide-react';
@@ -53,12 +54,18 @@ const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; b
   // review rail's `needs_access` outcome uses, so one product story is told in one
   // colour. NOT danger: nothing was lost, the repository exists.
   code_access_refused: { Icon: ShieldAlert, badge: 'bg-(--el-notif-access-refused)' },
+  // MOTIR-8775 · Story MOTIR-8246 — the PLAN-READY row
+  // (`design/onboarding-migrate/design-notes.md`, Non-blocking index states, panel
+  // I). `list-checks`: a plan of items to look over. `--el-notif-plan-ready` maps
+  // to `--color-success` — something finished that the person was waiting for.
+  plan_ready: { Icon: ListChecks, badge: 'bg-(--el-notif-plan-ready)' },
 };
 
 /** Types whose subject is a PROJECT rather than a work item — no actor, and a
  *  destination resolved from the TYPE. `code_access_refused` is the first
- *  (MOTIR-5016); `Notification.workItemId` is null on these rows. */
-const ACTORLESS_TYPES = new Set<string>(['code_access_refused']);
+ *  (MOTIR-5016), `plan_ready` the second (MOTIR-8775); `Notification.workItemId`
+ *  is null on these rows. */
+const ACTORLESS_TYPES = new Set<string>(['code_access_refused', 'plan_ready']);
 const DEFAULT_META = { Icon: Bell, badge: 'bg-(--el-text-muted)' };
 
 /** Pick the summary i18n key for a notification's type (+ whether it deep-links). */
@@ -68,6 +75,7 @@ function summaryKey(type: string, hasKey: boolean): string {
   // below is for a work-item row whose key is missing — a degraded payload — which
   // is a different thing from a row that is not about a work item at all.
   if (type === 'code_access_refused') return 'summary.accessRefused';
+  if (type === 'plan_ready') return 'summary.planReady';
   if (!hasKey) return 'summary.genericNoKey';
   switch (type) {
     case 'mentioned':
@@ -117,9 +125,11 @@ export function NotificationRow({
   const href =
     data.kind === 'code_access_refused'
       ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
-      : issueKey
-        ? `/items/${issueKey}`
-        : null;
+      : data.kind === 'plan_ready'
+        ? `/plans/${encodeURIComponent(data.planId)}`
+        : issueKey
+          ? `/items/${issueKey}`
+          : null;
   const createdAt = new Date(notification.createdAt);
 
   // Rich summary: actor + key bolded via the <s> tag, greyed one tier on a
@@ -138,7 +148,8 @@ export function NotificationRow({
     actor: actorName,
     key: issueKey ?? '',
     status: toStatus,
-    project: data.kind === 'code_access_refused' ? data.projectName : '',
+    project:
+      data.kind === 'code_access_refused' || data.kind === 'plan_ready' ? data.projectName : '',
     s: strong,
   });
 
