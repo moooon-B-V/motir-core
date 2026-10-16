@@ -8629,6 +8629,58 @@
         "installation_not_accessibleHint": "Il tuo utente GitHub non vede questa installazione, quindi non è stato collegato nulla. Un proprietario dell’account GitHub può darti l’accesso.",
         "not_configuredTitle": "GitHub non è configurato in questa installazione",
         "not_configuredHint": "Questa installazione di Motir non ha ancora una GitHub App, quindi GitHub non può essere collegato da qui. Chi gestisce l’installazione può configurarla."
+      },
+      "existing": {
+        "title": "I tuoi account GitHub con l’app Motir",
+        "hint": "L’app Motir è già installata su questi account. Scegline uno per collegare qui i suoi repository. Non serve installarla di nuovo.",
+        "loading": "Ricerca dei tuoi account GitHub…",
+        "typeUser": "Account personale",
+        "typeOrg": "Organizzazione GitHub",
+        "linkedHere": "Già collegato a questa organizzazione",
+        "pickCta": "Scegli i repository",
+        "pickAria": "Scegli i repository di {login}",
+        "installAnotherCta": "Installa su un altro account",
+        "installAnotherHint": "Usa questa opzione se l’account che vuoi non è nell’elenco.",
+        "loadErrorTitle": "Non è stato possibile leggere i tuoi account GitHub",
+        "loadErrorHint": "Non è stato modificato nulla. Riprova o installa su un altro account.",
+        "retryCta": "Riprova",
+        "identity": {
+          "title": "Accedi con GitHub per trovare le tue installazioni.",
+          "hint": "Motir controlla solo su quali account è installata l’app Motir e a quali di questi puoi accedere. Puoi saltare questo passaggio e installarla su un nuovo account.",
+          "cta": "Accedi con GitHub",
+          "skipCta": "Salta e installa",
+          "declinedHint": "GitHub non ha completato l’accesso, quindi non è stato modificato nulla. Riprova, oppure salta questo passaggio e installa."
+        },
+        "picker": {
+          "heading": "Repository di {login}",
+          "hint": "Scegli i repository che questa organizzazione collega. Nulla viene collegato finché non confermi.",
+          "fromInstallHint": "Hai scelto un account su cui l’app Motir è già installata. Scegli quali dei suoi repository collega questa organizzazione.",
+          "loading": "Caricamento dei repository…",
+          "available": "Disponibile",
+          "connectedHere": "Collegato qui",
+          "connectedElsewhere": "Collegato a un’altra organizzazione",
+          "connectedElsewhereHint": "Questo repository non può essere scelto qui.",
+          "selectedCount": "{count, plural, one {# repository selezionato} other {# repository selezionati}}",
+          "confirmCta": "{count, plural, one {Collega # repository} other {Collega # repository}}",
+          "backCta": "Torna agli account",
+          "nothingLeftTitle": "Non resta nulla da collegare da questo account",
+          "nothingLeftHint": "Ogni repository qui è già collegato, a questa organizzazione o a un’altra. Per offrirne altri, aggiungi repository all’installazione su GitHub.",
+          "nothingLeftCta": "Aggiungi repository su GitHub"
+        },
+        "outcome": {
+          "linkedTitle": "Repository collegati",
+          "linkedHint": "Motir ora può leggere i repository che hai scelto. Non è stato collegato nient’altro di questo account.",
+          "takenTitle": "Un repository è stato preso mentre sceglievi",
+          "takenHint": "Un’altra organizzazione ha collegato {repos}. Non è stato collegato nulla. L’elenco è aggiornato, quindi scegli di nuovo.",
+          "notAccessibleTitle": "Non puoi più accedere a quell’account",
+          "notAccessibleHint": "GitHub non ti permette più di vedere questa installazione, quindi è stata rimossa dall’elenco. Chiedi l’accesso a un proprietario dell’account GitHub o installa su un altro account.",
+          "notAdminTitle": "Solo un amministratore dell’organizzazione può collegare un’installazione esistente",
+          "notAdminHint": "Chiedi a un amministratore di questa organizzazione di collegarla, oppure installa tu su un altro account.",
+          "selectionRequiredTitle": "Scegli almeno un repository",
+          "selectionRequiredHint": "Non è stato collegato nulla. Seleziona i repository che vuoi, poi conferma.",
+          "notVisibleTitle": "Un repository non fa più parte di questa installazione",
+          "notVisibleHint": "Non è stato collegato nulla. L’elenco è aggiornato, quindi scegli di nuovo."
+        }
       }
     },
     "index": {

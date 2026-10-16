@@ -71,10 +71,18 @@ function connectState(
 }
 const NOT_CONNECTED_TITLE = enMessages.onboardingMigrate.connect.missingTitle;
 
+// The connect step also reads the accounts the Motir App is already installed on
+// (MOTIR-8245). These cases are about the step with NONE, so every fake answers
+// that read with an empty list, the world in which the pre-flight leads; the
+// list itself is `onboarding-existing-accounts.test.tsx`'s to prove.
+const ACCOUNTS_READ = /\/api\/organizations\/[^/]+\/github\/accounts$/;
+
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;
 function fakeFetch(handler: Handler) {
   const spy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
-    handler(String(input), init),
+    ACCOUNTS_READ.test(String(input))
+      ? json({ state: 'ok', accounts: [] })
+      : handler(String(input), init),
   );
   vi.stubGlobal('fetch', spy);
   return spy;
