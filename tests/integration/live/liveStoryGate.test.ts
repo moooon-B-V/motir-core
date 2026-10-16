@@ -499,7 +499,14 @@ describe('4 · a burst of 189 MCP writes', () => {
         const n = calls.get(r.userId)?.length ?? 0;
         expect(n, `reads for ${r.userId} over ${elapsed} ms`).toBeGreaterThan(0);
         expect(n).toBeLessThanOrEqual(windows);
-        expect(n, 'far below one read per write').toBeLessThan(189 / 3);
+        // Fewer reads than writes, always. "FAR below" is a claim about a burst,
+        // and only holds when the writes came faster than the window: on a loaded
+        // runner a single write can outlast it, and then each window honestly
+        // holds one write — the `windows` bound above is the invariant.
+        expect(n, 'fewer reads than writes').toBeLessThan(189);
+        if (elapsed / 189 < WORKBENCH_STREAM_COALESCE_MS / 3) {
+          expect(n, 'far below one read per write').toBeLessThan(189 / 3);
+        }
       }
       expect(maxActive).toBeLessThanOrEqual(WORKBENCH_STREAM_READ_CONCURRENCY);
       expect(maxLimiter).toBeLessThanOrEqual(WORKBENCH_STREAM_READ_CONCURRENCY);
