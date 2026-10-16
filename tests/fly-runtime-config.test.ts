@@ -391,6 +391,13 @@ describe('fly.toml — the deployment configuration', () => {
     expect(flyToml).toMatch(/size\s*=\s*"performance-1x"/);
   });
 
+  it('deploys bluegreen, so one running machine is not an outage on every deploy', () => {
+    // The default `rolling` strategy replaces a machine in place; with a single
+    // running `app` machine that is a gap. Unverified against the worker group and
+    // the suspended spare — see the comment above `strategy` in fly.toml.
+    expect(flyToml).toMatch(/^\s*strategy\s*=\s*"bluegreen"$/m);
+  });
+
   it('runs migrations from the release command, through the staged lane', () => {
     // Not `pnpm prisma migrate deploy`: the standalone image has no pnpm and no
     // CLI on PATH. The entrypoint is what makes the staged directory runnable.

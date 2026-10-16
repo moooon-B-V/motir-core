@@ -114,6 +114,24 @@ kill_timeout = "90s"
   # back, so that retry matters more here than it does in a build.
   release_command = "node /app/migrate/release-migrate.mjs"
 
+  # ⚠️ BLUEGREEN, SO ONE RUNNING MACHINE DOES NOT MEAN A GAP ON EVERY DEPLOY
+  # (2026-10-16, owner decision). Fly's default `rolling` strategy replaces each
+  # machine IN PLACE: stop the old one, start the new one on the same machine. With
+  # one running `app` machine and the spare suspended, that is an outage for the
+  # restart. `bluegreen` starts the new machines BESIDE the old ones, waits for
+  # their health checks to pass, moves traffic, then destroys the old ones. The
+  # check it waits on is `/api/health/ready` under [[http_service.checks]].
+  #
+  # ⚠️ NOT YET SEEN WORKING HERE. Three things are unverified: (1) the `worker`
+  # group declares no health check, and bluegreen waits on checks; (2) what it does
+  # with the SUSPENDED spare — start a green copy of it, or leave it; (3) that
+  # requests keep answering through a deploy. TRIGGER: the first deploy after this
+  # lands. Run `while true; do curl -s -o /dev/null -w '%{http_code} ' \
+  # https://<app host>/api/health/ready; sleep 0.5; done` through it; any non-200
+  # means the gap is still there. If the worker or the spare blocks the deploy,
+  # remove this line and the deploy goes back to `rolling`.
+  strategy = "bluegreen"
+
 [env]
   PORT = "8080"
   # HOSTNAME=0.0.0.0 is set in the Dockerfile rather than here, because getting
