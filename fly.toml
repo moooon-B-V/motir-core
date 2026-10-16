@@ -122,14 +122,43 @@ kill_timeout = "90s"
   # their health checks to pass, moves traffic, then destroys the old ones. The
   # check it waits on is `/api/health/ready` under [[http_service.checks]].
   #
-  # ⚠️ NOT YET SEEN WORKING HERE. Three things are unverified: (1) the `worker`
-  # group declares no health check, and bluegreen waits on checks; (2) what it does
-  # with the SUSPENDED spare — start a green copy of it, or leave it; (3) that
-  # requests keep answering through a deploy. TRIGGER: the first deploy after this
-  # lands. Run `while true; do curl -s -o /dev/null -w '%{http_code} ' \
-  # https://<app host>/api/health/ready; sleep 0.5; done` through it; any non-200
-  # means the gap is still there. If the worker or the spare blocks the deploy,
-  # remove this line and the deploy goes back to `rolling`.
+  # WHAT THE DOCS AND flyctl's SOURCE SAY (read 2026-10-16; the docs are silent on
+  # most of it, so the answers below are from `internal/command/deploy/
+  # strategy_bluegreen.go` on flyctl master, read through a summariser, not run):
+  #  - REQUIRES A CHECK. docs.fly.io/reference/configuration: "You need to configure
+  #    at least one health check to use the `bluegreen` strategy." `app` has one
+  #    ([[http_service.checks]] above). Without any machine having a check the
+  #    deploy refuses with "app not in valid state for bluegreen deployments".
+  #  - THE WORKER HAS NO CHECK, AND THAT IS ONLY A WARNING. A machine with no
+  #    configured check logs "[WARN] Machine … doesn't have healthchecks setup. We
+  #    won't check its health." and is waited on for the STARTED state alone. It
+  #    does not hang the deploy.
+  #  - A STOPPED SPARE STAYS STOPPED. Each old (blue) machine gets a green copy that
+  #    inherits "skip launch", so a stopped blue yields a stopped green and no idle
+  #    machine is woken. flyctl force-starts one green per process group ONLY when
+  #    none in that group would start on its own; `app` has a running machine.
+  #  - A SUSPENDED SPARE IS NOT MENTIONED ANYWHERE. There is no suspend-specific
+  #    logic, so the likely outcome is a green copy that boots (two `app` machines
+  #    running after a deploy) which Fly's proxy then suspends again once idle. That
+  #    is a guess; it costs a few minutes of a second running machine, not an outage.
+  #  - NO VOLUMES. Neither canary nor bluegreen works with volumes; this app has none.
+  #  - ORDER: greens start (not registered for traffic) -> health -> uncordoned ->
+  #    blues cordoned after 10 s -> stopped after another 10 s -> destroyed. Failure
+  #    at any step rolls back to the previous release.
+  #  - KNOWN FLAKINESS, REPORTED NOT REPRODUCED: Fly's community forum has posts of a
+  #    bluegreen deploy leaving two image versions running, and one reporting both
+  #    colours destroyed. CI installs flyctl@master, so the stopped-machine bug fixed
+  #    in 0.1.119 is long gone. `scripts/assert-machine-pool.mjs` runs after every
+  #    deploy and fails the job on a missing or stopped `app` machine, which is the
+  #    net for both reports.
+  #
+  # STILL UNVERIFIED HERE: that requests keep answering through a deploy, and what
+  # the suspended spare does. TRIGGER: the first deploy after this lands. Run
+  #   while true; do curl -s -o /dev/null -w '%{http_code} ' \
+  #     https://<app host>/api/health/ready; sleep 0.5; done
+  # through it; any non-200 means the gap is still there, and `fly machine list`
+  # afterwards should show one `app` image version. If it misbehaves, delete the
+  # `strategy` line and deploys return to `rolling`.
   strategy = "bluegreen"
 
 [env]
