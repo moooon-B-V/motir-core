@@ -14471,7 +14471,9 @@
       "completed": "Eso es todo lo que necesitaba preguntar.",
       "nothingToAsk": "No tengo nada que preguntar: esto está lo bastante claro para planificar. Ahora escribo el plan.",
       "stopped": "Detuviste las preguntas.",
-      "stoppedNoAnswer": "Detuviste las preguntas antes de responder ninguna. No se escribió nada."
+      "stoppedNoAnswer": "Detuviste las preguntas antes de responder ninguna. No se escribió nada.",
+      "handoffFailed": "Interrógame no pudo hacer sus preguntas, así que el plan se está escribiendo sin ellas. Tu solicitud se mantiene tal como la escribiste.",
+      "handoffNoCredit": "Interrógame necesita crédito de IA para hacer sus preguntas, así que el plan se está escribiendo sin ellas."
     },
     "summary": {
       "title": "Lo que decidiste",
