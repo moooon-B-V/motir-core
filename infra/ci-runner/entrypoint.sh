@@ -70,30 +70,11 @@ fi
 if [ "${MOTIR_RUNNER_SKIP_DOCKER:-0}" = "1" ]; then
   log "MOTIR_RUNNER_SKIP_DOCKER=1 — not starting dockerd (image self-test only; \`services:\` jobs WILL fail)"
 else
-  log "starting dockerd"
-  dockerd --host=unix:///var/run/docker.sock >/var/log/dockerd.log 2>&1 &
-  DOCKERD_PID=$!
-
-  started_at="${SECONDS}"
-  deadline=$((started_at + 30))
-  until docker version >/dev/null 2>&1; do
-    if ! kill -0 "${DOCKERD_PID}" 2>/dev/null; then
-      log "--- dockerd.log ---"; cat /var/log/dockerd.log >&2 || true
-      die "dockerd exited during startup"
-    fi
-    if [ "${SECONDS}" -ge "${deadline}" ]; then
-      log "--- dockerd.log ---"; cat /var/log/dockerd.log >&2 || true
-      die "dockerd did not become ready within 30s"
-    fi
-    sleep 1
-  done
-  # The storage driver, logged because `docker version` answering is NOT the
-  # same claim as "this daemon can create a container". A daemon whose data dir
-  # cannot support its snapshotter answers happily and then fails the first
-  # `services:` container with an opaque mount error, mid-job, on the tenant's
-  # metered clock. One cheap line here is the difference between diagnosing that
-  # from the boot log and diagnosing it from a customer's failed build.
-  log "dockerd ready after $((SECONDS - started_at))s (storage driver: $(docker info --format '{{.Driver}}' 2>/dev/null || echo unknown))"
+  # `motir-ci-runner-dockerd` starts the daemon AND proves it can unpack a layer
+  # that deletes a file, falling back through storage candidates when it cannot
+  # (MOTIR-8821). It exits non-zero when none can, which `set -e` turns into a
+  # failed boot.
+  motir-ci-runner-dockerd
 fi
 
 # ── The runner ───────────────────────────────────────────────────────────────
@@ -118,4 +99,5 @@ fi
 log "exec run.sh (JIT config, one job, then de-register and exit)"
 exec setpriv --reuid=runner --regid=runner --init-groups \
   env -u ACTIONS_RUNNER_INPUT_JITCONFIG HOME=/home/runner USER=runner LOGNAME=runner \
+  ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/motir-ci-runner-job-started.sh \
   /home/runner/actions-runner/run.sh --jitconfig "${JITCONFIG}"
