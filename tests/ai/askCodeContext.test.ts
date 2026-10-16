@@ -164,3 +164,48 @@ describe('a conversation job carries the project code context', () => {
     }
   });
 });
+
+// Story MOTIR-7734 · MOTIR-8742 — the same two submits carry BOTH languages: the
+// org's content language and the ASKER's own, read fresh at each submit.
+describe('a conversation job carries the tenant languages', () => {
+  const tenantOf = (n: number) => submitJobMock.mock.calls[n]![1] as Record<string, unknown>;
+  const languagesOf = (n: number) => ({
+    contentLanguage: tenantOf(n)['contentLanguage'],
+    personLanguage: tenantOf(n)['personLanguage'],
+  });
+  const setOrgLanguage = (contentLanguage: string) =>
+    adminDb.organization.update({
+      where: { id: fx.workspace.organizationId },
+      data: { contentLanguage },
+    });
+  const setLocale = (locale: string | null) =>
+    adminDb.user.update({ where: { id: fx.ownerId }, data: { locale } });
+
+  it('`ask_project` and `debug_bug` both send the org’s and the asker’s language', async () => {
+    await setOrgLanguage('ja');
+    await setLocale('ko');
+    await askThenDebug('Export hangs');
+    for (const n of [0, 1]) {
+      expect(languagesOf(n)).toEqual({ contentLanguage: 'ja', personLanguage: 'ko' });
+    }
+  });
+
+  it('an asker with no saved language gets the content language, never empty', async () => {
+    await setOrgLanguage('de');
+    await setLocale(null);
+    await askThenDebug('Export hangs');
+    for (const n of [0, 1]) {
+      expect(languagesOf(n)).toEqual({ contentLanguage: 'de', personLanguage: 'de' });
+    }
+  });
+
+  it('reads the org setting at each submit: moved from en to ja, the next ask sends ja', async () => {
+    await setOrgLanguage('en');
+    await setLocale('en');
+    await ask(post('/api/ai/ask', { body: 'one' }));
+    expect(tenantOf(0)['contentLanguage']).toBe('en');
+    await setOrgLanguage('ja');
+    await ask(post('/api/ai/ask', { body: 'two' }));
+    expect(tenantOf(1)['contentLanguage']).toBe('ja');
+  });
+});

@@ -5,6 +5,7 @@ import { describedForWrite, InvalidAuthoredBugError, parseAuthoredBug } from '@/
 import { MotirAiError } from '@/lib/ai/errors';
 import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import type { BugAuthoringContext } from '@/lib/ai/types';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { getMonitorProvider } from '@/lib/monitors';
@@ -190,6 +191,13 @@ export const monitorBugEnrichmentService = {
     };
 
     const { organizationId, isMeta, internalBilling } = await resolveTenantOrg(binder);
+    // The two languages (MOTIR-8742) with NO person: a monitor filed this bug, and
+    // the binder is only the identity the job token is scoped to — not someone the
+    // write-up speaks to. So the explanation is written in the content language.
+    const languages = await resolveTenantLanguages({
+      workspaceId: trigger.workspaceId,
+      userId: null,
+    });
     const { jobId } = await submitJob(
       'author_bug',
       {
@@ -199,6 +207,7 @@ export const monitorBugEnrichmentService = {
         workspaceId: trigger.workspaceId,
         projectId: trigger.projectId,
         projectKey: project.identifier,
+        ...languages,
       },
       // `code` absent — not an empty set — for a project with no established
       // repository: motir-ai reads that as `no_repos` and degrades.

@@ -254,6 +254,26 @@ describe('a monitor-filed bug is dispatched ONCE', () => {
     });
   });
 
+  it('sends the content language and NO person — the binder is not who the write-up speaks to (MOTIR-8742)', async () => {
+    const { fx, target } = await seed();
+    await adminDb.organization.update({
+      where: { id: fx.workspace.organizationId },
+      data: { contentLanguage: 'zh' },
+    });
+    // The binder saved English; a monitor-filed bug still has no person.
+    await adminDb.user.update({ where: { id: fx.ctx.userId }, data: { locale: 'en' } });
+    const { event } = await file(target, 'binder-lang');
+    await runJob(event);
+    const tenant = vi.mocked(submitJob).mock.calls[0]![1] as Record<string, unknown>;
+    expect(tenant).toMatchObject({
+      workspaceId: fx.workspaceId,
+      contentLanguage: 'zh',
+      personLanguage: '',
+    });
+    // The job identity is unchanged: still the binder.
+    expect(vi.mocked(submitJob).mock.calls[0]![3]).toEqual({ userId: fx.ctx.userId });
+  });
+
   it('observes a COMMITTED bug — the item the step reads is present, with its thin body', async () => {
     const { target } = await seed();
     const { workItemId, event } = await file(target, 'commit-1');
