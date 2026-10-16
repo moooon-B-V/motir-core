@@ -803,8 +803,8 @@ describe('requestsFleetRunner (MOTIR-8813)', () => {
   });
 });
 
-describe('the checked-in manifest (MOTIR-8813)', () => {
-  it("the fleet-bound gap in project MOTIR's private repositories is exactly the binfmt image job", () => {
+describe('the checked-in manifest (MOTIR-8813 · MOTIR-8815)', () => {
+  it("every fleet-bound job in project MOTIR's private repositories is runnable", () => {
     const gaps = Object.values(checkedInInventory.repos)
       .filter((r) => r.visibility === 'private')
       .flatMap((r) =>
@@ -815,9 +815,7 @@ describe('the checked-in manifest (MOTIR-8813)', () => {
             .map((j) => `${r.repoRef} ${w.path} ${j.jobId} ${j.missing.join(',')}`),
         ),
       );
-    expect(gaps).toEqual([
-      'moooon-B-V/motir-gateway .github/workflows/docker-image.yml push_to_registries binfmt-misc',
-    ]);
+    expect(gaps).toEqual([]);
   });
 });
 
