@@ -26,9 +26,14 @@ import {
   type SeedTranslator,
 } from '@/lib/planning/refusalSeed';
 import { PlanningSeedNotFoundError } from '@/lib/planChange/errors';
+import { readGuideTurnRecord, type GuideReplanOffer } from '@/lib/ai/guideWorkItem';
+import { replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
+import { composeGuideSeedFirstTurn, isGuideSeedableState } from '@/lib/planning/guideSeed';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import type { PlanningSeedDTO } from '@/lib/dto/planningSeed';
+import type { PlanningGuideSeedDTO, PlanningSeedDTO } from '@/lib/dto/planningSeed';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 
 // THE PLANNING SEED read (story MOTIR-6068 · MOTIR-6208, widened to a PICKED
@@ -120,6 +125,78 @@ async function waitingKeysFor(
       .filter((d) => !isTerminalStatus(d, terminalByProject))
       .map((d) => d.identifier);
   });
+}
+
+/** What the guide-offer read learns from the turn, its session and its thread. */
+interface GuideOfferFacts {
+  offer: GuideReplanOffer;
+  targetKey: string;
+  guidedKey: string;
+  state: 'undecided' | 'confirmed';
+}
+
+/**
+ * The offer on `guideTurnId`, for THIS viewer, or {@link PlanningSeedNotFoundError}.
+ * One refusal for: a missing or blank turn, a turn that is not an `assistant` turn,
+ * a session in another workspace or project, one that is not a `guide` conversation,
+ * one that is not the viewer's, no offer, an offer with no target, and an offer that
+ * is declined or superseded.
+ */
+async function readGuideOfferFor(
+  guideTurnId: string,
+  pctx: ProjectContext,
+): Promise<GuideOfferFacts> {
+  return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+    const turn = await planChangeTurnRepository.findById(guideTurnId, pctx.workspaceId, tx);
+    if (!turn || turn.role !== 'assistant') throw new PlanningSeedNotFoundError();
+    const guide = await planChangeSessionRepository.findByIdInProject(
+      turn.sessionId,
+      pctx.projectId,
+      pctx.workspaceId,
+      tx,
+    );
+    if (!guide || guide.origin !== 'guide' || guide.createdById !== pctx.userId) {
+      throw new PlanningSeedNotFoundError();
+    }
+    const offer = readGuideTurnRecord(turn.guideTurn)?.replanOffer;
+    if (!offer || offer.targetKey === null) throw new PlanningSeedNotFoundError();
+    // The guided card is the guide conversation's scope: `startGuideWithFirstTurn`
+    // writes the session with `scopeKey` / `targetKeys` of the ONE card it guides
+    // (`targetKeys[0]`), the same read `guideLandingService.land` makes.
+    const guidedKey = guide.targetKeys[0];
+    if (!guidedKey) throw new PlanningSeedNotFoundError();
+    const rows = await planChangeTurnRepository.listBySessionId(guide.id, pctx.workspaceId, tx);
+    const state = replanOfferStateOf(
+      rows.map((t) => ({ id: t.id, role: t.role, guide: readGuideTurnRecord(t.guideTurn) })),
+      turn.id,
+    );
+    if (!isGuideSeedableState(state)) throw new PlanningSeedNotFoundError();
+    return { offer, targetKey: offer.targetKey, guidedKey, state };
+  });
+}
+
+/** A card the viewer may browse, in THIS project; else {@link PlanningSeedNotFoundError}. */
+async function visibleCardIn(key: string, pctx: ProjectContext): Promise<WorkItemDto> {
+  try {
+    const card = await workItemsService.getWorkItemByIdentifier(pctx.projectId, key, {
+      userId: pctx.userId,
+      workspaceId: pctx.workspaceId,
+    });
+    if (card.projectId !== pctx.projectId) throw new PlanningSeedNotFoundError();
+    return card;
+  } catch (err) {
+    if (isNotVisible(err)) throw new PlanningSeedNotFoundError();
+    throw err;
+  }
+}
+
+/** The target must still take new work: not archived and not in the DONE category.
+ *  It is NOT re-resolved forward — the landing resolved it once, and Confirm asserts
+ *  the scope equals the stored target, so a different anchor would be refused there. */
+async function assertOpenTarget(target: WorkItemDto, pctx: ProjectContext): Promise<void> {
+  const statuses = await workflowsService.listStatusesByProject(pctx.projectId, pctx.workspaceId);
+  const done = statuses.some((s) => s.key === target.status && s.category === 'done');
+  if (target.archivedAt !== null || done) throw new PlanningSeedNotFoundError();
 }
 
 export const planningSeedService = {
@@ -222,6 +299,52 @@ export const planningSeedService = {
             },
           }
         : {}),
+    };
+  },
+  /**
+   * The seed a guide's RE-PLAN OFFER gives the planning surface (story MOTIR-8684 ·
+   * MOTIR-8692; decision MOTIR-8685), addressed by the offer's turn id — never its
+   * text. Owner-only, like the Confirm that follows it; browse-gated on the GUIDED
+   * card and on the TARGET; reads and writes nothing else.
+   *
+   * ⚠️ ONE REFUSAL — {@link PlanningSeedNotFoundError} — for every way there is
+   * "nothing here for you": see {@link readGuideOfferFor}, plus a guided card or a
+   * target the viewer cannot browse (or moved out of the project), and a target that
+   * has become Done or archived since the offer landed. The `firstTurn` is the
+   * request verbatim.
+   */
+  async getGuidePlanningSeed(
+    guideTurnId: string,
+    pctx: ProjectContext,
+  ): Promise<PlanningGuideSeedDTO> {
+    const id = guideTurnId.trim();
+    if (id === '') throw new PlanningSeedNotFoundError();
+    const { offer, targetKey, guidedKey, state } = await readGuideOfferFor(id, pctx);
+    const [guided, target] = await Promise.all([
+      visibleCardIn(guidedKey, pctx),
+      visibleCardIn(targetKey, pctx),
+    ]);
+    await assertOpenTarget(target, pctx);
+    const firstTurn = composeGuideSeedFirstTurn(offer);
+    if (firstTurn === null || offer.targetResolution === 'none') {
+      throw new PlanningSeedNotFoundError();
+    }
+    const seeded = await planChangeSessionsService.findGuideSeededSession(pctx, id);
+    return {
+      source: 'guide',
+      guideTurnId: id,
+      intent: 'plan',
+      anchorKey: target.identifier,
+      firstTurn,
+      offerState: state,
+      seededSessionId: seeded?.sessionId ?? null,
+      seededSessionOpen: seeded?.open ?? false,
+      guide: {
+        guidedKey: guided.identifier,
+        guidedTitle: guided.title,
+        targetResolution: offer.targetResolution,
+        confirmedAt: offer.confirmedAt,
+      },
     };
   },
 };

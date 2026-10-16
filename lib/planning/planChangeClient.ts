@@ -730,7 +730,16 @@ export async function resumeContextualSession(
  *  `seedGateId` (MOTIR-6210) is the REFUSED gate a seeded re-plan starts from. It
  *  rides only when there is no `sessionId` — the first turn — and the server
  *  ignores it otherwise; a gate that may not seed the scope answers
- *  `422 SEED_NOT_APPLICABLE`. */
+ *  `422 SEED_NOT_APPLICABLE`.
+ *
+ *  `seedGuideTurnId` (Story MOTIR-8684 · MOTIR-8693) is the GUIDE OFFER's turn a
+ *  guide-seeded first turn starts from. Like `seedGateId` it rides only the first turn
+ *  (no `sessionId`), and it is NEVER sent together with a gate seed — the two seeds are
+ *  exclusive on the session, so this throws rather than send both. The server answers
+ *  three refusals the caller must word: `409 GUIDE_REPLAN_OFFER_CONFIRMED { sessionId }`
+ *  (the offer already started a session — return to it, send nothing),
+ *  `409 GUIDE_REPLAN_OFFER_NOT_OPEN` (declined or superseded) and
+ *  `422 SEED_NOT_APPLICABLE` (the scope does not hold the offer's target). */
 export async function submitContextualPlan(
   anchorId: string,
   prompt: string,
@@ -739,7 +748,11 @@ export async function submitContextualPlan(
   isAnswer = false,
   sessionId: string | null = null,
   seedGateId: string | null = null,
+  seedGuideTurnId: string | null = null,
 ): Promise<ContextualPlanResponse> {
+  if (seedGateId && seedGuideTurnId) {
+    throw new Error('A planning turn is seeded by a gate or a guide offer, never both.');
+  }
   return post<ContextualPlanResponse>(
     anchorPath(anchorId),
     {
@@ -748,6 +761,7 @@ export async function submitContextualPlan(
       ...extra(targetKeys),
       ...withSession(sessionId),
       ...(seedGateId && !sessionId ? { seedGateId } : {}),
+      ...(seedGuideTurnId && !sessionId ? { seedGuideTurnId } : {}),
     },
     signal,
   );

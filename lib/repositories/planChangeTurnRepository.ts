@@ -40,6 +40,17 @@ export const planChangeTurnRepository = {
    *  AND `workspaceId`, so a turn id from another thread — or another tenant —
    *  resolves to null rather than to somebody else's sentence. `tx` is required:
    *  every caller reads it to guard a following write. */
+  /** One turn by id in this workspace (MOTIR-8691): the guide-seeded start reads the
+   *  offer's turn BEFORE it knows the session, then re-reads it under that session's
+   *  lock. Workspace-scoped, like every read here. */
+  async findById(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeTurn | null> {
+    return tx.planChangeTurn.findFirst({ where: { id, workspaceId } });
+  },
+
   async findByIdInSession(
     id: string,
     sessionId: string,
@@ -79,6 +90,19 @@ export const planChangeTurnRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeTurn> {
     return tx.planChangeTurn.update({ where: { id }, data });
+  },
+
+  /** Rewrite ONE turn's `guide_turn` JSON (MOTIR-8689): the guide reply's record
+   *  gains a decision about its re-plan offer after it was appended. Repository
+   *  only — the rule (who may, in which state) lives in the service, which holds the
+   *  session's row lock. `workspaceId` scopes the write. Requires `tx`. */
+  async setGuideTurn(
+    id: string,
+    workspaceId: string,
+    guideTurn: Prisma.InputJsonValue,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.planChangeTurn.updateMany({ where: { id, workspaceId }, data: { guideTurn } });
   },
 
   /** CLAIM a `debug` turn's one write (MOTIR-7049): stamp `debugLandingClaimedAt`

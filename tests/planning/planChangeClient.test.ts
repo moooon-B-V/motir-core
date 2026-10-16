@@ -273,6 +273,40 @@ describe('planChangeClient — the MULTI-TARGET anchors (MOTIR-1491)', () => {
     });
   });
 
+  it('sends seedGuideTurnId on a first turn only, and never beside a gate seed (MOTIR-8693)', async () => {
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }),
+    );
+
+    await submitContextualPlan(
+      'wi_812',
+      'Re-plan.',
+      ['MOTIR-31'],
+      undefined,
+      false,
+      null,
+      null,
+      't1',
+    );
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      prompt: 'Re-plan.',
+      isAnswer: false,
+      targetKeys: ['MOTIR-31'],
+      seedGuideTurnId: 't1',
+    });
+
+    // A named session is a later turn: the seed is dropped.
+    await submitContextualPlan('wi_812', 'More.', [], undefined, false, 's-1', null, 't1');
+    expect(JSON.parse(lastCall()[1].body as string)).not.toHaveProperty('seedGuideTurnId');
+
+    // The two seeds are exclusive on a session: nothing is sent.
+    fetchMock.mockClear();
+    await expect(
+      submitContextualPlan('wi_812', 'x', [], undefined, false, null, 'g1', 't1'),
+    ).rejects.toThrow(/never both/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('a RESUBMIT re-sends to the same anchor SET — retrying must not re-aim the turn', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }));
 

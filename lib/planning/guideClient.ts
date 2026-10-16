@@ -1,6 +1,6 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import type { GuideTurnRecord } from '@/lib/ai/guideWorkItem';
-import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type { GuidePlanningAccessDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 
 // The browser's half of the GUIDE door (Story MOTIR-7459 · MOTIR-7466) — the
 // three bodies `POST /api/ai/guide` takes (MOTIR-7464) and the settle that lands
@@ -19,6 +19,9 @@ export interface GuideTurnResponse {
   turnId: string | null;
   started: boolean;
   session: PlanChangeSessionDto;
+  /** Whether a re-plan offer's Confirm may be drawn (MOTIR-8694). Optional: a
+   *  response from before the field existed reads as "may plan". */
+  planning?: GuidePlanningAccessDto;
 }
 
 /** What a settle landed. `silent` is a replay, or a job not finished yet. */
@@ -88,4 +91,14 @@ export function settleGuideJob(
   signal?: AbortSignal,
 ): Promise<GuideSettleResponse> {
   return post('/api/ai/guide/settle', { sessionId, jobId }, signal);
+}
+
+/** DECLINE a guide reply's re-plan offer (Story MOTIR-8684 · MOTIR-8694). Plans
+ *  nothing and spends nothing; replayable. Answers the thread as it now stands. */
+export function declineGuideOffer(
+  sessionId: string,
+  turnId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto> {
+  return post('/api/ai/guide/offer/decline', { sessionId, turnId }, signal);
 }

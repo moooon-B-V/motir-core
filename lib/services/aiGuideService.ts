@@ -9,6 +9,7 @@ import {
   buildGuideContext,
   deriveTemporaryList,
   type GuideCardInput,
+  type GuideContextAncestor,
   type GuideContextTurn,
   type GuideRowInput,
 } from '@/lib/ai/guideWorkItem';
@@ -25,8 +26,13 @@ import { AttachmentNotOnWorkItemError } from '@/lib/blob/errors';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import type { WorkItemDto } from '@/lib/dto/workItems';
-import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
+import type {
+  GuidePlanningAccessDto,
+  PlanChangeSessionDto,
+  PlanChangeTurnDto,
+} from '@/lib/dto/planChange';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { deliveryMemberState } from '@/lib/workItems/deliverySet';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -119,6 +125,20 @@ export interface GuideTurnResult {
   /** Whether this call STARTED the conversation (the door's first turn). */
   started: boolean;
   session: PlanChangeSessionDto;
+  /** Whether Confirm may be drawn on a re-plan offer (MOTIR-8694). */
+  planning: GuidePlanningAccessDto;
+}
+
+/**
+ * The planning access an offer's Confirm is drawn by. The door asserted `ai:plan`
+ * (`requireGuidableCard`) before any result is built, so the permission half is
+ * already true; Motir AI being configured is the same read the AI planning
+ * settings page passes as `aiConfigured`.
+ */
+function planningAccess(): GuidePlanningAccessDto {
+  return isMotirAiConfigured()
+    ? { canPlan: true, reason: null }
+    : { canPlan: false, reason: 'ai_not_configured' };
 }
 
 /** The card a guide conversation is about, gated, plus its rows in list order. */
@@ -205,7 +225,36 @@ async function readGuideCard(item: WorkItemDto, ctx: ProjectContext): Promise<Gu
     // The bugs already filed against this card (MOTIR-7800), so the model can
     // cite one instead of filing it again through `file_bug`.
     openBugs: await guideBugFilingService.listOpenBugs(item, ctx),
+    // The card's parent chain (MOTIR-8685), so a `needs_replan` can name the parent
+    // as its target and the guide can see which ancestors are finished.
+    ancestors: await readGuideAncestors(item, ctx),
   };
+}
+
+/** The guided card's ancestors, root → parent, in the card's own project, each with
+ *  its status CATEGORY. An ancestor outside the project is left out: the viewer's
+ *  browse right was checked for this project only. */
+async function readGuideAncestors(
+  item: WorkItemDto,
+  ctx: ProjectContext,
+): Promise<GuideContextAncestor[]> {
+  if (!item.parentId) return [];
+  const [rows, statuses] = await Promise.all([
+    withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
+    ),
+    workflowsService.listStatusesByProject(ctx.projectId, ctx.workspaceId),
+  ]);
+  const categoryOf = new Map(statuses.map((s) => [s.key, s.category]));
+  return rows
+    .filter((row) => row.projectId === ctx.projectId)
+    .map((row) => ({
+      key: row.identifier,
+      title: row.title,
+      type: row.type,
+      status: row.status,
+      statusCategory: categoryOf.get(row.status) ?? null,
+    }));
 }
 
 /** An attachment as the file resolver reads it. */
@@ -352,7 +401,14 @@ async function runTurn(
     { jobId },
     { sessionId: session.id },
   );
-  return { outcome: 'guiding', jobId, turnId: turn.id, started, session: bound };
+  return {
+    outcome: 'guiding',
+    jobId,
+    turnId: turn.id,
+    started,
+    session: bound,
+    planning: planningAccess(),
+  };
 }
 
 export const aiGuideService = {
@@ -383,7 +439,14 @@ export const aiGuideService = {
       { resume: guided.rows.length > 0 },
     );
     if (!opened) {
-      return { outcome: 'guiding', jobId: null, turnId: null, started: false, session };
+      return {
+        outcome: 'guiding',
+        jobId: null,
+        turnId: null,
+        started: false,
+        session,
+        planning: planningAccess(),
+      };
     }
     const first = session.turns.at(-1);
     if (!first) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
@@ -451,7 +514,14 @@ export const aiGuideService = {
     if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
     const guided = await requireGuidableCard(guidedKeyOf(current), ctx);
     if (turn.jobId) {
-      return { outcome: 'guiding', jobId: turn.jobId, turnId, started: false, session: current };
+      return {
+        outcome: 'guiding',
+        jobId: turn.jobId,
+        turnId,
+        started: false,
+        session: current,
+        planning: planningAccess(),
+      };
     }
     return runTurn(guided, current, turn, ctx, false);
   },

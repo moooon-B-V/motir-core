@@ -7545,7 +7545,9 @@
         "aria": "Otwórz {key}, element roboczy, który ta rozmowa planuje ponownie",
         "pickLabel": "Kontynuacja <mono>{key}</mono>",
         "chose": "wybrano: {label}",
-        "pickAria": "Otwórz {key}, wybór, którego kontynuacją jest ta rozmowa (wybrano: {label})"
+        "pickAria": "Otwórz {key}, wybór, którego kontynuacją jest ta rozmowa (wybrano: {label})",
+        "guideLabel": "Z przewodnika po <mono>{key}</mono>",
+        "guideAria": "Otwórz {key}, element roboczy, przez który prowadził Cię Motir AI, gdy zaproponował zmianę planu"
       },
       "end": {
         "failed": "Zamknięta · próba nie powiodła się · {time}",
@@ -7975,6 +7977,16 @@
     "followUpCard": {
       "label": "Kontynuacja wyboru"
     },
+    "guideSeed": {
+      "chip": "z przewodnika",
+      "lead": "Otwarte w {target} na podstawie przewodnika Motir AI po {guided}.",
+      "card": "Z przewodnika",
+      "cardBy": "Potwierdzone przez {who} · {when}",
+      "justNow": "przed chwilą",
+      "you": "Ty",
+      "status": "Planowanie",
+      "offerClosed": "Ta oferta zmiany planu nie jest już otwarta. Wróć do przewodnika, aby zobaczyć, na jakim jest etapie."
+    },
     "guide": {
       "openedFrom": "Otwarto z {key}",
       "reading": "Czytanie {key} i jego listy zadań…",
@@ -8006,7 +8018,8 @@
       "errors": {
         "notManual": "Motir AI prowadzi człowieka przez pracę ręczną, a ten element roboczy jest przeznaczony dla agenta, więc nie ma tu przez co prowadzić.",
         "closed": "Ten element roboczy jest gotowy lub zarchiwizowany, więc nie ma już przez co prowadzić.",
-        "forbidden": "Aby skorzystać z przewodnika, potrzebujesz uprawnień do edycji tego elementu roboczego i do planowania z Motir AI."
+        "forbidden": "Aby skorzystać z przewodnika, potrzebujesz uprawnień do edycji tego elementu roboczego i do planowania z Motir AI.",
+        "offerClosed": "Ta oferta została już rozstrzygnięta, więc nie można jej zmienić. Wczytaj ponownie element roboczy, aby zobaczyć, na jakim jest etapie."
       },
       "youTicked": "Zaznaczono krok {n} na liście",
       "youUnticked": "Odznaczono krok {n} na liście",
@@ -8061,6 +8074,32 @@
         "typeText": "Tekst",
         "typeMarkdown": "Markdown",
         "typeFile": "Plik"
+      },
+      "offer": {
+        "label": "Prośba o zmianę planu",
+        "target": "Cel",
+        "targetElsewhere": "Zmiana planu zaczyna się od {key}, a nie od tego elementu roboczego.",
+        "resolved": "{done} jest gotowe, więc zmiana planu zaczyna się od {open}.",
+        "noTarget": "Brak otwartego elementu roboczego, od którego można zacząć zmianę planu.",
+        "confirm": "Potwierdź",
+        "confirming": "Uruchamianie…",
+        "openSession": "Otwórz sesję planowania",
+        "decline": "Odrzuć",
+        "declining": "Odrzucanie…",
+        "showAll": "Pokaż wszystko",
+        "showLess": "Pokaż mniej",
+        "confirmHelp": "Otwiera planowanie Motir AI dla {key} z wysłaną tą prośbą. Zużywa kredyty.",
+        "declineHelp": "Zamyka tę ofertę. Nic nie zostanie zaplanowane.",
+        "replaced": "Zastąpiona nowszą ofertą",
+        "started": "Zmiana planu rozpoczęta",
+        "startedBy": "Potwierdzone · {when}",
+        "declined": "Odrzucone",
+        "declinedBy": "Odrzucone · {when}",
+        "recorded": "Zapisane w elemencie roboczym",
+        "resumeAt": "Przewodnik „Poprowadź mnie” wznowi od kroku {n}.",
+        "walkStopped": "Przewodnik został zatrzymany.",
+        "cannotPlan": "Nie możesz tu rozpocząć planowania — poproś kogoś, kto może, lub udostępnij tę prośbę.",
+        "noAi": "Motir AI nie jest tu skonfigurowany, więc planowania nie można rozpocząć. Nadal możesz udostępnić tę prośbę."
       }
     },
     "restart": {

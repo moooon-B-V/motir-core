@@ -7545,7 +7545,9 @@
         "aria": "Ouvrir {key}, l'élément de travail que cette conversation replanifie",
         "pickLabel": "Suite de <mono>{key}</mono>",
         "chose": "a choisi {label}",
-        "pickAria": "Ouvrir {key}, le choix dont cette conversation est la suite (a choisi {label})"
+        "pickAria": "Ouvrir {key}, le choix dont cette conversation est la suite (a choisi {label})",
+        "guideLabel": "Depuis le guide de <mono>{key}</mono>",
+        "guideAria": "Ouvrir {key}, l'élément de travail sur lequel Motir AI vous guidait quand il a proposé cette replanification"
       },
       "end": {
         "failed": "Fermée · la tentative a échoué · {time}",
@@ -7975,6 +7977,16 @@
     "followUpCard": {
       "label": "Suite d'un choix"
     },
+    "guideSeed": {
+      "chip": "depuis un guide",
+      "lead": "Ouvert sur {target} depuis le guide de Motir AI sur {guided}.",
+      "card": "Depuis un guide",
+      "cardBy": "Confirmé par {who} · {when}",
+      "justNow": "à l’instant",
+      "you": "vous",
+      "status": "En planification",
+      "offerClosed": "Cette offre de replanification n’est plus ouverte. Retournez au guide pour voir où elle en est."
+    },
     "guide": {
       "openedFrom": "Ouvert depuis {key}",
       "reading": "Lecture de {key} et de sa liste de tâches…",
@@ -8006,7 +8018,8 @@
       "errors": {
         "notManual": "Motir AI guide une personne dans un travail manuel ; or cet élément de travail est destiné à un agent, il n'y a donc rien à guider ici.",
         "closed": "Cet élément de travail est terminé ou archivé, il n'y a donc plus rien à guider.",
-        "forbidden": "Pour être guidé, vous devez avoir l'autorisation de modifier cet élément de travail et de planifier avec Motir AI."
+        "forbidden": "Pour être guidé, vous devez avoir l'autorisation de modifier cet élément de travail et de planifier avec Motir AI.",
+        "offerClosed": "Cette offre a déjà fait l’objet d’une décision et ne peut plus être modifiée. Rechargez l’élément de travail pour voir où elle en est."
       },
       "youTicked": "Vous avez coché l'étape {n} de la liste",
       "youUnticked": "Vous avez décoché l'étape {n} de la liste",
@@ -8061,6 +8074,32 @@
         "typeText": "Texte",
         "typeMarkdown": "Markdown",
         "typeFile": "Fichier"
+      },
+      "offer": {
+        "label": "Requête de replanification",
+        "target": "Destinée à",
+        "targetElsewhere": "La replanification commence sur {key}, et non sur cet élément de travail.",
+        "resolved": "{done} est terminé, la replanification commence donc sur {open}.",
+        "noTarget": "Il n’y a aucun élément de travail ouvert à partir duquel replanifier.",
+        "confirm": "Confirmer",
+        "confirming": "Démarrage…",
+        "openSession": "Ouvrir la session de planification",
+        "decline": "Refuser",
+        "declining": "Refus en cours…",
+        "showAll": "Tout afficher",
+        "showLess": "Afficher moins",
+        "confirmHelp": "Ouvre la planification de Motir AI sur {key} avec cette requête envoyée. Cela consomme des crédits.",
+        "declineHelp": "Ferme cette offre. Rien n’est planifié.",
+        "replaced": "Remplacée par une offre plus récente",
+        "started": "Replanification démarrée",
+        "startedBy": "Confirmée · {when}",
+        "declined": "Refusée",
+        "declinedBy": "Refusée · {when}",
+        "recorded": "Enregistrée sur l’élément de travail",
+        "resumeAt": "« Guidez-moi » reprendra à l’étape {n}.",
+        "walkStopped": "Le parcours est arrêté.",
+        "cannotPlan": "Vous ne pouvez pas lancer la planification ici : demandez à quelqu’un qui le peut, ou partagez cette requête.",
+        "noAi": "Motir AI n’est pas configuré ici, la planification ne peut donc pas démarrer. Vous pouvez tout de même partager cette requête."
       }
     },
     "restart": {

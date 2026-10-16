@@ -1,4 +1,9 @@
-import type { PlanningSeedDTO, PlanningSeedReadDTO } from '@/lib/dto/planningSeed';
+import type {
+  PlanningGuideSeedDTO,
+  PlanningGuideSeedReadDTO,
+  PlanningSeedDTO,
+  PlanningSeedReadDTO,
+} from '@/lib/dto/planningSeed';
 
 // Client read of the REFUSAL SEED (story MOTIR-6068 · MOTIR-6210) from
 // `GET /api/approval-gates/{id}/planning-seed` (MOTIR-6208) — what the planning
@@ -38,4 +43,27 @@ export async function fetchPlanningSeed(
   }
   const body = (await res.json()) as PlanningSeedReadDTO;
   return { ...body.seed, seededSessionId: body.seed.seededSessionId ?? null };
+}
+
+/**
+ * Fetch the GUIDE-OFFER seed for `guideTurnId` (story MOTIR-8684 · MOTIR-8692) from
+ * `GET /api/ai/guide/offer/{turnId}/planning-seed` — the twin of
+ * {@link fetchPlanningSeed}, with the same contract: `null` on `404` (the
+ * no-existence-leak answer), a THROW on any other non-`2xx`, and an abort
+ * propagates as the caller's `AbortError`. The overlay start calls this on open.
+ */
+export async function fetchGuidePlanningSeed(
+  guideTurnId: string,
+  signal?: AbortSignal,
+): Promise<PlanningGuideSeedDTO | null> {
+  const res = await fetch(`/api/ai/guide/offer/${encodeURIComponent(guideTurnId)}/planning-seed`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+    signal,
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Guide offer seed read failed (${res.status})`);
+  }
+  return ((await res.json()) as PlanningGuideSeedReadDTO).seed;
 }

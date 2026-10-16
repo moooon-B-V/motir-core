@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type { GuidePlanningAccessDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import { PlanEditsClientError, streamAskJob } from '@/lib/planning/planEditsClient';
 import {
   openGuideConversation,
+  declineGuideOffer,
   resubmitGuideTurn,
   sendGuideTurn,
   settleGuideJob,
@@ -57,6 +58,10 @@ export interface GuideConversationState {
   markers: GuidePersonMarker[];
   /** A canvas tick the card refused, in the to-do catalog's words. */
   tickError: string | null;
+  /** The offer turn whose Decline is in flight, or null. */
+  decliningTurnId: string | null;
+  /** Whether a re-plan offer's Confirm may be drawn, as the door last said. */
+  planning: GuidePlanningAccessDto;
 }
 
 /** The to-do reads and writes, injected so the hook stays free of the page's
@@ -129,6 +134,8 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
     outOfCredits: false,
     markers: [],
     tickError: null,
+    decliningTurnId: null,
+    planning: { canPlan: true, reason: null },
   });
   const stateRef = useRef(state);
   useEffect(() => {
@@ -221,7 +228,12 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
   const take = useCallback(
     async (response: GuideTurnResponse) => {
       if (!mountedRef.current) return;
-      setState((s) => ({ ...s, session: response.session, phase: 'idle' }));
+      setState((s) => ({
+        ...s,
+        session: response.session,
+        phase: 'idle',
+        planning: response.planning ?? s.planning,
+      }));
       const pending = response.jobId
         ? { jobId: response.jobId }
         : (() => {
@@ -377,5 +389,27 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
     }
   }, []);
 
-  return { state, send, retry, reloadRows, setRowDone };
+  /**
+   * DECLINE a re-plan offer (MOTIR-8694): one stamp on the offer, nothing planned or
+   * spent, no turn run. The thread it answers replaces the held one, so the offer
+   * re-renders from the record as Declined. A refused decline (the offer was already
+   * decided in another tab) re-reads nothing here: the typed code is shown in the
+   * guide's own failure words and the next open reads the record.
+   */
+  const declineOffer = useCallback(async (turnId: string) => {
+    const session = stateRef.current.session;
+    if (!session || stateRef.current.decliningTurnId !== null) return;
+    setState((s) => ({ ...s, decliningTurnId: turnId, errorCode: null }));
+    try {
+      const next = await declineGuideOffer(session.id, turnId);
+      if (!mountedRef.current) return;
+      setState((s) => ({ ...s, session: next, decliningTurnId: null }));
+    } catch (err) {
+      if (!mountedRef.current) return;
+      const { code } = errorCodeOf(err);
+      setState((s) => ({ ...s, decliningTurnId: null, errorCode: code ?? 'FAILED' }));
+    }
+  }, []);
+
+  return { state, send, retry, reloadRows, setRowDone, declineOffer };
 }
