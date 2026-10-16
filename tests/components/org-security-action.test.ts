@@ -26,12 +26,6 @@ vi.mock('next/navigation', async (importOriginal) => ({
   redirect,
 }));
 vi.mock('next/cache', () => ({ revalidatePath }));
-const orgCookie = vi.hoisted(() => ({ value: 'org_acme' as string | null }));
-vi.mock('next/headers', () => ({
-  cookies: async () => ({
-    get: () => (orgCookie.value === null ? undefined : { value: orgCookie.value }),
-  }),
-}));
 vi.mock('@/lib/services/organizationsService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/organizationsService')>()),
   organizationsService: { resolveActiveOrganization },
@@ -39,6 +33,14 @@ vi.mock('@/lib/services/organizationsService', async (importOriginal) => ({
 vi.mock('@/lib/services/twoFactorPolicyService', () => ({
   twoFactorPolicyService: { setOrganizationPolicy },
 }));
+// The pane resolves its org the SHELL's way (MOTIR-8776) — the active
+// workspace's org first, the org cookie as the fallback. That resolution has its
+// own real-Postgres suite (`tests/organizations/activeOrganizationForPane.test.ts`);
+// here it answers whatever `resolveActiveOrganization` is primed with.
+const { resolveActiveOrganizationForPane } = vi.hoisted(() => ({
+  resolveActiveOrganizationForPane: vi.fn(),
+}));
+vi.mock('@/lib/workspaces/tierDisclosure.server', () => ({ resolveActiveOrganizationForPane }));
 
 const ORG = { id: 'org_acme', name: 'Acme', slug: 'acme' };
 
@@ -52,7 +54,9 @@ beforeEach(() => {
   getSession.mockResolvedValue({ user: { id: 'u1' } });
   resolveActiveOrganization.mockResolvedValue({ organization: ORG, role: 'owner' });
   setOrganizationPolicy.mockResolvedValue({ organizationId: ORG.id, requiresTwoFactor: true });
-  orgCookie.value = 'org_acme';
+  resolveActiveOrganizationForPane.mockImplementation((userId: string) =>
+    resolveActiveOrganization(userId),
+  );
 });
 // ⚠️ NO `vi.resetModules()` here. The action is imported dynamically and the
 // error classes statically; resetting the registry between tests gives them two
@@ -126,14 +130,14 @@ describe('setOrganizationRequireTwoFactorAction', () => {
     expect(setOrganizationPolicy).not.toHaveBeenCalled();
   });
 
-  it('resolves the active org with NO cookie — the org-only-member arm', async () => {
-    // `resolveActiveOrganization` takes `null` as "no preference" and picks the
-    // actor's own org. The arm exists for a member whose browser has never set
-    // the cookie, and it must reach the service rather than short-circuit.
-    orgCookie.value = null;
+  it('writes to the org the SHELL names — it never reads the org cookie itself (MOTIR-8776)', async () => {
+    // The cookie is only the shell's FALLBACK; reading it alone made this action
+    // write to whichever org the org menu last named while the header named the
+    // active workspace's. The resolution is the shared helper's, keyed on the
+    // signed-in user and nothing else.
     const run = await action();
     await expect(run(true)).resolves.toEqual({ ok: true });
-    expect(resolveActiveOrganization).toHaveBeenCalledWith('u1', null);
+    expect(resolveActiveOrganizationForPane).toHaveBeenCalledWith('u1');
   });
 
   it('redirects to /dashboard when no active org resolves', async () => {

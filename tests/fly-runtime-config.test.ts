@@ -388,7 +388,14 @@ describe('Dockerfile — the standalone SCOPE ASSERTION, RUN rather than read (M
 describe('fly.toml — the deployment configuration', () => {
   it('pins the region and the VM the ADR decided', () => {
     expect(flyToml).toMatch(/^primary_region\s*=\s*"iad"/m);
-    expect(flyToml).toMatch(/size\s*=\s*"shared-cpu-2x"/);
+    expect(flyToml).toMatch(/size\s*=\s*"performance-1x"/);
+  });
+
+  it('deploys bluegreen, so one running machine is not an outage on every deploy', () => {
+    // The default `rolling` strategy replaces a machine in place; with a single
+    // running `app` machine that is a gap. Unverified against the worker group and
+    // the suspended spare — see the comment above `strategy` in fly.toml.
+    expect(flyToml).toMatch(/^\s*strategy\s*=\s*"bluegreen"$/m);
   });
 
   it('runs migrations from the release command, through the staged lane', () => {
@@ -398,7 +405,7 @@ describe('fly.toml — the deployment configuration', () => {
     expect(flyToml).not.toMatch(/release_command[^\n]*pnpm/);
   });
 
-  it('declares the machine POLICY — and keeps BOTH machines warm', () => {
+  it('declares the machine POLICY — one running, the spare suspended and woken on load', () => {
     // ⚠️ `min_machines_running` WAS 1, AND 2 IS A DECISION (MOTIR-2785,
     // executing `docs/decisions/application-hosting.md` Amendment 7 §14). This
     // assertion went red on that change, which is the guard working.
@@ -415,8 +422,8 @@ describe('fly.toml — the deployment configuration', () => {
     // Measured 2026-08-20 rather than argued: the spare DID start on a deploy at
     // 12:29:18Z and the PROXY stopped it 5m40s later, so this app served its
     // whole load from one machine from 12:35Z onward.
-    expect(flyToml).toMatch(/^\s*min_machines_running\s*=\s*2$/m);
-    expect(flyToml).toMatch(/^\s*auto_stop_machines\s*=\s*"stop"$/m);
+    expect(flyToml).toMatch(/^\s*min_machines_running\s*=\s*1$/m);
+    expect(flyToml).toMatch(/^\s*auto_stop_machines\s*=\s*"suspend"$/m);
     expect(flyToml).toMatch(/^\s*auto_start_machines\s*=\s*true$/m);
   });
 
