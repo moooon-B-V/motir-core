@@ -14,6 +14,14 @@ those two no longer hold the switch off. The one fleet-bound gap left in the
 private set is motir-gateway `docker-image.yml · push_to_registries`
 (`binfmt-misc`).
 
+**Re-measured again (MOTIR-8815):** motir-gateway after it deleted one-api's four
+tag-triggered release workflows (`docker-image.yml`, `macos-release.yml`,
+`windows-release.yml`, `linux-release.yml`). None had ever run; the gateway ships
+through `fly-deploy.yml`. Their jobs leave the manifest, and every fleet-bound job
+in project MOTIR's private repositories is now `runnable`.
+motir-meta is re-measured in the same pass at `c569dd54a`: #632 added one script to
+`guards.yml`'s matrix arguments, with no job, runner or tool change.
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the

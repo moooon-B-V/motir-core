@@ -939,9 +939,9 @@
     "moooon-B-V/motir-gateway": {
       "repoRef": "moooon-B-V/motir-gateway",
       "ref": "main",
-      "sha": "233c4da249a05802ba4f24416f30d675950167ef",
+      "sha": "5f3bfb19d04aba31bd7868269761767cff8b3310",
       "visibility": "private",
-      "measuredAt": "2026-10-16T15:00:35Z",
+      "measuredAt": "2026-10-16T19:25:32Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
       "workflows": [
         {
@@ -1011,19 +1011,6 @@
           ]
         },
         {
-          "path": ".github/workflows/docker-image.yml",
-          "jobs": [
-            {
-              "jobId": "push_to_registries",
-              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
-              "triggers": ["push", "workflow_dispatch"],
-              "verdict": "needs-image",
-              "missing": ["binfmt-misc"],
-              "evidence": ".github/workflows/docker-image.yml:35"
-            }
-          ]
-        },
-        {
           "path": ".github/workflows/fly-deploy.yml",
           "jobs": [
             {
@@ -1033,33 +1020,6 @@
               "verdict": "runnable",
               "missing": [],
               "evidence": ".github/workflows/fly-deploy.yml:42"
-            }
-          ]
-        },
-        {
-          "path": ".github/workflows/linux-release.yml",
-          "jobs": [
-            {
-              "jobId": "release",
-              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
-              "triggers": ["push", "workflow_dispatch"],
-              "verdict": "runnable",
-              "missing": [],
-              "evidence": ".github/workflows/linux-release.yml:48"
-            }
-          ]
-        },
-        {
-          "path": ".github/workflows/macos-release.yml",
-          "jobs": [
-            {
-              "jobId": "release",
-              "runsOn": "macos-latest",
-              "triggers": ["push", "workflow_dispatch"],
-              "verdict": "cannot-host",
-              "missing": [],
-              "evidence": ".github/workflows/macos-release.yml:18",
-              "reason": "runs-on macos-latest: the fleet boots Linux x64 machines only"
             }
           ]
         },
@@ -1075,30 +1035,16 @@
               "evidence": ".github/workflows/rate-drift-dispatch.yml:73"
             }
           ]
-        },
-        {
-          "path": ".github/workflows/windows-release.yml",
-          "jobs": [
-            {
-              "jobId": "release",
-              "runsOn": "windows-latest",
-              "triggers": ["push", "workflow_dispatch"],
-              "verdict": "cannot-host",
-              "missing": [],
-              "evidence": ".github/workflows/windows-release.yml:18",
-              "reason": "runs-on windows-latest: the fleet boots Linux x64 machines only"
-            }
-          ]
         }
       ],
-      "jobCount": 13
+      "jobCount": 9
     },
     "moooon-B-V/motir-meta": {
       "repoRef": "moooon-B-V/motir-meta",
       "ref": "main",
-      "sha": "f37c1f5e637311a49ef450cce71a1953c5b27dd0",
+      "sha": "c569dd54adc5212cfa7e1e4c03b12fd0f66bd923",
       "visibility": "private",
-      "measuredAt": "2026-10-16T15:00:35Z",
+      "measuredAt": "2026-10-16T19:27:50Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
       "workflows": [
         {
