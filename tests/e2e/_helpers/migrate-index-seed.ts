@@ -188,3 +188,27 @@ export async function recordIndexFailed(
     data: { ...ledgerRow(workspaceId, 'failed'), finishedAt, durationMs: 3100, failure },
   });
 }
+
+/**
+ * Point a connected repo's index CLAIM at a ledger row (Story MOTIR-8246). The
+ * per-repo status reads the run its `github_repo.indexing_run_id` names, so a
+ * `running` or `failed` row only lands on a repo once the repo claims it — the
+ * state the index dispatch leaves behind when it starts that repo's container.
+ */
+export async function claimIndexRun(
+  workspaceId: string,
+  repo: { owner: string; name: string },
+  runId: string,
+): Promise<void> {
+  await db.githubRepo.updateMany({
+    where: { workspaceId, owner: repo.owner, name: repo.name },
+    data: { indexingRunId: runId },
+  });
+}
+
+/** A FAILED index run, returned by id so a repo can claim it. */
+export async function recordIndexFailedRun(workspaceId: string, repoRef: string): Promise<string> {
+  const runId = await recordIndexRunning(workspaceId);
+  await recordIndexFailed(workspaceId, repoRef, runId);
+  return runId;
+}

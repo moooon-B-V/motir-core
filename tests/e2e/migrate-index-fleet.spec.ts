@@ -1,9 +1,11 @@
 // E2E: the migrate wizard's INDEX step, driven by the container path's ledger
 // (Story MOTIR-1981 · MOTIR-1993).
 //
-// The index fleet has exactly ONE user-observable surface — the migrate
-// wizard's Index step, which renders a row per connected repo and gates its
-// Next button on `allIndexed`. Everything MOTIR-2026 / MOTIR-2027 do (one
+// The index fleet's user-observable surfaces are the migrate wizard's Index
+// step, which renders a row per connected repo, and — once the person has moved
+// on — the bar's indexing chip and its detail. Since Story MOTIR-8246 the Index
+// step is NOT a stop: Next opens as soon as an index exists in any state, and
+// the per-repo progress is read in the chip's detail at the Import step. Everything MOTIR-2026 / MOTIR-2027 do (one
 // container per (repo × project), boot → poll → settle as durable steps) is
 // invisible from a user's seat except through this surface, so this is where a
 // regression in that path becomes visible to a person. It is also the assertion
@@ -147,6 +149,14 @@ const repoRow = (page: Page, repoName: string) =>
 const nextButton = (page: Page) =>
   indexPanel(page).getByRole('button', { name: 'Next: import your work' });
 
+/** The bar's indexing chip past the Index step (MOTIR-8771), and its detail. */
+const indicator = (page: Page) => page.getByTestId('migrate-index-indicator');
+const detail = (page: Page) => page.getByTestId('migrate-index-detail');
+const detailRow = (page: Page, repo: { owner: string; name: string }) =>
+  detail(page).locator(
+    `[data-testid="migrate-index-detail-repo"][data-repo-ref="${indexRepoRef(repo)}"]`,
+  );
+
 /**
  * The WIZARD's error banner (`<p role="alert">`), scoped to `main`.
  *
@@ -214,7 +224,7 @@ test('@smoke the index lane selects the FAKE orchestrator through the shipped co
 
 // ── The journey ──────────────────────────────────────────────────────────────
 
-test('@smoke migrate Index step — every repo reaches indexed, and Next opens only then', async ({
+test('@smoke migrate Index step — Next opens on the first read, and every repo reaches indexed in the bar', async ({
   page,
 }) => {
   let releaseFirstPoll!: () => void;
@@ -228,8 +238,8 @@ test('@smoke migrate Index step — every repo reaches indexed, and Next opens o
 
   // ── LOADING: the step renders before it knows anything ────────────────────
   // No status yet, so no per-repo list — but a frame the user can read, and no
-  // error. The whole point of the assertion: an unanswered poll must not flash
-  // the error alert or an empty panel.
+  // error. An unanswered poll must not flash the error alert or an empty panel,
+  // and with no repository listed yet there is nothing to move on from.
   const panel = indexPanel(page);
   await expect(page.getByRole('heading', { name: 'Indexing your codebase' })).toBeVisible();
   await expect(panel.getByText('Waiting for repositories to be indexed')).toBeVisible();
@@ -237,34 +247,45 @@ test('@smoke migrate Index step — every repo reaches indexed, and Next opens o
   await expect(errorBanner(page)).toHaveCount(0);
   await expect(nextButton(page)).toBeDisabled();
 
-  // ── PENDING: three repos, none indexed, the gate shut ─────────────────────
+  // ── NOT A STOP (Story MOTIR-8246 · MOTIR-8768): three repos, none indexed,
+  //    and Next is OPEN — the run may leave once an index exists in any state.
   releaseFirstPoll();
   const initial = await waitForIndexStatus(page, (s) => s.total === E2E_INDEX_REPOS.length);
   expect(initial.indexedCount).toBe(0);
   expect(initial.allIndexed).toBe(false);
   // The SET, sorted — the route's order is `githubRepoRepository
   // .listByInstallation`'s `(owner, name)` collation, which is a property of the
-  // connected-repo read and not of this step. Pinning the seed's insertion order
-  // here would assert the fixture, and would break the day a repo is renamed.
+  // connected-repo read and not of this step.
   expect([...initial.repos.map((r) => r.repoRef)].sort()).toEqual(
     E2E_INDEX_REPOS.map(indexRepoRef).sort(),
   );
-
   await expect(panel.getByText('0 of 3 repositories done')).toBeVisible();
   for (const repo of E2E_INDEX_REPOS) {
     await expect(repoRow(page, repo.name)).toContainText('Queued');
   }
-  await expect(nextButton(page)).toBeDisabled();
+  await expect(nextButton(page)).toBeEnabled();
+
+  // ── Leave while nothing is indexed; the progress moves to the bar ─────────
+  const advanced = page.waitForResponse(
+    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
+  );
+  await nextButton(page).click();
+  expect((await advanced).status()).toBe(200);
+  await expect(page.getByRole('heading', { name: 'Bring in your existing backlog' })).toBeVisible();
+
+  await indicator(page).click();
+  await expect(detail(page)).toBeVisible();
+  for (const repo of E2E_INDEX_REPOS) {
+    await expect(detailRow(page, repo)).toHaveAttribute('data-status', 'queued');
+  }
 
   // ── IN FLIGHT: a running row is aggregate, never per-repo ─────────────────
-  // The ledger cannot tie a `running` row to a repo (it carries no output), so
-  // this must move `hasRunning` and NOTHING else — no row may flip on it.
+  // An UNCLAIMED running row cannot be tied to a repo (it carries no output and
+  // no repo points at it), so it must move `hasRunning` and NOTHING else.
   const storefrontRun = await recordIndexRunning(workspaceId);
   const running = await waitForIndexStatus(page, (s) => s.hasRunning);
   expect(running.indexedCount).toBe(0);
   expect(running.repos.every((r) => r.status === 'queued')).toBe(true);
-  await expect(panel).toHaveAttribute('aria-busy', 'true');
-  await expect(nextButton(page)).toBeDisabled();
 
   // ── ONE repo done: its row flips, the others do not ───────────────────────
   await recordIndexSucceeded(workspaceId, indexRepoRef(STOREFRONT), storefrontRun);
@@ -272,11 +293,10 @@ test('@smoke migrate Index step — every repo reaches indexed, and Next opens o
   expect(one.allIndexed).toBe(false);
   expect(one.repos.find((r) => r.repoRef === indexRepoRef(STOREFRONT))?.status).toBe('indexed');
 
-  await expect(repoRow(page, STOREFRONT.name)).toContainText('Indexed');
-  await expect(repoRow(page, BILLING_API.name)).toContainText('Queued');
-  await expect(repoRow(page, SHARED_UI.name)).toContainText('Queued');
-  await expect(panel.getByText('1 of 3 repositories done')).toBeVisible();
-  await expect(nextButton(page)).toBeDisabled();
+  await expect(detailRow(page, STOREFRONT)).toHaveAttribute('data-status', 'indexed');
+  await expect(detailRow(page, BILLING_API)).toHaveAttribute('data-status', 'queued');
+  await expect(detailRow(page, SHARED_UI)).toHaveAttribute('data-status', 'queued');
+  await expect(detail(page).getByText('1 of 3 repositories done')).toBeVisible();
 
   // ── A FAILED container does NOT fake success ──────────────────────────────
   // The run failed, so it wrote no `output.repoRef` — the repo has no graph and
@@ -287,38 +307,23 @@ test('@smoke migrate Index step — every repo reaches indexed, and Next opens o
   const afterFailure = await statusAfterUnchangedWrite(page);
   expect(afterFailure.indexedCount).toBe(1);
   expect(afterFailure.allIndexed).toBe(false);
-  expect(afterFailure.repos.find((r) => r.repoRef === indexRepoRef(BILLING_API))?.status).toBe(
-    'pending',
+  expect(afterFailure.repos.find((r) => r.repoRef === indexRepoRef(BILLING_API))?.status).not.toBe(
+    'indexed',
   );
-
-  await expect(repoRow(page, BILLING_API.name)).toContainText('Queued');
-  await expect(panel.getByText('1 of 3 repositories done')).toBeVisible();
-  await expect(nextButton(page)).toBeDisabled();
+  await expect(detailRow(page, BILLING_API)).not.toHaveAttribute('data-status', 'indexed');
 
   // ── The retry succeeds, and the last repo with it ─────────────────────────
   await recordIndexSucceeded(workspaceId, indexRepoRef(BILLING_API));
   const two = await waitForIndexStatus(page, (s) => s.indexedCount === 2);
   expect(two.allIndexed).toBe(false);
-  await expect(panel.getByText('2 of 3 repositories done')).toBeVisible();
-  await expect(nextButton(page)).toBeDisabled();
+  await expect(detail(page).getByText('2 of 3 repositories done')).toBeVisible();
 
   await recordIndexSucceeded(workspaceId, indexRepoRef(SHARED_UI));
   const all = await waitForIndexStatus(page, (s) => s.allIndexed);
   expect(all.indexedCount).toBe(E2E_INDEX_REPOS.length);
-
-  for (const repo of E2E_INDEX_REPOS) {
-    await expect(repoRow(page, repo.name)).toContainText('Indexed');
-  }
-  await expect(panel.getByText('Code graph built')).toBeVisible();
-  await expect(nextButton(page)).toBeEnabled();
-
-  // ── And only now may the run leave the step ───────────────────────────────
-  const advanced = page.waitForResponse(
-    (r) => r.url().includes('/advance') && r.request().method() === 'POST',
-  );
-  await nextButton(page).click();
-  expect((await advanced).status()).toBe(200);
-  await expect(page.getByRole('heading', { name: 'Bring in your existing backlog' })).toBeVisible();
+  // The chip says done for a moment, then leaves the bar.
+  await expect(indicator(page)).toHaveAttribute('data-state-summary', 'done');
+  await expect(indicator(page)).toHaveCount(0, { timeout: 15_000 });
 });
 
 test('@smoke migrate Index step — no connected repos renders the empty state, not an error', async ({
