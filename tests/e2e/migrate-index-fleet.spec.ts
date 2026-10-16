@@ -262,7 +262,7 @@ test('@smoke migrate Index step — every repo reaches indexed, and Next opens o
   const storefrontRun = await recordIndexRunning(workspaceId);
   const running = await waitForIndexStatus(page, (s) => s.hasRunning);
   expect(running.indexedCount).toBe(0);
-  expect(running.repos.every((r) => r.status === 'pending')).toBe(true);
+  expect(running.repos.every((r) => r.status === 'queued')).toBe(true);
   await expect(panel).toHaveAttribute('aria-busy', 'true');
   await expect(nextButton(page)).toBeDisabled();
 

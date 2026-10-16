@@ -143,9 +143,8 @@ describe('a step the verdict did NOT keep does not run', () => {
     });
     await patch(fx, run.id, { step: 'import' });
 
-    expect((await migrateOnboardingService.advanceFromImport(run.id, fx.ctx)).step).toBe(
-      'audit_convention',
-    );
+    // `import` is the last step a run walks since MOTIR-8770, so the hop is `done`.
+    expect((await migrateOnboardingService.advanceFromImport(run.id, fx.ctx)).step).toBe('done');
   });
 });
 

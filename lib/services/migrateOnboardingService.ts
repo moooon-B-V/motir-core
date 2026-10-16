@@ -396,13 +396,18 @@ function indexExitResult(exit: MigrateIndexExit): ExitResult {
   return exit.graphBuilt ? { ready: true, patch: { codeGraphReady: true } } : { ready: true };
 }
 
-/** import → audit_convention. OPTIONAL step — exit when the user either completed
- *  an import (a succeeded/partially_failed `Import` row exists for this project)
- *  or explicitly skipped it. No kick — the user does the import in the standalone
- *  import wizard or skips; this step only polls the outcome. */
+/** import → done. OPTIONAL step — exit when the user either completed an import
+ *  (a succeeded/partially_failed `Import` row exists for this project) or
+ *  explicitly skipped it. No kick — the user does the import in the standalone
+ *  import wizard or skips; this step only polls the outcome.
+ *
+ *  ⚠️ IT ENDS THE RUN (MOTIR-8770, design MOTIR-8767 revision A). Onboarding no
+ *  longer drafts a plan before the person has said what to build, so a new run
+ *  never walks into `audit_convention` → `discovery` → `generate` → `review`.
+ *  Those wirings stay for runs already parked on them. */
 const IMPORT: StepWiring = {
   from: 'import',
-  to: 'audit_convention',
+  to: 'done',
   async checkExit({ run, ctx }) {
     // Already marked done (skip or completion persisted on a prior advance).
     if (run.importSkipped || run.importCompleted) return { ready: true };
@@ -652,6 +657,19 @@ async function commitAdvance(
   );
 }
 
+/** A run row as its DTO, with the project's latest import beside it
+ *  (MOTIR-8770). Every service read and write of a run answers through here, so
+ *  the wizard's background-import line never disappears after an advance. */
+async function toRunDto(
+  row: MigrateOnboarding,
+  workspaceId: string,
+): Promise<MigrateOnboardingDto> {
+  const latestImport = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    importRepository.findLatestForProject(row.projectId, workspaceId, tx),
+  );
+  return toMigrateOnboardingDto(row, latestImport);
+}
+
 /**
  * The shared transition mechanic. Resolve + access-gate the run and its project,
  * then OUTSIDE any transaction: (1) idempotently KICK the current step's driving
@@ -705,7 +723,7 @@ async function advance(
           tx,
         ),
     );
-    return toMigrateOnboardingDto(row!);
+    return toRunDto(row!, ctx.workspaceId);
   }
 
   // (1) Kick the current step's driving action (idempotent). A kick that submits
@@ -738,7 +756,7 @@ async function advance(
   );
   // `onPreconditionMiss: 'throw'` never yields null — the non-null assertion is
   // the type system catching up with that, not an unchecked assumption.
-  return toMigrateOnboardingDto(row!);
+  return toRunDto(row!, ctx.workspaceId);
 }
 
 /** Page size for the sweep's cross-workspace scan — bounded (finding #57).
@@ -1091,7 +1109,7 @@ export const migrateOnboardingService = {
             tx,
           ),
       );
-      return toMigrateOnboardingDto(row);
+      return toRunDto(row, ctx.workspaceId);
     } catch (err) {
       // A concurrent starter won the unique-index race — surface the typed
       // domain error, never a raw P2002 (the concurrency-to-typed-error rule).
@@ -1112,7 +1130,7 @@ export const migrateOnboardingService = {
     const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       migrateOnboardingRepository.findByProjectId(projectId, ctx.workspaceId, tx),
     );
-    return row ? toMigrateOnboardingDto(row) : null;
+    return row ? toRunDto(row, ctx.workspaceId) : null;
   },
 
   /** One run by id (browse-gated). Throws `MigrateOnboardingNotFoundError` when
@@ -1124,7 +1142,7 @@ export const migrateOnboardingService = {
     );
     if (!row) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
-    return toMigrateOnboardingDto(row);
+    return toRunDto(row, ctx.workspaceId);
   },
 
   /**
@@ -1346,10 +1364,11 @@ export const migrateOnboardingService = {
   },
 
   /**
-   * Skip the OPTIONAL import step — transition `import → audit_convention`,
-   * setting `importSkipped` to true. Only valid when the run is at the `import`
-   * step; rejects with `MigrateOnboardingStepError` otherwise. Idempotent: a run
-   * that already skipped is a no-op (returns the current row as-is).
+   * Skip the OPTIONAL import step — transition `import → done`, completing the
+   * run and setting `importSkipped` to true (MOTIR-8770: the import is the last
+   * step a new run walks). Only valid when the run is at the `import` step;
+   * rejects with `MigrateOnboardingStepError` otherwise. Idempotent: a run that
+   * already skipped is a no-op (returns the current row as-is).
    */
   async skipImport(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
     const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -1362,18 +1381,65 @@ export const migrateOnboardingService = {
     }
     // Already skipped or already past import — idempotent no-op.
     if (existing.importSkipped || existing.importCompleted) {
-      return toMigrateOnboardingDto(existing);
+      return toRunDto(existing, ctx.workspaceId);
     }
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
       (tx) =>
-        migrateOnboardingRepository.update(
-          id,
-          { importSkipped: true, step: 'audit_convention' as MigrateOnboardingStep },
+        commitAdvance(
+          {
+            id,
+            workspaceId: ctx.workspaceId,
+            wiring: { from: 'import', to: 'done' },
+            patch: { importSkipped: true },
+            onPreconditionMiss: 'throw',
+          },
           tx,
         ),
     );
-    return toMigrateOnboardingDto(row);
+    return toRunDto(row!, ctx.workspaceId);
+  },
+
+  /**
+   * ENTER MOTIR (MOTIR-8770, design MOTIR-8767 revision A) — finish onboarding
+   * from `index` or `import` without waiting on the index or on an import.
+   * Edit-gated like `skipImport`. Completes the run (`step: done`, `status:
+   * completed`) through `commitAdvance`, so a concurrent advance lands on the
+   * wrong-step guard rather than double-writing.
+   *
+   * It starts NOTHING and touches nothing else: no convention, no discovery, no
+   * generation, no `Import` row, no `importSkipped` / `importCompleted`, and no
+   * `project.onboardingRanAt` (that marker means a plan was approved; leaving it
+   * null keeps "Resume onboarding" as the way to plan once the person knows what
+   * to build). The index keeps running and `retryIndex` still works afterwards.
+   *
+   * Idempotent: a run already `done` answers its DTO unchanged. From any other
+   * step it is a `MigrateOnboardingStepError`.
+   */
+  async enter(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
+    if (!existing) throw new MigrateOnboardingNotFoundError(id);
+    await projectAccessService.assertCanEdit(existing.projectId, ctx);
+    if (existing.step === 'done') return toRunDto(existing, ctx.workspaceId);
+    if (existing.step !== 'index' && existing.step !== 'import') {
+      throw new MigrateOnboardingStepError(id, existing.step, 'import');
+    }
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
+      (tx) =>
+        commitAdvance(
+          {
+            id,
+            workspaceId: ctx.workspaceId,
+            wiring: { from: existing.step, to: 'done' },
+            onPreconditionMiss: 'throw',
+          },
+          tx,
+        ),
+    );
+    return toRunDto(row!, ctx.workspaceId);
   },
 
   /**

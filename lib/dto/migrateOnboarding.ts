@@ -80,8 +80,34 @@ export interface MigrateOnboardingDto {
    * user, which is what the rail's collapsed row and the provenance line say.
    */
   keptSteps: MigrateOnboardingStepDto[];
+  /**
+   * The project's most recent work-item import, in any status, or null when it
+   * has none (MOTIR-8770). Entering Motir does not wait on an import, so the
+   * wizard reads this to show one still running in the background.
+   */
+  latestImport: MigrateLatestImportDto | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The import status a migrate run reports — mirrors Prisma's `ImportStatus`. */
+export type MigrateLatestImportStatusDto =
+  | 'draft'
+  | 'previewed'
+  | 'running'
+  | 'succeeded'
+  | 'partially_failed'
+  | 'failed';
+
+/**
+ * The project's latest import as the migrate run reports it (MOTIR-8770).
+ * `processedCount` is created + updated + skipped + failed so far. The import
+ * row records no total, so there is no denominator to show.
+ */
+export interface MigrateLatestImportDto {
+  source: 'jira' | 'linear' | 'github' | 'plane' | 'csv';
+  status: MigrateLatestImportStatusDto;
+  processedCount: number;
 }
 
 /** Input to `migrateOnboardingService.startMigration`. The connect step's repo

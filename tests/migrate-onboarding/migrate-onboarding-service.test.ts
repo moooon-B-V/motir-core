@@ -338,7 +338,7 @@ describe('migrateOnboardingService — import step (optional; MOTIR-1643)', () =
 
     await seedCompletedImport(fx);
     const dto = await migrateOnboardingService.advanceFromImport(run.id, fx.ctx);
-    expect(dto.step).toBe('audit_convention');
+    expect(dto.step).toBe('done'); // the import step ends the run (MOTIR-8770);
     expect(dto.importCompleted).toBe(true);
     expect(dto.importSkipped).toBe(false);
   });
@@ -354,10 +354,10 @@ describe('migrateOnboardingService — import step (optional; MOTIR-1643)', () =
     });
 
     const dto = await migrateOnboardingService.advanceFromImport(run.id, fx.ctx);
-    expect(dto.step).toBe('audit_convention');
+    expect(dto.step).toBe('done'); // the import step ends the run (MOTIR-8770);
   });
 
-  it('skipImport transitions import → audit_convention with importSkipped = true', async () => {
+  it('skipImport transitions import → done with importSkipped = true', async () => {
     const fx = await makeWorkItemFixture();
     const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
     await patchRun(fx, run.id, {
@@ -367,7 +367,7 @@ describe('migrateOnboardingService — import step (optional; MOTIR-1643)', () =
     });
 
     const dto = await migrateOnboardingService.skipImport(run.id, fx.ctx);
-    expect(dto.step).toBe('audit_convention');
+    expect(dto.step).toBe('done'); // the import step ends the run (MOTIR-8770);
     expect(dto.importSkipped).toBe(true);
     expect(dto.importCompleted).toBe(false);
   });
@@ -406,7 +406,7 @@ describe('migrateOnboardingService — import step (optional; MOTIR-1643)', () =
     });
 
     const dto = await migrateOnboardingService.advanceFromImport(run.id, fx.ctx);
-    expect(dto.step).toBe('audit_convention');
+    expect(dto.step).toBe('done'); // the import step ends the run (MOTIR-8770);
   });
 });
 
@@ -682,7 +682,7 @@ describe('migrateOnboardingService — advanceNext dispatch + guards', () => {
     // Set importSkipped → advanceNext succeeds.
     await patchRun(fx, run.id, { importSkipped: true });
     const dto = await migrateOnboardingService.advanceNext(run.id, fx.ctx);
-    expect(dto.step).toBe('audit_convention');
+    expect(dto.step).toBe('done'); // the import step ends the run (MOTIR-8770);
   });
 
   it('rejects a transition from the wrong step (no step-skipping / double-advance)', async () => {

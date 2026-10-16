@@ -76,8 +76,8 @@ async function seedRepo(
       ...(index.indexRefusedAt
         ? {
             indexRefusedAt: index.indexRefusedAt,
-            indexRefusedSizeBytes: 5n,
-            indexRefusedCapBytes: 4n,
+            indexRefusedSizeBytes: BigInt(5),
+            indexRefusedCapBytes: BigInt(4),
           }
         : {}),
     },
