@@ -1780,3 +1780,285 @@ pre-flight rows stack and the slot rows wrap.
   including 2f, 2g, 2h, 2i, 2j and 2k, not the happy path alone. Nothing taken.
 - **MOTIR-8480 (exit gate)** and **MOTIR-8481 (substrate)** — 2f is the state their organisation-tier
   gate makes reachable ("whichever of its workspaces connected them"); nothing given or taken.
+
+## Revision 8 (2026-10-16) — the connect step's already-installed accounts: account list, GitHub sign-in prompt, repository picker and every link outcome (MOTIR-8758)
+
+**Amends:** § _Revision 7_ (the connect step's eleven states, panels 2a–2k, as drawn in
+[`onboarding-migrate--connect-states.mock.html`](./onboarding-migrate--connect-states.mock.html)) by
+ADDING states to the step's card body. It reuses, unchanged, the Settings picker's row kinds from
+`design/github/` § _MOTIR-8217_ ([`github--multi-org-account.mock.html`](../github/github--multi-org-account.mock.html)
+panels A2a–A5, built by MOTIR-8223). **Delta mock:**
+[`onboarding-migrate--installed-accounts.mock.html`](./onboarding-migrate--installed-accounts.mock.html).
+Story MOTIR-8245. No earlier mock is edited and no earlier Revision is rewritten; where Revision 7
+and this section disagree about the connect step's card body, this section wins.
+
+**The card asked for three files: an edit of `onboarding-migrate.mock.html` and a re-exported
+`onboarding-migrate.png`.** Both are replaced by this delta mock under
+`docs/decisions/design-result.md` AMENDMENT 4 (`CLAUDE.md` § _Design assets_), exactly as Revision 7
+recorded for its own card: a change is a new `<surface>--<change>.mock.html` holding only the changed
+panels, and there is no `.png` export any more. The pack is two files — this section and the delta
+mock. (Recorded as a build-through discrepancy on MOTIR-8758.)
+
+**Read before drawing:** `origin/main` at **`b6fc3af5d`** (2026-10-15). The folder's last section was
+Revision 7, so this is **Revision 8**. Both published predecessor results were fetched with
+`get_design` — MOTIR-8469 (`connect-states.mock.html` + this notes file, byte-identical to the
+committed mirror) and MOTIR-8217 (`github--multi-org-account.mock.html`).
+
+**The words are MOTIR-8759's.** The sibling copy card already fixes the English and Chinese for this
+surface under `onboardingMigrate.connect.existing.*` and says the design "draws where the strings
+sit, and does not gate their words". This board therefore draws MOTIR-8759's English verbatim, reuses
+shipped keys where that card has none (the Settings picker's search, select-all, picker error and
+nothing-left count labels; the predecessor's status lines), and adds **one** key that card does not
+have (`existing.identity.declinedHint`, below).
+
+**Design system — files read:** root `package.json` (`"@motir/design-system": "workspace:*"`),
+`app/globals.css` (line 13 `@import '@motir/design-system/theme.css'`),
+`packages/design-system/package.json` (**`0.14.0`**, exports `./mock`). **Verdict: ON MOTIR DESIGN —
+branch (a).** The mock is built with `renderMock` from the package's real `Card`, `Button`, `Pill`,
+`Spinner`, `Checkbox`, `Input` and `ErrorState`, axes `warm-editorial` · `motir` · `motir`, every
+frame a `[data-appearance-scope]` carrying `data-theme`. Nothing is proposed for the package.
+`EmptyState` is deliberately not used: "no accounts" is the pre-flight (2n) and "nothing left" is an
+explicit reasoned panel (2q), neither an illustration.
+
+**Shipped reality read this run:** `app/(onboarding)/onboarding/migrate/_components/ConnectPanel.tsx`
+(MOTIR-8475 — the eleven-value `ConnectStepState`, `StatusBlock`, `Preflight`, `RepoList`, the foot row
+with the quiet manage link and Continue, `REPORT_OF_STATUS` with `select_repos → read`),
+`components/onboarding/layout/WarmButton.tsx` (`WARM_CTA`), `lib/github/bannerStatus.ts`
+(`GITHUB_BANNER_TONE`), `app/(authed)/settings/organization/git/_components/` (`ConnectGithubFlow.tsx`,
+`RepoPickerRow.tsx`, `NoReposLeftPanel.tsx`, `githubAccounts.ts`), `lib/dto/github.ts`
+(`GithubAccountsForOrganizationDTO`, `GithubAccountRepositoriesDTO`),
+`app/api/organizations/[orgId]/github/{accounts,installations}/route.ts` (their status lists),
+`messages/en.json` (`github.picker.*`, `onboardingMigrate.connect.*`) and MOTIR-8759's `## Strings`.
+
+### Build note — the folder, listed in full before drawing
+
+```
+design/onboarding-migrate/
+  design-notes.md
+  onboarding-migrate--connect-states.mock.html
+  onboarding-migrate--vibe-layout.mock.html
+  onboarding-migrate.mock.html
+  onboarding-migrate.png
+```
+
+The connect step's current design of record is `onboarding-migrate--connect-states.mock.html`
+(Revision 7, 2a–2k). The other three files are records of earlier moments. This delta amends the
+first and touches none of them.
+
+### Which numbering governs — the panel index
+
+**2a–2k (Revision 7) governs** and keeps its meaning. The new panels continue it as **2l–2t**, one
+letter per numbered state on MOTIR-8758, with roman sub-panels for that state's variants. The board's
+first section is this index.
+
+| card state | panels       | state                                                                                                                                                                              | its next action                                                         |
+| ---------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 1          | 2l.i · 2l.ii | Account list, populated — one account; three, linked and not linked mixed                                                                                                          | Choose repositories (per row) · Install on another account (row)        |
+| 2          | 2m.i · 2m.ii | Account list loading (skeleton under the checking spinner) · could not read                                                                                                        | none · Try again (secondary)                                            |
+| 3          | 2n           | No accounts → the pre-flight **as shipped**, unchanged                                                                                                                             | Connect GitHub (primary)                                                |
+| 4          | 2o.i–iv      | Identity prompt: default · in flight · back from the round trip (list, no prompt) · declined or not finished                                                                       | Sign in with GitHub (primary) · Skip and install instead (quiet)        |
+| 5          | 2p.i–iv      | Picker: the three row kinds · loading · error with retry · 54 rows, scrolling, sticky footer                                                                                       | Connect N (primary, disabled at 0) · Back to accounts                   |
+| 6          | 2q           | Nothing left to offer                                                                                                                                                              | Choose another account (secondary) · Add repositories on GitHub (quiet) |
+| 7          | 2r.i · 2r.ii | `select_repos` arrival opens the picker for that installation · unreachable installation                                                                                           | Connect N · Choose repositories on another account                      |
+| 8          | 2s.i–vii     | Linked · taken meanwhile (409) · empty selection (422 guard) · no longer in the installation (422) · no longer accessible with / without other accounts (403) · not an admin (403) | Continue · Connect N (×3) · Install on another account (×3)             |
+| 9          | 2t.i–iii     | With Already connected (list below) · Waiting for an owner (list above, line below) · Install cancelled (list above, line below)                                                   | Continue · Choose repositories                                          |
+
+Every panel is drawn in light and dark (two `[data-appearance-scope]` frames). Only the card body
+changes; the rail and StepHead are the shipped ones.
+
+### The access path
+
+connect step → **account list** (2l) — or the **identity prompt** (2o) when Motir has no GitHub
+sign-in for the person, or the **pre-flight** (2n) when there is no account → Choose repositories on
+an account → **picker** (2p; or **nothing left**, 2q) → Connect N → **linked** (2s.i) → Continue →
+Index. The install round trip re-enters at the picker: GitHub returns `select_repos` with an
+`installation_id`, and the step opens the picker for that installation (2r.i). The install row is
+present wherever the person can still install, and the identity prompt can always be skipped to the
+pre-flight — **no state depends on signing in with GitHub to install**.
+
+### Layout, element by element (colour role · shape token)
+
+| element                        | part                                                                                                                                    | colour                                                                                                                                             | shape                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| account-list head              | glyph `Building2` + `existing.title` + `existing.hint`                                                                                  | `--el-text-secondary` glyph · `--el-text` title · `--el-text-secondary` hint                                                                       | —                                                                               |
+| account row                    | `<button>` named _Choose repositories from {login}_: avatar disc · login · type pill · link pill · _Choose repositories_ + chevron      | login `--el-text`; disc `--el-avatar-fallback` / `--el-text-inverted`; action `--el-link`; hover `--el-option-active-bg`                           | `--radius-control`, `--spacing-control-x/y`, `--height-control` (Settings' row) |
+| type pill                      | `Pill tone="neutral"` + `Building2` / `UserRound` + _GitHub organisation_ / _Personal account_                                          | `--el-chip-bg` / `--el-text-secondary`                                                                                                             | `--radius-badge`, `--spacing-chip-x`                                            |
+| link pill                      | `Pill severity="success"` + `Check` + _Already linked to this organisation_ · or `Pill tone="neutral"` _Not linked_                     | `--el-tint-mint` / `--el-text-strong` · `--el-chip-bg` / `--el-text-secondary`                                                                     | `--radius-badge`                                                                |
+| install row                    | Settings' dashed row: `Plus` disc, _Install on another account_ + hint, `ExternalLink`                                                  | border `--el-button-border`; disc `--el-card-icon-bg` / `--el-card-icon-fg`; hint `--el-text-secondary`                                            | `--radius-control`, `--spacing-control-x/y`                                     |
+| identity prompt                | inset panel: `UserRound` + title + hint, then primary + skip                                                                            | panel `--el-surface-soft`, border `--el-border`; title `--el-text`; hint and skip `--el-text-secondary` (6.40 / 8.12 — never muted on this ground) | `--radius-card`, `--spacing-card-padding`                                       |
+| one-line notice (2o.iv, 2r.i)  | `Info` + one sentence                                                                                                                   | `--el-tint-sky` / `--el-text-strong`                                                                                                               | `--radius-control`, `--spacing-control-x/y`                                     |
+| outcome notice (2s.ii, iv–vii) | `Info` + title (semibold) + hint                                                                                                        | `--el-tint-sky` / `--el-text-strong`                                                                                                               | `--radius-control`, `--spacing-control-x/y`                                     |
+| picker back                    | `ArrowLeft` + _Back to accounts_                                                                                                        | `--el-link`                                                                                                                                        | —                                                                               |
+| picker head                    | initial disc + _Repositories in {login}_ + `picker.hint`                                                                                | as account row; hint `--el-text-secondary`                                                                                                         | —                                                                               |
+| search                         | `Input` with `Search` addon                                                                                                             | the part's own                                                                                                                                     | `--radius-input`, `--height-input`                                              |
+| select-all + counter           | `Checkbox labelVisible` · `picker.selectedCount` (`aria-live`)                                                                          | `--el-text` · `--el-text-secondary`                                                                                                                | —                                                                               |
+| repository row                 | `RepoPickerRow`'s markup: `Checkbox`, owner/ + name, availability mark; `sr-only` _Available_ / _This repository can't be chosen here._ | owner `--el-text-secondary`, name `--el-text` (locked rows `--el-text-secondary`); `Lock` / `Check` `--el-icon-muted`                              | `--radius-control`, `--height-control`                                          |
+| just-taken row (2s.ii)         | the same row, locked, with `Info` beside _Connected to another organisation_                                                            | row ground `--el-tint-sky`; all its text `--el-text-strong`                                                                                        | `--radius-control`                                                              |
+| picker footer                  | top rule, guard text left, primary right; **sticky** in 2p.iv                                                                           | rule `--el-border-soft`; sticky ground `--el-card`                                                                                                 | —                                                                               |
+| nothing left                   | `CircleSlash` + title, two count tiles, hint, two actions                                                                               | tiles border `--el-border-soft`, label `--el-text-secondary`, glyph `--el-icon-muted`, number `--el-text`                                          | tiles `--radius-card`, `--spacing-control-x/y`                                  |
+| primaries                      | Sign in with GitHub · Connect N · Connect GitHub · Continue                                                                             | `--el-cta-warm` / `--el-cta-warm-text` (`WARM_CTA`)                                                                                                | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x`                            |
+
+**Never colour alone:** each type pill carries a building or person glyph; the linked pill a check;
+each locked repository a lock or a check beside its words; the just-taken row an `Info` glyph and its
+words; every notice an `Info` glyph.
+
+### Behaviour the board depicts
+
+1. **One primary per panel, at most.** The account list has none: each row's _Choose repositories_
+   is the choice, the install row is secondary. The identity prompt's sign-in is its one primary; the
+   picker's is Connect N; linked and already-connected keep Continue.
+2. **The account list sits ABOVE the install control and replaces the pre-flight's lone Connect
+   GitHub** whenever the accounts read answers at least one account. With none (2n), the step is the
+   shipped pre-flight unchanged.
+3. **The identity prompt is skippable.** Skip removes the prompt for this visit and shows the
+   pre-flight (2b as shipped). Sign-in leaves in the same tab and returns to this step, which reads
+   the accounts again and shows the list with no stale prompt (2o.iii).
+4. **A linked-here account stays pickable** (2l.ii): its picker shows its connected repositories
+   checked and locked (_Connected here_), so the person can add more.
+5. **`connected_elsewhere` names nobody** — the row says _Connected to another organisation_ and
+   nothing else, in the picker, the nothing-left counts and every outcome.
+6. **Taken meanwhile (409)** re-reads the repositories: the outcome sits on top of the picker, the
+   named row is marked in place (tinted, locked, `Info`), every other choice is kept and Connect N
+   stays enabled; nothing was written.
+7. **422** has two faces: zero selected is prevented (Connect disabled, `outcome.selectionRequiredTitle`
+   in the footer as secondary text — not an alert; should the 422 come back anyway the full outcome
+   shows on top), and a repository no longer in the installation re-reads the list in place with the
+   outcome on top and the remaining selection kept.
+8. **403 is two different outcomes.** `installation_not_accessible` removes that account from the
+   list and says why (2s.v; when it was the last, 2s.vi leaves the install row). A member's refusal
+   (not an organisation admin) replaces the account list and the identity prompt with its outcome
+   and keeps the install row (2s.vii). The step tells the two apart by the response body code, never
+   by the status (MOTIR-8765 asserts they differ).
+9. **`select_repos`** opens the picker directly, under `picker.fromInstallHint` (2r.i); an
+   installation the person cannot reach shows the shipped `installation_not_accessible` line above
+   whatever the accounts read gives (2r.ii).
+10. **Combinations** (card #9): Already connected keeps its block and Continue on top, with the list
+    below as the secondary way to add more (2t.i); Waiting for an owner and Install cancelled keep
+    the list above and their shipped status line below, with no second install button — the install
+    row in the list is the retry (2t.ii, 2t.iii).
+
+### The data each state needs
+
+- **Account** (list rows): login · type (GitHub organisation / personal account) · avatar (or the
+  initial) · link state (already linked here / not linked).
+- **The accounts read's three answers:** accounts (0..n) · identity required · a failure (2m.ii).
+  Plus whether the person may link at all (organisation admin), which decides 2s.vii.
+- **Repository** (picker rows): full name · availability (available / connected here / connected
+  elsewhere). **Counts** for nothing-left: connected here · connected elsewhere.
+- **Link outcome:** success with the connected repositories; or a refusal by kind — taken meanwhile
+  naming the repository or repositories; selection empty; repository no longer visible;
+  installation not accessible; not an admin.
+- **Arrival:** the `select_repos` return and its installation reference.
+
+### Slot → key (Revision 8)
+
+MOTIR-8759 owns the words; this table says where each one sits. **8759** rows are that card's keys
+under `onboardingMigrate.connect.existing.*`, English verbatim from its `## Strings`. **Reused**
+rows already ship in all eleven languages. **GIVES** is the one key this board needs that MOTIR-8759
+does not list.
+
+| slot                             | key                                                                                                                    | status           | English                                                                                                                                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| account-list title · hint        | `existing.title` · `existing.hint`                                                                                     | 8759             | Your GitHub accounts with the Motir App · The Motir App is already installed on these accounts. Pick one to connect its repositories here. You do not need to install again. |
+| 2m.i loading line                | `existing.loading`                                                                                                     | 8759             | Looking for your GitHub accounts…                                                                                                                                            |
+| type pill                        | `existing.typeOrg` · `existing.typeUser`                                                                               | 8759             | GitHub organisation · Personal account                                                                                                                                       |
+| linked pill                      | `existing.linkedHere`                                                                                                  | 8759             | Already linked to this organisation                                                                                                                                          |
+| not-linked pill                  | `github.picker.notLinked`                                                                                              | reused           | Not linked                                                                                                                                                                   |
+| row action · its accessible name | `existing.pickCta` · `existing.pickAria`                                                                               | 8759             | Choose repositories · Choose repositories from {login}                                                                                                                       |
+| account-list `aria-label`        | `github.picker.accountsLabel`                                                                                          | reused           | Accounts                                                                                                                                                                     |
+| install row · hint               | `existing.installAnotherCta` · `existing.installAnotherHint`                                                           | 8759             | Install on another account · Use this if the account you want is not listed.                                                                                                 |
+| 2m.ii title · hint · retry       | `existing.loadErrorTitle` · `existing.loadErrorHint` · `existing.retryCta`                                             | 8759             | We could not read your GitHub accounts · Nothing was changed. Try again, or install on another account. · Try again                                                          |
+| 2o title · hint · primary · skip | `existing.identity.title` · `.hint` · `.cta` · `.skipCta`                                                              | 8759             | (as in 8759)                                                                                                                                                                 |
+| 2o.ii loading label              | `starting`                                                                                                             | reused           | Opening GitHub…                                                                                                                                                              |
+| 2o.iv line                       | `existing.identity.declinedHint`                                                                                       | **GIVES → 8759** | GitHub did not sign you in, so nothing was changed. Try again, or skip and install instead.                                                                                  |
+| picker head · hint · back        | `existing.picker.heading` · `.hint` · `.backCta`                                                                       | 8759             | Repositories in {login} · Choose the repositories this organisation connects. Nothing is connected until you confirm. · Back to accounts                                     |
+| 2r.i line                        | `existing.picker.fromInstallHint`                                                                                      | 8759             | You chose an account the Motir App is already installed on. Choose which of its repositories this organisation connects.                                                     |
+| 2p.ii line                       | `existing.picker.loading`                                                                                              | 8759             | Loading repositories…                                                                                                                                                        |
+| search · select-all              | `github.picker.search` · `github.picker.selectAll`                                                                     | reused           | Search repositories · Select all available ({count})                                                                                                                         |
+| counter · Connect N              | `existing.picker.selectedCount` · `existing.picker.confirmCta`                                                         | 8759             | {count} repositories selected · Connect {count} repositories (disabled at 0)                                                                                                 |
+| row marks                        | `existing.picker.available` (sr-only) · `.connectedHere` · `.connectedElsewhere` · `.connectedElsewhereHint` (sr-only) | 8759             | Available · Connected here · Connected to another organisation · This repository can't be chosen here.                                                                       |
+| 2p.iii                           | `github.picker.reposError.title` · `.body` · `github.picker.retry`                                                     | reused           | Couldn't load repositories · (as shipped) · Try again                                                                                                                        |
+| 2q title · hint · link           | `existing.picker.nothingLeftTitle` · `.nothingLeftHint` · `.nothingLeftCta`                                            | 8759             | Nothing left to connect from this account · (as in 8759) · Add repositories on GitHub                                                                                        |
+| 2q count labels · button         | `github.picker.noneLeft.connectedHere` · `.connectedElsewhere` · `.chooseAnother`                                      | reused           | Connected to this organisation · Connected to other organisations · Choose another account                                                                                   |
+| 2s.i                             | `existing.outcome.linkedTitle` · `.linkedHint` + `pill.connected` · `detected` · `continue`                            | 8759 + reused    | Repositories connected · (as in 8759)                                                                                                                                        |
+| 2s.ii                            | `existing.outcome.takenTitle` · `.takenHint`                                                                           | 8759             | A repository was taken while you were choosing · Another organisation connected {repos}. …                                                                                   |
+| 2s.iii guard                     | `existing.outcome.selectionRequiredTitle` (· `.selectionRequiredHint` if a 422 returns)                                | 8759             | Choose at least one repository                                                                                                                                               |
+| 2s.iv                            | `existing.outcome.notVisibleTitle` · `.notVisibleHint`                                                                 | 8759             | A repository is no longer in this installation · Nothing was connected. The list is updated, so choose again.                                                                |
+| 2s.v · 2s.vi                     | `existing.outcome.notAccessibleTitle` · `.notAccessibleHint`                                                           | 8759             | You can no longer reach that account · (as in 8759)                                                                                                                          |
+| 2s.vii                           | `existing.outcome.notAdminTitle` · `.notAdminHint`                                                                     | 8759             | Only an organisation admin can link an existing installation · (as in 8759)                                                                                                  |
+| 2r.ii line                       | `pill.notConnected` · `outcome.installation_not_accessibleTitle` · `…Hint`                                             | reused           | (as shipped)                                                                                                                                                                 |
+| 2t.\* status lines               | `pill.*`, `alreadyConnected*`, `ownerPending*`, `cancelled*`, `continue`, `manage`                                     | reused           | (as shipped)                                                                                                                                                                 |
+
+**Locale set:** MOTIR-8759's keys plus `existing.identity.declinedHint` need `zh` (MOTIR-8759) and
+the nine other app languages (MOTIR-8761). Reused keys already exist in all eleven. Account logins
+(`acme-labs`, `acme-mobile`, `dana-okafor`), repository names and counts are fixtures.
+
+### AA — the measured pairs (motir palette, computed in the rendered mock's own light and dark scopes, WCAG 2.x)
+
+| ink → ground                                                                        | light   | dark    | needs |
+| ----------------------------------------------------------------------------------- | ------- | ------- | ----- |
+| `--el-text` → `--el-card`                                                           | 17.63:1 | 16.75:1 | 4.5   |
+| `--el-text-secondary` → `--el-card`                                                 | 6.75:1  | 8.64:1  | 4.5   |
+| `--el-text` → `--el-surface-soft` (identity prompt title)                           | 16.73:1 | 15.74:1 | 4.5   |
+| `--el-text-secondary` → `--el-surface-soft` (identity prompt hint, skip)            | 6.40:1  | 8.12:1  | 4.5   |
+| `--el-text-strong` → `--el-tint-sky` (notices, outcomes, just-taken row, info pill) | 12.66:1 | 11.14:1 | 4.5   |
+| `--el-text-strong` → `--el-tint-mint` (linked pill, success pill)                   | 12.90:1 | 11.08:1 | 4.5   |
+| `--el-text-secondary` → `--el-chip-bg` (type pill, not-linked pill)                 | 5.91:1  | 7.81:1  | 4.5   |
+| `--el-link` → `--el-card` (Choose repositories, Back to accounts)                   | 6.31:1  | 8.89:1  | 4.5   |
+| `--el-text-inverted` → `--el-avatar-fallback` (initial disc)                        | 6.31:1  | 8.89:1  | 4.5   |
+| `--el-cta-warm-text` → `--el-cta-warm` (primaries)                                  | 4.65:1  | 5.89:1  | 4.5   |
+| `--el-icon-muted` → `--el-card` (lock, check, external glyphs)                      | 6.07:1  | 7.78:1  | 3     |
+
+The overlapping pairs reproduce Revision 7's numbers exactly. No text in the asset is painted with
+`--el-text-muted` or `--el-text-faint`, and no danger ink is used anywhere on the board.
+
+### Findings
+
+- **F1 — the onboarding identity prompt is not Settings' identity panel.** Settings' `identity`
+  copy sends the person to _Settings → Account → Git accounts_; on onboarding that would leave the
+  wizard. This step signs in in place and returns (2o), with MOTIR-8759's own `existing.identity.*`
+  words. The sign-in that returns to the onboarding surface is MOTIR-8762's.
+- **F2 — `installation_not_accessible` is `danger` in `GITHUB_BANNER_TONE`**, but on this step the
+  person did nothing wrong, and the card asks for a benign tone for every non-success state. 2r.ii
+  draws it **info** on the connect step only; Settings' banner tone is not changed here.
+- **F3 — taken meanwhile is an outcome, not a row error.** Settings marks the named row with a
+  `--el-danger-on-surface` sentence (`RepoPickerRow`'s `error`). MOTIR-8759 words it as an outcome
+  with a title and a hint, so 2s.ii puts the outcome on top and marks the named row in place with a
+  benign tint. The picker row's markup is otherwise `RepoPickerRow`'s; the onboarding picker does not
+  pass its `error`.
+- **F4 — the two 403s are only distinguishable by body code** (behaviour 8).
+- **F5 — `confirmCta` has no zero form.** At zero selected the disabled primary reads _Connect 0
+  repositories_; the footer's guard line carries the meaning. A `=0` arm is the copy card's call, not
+  this board's.
+
+### GIVES / TAKES
+
+- **MOTIR-8759 (copy, EN + ZH)** — **GIVES** where each of its keys sits (the slot table) and ONE key
+  it does not list: `existing.identity.declinedHint` (2o.iv). **TAKES** nothing.
+- **MOTIR-8761 (nine languages)** — **GIVES** the same added key beside MOTIR-8759's set. Nothing taken.
+- **MOTIR-8762 (account list, sign-in, admin gate)** — **GIVES** 2l, 2m, 2n, 2o, 2s.v–vii, 2t and
+  behaviour 1–4, 8, 10. **TAKES** the pre-flight's place as the step's FIRST body whenever at least
+  one account is listed (the pre-flight's lone Connect GitHub becomes the install row there).
+- **MOTIR-8763 (picker, nothing left, `select_repos`)** — **GIVES** 2p, 2q, 2r and behaviour 5, 9.
+  **TAKES** the `select_repos` read's mapping to a status line with a link to GitHub: arrival now
+  opens the picker for that installation.
+- **MOTIR-8764 (confirm and outcomes)** — **GIVES** 2s.i–iv and behaviour 6–8. Nothing taken.
+- **MOTIR-8760 (setup-route pin)** — **GIVES** the arrival 2r.i depends on (`select_repos` +
+  `installation_id` back to this step). Nothing taken.
+- **MOTIR-8765 (integration)** — **GIVES** the outcomes it must keep distinguishable: taken
+  meanwhile, nothing left (both counts), no longer accessible vs not an admin. Nothing taken.
+- **MOTIR-8766 (E2E)** — **GIVES** the walk: list → Choose repositories → picker → Connect N →
+  linked → Continue, in English and Chinese, plus the identity prompt. Nothing taken.
+
+### Sweep
+
+- **Keys:** every reused key in the table resolves in `messages/en.json` at `b6fc3af5d`
+  (`github.picker.*`, `onboardingMigrate.connect.*`). No `onboardingMigrate.connect.existing.*` key
+  exists yet — expected; MOTIR-8759 writes them.
+- **Criteria this changes:** Revision 7 § _Behaviour_ 1 ("2b/2h: Connect GitHub is the only way
+  out of the pre-flight") and its "the step's empty state is the pre-flight" now hold **only when the
+  accounts read lists no account** (2n); with accounts listed, the list leads (behaviour 2 above).
+  Amended here rather than in Revision 7, which stays a record. In code,
+  `ConnectPanel.tsx`'s `preflight` case, `tests/components/onboarding-connect-step.test.tsx` and
+  `tests/e2e/acceptance-onboarding-github-connect.spec.ts` assume the pre-flight on arrival; they
+  remain true for the no-account case and are MOTIR-8762's to extend, not to rewrite.
