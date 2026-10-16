@@ -322,7 +322,7 @@ function AccountRow({
 }
 
 /** Settings' dashed install row (MOTIR-8223), pressing the step's own install. */
-function InstallRow({ onInstall }: { onInstall: () => void }) {
+export function InstallRow({ onInstall }: { onInstall: () => void }) {
   const t = useTranslations('onboardingMigrate.connect');
   return (
     <button

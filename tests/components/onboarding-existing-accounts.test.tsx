@@ -168,16 +168,20 @@ describe('accounts listed (2l)', () => {
     expect(screen.queryByText(c.preflightCta)).toBeNull();
   });
 
-  it('a pick goes no further than the seam — no repository read, no link', async () => {
+  it('a pick reads that account’s repositories and posts no link', async () => {
     const spy = fake(makeState('not_started'), ok([ACME]));
     renderStep();
     await settle();
-    const before = spy.mock.calls.length;
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Choose repositories from acme-labs' }));
     });
-    expect(spy.mock.calls.length).toBe(before);
-    expect(screen.getByTestId('existing-accounts')).toBeTruthy();
+    // The picker behind the pick is MOTIR-8763's (its own test file).
+    expect(spy.mock.calls.some(([u]) => String(u).endsWith('/accounts/101/repositories'))).toBe(
+      true,
+    );
+    expect(
+      spy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+    ).toBe(false);
   });
 
   it('pressing the install row is the step’s own install press', async () => {

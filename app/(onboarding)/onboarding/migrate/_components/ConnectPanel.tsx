@@ -39,7 +39,9 @@ import type {
   MigrateConnectStateDto,
 } from '@/lib/dto/migrateOnboarding';
 import { StepHead } from './StepHead';
-import { ExistingAccounts, existingAccountsShown } from './ExistingAccounts';
+import { ExistingAccounts, InstallRow, existingAccountsShown } from './ExistingAccounts';
+import { ExistingRepositoryPicker } from './ExistingRepositoryPicker';
+import { useAccountRepositories } from './useAccountRepositories';
 import { useInstalledAccounts } from './useInstalledAccounts';
 
 // THE CONNECT STEP (Story MOTIR-8241 · MOTIR-8475), built on
@@ -273,9 +275,23 @@ export function ConnectPanel({
   const [identityDeclined] = useState(() =>
     IDENTITY_DECLINED.has(searchParams.get('github') ?? ''),
   );
-  // The account the person picked — the repository picker behind it is
-  // MOTIR-8763's; this card records the pick and goes no further.
-  const [, setPickedInstallation] = useState<string | null>(null);
+  // The account whose repositories the picker shows (MOTIR-8763): a pick from
+  // the list, or the install round trip's `select_repos` + `installation_id`,
+  // read ONCE here beside the report (`select_repos` stays a `read` status
+  // there) and dropped from the address with the rest of `RETURN_PARAMS`.
+  const [pickTarget, setPickTarget] = useState<{
+    installationId: string;
+    fromInstall: boolean;
+  } | null>(() => {
+    const id = searchParams.get('installation_id');
+    return searchParams.get('github') === 'select_repos' && id
+      ? { installationId: id, fromInstall: true }
+      : null;
+  });
+  const repositories = useAccountRepositories(
+    read?.organizationId ?? null,
+    pickTarget?.installationId ?? null,
+  );
 
   const phaseRef = useRef<SendPhase>('idle');
   const beforeRef = useRef<string | null>(null);
@@ -415,7 +431,7 @@ export function ConnectPanel({
     void readNow('retry');
     accounts.reload();
   };
-  const existing =
+  const accountsBlock =
     read !== null && existingAccountsShown(accounts.state, identitySkipped) ? (
       <ExistingAccounts
         state={accounts.state}
@@ -423,10 +439,56 @@ export function ConnectPanel({
         identityDeclined={identityDeclined}
         onSkipIdentity={() => setIdentitySkipped(true)}
         onRetry={accounts.reload}
-        onPickAccount={(installationRef) => setPickedInstallation(installationRef)}
+        onPickAccount={(installationId) => setPickTarget({ installationId, fromInstall: false })}
         onInstall={send}
       />
     ) : null;
+  // 2r.ii: the install round trip named an installation this person cannot
+  // reach — the picker does not open; the shipped line sits above whatever the
+  // accounts read gives, and an install control is always there.
+  const arrivalUnreachable =
+    pickTarget?.fromInstall === true && repositories.state.kind === 'not_accessible';
+  const pickedAccount =
+    pickTarget && accounts.state.kind === 'ok'
+      ? accounts.state.accounts.find((a) => a.installationId === pickTarget.installationId)
+      : undefined;
+  const firstRow =
+    repositories.state.kind === 'ok' ? repositories.state.rows[0]?.fullName : undefined;
+  const pickedLogin =
+    pickedAccount?.accountLogin ?? firstRow?.split('/')[0] ?? pickTarget?.installationId ?? '';
+  const existing =
+    read === null ? null : pickTarget && !arrivalUnreachable ? (
+      <ExistingRepositoryPicker
+        accountLogin={pickedLogin}
+        state={repositories.state}
+        selected={repositories.selected}
+        taken={repositories.taken}
+        fromInstall={pickTarget.fromInstall}
+        manageUrl={githubInstallationManageUrl({
+          accountLogin: pickedLogin,
+          accountType: pickedAccount?.accountType ?? 'User',
+          installationId: pickTarget.installationId,
+        })}
+        onToggle={repositories.toggle}
+        onToggleAll={repositories.toggleAll}
+        onBack={() => setPickTarget(null)}
+        onRetry={repositories.refresh}
+        // The link is MOTIR-8764's; the picker hands it the chosen ids.
+        onConfirm={() => {}}
+      />
+    ) : arrivalUnreachable ? (
+      <>
+        <StatusBlock
+          pill={{ tone: 'info', label: t('pill.notConnected') }}
+          glyph={<Info className="size-4" />}
+          title={t('outcome.installation_not_accessibleTitle')}
+          hint={t('outcome.installation_not_accessibleHint')}
+        />
+        {accountsBlock ?? <InstallRow onInstall={send} />}
+      </>
+    ) : (
+      accountsBlock
+    );
   const account = read?.installation.accounts[0];
   const manageUrl = manageUrlFor(account);
   const repos = read?.repositories ?? [];
