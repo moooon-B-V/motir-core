@@ -21,6 +21,16 @@ import type { LiveSignalListener, LiveSignalSource } from '../liveSignal';
 // connection carries `moved: []` to hand the client its cursor, and a reconnect
 // that missed nothing carries the same. Signalling those would re-read on every
 // reconnect, which is the cost this design avoids.
+//
+// ⚠️ THE CONNECTION PARKS IN A HIDDEN TAB (Story MOTIR-8542 · Subtask MOTIR-8731).
+// A tab hidden for `WORKBENCH_STREAM_HIDDEN_GRACE_MS` aborts its connection and
+// PARKS: no fetch, no watchdog, no backoff timer, no `offline` / `online` wake —
+// the cursor, the listeners and `seq` are kept. Shown again, it reopens at once
+// with the held cursor, and the server's opening frame names whatever moved
+// while it was away, so the catch-up is ONE nudge through the ordinary path. A
+// park is deliberate, so it never reads as a drop: `reconnecting` stays false
+// through hide, park and reopen (design-notes § 39 rule 2), and only a reopen
+// that FAILS enters the drop path. The grace keeps a quick tab switch free.
 
 /** The stream's address — one place, so the source and its tests agree. */
 export const WORKBENCH_STREAM_PATH = '/api/workbench/stream';
@@ -52,11 +62,28 @@ const BACKOFF_CEILING_MS = 15_000;
  */
 export const STREAM_STALE_MS = 35_000;
 
+/**
+ * How long a tab may stay hidden before its connection parks. A quick tab switch
+ * keeps the connection; a tab left in the background stops holding one.
+ */
+export const WORKBENCH_STREAM_HIDDEN_GRACE_MS = 30_000;
+
+function isHidden(): boolean {
+  return typeof document !== 'undefined' && document.visibilityState === 'hidden';
+}
+
 /** How often the watchdog looks. Cheap, and never the thing that decides. */
 const WATCHDOG_TICK_MS = 2_000;
 
 function isTabKey(value: unknown): value is WorkbenchTabKey {
   return typeof value === 'string' && (WORKBENCH_TAB_KEYS as readonly string[]).includes(value);
+}
+
+interface PumpHandle {
+  /** End the pump and its connection; nothing reconnects. */
+  stop(): void;
+  /** The tab was shown: forget the silence measured while it was hidden. */
+  freshen(): void;
 }
 
 export interface WorkbenchStreamSource extends LiveSignalSource {
@@ -70,8 +97,12 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
   // The cursor the next connection presents. It outlives every connection.
   let cursor: string | null = null;
   let seq = 0;
-  // The running pump's stop, or null when no connection is held.
-  let stopPump: (() => void) | null = null;
+  // The running pump, or null when no connection is held (none subscribed, or parked).
+  let pumpHandle: PumpHandle | null = null;
+  // Parked: subscribed, but the tab has been hidden past the grace, so no
+  // connection is held until it is shown again.
+  let parked = false;
+  let graceTimer: ReturnType<typeof setTimeout> | null = null;
 
   const signal = (moved: WorkbenchTabKey[]): void => {
     seq += 1;
@@ -79,13 +110,17 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
     for (const listener of [...listeners]) listener(next);
   };
 
-  const startPump = (): (() => void) => {
+  const startPump = (): PumpHandle => {
     // ⚠️ TWO CONTROLLERS, AND THE SPLIT IS LOAD-BEARING. `lifetime` is the last
     // subscriber leaving, after which nothing reconnects. Each CONNECTION gets
     // its own, so the watchdog and the `offline` listener can kill a dead
     // connection without telling the pump to give up.
     const lifetime = new AbortController();
     let cancelled = false;
+    // When this connection last delivered a byte. Pump-scoped so a show can
+    // reset it: a gap measured across a hidden spell is the browser throttling
+    // timers, not a dead connection.
+    let lastByteAt = Date.now();
 
     const pump = async (): Promise<void> => {
       for (let attempt = 0; !cancelled; attempt += 1) {
@@ -95,8 +130,11 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
         // A browser that KNOWS it is offline says so at once, rather than waiting
         // out the watchdog: the reader is told in the moment the lift stops.
         window.addEventListener('offline', dropConnection);
-        let lastByteAt = Date.now();
+        lastByteAt = Date.now();
         const watchdog = setInterval(() => {
+          // A hidden tab's timers are throttled, so its silence proves nothing:
+          // only a VISIBLE tab may call a quiet connection dead.
+          if (isHidden()) return;
           if (Date.now() - lastByteAt >= STREAM_STALE_MS) dropConnection();
         }, WATCHDOG_TICK_MS);
         try {
@@ -155,30 +193,83 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
         // ⚠️ THE BACKOFF IS INTERRUPTED BY `online`. Waiting out fifteen seconds
         // after the network has visibly come back is a stale page the reader can
         // SEE is stale, and it is the half of a drop they remember.
+        // The last subscriber leaving, or a park, ends the wait too, so a
+        // stopped pump leaves no timer and no listener behind.
         await new Promise<void>((resolve) => {
           const wake = (): void => {
             clearTimeout(timer);
             window.removeEventListener('online', wake);
+            lifetime.signal.removeEventListener('abort', wake);
             resolve();
           };
           const timer = setTimeout(wake, backoff);
           window.addEventListener('online', wake, { once: true });
+          lifetime.signal.addEventListener('abort', wake, { once: true });
         });
       }
     };
 
     void pump();
-    return () => {
-      cancelled = true;
-      lifetime.abort();
+    return {
+      stop: () => {
+        cancelled = true;
+        lifetime.abort();
+      },
+      freshen: () => {
+        lastByteAt = Date.now();
+      },
     };
   };
 
-  const stop = (): void => {
-    stopPump?.();
-    stopPump = null;
-    // Nothing is connected, so nothing is reconnecting.
+  const clearGrace = (): void => {
+    if (graceTimer !== null) clearTimeout(graceTimer);
+    graceTimer = null;
+  };
+
+  const stopPump = (): void => {
+    pumpHandle?.stop();
+    pumpHandle = null;
+    // Nothing is connected, so nothing is reconnecting — a park included.
     reconnecting.set(false);
+  };
+
+  const park = (): void => {
+    graceTimer = null;
+    if (listeners.size === 0 || parked) return;
+    parked = true;
+    stopPump();
+  };
+
+  const onVisibility = (): void => {
+    if (isHidden()) {
+      if (graceTimer === null && !parked) {
+        graceTimer = setTimeout(park, WORKBENCH_STREAM_HIDDEN_GRACE_MS);
+      }
+      return;
+    }
+    clearGrace();
+    if (parked) {
+      // Resume in place: a fresh pump, attempt 0, presenting the held cursor.
+      parked = false;
+      pumpHandle = startPump();
+    } else {
+      pumpHandle?.freshen();
+    }
+  };
+
+  const start = (): void => {
+    document.addEventListener('visibilitychange', onVisibility);
+    pumpHandle = startPump();
+    if (isHidden()) graceTimer = setTimeout(park, WORKBENCH_STREAM_HIDDEN_GRACE_MS);
+  };
+
+  const stop = (): void => {
+    clearGrace();
+    parked = false;
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibility);
+    }
+    stopPump();
   };
 
   return {
@@ -186,7 +277,7 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
       if (topic.kind !== 'workbench') return () => {};
       const listener: LiveSignalListener = (s) => onSignal(s);
       listeners.add(listener);
-      if (!stopPump) stopPump = startPump();
+      if (!pumpHandle && !parked) start();
       return () => {
         listeners.delete(listener);
         if (listeners.size === 0) stop();

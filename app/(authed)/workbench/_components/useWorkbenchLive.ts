@@ -59,9 +59,13 @@ export function useWorkbenchLiveSignal(): WorkbenchLive {
 
 // ⚠️ THE CONNECTION LIVES BEHIND THE SEAM NOW (Story MOTIR-8539 · Subtask
 // MOTIR-8572): `lib/live/sources/workbenchStreamSource.ts` holds it, unchanged,
-// and this file reads it through `useLiveSignal`. The two constants are
+// and this file reads it through `useLiveSignal`. Its constants are
 // re-exported from here so every existing reader keeps its import.
-export { STREAM_STALE_MS, WORKBENCH_STREAM_PATH } from '@/lib/live/sources/workbenchStreamSource';
+export {
+  STREAM_STALE_MS,
+  WORKBENCH_STREAM_HIDDEN_GRACE_MS,
+  WORKBENCH_STREAM_PATH,
+} from '@/lib/live/sources/workbenchStreamSource';
 
 /** The one topic the Workbench reads. */
 const WORKBENCH_TOPIC = { kind: 'workbench' } as const;
