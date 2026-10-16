@@ -1141,6 +1141,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(server.v1Calls[0]?.query.get('sessionBranch')).toBeNull();
     expect(server.v1Calls[1]?.query.get('sessionBranch')).toBe('motir/auto-1');
     expect(server.v1Calls[2]?.query.get('sessionBranch')).toBeNull();
+    // EVERY read declares that this CLI posts the agent's self-report (MOTIR-8810):
+    // without it the server routes the unbuildable report through the MCP tool,
+    // which is right for 0.12.0 and wrong for a CLI that makes the post itself.
+    expect(server.v1Calls.map((c) => c.query.get('agentReport'))).toEqual(['1', '1', '1']);
     // The field-with-no-reader rule, and what it looks like once a reader
     // arrives. The two SCALAR repo-plumbing fields were dropped while nothing
     // routed on them; MOTIR-3588 made the resolution read them — a missing

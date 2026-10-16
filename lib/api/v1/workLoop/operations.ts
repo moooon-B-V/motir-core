@@ -120,6 +120,20 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
         schema: z.string(),
       },
       {
+        name: 'agentReport',
+        in: 'query',
+        required: false,
+        description:
+          '`1` when the CLIENT that will launch the agent posts what the agent writes into ' +
+          '`$MOTIR_AGENT_REPORT` as `unbuildable`, `discrepancy` and `stop` (MOTIR-8810). With ' +
+          'it, the STOP branch tells the agent to put its unbuildable reason in that file, and ' +
+          'an agent with no Motir tools to put its discrepancy and its stop there too. Absent ' +
+          'means no: the report goes through the `report_unbuildable_target` tool and neither ' +
+          'file route is named, because a client that does not post them would drop them. ' +
+          '⚠️ It changes the TEXT only.',
+        schema: z.string(),
+      },
+      {
         name: 'continueFrom',
         in: 'query',
         required: false,

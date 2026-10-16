@@ -1031,5 +1031,20 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.69.0` after MOTIR-8698's
  *   `1.68.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   OPERATIONS.
+ *
+ * - `1.70.0` — MOTIR-8810 adds the optional `agentReport` query parameter to
+ *   `getWorkItemDispatchPrompt`: `1` declares that the client posts what its agent writes
+ *   into `$MOTIR_AGENT_REPORT` as `unbuildable`, `discrepancy` and `stop`. Absent, the STOP
+ *   branch routes the report through `report_unbuildable_target` again and names neither
+ *   file route — `@motir/cli` 0.12.0 sends nothing and posts none of the three, so the
+ *   prompt MOTIR-8698 deployed lost every report it handled
+ *   (`run-found-trigger-dispatched-path.md` AMENDMENT 3).
+ *
+ *   Additive: a new optional parameter; a client that omits it is answered a prompt it
+ *   can act on.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.70.0` after MOTIR-8722's
+ *   `1.69.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   PARAMETER.
  */
-export const V1_CONTRACT_VERSION = '1.69.0';
+export const V1_CONTRACT_VERSION = '1.70.0';

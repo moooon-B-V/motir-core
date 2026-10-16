@@ -281,6 +281,12 @@ export interface DispatchPromptOptions {
    * have ended without success, else `ContinueFromInvalidError` (422).
    */
   continueFrom?: string;
+  /**
+   * Whether the runner posts the `$MOTIR_AGENT_REPORT` findings (MOTIR-8810) — see
+   * {@link import('@/lib/dispatch/promptTemplate').DispatchPromptSource.runnerPostsAgentReport}.
+   * Passed through undefaulted, for the same reason as `findingsPolicy`.
+   */
+  runnerPostsAgentReport?: boolean;
 }
 
 /**
@@ -549,6 +555,9 @@ export const dispatchPromptService = {
       // "the full protocol", so defaulting it here would put a second copy of
       // that decision in a second place.
       ...(opts.findingsPolicy ? { findingsPolicy: opts.findingsPolicy } : {}),
+      ...(opts.runnerPostsAgentReport === undefined
+        ? {}
+        : { runnerPostsAgentReport: opts.runnerPostsAgentReport }),
     });
 
     return {
