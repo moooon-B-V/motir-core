@@ -336,6 +336,55 @@ describe('THE RESUME CONTRACT', () => {
   });
 });
 
+// ⚠️ A CANCEL WAITS FOR THE RE-READ IT INTERRUPTED (MOTIR-8812). A re-read is
+// a transaction under the reader's context. When `cancel()` returned while one
+// ran, the request ended with that transaction still open — the in-flight probe
+// caught it in a merge-queue run as `idle in transaction` on the project SELECT.
+// Here the re-read is held at its start, so the cancel lands inside it every
+// time rather than only when a notification happens to race the test's exit.
+describe('A CANCEL MID-READ', () => {
+  it('resolves only once the re-read it interrupted has settled', async () => {
+    const actual = workbenchWatermarkService.read.bind(workbenchWatermarkService);
+    let started!: () => void;
+    const reread = new Promise<void>((resolve) => (started = resolve));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let settledRead = false;
+    let calls = 0;
+    vi.spyOn(workbenchWatermarkService, 'read').mockImplementation(
+      async (...args: Parameters<typeof actual>) => {
+        calls += 1;
+        if (calls === 1) return actual(...args);
+        started();
+        await gate;
+        try {
+          return await actual(...args);
+        } finally {
+          settledRead = true;
+        }
+      },
+    );
+
+    const res = await GET(req('/api/workbench/stream'));
+    const reader = res.body!.getReader();
+    await reader.read(); // the opening frame
+    await listening();
+    await card('Written while connected');
+    await reread;
+
+    let cancelled = false;
+    const cancelling = reader.cancel().then(() => {
+      cancelled = true;
+    });
+    await sleep(WORKBENCH_STREAM_COALESCE_MS);
+    expect(cancelled, 'the cancel returned with the re-read still running').toBe(false);
+
+    release();
+    await cancelling;
+    expect(settledRead).toBe(true);
+  });
+});
+
 describe('A DISCONNECT ENDS THE SESSION — the only thing that ever ends this stream', () => {
   it('unsubscribes and stops re-reading once the reader has gone', async () => {
     const spy = vi.spyOn(workbenchWatermarkService, 'read');

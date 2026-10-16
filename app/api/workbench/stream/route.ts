@@ -219,11 +219,14 @@ async function openStream(req: Request): Promise<Response> {
       ),
   });
 
-  let ended = false;
-  const end = (): void => {
-    if (ended) return;
-    ended = true;
-    session.close();
+  // ⚠️ ENDING WAITS FOR A READ ALREADY RUNNING (MOTIR-8812). Everything else
+  // stops at once, but a re-read the session started before the reader left is
+  // a transaction under their context; `end()` answers the session's settle, so
+  // the stream's `cancel()` resolves only once that transaction has closed.
+  let ending: Promise<void> | undefined;
+  const end = (): Promise<void> => {
+    if (ending) return ending;
+    ending = session.close();
     if (heartbeat !== undefined) clearTimeout(heartbeat);
     heartbeat = undefined;
     req.signal.removeEventListener('abort', onAbort);
@@ -237,8 +240,9 @@ async function openStream(req: Request): Promise<Response> {
         // already closed
       }
     }
+    return ending;
   };
-  const onAbort = (): void => end();
+  const onAbort = (): void => void end();
   req.signal.addEventListener('abort', onAbort, { once: true });
 
   // The OPENING read happens BEFORE the stream is constructed, so a failure in
@@ -247,14 +251,14 @@ async function openStream(req: Request): Promise<Response> {
   try {
     first = await session.start(since);
   } catch (err) {
-    end();
+    await end();
     throw err;
   }
 
   // ⚠️ A READER WHO LEFT WHILE THE GATE OR THE FIRST READ WAS IN FLIGHT gets
   // no stream at all, and the session is already closed by the abort above.
   if (req.signal.aborted) {
-    end();
+    await end();
     return new Response(null, { status: 204 });
   }
 
@@ -271,7 +275,7 @@ async function openStream(req: Request): Promise<Response> {
     },
     cancel() {
       cancelled = true;
-      end();
+      return end();
     },
   });
 
