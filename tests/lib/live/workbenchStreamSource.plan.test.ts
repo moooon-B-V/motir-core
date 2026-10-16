@@ -68,6 +68,7 @@ function streams() {
     openAtFetch,
     urls: () => connections.map((c) => c.url),
     open: () => connections.filter((c) => !c.aborted),
+    raw: write,
     watermark: (cursor: string, moved: string[] = []) =>
       write(`event: watermark\ndata: ${JSON.stringify({ moved, cursor })}\n\n`),
     plan: (planId: string, reviewVersion: string) =>
@@ -337,5 +338,82 @@ describe('with no plan watched', () => {
     expect(s.urls()).toEqual([WORKBENCH_STREAM_PATH]);
     // The watchdog is the only timer a Workbench-only connection owns.
     expect(vi.getTimerCount()).toBe(1);
+  });
+});
+
+// ── THE EDGE ARMS (Story MOTIR-8542 · MOTIR-8733) ──────────────────────────
+// The story gate's per-file coverage floor named the arms no case above reached.
+
+describe('the edge arms', () => {
+  it('a malformed plan frame and a watermark frame with no `moved` list signal nobody', async () => {
+    const s = streams();
+    const wb = collect();
+    const p1 = collect();
+    source.subscribe({ kind: 'workbench' }, wb.listener);
+    source.subscribe({ kind: 'plan', planId: 'p1' }, p1.listener);
+    await vi.advanceTimersByTimeAsync(PLAN_WATCH_SETTLE_MS);
+
+    await s.raw(`event: plan\ndata: ${JSON.stringify({ planId: 'p1', reviewVersion: 7 })}\n\n`);
+    await s.raw(`event: watermark\ndata: ${JSON.stringify({ moved: 'toDo', cursor: 'w1.x' })}\n\n`);
+
+    expect(p1.seen).toEqual([]);
+    expect(wb.seen).toEqual([]);
+  });
+
+  it('an un-subscribe called twice removes once, for either topic', async () => {
+    const s = streams();
+    const offWb = source.subscribe({ kind: 'workbench' }, () => {});
+    const offPlan = source.subscribe({ kind: 'plan', planId: 'p1' }, () => {});
+    const keep = source.subscribe({ kind: 'plan', planId: 'p2' }, () => {});
+    await vi.advanceTimersByTimeAsync(PLAN_WATCH_SETTLE_MS);
+    offPlan();
+    offPlan();
+    offWb();
+    offWb();
+    await vi.advanceTimersByTimeAsync(PLAN_WATCH_SETTLE_MS);
+    // p2 still holds the one connection.
+    expect(s.open()).toHaveLength(1);
+    keep();
+  });
+
+  it('a trigger for a plan nobody watches is a no-op', () => {
+    streams();
+    expect(() => source.trigger!({ kind: 'plan', planId: 'nobody' })).not.toThrow();
+  });
+
+  it('a set change undone inside the settle window reopens nothing', async () => {
+    const s = streams();
+    source.subscribe({ kind: 'workbench' }, () => {});
+    await vi.advanceTimersByTimeAsync(0);
+    const off = source.subscribe({ kind: 'plan', planId: 'p1' }, () => {});
+    off();
+    await vi.advanceTimersByTimeAsync(PLAN_WATCH_SETTLE_MS * 2);
+    expect(s.connections).toHaveLength(1);
+  });
+
+  it('a first subscription in a HIDDEN tab arms the grace at once, and parks', async () => {
+    const s = streams();
+    visibility = 'hidden';
+    source.subscribe({ kind: 'plan', planId: 'p1' }, () => {});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.open()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_HIDDEN_GRACE_MS);
+    expect(s.open()).toHaveLength(0);
+  });
+
+  it('a non-OK answer is a drop: it says reconnecting and retries', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        calls.push(String(input));
+        return Promise.resolve(new Response('nope', { status: 503 }));
+      }),
+    );
+    source.subscribe({ kind: 'plan', planId: 'p1' }, () => {});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(source.reconnecting.get()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
   });
 });

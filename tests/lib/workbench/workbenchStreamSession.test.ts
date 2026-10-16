@@ -424,3 +424,150 @@ describe('THE LAYERING', () => {
     }
   });
 });
+
+// ── THE EDGE ARMS (Story MOTIR-8542 · MOTIR-8733) ──────────────────────────
+// The story gate's per-file coverage floor named the arms no case above reached:
+// a read waiting for a limiter slot, a session closed while it waited, a
+// non-Error throw, a start after close, and an un-listen called twice.
+
+describe('THE EDGE ARMS', () => {
+  /** A one-slot limiter whose slot the test holds, so reads queue behind it. */
+  async function heldSlot(c: WorkbenchStreamCoalescer): Promise<() => void> {
+    let release!: () => void;
+    void c.run(() => new Promise<void>((resolve) => (release = resolve)));
+    await vi.advanceTimersByTimeAsync(0);
+    return () => release();
+  }
+
+  function narrowSession(
+    opts: {
+      read?: (a: WorkbenchStreamActor, s: string | null) => Promise<WorkbenchWatermarkDto>;
+      readPlan?: (planId: string) => Promise<{ status: string; reviewVersion: string } | null>;
+      watched?: { planId: string; version: string | null }[];
+    } = {},
+  ) {
+    const narrow = createWorkbenchStreamCoalescer({ concurrency: 1, logger: quiet });
+    const hub = fakeHub();
+    const read = vi.fn(opts.read ?? steppingRead());
+    const write = vi.fn();
+    const writePlan = vi.fn();
+    const session = createWorkbenchStreamSession({
+      actor: ACTOR,
+      hub,
+      read,
+      write,
+      coalescer: narrow,
+      random: () => 0.5,
+      logger: quiet,
+      ...(opts.readPlan ? { readPlan: opts.readPlan, writePlan } : {}),
+      ...(opts.watched ? { watched: opts.watched } : {}),
+    });
+    return { narrow, hub, read, write, writePlan, session };
+  }
+
+  it('a second window while a read waits for a slot asks for nothing more', async () => {
+    const { narrow, hub, read, session } = narrowSession();
+    await session.start(null);
+    const release = await heldSlot(narrow);
+
+    hub.signal();
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_COALESCE_MS);
+    hub.signal();
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_COALESCE_MS);
+    expect(narrow.queuedReads).toBe(1);
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    session.close();
+  });
+
+  it('a session closed while its reads waited for a slot reads nothing when the slot frees', async () => {
+    const readPlan = vi.fn(async () => ({ status: 'generating', reviewVersion: 'v2' }));
+    const { narrow, hub, read, writePlan, session } = narrowSession({
+      readPlan,
+      watched: [{ planId: 'plan-a', version: 'v1' }],
+    });
+    const release = await heldSlot(narrow);
+    const started = session.start(null);
+    await vi.advanceTimersByTimeAsync(0);
+    await started;
+    // The opening plan read is queued; a reconnect asks for it again, and is absorbed.
+    hub.reconnect();
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_RECONNECT_JITTER_MS);
+    hub.signal();
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_COALESCE_MS);
+
+    session.close();
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(readPlan).not.toHaveBeenCalled();
+    expect(writePlan).not.toHaveBeenCalled();
+  });
+
+  it('a non-Error throw is logged as itself, on the watermark read and on a plan read', async () => {
+    let n = 0;
+    const { hub, session } = narrowSession({
+      read: async () => {
+        n += 1;
+        if (n === 2) throw 'pool exhausted';
+        return reading(`c${n}`);
+      },
+      readPlan: async () => {
+        throw 'plan read refused';
+      },
+      watched: [{ planId: 'plan-a', version: null }],
+    });
+    await session.start(null);
+    await vi.advanceTimersByTimeAsync(0);
+    hub.signal();
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_COALESCE_MS);
+
+    const logged = quiet.warn.mock.calls.map((c) => c[1]);
+    expect(logged).toContain('pool exhausted');
+    expect(logged).toContain('plan read refused');
+    session.close();
+  });
+
+  it('a plan read that throws after close logs nothing', async () => {
+    let fail!: (e: unknown) => void;
+    const { session } = narrowSession({
+      readPlan: () => new Promise((_, reject) => (fail = reject)),
+      watched: [{ planId: 'plan-a', version: null }],
+    });
+    await session.start(null);
+    await vi.advanceTimersByTimeAsync(0);
+    session.close();
+    fail(new Error('too late'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(quiet.warn).not.toHaveBeenCalled();
+  });
+
+  it('a readPlan with no watched list watches nothing', async () => {
+    const readPlan = vi.fn(async () => null);
+    const { session } = narrowSession({ readPlan });
+    await session.start(null);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(readPlan).not.toHaveBeenCalled();
+    session.close();
+  });
+
+  it('refuses to start once closed', async () => {
+    const { session } = narrowSession();
+    session.close();
+    await expect(session.start(null)).rejects.toThrow('closed');
+  });
+
+  it('the coalescer: an un-listen called twice removes once, and a window with no listener tells nobody', async () => {
+    const c = createWorkbenchStreamCoalescer({ logger: quiet });
+    const told = vi.fn();
+    const off = c.listen('k', told);
+    off();
+    off();
+    c.touch('k');
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_COALESCE_MS);
+    expect(told).not.toHaveBeenCalled();
+    expect(c.openWindows).toBe(0);
+  });
+});

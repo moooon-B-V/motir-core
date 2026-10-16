@@ -320,3 +320,103 @@ describe('the module source', () => {
     expect(src).not.toMatch(/^import /m);
   });
 });
+
+// ── THE EDGE ARMS (Story MOTIR-8542 · MOTIR-8733) ──────────────────────────
+// The story gate's per-file coverage floor named the arms no case above reached:
+// the URL fallback, a hub stopped while its session was still connecting, and
+// what the client itself can hand back (a non-Error failure, a payload-less
+// notification). The last three drive the client's own methods, because a real
+// server never produces them on demand.
+
+describe('the hub, at its edges', () => {
+  it('falls back to DATABASE_URL when no unpooled URL is configured', async () => {
+    const saved = process.env['DATABASE_URL_UNPOOLED'];
+    delete process.env['DATABASE_URL_UNPOOLED'];
+    try {
+      const hub = createLiveSignalHub(quietLog());
+      hubs.push(hub);
+      hub.subscribe({ onSignal: () => {} });
+      await until(() => hub.connected, 'connected on DATABASE_URL');
+    } finally {
+      if (saved !== undefined) process.env['DATABASE_URL_UNPOOLED'] = saved;
+    }
+  });
+
+  it('a hub stopped while its session is still connecting logs nothing and keeps nothing', async () => {
+    const log = quietLog();
+    const hub = createLiveSignalHub({
+      ...log,
+      connectionString: 'postgresql://nobody:nobody@127.0.0.1:1/nothing',
+    });
+    hubs.push(hub);
+    hub.subscribe({ onSignal: () => {} });
+    await hub.stop();
+    await new Promise((r) => realSetTimeout(r, 200));
+    expect(log.warn).toEqual([]);
+    expect(hub.connected).toBe(false);
+  });
+
+  it('a session that finishes connecting after stop() is closed, never used', async () => {
+    let finish!: () => void;
+    const connect = vi
+      .spyOn(Client.prototype, 'connect')
+      .mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)) as never);
+    const query = vi.spyOn(Client.prototype, 'query').mockResolvedValue({} as never);
+    const end = vi.spyOn(Client.prototype, 'end').mockResolvedValue(undefined as never);
+    try {
+      const hub = makeHub(quietLog());
+      hub.subscribe({ onSignal: () => {} });
+      await hub.stop();
+      finish();
+      await until(() => end.mock.calls.length >= 2, 'the late session closed');
+      expect(hub.connected).toBe(false);
+    } finally {
+      connect.mockRestore();
+      query.mockRestore();
+      end.mockRestore();
+    }
+  });
+
+  it('logs a non-Error failure as itself, and drops a notification with no payload', async () => {
+    const log = quietLog();
+    let calls = 0;
+    const connect = vi.spyOn(Client.prototype, 'connect').mockImplementation(() => {
+      calls += 1;
+      return (calls === 1 ? Promise.reject('refused') : Promise.resolve()) as never;
+    });
+    // The client the hub is listening on: the one its latest connect was called on.
+    const current = () => connect.mock.contexts.at(-1) as Client;
+    const query = vi.spyOn(Client.prototype, 'query').mockResolvedValue({} as never);
+    const end = vi.spyOn(Client.prototype, 'end').mockResolvedValue(undefined as never);
+    const timer = vi
+      .spyOn(globalThis, 'setTimeout')
+      .mockImplementation(((fn: () => void) => realSetTimeout(fn, 0)) as typeof setTimeout);
+    try {
+      const hub = makeHub({ ...log, logger: log.logger });
+      const got: LiveNotification[] = [];
+      const caughtUp: string[] = [];
+      hub.subscribe({
+        onSignal: () => {},
+        onReconnect: () => {
+          throw new Error('a subscriber broke');
+        },
+      });
+      hub.subscribe({ onSignal: (n) => got.push(n), onReconnect: () => caughtUp.push('second') });
+      await until(() => hub.connected, 'connected on the retry');
+      expect(log.warn[0]?.[1]).toBe('refused');
+      // One subscriber throwing on reconnect does not stop the next being told.
+      expect(log.warn.some((w) => String(w[0]).includes('threw on reconnect'))).toBe(true);
+      expect(caughtUp).toEqual(['second']);
+      current().emit('notification', { channel: LIVE_SIGNAL_CHANNEL, payload: undefined });
+      expect(got).toEqual([]);
+      // The session ENDING (rather than erroring) is a drop too.
+      current().emit('end');
+      expect(hub.connected).toBe(false);
+    } finally {
+      timer.mockRestore();
+      connect.mockRestore();
+      query.mockRestore();
+      end.mockRestore();
+    }
+  });
+});
