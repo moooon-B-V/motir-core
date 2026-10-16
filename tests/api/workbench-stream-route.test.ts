@@ -487,6 +487,11 @@ describe('THE WATCHED-PLAN SET (MOTIR-8730)', () => {
     const plan = await plansService.createPlan(fx.projectId, { title: 'Watched' }, fx.ctx);
     const { planReviewService } = await import('@/lib/services/planReviewService');
     const current = await planReviewService.readReviewVersionForReader(plan.id, fx.ctx);
+    // The plan write also moves the PROJECT, so the session re-reads its watermark
+    // beside the plan reading — and that read can still be on the wire when the
+    // plan frame lands. Record both kinds, and settle them before the test ends.
+    const watermarkReads = vi.spyOn(workbenchWatermarkService, 'read');
+    const planReadings = vi.spyOn(planReviewService, 'readReviewVersionForReader');
 
     const res = await GET(
       req(
@@ -512,6 +517,9 @@ describe('THE WATCHED-PLAN SET (MOTIR-8730)', () => {
       text += decoder.decode(chunk.value, { stream: true });
     }
     await reader.cancel();
+    await Promise.allSettled(
+      [...watermarkReads.mock.results, ...planReadings.mock.results].map((r) => r.value),
+    );
 
     const block = text.split('\n\n').find((b) => b.startsWith('event: plan'));
     expect(block, text).toBeDefined();
