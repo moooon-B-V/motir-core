@@ -28,7 +28,11 @@ import {
   DraftErrorNotice,
 } from '@/components/issues/DraftWithAi';
 import { useExplanationDraft } from '@/lib/hooks/useExplanationDraft';
-import { isUntouchedAiDraft, explanationSourceForSave } from '@/lib/ai/explanationSource';
+import {
+  isUntouchedAiDraft,
+  explanationLanguageForSave,
+  explanationSourceForSave,
+} from '@/lib/ai/explanationSource';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemDto, WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -176,6 +180,13 @@ export function EditIssueForm({
         // an edited draft → `user_edited`; omitted otherwise so the service's
         // auto-flip rule (editing an existing ai_draft → user_edited) applies.
         const explanationSource = explanationSourceForSave(explanation, draft.draftBaseline);
+        // …and the language it was drafted in (MOTIR-8744); omitted otherwise, so
+        // the write door records the organisation's content language.
+        const explanationLanguage = explanationLanguageForSave(
+          explanation,
+          draft.draftBaseline,
+          draft.draftLanguage,
+        );
         const res = await updateIssueAction({
           id: issue.id,
           expectedUpdatedAt: token,
@@ -184,6 +195,7 @@ export function EditIssueForm({
           descriptionMd: description.trim() ? description : null,
           explanationMd: explanation.trim() ? explanation : null,
           ...(explanationSource ? { explanationSource } : {}),
+          ...(explanationLanguage ? { languages: { explanation: explanationLanguage } } : {}),
           parentId,
           assigneeId,
           priority,

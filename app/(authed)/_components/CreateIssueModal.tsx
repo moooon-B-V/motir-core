@@ -20,7 +20,11 @@ import {
   AiDraftedPill,
 } from '@/components/issues/DraftWithAi';
 import { useExplanationDraft } from '@/lib/hooks/useExplanationDraft';
-import { isUntouchedAiDraft, explanationSourceForSave } from '@/lib/ai/explanationSource';
+import {
+  isUntouchedAiDraft,
+  explanationLanguageForSave,
+  explanationSourceForSave,
+} from '@/lib/ai/explanationSource';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
@@ -167,12 +171,20 @@ export function CreateIssueModal({
       // `ai_draft`; an edited draft as `user_edited`; a hand-typed one omits the
       // field (the service defaults it to `user_authored`).
       const explanationSource = explanationSourceForSave(explanation, draft.draftBaseline);
+      // …and the language it was drafted in (MOTIR-8744); omitted otherwise, so
+      // the write door records the organisation's content language.
+      const explanationLanguage = explanationLanguageForSave(
+        explanation,
+        draft.draftBaseline,
+        draft.draftLanguage,
+      );
       const result = await createIssueAction({
         kind,
         title: trimmedTitle,
         descriptionMd: description.trim() ? description : null,
         explanationMd: explanation.trim() ? explanation : null,
         ...(explanationSource ? { explanationSource } : {}),
+        ...(explanationLanguage ? { languages: { explanation: explanationLanguage } } : {}),
         priority,
         parentId,
         // Type + executor (Story 2.7), leaf-only: sent only when a type was
