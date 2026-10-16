@@ -80,8 +80,34 @@ export interface MigrateOnboardingDto {
    * user, which is what the rail's collapsed row and the provenance line say.
    */
   keptSteps: MigrateOnboardingStepDto[];
+  /**
+   * The project's most recent work-item import, in any status, or null when it
+   * has none (MOTIR-8770). Entering Motir does not wait on an import, so the
+   * wizard reads this to show one still running in the background.
+   */
+  latestImport: MigrateLatestImportDto | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The import status a migrate run reports — mirrors Prisma's `ImportStatus`. */
+export type MigrateLatestImportStatusDto =
+  | 'draft'
+  | 'previewed'
+  | 'running'
+  | 'succeeded'
+  | 'partially_failed'
+  | 'failed';
+
+/**
+ * The project's latest import as the migrate run reports it (MOTIR-8770).
+ * `processedCount` is created + updated + skipped + failed so far. The import
+ * row records no total, so there is no denominator to show.
+ */
+export interface MigrateLatestImportDto {
+  source: 'jira' | 'linear' | 'github' | 'plane' | 'csv';
+  status: MigrateLatestImportStatusDto;
+  processedCount: number;
 }
 
 /** Input to `migrateOnboardingService.startMigration`. The connect step's repo
@@ -100,11 +126,14 @@ export interface StartMigrateOnboardingInput {
   keptSteps?: MigrateOnboardingStepDto[];
 }
 
-/** One connected repository's index status, as the wizard's Index step renders
- *  it. `indexed` = a succeeded `system.code-graph-index` run matches this repo's
- *  `output.repoRef`; `pending` = not yet (queued or in flight — the ledger cannot
- *  distinguish per-repo, see `MigrateIndexStatusDto.hasRunning`). */
-export type MigrateIndexRepoStatusDto = 'indexed' | 'pending';
+/** One connected repository's index status (Story MOTIR-8246 · MOTIR-8768),
+ *  derived by `deriveMigrateIndexRepoState` from the pointer-plus-ledger facts:
+ *  `indexed` = a succeeded `system.code-graph-index` run carries this repo's
+ *  `output.repoRef`; `indexing` = the repo's `indexingRunId` names a `running`
+ *  row; `failed` = that pointer names a `failed` / `abandoned` row, or the repo
+ *  was refused for size; `queued` = anything else (enqueued, not yet claimed, or
+ *  paused for catch-up). */
+export type MigrateIndexRepoStatusDto = 'queued' | 'indexing' | 'indexed' | 'failed';
 
 /** One row in the Index step's per-repo list. */
 export interface MigrateIndexRepoDto {
@@ -120,14 +149,27 @@ export interface MigrateIndexRepoDto {
  * of them have a succeeded index run; `hasRunning` is the aggregate "an index is
  * in flight right now" flag (a running `system.code-graph-index` row exists — the
  * ledger cannot tie a running row to a specific repo, so the in-flight state is
- * aggregate, not per-repo). `allIndexed` gates the wizard's Next button.
+ * aggregate, not per-repo). `allIndexed` is true once every connected repo is
+ * indexed. `failedCount` of them read `failed` (MOTIR-8768).
  */
 export interface MigrateIndexStatusDto {
   repos: MigrateIndexRepoDto[];
   indexedCount: number;
+  failedCount: number;
   total: number;
   hasRunning: boolean;
   allIndexed: boolean;
+}
+
+/**
+ * What `POST …/index-retry` answers (MOTIR-8769): the repository and the state it
+ * is in after the call. `queued` when a failed index was re-enqueued (or a
+ * concurrent retry already did it); the current state, unchanged, when the
+ * repository was not failed — a retry never enqueues twice.
+ */
+export interface MigrateIndexRetryResultDto {
+  repoRef: string;
+  status: MigrateIndexRepoStatusDto;
 }
 
 /**

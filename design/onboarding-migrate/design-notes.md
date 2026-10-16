@@ -2062,3 +2062,309 @@ The overlapping pairs reproduce Revision 7's numbers exactly. No text in the ass
   `ConnectPanel.tsx`'s `preflight` case, `tests/components/onboarding-connect-step.test.tsx` and
   `tests/e2e/acceptance-onboarding-github-connect.spec.ts` assume the pre-flight on arrival; they
   remain true for the no-account case and are MOTIR-8762's to extend, not to rewrite.
+
+## Non-blocking index states (2026-10-16 · MOTIR-8767 · Story MOTIR-8246)
+
+**Design system — files read:** root `package.json` (`"@motir/design-system": "workspace:*"`),
+`app/globals.css` (line 13 `@import '@motir/design-system/theme.css'`),
+`packages/design-system/package.json` (**`0.15.1`**, exports `./mock`), `app/layout.tsx` (the
+`data-style` / `data-palette` / `data-type` axes). No `DESIGN.md`. **Verdict: ON MOTIR DESIGN —
+branch (a).** The mock is built with `renderMock` from the package's real `Button`,
+`buttonVariants`, `Card` and `Spinner` (the last only in the unchanged reference panel H), axes
+`warm-editorial` · `motir` · `motir`, every frame a `[data-appearance-scope]` carrying `data-theme`.
+`BrandMark` comes from `@motir/brand` with `brand.css` inlined; the GitHub mark is
+`components/icons/GithubMark.tsx` verbatim. Nothing is proposed for the package: the chip, the
+detail, the generate notice and the drawer row are **product-local components** (one surface each,
+onboarding- or drawer-specific).
+
+**Amends:** § _2026-10-12 — the vibe layout on the migrate wizard_ → **Revision 2** (§ _The indexing
+chip and its detail — per element_, § _Behaviour the board depicts_, § _Slot → key (Revision 2)_),
+as drawn in [`onboarding-migrate--vibe-layout.mock.html`](./onboarding-migrate--vibe-layout.mock.html)
+Panels **3a, 3b, 3c, 4, 5, 9c and 10** — and, through Revision 2, **MOTIR-930's Panel 3 (the Index
+step's waiting screen)**, which stays removed. **Delta mock:**
+[`index-nonblocking--delta.mock.html`](./index-nonblocking--delta.mock.html). No earlier mock is
+edited. Where Revision 2 and this section disagree, this section wins.
+
+**Composes, never re-draws:** the plan window's indexing banner, **MOTIR-4825**
+([`design/ai-chat/reading-and-handoff.mock.html`](../ai-chat/reading-and-handoff.mock.html) Panel 7,
+shipped as `planningWorkspace.indexing.*`) — **the source of the shared wording and state names**;
+and the restyled chrome of the restyle story (MOTIR-8251 / MOTIR-8254: `OnboardingWizardBar`, the
+rail, `WarmButton`'s `--el-cta-warm`). The plan window's wait state is not drawn here.
+
+**Shipped reality read this run:** `app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx`
+(the bar, `Rail` / `RailStep`, `ImportPanel`, `QuestionsPanel`, `DraftingCard`, `ReadyCard`),
+`app/api/onboarding/migrate/[id]/index-status/route.ts`, `lib/dto/migrateOnboarding.ts`
+(`MigrateIndexStatusDto`), `app/(authed)/_components/NotificationRow.tsx` (the actorless arm of
+`code_access_refused`), `messages/en.json` + `zh.json` (`planningWorkspace.indexing.*`,
+`onboardingMigrate.index.*`, `onboardingMigrate.questions.*`, `notifications.summary.*`), and the
+sibling cards MOTIR-8768 (the four states), MOTIR-8769 (retry and its refusals), MOTIR-8772 and
+MOTIR-8775.
+
+### What changes against Revision 2, and why
+
+1. **The wording is the plan window's, not a second dialect.** Revision 2's chip said _Reading your
+   code · 33%_. The banner (MOTIR-4825) already says **Indexing {repos}** with the tails **Queued** /
+   **In progress**, and **I couldn't index {repos}** when it failed. The chip now says exactly that,
+   by the same keys, so the product names one wait one way.
+2. **No percentage, no bar for one repository.** The banner's rule holds here for the same reason:
+   motir-core is told an index SUCCEEDED, never how far along it is. The only progress figure the
+   read carries is `indexedCount` of `total`, so it appears only with **several** repositories (the
+   chip's `1 of 3 done`, the detail's aggregate line). Revision 2's 6 px bar is dropped.
+3. **The quiet cue is the banner's three dots, not a `Spinner`.** Pulsing for _indexing_, still for
+   _queued_; `prefers-reduced-motion` stills them too. The only spinner on the board is a busy
+   **Try again** button and the shipped drafting card (H), both real work in flight.
+4. **The generate step gets a notice** (Revision 2 drew only the Decision note): panels F and G.
+5. **Plan ready** is drawn in both places (I).
+
+### Panels (light AND dark each)
+
+| panel | what it draws                                                                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | **The access path.** Import step, chip first in the bar's control group, detail closed. Rail: Import current, Index a background row.           |
+| B     | The detail open, anchored under the chip (popover). Close / Escape / outside click close it.                                                    |
+| C     | The chip's looks, one repository: queued · indexing · focus-visible · done · done fading · failed.                                              |
+| D     | Several repositories, mixed: chip `Indexing 3 repositories · 1 of 3 done`; failed wins (`· 1 failed`); two details itemising them.              |
+| E     | Retry: idle · in flight (busy, disabled) · back to Queued · refused 409 · refused 422 · errored.                                                |
+| F     | Generate step, graph not ready, index queued/indexing: the notice. No spinner, no `aria-busy`, no bar. **Continue into your project**.          |
+| G     | Generate step, index failed: _Your plan is waiting on a working index_, the per-repo retry row, Continue (secondary).                           |
+| H     | Reference, graph ready: the shipped `DraftingCard`, **unchanged**; the chip has left the bar.                                                   |
+| I     | Plan ready: in onboarding the shipped `ReadyCard` (**nothing added above it**); elsewhere the `plan_ready` drawer row, EN and ZH.               |
+| J     | Chinese: chip looks, a mixed detail with a refusal, both generate notices.                                                                      |
+| K     | Narrow 390: the chip as an icon with a state dot (closed), the detail as a bottom sheet over the scrim (open, failed), and the four dot states. |
+
+### Every state and its trigger (`GET …/index-status`, as MOTIR-8768 shapes it)
+
+Per repository, `repos[i].status` ∈ `queued | indexing | indexed | failed`; aggregate `total`,
+`indexedCount`, `failedCount`, `allIndexed`. The chip's state is derived in this order — **one**
+function, used by the chip, the narrow dot and the rail row:
+
+| state (chip · dot · rail)  | trigger                                                                                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **failed**                 | `failedCount > 0` (wins over everything else)                                                                                                              |
+| **done** → then **absent** | `allIndexed === true`: shown on the first read that says so, announced once, gone after ~4 s; never drawn when the wizard mounts on an already-indexed run |
+| **indexing**               | any `repos[i].status === 'indexing'`                                                                                                                       |
+| **queued**                 | otherwise (every repo `queued`, or some `indexed` and the rest `queued`)                                                                                   |
+| single vs multi            | `total === 1` names the repository; `total > 1` counts (`Indexing {n} repositories · {indexedCount} of {total} done`)                                      |
+| detail row chips           | `repos[i].status` verbatim: `indexed` mint · `indexing` sky + dots · `queued` muted · `failed` danger surface                                              |
+| retry busy                 | the `POST …/index-retry` request is in flight                                                                                                              |
+| retry → queued             | that request answered `200 { status: 'queued' }` (next read also says `queued`, MOTIR-8769)                                                                |
+| retry refused (409)        | `not_connected`                                                                                                                                            |
+| retry refused (422)        | `refused_too_large` (a size-refused repo reads `failed`; the retry is how the person learns why)                                                           |
+| retry errored              | any other non-2xx or a network failure                                                                                                                     |
+| generate notice (F)        | `run.step === 'generate' && !run.codeGraphReady && failedCount === 0` (includes "status not loaded yet")                                                   |
+| generate failed (G)        | `run.step === 'generate' && !run.codeGraphReady && failedCount > 0`                                                                                        |
+| generate unchanged (H)     | `run.codeGraphReady === true` → shipped `DraftingCard`                                                                                                     |
+| plan ready, onboarding (I) | the run re-read returns step `review` → shipped `ReadyCard`                                                                                                |
+| plan ready, elsewhere (I)  | a `plan_ready` notification row (MOTIR-8770 emits, MOTIR-8775 renders)                                                                                     |
+
+The chip is mounted on every step after `index` and disappears once `allIndexed` holds; it never
+changes the step underneath.
+
+### Per element — colour + shape role
+
+| element                                                          | colour                                                                                                                                                                                                                                                                                                              | shape / size                                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| chip (`button`, `aria-expanded`, `aria-controls="index-detail"`) | `Button secondary sm` on `--el-page-bg`, border `--el-border-strong`; open: `--el-surface`; title `--el-text`, tail `--el-text-secondary`                                                                                                                                                                           | `--radius-btn`, `--height-btn-sm`; max 22rem, the repo name truncates first, the tail never |
+| chip — failed                                                    | border `--el-danger-on-surface`, glyph `CircleAlert` + tail `--el-danger-on-surface`; title stays `--el-text`                                                                                                                                                                                                       | as above                                                                                    |
+| chip glyph — indexing · queued · done                            | three 5 px dots `--el-accent-on-surface` pulsing · `--el-text-secondary` still · `CheckCircle2` `--el-success`                                                                                                                                                                                                      | `rounded-full` dots                                                                         |
+| chip label                                                       | inside `aria-live="polite"`: a state change is announced, never focused                                                                                                                                                                                                                                             | `text-xs`                                                                                   |
+| chip focus-visible                                               | `--focus-ring-color` ring, offset on `--el-surface`                                                                                                                                                                                                                                                                 | ring-2                                                                                      |
+| narrow chip (390)                                                | `FileCode2` `--el-text`; dot `--el-text-secondary` / `--el-accent-on-surface` / `--el-success` / `--el-danger-on-surface`, ring `--el-page-bg`; the full label is its `aria-label`                                                                                                                                  | `--radius-control`, `p-(--spacing-icon-btn)`; dot `size-2.5` `rounded-full`                 |
+| detail (`role="dialog"`, `data-surface="popover"`)               | `--el-page-bg`, border `--el-border`, `--shadow-elevated`                                                                                                                                                                                                                                                           | `--radius-card`, `--spacing-card-padding`, 380 px                                           |
+| detail as bottom sheet (390)                                     | as above over `--el-overlay-scrim`; grab handle `--el-border-strong` (decorative)                                                                                                                                                                                                                                   | `--radius-modal`, full width, bottom edge flush                                             |
+| title · Close · body · aggregate · heading                       | `--el-text` semibold · `Button ghost sm` · `--el-text-secondary` · `--el-text-secondary` (only when `total > 1`) · `--el-text-secondary` caps                                                                                                                                                                       | —                                                                                           |
+| repo row                                                         | border `--el-border-soft`; `GithubMark` `--el-text-secondary` (sr-only "GitHub"); owner `--el-text-secondary`, name `--el-text`, mono                                                                                                                                                                               | `--radius-control`, `--spacing-control-x`                                                   |
+| row state chips                                                  | `--el-tint-mint` / `--el-tint-sky` + `--el-text-strong`; `--el-muted` + `--el-text-secondary`; `--el-danger-surface` + `--el-danger-on-surface`                                                                                                                                                                     | `--radius-badge`, `--spacing-chip-x/y`                                                      |
+| failed row · its sentence                                        | border `--el-danger-on-surface` · `--el-text-secondary`                                                                                                                                                                                                                                                             | as row                                                                                      |
+| Try again · Check the connection                                 | `Button secondary sm` + `RotateCcw` (busy: `loading`, disabled, `aria-busy`) · `Button ghost sm` link → `/settings/organization/git`                                                                                                                                                                                | `--radius-btn`, `--height-btn-sm`                                                           |
+| refusal sentence                                                 | `--el-danger-on-surface` + `CircleAlert`, `role="alert"`                                                                                                                                                                                                                                                            | `text-xs`                                                                                   |
+| rail Index background row                                        | marker ring `--el-border`, dots / `CircleAlert` as the chip; label `--el-text`, meta `--el-text-secondary`; never `aria-current`                                                                                                                                                                                    | `size-5`, `--radius-control`                                                                |
+| generate notice (`Card`, `role="status"`)                        | icon disc `--el-tint-sky` + `--el-text-strong` (`BookOpenText`, static); heading `--el-text-strong`; body `--el-text-secondary`; state line `--el-text-secondary`; Continue = `WarmButton` (`--el-cta-warm` / `--el-cta-warm-text`)                                                                                 | `--radius-card`; disc `rounded-full`                                                        |
+| generate notice — failed                                         | disc `--el-danger-surface` + `--el-danger-on-surface` (`CircleAlert`); the failed repo row as above; Continue `Button secondary md`                                                                                                                                                                                 | as above                                                                                    |
+| `plan_ready` drawer row                                          | the actorless arm of `NotificationRow`: glyph `ListChecks` in the avatar slot, fill `--el-notif-plan-ready` (**new Tier-3 token for MOTIR-8775, mapped to `--color-success`**; drawn as `--el-success`), glyph `--el-accent-text`; summary `--el-text`, project bold `--el-text-strong`, time `--el-text-secondary` | as shipped                                                                                  |
+
+No `--el-text-muted`, no `--el-text-faint` text, no `--el-danger-text`, no raw colour. The dots'
+pulse is the only `<style>` rule the mock adds besides `brand.css`.
+
+### Behaviour
+
+1. **Access path.** The chip sits first in the bar's control group, before _Start from an idea
+   instead_; at 390 the icon takes that slot and the flow name is not shown. Click / Enter / Space
+   opens the detail (popover on desktop, bottom sheet at 390); Close, Escape, an outside click (or a
+   tap on the scrim, or a downward swipe) closes it and returns focus to the chip.
+2. **One read.** Chip, dot, rail row and generate notice read the one `index-status` poll the wizard
+   already runs; it stops once `allIndexed` holds.
+3. **Retry is one mechanism**, shown in the detail's failed row and in the generate notice's failed
+   variant (MOTIR-8772 extracts it rather than copying it).
+4. **The generate notice never advances.** It re-reads the run; on `codeGraphReady` it hands over to
+   the shipped `DraftingCard`, on step `review` to the shipped `ReadyCard`, without a reload.
+5. **Continue into your project** goes where _Save & exit_ goes (`saveExitHref`), so the run stays
+   active and the sweep finishes the job.
+
+### Slot → key (proposed — `messages/` is not edited here)
+
+**Reused, unchanged:** `planningWorkspace.indexing.title` (`Indexing {repos}` · `正在索引 {repos}`),
+`.chipQueued` (Queued · 排队中), `.chipRunning` (In progress · 进行中), `.failedTitle`
+(`I couldn't index {repos}` · `我没能索引 {repos}`), `.retry` (Try again · 重试);
+`onboardingMigrate.index.heading` (detail title), `.aggregate`, `.perRepo`, `.state.indexed`,
+`.state.queued`; `onboardingMigrate.questions.*` (H, I); `common.saveExit`.
+
+| slot                         | key (NEW unless marked)                                 | English                                                                                                                                                 | 中文                                                                                                           |
+| ---------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| chip — done                  | `onboardingMigrate.indexing.doneTitle`                  | Indexed {repos}                                                                                                                                         | 已索引 {repos}                                                                                                 |
+| {repos} with several         | `onboardingMigrate.indexing.repoCount`                  | {count, plural, one {# repository} other {# repositories}}                                                                                              | {count} 个仓库                                                                                                 |
+| chip tail — multi            | `onboardingMigrate.indexing.aggregateTail`              | {done} of {total} done                                                                                                                                  | 已完成 {done} / {total}                                                                                        |
+| chip tail — failed (multi)   | `onboardingMigrate.indexing.failedTail`                 | {count} failed                                                                                                                                          | {count} 个失败                                                                                                 |
+| narrow chip name suffix      | `onboardingMigrate.indexing.openDetail`                 | Index status — open details                                                                                                                             | 索引状态——打开详情                                                                                             |
+| detail body                  | `onboardingMigrate.indexing.detailBody`                 | This keeps going in the background, so carry on. Only drafting your plan waits for it, and that starts by itself when indexing finishes.                | 它在后台继续运行，你可以接着往下走。只有起草计划需要等它，索引完成后会自动开始。                               |
+| row chips                    | `onboardingMigrate.index.state.indexing` · `.failed`    | In progress · Failed                                                                                                                                    | 进行中 · 失败                                                                                                  |
+| failed row sentence          | `onboardingMigrate.indexing.rowFailed`                  | Motir couldn't index this repository. Nothing you've done is lost.                                                                                      | Motir 没能索引这个仓库。你已完成的步骤都不会丢失。                                                             |
+| Check the connection · Close | `onboardingMigrate.indexing.checkConnection` · `.close` | Check the connection · Close                                                                                                                            | 检查连接 · 关闭                                                                                                |
+| retry busy                   | `onboardingMigrate.indexing.retrying`                   | Trying again…                                                                                                                                           | 正在重试……                                                                                                     |
+| refusal 409                  | `onboardingMigrate.indexing.refusedNotConnected`        | This repository isn't connected to the project any more. Check the connection, then try again.                                                          | 这个仓库已不再连接到该项目。请先检查连接，再重试。                                                             |
+| refusal 422                  | `onboardingMigrate.indexing.refusedTooLarge`            | This repository is too large for Motir to index.                                                                                                        | 这个仓库太大，Motir 无法为它建立索引。                                                                         |
+| retry error                  | `onboardingMigrate.indexing.retryError`                 | Motir couldn't start that again. Try once more in a moment.                                                                                             | Motir 没能重新开始。请稍后再试一次。                                                                           |
+| rail sub-line                | `onboardingMigrate.rail.sub` (shipped, unchanged)       | Indexing runs in the background — leave and come back.                                                                                                  | 索引在后台运行——你可以离开再回来。                                                                             |
+| rail Index meta              | `onboardingMigrate.rail.indexBackground`                | In the background · {state}                                                                                                                             | 在后台 · {state}                                                                                               |
+| notice heading               | `onboardingMigrate.generateWaiting.heading`             | Your plan is drafted as soon as Motir has read your code                                                                                                | Motir 读完你的代码后，会立即起草你的计划                                                                       |
+| notice body                  | `onboardingMigrate.generateWaiting.body`                | Motir is still indexing {repos}. You don't have to wait here: go on into your project, and you'll get a notification when your plan is ready to review. | Motir 仍在索引 {repos}。你不必在这里等：直接进入你的项目，计划可以审阅时你会收到通知。                         |
+| notice state line            | `onboardingMigrate.generateWaiting.state`               | Indexing {repos} · {state}                                                                                                                              | 正在索引 {repos} · {state}                                                                                     |
+| Continue                     | `onboardingMigrate.generateWaiting.continue`            | Continue into your project                                                                                                                              | 进入你的项目                                                                                                   |
+| failed heading               | `onboardingMigrate.generateWaiting.failedHeading`       | Your plan is waiting on a working index                                                                                                                 | 你的计划在等待一个可用的索引                                                                                   |
+| failed body                  | `onboardingMigrate.generateWaiting.failedBody`          | I couldn't index {repos}, so there is nothing to draft from yet. Nothing you've done is lost. Try again, or carry on and come back to it.               | 我没能索引 {repos}，所以暂时没有可以起草的依据。你已完成的步骤都不会丢失。可以重试，也可以先继续，稍后再回来。 |
+| drawer row                   | `notifications.summary.planReady`                       | Your first plan for <s>{project}</s> is ready to review                                                                                                 | <s>{project}</s> 的第一份计划已可审阅                                                                          |
+
+**Retired with the stop** (if nothing else reads them): `onboardingMigrate.index.eyebrow`, `.body`,
+`.building`, `.waiting`, `.callout`, `.completeTitle`, `.completeNote`, `.next`, and
+`questions.draftingWaits` (MOTIR-8772 checks with `git grep`). Revision 2's proposed `indexing.queued/.running/.done/.failed`, `indexing.detailTitle`,
+`indexing.failedBody` and `rail.indexQueued/.indexFailed` are **superseded** by the table above.
+Its **Decision note** (Panel 5, `decision.waitNote` / `.failedNote`) is **not redrawn and stands as
+drawn there**; it is not in this story's scope.
+
+**Chinese length.** The chip's widest Chinese label (`正在索引 3 个仓库 · 已完成 1 / 3`) fits
+`--height-btn-sm` on one line in panel J; the repository name truncates before the tail.
+
+### Findings
+
+- **F1 — `index-status` carries no reason for a failure.** A size-refused repo and a crashed index
+  both read `failed`, so the detail offers Try again on both and the 422 sentence is how a person
+  learns about size. A `failedReason` on the row would let the detail say it up front; not built
+  here, and not needed for this story's acceptance.
+
+### GIVES / TAKES
+
+- **MOTIR-8771 (indicator)** — **GIVES** panels A–E, J, K: the chip, the narrow icon, the detail /
+  sheet, the retry states, the derivation order and the keys above. **TAKES** Revision 2's
+  _Reading your code · 33%_ wording and its progress bar.
+- **MOTIR-8772 (generate notice)** — **GIVES** panels F, G, H, I (onboarding half) and the
+  `generateWaiting.*` keys; `ReadyCard` gets **no** banner line.
+- **MOTIR-8775 (notification type)** — **GIVES** the drawer row of panel I and the
+  `--el-notif-plan-ready` → `--color-success` mapping.
+- **MOTIR-8769 (retry)** — given nothing to build; its 409 / 422 / generic answers each have a
+  sentence here.
+- **MOTIR-8774 (E2E)** — **GIVES** the walk: A → B → C (done fades) → F → I, and G → E in English
+  and Chinese.
+
+## Non-blocking index states — Revision A: enter Motir while indexing and importing run (2026-10-16 · MOTIR-8767 · Story MOTIR-8246)
+
+**Why this revision.** Mo sent the first version back on 2026-10-16:
+
+> we don't create a plan if we don't know what the user wants to build next. And i don't see why
+> the questions are asked, so "A few questions" can be removed. Give the user a button and the user
+> can enter the Motir even the indexing is not finished, and we don't let the user wait for the
+> work items import either, those 2 jobs can run in the background
+
+**Amends:** § _Non-blocking index states_ (above) and its delta mock
+[`index-nonblocking--delta.mock.html`](./index-nonblocking--delta.mock.html). **Delta mock:**
+[`index-nonblocking--enter-motir.mock.html`](./index-nonblocking--enter-motir.mock.html), built with
+the same generator parts as the first delta (`renderMock`, the package's real `Button` and `Card`,
+`BrandMark`, axes `warm-editorial` · `motir` · `motir`, light and dark per panel). Nothing is
+proposed for the design-system package. Where this revision and the section above disagree, this
+revision wins.
+
+### What changes
+
+- **The wizard ends at the Import step with one primary action, _Enter Motir_.** It is enabled
+  whatever the index reads (queued, in progress, indexed or failed) and whatever the import is doing.
+  It replaces _Skip for now_: entering without importing is skipping.
+- **The import runs in the background too.** Starting one no longer holds the step: the card shows
+  a status line for the running import, the source tiles go inert (`aria-disabled`, dimmed) while one
+  runs, and the rail shows _Import work items_ as a second background row beside _Index_.
+- **No plan is drafted in onboarding.** The rail's _Your direction_ group and its _A few questions_
+  step are removed, and so is everything that existed only to draft a plan: the generate-step notice
+  and its failed variant (panels F and G above), the drafting reference (H), and the plan-ready
+  moment in onboarding and in the drawer (I).
+- **The detail lists both background jobs.** Its body copy no longer mentions a plan, and while an
+  import runs it gains a _Work items import_ group under _Per repository_.
+
+**Unchanged from the section above:** the chip and its every look (panels A, C, D), the detail's
+per-repository rows, the failed state and its retry with every refusal (E), and the narrow layout (K),
+apart from the detail body copy, which every panel now reads from the new key below.
+
+### Panels (light AND dark each)
+
+| Panel | What it shows                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------------- |
+| A     | Import step after connect, nothing imported, index in progress: _Enter Motir_ is the primary.   |
+| B     | An import running (Jira, 40 of 120): status line, inert tiles, Import as a background rail row. |
+| C     | The chip's detail open with both jobs: the repository row and the _Work items import_ row.      |
+| D     | The index failed: the chip reads failed, _Enter Motir_ stays enabled.                           |
+| E     | Chinese: panel B and the detail at their longer length.                                         |
+
+### Per element — colour + shape role
+
+| Element                        | Colour                                                                | Shape                                                           |
+| ------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------- |
+| _Enter Motir_                  | `Button` primary (`--el-accent` fill, `--el-accent-text`)             | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x/y`          |
+| Hint beside it                 | `--el-text-secondary` on the card                                     | —                                                               |
+| Footer divider                 | `--el-border-soft`                                                    | —                                                               |
+| Import status line             | `--el-tint-sky` fill, `--el-text-strong` text, accent dots            | `--radius-control`, `--spacing-control-x`                       |
+| Inert source tiles             | unchanged inks, whole row at 60% opacity                              | unchanged                                                       |
+| Rail import background row     | as the Index background row: `--el-border` ring, dots, secondary meta | `--radius-control`                                              |
+| Detail _Work items import_ row | `--el-border-soft` border, `--el-text`; chip `--el-tint-sky` + strong | `--radius-control`; chip `--radius-badge`, `--spacing-chip-x/y` |
+
+Every text ink is `--el-text`, `--el-text-strong` or `--el-text-secondary`; nothing uses
+`--el-text-muted` or `--el-text-faint`.
+
+### Behaviour
+
+- **_Enter Motir_ finishes onboarding.** It completes the run (`step: 'done'`,
+  `status: 'completed'`, the terminal shape a walked run already has) and goes to the project. The
+  index and any import keep running; nothing about either job changes.
+- After entering, the index state is where shipped surfaces already show it (the plan window's
+  indexing banner, MOTIR-4825, and the repository settings). Nothing new is drawn inside the app.
+- The retry (MOTIR-8769's `POST …/index-retry`) is reached from the chip's detail exactly as before.
+
+### Slot → key (proposed — `messages/` is not edited here)
+
+| Slot                       | Key                                         | en                                                                                                          | zh                                                                                |
+| -------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Primary action             | `onboardingMigrate.enter.cta`               | Enter Motir                                                                                                 | 进入 Motir                                                                        |
+| Hint beside it             | `onboardingMigrate.enter.hint`              | Indexing and any import keep going after you enter.                                                         | 进入之后，索引和导入会继续进行。                                                  |
+| Rail subtitle              | `onboardingMigrate.rail.subtitle`           | Indexing and importing run in the background. Enter Motir whenever you like.                                | 索引和导入都在后台运行。你随时可以进入 Motir。                                    |
+| Import step body           | `onboardingMigrate.import.body`             | Import from Jira, Linear or Plane, or enter Motir and do it later. An import keeps going in the background. | 从 Jira、Linear 或 Plane 导入，或者先进入 Motir，以后再做。导入会在后台继续进行。 |
+| Import status line         | `onboardingMigrate.import.running`          | Importing from {source} · {done} of {total} work items                                                      | 正在从 {source} 导入 · 已完成 {done} / {total} 个工作项                           |
+| Import status line, second | `onboardingMigrate.import.runningBody`      | This keeps going in the background. You don't have to wait for it.                                          | 它在后台继续运行，你不必等它完成。                                                |
+| Detail body (replaces)     | `onboardingMigrate.indexing.detailBody`     | This keeps going in the background. You can enter Motir now; nothing waits for it to finish.                | 它在后台继续运行。你现在就可以进入 Motir，没有任何步骤需要等它完成。              |
+| Detail import group        | `onboardingMigrate.indexing.importHeading`  | Work items import                                                                                           | 工作项导入                                                                        |
+| Detail import row state    | `onboardingMigrate.indexing.importProgress` | {done} of {total}                                                                                           | {done} / {total}                                                                  |
+
+**Retired by this revision:** every `onboardingMigrate.generateWaiting.*` key and the plan-ready
+copy proposed above.
+
+### What this means for the code cards (for the re-plan Mo asked for)
+
+This revision removes plan generation from onboarding, so the story's cards that draft or announce a
+plan no longer match the design: MOTIR-8770 (start generation when the graph is built, notify plan
+ready), MOTIR-8772 (the generate-step notice and plan-ready notice), the `plan_ready` notification
+type already built under MOTIR-8775, and the parts of MOTIR-8773 / MOTIR-8774 that test them. Ending
+the wizard at Import, removing the discovery step and backgrounding the import are not covered by any
+card yet. MOTIR-8768 (the index step no longer waits) and MOTIR-8769 (retry) stand as built, and
+MOTIR-8771 (the chip and detail) stands with the detail changes above.
+
+### GIVES / TAKES
+
+- **GIVES** the wizard's end state as one primary action that never waits, and the detail's import
+  group.
+- **TAKES** the chip, detail, failed state and retry from § _Non-blocking index states_, and the
+  index and retry reads from MOTIR-8768 and MOTIR-8769.

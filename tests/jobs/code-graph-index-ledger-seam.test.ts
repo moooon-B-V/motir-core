@@ -135,7 +135,7 @@ describe('a dispatched index is visible to the ledger’s REAL consumers', () =>
     expect(status.allIndexed).toBe(true);
   }, 30_000);
 
-  it('a repo with no run reads as PENDING through the same DTO — the assertion is not vacuous', async () => {
+  it('a repo with no run reads as QUEUED through the same DTO — the assertion is not vacuous', async () => {
     const { workspaceId, ownerUserId, projectIds } = await seedIndexWorkspace('seam-pending', 1);
 
     const ctx = { userId: ownerUserId, workspaceId };
@@ -143,7 +143,7 @@ describe('a dispatched index is visible to the ledger’s REAL consumers', () =>
     const status = await migrateOnboardingService.getIndexStatus(run.id, ctx);
 
     expect(status.repos).toEqual([
-      { provider: 'github', repoRef: INDEX_REPO_REF, status: 'pending' },
+      { provider: 'github', repoRef: INDEX_REPO_REF, status: 'queued' },
     ]);
     expect(status.allIndexed).toBe(false);
   });
@@ -261,7 +261,7 @@ describe('a container that did not exit 0 writes no claim the ledger’s readers
       const run = await migrateOnboardingService.startMigration(projectIds[0]!, ctx);
       const status = await migrateOnboardingService.getIndexStatus(run.id, ctx);
       expect(status.repos).toEqual([
-        { provider: 'github', repoRef: INDEX_REPO_REF, status: 'pending' },
+        { provider: 'github', repoRef: INDEX_REPO_REF, status: 'queued' },
       ]);
       expect(status.allIndexed).toBe(false);
 

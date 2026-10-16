@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { enMessages, renderWithIntl } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 import type {
   MigrateConnectOutcome,
   MigrateConnectStateDto,
@@ -43,6 +44,7 @@ function makeRun(overrides: Partial<MigrateOnboardingDto> = {}): MigrateOnboardi
     generateJobId: null,
     importSkipped: false,
     importCompleted: false,
+    latestImport: null,
     createdAt: '2026-10-12T00:00:00.000Z',
     updatedAt: '2026-10-12T00:00:00.000Z',
     ...overrides,
@@ -257,5 +259,234 @@ describe('one page to finish onboarding (Revision 6)', () => {
     );
     expect(await screen.findByText(/24 items are drafted for Quiet Harbor/)).toBeTruthy();
     expect(screen.getByText('Your first plan is ready')).toBeTruthy();
+  });
+});
+
+describe('the indexing indicator in the bar (MOTIR-8771)', () => {
+  const indexing = {
+    repos: [{ provider: 'github', repoRef: 'acme/widgets', status: 'indexing' }],
+    indexedCount: 0,
+    failedCount: 0,
+    total: 1,
+    hasRunning: true,
+    allIndexed: false,
+  };
+
+  it('shows on the import step from the one index read, and opening it keeps the step', async () => {
+    fakeFetch((url) => {
+      if (url.endsWith('/index-status')) return json(indexing);
+      return json({}, 404);
+    });
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({ step: 'import', connectedRepoRef: 'acme/widgets' })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+      />,
+    );
+    const chip = await screen.findByTestId('migrate-index-indicator');
+    expect(chip.textContent).toContain('Indexing widgets');
+    const current = () => document.querySelector('[aria-current="step"]')?.textContent ?? '(none)';
+    const before = current();
+    fireEvent.click(chip);
+    expect(await screen.findByTestId('migrate-index-detail')).toBeTruthy();
+    expect(current()).toBe(before);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it.each(['connect', 'index'] as const)('is not in the bar on %s', async (step) => {
+    fakeFetch((url) => {
+      if (url.endsWith('/index-status')) return json(indexing);
+      if (url.endsWith('/connect-state')) return json(connectState('not_started'));
+      return json({}, 404);
+    });
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({ step, connectedRepoRef: 'acme/widgets' })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+      />,
+    );
+    await act(async () => {});
+    expect(screen.queryByTestId('migrate-index-indicator')).toBeNull();
+  });
+});
+
+describe('the Import step ends onboarding with Enter Motir (MOTIR-8772)', () => {
+  const indexStatus = (status: 'queued' | 'indexing' | 'indexed' | 'failed') => ({
+    repos: [{ provider: 'github', repoRef: 'acme/widgets', status }],
+    indexedCount: status === 'indexed' ? 1 : 0,
+    failedCount: status === 'failed' ? 1 : 0,
+    total: 1,
+    hasRunning: status === 'indexing',
+    allIndexed: status === 'indexed',
+  });
+  const importer = {
+    project: { id: 'p1', name: 'Quiet Harbor' },
+    statuses: [],
+    connected: {
+      jira: { connected: false },
+      linear: { connected: false },
+      github: { connected: false },
+      plane: { connected: false },
+    },
+    existingImportId: null,
+  };
+  const runningImport = { source: 'jira' as const, status: 'running' as const, processedCount: 40 };
+
+  it.each(['indexing', 'failed'] as const)(
+    'Enter Motir is enabled with the index %s, posts to enter and goes to the project',
+    async (state) => {
+      const calls = fakeFetch((url, init) => {
+        if (url.endsWith('/index-status')) return json(indexStatus(state));
+        if (url.endsWith('/enter') && init?.method === 'POST')
+          return json(makeRun({ step: 'done', status: 'completed' }));
+        return json({}, 404);
+      });
+      renderWithIntl(
+        <MigrateWizard
+          initialRun={makeRun({ step: 'import', connectedRepoRef: 'acme/widgets' })}
+          projectName="Quiet Harbor"
+          userInitial="Y"
+        />,
+      );
+      await screen.findByTestId('migrate-index-indicator');
+      expect(screen.queryByRole('button', { name: 'Skip import' })).toBeNull();
+      const enter = screen.getByRole('button', { name: 'Enter Motir' }) as HTMLButtonElement;
+      expect(enter.disabled).toBe(false);
+      expect(screen.getByText('Indexing and any import keep going after you enter.')).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(enter);
+      });
+      expect(
+        calls.mock.calls.some(
+          ([u, init]) =>
+            String(u) === '/api/onboarding/migrate/run-1/enter' && init?.method === 'POST',
+        ),
+      ).toBe(true);
+      expect(push).toHaveBeenCalledWith('/roadmap');
+    },
+  );
+
+  it('shows a started import running in the background with the sources inert', async () => {
+    fakeFetch((url) => {
+      if (url.endsWith('/index-status')) return json(indexStatus('indexing'));
+      return json({}, 404);
+    });
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({
+          step: 'import',
+          connectedRepoRef: 'acme/widgets',
+          latestImport: runningImport,
+        })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+        importer={importer}
+      />,
+    );
+    await act(async () => {});
+    const line = screen.getByTestId('migrate-import-running');
+    expect(line.getAttribute('role')).toBe('status');
+    expect(line.textContent).toContain('Importing from Jira · 40 work items so far');
+    expect(line.textContent).toContain("You don't have to wait for it.");
+    const sources = screen.getByTestId('migrate-import-sources');
+    expect(sources.getAttribute('aria-disabled')).toBe('true');
+    expect(sources.hasAttribute('inert')).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Enter Motir' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it('with no import running, the sources are live and there is no status line', async () => {
+    fakeFetch((url) =>
+      url.endsWith('/index-status') ? json(indexStatus('indexed')) : json({}, 404),
+    );
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({
+          step: 'import',
+          connectedRepoRef: 'acme/widgets',
+          latestImport: { source: 'jira', status: 'succeeded', processedCount: 120 },
+        })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+        importer={importer}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.queryByTestId('migrate-import-running')).toBeNull();
+    const sources = screen.getByTestId('migrate-import-sources');
+    expect(sources.hasAttribute('aria-disabled')).toBe(false);
+    expect(sources.hasAttribute('inert')).toBe(false);
+  });
+
+  it('the rail has no questions step, and names both background jobs', async () => {
+    fakeFetch((url) =>
+      url.endsWith('/index-status') ? json(indexStatus('indexing')) : json({}, 404),
+    );
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({
+          step: 'import',
+          connectedRepoRef: 'acme/widgets',
+          latestImport: runningImport,
+        })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+      />,
+    );
+    await screen.findByText('In the background · In progress');
+    const rail = screen.getByRole('navigation', { name: 'Your migration' });
+    expect(rail.textContent).not.toContain('A few questions');
+    expect(rail.textContent).not.toContain('Your direction');
+    expect(rail.textContent).toContain(
+      'Indexing and importing run in the background. Enter Motir whenever you like.',
+    );
+    expect(rail.textContent).toContain('In the background · 40 so far');
+    // A background job is never the current step.
+    expect(rail.querySelectorAll('[aria-current="step"]')).toHaveLength(0);
+  });
+
+  it('the Index step does not wait: Next opens while the index is still queued', async () => {
+    fakeFetch((url) =>
+      url.endsWith('/index-status') ? json(indexStatus('queued')) : json({}, 404),
+    );
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({ step: 'index', connectedRepoRef: 'acme/widgets' })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+      />,
+    );
+    const next = (await screen.findByRole('button', {
+      name: /Next: import your work/,
+    })) as HTMLButtonElement;
+    await screen.findByText('0 of 1 repositories done');
+    expect(next.disabled).toBe(false);
+  });
+
+  it('renders in Chinese', async () => {
+    fakeFetch((url) =>
+      url.endsWith('/index-status') ? json(indexStatus('indexing')) : json({}, 404),
+    );
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({
+          step: 'import',
+          connectedRepoRef: 'acme/widgets',
+          latestImport: runningImport,
+        })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(await screen.findByRole('button', { name: '进入 Motir' })).toBeTruthy();
+    expect(screen.getByText('进入之后，索引和导入会继续进行。')).toBeTruthy();
+    expect(screen.getByTestId('migrate-import-running').textContent).toContain(
+      '正在从 Jira 导入 · 已处理 40 个工作项',
+    );
+    expect(screen.getByText('索引和导入都在后台运行。你随时可以进入 Motir。')).toBeTruthy();
   });
 });

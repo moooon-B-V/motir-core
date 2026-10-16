@@ -1,6 +1,7 @@
 import { cookies, headers } from 'next/headers';
 import { getSession } from '@/lib/auth';
 import { contentLanguageFromAcceptLanguage } from '@/lib/i18n/contentLanguage';
+import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import type { WorkspaceContext } from './context';
 import { WORKSPACE_COOKIE_NAME, resolveWorkspaceFromIds } from './middleware';
 
@@ -15,8 +16,11 @@ export { resolveWorkspaceContext, WORKSPACE_COOKIE_NAME } from './middleware';
  * React Server Component, Route Handler, or Server Action — the
  * workspace analogue of `getSession()` in lib/auth/index.ts.
  *
- * Returns null only when there is no session. A signed-in user with zero
- * workspace memberships is self-healed by the resolver (Subtask 1.2.4):
+ * Returns null when there is no session, and when the active org (the org
+ * cookie) is one the user belongs to that has no workspace (MOTIR-8777) — the
+ * user is then in that org with no workspace, and project pages send them to
+ * `/no-project`, which lands them on the org. Otherwise a signed-in user with
+ * zero workspace memberships is self-healed by the resolver (Subtask 1.2.4):
  * it calls workspacesService.ensureDefaultWorkspace and returns the
  * backfilled workspace rather than stranding the user with null.
  *
@@ -45,6 +49,7 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
   const pinned = session.impersonation?.session.workspaceId ?? null;
   const cookieStore = pinned ? null : await cookies();
   const cookieWorkspaceId = pinned ?? cookieStore?.get(WORKSPACE_COOKIE_NAME)?.value ?? null;
+  const cookieOrganizationId = cookieStore?.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
 
   const userId = session.user.id;
   // Seeds the content language of a default org the self-heal mints (Story
@@ -55,6 +60,7 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
     cookieWorkspaceId,
     session.user.name,
     contentLanguageFromAcceptLanguage(acceptLanguage),
+    cookieOrganizationId,
   );
   if (!workspaceId) return null;
   return { userId, workspaceId };

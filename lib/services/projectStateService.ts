@@ -8,6 +8,9 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectsService } from '@/lib/services/projectsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
+import { deriveMigrateIndexRepoState } from '@/lib/codeGraph/migrateIndexRepoState';
+import { deriveRefreshFailing } from '@/lib/codeGraph/refreshReason';
 
 // The project's PLANNING PRECONDITIONS, in ONE read (MOTIR-1968) — an ADAPTER
 // over four shipped reads, not a new capability.
@@ -95,11 +98,10 @@ async function resolveCodeState(
     installation.repos.map((repo) => ({ provider: installation.provider, repo })),
   );
 
-  // ONE workspace-scoped transaction for both LEDGER reads, so the job_run RLS
-  // policy sees the bound workspace GUC and the two halves are consistent.
-  const { indexedRefs, running } = await withWorkspaceContext(
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    async (tx) => {
+  // ONE workspace-scoped transaction for the LEDGER reads, so the job_run RLS
+  // policy sees the bound workspace GUC and the halves are consistent.
+  const { indexedRefs, running, runningRunIds, terminalRunIds, organizationId } =
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
       // The whole ledger for this workspace in one query — the N+1 the per-repo
       // lookup would be. `output.repoRef` is `owner/name`, the same spelling
       // `resolveCodeContext` builds, so the Set membership test is exact.
@@ -107,19 +109,50 @@ async function resolveCodeState(
         await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
       );
       const run = await jobRunRepository.findRunningCodeGraphIndexForWorkspace(ctx.workspaceId, tx);
-      return { indexedRefs: refs, running: run };
-    },
+      return {
+        indexedRefs: refs,
+        running: run,
+        runningRunIds: new Set(
+          await jobRunRepository.listRunningCodeGraphIndexRunIds(ctx.workspaceId, tx),
+        ),
+        terminalRunIds: new Set(
+          await jobRunRepository.listTerminalCodeGraphRunIds(ctx.workspaceId, tx),
+        ),
+        organizationId: await resolveOrganizationId(ctx.workspaceId, tx),
+      };
+    });
+
+  // Each repository's index POINTER and size refusal — the facts the wizard's
+  // four-state derivation reads (MOTIR-8768), so this read and the wizard's poll
+  // name the same state for the same repository. Skipped when nothing is
+  // connected.
+  const pointers = new Map(
+    repos.length === 0
+      ? []
+      : (
+          await githubInstallationService.listOrganizationRepoIndexPointers({
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            organizationId,
+          })
+        ).map((row) => [row.repoRef, row] as const),
   );
 
   const rows: MigrateIndexRepoDto[] = repos.map(({ provider, repo }) => {
     const repoRef = `${repo.owner}/${repo.name}`;
+    const pointer = pointers.get(repoRef);
+    const indexingRunId = pointer?.indexingRunId ?? null;
     return {
       provider,
       repoRef,
-      // `pending` covers "queued", "in flight" AND "nothing ever tried" — the
-      // ledger cannot separate them per repo (a running row carries no
-      // repoRef), and MOTIR-1961's repos sat in the third of those forever.
-      status: indexedRefs.has(repoRef) ? 'indexed' : 'pending',
+      // `queued` still covers "nothing ever tried" — MOTIR-1961's repos sat there
+      // forever — beside "enqueued, not yet claimed".
+      status: deriveMigrateIndexRepoState({
+        hasSucceededIndex: indexedRefs.has(repoRef),
+        hasRunningIndex: indexingRunId !== null && runningRunIds.has(indexingRunId),
+        refreshFailing: deriveRefreshFailing({ indexingRunId, terminalRunIds }),
+        refusedForSize: (pointer?.indexRefusedAt ?? null) !== null,
+      }),
     };
   });
   const indexedCount = rows.filter((row) => row.status === 'indexed').length;
@@ -130,6 +163,7 @@ async function resolveCodeState(
     index: {
       repos: rows,
       indexedCount,
+      failedCount: rows.filter((row) => row.status === 'failed').length,
       total,
       hasRunning: running !== null,
       // `total > 0` deliberately: "every one of zero repos is indexed" is a
