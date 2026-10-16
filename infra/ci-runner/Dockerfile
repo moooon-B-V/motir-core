@@ -317,6 +317,10 @@ RUN set -eux; \
     chown -R runner:runner /home/runner /opt/hostedtoolcache
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/motir-ci-runner-entrypoint
+# dockerd start + the whiteout-unpack proof the entrypoint runs (MOTIR-8821), and
+# the runner hook that prints its outcome into the job log.
+COPY --chmod=0755 start-dockerd.sh /usr/local/bin/motir-ci-runner-dockerd
+COPY --chmod=0755 job-started.sh /usr/local/bin/motir-ci-runner-job-started.sh
 
 # No runner ENV is set here on purpose. `PLAYWRIGHT_BROWSERS_PATH` stays at its
 # default (see the not-installed note in the header), and

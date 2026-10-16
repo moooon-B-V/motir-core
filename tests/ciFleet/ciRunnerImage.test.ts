@@ -24,6 +24,8 @@ const ROOT = process.cwd();
 const IMAGE_DIR = join(ROOT, 'infra/ci-runner');
 const dockerfile = readFileSync(join(IMAGE_DIR, 'Dockerfile'), 'utf8');
 const entrypoint = readFileSync(join(IMAGE_DIR, 'entrypoint.sh'), 'utf8');
+const startDockerd = readFileSync(join(IMAGE_DIR, 'start-dockerd.sh'), 'utf8');
+const proveBoot = readFileSync(join(IMAGE_DIR, 'smoke/prove-boot.sh'), 'utf8');
 const ciYml = readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8');
 const imageYml = readFileSync(join(ROOT, '.github/workflows/runner-image.yml'), 'utf8');
 const releaseYml = readFileSync(join(ROOT, '.github/workflows/release-runner-image.yml'), 'utf8');
@@ -164,6 +166,41 @@ describe('the boot contract — the orchestrator and the entrypoint agree', () =
     // than a lost requirement. buildSpec still sets it; the entrypoint logs it.
     expect(spec.env['ACTIONS_RUNNER_CONFIG_ARGS']).toBe('--no-default-labels');
     expect(code(entrypoint)).not.toMatch(/run\.sh.*ACTIONS_RUNNER_CONFIG_ARGS/);
+  });
+});
+
+describe('dockerd must be able to unpack a layer, not merely answer (MOTIR-8821)', () => {
+  it('the entrypoint starts dockerd through the script that proves a whiteout unpack', () => {
+    expect(code(entrypoint)).toContain('motir-ci-runner-dockerd');
+    expect(code(entrypoint)).not.toMatch(/^\s*dockerd /m);
+    expect(code(dockerfile)).toContain('start-dockerd.sh /usr/local/bin/motir-ci-runner-dockerd');
+  });
+
+  it('probes with a layer that deletes a file, and falls back through the storage candidates', () => {
+    const body = code(startDockerd);
+    expect(body).toContain('.wh.gone');
+    expect(body).toContain('docker create');
+    for (const candidate of ['default', 'overlay2', 'vfs']) {
+      expect(body).toMatch(new RegExp(`${candidate}\\)`));
+    }
+    // A boot that finds no working candidate fails rather than serving jobs.
+    expect(body).toMatch(/die "no dockerd storage candidate/);
+  });
+
+  it('prints the storage outcome into the job log through the runner hook', () => {
+    expect(code(entrypoint)).toContain(
+      'ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/motir-ci-runner-job-started.sh',
+    );
+    expect(code(dockerfile)).toContain(
+      'job-started.sh /usr/local/bin/motir-ci-runner-job-started.sh',
+    );
+    expect(code(startDockerd)).toContain('/run/motir-ci-runner-docker-storage');
+  });
+
+  it('the boot smoke pulls a whiteout-bearing image through the production script', () => {
+    expect(code(proveBoot)).toContain('motir-ci-runner-dockerd');
+    expect(code(proveBoot)).toContain('docker pull pgvector/pgvector:pg16');
+    expect(code(proveBoot)).not.toContain('MOTIR_RUNNER_SKIP_DOCKER');
   });
 });
 
