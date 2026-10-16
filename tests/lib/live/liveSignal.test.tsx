@@ -258,12 +258,14 @@ describe('the workbench stream source', () => {
     offC();
   });
 
-  it('ignores a plan topic — it holds no connection for one', async () => {
+  // Inverted by Story MOTIR-8542 · MOTIR-8732: the stream now SERVES the plan
+  // topic, so a plan subscription alone opens the one connection, watching it.
+  it('opens the one connection for a plan topic, watching that plan', async () => {
     const stream = stubStream();
     const source = createWorkbenchStreamSource();
     const off = source.subscribe({ kind: 'plan', planId: 'p1' }, () => {});
     await new Promise((r) => setTimeout(r, 0));
-    expect(stream.calls).toHaveLength(0);
+    expect(stream.calls).toEqual(['/api/workbench/stream?watch=p1%3A']);
     off();
   });
 });

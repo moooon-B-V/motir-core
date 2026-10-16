@@ -1,7 +1,12 @@
 import { drainSseFrames } from '@/lib/ai/sseFrames';
 import { WORKBENCH_TAB_KEYS, type WorkbenchTabKey } from '@/lib/dto/workbench';
+import {
+  formatWatchParams,
+  WORKBENCH_STREAM_MAX_WATCHED_PLANS,
+  WORKBENCH_STREAM_PLAN_FRAME,
+} from '@/lib/workbench/planWatch';
 import { createLiveFlag } from '../liveFlag';
-import type { LiveSignalListener, LiveSignalSource } from '../liveSignal';
+import type { LiveSignal, LiveSignalListener, LiveSignalSource, LiveTopic } from '../liveSignal';
 
 // THE WORKBENCH'S SSE NUDGE, AS A SOURCE (Story MOTIR-8539 · Subtask MOTIR-8572).
 //
@@ -31,6 +36,18 @@ import type { LiveSignalListener, LiveSignalSource } from '../liveSignal';
 // park is deliberate, so it never reads as a drop: `reconnecting` stays false
 // through hide, park and reopen (design-notes § 39 rule 2), and only a reopen
 // that FAILS enters the drop path. The grace keeps a quick tab switch free.
+//
+// ⚠️ IT SERVES THE `plan` TOPIC TOO (Story MOTIR-8542 · Subtask MOTIR-8732). A
+// generating plan's reads follow `plan` frames on this same connection instead of
+// a 2.5 s timer. The watched plans ride the connection URL (`watch=<id>:<version>`,
+// the first `WORKBENCH_STREAM_MAX_WATCHED_PLANS` in subscription order), so a
+// change to the SET of plans reopens the one connection — close before open,
+// after `PLAN_WATCH_SETTLE_MS`, with the held cursor, and never as a drop. A plan
+// frame signals that plan's listeners only. While a connection is up and a plan
+// is watched, every `PLAN_BACKSTOP_MS` each watched plan gets a `full` signal: the
+// review version cannot see a committed card a proposal points at being renamed,
+// and a lost notification must not leave a plan stale for longer than that. The
+// backstop timer belongs to the connection, so a parked tab runs none.
 
 /** The stream's address — one place, so the source and its tests agree. */
 export const WORKBENCH_STREAM_PATH = '/api/workbench/stream';
@@ -72,6 +89,20 @@ function isHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';
 }
 
+/**
+ * While a plan is watched and a connection is up, each watched plan is read in
+ * full this often — the bound the poll's every-8th full read used to keep.
+ */
+export const PLAN_BACKSTOP_MS = 60_000;
+
+/**
+ * How long a change to the watched plan set waits before it reopens the
+ * connection, so a surface mounting two subscriptions in one render pays one reopen.
+ */
+export const PLAN_WATCH_SETTLE_MS = 50;
+
+type PlanTopic = Extract<LiveTopic, { kind: 'plan' }>;
+
 /** How often the watchdog looks. Cheap, and never the thing that decides. */
 const WATCHDOG_TICK_MS = 2_000;
 
@@ -93,6 +124,14 @@ export interface WorkbenchStreamSource extends LiveSignalSource {
 
 export function createWorkbenchStreamSource(): WorkbenchStreamSource {
   const listeners = new Set<LiveSignalListener>();
+  // The plan topic: listeners per plan in subscription order, the last version a
+  // `plan` frame carried, and each plan's own monotonic `seq`.
+  const planListeners = new Map<string, Set<LiveSignalListener>>();
+  const planVersions = new Map<string, string>();
+  const planSeqs = new Map<string, number>();
+  // The watched set the running pump's connection was opened with.
+  let connectedWatchKey = '';
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
   const reconnecting = createLiveFlag(false);
   // The cursor the next connection presents. It outlives every connection.
   let cursor: string | null = null;
@@ -108,6 +147,39 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
     seq += 1;
     const next = { topic: { kind: 'workbench' as const }, seq, moved };
     for (const listener of [...listeners]) listener(next);
+  };
+
+  const signalPlan = (planId: string, mark: 'forced' | 'full' | null): void => {
+    const set = planListeners.get(planId);
+    if (!set) return;
+    const planSeq = (planSeqs.get(planId) ?? 0) + 1;
+    planSeqs.set(planId, planSeq);
+    const topic: PlanTopic = { kind: 'plan', planId };
+    const next: LiveSignal =
+      mark === 'forced'
+        ? { topic, seq: planSeq, forced: true }
+        : mark === 'full'
+          ? { topic, seq: planSeq, full: true }
+          : { topic, seq: planSeq };
+    for (const listener of [...set]) listener(next);
+  };
+
+  const hasSubscribers = (): boolean => listeners.size > 0 || planListeners.size > 0;
+
+  /** The plans the connection URL carries, in subscription order. */
+  const watchedPlanIds = (): string[] =>
+    [...planListeners.keys()].slice(0, WORKBENCH_STREAM_MAX_WATCHED_PLANS);
+
+  const streamUrl = (): string => {
+    const params: string[] = [];
+    if (cursor) params.push(`since=${encodeURIComponent(cursor)}`);
+    const watch = formatWatchParams(
+      watchedPlanIds().map((planId) => ({ planId, version: planVersions.get(planId) ?? null })),
+    );
+    if (watch) params.push(watch);
+    return params.length > 0
+      ? `${WORKBENCH_STREAM_PATH}?${params.join('&')}`
+      : WORKBENCH_STREAM_PATH;
   };
 
   const startPump = (): PumpHandle => {
@@ -137,12 +209,14 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
           if (isHidden()) return;
           if (Date.now() - lastByteAt >= STREAM_STALE_MS) dropConnection();
         }, WATCHDOG_TICK_MS);
+        // The plan backstop, owned by THIS connection: it starts when the
+        // connection opens and ends with it, so a parked, stopped or backing-off
+        // pump runs none.
+        let backstop: ReturnType<typeof setInterval> | null = null;
         try {
-          const since = cursor;
-          const url = since
-            ? `${WORKBENCH_STREAM_PATH}?since=${encodeURIComponent(since)}`
-            : WORKBENCH_STREAM_PATH;
-          const res = await fetch(url, {
+          // The set this connection is opened with — what a set change compares to.
+          connectedWatchKey = watchedPlanIds().join(',');
+          const res = await fetch(streamUrl(), {
             headers: { Accept: 'text/event-stream' },
             signal: connection.signal,
           });
@@ -151,6 +225,11 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
           // A connection that opened resets the backoff: the next drop is a
           // first drop, not the fifth.
           attempt = 0;
+          if (planListeners.size > 0) {
+            backstop = setInterval(() => {
+              for (const planId of [...planListeners.keys()]) signalPlan(planId, 'full');
+            }, PLAN_BACKSTOP_MS);
+          }
 
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
@@ -164,7 +243,18 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
             buffer += decoder.decode(value, { stream: true });
             const { frames, rest } = drainSseFrames(buffer);
             buffer = rest;
-            for (const { data } of frames) {
+            for (const { event, data } of frames) {
+              if (event === WORKBENCH_STREAM_PLAN_FRAME) {
+                // A plan frame is a signal for that plan alone, never a tab nudge.
+                const plan = data as { planId?: unknown; reviewVersion?: unknown };
+                if (typeof plan.planId !== 'string' || typeof plan.reviewVersion !== 'string') {
+                  continue;
+                }
+                if (!planListeners.has(plan.planId)) continue;
+                planVersions.set(plan.planId, plan.reviewVersion);
+                signalPlan(plan.planId, null);
+                continue;
+              }
               const frame = data as { moved?: unknown; cursor?: unknown };
               if (typeof frame.cursor === 'string') cursor = frame.cursor;
               const moved = Array.isArray(frame.moved) ? frame.moved.filter(isTabKey) : [];
@@ -181,6 +271,7 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
           if (cancelled || lifetime.signal.aborted) return;
         } finally {
           clearInterval(watchdog);
+          if (backstop !== null) clearInterval(backstop);
           lifetime.signal.removeEventListener('abort', dropConnection);
           window.removeEventListener('offline', dropConnection);
         }
@@ -235,7 +326,7 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
 
   const park = (): void => {
     graceTimer = null;
-    if (listeners.size === 0 || parked) return;
+    if (!hasSubscribers() || parked) return;
     parked = true;
     stopPump();
   };
@@ -263,8 +354,29 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
     if (isHidden()) graceTimer = setTimeout(park, WORKBENCH_STREAM_HIDDEN_GRACE_MS);
   };
 
+  const clearSettle = (): void => {
+    if (settleTimer !== null) clearTimeout(settleTimer);
+    settleTimer = null;
+  };
+
+  // ⚠️ A CHANGE TO THE WATCHED SET REOPENS THE ONE CONNECTION — close before
+  // open, so two `fetch`es are never out at once, and not as a drop: no backoff,
+  // no `reconnecting`. Parked, the change is only recorded: the show-time reopen
+  // builds its URL from the current set.
+  const watchSetChanged = (): void => {
+    if (settleTimer !== null) return;
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      if (!pumpHandle || parked) return;
+      if (watchedPlanIds().join(',') === connectedWatchKey) return;
+      pumpHandle.stop();
+      pumpHandle = startPump();
+    }, PLAN_WATCH_SETTLE_MS);
+  };
+
   const stop = (): void => {
     clearGrace();
+    clearSettle();
     parked = false;
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibility);
@@ -274,14 +386,39 @@ export function createWorkbenchStreamSource(): WorkbenchStreamSource {
 
   return {
     subscribe(topic, onSignal) {
-      if (topic.kind !== 'workbench') return () => {};
+      // A wrapper per subscription, so the same callback subscribed twice is two.
       const listener: LiveSignalListener = (s) => onSignal(s);
+      if (topic.kind === 'plan') {
+        const { planId } = topic;
+        let set = planListeners.get(planId);
+        const added = !set;
+        if (!set) {
+          set = new Set();
+          planListeners.set(planId, set);
+        }
+        set.add(listener);
+        if (!pumpHandle && !parked) start();
+        else if (added) watchSetChanged();
+        return () => {
+          const current = planListeners.get(planId);
+          if (!current?.delete(listener)) return;
+          if (current.size > 0) return;
+          planListeners.delete(planId);
+          planVersions.delete(planId);
+          if (!hasSubscribers()) stop();
+          else watchSetChanged();
+        };
+      }
       listeners.add(listener);
       if (!pumpHandle && !parked) start();
       return () => {
-        listeners.delete(listener);
-        if (listeners.size === 0) stop();
+        if (!listeners.delete(listener)) return;
+        if (!hasSubscribers()) stop();
       };
+    },
+    trigger(topic) {
+      // Only a plan is nudged on demand (the poll hook's `refresh()`).
+      if (topic.kind === 'plan') signalPlan(topic.planId, 'forced');
     },
     reconnecting,
     dispose: stop,

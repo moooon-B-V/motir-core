@@ -17,7 +17,6 @@ import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 import { LiveSignalProvider, routeLiveSources } from '@/lib/live/liveSignal';
 import { WorkbenchRereadProvider } from '@/lib/workbench/workbenchReread';
 import { createWorkbenchStreamSource } from '@/lib/live/sources/workbenchStreamSource';
-import { planPollSource } from '@/lib/live/sources/planPollSource';
 
 // THE HOST THAT HOLDS THE STREAM (Story MOTIR-5238 · Subtask MOTIR-5242).
 //
@@ -72,14 +71,12 @@ import { planPollSource } from '@/lib/live/sources/planPollSource';
 export function WorkbenchLive({ children }: { children: ReactNode }) {
   // ⚠️ ONE SOURCE FOR THE SHELL'S LIFETIME (Story MOTIR-8539 · MOTIR-8572): it
   // holds the one connection, opened while a subscriber is present. The plan
-  // topic routes to the poll's cadence, so a plan surface under the shell reads
-  // the same seam as one outside it.
+  // topic routes to the SAME source (Story MOTIR-8542 · MOTIR-8732): a generating
+  // plan's reads follow `plan` frames on that connection, and no timer runs. A
+  // surface outside the shell keeps the poll's cadence (`DEFAULT_LIVE_SOURCE`).
   const [stream] = useState(createWorkbenchStreamSource);
   useEffect(() => () => stream.dispose(), [stream]);
-  const source = useMemo(
-    () => routeLiveSources({ workbench: stream, plan: planPollSource }),
-    [stream],
-  );
+  const source = useMemo(() => routeLiveSources({ workbench: stream, plan: stream }), [stream]);
   // ⚠️ THE REREAD SLOT LIVES HERE TOO (MOTIR-8576), for the reason this host is
   // in the shell at all: the planning overlay that asks the Workbench to re-read
   // after an approve is mounted beside the page, not inside it, so only a provider
