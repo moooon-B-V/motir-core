@@ -8,6 +8,7 @@ import { redirectIfOrganizationSuspended } from '@/lib/organizations/suspensionR
 import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { entitlementsService } from '@/lib/services/entitlementsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { orgCan } from '@/lib/organizations/capabilities';
 import { projectsService } from '@/lib/services/projectsService';
@@ -216,7 +217,16 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
         role: currentOrg.role,
       }
     : null;
-  const orgs = currentOrg ? await organizationsService.listUserOrganizations(session.user.id) : [];
+  // The org list and whether this account may create an org (§4.5 — the org
+  // menu's "Create organization" door, MOTIR-8779) are independent reads, so
+  // they share one round trip. Both are skipped for an account with no org,
+  // whose shell renders no org control at all.
+  const [orgs, canCreateOrganization] = currentOrg
+    ? await Promise.all([
+        organizationsService.listUserOrganizations(session.user.id),
+        entitlementsService.canCreateOrganization(session.user.id),
+      ])
+    : [[], false];
   // Whether this is a Motir cloud build — gates the org menu's "Billing & plans"
   // row (Story 8.1.7); off-cloud the commercial surface does not exist (ADR §6).
   const cloudBilling = isCloudBilling();
@@ -511,6 +521,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           buildInPublicProjectKey={buildInPublicProjectKey}
                           buildingInPublic={buildingInPublic}
                           cloudBilling={cloudBilling}
+                          canCreateOrganization={canCreateOrganization}
                           showPlanWithAi={showPlanWithAi}
                         />
                       }
@@ -600,6 +611,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           workspaces={workspaces}
                           activeWorkspaceId={activeWorkspaceId}
                           cloudBilling={cloudBilling}
+                          canCreateOrganization={canCreateOrganization}
                           placement="drawer"
                         />
                       }

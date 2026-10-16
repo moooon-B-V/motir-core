@@ -197,28 +197,50 @@ export async function switchOrganizationAction(organizationId: string): Promise<
 }
 
 /**
- * Create a new organization (Story 6.10.5 — the switch-org section's "Create
+ * What `createOrganizationAction` resolves to — the same shape as
+ * `CreateWorkspaceResult`, for the same reason: the §4.5 cap's refusal is a
+ * business answer, not a server fault (MOTIR-8779).
+ */
+export type CreateOrganizationResult =
+  | { ok: true; organization: OrganizationDTO }
+  | { ok: false; error: string; entitlement: EntitlementKind };
+
+/**
+ * Create a new organization (Story 6.10.5 — the org menu's "Create
  * organization") with the signed-in user as its owner, and make it the active
  * org. The new org has no workspace yet, so the workspace cookie is cleared;
  * the user lands in the new (empty) org and creates its first workspace via
  * "New workspace". Returns the new org so the client can reflect it before
  * router.refresh().
  */
-export async function createOrganizationAction(name: string): Promise<OrganizationDTO> {
+export async function createOrganizationAction(name: string): Promise<CreateOrganizationResult> {
   const session = await getSession();
   if (!session) throw new Error('UNAUTHENTICATED');
 
   const trimmed = name.trim();
   if (!trimmed) throw new Error('EMPTY_NAME');
 
-  const organization = await organizationsService.createOrganization({
-    name: trimmed,
-    actorUserId: session.user.id,
-    contentLanguage: contentLanguageFromAcceptLanguage((await headers()).get('accept-language')),
-  });
+  // MOTIR-8779 — the §4.5 gate (`entitlementsService.assertCanCreateOrganization`)
+  // throws a typed `EntitlementExceededError` when the account is at its org
+  // quota. Escaping a Server Action it renders a 500, which says Motir broke
+  // when in fact the quota held. Converted here exactly as `createWorkspaceAction`
+  // converts the workspace cap (MOTIR-5130): only this call, only this class.
+  let organization;
+  try {
+    organization = await organizationsService.createOrganization({
+      name: trimmed,
+      actorUserId: session.user.id,
+      contentLanguage: contentLanguageFromAcceptLanguage((await headers()).get('accept-language')),
+    });
+  } catch (err) {
+    if (err instanceof EntitlementExceededError) {
+      return { ok: false, error: err.message, entitlement: err.entitlement };
+    }
+    throw err;
+  }
 
   const cookieStore = await cookies();
   cookieStore.set(ORGANIZATION_COOKIE_NAME, organization.id, COOKIE_OPTIONS);
   cookieStore.delete(WORKSPACE_COOKIE_NAME);
-  return organization;
+  return { ok: true, organization };
 }

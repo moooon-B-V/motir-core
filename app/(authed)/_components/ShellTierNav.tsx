@@ -72,6 +72,10 @@ export interface ShellTierNavProps {
   /** True on a Motir cloud build — gates the org menu's "Billing & plans" row
    *  (Story 8.1.7). Resolved server-side and threaded down to OrgControl. */
   cloudBilling: boolean;
+  /** Whether the account may create an organization (§4.5, resolved in the
+   *  layout) — threaded to OrgControl, which offers "Create organization" on it
+   *  alone (MOTIR-8779). */
+  canCreateOrganization?: boolean;
   /**
    * WHICH host this instance renders in, and therefore which part of the path
    * it carries. `bar` (the default) is the full ladder above. `drawer` is the
@@ -110,6 +114,7 @@ export function ShellTierNav({
   workspaces,
   activeWorkspaceId,
   cloudBilling,
+  canCreateOrganization = false,
   placement = 'bar',
   activeProject = null,
   projects = [],
@@ -131,6 +136,7 @@ export function ShellTierNav({
       orgs={orgs}
       cloudBilling={cloudBilling}
       workspaceTierRevealed={showWorkspaceSwitcher}
+      canCreateOrganization={canCreateOrganization}
     />
   );
   const workspaceSwitcher = (

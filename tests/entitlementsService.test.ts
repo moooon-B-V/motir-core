@@ -28,6 +28,7 @@ const { keyForAppend } = await import('@/lib/workItems/positioning');
 const { truncateAuthTables } = await import('./helpers/db');
 const { CapLockUnavailableError, EntitlementExceededError } = await import('@/lib/billing/errors');
 const { publicAddressRepository } = await import('@/lib/repositories/publicAddressRepository');
+const { organizationsService } = await import('@/lib/services/organizationsService');
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -574,6 +575,80 @@ describe('entitlementsService — org-creation gate (§4.5)', () => {
         entitlementsService.assertCanCreateOrganization(user.id, tx),
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+/** A user who is a plain MEMBER of somebody else's org and owns none — every
+ *  invited teammate (MOTIR-8779). */
+async function makeInvitedMember(): Promise<{ memberId: string; hostOrgId: string }> {
+  const host = await createTestUser();
+  const { workspace } = await workspacesService.createWorkspace({
+    name: 'Host',
+    ownerUserId: host.id,
+  });
+  const hostOrgId = await orgIdOf(workspace.id);
+  const member = await createTestUser();
+  await adminDb.organizationMembership.create({
+    data: { organizationId: hostOrgId, userId: member.id, role: 'member' },
+  });
+  return { memberId: member.id, hostOrgId };
+}
+
+describe('entitlementsService — can this account create an org? (§4.5 read, MOTIR-8779)', () => {
+  it('a MEMBER of one org who owns none may create exactly one, and the second is refused', async () => {
+    const { memberId } = await makeInvitedMember();
+    expect(await entitlementsService.canCreateOrganization(memberId)).toBe(true);
+
+    await organizationsService.createOrganization({ name: 'Mine', actorUserId: memberId });
+    expect(await entitlementsService.canCreateOrganization(memberId)).toBe(false);
+
+    await expect(
+      organizationsService.createOrganization({ name: 'Another', actorUserId: memberId }),
+    ).rejects.toMatchObject({ entitlement: 'organizations' });
+    // Belongs to two orgs now, owns one free one: still at the quota.
+    expect(await adminDb.organizationMembership.count({ where: { userId: memberId } })).toBe(2);
+    expect(await entitlementsService.canCreateOrganization(memberId)).toBe(false);
+  });
+
+  it('agrees with the gate as the owned org is upgraded', async () => {
+    const user = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'First',
+      ownerUserId: user.id,
+    });
+    const orgId = await orgIdOf(workspace.id);
+    expect(await entitlementsService.canCreateOrganization(user.id)).toBe(false);
+
+    await setTier(orgId, SCALED);
+    expect(await entitlementsService.canCreateOrganization(user.id)).toBe(true);
+
+    await setTier(orgId, CANCELED);
+    expect(await entitlementsService.canCreateOrganization(user.id)).toBe(false);
+  });
+
+  it('keeps the META exemption: an ADMIN of the meta org is uncapped, a MEMBER of it is not', async () => {
+    const { memberId, hostOrgId } = await makeInvitedMember();
+    await setMeta(hostOrgId);
+    // A member of the meta org owns nothing, so they hold the ordinary one free org…
+    await organizationsService.createOrganization({ name: 'Mine', actorUserId: memberId });
+    expect(await entitlementsService.canCreateOrganization(memberId)).toBe(false);
+
+    // …and being made an ADMIN of the meta org is what lifts the quota.
+    await adminDb.organizationMembership.update({
+      where: { organizationId_userId: { organizationId: hostOrgId, userId: memberId } },
+      data: { role: 'admin' },
+    });
+    expect(await entitlementsService.canCreateOrganization(memberId)).toBe(true);
+    await expect(
+      organizationsService.createOrganization({ name: 'Another', actorUserId: memberId }),
+    ).resolves.toMatchObject({ name: 'Another' });
+  });
+
+  it('is always true off-cloud', async () => {
+    delete process.env['MOTIR_CLOUD'];
+    const user = await createTestUser();
+    await workspacesService.createWorkspace({ name: 'First', ownerUserId: user.id });
+    expect(await entitlementsService.canCreateOrganization(user.id)).toBe(true);
   });
 });
 
