@@ -14500,7 +14500,9 @@
       "completed": "Isso é tudo o que eu precisava perguntar.",
       "nothingToAsk": "Não tenho nada a perguntar: isso está claro o bastante para planejar. Vou escrever o plano agora.",
       "stopped": "Você parou as perguntas.",
-      "stoppedNoAnswer": "Você parou as perguntas antes de qualquer resposta. Nada foi escrito."
+      "stoppedNoAnswer": "Você parou as perguntas antes de qualquer resposta. Nada foi escrito.",
+      "handoffFailed": "Me questione não conseguiu fazer as perguntas, então o plano está sendo escrito sem elas. Sua solicitação continua como você escreveu.",
+      "handoffNoCredit": "Me questione precisa de crédito de IA para fazer as perguntas, então o plano está sendo escrito sem elas."
     },
     "summary": {
       "title": "O que você definiu",

@@ -14500,7 +14500,9 @@
       "completed": "È tutto quello che dovevo chiedere.",
       "nothingToAsk": "Non ho niente da chiedere: è abbastanza chiaro per pianificare. Ora scrivo il piano.",
       "stopped": "Hai interrotto le domande.",
-      "stoppedNoAnswer": "Hai interrotto le domande prima di qualsiasi risposta. Non è stato scritto nulla."
+      "stoppedNoAnswer": "Hai interrotto le domande prima di qualsiasi risposta. Non è stato scritto nulla.",
+      "handoffFailed": "Interrogami non è riuscito a porre le sue domande, quindi il piano viene scritto senza di esse. La tua richiesta resta come l’hai scritta.",
+      "handoffNoCredit": "Interrogami ha bisogno di credito IA per porre le sue domande, quindi il piano viene scritto senza di esse."
     },
     "summary": {
       "title": "Ciò che hai stabilito",

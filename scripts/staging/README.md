@@ -110,5 +110,5 @@ bucket in this check is **the runner's**, for its whole window:
 `lib/cases.ts` is a documented copy of `tests/two-instance/limits.spec.ts` and `followups.spec.ts`,
 not a module both import. The local cases spoof a client IP per sequence and seed their data through
 the app's services in-process, and neither is possible against a deployed app. Every assertion they
-make is made here too. The three constants copied from the app (the stream's poll cadence and frame
+make is made here too. The three constants copied from the app (the stream's coalescing window and frame
 name, the CLI's client id) are pinned to the app's values by `tests/staging/pinnedClient.test.ts`.

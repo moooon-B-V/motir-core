@@ -14500,7 +14500,9 @@
       "completed": "Dat is alles wat ik moest vragen.",
       "nothingToAsk": "Ik heb niets te vragen: dit is duidelijk genoeg om te plannen. Ik schrijf nu het plan.",
       "stopped": "Je hebt het ondervragen gestopt.",
-      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven."
+      "stoppedNoAnswer": "Je hebt het ondervragen gestopt vóór een antwoord. Er is niets geschreven.",
+      "handoffFailed": "Ondervraag me kon zijn vragen niet stellen, dus het plan wordt zonder die vragen geschreven. Je verzoek blijft zoals je het schreef.",
+      "handoffNoCredit": "Ondervraag me heeft AI-tegoed nodig om zijn vragen te stellen, dus het plan wordt zonder die vragen geschreven."
     },
     "summary": {
       "title": "Wat je hebt vastgelegd",
