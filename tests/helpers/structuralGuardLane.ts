@@ -199,6 +199,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // asked the question nobody had: is each of this story's guards in a lane where
   // its cost is a function of the tree rather than of what else is running?
   'tests/ciFleet/orchestratorPortBoundary.test.ts',
+  // ── tests/ciFleet/ — the ORG-IDENTITY guard (MOTIR-8716) ──────────────────
+  // The same shape as the port boundary above: it lists `lib/` + `app/` with
+  // `git ls-files`, comment-strips every code file and tests a handful of
+  // patterns against every line. No database, no render, no coverage to carry.
+  'tests/ciFleet/fleetNoOrgIdentityBranch.test.ts',
   // ── tests/typecheck-program/ — the story's guard CENSUS (MOTIR-4300) ──────
   // ⚠️ IT IS HERE BY DERIVATION, NOT BY COST, and that is worth saying because
   // the file itself reads five named files and takes ~10 ms. It imports THIS

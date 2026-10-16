@@ -194,10 +194,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // refuses LOUDLY rather than answering wrongly. `workspaceRepository.findBySlug`
   // left this list entirely: the `--workspace` arm binds `app.bootstrap_slug`
   // (`withBootstrapSlugContext`) and now works under EITHER role.
-  'projectRepository.ts#findAllByIdentifier': [
-    'operator-script',
-    'stampOnboardingRan — cross-tenant search, refused loudly under motir_app',
-  ],
   'projectRepository.ts#findBySlug': [
     'operator-script',
     'stampOnboardingRan — cross-tenant search, refused loudly under motir_app',
@@ -303,6 +299,14 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // on customer paths with no platform flag bound. Both tables' SELECT arm is
   // `USING (true)` — platform reference data — and their writes stay behind
   // `app.platform_staff`.
+  // ── the FLEET ORG CI setting (Story MOTIR-8699 · MOTIR-8714) ───────────
+  // The console's state read runs outside any platform transaction (a platform
+  // context cannot open without auditing). The table's SELECT arm is
+  // `USING (true)`; its writes stay behind `app.platform_staff`.
+  'platformFleetOrgCiRepository.ts#find': [
+    'public',
+    'platform_fleet_org_ci_read (20261015300000) · platformFleetOrgCiRead.test "the fleet org CI state read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
   'platformRunModelRepository.ts#findListedModelsForOffer': [
     'public',
     'platform_run_model_read + platform_run_model_list_read (20261004120000) · platformRunModelOfferRead.test "the offer read" (under SET LOCAL ROLE motir_app, nothing bound)',

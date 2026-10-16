@@ -9392,7 +9392,8 @@
       "navPlanningLessons": "Lezioni di pianificazione",
       "navIdeas": "Idee",
       "navEnterpriseRequests": "Richieste Enterprise",
-      "navRunModels": "Modelli delle esecuzioni ospitate"
+      "navRunModels": "Modelli delle esecuzioni ospitate",
+      "navFleetSettings": "Impostazioni della flotta"
     },
     "nav": {
       "overview": "Panoramica",
@@ -9572,7 +9573,11 @@
             }
           },
           "fleet": {
-            "stop": "Arrestati i container della flotta"
+            "stop": "Arrestati i container della flotta",
+            "org_ci": {
+              "enable": "Attivata la CI della flotta",
+              "disable": "Disattivata la CI della flotta"
+            }
           },
           "enterprise_request": {
             "transition": "Spostata una richiesta Enterprise"
@@ -11498,6 +11503,186 @@
         "notPermitted": "Non eseguito — il tuo ruolo nello staff non lo consente. Non è stato cambiato nulla.",
         "notFound": "Questa idea non esiste più. Qualcuno l’ha eliminata mentre avevi la pagina aperta.",
         "failed": "Qualcosa è andato storto, quindi non è stato cambiato nulla. Riprova."
+      }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Operazioni · Impostazioni della flotta",
+      "title": "Impostazioni della flotta",
+      "subtitle": "Qui un superadmin decide quale CI gira sulle macchine di Motir. Ogni modifica chiede un motivo e viene scritta nel registro di audit.",
+      "empty": "Nessun progetto offre la CI sulla flotta: nessun progetto della meta-organizzazione ha un repository privato in un’organizzazione collegata.",
+      "setting": {
+        "title": "Esegui la CI dei repository privati di Motir sulla flotta",
+        "pair": "Progetto {project} · Organizzazione GitHub {org}",
+        "superadminOnly": "Solo superadmin",
+        "explanation": "Se attiva, ogni job di CI nei repository privati di Motir su {org} richiede l’etichetta {label} e gira sulle macchine condivise {fleet}, addebitato a moooon B.V. Se disattivata, girano sui runner ospitati da GitHub. In nessun caso cambia un file di workflow."
+      },
+      "state": {
+        "on": "Attiva",
+        "off": "Disattivata"
+      },
+      "action": {
+        "turnOn": "Attiva",
+        "turnOff": "Disattiva"
+      },
+      "blocked": "Non puoi attivarla finché ogni condizione non è soddisfatta.",
+      "offNeverBlocked": "La disattivazione non attende mai la disponibilità.",
+      "meta": {
+        "lastChanged": "Ultima modifica",
+        "changedBy": "da {email}, {when} — «{reason}»",
+        "neverChanged": "Mai modificata",
+        "auditLink": "Registro di audit",
+        "variable": "Variabile GitHub",
+        "repositories": "Repository"
+      },
+      "variable": {
+        "present": "{name} = {value} su {org} (repository privati): i nuovi job richiedono la flotta.",
+        "absent": "{name} non è impostata su {org}: i job ripiegano sui runner ospitati da GitHub.",
+        "unknown": "Impossibile leggere {name} su {org}: GitHub ha risposto HTTP {status}.",
+        "unreachable": "Impossibile leggere {name} su {org}: GitHub non è raggiungibile."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Salvata come attiva, ma GitHub non concorda.",
+          "body": "{name} non è impostata su {org}, quindi i nuovi job girano ancora sui runner ospitati da GitHub. Disattiva e riattiva l’impostazione per scriverla."
+        },
+        "offPresent": {
+          "title": "Salvata come disattivata, ma GitHub non concorda.",
+          "body": "{name} è ancora impostata su {org}, quindi i nuovi job richiedono ancora la flotta. Attiva e disattiva di nuovo l’impostazione per rimuoverla."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# repository privato} other {# repository privati}}, letti in fase di esecuzione dai repository privati del progetto {project} su {org}"
+      },
+      "monitoringLine": "Le macchine di Motir compaiono sotto moooon B.V. in Monitoraggio › Flotta",
+      "onCallout": {
+        "title": "La CI di Motir è sulla flotta.",
+        "link": "Apri Monitoraggio › Flotta"
+      },
+      "degraded": {
+        "title": "Attiva ma non pronta.",
+        "body": "I nuovi job resteranno in coda finché il problema non sarà risolto o l’impostazione non verrà disattivata."
+      },
+      "readiness": {
+        "title": "Disponibilità",
+        "subtitle": "Nove condizioni, nell’ordine in cui un job le incontra. Una condizione che non è stato possibile verificare conta come non soddisfatta.",
+        "ready": "Pronta",
+        "readySub": "Tutte le {count} condizioni soddisfatte",
+        "notReady": "Non pronta — {count, plural, one {# condizione non soddisfatta} other {# condizioni non soddisfatte}}",
+        "unmetCount": "{count} non soddisfatte",
+        "unknownCount": "{count} non verificabili",
+        "checked": "Verificata {when}",
+        "checkedAgain": "Verificata di nuovo {when}",
+        "recheck": "Verifica di nuovo"
+      },
+      "mark": {
+        "met": "Soddisfatta",
+        "unmet": "Non soddisfatta",
+        "unknown": "Non verificabile"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Interruttore di emergenza della flotta"
+        },
+        "app_installed": {
+          "label": "App installata"
+        },
+        "app_runner_permission": {
+          "label": "Permesso dell’App: runner self-hosted"
+        },
+        "app_variables_permission": {
+          "label": "Permesso dell’App: variabili (scrittura)"
+        },
+        "workflow_job_subscription": {
+          "label": "Consegna di workflow_job"
+        },
+        "app_repositories": {
+          "label": "L’App raggiunge i repository"
+        },
+        "delivery_attributable": {
+          "label": "Job attribuiti al progetto {project}"
+        },
+        "runner_group": {
+          "label": "Gruppo di runner"
+        },
+        "image_coverage": {
+          "label": "Copertura dell’immagine"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "L’interruttore di emergenza della flotta è inserito ({variable}=0), quindi nessuna macchina della flotta si avvia. Un operatore lo rimuove o lo alza.",
+        "app_not_installed": "L’App motir-studio non è installata su {org}. Un proprietario di {org} la installa.",
+        "app_suspended": "L’App motir-studio su {org} è sospesa dal {date}. Un proprietario di {org} revoca la sospensione.",
+        "permission_missing": "L’App motir-studio su {org} ha {permission}: nessuno, e le serve la scrittura. Un proprietario di {org} accetta la richiesta di permesso.",
+        "permission_insufficient": "L’App motir-studio su {org} ha {permission}: {granted}, e le serve la scrittura. Un proprietario di {org} accetta la richiesta di permesso.",
+        "not_subscribed": "L’App non è iscritta agli eventi workflow_job, quindi GitHub non comunica mai a Motir che un job è in coda. Chi amministra l’App motir-studio la iscrive nelle impostazioni dell’App.",
+        "repositories_not_granted": "L’installazione dell’App su {org} non raggiunge {repositories}. Un proprietario di {org} li aggiunge all’accesso ai repository dell’installazione.",
+        "no_private_repositories": "Il progetto {project} non ha repository privati in {org}, quindi la flotta non ha nulla da eseguire.",
+        "not_attributable": "Un job in coda da {repositories} non verrebbe attribuito al progetto {project}, quindi resterebbe in coda finché GitHub non lo fa scadere. Ricollega il repository al progetto in modo che la sua riga speculare sia aggiornata.",
+        "no_runner_group": "Il progetto {project} non ha un gruppo di runner in {org}. Un operatore esegue {script} --project {project}.",
+        "sync_pending": "Il gruppo di runner del progetto in {org} non è sincronizzato con i suoi repository. Un operatore esegue {script} --project {project}.",
+        "jobs_not_runnable": "{count, plural, one {# job non può} other {# job non possono}} ancora girare sull’immagine runner della flotta. Chi mantiene l’immagine della flotta aggiunge lo strumento mancante; un job che richiede un altro sistema operativo resta non eseguibile finché non esce dall’insieme privato.",
+        "not_inventoried": "{repositories} non {count, plural, one {è} other {sono}} nell’inventario dei job della flotta, quindi nessuno ha verificato che l’immagine runner possa eseguire i {count, plural, one {suoi} other {loro}} job. Chi mantiene l’inventario lo riesegue.",
+        "inventory_stale": "I workflow di {repositories} sono cambiati dopo che l’inventario dei job della flotta li ha misurati. Chi mantiene l’inventario lo riesegue.",
+        "read_failed": "Impossibile verificare: GitHub ha risposto HTTP {status}. Conta come non soddisfatta finché una verifica non riesce.",
+        "read_unreachable": "Impossibile verificare: GitHub non è raggiungibile. Conta come non soddisfatta finché una verifica non riesce.",
+        "read_failedNoStatus": "Impossibile verificare. Conta come non soddisfatta finché una verifica non riesce.",
+        "app_not_readable": "Non verificabile finché l’App motir-studio non è installata e leggibile su {org}."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — manca {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — non ospitabile: {reason}",
+        "more": "+{count} altri",
+        "scope": "Questo riguarda l’immagine inventariata costruita da main, non l’immagine avviata in produzione."
+      },
+      "confirm": {
+        "onTitle": "Attivare la CI sulla flotta per {org}?",
+        "onBody": "Disattivata → Attiva. Ogni nuovo job di CI in {count, plural, one {# repository} other {# repository}} girerà sulla flotta e sarà addebitato al pool di moooon B.V.: {repositories}. I job già in esecuzione terminano dove sono partiti.",
+        "offTitle": "Disattivare la CI sulla flotta per {org}?",
+        "offBody": "Attiva → Disattivata. I nuovi job tornano sui runner ospitati da GitHub; i job già in esecuzione sulla flotta terminano lì. La disattivazione non attende mai la disponibilità.",
+        "reasonLabel": "Motivo: obbligatorio, scritto nel registro di audit",
+        "reasonPlaceholderOn": "Perché la stai attivando?",
+        "reasonPlaceholderOff": "Perché la stai disattivando?",
+        "reasonHint": "Visibile a qualsiasi operatore che leggerà questa modifica in seguito. «Test» da solo non spiega nulla.",
+        "reasonHintEmpty": "Il pulsante resta disattivato finché non scrivi un motivo: la stessa regola applicata dal server.",
+        "cancel": "Annulla",
+        "confirmOn": "Attiva",
+        "confirmOff": "Disattiva"
+      },
+      "refused": {
+        "reasonMissing": "Non {direction}: il motivo è obbligatorio e viene scritto nel registro di audit con questa modifica. Non è cambiato nulla.",
+        "alreadyOn": "Già attiva: non è cambiato nulla.",
+        "alreadyOff": "Già disattivata: non è cambiato nulla.",
+        "alreadyBody": "Un altro superadmin l’ha modificata prima, quindi non è stato scritto nulla e non è stata aggiunta alcuna riga di audit.",
+        "githubStatus": "Non {direction}: GitHub ha rifiutato di {operation} {name} su {org} (HTTP {status}).",
+        "githubUnreachable": "Non {direction}: GitHub non è raggiungibile per {operation} {name} su {org}.",
+        "nothingChanged": "Non è cambiato nulla: l’impostazione e la variabile GitHub sono com’erano.",
+        "notReady": "Non attivata: la flotta ha smesso di essere pronta dopo il caricamento di questa pagina.",
+        "notReadyList": "Ora non soddisfatte: {conditions}. Non è cambiato nulla. La disponibilità qui sotto è stata verificata di nuovo.",
+        "notPermitted": "Non modificata: solo un superadmin può modificare questa impostazione.",
+        "targetUnknown": "Non modificata: questa impostazione non è più offerta per questo progetto e questa organizzazione. Ricarica la pagina.",
+        "failed": "Non {direction}: qualcosa è andato storto. Ricarica la pagina per vedere l’impostazione com’è ora."
+      },
+      "done": {
+        "on": "Attivata. Da ora i nuovi job richiedono la flotta.",
+        "off": "Disattivata. I nuovi job tornano sui runner ospitati da GitHub."
+      },
+      "direction": {
+        "on": "attivata",
+        "off": "disattivata"
+      },
+      "operation": {
+        "read": "leggere",
+        "set": "impostare",
+        "delete": "eliminare"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Runner self-hosted",
+        "organization_actions_variables": "Variabili"
+      },
+      "unavailable": {
+        "title": "Impossibile caricare l’impostazione della flotta",
+        "body": "Non è stato possibile leggere l’impostazione o la sua disponibilità, quindi non viene mostrato alcuno stato né offerto alcun interruttore. È un errore di lettura: non è cambiato nulla e nessun valore viene indovinato.",
+        "retry": "Riprova"
       }
     }
   },

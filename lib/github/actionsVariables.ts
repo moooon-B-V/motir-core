@@ -1,4 +1,4 @@
-import { provisioningAuth } from '@/lib/github/repoProvisioning';
+import { resolveOrgAuth, type GithubOrgTarget } from '@/lib/github/orgTarget';
 
 // The ORG ACTIONS-VARIABLE boundary (Story MOTIR-1916 · MOTIR-2015) — the one
 // module that talks to GitHub about a variable a workflow reads.
@@ -7,10 +7,13 @@ import { provisioningAuth } from '@/lib/github/repoProvisioning';
 // all of the host mechanics live here, none of the bookkeeping does, and the line
 // between them is where the tests fake. It is a LEAF PRIMITIVE in the
 // `lib/github/appAuth.ts` sense — services import it directly; routes never do.
-// It authenticates through `provisioningAuth()` for the same reason the group
-// client does: "which org does Motir own, and with which credential?" keeps
+// It authenticates through `resolveOrgAuth()` (`lib/github/orgTarget.ts`) for the
+// same reason the group client does: "which org, with which credential?" keeps
 // exactly ONE reader, so a variable can never be written into a different org
-// than the runner groups and repositories it governs.
+// than the runner groups and repositories it governs. With no target that reader
+// answers the provisioning org, which is the default every shipped caller takes;
+// a caller that names a `GithubOrgTarget` (MOTIR-8702) acts on that org through
+// that installation instead, and every inner call it makes forwards the target.
 //
 // ⚠️ ORGANIZATION SCOPE ONLY — THERE IS NO REPOSITORY-VARIABLE FUNCTION HERE, and
 // its absence is load-bearing rather than an omission (ADR §N.1, MOTIR-2015).
@@ -157,8 +160,8 @@ export const actionsVariableClient = {
    * purpose is to move away from, and it is also the correct reading on a fresh
    * org that has never established a repository.
    */
-  async getOrgVariable(name: string): Promise<OrgVariable | null> {
-    const { org, token } = await provisioningAuth();
+  async getOrgVariable(name: string, target?: GithubOrgTarget): Promise<OrgVariable | null> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(`${variablesBase(org)}/${encodeURIComponent(name)}`, {
       method: 'GET',
       token,
@@ -196,26 +199,34 @@ export const actionsVariableClient = {
    * IDEMPOTENT under every interleaving, and self-healing: a variable an operator
    * deletes or edits by hand is restored by the next establishment.
    */
-  async ensureOrgVariable(name: string, value: string): Promise<EnsureOrgVariableOutcome> {
-    const existing = await this.getOrgVariable(name);
+  async ensureOrgVariable(
+    name: string,
+    value: string,
+    target?: GithubOrgTarget,
+  ): Promise<EnsureOrgVariableOutcome> {
+    const existing = await this.getOrgVariable(name, target);
     if (existing && existing.value === value && existing.visibility === VARIABLE_VISIBILITY) {
       return 'unchanged';
     }
-    return existing ? this.patch(name, value) : this.create(name, value);
+    return existing ? this.patch(name, value, target) : this.create(name, value, target);
   },
 
   /** POST the create. A 409 means a concurrent ensure won the race — the variable
    *  now exists, so this falls through to the PATCH, which converges on the same
    *  value rather than reporting a conflict the caller cannot act on. */
-  async create(name: string, value: string): Promise<EnsureOrgVariableOutcome> {
-    const { org, token } = await provisioningAuth();
+  async create(
+    name: string,
+    value: string,
+    target?: GithubOrgTarget,
+  ): Promise<EnsureOrgVariableOutcome> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(variablesBase(org), {
       method: 'POST',
       token,
       body: JSON.stringify({ name, value, visibility: VARIABLE_VISIBILITY }),
     });
     if (res.ok) return 'created';
-    if (res.status === 409) return this.patch(name, value);
+    if (res.status === 409) return this.patch(name, value, target);
     throw new ActionsVariableApiError(res.status, errorDetail(await readJson(res)));
   },
 
@@ -223,14 +234,35 @@ export const actionsVariableClient = {
    *  brought back to {@link VARIABLE_VISIBILITY}, not merely to the right value —
    *  a variable scoped `all` would reach public repositories the fleet refuses to
    *  serve, which is the failure the visibility choice exists to prevent. */
-  async patch(name: string, value: string): Promise<EnsureOrgVariableOutcome> {
-    const { org, token } = await provisioningAuth();
+  async patch(
+    name: string,
+    value: string,
+    target?: GithubOrgTarget,
+  ): Promise<EnsureOrgVariableOutcome> {
+    const { org, token } = await resolveOrgAuth(target);
     const res = await request(`${variablesBase(org)}/${encodeURIComponent(name)}`, {
       method: 'PATCH',
       token,
       body: JSON.stringify({ name, value, visibility: VARIABLE_VISIBILITY }),
     });
     if (res.ok) return 'updated';
+    throw new ActionsVariableApiError(res.status, errorDetail(await readJson(res)));
+  },
+
+  /**
+   * DELETE the org variable `name`, so every workflow reading it falls back to its
+   * own default (`vars.X || 'ubuntu-latest'`). A 404 answers `'absent'` rather
+   * than failing: the desired end state — no variable — already holds, whoever
+   * reached it. Any other refusal throws {@link ActionsVariableApiError}.
+   */
+  async deleteOrgVariable(name: string, target?: GithubOrgTarget): Promise<'deleted' | 'absent'> {
+    const { org, token } = await resolveOrgAuth(target);
+    const res = await request(`${variablesBase(org)}/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+      token,
+    });
+    if (res.status === 204 || res.ok) return 'deleted';
+    if (res.status === 404) return 'absent';
     throw new ActionsVariableApiError(res.status, errorDetail(await readJson(res)));
   },
 };

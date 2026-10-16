@@ -98,6 +98,23 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-8699 · MOTIR-8717 — the GitHub calls behind /admin/fleet-settings
+    // (the org installation, its repositories, visibility, the workflow commit and
+    // the org's MOTIR_RUNNER variable).
+    // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE` and `E2E_TEST_GITHUB_REPOS`, and the order is
+    // load-bearing: the REPOS seam answers every `POST /app/installations/*` with one
+    // shared token and the MERGE seam answers `GET /repos/{owner}/{name}` for its own
+    // repositories. This one claims only the orgs and installation ids its control
+    // file names, so its token mint and its repository reads can tell its org apart,
+    // and every other call falls through to them untouched.
+    flag: 'E2E_TEST_GITHUB_FLEET_ORG_CI',
+    message: 'GitHub fleet org CI (installation, repositories, MOTIR_RUNNER) mocked.',
+    install: async (agent) => {
+      const { installGithubFleetOrgCiMock } = await import('@/lib/test-github-fleet-org-ci-mock');
+      installGithubFleetOrgCiMock(agent);
+    },
+  },
+  {
     // ⚠️ BEFORE `E2E_TEST_GITHUB_REPOS`, and the order is load-bearing: both seams
     // answer `GET /repos/{owner}/{name}`, undici tries intercepts in registration
     // order, and this one claims only the repositories its control file names.

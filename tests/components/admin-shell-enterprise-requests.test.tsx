@@ -28,6 +28,7 @@ const LABELS = {
   navUsers: en.platformAdmin.nav.users,
   navEnterpriseRequests: shell.navEnterpriseRequests,
   navMonitoring: en.platformAdmin.nav.monitoring,
+  navFleetSettings: en.platformAdmin.shell.navFleetSettings,
   navAiPlanning: shell.navAiPlanning,
   navPlanningLessons: shell.navPlanningLessons,
   navIdeas: shell.navIdeas,

@@ -15,6 +15,7 @@ import {
   ScrollText,
   Search,
   Server,
+  ServerCog,
   Shield,
   Sparkles,
   UserSearch,
@@ -57,6 +58,8 @@ export interface AdminShellLabels {
   /** Platform → Enterprise requests (MOTIR-7609), visible to every staff role. */
   navEnterpriseRequests: string;
   navMonitoring: string;
+  /** Operations → Fleet settings (MOTIR-8715), superadmin only. */
+  navFleetSettings: string;
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
   navPlanningLessons: string;
@@ -168,6 +171,21 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           href: '/admin/monitoring',
           active: pathname === '/admin/monitoring',
         },
+        // The fleet's one WRITE beside its read surface (MOTIR-8715, design
+        // `platform-admin` AMENDMENT 2026-10 § Fleet settings): directly after
+        // Monitoring. It follows the Audit log row's rule, not Monitoring's —
+        // `superadmin` only; for the other roles the row is absent and the route
+        // 404s.
+        ...(operator.role === 'superadmin'
+          ? [
+              {
+                icon: <ServerCog />,
+                label: labels.navFleetSettings,
+                href: '/admin/fleet-settings',
+                active: pathname === '/admin/fleet-settings',
+              },
+            ]
+          : []),
         {
           icon: <Sparkles />,
           label: labels.navAiPlanning,

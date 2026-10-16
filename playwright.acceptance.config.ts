@@ -186,6 +186,28 @@ process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PA
 // together: `githubMergeSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
 process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] ??= '1';
 
+// ── The GitHub FLEET ORG CI seam (Story MOTIR-8699 · MOTIR-8717) ─────────────
+//
+// `/admin/fleet-settings` reads its readiness verdict and flips the org's
+// `MOTIR_RUNNER` variable server-side, so the fake GitHub for it lives in the Next
+// process (lib/test-github-fleet-org-ci-mock.ts, behind E2E_TEST_GITHUB_FLEET_ORG_CI=1).
+// It answers only the orgs its control names, through the Studio App credentials
+// the repos and merge seams' lane already carries (`GITHUB_STUDIO_APP_*` below), so
+// the App JWT and the installation-token mint run for real. Its control and journal
+// are on the runner too: the spec WRITES what GitHub says and READS what was called.
+// The webServer is NOT given `MOTIR_FLEET_MAX_IN_FLIGHT`, so the readiness kill-switch
+// condition can be met (`0` would engage it; unset is no ceiling).
+//
+// Not mirrored onto the job worker: no fleet-settings call is a job.
+const E2E_GITHUB_FLEET_ORG_CI_CONTROL = path.resolve(
+  '/tmp/motir-acceptance-github-fleet-org-ci-control.json',
+);
+const E2E_GITHUB_FLEET_ORG_CI_JOURNAL = path.resolve(
+  '/tmp/motir-acceptance-github-fleet-org-ci-journal.jsonl',
+);
+process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL'] ??= E2E_GITHUB_FLEET_ORG_CI_CONTROL;
+process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL'] ??= E2E_GITHUB_FLEET_ORG_CI_JOURNAL;
+
 // ── The HOSTED RUN seams (Story MOTIR-683 · MOTIR-6452) ──────────────────────
 //
 // `hostedRunService.start` calls three real services this lane cannot reach:
@@ -553,6 +575,10 @@ export default defineConfig({
         E2E_TEST_GITHUB_MERGE: '1',
         MOTIR_GITHUB_MERGE_CONTROL_PATH,
         MOTIR_GITHUB_MERGE_JOURNAL_PATH,
+        // The fleet settings journey's GitHub (MOTIR-8717) — see the block above.
+        E2E_TEST_GITHUB_FLEET_ORG_CI: '1',
+        E2E_GITHUB_FLEET_ORG_CI_CONTROL: process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL']!,
+        E2E_GITHUB_FLEET_ORG_CI_JOURNAL: process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL']!,
         GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
         GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
         GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,

@@ -249,6 +249,13 @@ export default defineConfig({
         'app/**/admin/ideas/_components/IdeasUnavailable.tsx',
         'app/**/admin/ideas/_components/ideaListQuery.ts',
         'app/**/_components/AdminShell.tsx',
+        // Story MOTIR-8699 · MOTIR-8716 — the console's Fleet settings page (see the
+        // fleet block in this list for the whole set). Pinned at 90 in `thresholds`.
+        'app/**/admin/fleet-settings/actions.ts',
+        'app/**/admin/fleet-settings/page.tsx',
+        'app/**/admin/fleet-settings/_components/FleetOrgCiSetting.tsx',
+        'app/**/admin/fleet-settings/_components/FleetSettingsUnavailable.tsx',
+        'app/**/admin/fleet-settings/_components/fleetReadinessCopy.ts',
         'lib/ideas/consoleActor.ts',
         'lib/services/ideasAdminService.ts',
         'lib/services/ideasPublicService.ts',
@@ -1588,6 +1595,31 @@ export default defineConfig({
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
         'lib/jobs/definitions/ciRunnerFleet.ts',
+        // Story MOTIR-8699 · MOTIR-8716 — Motir CI on the fleet for a CONNECTED org:
+        // the org-target auth, the readiness verdict's GitHub reads, the org
+        // Actions-variable client, the runner-target resolver, the readiness and
+        // setting services with their repository and mapper, and the console's
+        // Fleet settings page. Every file the story touched that carries runtime
+        // code and was not already gated (runnerGroups, runnerJitConfig,
+        // repoProvisioning, the boot / provisioning / stop / runner-group services
+        // and the platform errors and audit actions already are). Left out on
+        // purpose: the type-only files (`lib/dto/fleetOrgCiSetting.ts`,
+        // `lib/ciFleet/fleetJobInventoryTypes.ts`, `fleetJobInventory.d.json.ts`)
+        // and the measured JSON manifest, which have no statements to gate; and the
+        // three shared repositories (`githubRepoRepository`, `projectRepoRepository`,
+        // `projectRepository`) and `app/(admin)/layout.tsx`, which gained one method
+        // or one label each and are measured by the whole suite rather than by this
+        // story. Pinned at the fleet's 90 floor below.
+        'lib/github/orgTarget.ts',
+        'lib/github/orgInstallation.ts',
+        'lib/github/actionsVariables.ts',
+        'lib/github/repoVisibility.ts',
+        'lib/ciFleet/runnerTarget.ts',
+        'lib/repositories/projectRunnerGroupRepository.ts',
+        'lib/services/fleetReadinessService.ts',
+        'lib/services/fleetOrgCiSettingService.ts',
+        'lib/repositories/platformFleetOrgCiRepository.ts',
+        'lib/mappers/fleetOrgCiSettingMappers.ts',
         // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
         // Gated for a different reason than the primitive above: the whole card
         // is a claim about what must NOT be on screen (no repository name, count,
@@ -3205,6 +3237,62 @@ export default defineConfig({
         'lib/services/runDiscrepancyService.ts',
         'lib/mcp/tools/recordRunDiscrepancy.ts',
         'scripts/pgTopStatementsQuery.ts',
+        // Story MOTIR-8538 · MOTIR-8681 — THE LOAD-TEST INSTRUMENT below the k6
+        // runtime: every `loadtest/` module that loads under node (seed, manifest,
+        // the pure scenario helpers, profile, run command, capture, report).
+        // MEASURED on this branch with the story's specs (`tests/loadtest/**`),
+        // then pinned at the project floor; the PR body carries each file's four
+        // numbers. EXCLUDED BY NAME, because they import `k6/*` and cannot load
+        // under vitest — the end-to-end lane (MOTIR-8682) runs them with a real k6:
+        // `loadtest/k6/main.js`, `loadtest/k6/scenarios/*.js`,
+        // `loadtest/k6/lib/mcpClient.js`, `loadtest/k6/lib/manifest.js`.
+        'loadtest/staging/sideEffectSwitches.ts',
+        'loadtest/preflight/sideEffects.ts',
+        'loadtest/lib/endpointHost.ts',
+        'loadtest/seed/shape.ts',
+        'loadtest/seed/seed.ts',
+        'loadtest/seed/reset.ts',
+        'loadtest/seed/manifest.ts',
+        'loadtest/seed/guard.ts',
+        'loadtest/seed/tenants.ts',
+        'loadtest/k6/lib/agents.js',
+        'loadtest/k6/lib/classify.js',
+        'loadtest/k6/lib/holdStream.js',
+        'loadtest/k6/lib/iterations.js',
+        'loadtest/k6/lib/outcome.js',
+        'loadtest/k6/lib/readerOutcome.js',
+        'loadtest/k6/lib/readerProfile.js',
+        'loadtest/k6/lib/readerUsers.js',
+        'loadtest/k6/lib/record.js',
+        'loadtest/k6/lib/streamTally.js',
+        'loadtest/k6/lib/windowReadGate.js',
+        'loadtest/k6/runs/classify.js',
+        'loadtest/k6/runs/metrics.js',
+        'loadtest/k6/runs/sequence.js',
+        'loadtest/profiles/schema.ts',
+        'loadtest/profiles/resolve.ts',
+        'loadtest/run/fly.ts',
+        'loadtest/run/generator.ts',
+        'loadtest/run/neon.ts',
+        'loadtest/run/pinned.ts',
+        'loadtest/run/runRecord.ts',
+        'loadtest/run/run.ts',
+        'loadtest/capture/appLogs.ts',
+        'loadtest/capture/dbSampler.ts',
+        'loadtest/capture/index.ts',
+        'loadtest/capture/neon.ts',
+        'loadtest/capture/pgss.ts',
+        'loadtest/capture/redact.ts',
+        'loadtest/report/bottleneck.ts',
+        'loadtest/report/inputs.ts',
+        'loadtest/report/k6Points.ts',
+        'loadtest/report/p2028.ts',
+        'loadtest/report/prometheus.ts',
+        'loadtest/report/proxyShed.ts',
+        'loadtest/report/render.ts',
+        'loadtest/report/report.ts',
+        'loadtest/report/scaleOut.ts',
+        'loadtest/report/thresholds.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3215,6 +3303,89 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-8538 · THE LOAD TEST (Subtask MOTIR-8681) — see `include`. ──
+        'loadtest/staging/sideEffectSwitches.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'loadtest/preflight/sideEffects.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'loadtest/lib/endpointHost.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/seed/shape.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/seed/seed.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/seed/reset.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/seed/manifest.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/seed/guard.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/seed/tenants.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/lib/agents.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/lib/classify.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/lib/holdStream.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/lib/iterations.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/lib/outcome.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/lib/readerOutcome.js': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'loadtest/k6/lib/readerProfile.js': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'loadtest/k6/lib/readerUsers.js': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'loadtest/k6/lib/record.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/lib/streamTally.js': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'loadtest/k6/lib/windowReadGate.js': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'loadtest/k6/runs/classify.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/runs/metrics.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/k6/runs/sequence.js': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/profiles/schema.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/profiles/resolve.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/run/fly.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/run/generator.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/run/neon.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/run/pinned.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/run/runRecord.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/run/run.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/capture/appLogs.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/capture/dbSampler.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/capture/index.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/capture/neon.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/capture/pgss.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/capture/redact.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/bottleneck.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/inputs.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/k6Points.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/p2028.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/prometheus.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/proxyShed.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/render.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/report.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/scaleOut.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'loadtest/report/thresholds.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         // ── Story MOTIR-6170 · THE VISITOR (Subtask MOTIR-6650) — see `include`. ──
         // ── Story MOTIR-8651 · BUILD THROUGH (Subtask MOTIR-8662) — see `include`. ──
         'lib/services/runDiscrepancyService.ts': {
@@ -5429,6 +5600,42 @@ export default defineConfig({
         'lib/repositories/ciLiveAccrualRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/ciLiveCharge.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/fleetAttributionService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-8699 · MOTIR-8716 (see the include list).
+        'lib/github/orgTarget.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/orgInstallation.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/actionsVariables.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/repoVisibility.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/runnerTarget.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/projectRunnerGroupRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/fleetReadinessService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetOrgCiSettingService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/platformFleetOrgCiRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/fleetOrgCiSettingMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/admin/fleet-settings/actions.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/admin/fleet-settings/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/admin/fleet-settings/_components/FleetOrgCiSetting.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-settings/_components/FleetSettingsUnavailable.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-settings/_components/fleetReadinessCopy.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'lib/repositories/fleetMachineKillRepository.ts': {
           branches: 90,
           functions: 90,
