@@ -246,6 +246,8 @@ function render(replan: boolean): string {
     targetRepo: 'motir-core',
     sessionBranch: null,
     findingsPolicy: { ...FULL_FINDINGS_POLICY, replan, autoApproveReplan: false },
+    // The prompt a CLI that posts the self-report is handed (MOTIR-8810).
+    runnerPostsAgentReport: true,
   };
   return assembleDispatchPrompt(source).prompt;
 }

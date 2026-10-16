@@ -315,3 +315,31 @@ a Motir MCP) still makes every STOP call itself, the submit included.
 | Local run, agent with no Motir MCP   | the CLI posts `…/discrepancy`  | the CLI posts `…/stop`         | ❌ the brief is on the card; a person submits it |
 | Hosted run                           | the container's CLI, run token | the container's CLI, run token | ❌ as above: the run token holds no `ai:*` key   |
 | Run inside the user's agent instance | the instance's CLI, run token  | the instance's CLI, run token  | ❌ as above                                      |
+
+## AMENDMENT 3 — the file is the route only when the client says it posts it (MOTIR-8810, 2026-10-16)
+
+**What was wrong.** AMENDMENTS 1 and 2 moved three reports into `$MOTIR_AGENT_REPORT`
+(`unbuildable`, `discrepancy`, `stop`) and made the CLI post them. The server half deploys on
+merge; the CLI half reaches people only in a release. When MOTIR-8698 deployed, the only CLI
+anyone could install was `@motir/cli` 0.12.0 (published 2026-10-04), which reads `model` from
+that file and nothing else. So the deployed prompt told every agent with the file to put its
+unbuildable reason there instead of calling `report_unbuildable_target`, and the report was
+lost: no `unbuildable_reported` event and no planning bug (reproduced on MOTIR-8806, two runs at
+12:24 and 12:27 UTC, 2026-10-16; the same card with a CLI built from `main` filed MOTIR-8808).
+
+**What changes.** `GET /api/v1/work-items/{key}/dispatch-prompt` takes an optional
+`agentReport=1`, the client's declaration that it posts all three. The CLI sends it on every
+prompt read. Without it the STOP branch's step 4 is the `report_unbuildable_target` call it was
+before AMENDMENT 1, and the two _NO MOTIR TOOLS?_ file routes are not rendered, because the
+runner would drop them. The MCP `dispatch_prompt` tool never declares it, because nobody reading
+a prompt through it is the runner that would post, so the REST and MCP transports still render
+the same text for the same card.
+
+**Why a declaration and not the version header.** `x-motir-client-version` already exists, but a
+CLI built from `main` reports the same version string as the release it is ahead of (both read
+`0.12.0` at `ed2a90c87`), so a version floor could not tell the CLI that posts from the one that
+does not. The declaration is sent only by code that does the posting.
+
+**The rule this leaves.** A prompt change that routes work through the runner is a contract with
+a CLI release that ships after the server. It renders behind the client's own declaration, never
+on the assumption that the CLI on `main` is the CLI people run.

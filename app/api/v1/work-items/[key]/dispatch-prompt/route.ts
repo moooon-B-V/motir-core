@@ -103,6 +103,26 @@ function parseAutoApproveReplan(req: Request): boolean {
   return value === '1' || value === 'true';
 }
 
+/**
+ * Read the optional `?agentReport=` — the client's DECLARATION that it posts what
+ * its agent writes into `$MOTIR_AGENT_REPORT` as `unbuildable`, `discrepancy` and
+ * `stop` (MOTIR-8810).
+ *
+ * ⚠️ ABSENT MEANS NO, AND THAT IS THE WHOLE FIX. Every CLI anyone could install
+ * when MOTIR-8698 deployed — `@motir/cli` 0.12.0 — sends nothing here and reads
+ * only `model` from that file, so a prompt that routed the unbuildable report
+ * through it lost the report. A client that cannot say it posts gets the tool as
+ * the route — the text the MCP tool renders, which never declares it. A capability
+ * rather than a version, because a CLI built from `main` reports the same version
+ * string as the release it is ahead of.
+ */
+function parseAgentReport(req: Request): boolean {
+  const raw = new URL(req.url).searchParams.get('agentReport');
+  if (raw === null) return false;
+  const value = raw.trim().toLowerCase();
+  return value === '1' || value === 'true';
+}
+
 function parsePolicy(req: Request): FindingsPolicy {
   const raw = new URL(req.url).searchParams.get('findingsPolicy');
   const parsed = parseFindingsPolicy(raw, {
@@ -135,6 +155,7 @@ export const GET = withV1Route<{ key: string }>(
     const dto = await dispatchPromptService.getDispatchPrompt(projectId, identifier, ctx.service, {
       sessionBranch,
       findingsPolicy,
+      runnerPostsAgentReport: parseAgentReport(ctx.req),
       ...(continueFrom ? { continueFrom } : {}),
     });
 

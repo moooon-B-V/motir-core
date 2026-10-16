@@ -2669,8 +2669,9 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
 
   /** THE CARD IS WRONG, from its heading up to FOUND A DEFECT. */
   function block(policy: DispatchPromptSource['findingsPolicy']): string {
+    // A runner that posts the self-report (MOTIR-8810); the other route has its own block.
     const prompt = assembleDispatchPrompt(
-      source({ key: 'PROD-99', findingsPolicy: policy }),
+      source({ key: 'PROD-99', findingsPolicy: policy, runnerPostsAgentReport: true }),
     ).prompt;
     const branches = cardOutcomeBranches(prompt);
     const at = branches.indexOf('STOP — the WHAT itself breaks');
@@ -2816,8 +2817,11 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
 // build-through record or the STOP's writes itself. The prompt sends both through
 // `$MOTIR_AGENT_REPORT`, and says plainly that the re-plan is not submitted on that path.
 describe('NO MOTIR TOOLS — the build-through and the STOP go through the self-report (MOTIR-8722)', () => {
+  // A runner that posts the self-report (MOTIR-8810): only then are the file routes named.
   const prompt = (policy: DispatchPromptSource['findingsPolicy']) =>
-    assembleDispatchPrompt(source({ key: 'PROD-99', findingsPolicy: policy })).prompt;
+    assembleDispatchPrompt(
+      source({ key: 'PROD-99', findingsPolicy: policy, runnerPostsAgentReport: true }),
+    ).prompt;
   const REPLAN = { logBug: true, replan: true, autoApproveReplan: false };
   const NO_REPLAN = { logBug: true, replan: false, autoApproveReplan: false };
 
@@ -2854,6 +2858,73 @@ describe('NO MOTIR TOOLS — the build-through and the STOP go through the self-
     );
     expect(stop).toContain('"stop": {"toPlanning": false}');
     expect(stop).not.toContain('"toPlanning": true');
+  });
+});
+
+describe('a runner that does NOT post the self-report gets the tool as the route (MOTIR-8810)', () => {
+  // `@motir/cli` 0.12.0 sets `$MOTIR_AGENT_REPORT` and reads only `model` from it. The
+  // prompt MOTIR-8698 deployed told every agent with that file to put its unbuildable
+  // reason there and skip the tool, so with every CLI anyone could install the report was
+  // lost. Only a client that declares it posts gets `runnerPostsAgentReport: true`; the
+  // `/api/v1` route passes `false` otherwise, and the MCP tool passes nothing.
+  const REPLAN = { logBug: true, replan: true, autoApproveReplan: false };
+  const NO_REPLAN = { logBug: true, replan: false, autoApproveReplan: false };
+  const text = (
+    runnerPostsAgentReport: boolean | undefined,
+    policy: DispatchPromptSource['findingsPolicy'] = REPLAN,
+  ) =>
+    assembleDispatchPrompt(
+      source({
+        key: 'PROD-99',
+        findingsPolicy: policy,
+        ...(runnerPostsAgentReport === undefined ? {} : { runnerPostsAgentReport }),
+      }),
+    ).prompt;
+  const stopOf = (t: string) => t.slice(t.indexOf('STOP — the WHAT itself breaks'));
+  const throughOf = (t: string) =>
+    t.slice(
+      t.indexOf('BUILD THROUGH — the WHAT holds'),
+      t.indexOf('STOP — the WHAT itself breaks'),
+    );
+
+  it.each([
+    ['re-planning on', REPLAN],
+    ['re-planning off', NO_REPLAN],
+  ])(
+    'with %s, step 4 is the report_unbuildable_target call and names no file route',
+    (_n, policy) => {
+      expect(text(undefined, policy)).toBe(text(false, policy));
+      const stop = stopOf(text(false, policy));
+      expect(stop).toContain(
+        `  4. Report it with the ${REPORT_UNBUILDABLE_TARGET_TOOL_NAME} tool:`,
+      );
+      expect(stop).toContain('targetKey:  PROD-99');
+      expect(stop).not.toContain('no Motir tool needed');
+      expect(stop).not.toContain('"unbuildable"');
+      expect(stop).not.toContain('NO MOTIR TOOLS?');
+      expect(stop).not.toContain('"stop": {');
+    },
+  );
+
+  it('the build-through names no "discrepancy" file route', () => {
+    const through = throughOf(text(false));
+    expect(through).toContain(`Call the ${RECORD_RUN_DISCREPANCY_TOOL_NAME} tool ONCE`);
+    expect(through).not.toContain('"discrepancy"');
+    expect(through).not.toContain('NO MOTIR TOOLS?');
+  });
+
+  it('still asks for the model, which 0.12.0 does read', () => {
+    expect(text(false)).toContain('{"model": "<the model you are running as>"}');
+  });
+
+  it('a runner that posts gets the file route, with the tool kept for an unset variable', () => {
+    const t = text(true);
+    expect(stopOf(t)).toContain('no Motir tool needed');
+    expect(stopOf(t)).toContain(
+      `If the variable is unset, report it with the ${REPORT_UNBUILDABLE_TARGET_TOOL_NAME} tool:`,
+    );
+    expect(stopOf(t)).toContain('NO MOTIR TOOLS?');
+    expect(throughOf(t)).toContain('"discrepancy"');
   });
 });
 
@@ -3073,10 +3144,9 @@ describe('THE CARD IS WRONG — the WHAT test, BUILD THROUGH and STOP (MOTIR-865
 
   it('STOP keeps today’s steps under every policy, and names the report tool exactly once in the whole prompt', () => {
     for (const { name, policy } of POLICIES) {
-      const prompt = assembleDispatchPrompt(
-        source({ key: 'PROD-7', findingsPolicy: policy }),
-      ).prompt;
-      const block = flat(wrongBlock({ key: 'PROD-7', findingsPolicy: policy }));
+      const over = { key: 'PROD-7', findingsPolicy: policy, runnerPostsAgentReport: true };
+      const prompt = assembleDispatchPrompt(source(over)).prompt;
+      const block = flat(wrongBlock(over));
       const stop = block.slice(block.indexOf('STOP — the WHAT itself breaks'));
       expect(stop, name).toContain('1. REVERT FIRST.');
       expect(stop, name).toContain('Do not improvise');
