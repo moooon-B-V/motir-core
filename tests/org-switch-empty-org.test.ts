@@ -121,10 +121,11 @@ describe('MOTIR-8777 — switching to an organization with no workspace', () => 
     const { user, orgA } = await ownerOfAnEmptyOrg();
 
     const created = await createOrganizationAction('Brand new');
+    if (!created.ok) throw new Error(`create refused: ${created.entitlement}`);
 
     expect(await getWorkspaceContext()).toBeNull();
     const { currentOrg } = await resolveActiveOrganizationAsShell(user.id);
-    expect(currentOrg?.organization.id).toBe(created.id);
+    expect(currentOrg?.organization.id).toBe(created.organization.id);
     expect(currentOrg?.organization.id).not.toBe(orgA);
   });
 });
