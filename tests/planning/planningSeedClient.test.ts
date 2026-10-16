@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchPlanningSeed } from '@/lib/planning/planningSeedClient';
+import { fetchGuidePlanningSeed, fetchPlanningSeed } from '@/lib/planning/planningSeedClient';
 import { submitContextualPlan } from '@/lib/planning/planChangeClient';
 
 // MOTIR-6210 — the two CLIENT hops of the seeded re-plan: the seed read the
@@ -95,5 +95,44 @@ describe('submitContextualPlan — the seed rides the FIRST turn only', () => {
     fetchMock.mockResolvedValue(jsonResponse(OK));
     await submitContextualPlan('wi_44', 'Plain.');
     expect(JSON.parse(lastCall()[1].body as string)).toEqual({ prompt: 'Plain.', isAnswer: false });
+  });
+});
+
+describe('fetchGuidePlanningSeed', () => {
+  const GUIDE_SEED = {
+    source: 'guide',
+    guideTurnId: 't/1',
+    intent: 'plan',
+    anchorKey: 'ACME-4',
+    firstTurn: 'Re-plan ACME-4.',
+    offerState: 'undecided',
+    seededSessionId: null,
+    seededSessionOpen: false,
+    guide: {
+      guidedKey: 'ACME-9',
+      guidedTitle: 'Rotate the key',
+      targetResolution: 'as_asked',
+      confirmedAt: null,
+    },
+  };
+
+  it('reads the offer’s seed, addressed by the turn id alone', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ seed: GUIDE_SEED }));
+    await expect(fetchGuidePlanningSeed('t/1')).resolves.toEqual(GUIDE_SEED);
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/guide/offer/t%2F1/planning-seed');
+    expect(init.method ?? 'GET').toBe('GET');
+    expect(init.cache).toBe('no-store');
+    expect(url).not.toContain('Re-plan');
+  });
+
+  it('resolves null on a 404 (the no-existence-leak answer)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ code: 'NOT_FOUND' }, 404));
+    await expect(fetchGuidePlanningSeed('t')).resolves.toBeNull();
+  });
+
+  it('throws on any other non-2xx, so an outage never reads as a missing offer', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, 500));
+    await expect(fetchGuidePlanningSeed('t')).rejects.toThrow(/500/);
   });
 });

@@ -40,7 +40,10 @@ export interface WatcherCommentNotificationEmailProps {
 function WatcherCommentNotificationEmail(p: WatcherCommentNotificationEmailProps & { t: T }) {
   const { t } = p;
   return (
-    <EmailLayout preview={t('preview', { author: p.authorName, identifier: p.workItemIdentifier })}>
+    <EmailLayout
+      locale={p.locale}
+      preview={t('preview', { author: p.authorName, identifier: p.workItemIdentifier })}
+    >
       <Text style={greeting}>{t('greeting', { name: p.recipientName })}</Text>
       <Text style={lede}>
         {t('lede', {

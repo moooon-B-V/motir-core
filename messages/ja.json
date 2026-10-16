@@ -7542,7 +7542,9 @@
         "aria": "この会話が再計画する作業項目 {key} を開く",
         "pickLabel": "<mono>{key}</mono> のフォローアップ",
         "chose": "{label} を選択",
-        "pickAria": "この会話がフォローアップしている選択 {key} を開く({label} を選択)"
+        "pickAria": "この会話がフォローアップしている選択 {key} を開く({label} を選択)",
+        "guideLabel": "<mono>{key}</mono> のガイドから",
+        "guideAria": "{key} を開く（Motir AI がこの再計画を提案したときにガイドしていた作業項目）"
       },
       "end": {
         "failed": "終了 · 試行が失敗 · {time}",
@@ -7972,6 +7974,16 @@
     "followUpCard": {
       "label": "選択のフォローアップ"
     },
+    "guideSeed": {
+      "chip": "ガイドから",
+      "lead": "{guided} に関する Motir AI のガイドから {target} で開始しました。",
+      "card": "ガイドから",
+      "cardBy": "{who} が確認済み · {when}",
+      "justNow": "たった今",
+      "you": "あなた",
+      "status": "計画中",
+      "offerClosed": "この再計画の提案はすでに終了しています。ガイドに戻って状況を確認してください。"
+    },
     "guide": {
       "openedFrom": "{key} から開きました",
       "reading": "{key} とその ToDo リストを読み取っています…",
@@ -8003,7 +8015,8 @@
       "errors": {
         "notManual": "Motir AI は人が行う手作業をガイドします。この作業項目はエージェント向けのため、ここでガイドするものはありません。",
         "closed": "この作業項目は完了またはアーカイブ済みのため、ガイドするものは残っていません。",
-        "forbidden": "ガイドを受けるには、この作業項目を編集する権限と、Motir AI で計画する権限が必要です。"
+        "forbidden": "ガイドを受けるには、この作業項目を編集する権限と、Motir AI で計画する権限が必要です。",
+        "offerClosed": "この提案はすでに決定済みのため、変更できません。作業項目を再読み込みして状況を確認してください。"
       },
       "youTicked": "リストのステップ {n} にチェックを入れました",
       "youUnticked": "リストのステップ {n} のチェックを外しました",
@@ -8058,6 +8071,32 @@
         "typeText": "テキスト",
         "typeMarkdown": "Markdown",
         "typeFile": "ファイル"
+      },
+      "offer": {
+        "label": "再計画のリクエスト",
+        "target": "対象",
+        "targetElsewhere": "再計画は、この作業項目ではなく {key} から始まります。",
+        "resolved": "{done} は完了しているため、再計画は {open} から始まります。",
+        "noTarget": "再計画の起点にできる未完了の作業項目がありません。",
+        "confirm": "確定",
+        "confirming": "開始しています…",
+        "openSession": "計画セッションを開く",
+        "decline": "却下",
+        "declining": "却下しています…",
+        "showAll": "すべて表示",
+        "showLess": "表示を減らす",
+        "confirmHelp": "このリクエストを送信して、{key} で Motir AI の計画を開きます。クレジットを消費します。",
+        "declineHelp": "この提案を閉じます。何も計画されません。",
+        "replaced": "新しい提案に置き換えられました",
+        "started": "再計画を開始しました",
+        "startedBy": "確定済み · {when}",
+        "declined": "却下しました",
+        "declinedBy": "却下済み · {when}",
+        "recorded": "作業項目に記録されました",
+        "resumeAt": "「ガイドしてもらう」はステップ {n} から再開します。",
+        "walkStopped": "ウォークスルーは停止しています。",
+        "cannotPlan": "ここでは計画を開始できません。開始できる人に依頼するか、このリクエストを共有してください。",
+        "noAi": "ここでは Motir AI が設定されていないため、計画を開始できません。このリクエストは共有できます。"
       }
     },
     "restart": {
@@ -8520,8 +8559,8 @@
       "body": "Motir は GitHub で接続したリポジトリを読み込み、プロジェクト全体のコードを 1 つのマップにまとめます。",
       "gitlabNote": "GitLab の接続は近日対応予定です。",
       "checking": "接続済みのリポジトリを確認しています…",
-      "missingTitle": "GitHub を接続したら、すぐにここへ戻ります",
-      "missingHint": "GitHub が新しいタブで 1 分ほど開きます。そこで行うことは次のとおりです。戻ってきたとき、このステップはそのまま待っています。",
+      "missingTitle": "GitHub を連携したら、すぐここに戻ります",
+      "missingHint": "GitHub は新しいタブで約 1 分間開きます。そこで行うことはこの内容で、このステップは戻ってくるまで待機しています。",
       "connectCta": "GitHub を接続",
       "newTab": "（新しいタブで開きます）",
       "waitingTitle": "GitHub を待っています",
@@ -9337,7 +9376,8 @@
       "navPlanningLessons": "計画の教訓",
       "navIdeas": "アイデア",
       "navEnterpriseRequests": "Enterprise のリクエスト",
-      "navRunModels": "ホスト型実行のモデル"
+      "navRunModels": "ホスト型実行のモデル",
+      "navFleetSettings": "フリート設定"
     },
     "nav": {
       "overview": "概要",
@@ -9517,7 +9557,11 @@
             }
           },
           "fleet": {
-            "stop": "フリートのコンテナーを停止"
+            "stop": "フリートのコンテナーを停止",
+            "org_ci": {
+              "enable": "フリート CI をオンにした",
+              "disable": "フリート CI をオフにした"
+            }
           },
           "enterprise_request": {
             "transition": "Enterprise のリクエストを移動"
@@ -11443,6 +11487,186 @@
         "notPermitted": "実行されませんでした。あなたのスタッフロールではこの操作は許可されていません。何も変更されていません。",
         "notFound": "このアイデアはすでに存在しません。ページを開いている間に誰かが削除しました。",
         "failed": "問題が発生したため、何も変更されていません。もう一度お試しください。"
+      }
+    },
+    "fleetSettings": {
+      "breadcrumb": "運用 · フリート設定",
+      "title": "フリート設定",
+      "subtitle": "スーパー管理者が、誰の CI を Motir 自身のマシンで実行するかを決める場所です。変更のたびに理由の入力が必要で、監査ログに記録されます。",
+      "empty": "フリート CI を提供しているプロジェクトはありません。接続済みの組織にプライベートリポジトリを持つメタ組織のプロジェクトがありません。",
+      "setting": {
+        "title": "Motir のプライベートリポジトリの CI をフリートで実行する",
+        "pair": "プロジェクト {project} · GitHub 組織 {org}",
+        "superadminOnly": "スーパー管理者のみ",
+        "explanation": "オンにすると、{org} 上の Motir のプライベートリポジトリのすべての CI ジョブが {label} ラベルを要求し、共有の {fleet} マシンで実行され、moooon B.V. に計上されます。オフにすると、GitHub ホストのランナーで実行されます。どちらの場合もワークフローファイルは変更されません。"
+      },
+      "state": {
+        "on": "オン",
+        "off": "オフ"
+      },
+      "action": {
+        "turnOn": "オンにする",
+        "turnOff": "オフにする"
+      },
+      "blocked": "すべての条件が満たされるまでオンにできません。",
+      "offNeverBlocked": "オフにする操作は準備状況を待ちません。",
+      "meta": {
+        "lastChanged": "最終変更",
+        "changedBy": "{email}、{when} — 「{reason}」",
+        "neverChanged": "変更なし",
+        "auditLink": "監査ログ",
+        "variable": "GitHub 変数",
+        "repositories": "リポジトリ"
+      },
+      "variable": {
+        "present": "{org} の {name} = {value}（プライベートリポジトリ）— 新しいジョブはフリートを要求します。",
+        "absent": "{org} に {name} は設定されていません — ジョブは GitHub ホストのランナーにフォールバックします。",
+        "unknown": "{org} の {name} を読み取れませんでした — GitHub は HTTP {status} を返しました。",
+        "unreachable": "{org} の {name} を読み取れませんでした — GitHub に接続できませんでした。"
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "オンとして保存されていますが、GitHub と一致しません。",
+          "body": "{org} に {name} が設定されていないため、新しいジョブは引き続き GitHub ホストのランナーで実行されます。設定をオフにしてから再びオンにすると書き込まれます。"
+        },
+        "offPresent": {
+          "title": "オフとして保存されていますが、GitHub と一致しません。",
+          "body": "{org} に {name} がまだ設定されているため、新しいジョブは引き続きフリートを要求します。設定をオンにしてから再びオフにすると削除されます。"
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, other {# 件のプライベートリポジトリ}}（実行時に {org} 上のプロジェクト {project} のプライベートリポジトリから読み取り）"
+      },
+      "monitoringLine": "Motir のマシンは モニタリング › フリート の moooon B.V. の下に表示されます",
+      "onCallout": {
+        "title": "Motir の CI はフリートで実行されています。",
+        "link": "モニタリング › フリート を開く"
+      },
+      "degraded": {
+        "title": "オンの状態で準備ができていません。",
+        "body": "これが修正されるか設定がオフになるまで、新しいジョブはキューで待機します。"
+      },
+      "readiness": {
+        "title": "準備状況",
+        "subtitle": "ジョブが通過する順に並んだ 9 つの条件です。確認できなかった条件は未達として数えます。",
+        "ready": "準備完了",
+        "readySub": "{count} 件の条件をすべて満たしています",
+        "notReady": "準備未完了 — {count, plural, other {# 件の条件}}が未達",
+        "unmetCount": "未達 {count} 件",
+        "unknownCount": "確認できず {count} 件",
+        "checked": "{when}に確認",
+        "checkedAgain": "{when}に再確認",
+        "recheck": "再確認"
+      },
+      "mark": {
+        "met": "達成",
+        "unmet": "未達",
+        "unknown": "確認できず"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "フリートのキルスイッチ"
+        },
+        "app_installed": {
+          "label": "App のインストール"
+        },
+        "app_runner_permission": {
+          "label": "App の権限: セルフホストランナー"
+        },
+        "app_variables_permission": {
+          "label": "App の権限: 変数（書き込み）"
+        },
+        "workflow_job_subscription": {
+          "label": "workflow_job の配信"
+        },
+        "app_repositories": {
+          "label": "App がリポジトリにアクセスできる"
+        },
+        "delivery_attributable": {
+          "label": "ジョブがプロジェクト {project} に帰属する"
+        },
+        "runner_group": {
+          "label": "ランナーグループ"
+        },
+        "image_coverage": {
+          "label": "イメージのカバレッジ"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "フリートのキルスイッチが有効（{variable}=0）なため、フリートのマシンは起動しません。運用担当者が設定を解除するか値を上げます。",
+        "app_not_installed": "motir-studio App が {org} にインストールされていません。{org} のオーナーがインストールします。",
+        "app_suspended": "{org} の motir-studio App は {date} から停止されています。{org} のオーナーが停止を解除します。",
+        "permission_missing": "{org} の motir-studio App の {permission} 権限は なし で、書き込みが必要です。{org} のオーナーが権限リクエストを承認します。",
+        "permission_insufficient": "{org} の motir-studio App の {permission} 権限は {granted} で、書き込みが必要です。{org} のオーナーが権限リクエストを承認します。",
+        "not_subscribed": "App が workflow_job イベントを購読していないため、ジョブがキューに入ったことを GitHub が Motir に通知しません。motir-studio App の管理者が App の設定で購読します。",
+        "repositories_not_granted": "{org} 上の App のインストールは {repositories} にアクセスできません。{org} のオーナーがインストールのリポジトリアクセスに追加します。",
+        "no_private_repositories": "プロジェクト {project} には {org} のプライベートリポジトリがないため、フリートで実行するものはありません。",
+        "not_attributable": "{repositories} からキューに入ったジョブはプロジェクト {project} に帰属しないため、GitHub が期限切れにするまでキューに残ります。ミラー行が最新になるよう、リポジトリをプロジェクトに再接続してください。",
+        "no_runner_group": "プロジェクト {project} には {org} のランナーグループがありません。運用担当者が {script} --project {project} を実行します。",
+        "sync_pending": "{org} にあるプロジェクトのランナーグループがリポジトリと同期していません。運用担当者が {script} --project {project} を実行します。",
+        "jobs_not_runnable": "{count, plural, other {# 件のジョブ}}はまだフリートのランナーイメージで実行できません。フリートイメージの保守担当者が不足しているツールを追加します。別の OS が必要なジョブは、プライベートの対象から外れるまで実行できません。",
+        "not_inventoried": "{repositories} はフリートのジョブ一覧に含まれていないため、ランナーイメージで{count, plural, other {そのジョブ}}を実行できるかまだ誰も確認していません。一覧の保守担当者が再実行します。",
+        "inventory_stale": "{repositories} のワークフローは、フリートのジョブ一覧が計測した後に変更されました。一覧の保守担当者が再実行します。",
+        "read_failed": "確認できませんでした: GitHub は HTTP {status} を返しました。確認が成功するまで未達として数えます。",
+        "read_unreachable": "確認できませんでした: GitHub に接続できませんでした。確認が成功するまで未達として数えます。",
+        "read_failedNoStatus": "確認できませんでした。確認が成功するまで未達として数えます。",
+        "app_not_readable": "motir-studio App が {org} にインストールされ読み取り可能になるまで確認できません。"
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — {tools} が不足",
+        "cannotHost": "{repo} · {workflow} · {job} — ホストできません: {reason}",
+        "more": "ほか {count} 件",
+        "scope": "これは main からビルドされた一覧作成済みのイメージを対象としており、本番で起動するイメージではありません。"
+      },
+      "confirm": {
+        "onTitle": "{org} のフリート CI をオンにしますか？",
+        "onBody": "オフ → オン。{count, plural, other {# 件のリポジトリ}}の新しい CI ジョブはすべてフリートで実行され、moooon B.V. のプールに計上されます: {repositories}。実行中のジョブは開始した場所で完了します。",
+        "offTitle": "{org} のフリート CI をオフにしますか？",
+        "offBody": "オン → オフ。新しいジョブは GitHub ホストのランナーに戻ります。フリートで実行中のジョブはそこで完了します。オフにする操作は準備状況を待ちません。",
+        "reasonLabel": "理由 — 必須、監査ログに記録されます",
+        "reasonPlaceholderOn": "オンにする理由は？",
+        "reasonPlaceholderOff": "オフにする理由は？",
+        "reasonHint": "後でこの変更を読む運用担当者に表示されます。「テスト」だけでは何も伝わりません。",
+        "reasonHintEmpty": "理由を入力するまでボタンは無効のままです — サーバーが適用するのと同じルールです。",
+        "cancel": "キャンセル",
+        "confirmOn": "オンにする",
+        "confirmOff": "オフにする"
+      },
+      "refused": {
+        "reasonMissing": "{direction}にしませんでした: 理由は必須で、この変更とともに監査ログに記録されます。何も変更されていません。",
+        "alreadyOn": "すでにオンです — 何も変更されていません。",
+        "alreadyOff": "すでにオフです — 何も変更されていません。",
+        "alreadyBody": "別のスーパー管理者が先に変更したため、何も書き込まれず、監査行も追加されていません。",
+        "githubStatus": "{direction}にしませんでした: GitHub は {org} の {name} の{operation}を拒否しました（HTTP {status}）。",
+        "githubUnreachable": "{direction}にしませんでした: {org} の {name} を{operation}するために GitHub に接続できませんでした。",
+        "nothingChanged": "何も変更されていません: 設定と GitHub 変数は元のままです。",
+        "notReady": "オンにしませんでした: このページの読み込み後にフリートの準備が整わなくなりました。",
+        "notReadyList": "現在未達: {conditions}。何も変更されていません。下の準備状況を再確認しました。",
+        "notPermitted": "変更していません: この設定を変更できるのはスーパー管理者のみです。",
+        "targetUnknown": "変更していません: このプロジェクトと組織にはこの設定が提供されなくなりました。ページを再読み込みしてください。",
+        "failed": "{direction}にしませんでした: 問題が発生しました。ページを再読み込みして現在の設定を確認してください。"
+      },
+      "done": {
+        "on": "オンにしました。今後、新しいジョブはフリートを要求します。",
+        "off": "オフにしました。新しいジョブは GitHub ホストのランナーに戻ります。"
+      },
+      "direction": {
+        "on": "オン",
+        "off": "オフ"
+      },
+      "operation": {
+        "read": "読み取り",
+        "set": "設定",
+        "delete": "削除"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "セルフホストランナー",
+        "organization_actions_variables": "変数"
+      },
+      "unavailable": {
+        "title": "フリート設定を読み込めませんでした",
+        "body": "設定またはその準備状況を読み取れなかったため、状態は表示されず、スイッチも提供されません。これは読み取りエラーです — 何も変更されておらず、値も推測していません。",
+        "retry": "再試行"
       }
     }
   },

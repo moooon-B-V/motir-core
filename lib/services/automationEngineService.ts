@@ -12,6 +12,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { labelsService } from '@/lib/services/labelsService';
 import { customFieldValuesService } from '@/lib/services/customFieldValuesService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { decodeFilterEnvelope, type FilterAst } from '@/lib/filters/ast';
 import {
@@ -654,6 +655,9 @@ export const automationEngineService = {
         errorDetail: error,
         autoDisabled,
         rulesUrl: automationSettingsUrl(rule.projectId),
+        // The rule OWNER's saved language — they receive it, whoever's event
+        // fired the rule (MOTIR-8107).
+        locale: await resolveRecipientLocale({ userId: owner.id }),
       },
       workspaceId: input.workspaceId,
       idempotencyKey: `automation-rule-failed:${executionId}`,

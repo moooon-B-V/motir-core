@@ -321,3 +321,66 @@ describe('the run-found report rides the leg, before any verdict settles it (MOT
     expect(reports).toHaveLength(0);
   });
 });
+
+describe('the agent’s build-through and STOP ride the leg, before the verdict (MOTIR-8722)', () => {
+  const POINTS = [{ planAsked: 'a', built: 'b', why: 'c' }];
+  const STOP = { comment: 'no such table', toPlanning: true, requirement: null };
+
+  async function legWith(report: {
+    discrepancy?: typeof POINTS | null;
+    stop?: typeof STOP | null;
+  }) {
+    const order: string[] = [];
+    const calls: unknown[] = [];
+    const primary = target();
+    const verdict = await runDispatchLeg({
+      client: {
+        // The STOP's move to Planning is what the verdict then reads.
+        getWorkItem: async () =>
+          ({ item: { status: order.includes('stop') ? 'planning' : 'in_progress' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [] },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: 'm', ...report }),
+      run: git(true),
+      reporter: {
+        event: (e: { kind: string }) => order.push(e.kind),
+        reportDiscrepancy: async (key: string, points: unknown) => {
+          order.push('discrepancy');
+          calls.push(['discrepancy', key, points]);
+        },
+        reportStop: async (key: string, stop: unknown) => {
+          order.push('stop');
+          calls.push(['stop', key, stop]);
+        },
+      } as never,
+    });
+    return { order, calls, verdict };
+  }
+
+  it('records the points on the leg’s card after agent_exited and before leg_verdict', async () => {
+    const { order, calls } = await legWith({ discrepancy: POINTS });
+    expect(calls).toEqual([['discrepancy', 'PROD-1', POINTS]]);
+    expect(order.indexOf('agent_exited')).toBeLessThan(order.indexOf('discrepancy'));
+    expect(order.indexOf('discrepancy')).toBeLessThan(order.indexOf('leg_verdict'));
+  });
+
+  it('makes the STOP before the verdict, so a card it moved to Planning settles as a re-plan', async () => {
+    const { calls, verdict } = await legWith({ stop: STOP });
+    expect(calls).toEqual([['stop', 'PROD-1', STOP]]);
+    expect(verdict.kind).toBe('replan_submitted');
+  });
+
+  it('makes neither when the agent wrote neither', async () => {
+    const { calls } = await legWith({});
+    expect(calls).toHaveLength(0);
+  });
+});

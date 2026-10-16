@@ -36,6 +36,7 @@ import {
 import { signUnsubscribeToken, verifyUnsubscribeToken } from '@/lib/savedFilters/subscriptionToken';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import { encodeFilterParam, FILTER_PARAM } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -391,6 +392,8 @@ export const savedFilterSubscriptionsService = {
         resultCap: SUBSCRIPTION_RESULT_CAP,
         filterUrl,
         unsubscribeUrl,
+        // The subscriber's saved language (MOTIR-8107) — they are the recipient.
+        locale: await resolveRecipientLocale({ userId: user.id }),
       },
     });
 

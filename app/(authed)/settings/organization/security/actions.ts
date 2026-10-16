@@ -1,17 +1,15 @@
 'use server';
 
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
 import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
-import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
+import { resolveActiveOrganizationForPane } from '@/lib/workspaces/tierDisclosure.server';
 import {
   OrganizationClosingError,
   OrganizationNotFoundError,
   OrgForbiddenError,
 } from '@/lib/organizations/errors';
-import { organizationsService } from '@/lib/services/organizationsService';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import type { RequireTwoFactorSaveResult } from '../_components/RequireTwoFactorCard';
 
@@ -34,8 +32,7 @@ export async function setOrganizationRequireTwoFactorAction(
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
-  const current = await organizationsService.resolveActiveOrganization(session.user.id, orgCookie);
+  const current = await resolveActiveOrganizationForPane(session.user.id);
   if (!current) redirect('/dashboard');
 
   const errors = await getErrorsTranslator();

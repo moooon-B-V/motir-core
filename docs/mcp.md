@@ -4008,6 +4008,15 @@ If the WHAT itself cannot be built, this is the wrong tool: stop and use
 
 Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries.
 
+**A dispatched agent with no Motir tools does not call it** (MOTIR-8722,
+`run-found-trigger-dispatched-path.md` AMENDMENT 2). A hosted or agent-instance run's
+agent holds no Motir token, so it writes its points into `$MOTIR_AGENT_REPORT` as
+`"discrepancy"`, and the CLI records them with the run's own credential through
+`POST /api/v1/dispatch-runs/{id}/discrepancy`. Its STOP goes the same way, as `"stop"`,
+through `POST /api/v1/dispatch-runs/{id}/stop`: the comment and the move to Planning,
+with the re-plan brief kept on the card. That path does not submit the re-plan, because a
+run's credential cannot plan.
+
 #### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason` · `report_plan_step` · `hold_plan_revision`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the

@@ -15,9 +15,9 @@ import { EMAIL_LINK } from './_components/emailColors';
 // no env reads — `issueUrl` arrives fully built, the `excerpt` is already
 // plain text (mention tokens rendered as @Name via lib/mentions/excerpt.ts).
 // Localized via next-intl's synchronous createTranslator (rendering runs
-// off-request, in the email.send job); `locale` defaults to the base locale —
-// there is no persisted per-user locale yet (the same signal gap the invite
-// email documents), so senders currently omit it.
+// off-request, in the email.send job); `locale` is the RECIPIENT's language,
+// which the sender resolves when it queues the email
+// (lib/services/emailRecipientLocale.ts). Absent ⇒ English.
 
 // A minimal translator shape (satisfied by createTranslator's result).
 type T = (key: string, values?: Record<string, string | number>) => string;
@@ -41,7 +41,10 @@ function MentionNotificationEmail(p: MentionNotificationEmailProps & { t: T }) {
   const { t } = p;
   const ledeKey = p.source === 'comment' ? 'ledeComment' : 'ledeDescription';
   return (
-    <EmailLayout preview={t('preview', { author: p.authorName, identifier: p.workItemIdentifier })}>
+    <EmailLayout
+      locale={p.locale}
+      preview={t('preview', { author: p.authorName, identifier: p.workItemIdentifier })}
+    >
       <Text style={greeting}>{t('greeting', { name: p.recipientName })}</Text>
       <Text style={lede}>
         {t(ledeKey, {

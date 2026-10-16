@@ -749,6 +749,29 @@ describe('every operation’s REAL response validates against its declared schem
       { id: runId },
     );
 
+    // The run's DISCREPANCY record and its STOP report (MOTIR-8722), on the same open leg.
+    // The STOP leaves the card where it is (`toPlanning: false`), so the steps after it
+    // drive the run unchanged.
+    await drive(
+      'recordDispatchRunDiscrepancy',
+      () => import('@/app/api/v1/dispatch-runs/[id]/discrepancy/route'),
+      send(`/api/v1/dispatch-runs/${runId}/discrepancy`, 'POST', {
+        key: runCard,
+        points: [{ planAsked: 'Edit a.ts', built: 'Edited b.ts', why: 'a.ts does not exist' }],
+      }),
+      { id: runId },
+    );
+    await drive(
+      'reportDispatchRunStop',
+      () => import('@/app/api/v1/dispatch-runs/[id]/stop/route'),
+      send(`/api/v1/dispatch-runs/${runId}/stop`, 'POST', {
+        key: runCard,
+        comment: 'The card names a table that does not exist.',
+        toPlanning: false,
+      }),
+      { id: runId },
+    );
+
     // The HEARTBEAT (MOTIR-6528) — before the close, while the run is open: 204.
     await drive(
       'heartbeatDispatchRun',

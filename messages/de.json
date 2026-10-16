@@ -7545,7 +7545,9 @@
         "aria": "{key} öffnen, das Arbeitselement, das dieses Gespräch neu plant",
         "pickLabel": "Folgeplanung zu <mono>{key}</mono>",
         "chose": "hat {label} gewählt",
-        "pickAria": "{key} öffnen, die Auswahl, zu der dieses Gespräch die Folgeplanung ist ({label} gewählt)"
+        "pickAria": "{key} öffnen, die Auswahl, zu der dieses Gespräch die Folgeplanung ist ({label} gewählt)",
+        "guideLabel": "Aus der Anleitung zu <mono>{key}</mono>",
+        "guideAria": "{key} öffnen, das Arbeitselement, durch das Motir AI Sie geführt hat, als es diese Neuplanung angeboten hat"
       },
       "end": {
         "failed": "Geschlossen · der Versuch ist fehlgeschlagen · {time}",
@@ -7975,6 +7977,16 @@
     "followUpCard": {
       "label": "Folgeplanung zu einer Auswahl"
     },
+    "guideSeed": {
+      "chip": "aus einer Anleitung",
+      "lead": "Geöffnet auf {target} aus der Anleitung von Motir AI zu {guided}.",
+      "card": "Aus einer Anleitung",
+      "cardBy": "Bestätigt von {who} · {when}",
+      "justNow": "gerade eben",
+      "you": "Sie",
+      "status": "In Planung",
+      "offerClosed": "Dieses Angebot zur Neuplanung ist nicht mehr offen. Kehren Sie zur Anleitung zurück, um den Stand zu sehen."
+    },
     "guide": {
       "openedFrom": "Geöffnet aus {key}",
       "reading": "{key} und seine Aufgabenliste werden gelesen…",
@@ -8006,7 +8018,8 @@
       "errors": {
         "notManual": "Motir AI führt Personen durch manuelle Arbeit, und dieses Arbeitselement ist für einen Agenten bestimmt, daher gibt es hier nichts zu führen.",
         "closed": "Dieses Arbeitselement ist erledigt oder archiviert, daher gibt es nichts mehr zu führen.",
-        "forbidden": "Sie benötigen die Berechtigung, dieses Arbeitselement zu bearbeiten und mit Motir AI zu planen, um hindurchgeführt zu werden."
+        "forbidden": "Sie benötigen die Berechtigung, dieses Arbeitselement zu bearbeiten und mit Motir AI zu planen, um hindurchgeführt zu werden.",
+        "offerClosed": "Dieses Angebot wurde bereits entschieden und kann nicht mehr geändert werden. Laden Sie das Arbeitselement neu, um den Stand zu sehen."
       },
       "youTicked": "Sie haben Schritt {n} auf der Liste abgehakt",
       "youUnticked": "Sie haben den Haken bei Schritt {n} auf der Liste entfernt",
@@ -8061,6 +8074,32 @@
         "typeText": "Text",
         "typeMarkdown": "Markdown",
         "typeFile": "Datei"
+      },
+      "offer": {
+        "label": "Anfrage zur Neuplanung",
+        "target": "Gerichtet an",
+        "targetElsewhere": "Die Neuplanung beginnt bei {key}, nicht bei diesem Arbeitselement.",
+        "resolved": "{done} ist erledigt, daher beginnt die Neuplanung bei {open}.",
+        "noTarget": "Es gibt kein offenes Arbeitselement, von dem aus neu geplant werden kann.",
+        "confirm": "Bestätigen",
+        "confirming": "Wird gestartet…",
+        "openSession": "Planungssitzung öffnen",
+        "decline": "Ablehnen",
+        "declining": "Wird abgelehnt…",
+        "showAll": "Alle anzeigen",
+        "showLess": "Weniger anzeigen",
+        "confirmHelp": "Öffnet die Planung von Motir AI bei {key} und sendet diese Anfrage mit. Das verbraucht Credits.",
+        "declineHelp": "Schließt dieses Angebot. Es wird nichts geplant.",
+        "replaced": "Durch ein neueres Angebot ersetzt",
+        "started": "Neuplanung gestartet",
+        "startedBy": "Bestätigt · {when}",
+        "declined": "Abgelehnt",
+        "declinedBy": "Abgelehnt · {when}",
+        "recorded": "Am Arbeitselement festgehalten",
+        "resumeAt": "„Führe mich durch“ setzt bei Schritt {n} fort.",
+        "walkStopped": "Der Durchgang ist angehalten.",
+        "cannotPlan": "Sie können die Planung hier nicht starten – bitten Sie jemanden, der es kann, oder teilen Sie diese Anfrage.",
+        "noAi": "Motir AI ist hier nicht eingerichtet, daher kann die Planung nicht starten. Sie können diese Anfrage trotzdem teilen."
       }
     },
     "restart": {
@@ -9340,7 +9379,8 @@
       "navPlanningLessons": "Planungslektionen",
       "navIdeas": "Ideen",
       "navEnterpriseRequests": "Enterprise-Anfragen",
-      "navRunModels": "Modelle für gehostete Läufe"
+      "navRunModels": "Modelle für gehostete Läufe",
+      "navFleetSettings": "Flotteneinstellungen"
     },
     "nav": {
       "overview": "Übersicht",
@@ -9520,7 +9560,11 @@
             }
           },
           "fleet": {
-            "stop": "Flotten-Container gestoppt"
+            "stop": "Flotten-Container gestoppt",
+            "org_ci": {
+              "enable": "Flotten-CI eingeschaltet",
+              "disable": "Flotten-CI ausgeschaltet"
+            }
           },
           "enterprise_request": {
             "transition": "Enterprise-Anfrage verschoben"
@@ -11446,6 +11490,186 @@
         "notPermitted": "Nicht ausgeführt — Ihre Mitarbeiterrolle erlaubt dies nicht. Es wurde nichts geändert.",
         "notFound": "Diese Idee existiert nicht mehr. Jemand hat sie gelöscht, während Sie die Seite geöffnet hatten.",
         "failed": "Etwas ist schiefgegangen, daher wurde nichts geändert. Versuchen Sie es erneut."
+      }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Betrieb · Flotteneinstellungen",
+      "title": "Flotteneinstellungen",
+      "subtitle": "Hier entscheidet ein Superadmin, wessen CI auf Motirs eigenen Maschinen läuft. Jede Änderung verlangt einen Grund und wird ins Audit-Log geschrieben.",
+      "empty": "Kein Projekt bietet Flotten-CI an – kein Projekt der Meta-Organisation hat ein privates Repository in einer verbundenen Organisation.",
+      "setting": {
+        "title": "CI der privaten Repositorys von Motir auf der Flotte ausführen",
+        "pair": "Projekt {project} · GitHub-Organisation {org}",
+        "superadminOnly": "Nur Superadmin",
+        "explanation": "Wenn aktiviert, fordert jeder CI-Job in Motirs privaten Repositorys auf {org} das Label {label} an und läuft auf den gemeinsamen {fleet}-Maschinen, abgerechnet über moooon B.V. Wenn deaktiviert, laufen sie auf GitHub-gehosteten Runnern. In beiden Fällen ändert sich keine Workflow-Datei."
+      },
+      "state": {
+        "on": "An",
+        "off": "Aus"
+      },
+      "action": {
+        "turnOn": "Aktivieren",
+        "turnOff": "Deaktivieren"
+      },
+      "blocked": "Kann erst aktiviert werden, wenn jede Bedingung erfüllt ist.",
+      "offNeverBlocked": "Das Deaktivieren wartet nie auf die Bereitschaft.",
+      "meta": {
+        "lastChanged": "Zuletzt geändert",
+        "changedBy": "von {email}, {when} – „{reason}“",
+        "neverChanged": "Nie geändert",
+        "auditLink": "Audit-Log",
+        "variable": "GitHub-Variable",
+        "repositories": "Repositorys"
+      },
+      "variable": {
+        "present": "{name} = {value} auf {org} (private Repositorys) – neue Jobs fordern die Flotte an.",
+        "absent": "{name} ist auf {org} nicht gesetzt – Jobs fallen auf GitHub-gehostete Runner zurück.",
+        "unknown": "{name} auf {org} konnte nicht gelesen werden – GitHub antwortete mit HTTP {status}.",
+        "unreachable": "{name} auf {org} konnte nicht gelesen werden – GitHub war nicht erreichbar."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Als aktiviert gespeichert, aber GitHub weicht ab.",
+          "body": "{name} ist auf {org} nicht gesetzt, daher laufen neue Jobs weiterhin auf GitHub-gehosteten Runnern. Deaktivieren Sie die Einstellung und aktivieren Sie sie erneut, um sie zu schreiben."
+        },
+        "offPresent": {
+          "title": "Als deaktiviert gespeichert, aber GitHub weicht ab.",
+          "body": "{name} ist auf {org} noch gesetzt, daher fordern neue Jobs weiterhin die Flotte an. Aktivieren Sie die Einstellung und deaktivieren Sie sie erneut, um sie zu entfernen."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# privates Repository} other {# private Repositorys}}, zur Laufzeit aus den privaten Repositorys von Projekt {project} auf {org} gelesen"
+      },
+      "monitoringLine": "Motirs Maschinen erscheinen unter moooon B.V. in Monitoring › Flotte",
+      "onCallout": {
+        "title": "Motirs CI läuft auf der Flotte.",
+        "link": "Monitoring › Flotte öffnen"
+      },
+      "degraded": {
+        "title": "Aktiviert, aber nicht bereit.",
+        "body": "Neue Jobs warten in der Warteschlange, bis dies behoben oder die Einstellung deaktiviert ist."
+      },
+      "readiness": {
+        "title": "Bereitschaft",
+        "subtitle": "Neun Bedingungen, in der Reihenfolge, in der ein Job sie durchläuft. Eine Bedingung, die nicht geprüft werden konnte, zählt als nicht erfüllt.",
+        "ready": "Bereit",
+        "readySub": "Alle {count} Bedingungen erfüllt",
+        "notReady": "Nicht bereit – {count, plural, one {# Bedingung} other {# Bedingungen}} nicht erfüllt",
+        "unmetCount": "{count} nicht erfüllt",
+        "unknownCount": "{count} nicht prüfbar",
+        "checked": "Geprüft {when}",
+        "checkedAgain": "Erneut geprüft {when}",
+        "recheck": "Erneut prüfen"
+      },
+      "mark": {
+        "met": "Erfüllt",
+        "unmet": "Nicht erfüllt",
+        "unknown": "Nicht prüfbar"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Not-Aus der Flotte"
+        },
+        "app_installed": {
+          "label": "App installiert"
+        },
+        "app_runner_permission": {
+          "label": "App-Berechtigung: Selbst gehostete Runner"
+        },
+        "app_variables_permission": {
+          "label": "App-Berechtigung: Variablen (Schreiben)"
+        },
+        "workflow_job_subscription": {
+          "label": "Zustellung von workflow_job"
+        },
+        "app_repositories": {
+          "label": "App erreicht die Repositorys"
+        },
+        "delivery_attributable": {
+          "label": "Jobs werden Projekt {project} zugeordnet"
+        },
+        "runner_group": {
+          "label": "Runner-Gruppe"
+        },
+        "image_coverage": {
+          "label": "Image-Abdeckung"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "Der Not-Aus der Flotte ist aktiv ({variable}=0), daher startet keine Flottenmaschine. Ein Operator hebt ihn auf oder erhöht den Wert.",
+        "app_not_installed": "Die motir-studio-App ist auf {org} nicht installiert. Ein Inhaber von {org} installiert sie.",
+        "app_suspended": "Die motir-studio-App auf {org} ist seit {date} gesperrt. Ein Inhaber von {org} hebt die Sperre auf.",
+        "permission_missing": "Die motir-studio-App auf {org} hat {permission}: keine, und benötigt Schreibzugriff. Ein Inhaber von {org} nimmt die Berechtigungsanfrage an.",
+        "permission_insufficient": "Die motir-studio-App auf {org} hat {permission}: {granted}, und benötigt Schreibzugriff. Ein Inhaber von {org} nimmt die Berechtigungsanfrage an.",
+        "not_subscribed": "Die App hat workflow_job-Ereignisse nicht abonniert, daher meldet GitHub Motir nie einen wartenden Job. Wer die motir-studio-App verwaltet, abonniert sie in den Einstellungen der App.",
+        "repositories_not_granted": "Die Installation der App auf {org} erreicht {repositories} nicht. Ein Inhaber von {org} fügt sie dem Repository-Zugriff der Installation hinzu.",
+        "no_private_repositories": "Projekt {project} hat kein privates Repository in {org}, daher gibt es für die Flotte nichts auszuführen.",
+        "not_attributable": "Ein wartender Job aus {repositories} würde Projekt {project} nicht zugeordnet und bliebe daher in der Warteschlange, bis GitHub ihn verfallen lässt. Verbinden Sie das Repository erneut mit dem Projekt, damit seine Spiegelzeile aktuell ist.",
+        "no_runner_group": "Projekt {project} hat keine Runner-Gruppe in {org}. Ein Operator führt {script} --project {project} aus.",
+        "sync_pending": "Die Runner-Gruppe des Projekts in {org} ist nicht mit seinen Repositorys synchron. Ein Operator führt {script} --project {project} aus.",
+        "jobs_not_runnable": "{count, plural, one {# Job kann} other {# Jobs können}} noch nicht auf dem Runner-Image der Flotte laufen. Wer das Flotten-Image pflegt, ergänzt das fehlende Werkzeug; ein Job, der ein anderes Betriebssystem braucht, bleibt nicht ausführbar, bis er die privaten Repositorys verlässt.",
+        "not_inventoried": "{repositories} {count, plural, one {ist} other {sind}} nicht im Job-Inventar der Flotte, daher hat niemand geprüft, ob das Runner-Image {count, plural, one {seine} other {ihre}} Jobs ausführen kann. Wer das Inventar pflegt, führt es erneut aus.",
+        "inventory_stale": "Die Workflows von {repositories} haben sich geändert, nachdem das Job-Inventar der Flotte sie gemessen hat. Wer das Inventar pflegt, führt es erneut aus.",
+        "read_failed": "Konnte nicht geprüft werden: GitHub antwortete mit HTTP {status}. Gilt als nicht erfüllt, bis eine Prüfung gelingt.",
+        "read_unreachable": "Konnte nicht geprüft werden: GitHub war nicht erreichbar. Gilt als nicht erfüllt, bis eine Prüfung gelingt.",
+        "read_failedNoStatus": "Konnte nicht geprüft werden. Gilt als nicht erfüllt, bis eine Prüfung gelingt.",
+        "app_not_readable": "Kann erst geprüft werden, wenn die motir-studio-App auf {org} installiert und lesbar ist."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} – fehlt: {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} – nicht hostbar: {reason}",
+        "more": "+{count} weitere",
+        "scope": "Dies betrifft das inventarisierte, aus main gebaute Image, nicht das Image, das die Produktion startet."
+      },
+      "confirm": {
+        "onTitle": "Flotten-CI für {org} aktivieren?",
+        "onBody": "Aus → An. Jeder neue CI-Job in {count, plural, one {# Repository} other {# Repositorys}} läuft auf der Flotte und wird dem Kontingent von moooon B.V. belastet: {repositories}. Bereits laufende Jobs werden dort beendet, wo sie gestartet sind.",
+        "offTitle": "Flotten-CI für {org} deaktivieren?",
+        "offBody": "An → Aus. Neue Jobs laufen wieder auf GitHub-gehosteten Runnern; Jobs, die bereits auf der Flotte laufen, werden dort beendet. Das Deaktivieren wartet nie auf die Bereitschaft.",
+        "reasonLabel": "Grund – erforderlich, wird ins Audit-Log geschrieben",
+        "reasonPlaceholderOn": "Warum aktivieren Sie dies?",
+        "reasonPlaceholderOff": "Warum deaktivieren Sie dies?",
+        "reasonHint": "Wird jedem Operator angezeigt, der diese Änderung später liest. „Test“ allein beantwortet nichts.",
+        "reasonHintEmpty": "Die Schaltfläche bleibt deaktiviert, bis ein Grund eingegeben ist – dieselbe Regel, die der Server anwendet.",
+        "cancel": "Abbrechen",
+        "confirmOn": "Aktivieren",
+        "confirmOff": "Deaktivieren"
+      },
+      "refused": {
+        "reasonMissing": "Nicht {direction}: Ein Grund ist erforderlich und wird mit dieser Änderung ins Audit-Log geschrieben. Nichts wurde geändert.",
+        "alreadyOn": "Bereits aktiviert – nichts wurde geändert.",
+        "alreadyOff": "Bereits deaktiviert – nichts wurde geändert.",
+        "alreadyBody": "Ein anderer Superadmin hat es zuerst geändert, daher wurde nichts geschrieben und keine Audit-Zeile hinzugefügt.",
+        "githubStatus": "Nicht {direction}: GitHub hat abgelehnt, {name} auf {org} zu {operation} (HTTP {status}).",
+        "githubUnreachable": "Nicht {direction}: GitHub war nicht erreichbar, um {name} auf {org} zu {operation}.",
+        "nothingChanged": "Nichts wurde geändert: Die Einstellung und die GitHub-Variable sind unverändert.",
+        "notReady": "Nicht aktiviert: Die Flotte war nach dem Laden dieser Seite nicht mehr bereit.",
+        "notReadyList": "Jetzt nicht erfüllt: {conditions}. Nichts wurde geändert. Die Bereitschaft unten wurde erneut geprüft.",
+        "notPermitted": "Nicht geändert: Nur ein Superadmin kann diese Einstellung ändern.",
+        "targetUnknown": "Nicht geändert: Diesem Projekt und dieser Organisation wird die Einstellung nicht mehr angeboten. Laden Sie die Seite neu.",
+        "failed": "Nicht {direction}: Etwas ist schiefgelaufen. Laden Sie die Seite neu, um den aktuellen Stand der Einstellung zu sehen."
+      },
+      "done": {
+        "on": "Aktiviert. Neue Jobs fordern ab jetzt die Flotte an.",
+        "off": "Deaktiviert. Neue Jobs laufen wieder auf GitHub-gehosteten Runnern."
+      },
+      "direction": {
+        "on": "aktiviert",
+        "off": "deaktiviert"
+      },
+      "operation": {
+        "read": "lesen",
+        "set": "setzen",
+        "delete": "löschen"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Selbst gehostete Runner",
+        "organization_actions_variables": "Variablen"
+      },
+      "unavailable": {
+        "title": "Die Flotteneinstellung konnte nicht geladen werden",
+        "body": "Die Einstellung oder ihre Bereitschaft konnte nicht gelesen werden, daher wird kein Zustand angezeigt und kein Schalter angeboten. Dies ist ein Lesefehler – nichts hat sich geändert, und kein Wert wird geraten.",
+        "retry": "Erneut versuchen"
       }
     }
   },

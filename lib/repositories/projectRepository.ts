@@ -133,6 +133,36 @@ export interface ProjectHostedModelOverridesRow {
 
 export const projectRepository = {
   /**
+   * Every project of an organisation flagged `isMeta` — Motir's own — with its
+   * workspace and organisation ids (Story MOTIR-8699 · MOTIR-8714: the projects
+   * whose private-repository CI the platform console may move onto the fleet).
+   * Cross-tenant by design, so it runs under `withSystemContext`: `project`,
+   * `workspace` and `organization` all carry a `system_admin` read arm.
+   */
+  async listInMetaOrganizations(
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{ id: string; identifier: string; workspaceId: string; organizationId: string }>
+  > {
+    const rows = await tx.project.findMany({
+      where: { workspace: { organization: { isMeta: true } } },
+      select: {
+        id: true,
+        identifier: true,
+        workspaceId: true,
+        workspace: { select: { organizationId: true } },
+      },
+      orderBy: { identifier: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      identifier: r.identifier,
+      workspaceId: r.workspaceId,
+      organizationId: r.workspace.organizationId,
+    }));
+  },
+
+  /**
    * Read a project by id. Optionally takes `tx` when the caller is already
    * inside a transaction — required when running under the non-bypass
    * motir_app role with the project RLS policy in force, because the
@@ -184,8 +214,11 @@ export const projectRepository = {
    * path — a user-facing read must stay workspace-scoped via `findByIdentifier`
    * above, or it leaks the existence of other tenants' projects.
    */
-  async findAllByIdentifier(identifier: string): Promise<Project[]> {
-    return db.project.findMany({ where: { identifier }, orderBy: { createdAt: 'asc' } });
+  async findAllByIdentifier(identifier: string, tx?: Prisma.TransactionClient): Promise<Project[]> {
+    // `tx` lets operator tooling read under `withSystemContext`, which the
+    // project policy's system arm admits (MOTIR-8712's sync script).
+    const client = tx ?? dbRead;
+    return client.project.findMany({ where: { identifier }, orderBy: { createdAt: 'asc' } });
   },
 
   /**

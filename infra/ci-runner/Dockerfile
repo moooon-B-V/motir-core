@@ -54,6 +54,34 @@
 #   | unzip/zip/tar      | `actions/upload-artifact@v4` (S ci.yml:276,372) and     |
 #   |                    | `actions/checkout`'s tarball fallback                   |
 #
+# Extended for MOTIR's OWN private repositories (Story MOTIR-8699 · MOTIR-8710),
+# from the inventory `lib/ciFleet/fleetJobInventory.json` (MOTIR-8701), read
+# 2026-10-15 against each repository's `origin/main`. Only PRIVATE repositories
+# count: a public one never requests the fleet (the runner group access-lists
+# private repositories only), so its gaps buy nothing here.
+#
+#   A = moooon-B-V/motir-ai      @ 38bfab2 .github/workflows/
+#   G = moooon-B-V/motir-gateway @ 996e428 .github/workflows/
+#   M = moooon-B-V/motir-meta    @ a7fd87b .github/workflows/
+#
+#   | Toolchain          | Evidence                                              |
+#   | ------------------ | ----------------------------------------------------- |
+#   | gh (GitHub CLI)    | A rate-drift.yml:240 · A rate-sync.yml:113            |
+#   |                    | G catalog-refresh.yml:232,546 ·                        |
+#   |                    | G rate-drift-dispatch.yml:73 — `gh api` / `gh pr` /     |
+#   |                    | `gh issue` / `gh workflow run`, never installed by the  |
+#   |                    | job; `ubuntu-latest` preinstalls it. Ubuntu's own       |
+#   |                    | `gh` package (universe), so it is pinned the same way   |
+#   |                    | every other apt entry is.                               |
+#   | build-essential    | G ci.yml:61,127 · G linux-release.yml:48 ·              |
+#   |                    | G catalog-refresh.yml:232 — `go build`/`go test` of a   |
+#   |                    | module that depends on `mattn/go-sqlite3` (cgo,         |
+#   |                    | G go.mod:86). With no C compiler Go silently builds     |
+#   |                    | with CGO_ENABLED=0 and the sqlite driver fails at run   |
+#   |                    | time; `linux-release` links `-extldflags '-static'`.    |
+#   | python3            | M guards.yml:35,223 — `shell: python3 {0}` steps with   |
+#   |                    | no `actions/setup-python` before them.                  |
+#
 # NOT installed, and the reason stated rather than left silent:
 #   - The chromium BINARY. `playwright install --with-deps` downloads a build
 #     keyed to the REPO's own Playwright version, which this image cannot know.
@@ -65,6 +93,16 @@
 #   - `pg_isready`. It appears in S ci.yml:88-92's `options: --health-cmd`, but a
 #     Docker healthcheck runs INSIDE the service container. Adding a postgres
 #     client to the runner would be a toolchain entry with no evidence.
+#   - QEMU / binfmt handlers (`binfmt-misc` in the inventory; G docker-image.yml:35
+#     `docker/setup-qemu-action`). Not an image tool: the action registers
+#     handlers in the HOST kernel, i.e. the Fly machine's, which no Dockerfile
+#     line can provide. Whether that kernel accepts a privileged binfmt install
+#     is verified on a live fleet machine, not here; until then that job stays
+#     not-runnable in the manifest.
+#   - The buildx / compose CLI plugins. Every Motir job that builds an image runs
+#     `docker/setup-buildx-action` first, which installs buildx as the runner
+#     user; no Motir job invokes `docker compose` (inventory, "Things that look
+#     like gaps").
 #
 # ─── WHAT IS FIXED BY DECISION, NOT BY THIS FILE ─────────────────────────────
 #
@@ -145,9 +183,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
+        build-essential \
         ca-certificates \
         coreutils \
         curl \
+        gh \
         git \
         gnupg \
         gzip \
@@ -155,6 +195,7 @@ RUN apt-get update \
         jq \
         locales \
         openssh-client \
+        python3 \
         sudo \
         tar \
         unzip \

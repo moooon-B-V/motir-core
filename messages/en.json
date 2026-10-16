@@ -7545,7 +7545,9 @@
         "aria": "Open {key}, the work item this conversation re-plans",
         "pickLabel": "Follow-up to <mono>{key}</mono>",
         "chose": "chose {label}",
-        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
+        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})",
+        "guideLabel": "From the guide on <mono>{key}</mono>",
+        "guideAria": "Open {key}, the work item Motir AI was guiding you through when it offered this re-plan"
       },
       "end": {
         "failed": "Closed · the attempt failed · {time}",
@@ -7975,6 +7977,16 @@
     "followUpCard": {
       "label": "Follow-up to a choice"
     },
+    "guideSeed": {
+      "chip": "from a guide",
+      "lead": "Opened on {target} from Motir AI’s guide on {guided}.",
+      "card": "From a guide",
+      "cardBy": "Confirmed by {who} · {when}",
+      "justNow": "just now",
+      "you": "you",
+      "status": "Planning",
+      "offerClosed": "This re-plan offer is no longer open. Go back to the guide to see where it stands."
+    },
     "guide": {
       "openedFrom": "Opened from {key}",
       "reading": "Reading {key} and its to-do list…",
@@ -8006,7 +8018,8 @@
       "errors": {
         "notManual": "Motir AI guides a person through manual work, and this work item is for an agent, so there is nothing to guide here.",
         "closed": "This work item is done or archived, so there is nothing left to guide.",
-        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it."
+        "forbidden": "You need permission to edit this work item and to plan with Motir AI to be guided through it.",
+        "offerClosed": "This offer was already decided, so it can’t be changed. Reload the work item to see where it stands."
       },
       "youTicked": "You ticked step {n} on the list",
       "youUnticked": "You unticked step {n} on the list",
@@ -8061,6 +8074,32 @@
         "typeText": "Text",
         "typeMarkdown": "Markdown",
         "typeFile": "File"
+      },
+      "offer": {
+        "label": "Re-plan request",
+        "target": "Aimed at",
+        "targetElsewhere": "The re-plan starts on {key}, not on this work item.",
+        "resolved": "{done} is done, so the re-plan starts on {open}.",
+        "noTarget": "There is no open work item to re-plan from.",
+        "confirm": "Confirm",
+        "confirming": "Starting…",
+        "openSession": "Open the planning session",
+        "decline": "Decline",
+        "declining": "Declining…",
+        "showAll": "Show all",
+        "showLess": "Show less",
+        "confirmHelp": "Opens Motir AI planning on {key} with this request sent. It spends credits.",
+        "declineHelp": "Closes this offer. Nothing is planned.",
+        "replaced": "Replaced by a newer offer",
+        "started": "Re-plan started",
+        "startedBy": "Confirmed · {when}",
+        "declined": "Declined",
+        "declinedBy": "Declined · {when}",
+        "recorded": "Recorded on the work item",
+        "resumeAt": "Guide me through will pick up at step {n}.",
+        "walkStopped": "The walk is stopped.",
+        "cannotPlan": "You can’t start planning here — ask someone who can, or share this request.",
+        "noAi": "Motir AI isn’t set up here, so planning can’t start. You can still share this request."
       }
     },
     "restart": {
@@ -9340,7 +9379,8 @@
       "navPlanningLessons": "Planning lessons",
       "navIdeas": "Ideas",
       "navEnterpriseRequests": "Enterprise requests",
-      "navRunModels": "Hosted-run models"
+      "navRunModels": "Hosted-run models",
+      "navFleetSettings": "Fleet settings"
     },
     "nav": {
       "overview": "Overview",
@@ -9520,7 +9560,11 @@
             }
           },
           "fleet": {
-            "stop": "Stopped the fleet containers"
+            "stop": "Stopped the fleet containers",
+            "org_ci": {
+              "enable": "Turned fleet CI on",
+              "disable": "Turned fleet CI off"
+            }
           },
           "enterprise_request": {
             "transition": "Moved an Enterprise request"
@@ -11446,6 +11490,186 @@
         "notPermitted": "Not done — your staff role does not allow this. Nothing was changed.",
         "notFound": "This idea no longer exists. Someone deleted it while you had the page open.",
         "failed": "Something went wrong, so nothing was changed. Try again."
+      }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Operations · Fleet settings",
+      "title": "Fleet settings",
+      "subtitle": "Where a superadmin decides whose CI runs on Motir's own machines. Every change asks for a reason and is written to the audit log.",
+      "empty": "No project offers fleet CI — no meta-org project has a private repository in a connected org.",
+      "setting": {
+        "title": "Run Motir's private repositories' CI on the fleet",
+        "pair": "Project {project} · GitHub organisation {org}",
+        "superadminOnly": "Superadmin only",
+        "explanation": "When on, every CI job in Motir's private repositories on {org} requests the {label} label and runs on the shared {fleet} machines, attributed to moooon B.V. When off, they run on GitHub-hosted runners. No workflow file changes either way."
+      },
+      "state": {
+        "on": "On",
+        "off": "Off"
+      },
+      "action": {
+        "turnOn": "Turn on",
+        "turnOff": "Turn off"
+      },
+      "blocked": "Can't turn on until every condition is met.",
+      "offNeverBlocked": "Turning off never waits on readiness.",
+      "meta": {
+        "lastChanged": "Last changed",
+        "changedBy": "by {email}, {when} — “{reason}”",
+        "neverChanged": "Never changed",
+        "auditLink": "Audit log",
+        "variable": "GitHub variable",
+        "repositories": "Repositories"
+      },
+      "variable": {
+        "present": "{name} = {value} on {org} (private repositories) — new jobs request the fleet.",
+        "absent": "{name} is not set on {org} — jobs fall back to GitHub-hosted runners.",
+        "unknown": "Couldn't read {name} on {org} — GitHub answered HTTP {status}.",
+        "unreachable": "Couldn't read {name} on {org} — GitHub could not be reached."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Stored on, but GitHub disagrees.",
+          "body": "{name} is not set on {org}, so new jobs still run on GitHub-hosted runners. Turn the setting off and on again to write it."
+        },
+        "offPresent": {
+          "title": "Stored off, but GitHub disagrees.",
+          "body": "{name} is still set on {org}, so new jobs still request the fleet. Turn the setting on and off again to remove it."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# private repository} other {# private repositories}}, read at runtime from project {project}'s private repositories on {org}"
+      },
+      "monitoringLine": "Motir's machines appear under moooon B.V. in Monitoring › Fleet",
+      "onCallout": {
+        "title": "Motir's CI is on the fleet.",
+        "link": "Open Monitoring › Fleet"
+      },
+      "degraded": {
+        "title": "Not ready while on.",
+        "body": "New jobs will queue until this is fixed or the setting is turned off."
+      },
+      "readiness": {
+        "title": "Readiness",
+        "subtitle": "Nine conditions, in the order a job meets them. A condition that couldn't be checked counts as not met.",
+        "ready": "Ready",
+        "readySub": "All {count} conditions met",
+        "notReady": "Not ready — {count, plural, one {# condition} other {# conditions}} not met",
+        "unmetCount": "{count} unmet",
+        "unknownCount": "{count} couldn't be checked",
+        "checked": "Checked {when}",
+        "checkedAgain": "Checked again {when}",
+        "recheck": "Check again"
+      },
+      "mark": {
+        "met": "Met",
+        "unmet": "Not met",
+        "unknown": "Couldn't check"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Fleet kill switch"
+        },
+        "app_installed": {
+          "label": "App installed"
+        },
+        "app_runner_permission": {
+          "label": "App permission: Self-hosted runners"
+        },
+        "app_variables_permission": {
+          "label": "App permission: Variables (write)"
+        },
+        "workflow_job_subscription": {
+          "label": "workflow_job delivery"
+        },
+        "app_repositories": {
+          "label": "App reaches the repositories"
+        },
+        "delivery_attributable": {
+          "label": "Jobs attributed to project {project}"
+        },
+        "runner_group": {
+          "label": "Runner group"
+        },
+        "image_coverage": {
+          "label": "Image coverage"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "The fleet kill switch is engaged ({variable}=0), so no fleet machine boots. An operator unsets or raises it.",
+        "app_not_installed": "The motir-studio App is not installed on {org}. An owner of {org} installs it.",
+        "app_suspended": "The motir-studio App on {org} has been suspended since {date}. An owner of {org} unsuspends it.",
+        "permission_missing": "The motir-studio App on {org} holds {permission}: none, and needs write. An owner of {org} accepts the permission request.",
+        "permission_insufficient": "The motir-studio App on {org} holds {permission}: {granted}, and needs write. An owner of {org} accepts the permission request.",
+        "not_subscribed": "The App is not subscribed to workflow_job events, so GitHub never tells Motir a job is queued. Whoever administers the motir-studio App subscribes it in the App's settings.",
+        "repositories_not_granted": "The App's installation on {org} does not reach {repositories}. An owner of {org} adds them to the installation's repository access.",
+        "no_private_repositories": "Project {project} has no private repository in {org}, so there is nothing for the fleet to run.",
+        "not_attributable": "A queued job from {repositories} would not be attributed to project {project}, so it would stay queued until GitHub expires it. Reconnect the repository to the project so its mirror row is current.",
+        "no_runner_group": "Project {project} has no runner group in {org}. An operator runs {script} --project {project}.",
+        "sync_pending": "The project's runner group in {org} is out of sync with its repositories. An operator runs {script} --project {project}.",
+        "jobs_not_runnable": "{count, plural, one {# job} other {# jobs}} can't run on the fleet runner image yet. Whoever maintains the fleet image adds the missing tool; a job that needs another operating system stays unrunnable until it leaves the private set.",
+        "not_inventoried": "{repositories} {count, plural, one {is} other {are}} not in the fleet job inventory, so nobody has checked the runner image can run {count, plural, one {its} other {their}} jobs. Whoever maintains the inventory re-runs it.",
+        "inventory_stale": "The workflows of {repositories} changed after the fleet job inventory measured them. Whoever maintains the inventory re-runs it.",
+        "read_failed": "Couldn't check this: GitHub answered HTTP {status}. Counts as not met until a check succeeds.",
+        "read_unreachable": "Couldn't check this: GitHub could not be reached. Counts as not met until a check succeeds.",
+        "read_failedNoStatus": "Couldn't check this. Counts as not met until a check succeeds.",
+        "app_not_readable": "Can't be checked until the motir-studio App is installed and readable on {org}."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — missing {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — can't be hosted: {reason}",
+        "more": "+{count} more",
+        "scope": "This covers the inventoried image built from main, not the image production boots."
+      },
+      "confirm": {
+        "onTitle": "Turn on fleet CI for {org}?",
+        "onBody": "Off → On. Every new CI job in {count, plural, one {# repository} other {# repositories}} will run on the fleet and be charged to moooon B.V.'s pool: {repositories}. Jobs already running finish where they started.",
+        "offTitle": "Turn off fleet CI for {org}?",
+        "offBody": "On → Off. New jobs go back to GitHub-hosted runners; jobs already running on the fleet finish there. Turning off never waits on readiness.",
+        "reasonLabel": "Reason — required, written to the audit log",
+        "reasonPlaceholderOn": "Why are you turning this on?",
+        "reasonPlaceholderOff": "Why are you turning this off?",
+        "reasonHint": "Shown to any operator reading this change later. “Testing” on its own answers nothing.",
+        "reasonHintEmpty": "The button stays disabled until a reason is typed — the same rule the server applies.",
+        "cancel": "Cancel",
+        "confirmOn": "Turn on",
+        "confirmOff": "Turn off"
+      },
+      "refused": {
+        "reasonMissing": "Not turned {direction}: a reason is required, and it is written to the audit log with this change. Nothing changed.",
+        "alreadyOn": "Already on — nothing changed.",
+        "alreadyOff": "Already off — nothing changed.",
+        "alreadyBody": "Another superadmin changed it first, so nothing was written and no audit row was added.",
+        "githubStatus": "Not turned {direction}: GitHub refused to {operation} {name} on {org} (HTTP {status}).",
+        "githubUnreachable": "Not turned {direction}: GitHub could not be reached to {operation} {name} on {org}.",
+        "nothingChanged": "Nothing changed: the setting and the GitHub variable are as they were.",
+        "notReady": "Not turned on: the fleet stopped being ready after this page loaded.",
+        "notReadyList": "Not met now: {conditions}. Nothing changed. The readiness below has been checked again.",
+        "notPermitted": "Not changed: only a superadmin can change this setting.",
+        "targetUnknown": "Not changed: this project and organisation are no longer offered this setting. Reload the page.",
+        "failed": "Not turned {direction}: something went wrong. Reload the page to see the setting as it is now."
+      },
+      "done": {
+        "on": "Turned on. New jobs request the fleet from now on.",
+        "off": "Turned off. New jobs go back to GitHub-hosted runners."
+      },
+      "direction": {
+        "on": "on",
+        "off": "off"
+      },
+      "operation": {
+        "read": "read",
+        "set": "set",
+        "delete": "delete"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Self-hosted runners",
+        "organization_actions_variables": "Variables"
+      },
+      "unavailable": {
+        "title": "Couldn't load the fleet setting",
+        "body": "The setting or its readiness could not be read, so no state is shown and no switch is offered. This is a read error — nothing has changed, and no value is guessed.",
+        "retry": "Retry"
       }
     }
   },

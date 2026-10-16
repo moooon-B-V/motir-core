@@ -20,7 +20,7 @@
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 
 // App locale → BCP-47 tag for Intl. Add a row here when a locale ships.
-const BCP47: Record<Locale, string> = {
+export const BCP47: Record<Locale, string> = {
   en: 'en-US',
   zh: 'zh-CN',
   ja: 'ja-JP',

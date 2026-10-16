@@ -55,7 +55,7 @@ function OrganizationDeletionScheduledEmail(
 ) {
   const { t } = props;
   return (
-    <EmailLayout preview={t('preview', values(props))} footer={t('footer')}>
+    <EmailLayout locale={props.locale} preview={t('preview', values(props))} footer={t('footer')}>
       <Text style={greeting}>{t('greeting', values(props))}</Text>
       <Text style={para}>{lede(props, t)}</Text>
       <Text style={para}>{t('readOnly')}</Text>

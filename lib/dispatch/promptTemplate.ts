@@ -2132,7 +2132,7 @@ function modelSelfReport(): string[] {
     '  provenance.',
     '',
     '  If you genuinely cannot tell, leave "model" out — write no file at all unless',
-    '  a STOP below asks you to add to it: an empty record is honest,',
+    '  a step below asks you to add to it: an empty record is honest,',
     '  and a guessed one is not. If the variable is unset, skip this entirely.',
   ];
 }
@@ -2486,6 +2486,15 @@ function buildThroughSteps(
     '     describes something STILL broken after this card is done is a defect: file',
     '     it as a bug first, by the defect branch that follows this section, and cite',
     "     its key in that point's why.",
+    '     NO MOTIR TOOLS? If the record_run_discrepancy tool is not available to you',
+    '     (a hosted run, or a run inside an agent, gives you none) and the',
+    '     environment variable MOTIR_AGENT_REPORT is set, put the same points into the',
+    '     JSON file at that path instead, as "discrepancy" beside "model":',
+    '',
+    '         {"model": "<as above>", "discrepancy": [{"planAsked": "…", "built": "…", "why": "…"}]}',
+    '',
+    '     and the run records them on the card and its run when you exit. Then the',
+    '     Deviations list says the run records them, and step 5 does not apply.',
     ...finish,
     ...stated,
     '  5. If the call errors or is refused, still deliver. Write the exact line',
@@ -2626,6 +2635,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
   if (!policy.replan) {
     return [
       ...restructuring,
+      ...noToolsStop(policy),
       '  5. Stop, and leave the card In Progress. Do not move its status: this run',
       '     was launched without re-planning, so there is no plan to submit and no',
       '     decision for anyone to make yet. Your comment is the whole report:',
@@ -2636,6 +2646,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
 
   return [
     ...restructuring,
+    ...noToolsStop(policy),
     `  5. Move ${src.key} to Planning with the transition_status tool (key`,
     `     ${src.key}, status planning). That status is in the in-progress`,
     '     category, which is what actually takes the card out of the pickable set',
@@ -2680,6 +2691,54 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     nothing happened — no job was created and no credits were spent — so',
     '     re-submit once, WITHOUT the requirement. That is the only retry there is.',
     '  9. Stop. Do not pick up other work.',
+  ];
+}
+
+/**
+ * A STOP WITH NO MOTIR TOOLS (MOTIR-8722, `run-found-trigger-dispatched-path.md` AMENDMENT 2).
+ *
+ * Every write the STOP branch asks for — the comment, the move to Planning, the plan turn and
+ * the submit — is a Motir MCP call, and a hosted run's agent and an agent-instance run's agent
+ * have none (`AGENT_RUN_WITHHELD_ENV`; `/api/mcp` refuses a run token). So the agent puts them
+ * into `$MOTIR_AGENT_REPORT` as `stop`, and the CLI makes the comment and the move with the
+ * run's credential (`POST /api/v1/dispatch-runs/{id}/stop`).
+ *
+ * ⚠️ THE RE-PLAN IS NOT SUBMITTED ON THIS PATH, AND THE TEXT SAYS SO. A run's credential holds
+ * no `ai:*` key by decision (`HOSTED_RUN_TOKEN_GRANT`), and submitting is the act that spends
+ * the owner's credits; the brief is kept on the card for the person who submits it. An agent
+ * told the re-plan went out would report a submit nobody made.
+ */
+function noToolsStop(policy: FindingsPolicy): string[] {
+  const head = [
+    '  NO MOTIR TOOLS? If the Motir tools are not available to you (a hosted run, or',
+    '  a run inside an agent, gives you none), you cannot write the step-3 comment',
+  ];
+  if (!policy.replan) {
+    return [
+      ...head,
+      '  yourself. With MOTIR_AGENT_REPORT set, add "stop" to the same JSON file:',
+      '',
+      '         {"model": "…", "unbuildable": "<your step-3 comment>", "stop": {"toPlanning": false}}',
+      '',
+      '  and the run comments the card with your "unbuildable" text when you exit.',
+      '  Then stop as below, leaving the card In Progress.',
+    ];
+  }
+  return [
+    ...head,
+    '  or make the Planning, planning-thread and submit calls below yourself. With',
+    '  MOTIR_AGENT_REPORT set, add "stop" to the same JSON file, with the six',
+    '  requirement fields step 7 describes:',
+    '',
+    '         {"model": "…", "unbuildable": "<your step-3 comment>",',
+    '          "stop": {"toPlanning": true, "requirement": {"outcome": "…", "behaviour": "…",',
+    '                   "scopeEdge": "", "constraints": "", "acceptance": "…", "assumptions": ""}}}',
+    '',
+    '  When you exit, the run comments the card with your "unbuildable" text, moves',
+    '  it to Planning and keeps your requirement on the card. It does NOT submit the',
+    "  re-plan: a run's own credential cannot start planning, so a person submits it",
+    '  from the card, and the comment says so. Do not report a re-plan as submitted.',
+    '  Then stop. Do not pick up other work.',
   ];
 }
 

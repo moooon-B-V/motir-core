@@ -239,6 +239,10 @@ describe('the reason rule', () => {
     // A platform admin's stop of one organisation's fleet (Story MOTIR-6905 ·
     // MOTIR-7317) — destructive and cross-tenant, so `superadmin` with a reason.
     'fleet.stop': 'required',
+    // The fleet org CI setting (Story MOTIR-8699 · MOTIR-8714): moves another
+    // org's CI onto the fleet, so `superadmin` with a reason, both directions.
+    'fleet.org_ci.enable': 'required',
+    'fleet.org_ci.disable': 'required',
     'enterprise_request.transition': 'required',
     // The idea store (Story MOTIR-7662 · MOTIR-7671): retiring and deleting say
     // why an idea left the public list; the rest carry the caller's context.

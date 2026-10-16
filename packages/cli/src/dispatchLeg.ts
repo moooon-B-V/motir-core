@@ -251,6 +251,15 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     await reporter.reportUnbuildable?.(key, result.unbuildableReason);
   }
 
+  // THE AGENT'S OTHER WRITES (MOTIR-8722) — its build-through record and its STOP, which
+  // the prompt sends through `$MOTIR_AGENT_REPORT` when the agent has no Motir tools (a
+  // hosted run, a run inside an agent instance). Made with the run's credential, BEFORE the
+  // verdict below: the STOP's move to Planning is what `agentSubmittedReplan` then reads.
+  if (result.discrepancy && result.discrepancy.length > 0) {
+    await reporter.reportDiscrepancy?.(key, result.discrepancy);
+  }
+  if (result.stop) await reporter.reportStop?.(key, result.stop);
+
   if (result.exitCode !== 0) {
     return settle({
       kind: 'agent_failed',

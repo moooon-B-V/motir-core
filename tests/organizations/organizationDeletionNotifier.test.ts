@@ -25,6 +25,7 @@ const { organizationDeletionReminderEmail } =
   await import('@/lib/emailTemplates/organizationDeletionReminder');
 const { organizationErasedEmail } = await import('@/lib/emailTemplates/organizationErased');
 const { EMAIL_TEMPLATE_CLASS } = await import('@/lib/services/emailService');
+const { formatDate } = await import('@/lib/utils/datetime');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = new Date('2026-10-20T09:00:00.000Z');
@@ -302,5 +303,105 @@ describe('sendDueReminders', () => {
     await makeClosingOrg('k', new Date(NOW.getTime() + 3 * DAY_MS), 'cancelled');
     expect(await organizationDeletionNotifier.sendDueReminders(NOW)).toEqual({ remindersSent: 0 });
     expect(sent()).toHaveLength(0);
+  });
+});
+
+// Story MOTIR-7732 · MOTIR-8108 — every notice is written in each RECIPIENT's saved
+// language (English when none is saved), and a due date is formatted in it too.
+// The idempotency keys do not change with the language.
+describe('recipient language', () => {
+  async function speaks(userId: string, locale: string | null) {
+    await adminDb.user.update({ where: { id: userId }, data: { locale } });
+  }
+
+  function byAddress(): Record<string, Sent> {
+    return Object.fromEntries(sent().map((m) => [m.to, m]));
+  }
+
+  it('scheduled: each member’s language, and the due date written in it', async () => {
+    const dueAt = new Date(NOW.getTime() + 30 * DAY_MS);
+    const { request, owner, admin, member } = await makeClosingOrg('lang-a', dueAt);
+    await speaks(owner.id, 'ja');
+    await speaks(admin.id, 'de');
+    await speaks(member.id, null);
+
+    await organizationDeletionNotifier.notifyScheduled(request.id);
+
+    const mails = byAddress();
+    expect(mails[owner.email]!.data).toMatchObject({
+      locale: 'ja',
+      dueDate: formatDate(dueAt.toISOString(), 'ja'),
+    });
+    expect(mails[admin.email]!.data).toMatchObject({
+      locale: 'de',
+      dueDate: formatDate(dueAt.toISOString(), 'de'),
+    });
+    expect(mails[member.email]!.data).toMatchObject({
+      locale: 'en',
+      dueDate: formatDate(dueAt.toISOString(), 'en'),
+    });
+    expect(mails[owner.email]!.data.dueDate).not.toBe(mails[admin.email]!.data.dueDate);
+    expect(mails[owner.email]!.idempotencyKey).toBe(
+      `org-deletion:${request.id}:scheduled:${owner.id}`,
+    );
+  });
+
+  it('cancelled: each member’s language', async () => {
+    const { request, owner, admin, member } = await makeClosingOrg(
+      'lang-b',
+      new Date(NOW.getTime() + 20 * DAY_MS),
+      'cancelled',
+    );
+    await speaks(owner.id, 'fr');
+    await speaks(admin.id, 'ko');
+
+    await organizationDeletionNotifier.notifyCancelled(request.id);
+
+    const mails = byAddress();
+    expect(mails[owner.email]!.data.locale).toBe('fr');
+    expect(mails[admin.email]!.data.locale).toBe('ko');
+    expect(mails[member.email]!.data.locale).toBe('en');
+  });
+
+  it('erased: each recipient’s language, read from the account the sweep captured', async () => {
+    const { request, owner, admin } = await makeClosingOrg('lang-c', NOW);
+    await speaks(owner.id, 'es');
+    await speaks(admin.id, null);
+
+    await organizationDeletionNotifier.notifyErased({
+      requestId: request.id,
+      organizationName: 'Acme',
+      erasedAt: NOW,
+      recipients: [
+        { userId: owner.id, name: owner.name, email: owner.email, role: 'owner' },
+        { userId: admin.id, name: admin.name, email: admin.email, role: 'admin' },
+      ],
+    });
+
+    const mails = byAddress();
+    expect(mails[owner.email]!.data.locale).toBe('es');
+    expect(mails[admin.email]!.data.locale).toBe('en');
+  });
+
+  it('reminder: each recipient’s language, and the due date written in it', async () => {
+    const dueAt = new Date(NOW.getTime() + 6 * DAY_MS);
+    const { request, owner, admin } = await makeClosingOrg('lang-d', dueAt);
+    await speaks(owner.id, 'de');
+    await speaks(admin.id, 'ja');
+
+    await organizationDeletionNotifier.sendDueReminders(NOW);
+
+    const mails = byAddress();
+    expect(mails[owner.email]!.data).toMatchObject({
+      locale: 'de',
+      dueDate: formatDate(dueAt.toISOString(), 'de'),
+    });
+    expect(mails[admin.email]!.data).toMatchObject({
+      locale: 'ja',
+      dueDate: formatDate(dueAt.toISOString(), 'ja'),
+    });
+    expect(mails[admin.email]!.idempotencyKey).toBe(
+      `org-deletion:${request.id}:reminder-7:${admin.id}`,
+    );
   });
 });

@@ -30,10 +30,12 @@ function WorkspaceInviteEmail({
   inviterName,
   workspaceName,
   acceptUrl,
+  locale,
   t,
 }: WorkspaceInviteEmailProps & { t: T }) {
   return (
     <EmailLayout
+      locale={locale}
       preview={t('preview', { inviter: inviterName, workspace: workspaceName })}
       footer={`${t('expires')} ${t('ignore', { inviter: inviterName })}`}
     >

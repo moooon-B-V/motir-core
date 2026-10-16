@@ -403,6 +403,7 @@ model User {
   // (Story MOTIR-7521 · MOTIR-7525). SetNull: the entry outlives the account,
   // and the hash-chained audit log keeps WHO for ever.
   platformRunModelsAdded           PlatformRunModel[]                  @relation("PlatformRunModelAddedBy")
+  platformFleetOrgCiUpdated        PlatformFleetOrgCi[]                @relation("PlatformFleetOrgCiUpdatedBy")
   ideaResearchRuns                 IdeaResearchRun[]
   // Organizations this platform operator SUSPENDED and that are still suspended
   // (MOTIR-748). SetNull on the org's side: an operator's account outliving its
@@ -520,6 +521,33 @@ enum PlatformAuditTargetKind {
 /// `PlatformAuditLog` row. Seeded with motir-ai's offer on the first console
 /// read after deploy (`PlatformRunModelList` marks that it happened), so no
 /// project loses its model on deploy and no migration calls motir-ai.
+/// The platform setting "Run Motir's private repositories' CI on the fleet"
+/// (Story MOTIR-8699 · MOTIR-8714), one row per (project, connected org). It
+/// stores the operator's INTENT; its EFFECT is the org's `MOTIR_RUNNER` Actions
+/// variable, written by `fleetOrgCiSettingService` in the same audited
+/// transaction. No row = OFF. Read unconditionally, written only under
+/// `app.platform_staff` (the `platform_run_model` policy shape).
+model PlatformFleetOrgCi {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  /// The org login, stored lower-cased.
+  org             String
+  enabled         Boolean  @default(false)
+  /// The reason the last flip was given — the same text its audit row carries,
+  /// kept here so the console can show it without an audited read of the trail.
+  lastReason      String?  @map("last_reason")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  updatedBy User?   @relation("PlatformFleetOrgCiUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, org])
+  @@index([updatedByUserId])
+  @@map("platform_fleet_org_ci")
+}
+
 model PlatformRunModel {
   id        String   @id @default(cuid())
   model     String   @unique
@@ -2169,6 +2197,15 @@ model Project {
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
   repos                       ProjectRepo[]
+  // The project's runner groups in CONNECTED orgs (Story MOTIR-8699 · MOTIR-8712)
+  // — one per org other than the provisioning org that owns some of the project's
+  // private repositories and has the provisioning App installed. The provisioning
+  // org's group stays on the `runnerGroup*` columns above. Cascade: a group row
+  // existed only to serve this project.
+  runnerGroups                ProjectRunnerGroup[]
+  /// The platform switch "run this project's private-repository CI on the fleet",
+  /// one row per connected org (Story MOTIR-8699 · MOTIR-8714).
+  fleetOrgCiSettings          PlatformFleetOrgCi[]
   // The external monitored projects bound to THIS project (Story MOTIR-4926 ·
   // MOTIR-5258) — a SET whose degenerate case is one, never a column on this
   // model. Cascade: the bindings existed only to route this project's errors.
@@ -3537,6 +3574,11 @@ model PublicFollow {
   /// mid-week gets the next full week rather than a backfill, and a failed send
   /// does not silently skip a window.
   lastDigestAt DateTime? @map("last_digest_at")
+
+  /// Language of the page an email-only follow was made from; NULL on account
+  /// follows and on follows made before the column existed (MOTIR-8105). Plain
+  /// text, validated on read by `isLocale`, so a new locale needs no migration.
+  locale String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -9154,6 +9196,15 @@ model PlanChangeSession {
   /// session of the SAME seed. SetNull — a gate row that goes leaves the
   /// conversation intact and unseeded.
   seedGateId          String?                   @map("seed_gate_id")
+  /// The GUIDE REPLY TURN whose re-plan offer SEEDED this session (Story MOTIR-8684 ·
+  /// MOTIR-8691; decision MOTIR-8685): the `assistant` turn of a guide conversation
+  /// that holds the offer. Written ONLY at creation, by the guide-seeded first turn
+  /// (`planChangeSessionsService.startGuideSeededWithFirstTurn`), and never changed;
+  /// NULL on every other session, and on a session the guide's request was sent
+  /// into because the person already held the target. EXCLUSIVE with `seedGateId`
+  /// (the `plan_change_session_one_seed` CHECK). SetNull — a turn that goes leaves
+  /// the conversation intact and unseeded.
+  seedGuideTurnId     String?                   @map("seed_guide_turn_id")
   /// When the session ENDED (AMENDMENT 23 §1). **A session is OPEN ⟺ this is
   /// NULL.** An ended session is never resumed and accepts no turn. Written only
   /// by the one end operation, together with `endReason` and `endedById`.
@@ -9226,27 +9277,28 @@ model PlanChangeSession {
   createdAt           DateTime                  @default(now()) @map("created_at")
   updatedAt           DateTime                  @updatedAt @map("updated_at")
 
-  workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy   User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  seedGate    ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
-  endedBy     User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
-  copiedFrom  PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
-  copies      PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
-  turns       PlanChangeTurn[]
+  workspace     Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  seedGate      ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
+  seedGuideTurn PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
+  endedBy       User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  copiedFrom    PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
+  copies        PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
+  turns         PlanChangeTurn[]
   /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
   /// Cascade: a deleted thread takes its mailbox with it.
-  mailbox     PlanChangeMailboxEntry[]
+  mailbox       PlanChangeMailboxEntry[]
   /// The planner's mid-run PAUSES on this thread's runs (MOTIR-8007). Cascade.
-  runPauses   PlanChangeRunPause[]
+  runPauses     PlanChangeRunPause[]
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
-  targetLocks PlanTargetLock[]
+  targetLocks   PlanTargetLock[]
   /// The plans this conversation produced (AMENDMENT 17 §5) — many plans to one
   /// session: a refine or a revision writes a successor plan on the SAME
   /// session, never a new one.
-  plans       Plan[]
+  plans         Plan[]
 
   /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
   /// this adds no integrity constraint of its own — it exists solely to make
@@ -9264,6 +9316,9 @@ model PlanChangeSession {
   /// The SEEDED-session read (AMENDMENT 17 §9): "this member's most recent
   /// session seeded by this gate" — `findSeededForUser`.
   @@index([seedGateId, createdById, lastActivityAt])
+  /// The GUIDE-SEEDED-session read (MOTIR-8691): "this member's most recent
+  /// session seeded by this guide offer" — `findSeededByGuideTurnForUser`.
+  @@index([seedGuideTurnId, createdById, lastActivityAt])
   /// The TO RESUME read (Story MOTIR-7905): "this member's failed-waiting sessions",
   /// newest failure first.
   @@index([workspaceId, createdById, failedAt])
@@ -9442,7 +9497,7 @@ model PlanChangeTurn {
   authorId              String?                @map("author_id")
   createdAt             DateTime               @default(now()) @map("created_at")
 
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
   /// not at `session_id` alone, so a turn can only ever attach to a session IN ITS
   /// OWN WORKSPACE. This is the structural half of the tenancy guarantee: RLS
@@ -9452,8 +9507,10 @@ model PlanChangeTurn {
   /// use, wedging their thread (a cross-tenant DoS). Referencing the pair makes
   /// that row nonexistent rather than merely invisible, and unlike a policy it
   /// also holds for BYPASSRLS/superuser connections.
-  session   PlanChangeSession @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  author    User?             @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  session            PlanChangeSession   @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  /// The planning sessions seeded by the re-plan offer this turn holds (MOTIR-8691).
+  seededPlanSessions PlanChangeSession[] @relation("PlanChangeSessionSeedGuideTurn")
+  author             User?               @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   @@unique([sessionId, seq])
   @@index([sessionId, seq])
@@ -14378,4 +14435,33 @@ model IdeaResearchRun {
   @@index([ranAt])
   @@index([actorUserId])
   @@map("idea_research_run")
+}
+
+/// A project's self-hosted runner group in a CONNECTED org (Story MOTIR-8699 ·
+/// MOTIR-8712) — the org-keyed SET whose degenerate case, the provisioning org's
+/// group, stays on `Project.runnerGroup*`. One row per `(project, org)`: the group
+/// in that org, access-listed to the project's PRIVATE repositories there, managed
+/// through the provisioning App's installation on that org.
+model ProjectRunnerGroup {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  workspaceId     String    @map("workspace_id")
+  /// The org login, stored lower-cased (GitHub logins are case-insensitive).
+  org             String
+  /// The provisioning App's installation on `org` the group is managed through.
+  installationId  String    @map("installation_id")
+  runnerGroupId   Int       @map("runner_group_id")
+  runnerGroupName String    @map("runner_group_name")
+  syncedAt        DateTime? @map("synced_at")
+  /// A GitHub-side failure on the last sync for THIS org — the same meaning as
+  /// `Project.runnerGroupSyncPending`, scoped to one org.
+  syncPending     Boolean   @default(false) @map("sync_pending")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([projectId, org])
+  @@index([workspaceId])
+  @@map("project_runner_group")
 }

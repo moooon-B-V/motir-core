@@ -184,6 +184,25 @@ describe('buildDataExport → the export-ready notification', () => {
     expect(JSON.stringify(send!.data)).not.toContain(persisted.blobPathname!);
   });
 
+  // Story MOTIR-7732 · MOTIR-8108 — the reader's saved language, English when none.
+  it('is written in the reader’s saved language, English when they saved none', async () => {
+    for (const [saved, expected] of [
+      ['ko', 'ko'],
+      [null, 'en'],
+    ] as const) {
+      emitted.length = 0;
+      const user = await makeUser();
+      await adminDb.user.update({ where: { id: user.id }, data: { locale: saved } });
+      const request = await adminDb.dataExportRequest.create({
+        data: { userId: user.id, requestedAt: new Date() },
+      });
+      await dataExportService.notifyExportReady({ userId: user.id, requestId: request.id });
+      const send = emitted.find((e) => e.name === 'email.send');
+      expect((send!.data.data as { locale?: string }).locale).toBe(expected);
+      expect(send!.data.idempotencyKey).toBe(`data-export-ready:${request.id}`);
+    }
+  });
+
   it('a send that THROWS leaves the export ready and the build successful', async () => {
     const user = await makeUser();
     const request = await adminDb.dataExportRequest.create({

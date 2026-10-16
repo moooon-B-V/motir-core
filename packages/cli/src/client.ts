@@ -2531,6 +2531,52 @@ export class MotirClient {
     return { recordedOnRun: body.recordedOnRun };
   }
 
+  /**
+   * The run's DISCREPANCY record (MOTIR-8722) — the agent BUILT THROUGH `key`, a card this
+   * run holds, and wrote what it built differently into its self-report. One comment on the
+   * card and one finding on its leg of this run.
+   */
+  async recordDispatchRunDiscrepancy(args: {
+    runId: string;
+    key: string;
+    points: { planAsked: string; built: string; why: string }[];
+  }): Promise<{ commentId: string; recorded: boolean }> {
+    const body = await this.v1.request('recordDispatchRunDiscrepancy', {
+      path: { id: args.runId },
+      body: { key: args.key, points: args.points },
+    });
+    return { commentId: body.commentId, recorded: body.recorded };
+  }
+
+  /**
+   * The run's STOP report (MOTIR-8722) — the agent stopped on `key`. One comment with its
+   * finding and, with `toPlanning`, the card to Planning with the re-plan brief kept on it.
+   * The re-plan is NOT submitted: the run's credential cannot plan.
+   */
+  async reportDispatchRunStop(args: {
+    runId: string;
+    key: string;
+    comment: string;
+    toPlanning: boolean;
+    requirement?: Partial<
+      Record<
+        'outcome' | 'behaviour' | 'scopeEdge' | 'constraints' | 'acceptance' | 'assumptions',
+        string
+      >
+    >;
+  }): Promise<{ commentId: string; movedToPlanning: boolean }> {
+    const body = await this.v1.request('reportDispatchRunStop', {
+      path: { id: args.runId },
+      body: {
+        key: args.key,
+        comment: args.comment,
+        toPlanning: args.toPlanning,
+        ...(args.requirement ? { requirement: args.requirement } : {}),
+      },
+    });
+    return { commentId: body.commentId, movedToPlanning: body.movedToPlanning };
+  }
+
   /** CLOSE the run with its stop reason. The status is DERIVED server-side. */
   async closeDispatchRun(args: { runId: string; stopReason: DispatchStopReason }): Promise<void> {
     await this.v1.request('closeDispatchRun', {

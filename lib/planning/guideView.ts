@@ -6,6 +6,7 @@ import {
   type GuideActionOutcome,
   type GuideTurnRecord,
 } from '@/lib/ai/guideWorkItem';
+import { latestUndecidedReplanOffer } from '@/lib/planning/guideReplanOffer';
 import type { PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type { ExecutorDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
@@ -70,6 +71,12 @@ export interface GuideView {
   replies: GuideReply[];
   /** The latest turn's `edit_item` was refused: the card changed under it. */
   stale: boolean;
+  /** The latest guide turn holds an UNDECIDED re-plan offer (MOTIR-8694): the walk
+   *  is stopped, no step is marked current, and the canvas says so. */
+  walkStopped: boolean;
+  /** 1-based position of the first step not done — where Guide me through picks up
+   *  after a declined offer. Null when every step is done (or none exist). */
+  resumeStep: number | null;
 }
 
 interface AssistantRecord {
@@ -258,7 +265,11 @@ export function deriveGuideView(
     const namedRow = named ? rows.find((r) => r.id === named && !r.done) : undefined;
     currentId = namedRow?.id ?? rows.find((r) => !r.done)?.id ?? null;
   }
+  // A walk with an undecided offer on its last turn has stopped: nothing is current.
+  const walkStopped = latest !== null && latestUndecidedReplanOffer(turns)?.turnId === latest.id;
+  if (walkStopped) currentId = null;
   const currentIndex = currentId ? rows.findIndex((r) => r.id === currentId) : -1;
+  const firstOpen = kind === 'saved' || kind === 'temporary' ? rows.findIndex((r) => !r.done) : -1;
 
   return {
     ...base,
@@ -274,6 +285,8 @@ export function deriveGuideView(
       latest?.guide?.actions.some(
         (a, i) => a.type === 'edit_item' && latest.guide!.outcomes[i]?.outcome === 'skipped',
       ) ?? false,
+    walkStopped,
+    resumeStep: firstOpen >= 0 ? firstOpen + 1 : null,
   };
 }
 

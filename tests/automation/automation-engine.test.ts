@@ -570,6 +570,46 @@ describe('internal guards', () => {
   });
 });
 
+// Story MOTIR-7732 · MOTIR-8107 — the failure email is written in the rule
+// OWNER's saved language, whoever's event fired the rule.
+describe('the failure email language', () => {
+  it.each([
+    ['pl', 'pl'],
+    [null, 'en'],
+  ])('follows the owner’s saved language (%s → %s)', async (saved, expected) => {
+    const fx = await makeWorkItemFixture();
+    const rule = await makeRule(fx, {});
+    const ruleRow = await adminDb.automationRule.findUniqueOrThrow({
+      where: { id: rule.id },
+      include: { owner: { select: { id: true, name: true } } },
+    });
+    await adminDb.user.update({ where: { id: ruleRow.ownerId }, data: { locale: saved } });
+    const from = cap.events.length;
+    await automationEngineService.emailOwnerOnFailure(
+      ruleRow,
+      {
+        trigger: 'created',
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: 'wi',
+        eventId: 'e',
+      },
+      'exec-locale',
+      'boom: the detail as recorded',
+      false,
+    );
+    const mails = cap.events.slice(from).filter((e) => e.name === 'email.send');
+    expect(mails).toHaveLength(1);
+    const data = mails[0]!.data as {
+      idempotencyKey: string;
+      data: { locale?: string; errorDetail: string };
+    };
+    expect(data.data.locale).toBe(expected);
+    expect(data.data.errorDetail).toBe('boom: the detail as recorded');
+    expect(data.idempotencyKey).toBe('automation-rule-failed:exec-locale');
+  });
+});
+
 describe('retention sweep', () => {
   it('deletes only execution rows older than 90 days', async () => {
     const fx = await makeWorkItemFixture();

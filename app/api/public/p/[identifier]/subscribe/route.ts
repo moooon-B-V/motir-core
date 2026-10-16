@@ -9,6 +9,8 @@ import {
 import { enforcePublicFollowRateLimit } from '@/lib/rateLimit/publicFollowGuard';
 import { normalizeFollowEmail } from '@/lib/publicProjects/followTokens';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
+import { isLocale } from '@/lib/i18n/locales';
+import { currentLocale } from '@/lib/i18n/serverLocale';
 
 // The EMAIL-ONLY subscribe (Story 8.9 · Subtask 8.9.5) — the tier that exists
 // because a public project is a launch funnel and its visitor has no account.
@@ -22,6 +24,12 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // would turn this into an oracle for "does this address follow this project",
 // which is exactly what an endpoint that accepts arbitrary addresses must not
 // be (ADR §7). The two errors below are about the REQUEST, never about the row.
+//
+// The body may carry `locale`, the language of the page the visitor is reading;
+// without a valid one the request's own language stands in. It is RECORDED on
+// the follow so its emails can be written in it later (MOTIR-8105). This is the
+// one place reading the request language is right: it records a language, it
+// does not choose an email's.
 
 export async function POST(req: Request, { params }: { params: Promise<{ identifier: string }> }) {
   // The CAPABILITY gate (MOTIR-4034) — FIRST, before the rate limit and before
@@ -33,9 +41,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ identif
   const session = await getSession();
 
   let email = '';
+  let bodyLocale: unknown = undefined;
   try {
-    const body = (await req.json()) as { email?: unknown };
+    const body = (await req.json()) as { email?: unknown; locale?: unknown };
     if (typeof body?.email === 'string') email = body.email;
+    bodyLocale = body?.locale;
   } catch {
     email = '';
   }
@@ -46,7 +56,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ identif
   if (limited) return limited;
 
   try {
-    await publicFollowService.subscribeByEmail(identifier, email, session?.user.id ?? null);
+    const pageLocale =
+      typeof bodyLocale === 'string' && isLocale(bodyLocale) ? bodyLocale : await currentLocale();
+    await publicFollowService.subscribeByEmail(
+      identifier,
+      email,
+      session?.user.id ?? null,
+      pageLocale,
+    );
     return new NextResponse(null, { status: 202 });
   } catch (err) {
     if (err instanceof ProjectNotFoundError) {

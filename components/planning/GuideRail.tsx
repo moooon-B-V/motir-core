@@ -23,6 +23,7 @@ import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { Bubble } from '@/components/planning/PlanChangeRail';
+import { GuideReplanOffer } from '@/components/planning/GuideReplanOffer';
 import {
   GuideDropOverlay,
   GuideFileRefusals,
@@ -39,6 +40,7 @@ import type { WorkItemRefSummaryDto } from '@/lib/dto/workItems';
 import type { GuidePersonMarker, GuidePhase } from '@/lib/hooks/useGuideConversation';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { guideRailBody } from '@/lib/planning/guideReplyNotes';
+import { replanOfferOf, replanOfferStateOf } from '@/lib/planning/guideReplanOffer';
 import {
   guideOutcomeLines,
   type GuideOutcomeLine,
@@ -86,6 +88,14 @@ export interface GuideRailProps {
   onSend: (text: string, attachmentIds?: readonly string[]) => void;
   onRetry: () => void;
   onReload: () => void;
+  /** The viewer may start planning (`ai:plan`) — Confirm is withheld without it. */
+  canPlan?: boolean;
+  cannotPlanReason?: 'no_permission' | 'ai_not_configured' | null;
+  /** The offer turn whose Decline is in flight, or null. */
+  decliningTurnId?: string | null;
+  /** Open the planner from an offer's turn (Confirm, and a confirmed offer's link). */
+  onOpenOffer?: (turnId: string) => boolean | void;
+  onDeclineOffer?: (turnId: string) => void;
 }
 
 const REPLY_TURN_KEY: Record<Exclude<GuideReply, 'reload'>, string> = {
@@ -102,6 +112,7 @@ function errorKey(code: string): string {
   if (code === 'GUIDE_CARD_NOT_MANUAL') return 'errors.notManual';
   if (code === 'GUIDE_CARD_CLOSED') return 'errors.closed';
   if (code === 'FORBIDDEN' || code === 'PERMISSION_DENIED') return 'errors.forbidden';
+  if (code === 'GUIDE_REPLAN_OFFER_NOT_OPEN') return 'errors.offerClosed';
   return 'failed';
 }
 
@@ -116,6 +127,11 @@ export function GuideRail({
   onSend,
   onRetry,
   onReload,
+  canPlan = true,
+  cannotPlanReason = null,
+  decliningTurnId = null,
+  onOpenOffer,
+  onDeclineOffer,
 }: GuideRailProps) {
   const t = useTranslations('planningWorkspace');
   const tg = useTranslations('planningWorkspace.guide');
@@ -256,6 +272,22 @@ export function GuideRail({
                 view={view}
                 chip={chipSummary}
                 workItemRefs={session?.workItemRefs ?? {}}
+              />
+            ) : null}
+            {turn.role === 'assistant' && replanOfferOf(turns, turn.id) ? (
+              <GuideReplanOffer
+                turnId={turn.id}
+                offer={replanOfferOf(turns, turn.id)!}
+                state={replanOfferStateOf(turns, turn.id)!}
+                cardKey={card.identifier}
+                resumeStep={view.resumeStep}
+                canPlan={canPlan}
+                cannotPlanReason={cannotPlanReason}
+                busy={running}
+                declining={decliningTurnId === turn.id}
+                workItemRefs={session?.workItemRefs ?? {}}
+                onOpen={(id) => onOpenOffer?.(id)}
+                onDecline={(id) => onDeclineOffer?.(id)}
               />
             ) : null}
             {turn.id === latestAssistantId && view.stale ? (

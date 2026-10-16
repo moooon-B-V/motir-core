@@ -527,7 +527,7 @@ async function readHostedEnd(
  * named run exists, is closed, or lives elsewhere. Pass `null` for an OPEN,
  * which a run token never performs: the server opens a hosted run itself.
  */
-function assertRunTokenScope(runId: string | null, ctx: ServiceContext): void {
+export function assertRunTokenScope(runId: string | null, ctx: ServiceContext): void {
   if (ctx.tokenDispatchRunId === undefined) return;
   if (runId === null || runId !== ctx.tokenDispatchRunId) {
     throw new DispatchRunTokenOutOfScopeError();

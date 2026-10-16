@@ -395,6 +395,33 @@ describe('deliver — resolves AS the subscriber', () => {
     expect(payload.unsubscribeUrl).toContain('/unsubscribe/filter-subscription?token=');
   });
 
+  // Story MOTIR-7732 · MOTIR-8107 — the digest is written in the SUBSCRIBER's
+  // saved language; quoted item titles pass through untouched.
+  it.each([
+    ['ja', 'ja'],
+    [null, 'en'],
+  ])('writes the digest in the subscriber’s saved language (%s → %s)', async (saved, expected) => {
+    const { t, subscribe } = await makeFilterWithItems();
+    await adminDb.user.update({ where: { id: t.memberId }, data: { locale: saved } });
+    const sub = await subscribe();
+
+    const cap = captureEmailEvents();
+    await savedFilterSubscriptionsService.deliver({
+      workspaceId: t.fx.workspaceId,
+      subscriptionId: sub.id,
+      occurrenceKey: subscriptionOccurrenceKey(sub.id, new Date('2026-06-08T09:00:00.000Z')),
+    });
+    cap.restore();
+
+    expect(cap.events).toHaveLength(1);
+    const payload = cap.events[0]!.data.data as {
+      locale?: string;
+      items: Array<{ title: string }>;
+    };
+    expect(payload.locale).toBe(expected);
+    expect(payload.items.map((i) => i.title).sort()).toEqual(['Task 0', 'Task 1', 'Task 2']);
+  });
+
   it('skips (no mail) when the subscriber lost browse access', async () => {
     const { t, filter } = await makeFilterWithItems();
     // `other` subscribes to the shared filter, then loses project access.

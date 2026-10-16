@@ -11,6 +11,7 @@ import {
   parsePlanningLaunch,
   parsePlanningMode,
   parsePlanningOrigin,
+  planningHostPathFor,
   DEFAULT_PLANNING_MODE,
   type PlanningLaunchContext,
 } from '@/lib/planning/launcher';
@@ -192,7 +193,7 @@ describe('the overlay address — the parameter NAMES are the design contract', 
   // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8), and `planVia`
   // with MOTIR-6037 (MOTIR-6033's design, Part XXII §22.2), and `planGate` with
   // MOTIR-6210 (MOTIR-6206's design, § *The SEEDED re-plan* → *The ADDRESS*), and
-  // `planStart` with MOTIR-7973 (MOTIR-7875's design).
+  // `planStart` with MOTIR-7973 (MOTIR-7875's design), `planOffer` with MOTIR-8693.
   const DESIGN_NAMES = [
     'plan',
     'planFrom',
@@ -202,6 +203,7 @@ describe('the overlay address — the parameter NAMES are the design contract', 
     'planVia',
     'planGate',
     'planStart',
+    'planOffer',
   ];
 
   it('emits exactly the names the design records, and no others', () => {
@@ -577,5 +579,46 @@ describe('planStart — Expand STARTS a conversation on its stub (MOTIR-7973)', 
     expect(withoutPlanningOverlay(withPlanningOverlay('/ready?lane=x', start))).toBe(
       '/ready?lane=x',
     );
+  });
+});
+
+describe('planOffer — a GUIDE re-plan offer opens the seeded planner (MOTIR-8693)', () => {
+  const offer = { kind: 'guide-offer', guideTurnId: 't1' } as const;
+
+  it('writes plan=contextual&planFrom=guide-offer&planOffer=<turn id> and nothing else', () => {
+    expect(planningOverlaySearch(offer).toString()).toBe(
+      'plan=contextual&planFrom=guide-offer&planOffer=t1',
+    );
+    expect(withPlanningOverlay('/items/ACME-31', offer)).toBe(
+      '/items/ACME-31?plan=contextual&planFrom=guide-offer&planOffer=t1',
+    );
+  });
+
+  it('reads the turn id back, and Close strips it', () => {
+    const opened = withPlanningOverlay('/items/ACME-31?tab=a', offer);
+    const params = new URL(opened, 'http://x').searchParams;
+    expect(parsePlanningOverlay(params)).toMatchObject({
+      mode: 'contextual',
+      from: 'guide-offer',
+      guideTurnId: 't1',
+      itemKey: null,
+    });
+    expect(withoutPlanningOverlay(opened)).toBe('/items/ACME-31?tab=a');
+  });
+
+  it('is read only for its own origin', () => {
+    for (const from of ['project', 'work-item', 'refused-gate', 'roadmap']) {
+      const parsed = parsePlanningOverlay(
+        new URLSearchParams(`plan=contextual&planFrom=${from}&planOffer=t1`),
+      );
+      expect(parsed?.guideTurnId).toBeUndefined();
+    }
+    expect(planningOverlaySearch({ kind: 'work-item', itemKey: 'A-1' }).has('planOffer')).toBe(
+      false,
+    );
+  });
+
+  it('opens over the roadmap when it has no host page', () => {
+    expect(planningHostPathFor(offer)).toBe('/roadmap');
   });
 });

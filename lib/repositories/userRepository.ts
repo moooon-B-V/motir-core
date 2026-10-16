@@ -61,6 +61,31 @@ export const userRepository = {
     return row?.locale ?? null;
   },
 
+  /** The saved interface language of many users at once (Story MOTIR-7732 ·
+   *  MOTIR-8104) — ONE query however many ids, so a fan-out sender (every
+   *  watcher, every member) resolves its recipients' languages without an N+1.
+   *  Every requested id that names a user is a key; an unknown id is absent.
+   *  Unvalidated, like `findLocaleById`: the service narrows each value. */
+  async findLocalesByIds(ids: string[]): Promise<Map<string, string | null>> {
+    if (ids.length === 0) return new Map();
+    const rows = await dbRead.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, locale: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.locale]));
+  },
+
+  /** The saved interface language of the account holding `email` (Story
+   *  MOTIR-7732 · MOTIR-8104), matched case-insensitively the way every address
+   *  is stored. `null` when no account has the address; `{ locale: null }` when
+   *  one does and has saved no language — the two are different answers. */
+  async findLocaleByEmail(email: string): Promise<{ locale: string | null } | null> {
+    return dbRead.user.findUnique({
+      where: { email: normalizeEmail(email) },
+      select: { locale: true },
+    });
+  },
+
   /**
    * Batch-resolve users by id — the one round-trip the board swimlane
    * projection (Subtask 3.3.4) uses to label assignee lanes (id → name) without

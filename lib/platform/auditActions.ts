@@ -276,6 +276,21 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'fleet.stop': { kind: 'write', reason: 'required' },
   /**
+   * The platform setting "Run Motir's private repositories' CI on the fleet" was
+   * turned ON or OFF for one (project, connected org) pair (Story MOTIR-8699 ·
+   * MOTIR-8714): ON writes the org's `MOTIR_RUNNER` Actions variable so new jobs
+   * request a fleet runner; OFF deletes it so they fall back to GitHub-hosted.
+   *
+   * `required`, at the `superadmin` degree of ADR §7: it moves where another
+   * GitHub org's CI runs and what Motir pays for it. Target is `platform` with
+   * `<projectId>:<org>` as `targetId` (the setting belongs to the platform, not
+   * the tenant); `metadata` carries `{ projectId, projectKey, org, from, to,
+   * variableOutcome }`. Written only for a flip that changed something. The
+   * domain is `fleet` — the SUBJECT is the fleet, not the console screen.
+   */
+  'fleet.org_ci.enable': { kind: 'write', reason: 'required' },
+  'fleet.org_ci.disable': { kind: 'write', reason: 'required' },
+  /**
    * An Enterprise request was MOVED through its states by staff (Story
    * MOTIR-7602 · MOTIR-7608): `new → contacted → offer_sent → won`, or any open
    * state → `lost`. At the `operator` degree of ADR §7. Target is the

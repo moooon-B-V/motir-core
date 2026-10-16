@@ -7545,7 +7545,9 @@
         "aria": "Abrir {key}, o item de trabalho que esta conversa replaneja",
         "pickLabel": "Continuação de <mono>{key}</mono>",
         "chose": "escolheu {label}",
-        "pickAria": "Abrir {key}, a escolha da qual esta conversa é a continuação (escolheu {label})"
+        "pickAria": "Abrir {key}, a escolha da qual esta conversa é a continuação (escolheu {label})",
+        "guideLabel": "Do guia de <mono>{key}</mono>",
+        "guideAria": "Abrir {key}, o item de trabalho em que o Motir AI estava guiando você quando ofereceu este replanejamento"
       },
       "end": {
         "failed": "Encerrada · a tentativa falhou · {time}",
@@ -7975,6 +7977,16 @@
     "followUpCard": {
       "label": "Continuação de uma escolha"
     },
+    "guideSeed": {
+      "chip": "de um guia",
+      "lead": "Aberto em {target} a partir do guia do Motir AI sobre {guided}.",
+      "card": "De um guia",
+      "cardBy": "Confirmado por {who} · {when}",
+      "justNow": "agora mesmo",
+      "you": "você",
+      "status": "Em planejamento",
+      "offerClosed": "Esta oferta de replanejamento não está mais aberta. Volte ao guia para ver como ela está."
+    },
     "guide": {
       "openedFrom": "Aberto a partir de {key}",
       "reading": "Lendo {key} e a lista de tarefas dele…",
@@ -8006,7 +8018,8 @@
       "errors": {
         "notManual": "O Motir AI guia uma pessoa em trabalho manual, e este item de trabalho é para um agente, então não há nada a guiar aqui.",
         "closed": "Este item de trabalho está concluído ou arquivado, então não resta nada a guiar.",
-        "forbidden": "Você precisa de permissão para editar este item de trabalho e para planejar com o Motir AI para ser guiado nele."
+        "forbidden": "Você precisa de permissão para editar este item de trabalho e para planejar com o Motir AI para ser guiado nele.",
+        "offerClosed": "Esta oferta já foi decidida, então não pode ser alterada. Recarregue o item de trabalho para ver como ela está."
       },
       "youTicked": "Você marcou a etapa {n} da lista",
       "youUnticked": "Você desmarcou a etapa {n} da lista",
@@ -8061,6 +8074,32 @@
         "typeText": "Texto",
         "typeMarkdown": "Markdown",
         "typeFile": "Arquivo"
+      },
+      "offer": {
+        "label": "Pedido de replanejamento",
+        "target": "Direcionado a",
+        "targetElsewhere": "O replanejamento começa em {key}, não neste item de trabalho.",
+        "resolved": "{done} está concluído, então o replanejamento começa em {open}.",
+        "noTarget": "Não há nenhum item de trabalho aberto para iniciar o replanejamento.",
+        "confirm": "Confirmar",
+        "confirming": "Iniciando…",
+        "openSession": "Abrir a sessão de planejamento",
+        "decline": "Recusar",
+        "declining": "Recusando…",
+        "showAll": "Mostrar tudo",
+        "showLess": "Mostrar menos",
+        "confirmHelp": "Abre o planejamento do Motir AI em {key} com este pedido enviado. Gasta créditos.",
+        "declineHelp": "Fecha esta oferta. Nada será planejado.",
+        "replaced": "Substituída por uma oferta mais recente",
+        "started": "Replanejamento iniciado",
+        "startedBy": "Confirmado · {when}",
+        "declined": "Recusada",
+        "declinedBy": "Recusada · {when}",
+        "recorded": "Registrado no item de trabalho",
+        "resumeAt": "O Guie-me retomará a partir da etapa {n}.",
+        "walkStopped": "O passo a passo foi interrompido.",
+        "cannotPlan": "Você não pode iniciar o planejamento aqui — peça a alguém que possa, ou compartilhe este pedido.",
+        "noAi": "O Motir AI não está configurado aqui, então o planejamento não pode começar. Você ainda pode compartilhar este pedido."
       }
     },
     "restart": {
@@ -9340,7 +9379,8 @@
       "navPlanningLessons": "Lições de planejamento",
       "navIdeas": "Ideias",
       "navEnterpriseRequests": "Solicitações Enterprise",
-      "navRunModels": "Modelos de execução hospedada"
+      "navRunModels": "Modelos de execução hospedada",
+      "navFleetSettings": "Configurações da frota"
     },
     "nav": {
       "overview": "Visão geral",
@@ -9520,7 +9560,11 @@
             }
           },
           "fleet": {
-            "stop": "Parou os contêineres da frota"
+            "stop": "Parou os contêineres da frota",
+            "org_ci": {
+              "enable": "Ativou a CI da frota",
+              "disable": "Desativou a CI da frota"
+            }
           },
           "enterprise_request": {
             "transition": "Moveu uma solicitação Enterprise"
@@ -11446,6 +11490,186 @@
         "notPermitted": "Não realizado — sua função na equipe não permite isso. Nada foi alterado.",
         "notFound": "Esta ideia não existe mais. Alguém a excluiu enquanto você estava com a página aberta.",
         "failed": "Algo deu errado, então nada foi alterado. Tente novamente."
+      }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Operações · Configurações da frota",
+      "title": "Configurações da frota",
+      "subtitle": "Aqui um superadmin decide qual CI roda nas máquinas do próprio Motir. Toda alteração pede um motivo e é gravada no log de auditoria.",
+      "empty": "Nenhum projeto oferece CI na frota: nenhum projeto da meta-organização tem um repositório privado em uma organização conectada.",
+      "setting": {
+        "title": "Rodar a CI dos repositórios privados do Motir na frota",
+        "pair": "Projeto {project} · Organização do GitHub {org}",
+        "superadminOnly": "Somente superadmin",
+        "explanation": "Quando ativada, cada job de CI nos repositórios privados do Motir em {org} solicita o rótulo {label} e roda nas máquinas compartilhadas {fleet}, cobrado de moooon B.V. Quando desativada, eles rodam em runners hospedados pelo GitHub. Nenhum arquivo de workflow muda em nenhum dos casos."
+      },
+      "state": {
+        "on": "Ativada",
+        "off": "Desativada"
+      },
+      "action": {
+        "turnOn": "Ativar",
+        "turnOff": "Desativar"
+      },
+      "blocked": "Não é possível ativar até que todas as condições sejam atendidas.",
+      "offNeverBlocked": "Desativar nunca espera pela prontidão.",
+      "meta": {
+        "lastChanged": "Última alteração",
+        "changedBy": "por {email}, {when} — “{reason}”",
+        "neverChanged": "Nunca alterada",
+        "auditLink": "Log de auditoria",
+        "variable": "Variável do GitHub",
+        "repositories": "Repositórios"
+      },
+      "variable": {
+        "present": "{name} = {value} em {org} (repositórios privados): novos jobs solicitam a frota.",
+        "absent": "{name} não está definida em {org}: os jobs voltam para runners hospedados pelo GitHub.",
+        "unknown": "Não foi possível ler {name} em {org}: o GitHub respondeu HTTP {status}.",
+        "unreachable": "Não foi possível ler {name} em {org}: o GitHub não pôde ser alcançado."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Salva como ativada, mas o GitHub discorda.",
+          "body": "{name} não está definida em {org}, então novos jobs ainda rodam em runners hospedados pelo GitHub. Desative e ative a configuração novamente para gravá-la."
+        },
+        "offPresent": {
+          "title": "Salva como desativada, mas o GitHub discorda.",
+          "body": "{name} ainda está definida em {org}, então novos jobs ainda solicitam a frota. Ative e desative a configuração novamente para removê-la."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# repositório privado} other {# repositórios privados}}, lidos em tempo de execução dos repositórios privados do projeto {project} em {org}"
+      },
+      "monitoringLine": "As máquinas do Motir aparecem sob moooon B.V. em Monitoramento › Frota",
+      "onCallout": {
+        "title": "A CI do Motir está na frota.",
+        "link": "Abrir Monitoramento › Frota"
+      },
+      "degraded": {
+        "title": "Ativada, mas não pronta.",
+        "body": "Novos jobs ficarão na fila até que isso seja corrigido ou a configuração seja desativada."
+      },
+      "readiness": {
+        "title": "Prontidão",
+        "subtitle": "Nove condições, na ordem em que um job as encontra. Uma condição que não pôde ser verificada conta como não atendida.",
+        "ready": "Pronta",
+        "readySub": "Todas as {count} condições atendidas",
+        "notReady": "Não pronta — {count, plural, one {# condição não atendida} other {# condições não atendidas}}",
+        "unmetCount": "{count} não atendidas",
+        "unknownCount": "{count} não verificáveis",
+        "checked": "Verificada {when}",
+        "checkedAgain": "Verificada novamente {when}",
+        "recheck": "Verificar novamente"
+      },
+      "mark": {
+        "met": "Atendida",
+        "unmet": "Não atendida",
+        "unknown": "Não verificável"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Interruptor de emergência da frota"
+        },
+        "app_installed": {
+          "label": "App instalado"
+        },
+        "app_runner_permission": {
+          "label": "Permissão do App: runners auto-hospedados"
+        },
+        "app_variables_permission": {
+          "label": "Permissão do App: variáveis (escrita)"
+        },
+        "workflow_job_subscription": {
+          "label": "Entrega de workflow_job"
+        },
+        "app_repositories": {
+          "label": "O App alcança os repositórios"
+        },
+        "delivery_attributable": {
+          "label": "Jobs atribuídos ao projeto {project}"
+        },
+        "runner_group": {
+          "label": "Grupo de runners"
+        },
+        "image_coverage": {
+          "label": "Cobertura da imagem"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "O interruptor de emergência da frota está acionado ({variable}=0), então nenhuma máquina da frota inicia. Um operador o remove ou aumenta.",
+        "app_not_installed": "O App motir-studio não está instalado em {org}. Um proprietário de {org} o instala.",
+        "app_suspended": "O App motir-studio em {org} está suspenso desde {date}. Um proprietário de {org} remove a suspensão.",
+        "permission_missing": "O App motir-studio em {org} tem {permission}: nenhuma, e precisa de escrita. Um proprietário de {org} aceita a solicitação de permissão.",
+        "permission_insufficient": "O App motir-studio em {org} tem {permission}: {granted}, e precisa de escrita. Um proprietário de {org} aceita a solicitação de permissão.",
+        "not_subscribed": "O App não está inscrito nos eventos workflow_job, então o GitHub nunca avisa o Motir de que um job está na fila. Quem administra o App motir-studio o inscreve nas configurações do App.",
+        "repositories_not_granted": "A instalação do App em {org} não alcança {repositories}. Um proprietário de {org} os adiciona ao acesso a repositórios da instalação.",
+        "no_private_repositories": "O projeto {project} não tem repositório privado em {org}, então não há nada para a frota rodar.",
+        "not_attributable": "Um job na fila de {repositories} não seria atribuído ao projeto {project}, então ficaria na fila até o GitHub expirá-lo. Reconecte o repositório ao projeto para que sua linha espelho fique atualizada.",
+        "no_runner_group": "O projeto {project} não tem grupo de runners em {org}. Um operador executa {script} --project {project}.",
+        "sync_pending": "O grupo de runners do projeto em {org} está fora de sincronia com seus repositórios. Um operador executa {script} --project {project}.",
+        "jobs_not_runnable": "{count, plural, one {# job ainda não pode} other {# jobs ainda não podem}} rodar na imagem de runner da frota. Quem mantém a imagem da frota adiciona a ferramenta que falta; um job que precisa de outro sistema operacional continua sem poder rodar até sair do conjunto privado.",
+        "not_inventoried": "{repositories} não {count, plural, one {está} other {estão}} no inventário de jobs da frota, então ninguém verificou se a imagem de runner consegue rodar {count, plural, one {seus} other {seus}} jobs. Quem mantém o inventário o executa novamente.",
+        "inventory_stale": "Os workflows de {repositories} mudaram depois que o inventário de jobs da frota os mediu. Quem mantém o inventário o executa novamente.",
+        "read_failed": "Não foi possível verificar: o GitHub respondeu HTTP {status}. Conta como não atendida até que uma verificação tenha sucesso.",
+        "read_unreachable": "Não foi possível verificar: o GitHub não pôde ser alcançado. Conta como não atendida até que uma verificação tenha sucesso.",
+        "read_failedNoStatus": "Não foi possível verificar. Conta como não atendida até que uma verificação tenha sucesso.",
+        "app_not_readable": "Não pode ser verificada até que o App motir-studio esteja instalado e legível em {org}."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — falta {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — não pode ser hospedado: {reason}",
+        "more": "+{count} a mais",
+        "scope": "Isto cobre a imagem inventariada construída a partir de main, não a imagem que a produção inicia."
+      },
+      "confirm": {
+        "onTitle": "Ativar a CI na frota para {org}?",
+        "onBody": "Desativada → Ativada. Cada novo job de CI em {count, plural, one {# repositório} other {# repositórios}} vai rodar na frota e ser cobrado do pool de moooon B.V.: {repositories}. Jobs já em execução terminam onde começaram.",
+        "offTitle": "Desativar a CI na frota para {org}?",
+        "offBody": "Ativada → Desativada. Novos jobs voltam para runners hospedados pelo GitHub; jobs já em execução na frota terminam lá. Desativar nunca espera pela prontidão.",
+        "reasonLabel": "Motivo — obrigatório, gravado no log de auditoria",
+        "reasonPlaceholderOn": "Por que você está ativando?",
+        "reasonPlaceholderOff": "Por que você está desativando?",
+        "reasonHint": "Mostrado a qualquer operador que ler esta alteração depois. “Teste” sozinho não responde nada.",
+        "reasonHintEmpty": "O botão fica desativado até que um motivo seja digitado — a mesma regra que o servidor aplica.",
+        "cancel": "Cancelar",
+        "confirmOn": "Ativar",
+        "confirmOff": "Desativar"
+      },
+      "refused": {
+        "reasonMissing": "Não {direction}: um motivo é obrigatório e é gravado no log de auditoria com esta alteração. Nada mudou.",
+        "alreadyOn": "Já está ativada — nada mudou.",
+        "alreadyOff": "Já está desativada — nada mudou.",
+        "alreadyBody": "Outro superadmin a alterou primeiro, então nada foi gravado e nenhuma linha de auditoria foi adicionada.",
+        "githubStatus": "Não {direction}: o GitHub recusou {operation} {name} em {org} (HTTP {status}).",
+        "githubUnreachable": "Não {direction}: o GitHub não pôde ser alcançado para {operation} {name} em {org}.",
+        "nothingChanged": "Nada mudou: a configuração e a variável do GitHub estão como estavam.",
+        "notReady": "Não ativada: a frota deixou de estar pronta depois que esta página carregou.",
+        "notReadyList": "Não atendidas agora: {conditions}. Nada mudou. A prontidão abaixo foi verificada novamente.",
+        "notPermitted": "Não alterada: somente um superadmin pode alterar esta configuração.",
+        "targetUnknown": "Não alterada: esta configuração não é mais oferecida para este projeto e esta organização. Recarregue a página.",
+        "failed": "Não {direction}: algo deu errado. Recarregue a página para ver a configuração como está agora."
+      },
+      "done": {
+        "on": "Ativada. A partir de agora, novos jobs solicitam a frota.",
+        "off": "Desativada. Novos jobs voltam para runners hospedados pelo GitHub."
+      },
+      "direction": {
+        "on": "ativada",
+        "off": "desativada"
+      },
+      "operation": {
+        "read": "ler",
+        "set": "definir",
+        "delete": "excluir"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Runners auto-hospedados",
+        "organization_actions_variables": "Variáveis"
+      },
+      "unavailable": {
+        "title": "Não foi possível carregar a configuração da frota",
+        "body": "A configuração ou sua prontidão não pôde ser lida, então nenhum estado é mostrado e nenhum interruptor é oferecido. É um erro de leitura — nada mudou e nenhum valor é presumido.",
+        "retry": "Tentar novamente"
       }
     }
   },

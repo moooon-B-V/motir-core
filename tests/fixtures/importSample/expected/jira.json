@@ -1,0 +1,404 @@
+{
+  "vendor": "jira",
+  "facts": [
+    {
+      "id": "JIRA-01",
+      "subject": "count:kind:epic",
+      "assertion": "Motir holds exactly 3 imported work items of kind 'epic'.",
+      "arrival": "must_arrive",
+      "reason": "The kind is the native issue type, which jiraConnector.mapIssue reads."
+    },
+    {
+      "id": "JIRA-02",
+      "subject": "count:kind:story",
+      "assertion": "Motir holds exactly 10 imported work items of kind 'story'.",
+      "arrival": "must_arrive",
+      "reason": "The kind is the native issue type, which jiraConnector.mapIssue reads."
+    },
+    {
+      "id": "JIRA-03",
+      "subject": "count:kind:task",
+      "assertion": "Motir holds exactly 4 imported work items of kind 'task' (including the orphan F-41).",
+      "arrival": "must_arrive",
+      "reason": "The kind is the native issue type, which jiraConnector.mapIssue reads."
+    },
+    {
+      "id": "JIRA-04",
+      "subject": "count:kind:bug",
+      "assertion": "Motir holds exactly 4 imported work items of kind 'bug'.",
+      "arrival": "must_arrive",
+      "reason": "The kind is the native issue type, which jiraConnector.mapIssue reads."
+    },
+    {
+      "id": "JIRA-05",
+      "subject": "count:kind:subtask",
+      "assertion": "Motir holds exactly 20 imported work items of kind 'subtask'.",
+      "arrival": "must_arrive",
+      "reason": "The kind is the native issue type, which jiraConnector.mapIssue reads."
+    },
+    {
+      "id": "JIRA-06",
+      "subject": "count:items",
+      "assertion": "Motir holds exactly 41 imported work items in total.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue returns every item: the connector applies no status filter (whole-history scope, ADR §1)."
+    },
+    {
+      "id": "JIRA-07",
+      "subject": "items:*",
+      "assertion": "Every item's Motir parent is the fixture parentId, translated through the fixture-id to Jira key map the loader records.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.parent.key into parentExternalId; the importer resolves it in a second pass."
+    },
+    {
+      "id": "JIRA-08",
+      "subject": "F-41",
+      "assertion": "The orphan task arrives with no parent.",
+      "arrival": "must_arrive",
+      "reason": "fields.parent.key is empty, so parentExternalId is null."
+    },
+    {
+      "id": "JIRA-09",
+      "subject": "parent",
+      "assertion": "The hierarchy reaches depth 3 (epic > story > subtask) and no deeper than the fixture.",
+      "arrival": "must_arrive",
+      "reason": "Every parent edge arrives through fields.parent.key."
+    },
+    {
+      "id": "JIRA-10",
+      "subject": "items:*",
+      "assertion": "Every item's type token equals its Jira issue-type name: Epic, Story, Task, Bug or Sub-task; the resolver maps it to the fixture kind.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue passes fields.issuetype.name as SourceIssue.type."
+    },
+    {
+      "id": "JIRA-11",
+      "subject": "items:*",
+      "assertion": "Every item's status token equals the vendor state name the loader set, which is the fixture statusName.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads only the state name (fields.status.name)."
+    },
+    {
+      "id": "JIRA-12",
+      "subject": "F-28",
+      "assertion": "The cancelled item arrives with status token 'Won't do'.",
+      "arrival": "must_arrive",
+      "reason": "fields.status.name is read."
+    },
+    {
+      "id": "JIRA-13",
+      "subject": "F-40",
+      "assertion": "The cancelled item arrives with status token 'Won't do'.",
+      "arrival": "must_arrive",
+      "reason": "fields.status.name is read."
+    },
+    {
+      "id": "JIRA-14",
+      "subject": "status_done",
+      "assertion": "The done items (F-8, F-14, F-21, F-22, F-35, F-37, F-39) arrive with status token 'Done'.",
+      "arrival": "must_arrive",
+      "reason": "fields.status.name is read."
+    },
+    {
+      "id": "JIRA-15",
+      "subject": "items:*",
+      "assertion": "Each item's resulting Motir status category equals the fixture statusCategory (status_todo, status_in_progress, status_done; status_cancelled lands in the done category).",
+      "arrival": "must_arrive",
+      "reason": "The status CATEGORY is derived by the mapping resolver from the state name, not read by the connector (docs/decisions/issue-importer.md §2); this is the proof's assertion about Motir."
+    },
+    {
+      "id": "JIRA-16",
+      "subject": "status_done",
+      "assertion": "Every done item arrives with a non-null closedAt later than its createdAt.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.resolutiondate."
+    },
+    {
+      "id": "JIRA-17",
+      "subject": "F-28",
+      "assertion": "The cancelled item arrives with a non-null closedAt.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.resolutiondate; this holds only because the loader's 'Won't do' transition sets a resolution."
+    },
+    {
+      "id": "JIRA-18",
+      "subject": "F-40",
+      "assertion": "The cancelled item arrives with a non-null closedAt.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.resolutiondate; this holds only because the loader's 'Won't do' transition sets a resolution."
+    },
+    {
+      "id": "JIRA-19",
+      "subject": "closed_at",
+      "assertion": "Arriving closedAt values equal the fixture's closedAt values.",
+      "arrival": "known_not_read",
+      "reason": "The vendor stamps fields.resolutiondate at the time of the loader's transition, not the fixture's date; the fact checked is that the value is non-null and ordered, not equal."
+    },
+    {
+      "id": "JIRA-20",
+      "subject": "items:*",
+      "assertion": "Every item arrives with a non-null createdAt, and a parent's createdAt is earlier than its children's (the loader creates parents first).",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.created."
+    },
+    {
+      "id": "JIRA-21",
+      "subject": "created_at",
+      "assertion": "Arriving item createdAt values equal the fixture's createdAt values.",
+      "arrival": "known_not_read",
+      "reason": "The vendor stamps fields.created at load time; the connector reads it, but it is not the fixture value."
+    },
+    {
+      "id": "JIRA-22",
+      "subject": "comment",
+      "assertion": "Every comment arrives with a non-null createdAt.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads the comment's creation time."
+    },
+    {
+      "id": "JIRA-23",
+      "subject": "comment",
+      "assertion": "Arriving comment createdAt values equal the fixture's comment createdAt values.",
+      "arrival": "known_not_read",
+      "reason": "The vendor stamps a comment at load time; the connector reads it, but it is not the fixture value."
+    },
+    {
+      "id": "JIRA-24",
+      "subject": "label",
+      "assertion": "Each fixture label (Customer, backend, billing, customer, frontend, security, tech-debt, ux) arrives on exactly the items that carry it.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.labels."
+    },
+    {
+      "id": "JIRA-25",
+      "subject": "F-40",
+      "assertion": "The item with no fixture labels arrives with no labels.",
+      "arrival": "must_arrive",
+      "reason": "fields.labels is read."
+    },
+    {
+      "id": "JIRA-26",
+      "subject": "case_only_label_pair",
+      "assertion": "Both 'Customer' and 'customer' arrive as written, on their own items.",
+      "arrival": "must_arrive",
+      "reason": "Jira labels are free strings that keep their case; jiraConnector.mapIssue passes fields.labels through."
+    },
+    {
+      "id": "JIRA-27",
+      "subject": "priority",
+      "assertion": "Fixture priorities lowest, low, medium, high and highest arrive as Lowest, Low, Medium, High and Highest, and map to the same Motir priority.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.priority.name."
+    },
+    {
+      "id": "JIRA-28",
+      "subject": "no_priority",
+      "assertion": "Items with priority null (F-3, F-20, F-33) arrive with token 'no priority (field absent, token null)' and become Motir priority medium.",
+      "arrival": "must_arrive",
+      "reason": "The connector passes the token; the resolver maps an absent or unmatched priority to medium (ADR §2)."
+    },
+    {
+      "id": "JIRA-29",
+      "subject": "assignee",
+      "assertion": "Every assigned item arrives with its fixture assignee's email and name.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.assignee."
+    },
+    {
+      "id": "JIRA-30",
+      "subject": "non_member_assignee",
+      "assertion": "The items assigned to P-5 (F-16, F-24, F-36) arrive with assignee email elif.marchetti-saar@sample.motir.co.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.assignee."
+    },
+    {
+      "id": "JIRA-31",
+      "subject": "P-5",
+      "assertion": "The resulting Motir assignee of P-5's items (left unassigned or invited) is recorded, not asserted.",
+      "arrival": "must_arrive",
+      "reason": "This is the importer's choice for an unmatched user, so no expectation is made on it; the assignee EMAIL is the must-arrive fact."
+    },
+    {
+      "id": "JIRA-32",
+      "subject": "reporter",
+      "assertion": "Every item with a fixture reporterId arrives with that person's email and name as reporter.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.reporter."
+    },
+    {
+      "id": "JIRA-33",
+      "subject": "comment",
+      "assertion": "Each commented item (F-4, F-8, F-16, F-23, F-34, F-36, F-37) arrives with the fixture's comment count and comment author emails.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads every comment and its author."
+    },
+    {
+      "id": "JIRA-34",
+      "subject": "comment",
+      "assertion": "Comments arrive in fixture order by createdAt.",
+      "arrival": "must_arrive",
+      "reason": "Each comment's creation time is read and the loader writes them in order."
+    },
+    {
+      "id": "JIRA-35",
+      "subject": "comment",
+      "assertion": "Comment body text arrives.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads the comment body."
+    },
+    {
+      "id": "JIRA-36",
+      "subject": "comment",
+      "assertion": "Markdown formatting inside comment bodies arrives intact.",
+      "arrival": "known_not_read",
+      "reason": "jiraConnector.mapIssue flattens the ADF comment body with adfToText, which drops formatting."
+    },
+    {
+      "id": "JIRA-37",
+      "subject": "items:*",
+      "assertion": "Every item's description text arrives.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads the description."
+    },
+    {
+      "id": "JIRA-38",
+      "subject": "items:*",
+      "assertion": "Markdown formatting in descriptions arrives intact.",
+      "arrival": "known_not_read",
+      "reason": "jiraConnector.mapIssue flattens fields.description with adfToText, which drops formatting."
+    },
+    {
+      "id": "JIRA-39",
+      "subject": "F-37",
+      "assertion": "The long description arrives in full, not truncated.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads the description without a length limit."
+    },
+    {
+      "id": "JIRA-40",
+      "subject": "F-7",
+      "assertion": "The Chinese title and description arrive with every character intact (UTF-8).",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads title and description as strings."
+    },
+    {
+      "id": "JIRA-41",
+      "subject": "F-30",
+      "assertion": "Items with an empty description (F-30, F-33) arrive with a null or empty description.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps an empty description to null."
+    },
+    {
+      "id": "JIRA-42",
+      "subject": "F-21",
+      "assertion": "[link_blocks] The blocks link from F-21 to F-22 arrives as a 'Blocks' link on F-21 targeting F-22's Jira key (and on F-22 targeting F-21).",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.issuelinks[] to {type: type.name, targetExternalId}."
+    },
+    {
+      "id": "JIRA-43",
+      "subject": "F-5",
+      "assertion": "[link_blocks] The is_blocked_by link from F-5 to F-8 arrives as a 'Blocks' link on F-5 targeting F-8's Jira key (and on F-8 targeting F-5).",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.issuelinks[] to {type: type.name, targetExternalId}."
+    },
+    {
+      "id": "JIRA-44",
+      "subject": "F-6",
+      "assertion": "[link_relates_to] The relates_to link from F-6 to F-12 arrives as a 'Relates' link on F-6 targeting F-12's Jira key (and on F-12 targeting F-6).",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.issuelinks[] to {type: type.name, targetExternalId}."
+    },
+    {
+      "id": "JIRA-45",
+      "subject": "F-36",
+      "assertion": "[link_duplicates] The duplicates link from F-36 to F-18 arrives as a 'Duplicate' link on F-36 targeting F-18's Jira key (and on F-18 targeting F-36).",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.issuelinks[] to {type: type.name, targetExternalId}."
+    },
+    {
+      "id": "JIRA-46",
+      "subject": "cross_epic_link",
+      "assertion": "The cross-epic is_blocked_by link from F-5 to F-8 arrives.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue reads fields.issuelinks[] regardless of epic."
+    },
+    {
+      "id": "JIRA-47",
+      "subject": "link_blocks",
+      "assertion": "Link direction (blocks versus is_blocked_by) arrives.",
+      "arrival": "known_not_read",
+      "reason": "jiraConnector.mapIssue takes outwardIssue ?? inwardIssue and keeps only type.name, so inward and outward look the same."
+    },
+    {
+      "id": "JIRA-48",
+      "subject": "F-34",
+      "assertion": "The attachment on F-34 arrives with filename launcher-over-banner.png.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.attachment[].filename."
+    },
+    {
+      "id": "JIRA-49",
+      "subject": "F-34",
+      "assertion": "The attachment on F-34 arrives with content type image/png.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.attachment[].mimeType."
+    },
+    {
+      "id": "JIRA-50",
+      "subject": "F-34",
+      "assertion": "The attachment on F-34 arrives with size in bytes 184320.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.attachment[].size."
+    },
+    {
+      "id": "JIRA-51",
+      "subject": "F-37",
+      "assertion": "The attachment on F-37 arrives with filename renewal-job-2026-09-23.log.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.attachment[].filename."
+    },
+    {
+      "id": "JIRA-52",
+      "subject": "F-37",
+      "assertion": "The attachment on F-37 arrives with content type text/plain.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.attachment[].mimeType."
+    },
+    {
+      "id": "JIRA-53",
+      "subject": "F-37",
+      "assertion": "The attachment on F-37 arrives with size in bytes 52418.",
+      "arrival": "must_arrive",
+      "reason": "jiraConnector.mapIssue maps fields.attachment[].size."
+    },
+    {
+      "id": "JIRA-54",
+      "subject": "IT-1",
+      "assertion": "The closed iteration 'Harbor Sprint 14' arrives in Motir.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and no connector reads one; the vendor object is a Jira Sprint."
+    },
+    {
+      "id": "JIRA-55",
+      "subject": "IT-2",
+      "assertion": "The active iteration 'Harbor Sprint 15' arrives in Motir.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and no connector reads one; the vendor object is a Jira Sprint."
+    },
+    {
+      "id": "JIRA-56",
+      "subject": "IT-3",
+      "assertion": "The future iteration 'Harbor Sprint 16' arrives in Motir.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and no connector reads one; the vendor object is a Jira Sprint."
+    },
+    {
+      "id": "JIRA-57",
+      "subject": "iteration",
+      "assertion": "Each item's iteration assignment (iterationId) arrives.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and jiraConnector.mapIssue reads no Jira Sprint."
+    }
+  ]
+}

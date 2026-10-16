@@ -1,13 +1,11 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 import { Lock } from 'lucide-react';
 import { getSession } from '@/lib/auth';
-import { organizationsService } from '@/lib/services/organizationsService';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
-import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
+import { resolveActiveOrganizationForPane } from '@/lib/workspaces/tierDisclosure.server';
 import { orgCan } from '@/lib/organizations/capabilities';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
@@ -43,8 +41,7 @@ export default async function OrganizationSecurityPage() {
 
   const t = await getTranslations('orgAdmin');
 
-  const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
-  const current = await organizationsService.resolveActiveOrganization(session.user.id, orgCookie);
+  const current = await resolveActiveOrganizationForPane(session.user.id);
 
   if (!current) {
     return (

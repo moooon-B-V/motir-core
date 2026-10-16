@@ -1016,5 +1016,20 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.68.0` after MOTIR-8670's
  *   `1.67.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   OPERATION.
+ *
+ * - `1.69.0` — MOTIR-8722 adds `recordDispatchRunDiscrepancy`
+ *   (`POST /api/v1/dispatch-runs/{id}/discrepancy`, body `{ key, points }`, `200` with
+ *   `RunDiscrepancyAcknowledgement` — `{ commentId, recorded }`) and `reportDispatchRunStop`
+ *   (`POST /api/v1/dispatch-runs/{id}/stop`, body `{ key, comment, toPlanning, requirement? }`,
+ *   `200` with `RunStopReportAcknowledgement` — `{ commentId, movedToPlanning }`): the CLI
+ *   records a build-through and a STOP with the run's own credential, so a hosted run and a
+ *   run inside an agent instance reach both (`run-found-trigger-dispatched-path.md`
+ *   AMENDMENT 2). A run token may call both for its own run (`runTokenRoutes.ts`, `own_run`).
+ *
+ *   Additive: two new operations and two new components (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.69.0` after MOTIR-8698's
+ *   `1.68.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATIONS.
  */
-export const V1_CONTRACT_VERSION = '1.68.0';
+export const V1_CONTRACT_VERSION = '1.69.0';

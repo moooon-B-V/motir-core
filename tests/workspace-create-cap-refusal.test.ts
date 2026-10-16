@@ -45,12 +45,12 @@ vi.mock('next/headers', () => ({
 vi.mock('@/lib/services/workspacesService', () => ({
   workspacesService: { createWorkspace },
 }));
-vi.mock('@/lib/services/organizationsService', () => ({
-  organizationsService: {
-    resolveActiveOrganization: vi.fn(async () => ({
-      organization: { id: 'org_5130', name: 'Capped', slug: 'capped' },
-    })),
-  },
+// The action resolves the active org the way the shell does (MOTIR-8778).
+vi.mock('@/lib/workspaces/tierDisclosure.server', () => ({
+  resolveActiveOrganizationAsShell: vi.fn(async () => ({
+    currentOrg: { organization: { id: 'org_5130', name: 'Capped', slug: 'capped' } },
+    workspaces: [],
+  })),
 }));
 vi.mock('@/lib/services/projectsService', () => ({
   projectsService: { ensureDefaultProject, recordLastActiveProjectForWorkspace },

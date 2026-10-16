@@ -6,6 +6,7 @@ import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { dataExportRequestRepository } from '@/lib/repositories/dataExportRequestRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { resolveRecipientLocale } from '@/lib/services/emailRecipientLocale';
 import {
   DATA_EXPORT_RETENTION_DAYS,
   DATA_PRIVACY_PANE_PATH,
@@ -204,6 +205,7 @@ export const dataExportService = {
           // From the constant, never retyped — the promise the copy states and
           // the window the sweep enforces are the same number.
           retentionDays: DATA_EXPORT_RETENTION_DAYS,
+          locale: await resolveRecipientLocale({ userId: input.userId }),
         },
       });
     } catch (err) {
