@@ -24,6 +24,7 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { LatestRefusalDTO } from '@/lib/dto/approvalGate';
+import type { Locale } from '@/lib/i18n/locales';
 
 // The canonical DISPATCH-PROMPT grammar (Story 7.9 · MOTIR-1802) — the
 // open-core, deterministic rebuild of the cancelled 7.7.2 `generate_prompt` job.
@@ -461,6 +462,14 @@ export interface DispatchPromptSource {
    * to one without the field, which is every card that is not a monitor bug.
    */
   errorEvidence?: MonitorIssueLinkDto[];
+  /**
+   * The organisation's CONTENT LANGUAGE (Story MOTIR-7734 · MOTIR-8745) — the
+   * language any work item or to-do the agent writes through Motir is written in.
+   * Rendered as the WORK CONTENT LANGUAGE section. Omitted renders nothing, so a
+   * caller that does not pass it gets byte-identically the prompt it got before
+   * the field existed; a MANUAL item never renders it (no agent writes on it).
+   */
+  contentLanguage?: Locale;
   /**
    * The LATEST REFUSALS this run must answer (Story MOTIR-6070 · MOTIR-6422; ADR
    * `approval-gates.md` §10h note 4) — for this card, and for its run target when the
@@ -3267,6 +3276,46 @@ function errorEvidenceBlock(links: readonly MonitorIssueLinkDto[]): string[] {
     : [...section('ERROR EVIDENCE — what the monitor recorded for this work item', body), ''];
 }
 
+/** Each content language's English name, for the WORK CONTENT LANGUAGE section. */
+const LANGUAGE_NAMES: Record<Locale, string> = {
+  en: 'English',
+  zh: 'Chinese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  de: 'German',
+  fr: 'French',
+  es: 'Spanish',
+  it: 'Italian',
+  nl: 'Dutch',
+  pl: 'Polish',
+  pt: 'Portuguese',
+};
+
+/**
+ * The WORK CONTENT LANGUAGE section with its trailing separator (MOTIR-8745), or
+ * nothing when no language was passed or the item is MANUAL. A FACT stated to the
+ * agent, not an instruction to translate: the MCP door already records the
+ * organisation's language on what the agent writes.
+ */
+function contentLanguageBlock(src: DispatchPromptSource, manual: boolean): string[] {
+  const code = src.contentLanguage;
+  if (manual || code === undefined) return [];
+  return [
+    ...section('WORK CONTENT LANGUAGE', [
+      `This organisation writes its work content in ${LANGUAGE_NAMES[code]} (\`${code}\`).`,
+      'Any work item or to-do you write through Motir — a bug you file, an item you',
+      'create, a to-do you add — has its title, description, acceptance criteria,',
+      `explanation, and to-do text and notes written in ${LANGUAGE_NAMES[code]}, whatever`,
+      'language this card or the conversation is in.',
+      'Identifiers, file paths, code, commands, work item keys and quoted text keep',
+      'their original form.',
+      'The MCP door records that language for you: pass no language yourself unless',
+      'you deliberately write a field in another one.',
+    ]),
+    '',
+  ];
+}
+
 export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDispatchPrompt {
   const injections = src.injections ?? NO_INJECTIONS;
   const { body, acceptanceCriteria, contextRefs } = splitPlanBody(src.descriptionMd);
@@ -3357,6 +3406,9 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     '',
     ...section('CONTEXT', contextSection(src, body, contextRefs, injections)),
     '',
+    // The WORK CONTENT LANGUAGE (MOTIR-8745) sits between the card's context and
+    // its steps, and renders NOTHING when the caller passed no language.
+    ...contentLanguageBlock(src, manual),
     ...section('WHAT TO DO', whatToDo),
     '',
     ...section('ACCEPTANCE CRITERIA — every one must hold', acceptanceSection(acceptanceCriteria)),

@@ -206,6 +206,14 @@ export async function PATCH(
     ...('todos' in patch
       ? { todos: Array.isArray(patch.todos) ? (patch.todos as UpdateProposalInput['todos']) : null }
       : {}),
+    // The LANGUAGE of each text field this edit writes (MOTIR-8743) — by
+    // PRESENCE, and forwarded AS SENT: unlike the keys above, a wrong-typed value
+    // is not coerced to "none", because dropping a bad language statement would
+    // record the setting's language under text the planner said was written in
+    // another. The service refuses it (`validateProposedLanguages` → 422).
+    ...('languages' in patch
+      ? { languages: patch.languages as UpdateProposalInput['languages'] }
+      : {}),
   };
 
   try {

@@ -715,6 +715,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     // internal correction route's parser has to carry the key through into
     // `proposedFields`, which is the door MOTIR-4619 opens.
     todos: [{ text: 'Create the restricted API key', executor: 'human' }],
+    // The language each text field above was written in (MOTIR-8743) — every
+    // field it names is rewritten here, so the merge keeps all four keys.
+    languages: { title: 'zh', description: 'zh', explanation: 'ko', todos: 'zh' },
   } satisfies Record<UpdateProposalKey, unknown>;
 
   /** Each STRUCTURAL key → where the correction lands it, or `null` for a key

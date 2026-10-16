@@ -241,9 +241,9 @@ export const de: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      'Die Planungsvoraussetzungen eines Projekts – eingerichtet, Code verbunden, indexiert, Repository gesetzt – bevor Sie planen.',
+      'Die Planungsvoraussetzungen eines Projekts – eingerichtet, Code verbunden, indexiert, Repository gesetzt – und die Inhaltssprache seiner Organisation, bevor Sie planen.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:

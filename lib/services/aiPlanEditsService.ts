@@ -1,5 +1,6 @@
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
@@ -48,6 +49,7 @@ function buildTenant(
   organizationId: string,
   isMeta: boolean,
   internalBilling: boolean,
+  languages: TenantLanguages,
 ) {
   return {
     organizationId,
@@ -56,7 +58,20 @@ function buildTenant(
     workspaceId: ctx.workspaceId,
     projectId: ctx.projectId,
     projectKey: ctx.project.identifier,
+    // The two languages motir-ai writes in (MOTIR-8741): the org's content language,
+    // and the language of the person who STARTED the plan (`''` when nobody did).
+    contentLanguage: languages.contentLanguage,
+    personLanguage: languages.personLanguage,
   };
+}
+
+type TenantLanguages = Awaited<ReturnType<typeof resolveTenantLanguages>>;
+
+/** WHOSE language a plan-edit submit speaks (MOTIR-8741): the clicker's on a user
+ *  submit, nobody's on the cadence watcher's — the SAME rule `createdById` follows,
+ *  computed once so the two cannot drift. */
+function personUserIdFor(origin: 'user' | 'cadence', ctx: ProjectContext): string | null {
+  return origin === 'user' ? ctx.userId : null;
 }
 
 /**
@@ -171,10 +186,20 @@ async function assertCanPlan(ctx: ProjectContext): Promise<void> {
  *
  * The caller adds what is SPECIFIC to its submit (an anchor set, a `planId`, a prompt).
  */
-async function buildPlanningJobContext(ctx: ProjectContext, planId: string | null = null) {
+async function buildPlanningJobContext(
+  ctx: ProjectContext,
+  planId: string | null,
+  // WHOSE language the planner replies in (MOTIR-8741) — the person who STARTED the
+  // plan, not whoever pressed Send: required, so no planning submit can forget it.
+  personUserId: string | null,
+) {
   const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+  });
+  const languages = await resolveTenantLanguages({
+    workspaceId: ctx.workspaceId,
+    userId: personUserId,
   });
   // The PLANNING PRODUCER, not the bare grant list (MOTIR-4604): freshness verdict, reason and
   // in-flight flag, enqueuing a refresh where one can run. `undefined` ⇒ no connected repo.
@@ -200,7 +225,7 @@ async function buildPlanningJobContext(ctx: ProjectContext, planId: string | nul
   // plan carries none.
   const requirement = planId ? await sharpenedRequirementOf(planId, ctx) : undefined;
   return {
-    tenant: buildTenant(ctx, organizationId, isMeta, internalBilling),
+    tenant: buildTenant(ctx, organizationId, isMeta, internalBilling, languages),
     planningFields: {
       ...(requirement ? { requirement } : {}),
       generateExplanations: ctx.project.aiGenerateExplanations,
@@ -231,11 +256,14 @@ async function submitPlanEditJob(
   ctx: ProjectContext,
   opts: PlanEditSubmitOptions = {},
 ): Promise<PlanEditSubmitResult> {
+  const origin = opts.origin ?? 'user';
+  const personUserId = personUserIdFor(origin, ctx);
   // A caller that supplies its own requirement keeps it; otherwise the plan it
   // writes (when it names one) supplies the stored one.
   const { tenant, planningFields } = await buildPlanningJobContext(
     ctx,
     context.requirement ? null : (context.planId ?? null),
+    personUserId,
   );
   const { jobId } = await submitJob(
     // ONE planning kind (ADR `session-model.md` §6 step 2). Every planning submit
@@ -254,7 +282,6 @@ async function submitPlanEditJob(
   // job has one). Nobody clicked on that path, so recording the owner would
   // attribute to them a request they never made. The requester is therefore
   // written ⟺ a person actually asked, and `origin` is what identifies the rest.
-  const origin = opts.origin ?? 'user';
   const rootItemKey = context.rootItemKey ?? null;
   const plan = await plansService.createPlan(
     ctx.projectId,
@@ -271,7 +298,7 @@ async function submitPlanEditJob(
             // and the Plans page can say what it was for.
             ...(rootItemKey ? { targetKeys: [rootItemKey] } : {}),
           },
-      createdById: origin === 'user' ? ctx.userId : null,
+      createdById: personUserId,
       // WHO WROTE it (MOTIR-2996) — and unlike `createdById` above, this one
       // does NOT vary by path. Every submit this seam serves (expand / augment /
       // replan / contextual, and the cadence watcher) hands the tree to motir-ai
@@ -559,9 +586,12 @@ export const aiPlanEditsService = {
     planId: string,
     fromJobId: string,
     ctx: ProjectContext,
+    // The plan's `createdById` (MOTIR-8741): a resume speaks the plan STARTER's language,
+    // not the resumer's. The caller already read the plan to pre-check the resume.
+    starterUserId: string | null,
   ): Promise<{ jobId: string }> {
     await assertCanPlan(ctx);
-    const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId);
+    const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId, starterUserId);
     return submitJob(
       'plan',
       tenant,
@@ -623,7 +653,9 @@ async function dispatchRevision(
   // never gets the fields at all (MOTIR-4343, MOTIR-4736). Nothing to unwind on a failed
   // submit: the lease is taken BELOW, so a submit that never returned a job id has left the
   // plan exactly as it found it.
-  const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId);
+  // The plan STARTER's language (MOTIR-8741): a reviewer revising someone else's plan
+  // must not flip its replies and explanations into their own.
+  const { tenant, planningFields } = await buildPlanningJobContext(ctx, planId, plan.createdById);
   const { jobId } = await submitJob(
     // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes this a REVISION
     // on the far side — `readerForPlan`'s first arm — so its silent loss would route every

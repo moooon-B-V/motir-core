@@ -6,6 +6,7 @@
 
 import type { GuideContext } from '@/lib/ai/guideWorkItem';
 import type { TranslateJobInput } from '@/lib/ai/translate';
+import type { Locale } from '@/lib/i18n/locales';
 
 export const ENVELOPE_VERSION = 'v1' as const;
 
@@ -166,6 +167,23 @@ export interface Tenant {
   // does not yet read it simply keeps searching — the switch is then recorded and
   // sent, and takes effect when the far side honours it.
   webSearch?: boolean;
+  // THE TWO LANGUAGES A WRITING JOB WRITES IN (Story MOTIR-7734 · MOTIR-8737).
+  // The producer is `resolveTenantLanguages` (`lib/ai/tenantLanguages.ts`):
+  // `contentLanguage` is the org's content language — stored work content is
+  // written in it; `personLanguage` is the saved account language of the person
+  // the job answers — replies and explanations are written in it.
+  //
+  // ⚠️ `personLanguage: ''` IS NOT `personLanguage` ABSENT. `''` says "no
+  // requesting person" (a schedule or a monitor started the job); motir-ai then
+  // writes explanations in the content language. ABSENT means a producer forgot
+  // the field, and motir-ai REFUSES a writing job that lacks either (MOTIR-8736).
+  //
+  // Optional on the TS type for the same wire reason as `internalBilling`: older
+  // fixtures and the non-writing kinds stay representable. The six writing kinds
+  // (`plan`, `ask_project`, `generate_explanation`, `author_bug`, `debug_bug`,
+  // `analyze_bug`) always set both.
+  contentLanguage?: Locale;
+  personLanguage?: Locale | '';
   workspaceId: string;
   projectId: string;
   projectKey: string;

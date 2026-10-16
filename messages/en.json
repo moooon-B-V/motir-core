@@ -8539,7 +8539,12 @@
       "answeredGroup": "Already answered by your project",
       "answeredMeta": "Motir read your code and your work items",
       "discoveryStep": "A few questions",
-      "directionGroup": "Your direction"
+      "directionGroup": "Your direction",
+      "subtitle": "Indexing and importing run in the background. Enter Motir whenever you like.",
+      "background": "In the background · {detail}",
+      "backgroundInProgress": "In progress",
+      "backgroundQueued": "Queued",
+      "backgroundFailed": "Failed"
     },
     "common": {
       "back": "Back",
@@ -8633,7 +8638,9 @@
       "perRepo": "Per repository",
       "state": {
         "indexed": "Indexed",
-        "queued": "Queued"
+        "queued": "Queued",
+        "indexing": "In progress",
+        "failed": "Failed"
       },
       "callout": "Motir derives your conventions + a code-health check (and any plan) from the whole project, so it needs every repo indexed — Next stays disabled until every repository finishes.",
       "completeTitle": "Code graph built",
@@ -8643,11 +8650,13 @@
     "import": {
       "eyebrow": "Optional · Import & plan",
       "heading": "Bring in your existing backlog",
-      "body": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Import it into this project — you'll review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
+      "body": "Import from Jira, Linear or Plane, or enter Motir and do it later. An import keeps going in the background.",
       "reconcile": "When you then generate a plan, Motir reconciles the two so nothing is duplicated.",
       "skip": "Skip import",
       "bodyInline": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Bring it in right here. You review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
-      "continue": "Continue"
+      "continue": "Continue",
+      "running": "Importing from {source} · {done} work items so far",
+      "runningBody": "This keeps going in the background. You don't have to wait for it."
     },
     "decision": {
       "eyebrow": "Set up complete",
@@ -8673,6 +8682,26 @@
       "readyTitle": "Your first plan is ready",
       "readyBody": "{count, plural, one {# item is} other {# items are}} drafted for {project}. Nothing is final until you approve it.",
       "readyCta": "Review your plan"
+    },
+    "indexing": {
+      "doneTitle": "Indexed {repos}",
+      "repoCount": "{count, plural, one {# repository} other {# repositories}}",
+      "aggregateTail": "{done} of {total} done",
+      "failedTail": "{count} failed",
+      "detailBody": "This keeps going in the background. You can enter Motir now; nothing waits for it to finish.",
+      "rowFailed": "Motir couldn't index this repository. Nothing you've done is lost.",
+      "checkConnection": "Check the connection",
+      "close": "Close",
+      "retrying": "Trying again…",
+      "refusedNotConnected": "This repository isn't connected to the project any more. Check the connection, then try again.",
+      "refusedTooLarge": "This repository is too large for Motir to index.",
+      "retryError": "Motir couldn't start that again. Try once more in a moment.",
+      "importHeading": "Work items import",
+      "importProgress": "{done} so far"
+    },
+    "enter": {
+      "cta": "Enter Motir",
+      "hint": "Indexing and any import keep going after you enter."
     }
   },
   "repositorySet": {

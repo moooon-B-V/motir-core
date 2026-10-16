@@ -238,9 +238,9 @@ export const fr: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      "Les prérequis de planification d'un Projet — établi, code connecté, indexé, dépôt défini — avant de planifier.",
+      "Les prérequis de planification d'un Projet — établi, code connecté, indexé, dépôt défini — et la langue de contenu de son organisation, avant de planifier.",
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:

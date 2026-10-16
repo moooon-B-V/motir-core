@@ -56,3 +56,31 @@ export class MigrateOnboardingExitConditionError extends Error {
     this.name = 'MigrateOnboardingExitConditionError';
   }
 }
+
+/** Why a failed index cannot be retried from the onboarding run (MOTIR-8769). */
+export type MigrateIndexRetryRefusal =
+  /** The repository is not in the run's connected set. → 409 */
+  | 'not_connected'
+  /** The index refused the repository for its size; a re-enqueue would be
+   *  refused again, so nothing is retried. → 422 */
+  | 'refused_too_large';
+
+const RETRY_REFUSAL_MESSAGES: Record<MigrateIndexRetryRefusal, string> = {
+  not_connected: 'This repository is not connected to the project, so its index cannot be retried.',
+  refused_too_large:
+    'This repository is too large to index, so retrying would fail again. Reduce its size or contact support.',
+};
+
+/** A retry of a repository's failed index was refused (MOTIR-8769). The
+ *  `reason` is stable for a caller to switch on; the message is a plain sentence
+ *  the indicator can show. */
+export class MigrateIndexRetryRefusedError extends Error {
+  readonly code = 'MIGRATE_INDEX_RETRY_REFUSED' as const;
+  constructor(
+    readonly repoRef: string,
+    readonly reason: MigrateIndexRetryRefusal,
+  ) {
+    super(RETRY_REFUSAL_MESSAGES[reason]);
+    this.name = 'MigrateIndexRetryRefusedError';
+  }
+}

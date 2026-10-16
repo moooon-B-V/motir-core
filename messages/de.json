@@ -8539,7 +8539,12 @@
       "answeredGroup": "Bereits durch Ihr Projekt beantwortet",
       "answeredMeta": "Motir hat Ihren Code und Ihre Arbeitselemente gelesen",
       "discoveryStep": "Ein paar Fragen",
-      "directionGroup": "Ihre Ausrichtung"
+      "directionGroup": "Ihre Ausrichtung",
+      "subtitle": "Indexierung und Import laufen im Hintergrund. Öffne Motir, wann immer du willst.",
+      "background": "Im Hintergrund · {detail}",
+      "backgroundInProgress": "Läuft",
+      "backgroundQueued": "In der Warteschlange",
+      "backgroundFailed": "Fehlgeschlagen"
     },
     "common": {
       "back": "Zurück",
@@ -8633,7 +8638,9 @@
       "perRepo": "Pro Repository",
       "state": {
         "indexed": "Indexiert",
-        "queued": "Eingereiht"
+        "queued": "Eingereiht",
+        "indexing": "Läuft",
+        "failed": "Fehlgeschlagen"
       },
       "callout": "Motir leitet Ihre Konventionen und eine Code-Gesundheitsprüfung (und jeden Plan) aus dem gesamten Projekt ab und benötigt daher jedes Repository indexiert – „Weiter“ bleibt deaktiviert, bis alle Repositorys fertig sind.",
       "completeTitle": "Code-Graph erstellt",
@@ -8643,11 +8650,13 @@
     "import": {
       "eyebrow": "Optional · Importieren & planen",
       "heading": "Ihr bestehendes Backlog übernehmen",
-      "body": "Verfolgen Sie Arbeit bereits in Jira, Linear, GitHub, Plane oder einer CSV-Datei? Importieren Sie sie in dieses Projekt – Sie prüfen eine Vorschau des Testlaufs, bevor etwas geschrieben wird. Überspringen Sie dies, wenn Sie kein Backlog übernehmen möchten.",
+      "body": "Importiere aus Jira, Linear oder Plane, oder öffne Motir und erledige das später. Ein Import läuft im Hintergrund weiter.",
       "reconcile": "Wenn Sie anschließend einen Plan generieren, gleicht Motir beides ab, damit nichts doppelt vorkommt.",
       "skip": "Import überspringen",
       "bodyInline": "Sie verwalten Ihre Arbeit bereits in Jira, Linear, GitHub, Plane oder einer CSV-Datei? Übernehmen Sie sie gleich hier. Bevor etwas geschrieben wird, prüfen Sie eine Vorschau als Probelauf. Überspringen Sie diesen Schritt, wenn Sie kein Backlog übernehmen möchten.",
-      "continue": "Weiter"
+      "continue": "Weiter",
+      "running": "Import aus {source} · bisher {done} Arbeitselemente",
+      "runningBody": "Das läuft im Hintergrund weiter. Du musst nicht darauf warten."
     },
     "decision": {
       "eyebrow": "Einrichtung abgeschlossen",
@@ -8673,6 +8682,26 @@
       "readyTitle": "Ihr erster Plan ist fertig",
       "readyBody": "{count, plural, one {# Element ist} other {# Elemente sind}} für {project} entworfen. Nichts ist endgültig, bis Sie es genehmigen.",
       "readyCta": "Plan prüfen"
+    },
+    "indexing": {
+      "doneTitle": "{repos} indexiert",
+      "repoCount": "{count, plural, one {# Repository} other {# Repositorys}}",
+      "aggregateTail": "{done} von {total} fertig",
+      "failedTail": "{count} fehlgeschlagen",
+      "detailBody": "Das läuft im Hintergrund weiter. Du kannst Motir jetzt betreten; nichts wartet darauf, dass es fertig wird.",
+      "rowFailed": "Motir konnte dieses Repository nicht indexieren. Nichts, was du getan hast, geht verloren.",
+      "checkConnection": "Verbindung prüfen",
+      "close": "Schließen",
+      "retrying": "Wird erneut versucht …",
+      "refusedNotConnected": "Dieses Repository ist nicht mehr mit dem Projekt verbunden. Prüfe die Verbindung und versuche es dann erneut.",
+      "refusedTooLarge": "Dieses Repository ist zu groß, als dass Motir es indexieren könnte.",
+      "retryError": "Motir konnte das nicht neu starten. Versuche es gleich noch einmal.",
+      "importHeading": "Import der Arbeitselemente",
+      "importProgress": "{done} bisher"
+    },
+    "enter": {
+      "cta": "Motir öffnen",
+      "hint": "Indexierung und ein laufender Import gehen weiter, nachdem du Motir geöffnet hast."
     }
   },
   "repositorySet": {

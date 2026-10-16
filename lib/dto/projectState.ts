@@ -1,5 +1,6 @@
 import type { MigrateIndexStatusDto, MigrateOnboardingDto } from '@/lib/dto/migrateOnboarding';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
+import type { Locale } from '@/lib/i18n/locales';
 
 // The project's PLANNING PRECONDITIONS as one read (MOTIR-1968) — the
 // configuration state an agent planning over the MCP must be able to VERIFY
@@ -123,4 +124,13 @@ export interface ProjectStateDto {
    * seeded outside the wizard.
    */
   onboarding: MigrateOnboardingDto | null;
+  /**
+   * The ORGANISATION's content language (Story MOTIR-7734 · MOTIR-8746) — one of
+   * the eleven locale codes, and the language work content is written in. It is
+   * the organisation's setting, not the project's: every project in it answers
+   * the same code. A work item this caller writes is recorded in it unless the
+   * caller passes `language`. It is NOT a translation target — nothing is
+   * translated into it. A stored value that cannot be read answers `en`.
+   */
+  contentLanguage: Locale;
 }

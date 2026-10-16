@@ -2,6 +2,7 @@ import { orgFeatureDisabledResponse } from '@/lib/featureFlags/errorResponse';
 import { NextResponse } from 'next/server';
 
 import {
+  MigrateIndexRetryRefusedError,
   MigrateOnboardingExitConditionError,
   MigrateOnboardingNotFoundError,
   MigrateOnboardingStepError,
@@ -26,6 +27,14 @@ export function mapMigrateError(err: unknown): NextResponse | null {
     err instanceof MigrateOnboardingExitConditionError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  // A retry of a failed index (MOTIR-8769): a repo outside the run's connected
+  // set conflicts with the run's state; a size-refused repo cannot be processed.
+  if (err instanceof MigrateIndexRetryRefusedError) {
+    return NextResponse.json(
+      { code: err.code, reason: err.reason, error: err.message },
+      { status: err.reason === 'not_connected' ? 409 : 422 },
+    );
   }
   if (err instanceof ProjectAccessDeniedError) {
     return NextResponse.json(

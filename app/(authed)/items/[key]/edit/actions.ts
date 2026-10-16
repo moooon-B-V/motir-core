@@ -8,6 +8,8 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { explanationLanguageFromClient } from '@/lib/ai/explanationSource';
+import type { Locale } from '@/lib/i18n/locales';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
@@ -72,6 +74,9 @@ export interface UpdateIssueInput {
   // it omits the field when the explanation was hand-typed or untouched, so the
   // service's auto-flip rule applies. Explicit values win over the auto-flip.
   explanationSource?: WorkItemExplanationSourceDto;
+  // The language a drafted explanation was written in (MOTIR-8744) — only
+  // `explanation` is honoured, as on create.
+  languages?: { explanation?: Locale };
   parentId?: string | null;
   assigneeId?: string | null;
   priority?: WorkItemPriorityDto;
@@ -138,6 +143,7 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
         descriptionMd: input.descriptionMd,
         explanationMd: input.explanationMd,
         explanationSource: input.explanationSource,
+        ...explanationLanguageFromClient(input.languages, input.explanationMd),
         parentId: input.parentId,
         assigneeId: input.assigneeId,
         priority: input.priority,

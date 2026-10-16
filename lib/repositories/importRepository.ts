@@ -55,4 +55,20 @@ export const importRepository = {
       orderBy: { updatedAt: 'desc' },
     });
   },
+
+  /** The project's most recent import RUN in ANY status, or null when the
+   *  project has none (MOTIR-8770 — the migrate run reports it so the wizard can
+   *  show an import that keeps running in the background). Ordered by
+   *  `createdAt`, the column the `(projectId, createdAt)` index serves. */
+  async findLatestForProject(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Import | null> {
+    const client = tx ?? dbRead;
+    return client.import.findFirst({
+      where: { projectId, workspaceId },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
 };

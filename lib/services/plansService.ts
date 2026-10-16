@@ -107,6 +107,11 @@ import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
 import {
+  languageFor,
+  mergeProposalLanguages,
+  validateProposedLanguages,
+} from '@/lib/plans/validateProposedLanguages';
+import {
   assertReKindedAddKeepsNoLeafFields,
   isContainerKind,
   validateProposedKindChange,
@@ -744,6 +749,12 @@ function validateProposal(p: ProposalInput): void {
         '(the target replaces each ref) and `supersededByAdd` / `supersededByRemove` (each ref replaces the target).',
     );
   }
+  if (p.op !== 'add' && p.languages !== undefined) {
+    throw new InvalidProposalError(
+      `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`languages\` beside the fields is an \`add\`'s. ` +
+        'A `modify` names the language of each text field it sets in `patch.languages`.',
+    );
+  }
   assertFolderRefNotBlank(
     p.parentRef,
     'parentRef',
@@ -777,6 +788,12 @@ function validateProposal(p: ProposalInput): void {
     validateProposedDifficulty(
       p.proposedFields.difficulty,
       p.proposedFields.kind ?? DEFAULT_PROPOSED_KIND,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
+    // The language each text field was written in (MOTIR-8743) — beside the
+    // fields on the wire, or (an older producer's spelling) inside them.
+    validateProposedLanguages(
+      p.languages ?? p.proposedFields.languages,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
     assertKnownPlanningSource(
@@ -837,6 +854,11 @@ function validateProposal(p: ProposalInput): void {
     validateProposedDifficulty(
       p.patch.difficulty,
       null,
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
+    // The language of each text field the patch sets (MOTIR-8743).
+    validateProposedLanguages(
+      p.patch.languages,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
     // A `modify` may REPLACE the target's steps (MOTIR-8668 · AMENDMENT 27). The
@@ -980,7 +1002,27 @@ function mergeProposedFields(
   // per row: a list has no meaningful partial edit, the same reason a
   // correction's `blockedByRefs` replaces rather than merges.
   if (input.todos !== undefined) next.todos = input.todos;
+  // The LANGUAGES (MOTIR-8743) — per key, and a field this input rewrites
+  // without naming its language drops that field's key, so a person's edit (the
+  // public route sends none) never inherits the planner's claim about text it
+  // replaced. Approve then records that field in the organisation's language.
+  const languages = mergeProposalLanguages(current.languages, input, input.languages);
+  if (languages) next.languages = languages;
+  else delete next.languages;
   return next;
+}
+
+/**
+ * An `add`'s fields as STORED (MOTIR-8743): the language statement that arrives
+ * beside them is copied inside, the one place a proposal's fields live, so it
+ * survives every later edit to the row. A statement already inside is kept when
+ * none arrives beside it.
+ */
+function withProposalLanguages(
+  fields: PlanItemProposedFields,
+  languages: ProposalInput['languages'],
+): PlanItemProposedFields {
+  return languages === undefined ? fields : { ...fields, languages };
 }
 
 /** One to-do row a materialized `add` wrote, as the revision diff names it. */
@@ -2543,10 +2585,10 @@ async function materialize(
   if (statusKey == null) throw new NoInitialStatusError(plan.projectId);
 
   const adds = items.filter((i) => i.op === 'add');
-  // The language every approved add's text is recorded in (Story MOTIR-7731 ·
-  // MOTIR-8097). A proposal carries no language of its own, and the planner is
-  // asked to write in the organisation's content language, so that is what the
-  // created rows record. Read ONCE, in this transaction, before the per-item
+  // The language an approved add's text is recorded in when its proposal names
+  // none (Story MOTIR-7731 · MOTIR-8097; MOTIR-8743): the organisation's content
+  // language. A proposal that names one records THAT, whatever the setting has
+  // become since it was generated. Read ONCE, in this transaction, before the per-item
   // loop — approve's round-trip budget (MOTIR-3396) gains one query, not N.
   const orgLanguage = toOrgContentLanguage(
     await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
@@ -2655,9 +2697,15 @@ async function materialize(
       explanationMd: normalizedExplanationMd ?? null,
       // The recorded language of each written field (MOTIR-8097); an empty body
       // records NULL. Pass 3's temp-ref rewrite is not an edit and leaves these.
-      titleLanguage: orgLanguage,
-      descriptionLanguage: hasText(normalizedDescriptionMd) ? orgLanguage : null,
-      explanationLanguage: hasText(normalizedExplanationMd) ? orgLanguage : null,
+      // The language is the PROPOSAL's where it names one (MOTIR-8743) — fixed at
+      // generation — and the organisation's setting only where it does not.
+      titleLanguage: languageFor(pf.languages, 'title', orgLanguage),
+      descriptionLanguage: hasText(normalizedDescriptionMd)
+        ? languageFor(pf.languages, 'description', orgLanguage)
+        : null,
+      explanationLanguage: hasText(normalizedExplanationMd)
+        ? languageFor(pf.languages, 'explanation', orgLanguage)
+        : null,
       ...(typeof normalizedExplanationMd === 'string' && normalizedExplanationMd.trim() !== ''
         ? {
             explanationSource:
@@ -2844,8 +2892,8 @@ async function materialize(
           workItemId: created.id,
           text: requireText(todo.text),
           notesMd,
-          textLanguage: orgLanguage,
-          notesLanguage: hasText(notesMd) ? orgLanguage : null,
+          textLanguage: languageFor(pf.languages, 'todos', orgLanguage),
+          notesLanguage: hasText(notesMd) ? languageFor(pf.languages, 'todos', orgLanguage) : null,
           commandText: normalizeCommand(todo.commandText),
           executor: (todo.executor ?? pf.executor ?? 'human') as WorkItemCreateInput['executor'],
           position: keyForAppend(lastTodoPosition),
@@ -3497,15 +3545,29 @@ async function applyModify(
   // org's language is read only when a changed field needs it. Not part of the
   // revision diff — the language is a property of the text, not an edit.
   const changedText = [
-    ['titleLanguage', 'title' in update ? update.title : undefined],
-    ['descriptionLanguage', 'descriptionMd' in update ? update.descriptionMd : undefined],
-    ['explanationLanguage', 'explanationMd' in update ? update.explanationMd : undefined],
+    ['titleLanguage', 'title', 'title' in update ? update.title : undefined],
+    [
+      'descriptionLanguage',
+      'description',
+      'descriptionMd' in update ? update.descriptionMd : undefined,
+    ],
+    [
+      'explanationLanguage',
+      'explanation',
+      'explanationMd' in update ? update.explanationMd : undefined,
+    ],
   ] as const;
   let modifyLanguage: Locale | null = null;
-  for (const [column, value] of changedText) {
+  for (const [column, key, value] of changedText) {
     if (value === undefined) continue;
     if (typeof value !== 'string' || !hasText(value)) {
       update[column] = null;
+      continue;
+    }
+    // The patch's own statement first (MOTIR-8743); the setting only without one.
+    const stated = patch.languages?.[key];
+    if (stated) {
+      update[column] = stated;
       continue;
     }
     modifyLanguage ??= toOrgContentLanguage(
@@ -3955,17 +4017,20 @@ async function applyModify(
       let lastPosition: string | null = null;
       for (const todo of incoming) {
         const notesMd = normalizeNotes(todo.notesMd);
-        modifyLanguage ??= toOrgContentLanguage(
-          await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
-        );
+        // The patch's statement for the steps (MOTIR-8743), else the setting.
+        const stepLanguage =
+          patch.languages?.todos ??
+          (modifyLanguage ??= toOrgContentLanguage(
+            await organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+          ));
         const row = await workItemTodoRepository.create(
           {
             workspaceId: ctx.workspaceId,
             workItemId: item.workItemId,
             text: requireText(todo.text),
             notesMd,
-            textLanguage: modifyLanguage,
-            notesLanguage: hasText(notesMd) ? modifyLanguage : null,
+            textLanguage: stepLanguage,
+            notesLanguage: hasText(notesMd) ? stepLanguage : null,
             commandText: normalizeCommand(todo.commandText),
             executor: (todo.executor ?? cardExecutor ?? 'human') as WorkItemCreateInput['executor'],
             position: keyForAppend(lastPosition),
@@ -4378,6 +4443,11 @@ async function applyAddProposalEdit(
     );
   }
   const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+  // The language statement (MOTIR-8743), refused where it is written.
+  validateProposedLanguages(
+    input.languages,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: current.title }),
+  );
   const next = mergeProposedFields(current, input);
   if (!next.title?.trim()) {
     throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
@@ -5439,7 +5509,12 @@ export const plansService = {
               baseRevision: p.baseRevision ?? null,
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
-                ? { proposedFields: p.proposedFields as unknown as Prisma.InputJsonValue }
+                ? {
+                    proposedFields: withProposalLanguages(
+                      p.proposedFields,
+                      p.languages,
+                    ) as unknown as Prisma.InputJsonValue,
+                  }
                 : {}),
               ...(p.op === 'modify' && patch
                 ? { patch: patch as unknown as Prisma.InputJsonValue }
@@ -6445,6 +6520,11 @@ export const plansService = {
             );
           }
           const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+          // The language statement (MOTIR-8743), the deepen's check.
+          validateProposedLanguages(
+            input.languages,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: current.title }),
+          );
           const next = mergeProposedFields(current, input);
           // ⚠️ THE REPOSITORY AXIS IS REPLACED, NOT MERGED (bug MOTIR-4904). Every
           // other key here is sparse per KEY; these FOUR spellings are one field in
@@ -6606,6 +6686,11 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's language statement (MOTIR-8743).
+            validateProposedLanguages(
+              input.patch?.languages,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             // The replacement patch's RE-KIND (bug MOTIR-8192), held to the
             // append's membership check here and to its tree check below.
             validateProposedKindChange(
