@@ -1736,7 +1736,8 @@
       "unknown": "不明",
       "unestablished": "未作成",
       "excluded": "スキップ",
-      "delivered_without_change_request": "PR なしで提供"
+      "delivered_without_change_request": "PR なしで提供",
+      "delivered_by_child": "子作業項目で提供"
     }
   },
   "comments": {
@@ -7286,11 +7287,13 @@
         "delivered": "提供済み",
         "unestablished": "未作成",
         "excluded": "スキップ",
-        "delivered_without_change_request": "PR なしで出荷"
+        "delivered_without_change_request": "PR なしで出荷",
+        "delivered_by_child": "子作業項目で提供"
       },
       "repositoryNotCreated": "リポジトリはまだ作成されていません",
       "repositorySkipped": "このプロジェクトではスキップ",
       "shippedWithoutPullRequest": "プルリクエストなしで出荷",
+      "deliveredByChildPullRequest": "子作業項目のプルリクエストで出荷",
       "unlinkAria": "{target} へのリンクを削除",
       "unlinkConfirmBefore": "次へのリンクを削除しますか:",
       "unlinkConfirmAfter": "? GitHub 上のプルリクエストには影響せず、リンクだけが削除されます。",

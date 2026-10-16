@@ -1736,7 +1736,8 @@
       "unknown": "알 수 없음",
       "unestablished": "생성되지 않음",
       "excluded": "건너뜀",
-      "delivered_without_change_request": "PR 없이 출시됨"
+      "delivered_without_change_request": "PR 없이 출시됨",
+      "delivered_by_child": "하위 항목으로 출시됨"
     }
   },
   "comments": {
@@ -7283,11 +7284,13 @@
         "delivered": "전달됨",
         "unestablished": "생성되지 않음",
         "excluded": "건너뜀",
-        "delivered_without_change_request": "PR 없이 배포됨"
+        "delivered_without_change_request": "PR 없이 배포됨",
+        "delivered_by_child": "하위 항목으로 출시됨"
       },
       "repositoryNotCreated": "저장소가 아직 생성되지 않음",
       "repositorySkipped": "이 프로젝트에서는 건너뜀",
       "shippedWithoutPullRequest": "풀 리퀘스트 없이 배포됨",
+      "deliveredByChildPullRequest": "하위 작업 항목의 풀 리퀘스트로 배포됨",
       "unlinkAria": "{target}에 대한 연결 제거",
       "unlinkConfirmBefore": "다음에 대한 연결을 제거하시겠습니까:",
       "unlinkConfirmAfter": "? GitHub의 풀 리퀘스트는 변경되지 않으며 연결만 제거됩니다.",

@@ -20,7 +20,7 @@ import type { DispatchPromptDto, DispatchRepoDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { listDispatchRepoNames, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
 import { resolveDispatchRepo } from '@/lib/workItems/targetRepo';
-import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import type { RepoDelivery, RepoDeliveryState } from '@/lib/workItems/repoDelivery';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { designAccessService } from '@/lib/services/designAccessService';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
@@ -211,6 +211,18 @@ async function resolveOpenDependentKeys(
  * second rung — the set is that one repository with a `null` delivery state, so
  * `targetRepos[0]?.name ?? null === targetRepo` stays total.
  */
+/**
+ * A repository a CHILD card's own pull request delivered (MOTIR-8811) is
+ * `delivered` on the wire. The distinction is the item panel's — it explains why
+ * the item has no pull-request row of its own there — and what a dispatched run
+ * needs is only that a merge reached that trunk. Keeping it off the `/api/v1`
+ * enum also keeps every published CLI parsing the payload: its generated
+ * validators reject an enum member they were not generated with.
+ */
+function toDispatchDelivery(state: RepoDeliveryState): DispatchRepoDto['delivery'] {
+  return state === 'delivered_by_child' ? 'delivered' : state;
+}
+
 async function resolveDispatchRepos(
   delivery: readonly RepoDelivery[],
   projectId: string,
@@ -236,7 +248,7 @@ async function resolveDispatchRepos(
       name: resolved.name,
       cloneUrl: resolved.cloneUrl,
       defaultBranch: resolved.defaultBranch,
-      delivery: d.state,
+      delivery: toDispatchDelivery(d.state),
     };
   });
 }

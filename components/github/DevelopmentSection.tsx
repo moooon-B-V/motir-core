@@ -301,13 +301,15 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
   const unknown = state === 'unknown';
   // `delivered_without_change_request` (MOTIR-7180) reaches it too: there is no
   // pull request to draw, and its own copy says the work finished without one
-  // rather than leaving the row to read "No pull request yet".
+  // rather than leaving the row to read "No pull request yet". So does
+  // `delivered_by_child` (MOTIR-8811): the merge is linked to a CHILD card, so
+  // this item has no row of its own for it, and the copy says where it landed.
   const Glyph =
     state === 'unknown'
       ? CircleQuestionMark
       : state === 'unestablished'
         ? FolderGit2
-        : state === 'delivered_without_change_request'
+        : state === 'delivered_without_change_request' || state === 'delivered_by_child'
           ? CircleCheck
           : CircleDashed;
   const title =
@@ -319,7 +321,9 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
           ? 'development.repositorySkipped'
           : state === 'delivered_without_change_request'
             ? 'development.shippedWithoutPullRequest'
-            : 'development.noPullRequestYet';
+            : state === 'delivered_by_child'
+              ? 'development.deliveredByChildPullRequest'
+              : 'development.noPullRequestYet';
   const pillKey = `development.repoState.${state}` as const;
   return (
     <li className="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">

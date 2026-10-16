@@ -23,9 +23,11 @@ import type { Prisma } from '@/generated/prisma/client';
  * project with no `project_repository` set still pins with (ADR §5's
  * compatibility rung).
  *
- * It also says, per repository, whether a CONTAINER's work there SHIPPED WITHOUT
- * A CHANGE REQUEST (MOTIR-7180): every live leaf targeting it is in a
- * done-category status and none carries a linked delivery. The completion gate,
+ * It also says, per repository, whether a CONTAINER's work there was settled by
+ * its leaves: every live leaf targeting it is in a done-category status and
+ * either carries no linked delivery — SHIPPED WITHOUT A CHANGE REQUEST
+ * (MOTIR-7180) — or shipped through its OWN change request merged onto that
+ * repository's default branch — DELIVERED BY A CHILD (MOTIR-8811). The completion gate,
  * its re-evaluation and the item panel all read the set through here, so all
  * three see the same answer — `classifyRepoDelivery` decides what it means.
  *
@@ -55,11 +57,17 @@ export async function resolveExpectedRepos(
   );
   return toWorkItemRepositoryDtos(refs).map((r) => {
     const s = settlement.get(r.ref);
+    const settled = s !== undefined && s.leaves > 0 && s.settled === s.leaves;
+    // Every leaf settled it; WHICH WAY decides the word. One merge reached the
+    // trunk ⇒ a child delivered it (MOTIR-8811); none ⇒ it shipped without a
+    // change request (MOTIR-7180).
+    const byChild = settled && s.settledByChangeRequest > 0;
     return {
       repo: r.name,
       establishState: r.state,
       role: r.role,
-      shippedWithoutChangeRequest: s !== undefined && s.leaves > 0 && s.settled === s.leaves,
+      shippedWithoutChangeRequest: settled && !byChild,
+      deliveredByChild: byChild,
     };
   });
 }

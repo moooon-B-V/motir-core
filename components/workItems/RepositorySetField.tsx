@@ -54,6 +54,10 @@ const DELIVERY_META: Record<
   // it holds nothing and nothing is outstanding; the neutral chip on the row
   // says HOW it finished, so it never passes for a merge.
   delivered_without_change_request: { icon: CircleCheck, className: 'text-(--el-success)' },
+  // Delivered through a CHILD card's own merged pull request (MOTIR-8811) — the
+  // delivered glyph for the same reason, with the neutral chip saying the merge
+  // is linked one level down rather than to this item.
+  delivered_by_child: { icon: CircleCheck, className: 'text-(--el-success)' },
 };
 
 /**
@@ -177,12 +181,15 @@ export function RepositorySetField({
                   two do not share a severity: `unestablished` HOLDS the card and
                   is drawn as a warning; `excluded` is a settled decision that
                   holds nothing, and is drawn quiet — as is a repository that
-                  shipped without a pull request (MOTIR-7180). */}
+                  shipped without a pull request (MOTIR-7180) or through a
+                  child card's own pull request (MOTIR-8811). */}
               {d.state === 'unestablished' ? (
                 <Pill severity="warning" className="shrink-0">
                   {t(`repositoryDelivery.${d.state}`)}
                 </Pill>
-              ) : d.state === 'excluded' || d.state === 'delivered_without_change_request' ? (
+              ) : d.state === 'excluded' ||
+                d.state === 'delivered_without_change_request' ||
+                d.state === 'delivered_by_child' ? (
                 <Pill tone="neutral" className="shrink-0">
                   {t(`repositoryDelivery.${d.state}`)}
                 </Pill>
@@ -297,10 +304,14 @@ function RepositoryCountCaption({
   // One repository has nothing to count — the row already says everything.
   if (delivery.length < 2) return null;
 
-  // Shipped without a pull request counts as delivered: it holds nothing, and
-  // `repositoriesAllDelivered` must be what a finished container reads.
+  // Shipped without a pull request, or through a child's own, counts as
+  // delivered: it holds nothing, and `repositoriesAllDelivered` must be what a
+  // finished container reads.
   const delivered = delivery.filter(
-    (d) => d.state === 'delivered' || d.state === 'delivered_without_change_request',
+    (d) =>
+      d.state === 'delivered' ||
+      d.state === 'delivered_without_change_request' ||
+      d.state === 'delivered_by_child',
   );
   const unknown = delivery.filter((d) => d.state === 'unknown');
   const outstanding = delivery.filter((d) => d.state === 'awaiting');
