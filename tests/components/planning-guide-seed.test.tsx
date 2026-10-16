@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { StrictMode, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, renderHook, screen, waitFor } from '@testing-library/react';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanningGuideSeedDTO, PlanningSeedGuideDTO } from '@/lib/dto/planningSeed';
 
@@ -73,6 +73,7 @@ vi.mock('@/components/planning/PlanningWorkspaceHost', () => ({
     guideOrigin,
     extraInitialTargets,
     sessionIsResume,
+    onGuideOfferConfirmed,
   }: {
     launch: { mode: string; from: string; itemKey: string | null; sessionId?: string | null };
     initialDraft?: string;
@@ -83,6 +84,7 @@ vi.mock('@/components/planning/PlanningWorkspaceHost', () => ({
     guideOrigin?: PlanningSeedGuideDTO | null;
     extraInitialTargets?: { identifier: string }[];
     sessionIsResume?: boolean;
+    onGuideOfferConfirmed?: (sessionId: string) => void;
   }) => {
     const [mountId] = useState(() => Math.random());
     return (
@@ -101,7 +103,11 @@ vi.mock('@/components/planning/PlanningWorkspaceHost', () => ({
         data-seed-guide={seedGuideTurnId ?? ''}
         data-guided={guideOrigin?.guidedKey ?? ''}
         data-extra={(extraInitialTargets ?? []).map((t) => t.identifier).join(',')}
-      />
+      >
+        <button type="button" onClick={() => onGuideOfferConfirmed?.('s9')}>
+          reopen the started session
+        </button>
+      </div>
     );
   },
 }));
@@ -485,6 +491,18 @@ describe('the overlay — a guide offer opens on its target with the request to 
     expect(host.getAttribute('data-extra')).toBe('ACME-31');
     expect(fetchGuidePlanningSeed).toHaveBeenCalledTimes(1);
     expect(fetchGuidePlanningSeed.mock.calls[0]![0]).toBe(OFFER);
+  });
+
+  it('an reopen the started session reopens the session it started on the same target, sending nothing', async () => {
+    fetchGuidePlanningSeed.mockResolvedValue(SEED);
+    mountOverlay();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'reopen the started session' }));
+    expect(shallowPush).toHaveBeenCalledTimes(1);
+    const href = String(shallowPush.mock.calls[0]![0]);
+    expect(href).toContain('planSession=s9');
+    expect(href).toContain('ACME-12');
+    expect(href).not.toContain(OFFER);
   });
 
   it('when the guided card IS the target, it is in the scope once', async () => {
