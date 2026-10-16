@@ -1195,10 +1195,13 @@ describe('single dispatch — motir next / run / done', () => {
     // The prompt is a pure function of server state, so the expected text can be
     // assembled independently and compared BYTE FOR BYTE — the contract that the
     // CLI assembles no prompt grammar of its own.
+    // The CLI declares it posts the self-report file (`agentReport=1`,
+    // MOTIR-8810), so the server text it receives is the file-route rendering.
     const expected = await dispatchPromptService.getDispatchPrompt(
       fx.projectId,
       item.identifier,
       fx.ctx,
+      { runnerPostsAgentReport: true },
     );
     expect(next.stdout).toBe(expected.prompt);
     // Diagnostics go to stderr, so `motir next --print | pbcopy` pipes the prompt
