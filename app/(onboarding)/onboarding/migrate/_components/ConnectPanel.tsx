@@ -42,6 +42,8 @@ import { StepHead } from './StepHead';
 import { ExistingAccounts, InstallRow, existingAccountsShown } from './ExistingAccounts';
 import { ExistingRepositoryPicker } from './ExistingRepositoryPicker';
 import { useAccountRepositories } from './useAccountRepositories';
+import { ConnectOutcome } from './ConnectOutcome';
+import { useLinkInstallation, type LinkResult } from './useLinkInstallation';
 import { useInstalledAccounts } from './useInstalledAccounts';
 
 // THE CONNECT STEP (Story MOTIR-8241 · MOTIR-8475), built on
@@ -292,6 +294,9 @@ export function ConnectPanel({
     read?.organizationId ?? null,
     pickTarget?.installationId ?? null,
   );
+  // The link write and what it last answered (MOTIR-8764).
+  const linking = useLinkInstallation(read?.organizationId ?? null);
+  const [linkResult, setLinkResult] = useState<LinkResult | null>(null);
 
   const phaseRef = useRef<SendPhase>('idle');
   const beforeRef = useRef<string | null>(null);
@@ -431,6 +436,51 @@ export function ConnectPanel({
     void readNow('retry');
     accounts.reload();
   };
+  /** Link the chosen repositories, and say what happened (2s). */
+  const confirm = async (chosen: string[]) => {
+    if (!pickTarget) return;
+    const installationId = pickTarget.installationId;
+    // ⚠️ THE BODY IS THIS ORGANISATION'S WHOLE SET ON THE ACCOUNT: the link
+    // replaces the organisation's repositories with exactly `repoIds` (it
+    // answers `released`), so the ones already connected here ride along —
+    // the picker only adds, as Settings' does.
+    const here =
+      repositories.state.kind === 'ok'
+        ? repositories.state.rows
+            .filter((r) => r.availability === 'connected_here')
+            .map((r) => r.repoId)
+        : [];
+    setLinkResult(null);
+    const result = await linking.link({ installationId, repoIds: [...here, ...chosen] });
+    if (!result) return;
+    setLinkResult(result);
+    switch (result.kind) {
+      case 'linked':
+        // The connect read decides what is connected now; Continue appears
+        // through the same gate a reload would pass.
+        setPickTarget(null);
+        void readNow('retry');
+        break;
+      case 'taken':
+        repositories.markTaken(result.repos.map((r) => r.repoId));
+        repositories.refresh();
+        break;
+      case 'not_visible':
+        repositories.refresh();
+        break;
+      case 'not_accessible':
+        accounts.dropAccount(installationId);
+        setPickTarget(null);
+        break;
+      case 'not_admin':
+        setPickTarget(null);
+        break;
+      case 'selection_required':
+      case 'failed':
+        break;
+    }
+  };
+
   const accountsBlock =
     read !== null && existingAccountsShown(accounts.state, identitySkipped) ? (
       <ExistingAccounts
@@ -439,7 +489,10 @@ export function ConnectPanel({
         identityDeclined={identityDeclined}
         onSkipIdentity={() => setIdentitySkipped(true)}
         onRetry={accounts.reload}
-        onPickAccount={(installationId) => setPickTarget({ installationId, fromInstall: false })}
+        onPickAccount={(installationId) => {
+          setLinkResult(null);
+          setPickTarget({ installationId, fromInstall: false });
+        }}
         onInstall={send}
       />
     ) : null;
@@ -471,10 +524,21 @@ export function ConnectPanel({
         })}
         onToggle={repositories.toggle}
         onToggleAll={repositories.toggleAll}
-        onBack={() => setPickTarget(null)}
+        onBack={() => {
+          setLinkResult(null);
+          setPickTarget(null);
+        }}
         onRetry={repositories.refresh}
-        // The link is MOTIR-8764's; the picker hands it the chosen ids.
-        onConfirm={() => {}}
+        confirming={linking.pending}
+        notice={
+          linkResult && linkResult.kind !== 'linked' ? (
+            <ConnectOutcome
+              result={linkResult}
+              onRetry={() => void confirm([...repositories.selected])}
+            />
+          ) : null
+        }
+        onConfirm={(chosen) => void confirm(chosen)}
       />
     ) : arrivalUnreachable ? (
       <>
@@ -484,6 +548,19 @@ export function ConnectPanel({
           title={t('outcome.installation_not_accessibleTitle')}
           hint={t('outcome.installation_not_accessibleHint')}
         />
+        {accountsBlock ?? <InstallRow onInstall={send} />}
+      </>
+    ) : linkResult?.kind === 'not_admin' ? (
+      // 2s.vii: the refusal replaces the list; the install row stays.
+      <>
+        <ConnectOutcome result={linkResult} />
+        <InstallRow onInstall={send} />
+      </>
+    ) : linkResult?.kind === 'not_accessible' ? (
+      // 2s.v / 2s.vi: the account is gone from the list, and an install
+      // control is there whether or not any account is left.
+      <>
+        <ConnectOutcome result={linkResult} />
         {accountsBlock ?? <InstallRow onInstall={send} />}
       </>
     ) : (
@@ -512,6 +589,7 @@ export function ConnectPanel({
             repos={repos}
             manageUrl={manageUrl}
             existing={existing}
+            linked={linkResult?.kind === 'linked' ? <ConnectOutcome result={linkResult} /> : null}
             onSend={send}
             onRetry={retry}
           />
@@ -572,6 +650,7 @@ function ConnectBody({
   repos,
   manageUrl,
   existing,
+  linked,
   onSend,
   onRetry,
 }: {
@@ -583,6 +662,8 @@ function ConnectBody({
    *  — an empty list, a skipped sign-in. When present it OWNS the install
    *  control (its install row), so a state drops its own install button. */
   existing: ReactNode | null;
+  /** 2s.i: the link landed — said above the connected summary. */
+  linked: ReactNode | null;
   onSend: () => void;
   onRetry: () => void;
 }) {
@@ -685,6 +766,7 @@ function ConnectBody({
     case 'already_connected':
       return (
         <>
+          {linked}
           <StatusBlock
             pill={{
               tone: 'success',

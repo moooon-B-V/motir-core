@@ -226,22 +226,6 @@ describe('picking an account opens its picker (2p.i)', () => {
     expect(confirm.textContent).toContain('Connect 2 repositories');
   });
 
-  it('confirming hands over the chosen ids and posts nothing', async () => {
-    const spy = fake({});
-    renderStep();
-    await settle();
-    await pickAcme();
-    fireEvent.click(boxOf('web'));
-    const before = spy.mock.calls.length;
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('existing-picker-confirm'));
-    });
-    expect(spy.mock.calls.length).toBe(before);
-    expect(
-      spy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
-    ).toBe(false);
-  });
-
   it('Back returns to the account list', async () => {
     fake({});
     renderStep();

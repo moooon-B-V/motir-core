@@ -79,6 +79,10 @@ export function ExistingRepositoryPicker({
   const t = useTranslations('onboardingMigrate.connect.existing');
   const tPicker = useTranslations('github.picker');
   const [query, setQuery] = useState('');
+  // While the link is out the picker is inert: nothing changes under the write.
+  const toggle = confirming ? () => {} : onToggle;
+  const toggleAll = confirming ? () => {} : onToggleAll;
+  const back = confirming ? () => {} : onBack;
 
   const rows = useMemo(() => (state.kind === 'ok' ? state.rows : []), [state]);
   const available = rows.filter((r) => r.availability === 'available' && !taken.has(r.repoId));
@@ -93,7 +97,8 @@ export function ExistingRepositoryPicker({
     <div data-testid="existing-repository-picker" className="grid gap-3">
       <button
         type="button"
-        onClick={onBack}
+        onClick={back}
+        disabled={confirming}
         data-testid="existing-picker-back"
         className="inline-flex w-fit items-center gap-1.5 rounded-(--radius-control) text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent-on-surface)"
       >
@@ -172,7 +177,7 @@ export function ExistingRepositoryPicker({
           <div className="flex flex-wrap items-center justify-between gap-3 px-(--spacing-control-x)">
             <Checkbox
               checked={allSelected}
-              onChange={onToggleAll}
+              onChange={toggleAll}
               disabled={available.length === 0}
               label={tPicker('selectAll', { count: available.length })}
               labelVisible
@@ -205,7 +210,7 @@ export function ExistingRepositoryPicker({
                   row={row}
                   taken={taken.has(row.repoId)}
                   checked={selected.has(row.repoId)}
-                  onToggle={(next) => onToggle(row.repoId, next)}
+                  onToggle={(next) => toggle(row.repoId, next)}
                 />
               ))}
             </ul>
