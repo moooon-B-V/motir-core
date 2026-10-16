@@ -180,7 +180,10 @@ describe('accounts listed (2l)', () => {
       true,
     );
     expect(
-      spy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+      spy.mock.calls.some(
+        (call) =>
+          (call as unknown[])[1] && ((call as unknown[])[1] as RequestInit).method === 'POST',
+      ),
     ).toBe(false);
   });
 
