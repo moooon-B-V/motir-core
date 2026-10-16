@@ -8594,7 +8594,9 @@
       "perRepo": "Per repository",
       "state": {
         "indexed": "Indexed",
-        "queued": "Queued"
+        "queued": "Queued",
+        "indexing": "In progress",
+        "failed": "Failed"
       },
       "callout": "Motir derives your conventions + a code-health check (and any plan) from the whole project, so it needs every repo indexed — Next stays disabled until every repository finishes.",
       "completeTitle": "Code graph built",
@@ -8634,6 +8636,22 @@
       "readyTitle": "Your first plan is ready",
       "readyBody": "{count, plural, one {# item is} other {# items are}} drafted for {project}. Nothing is final until you approve it.",
       "readyCta": "Review your plan"
+    },
+    "indexing": {
+      "doneTitle": "Indexed {repos}",
+      "repoCount": "{count, plural, one {# repository} other {# repositories}}",
+      "aggregateTail": "{done} of {total} done",
+      "failedTail": "{count} failed",
+      "detailBody": "This keeps going in the background. You can enter Motir now; nothing waits for it to finish.",
+      "rowFailed": "Motir couldn't index this repository. Nothing you've done is lost.",
+      "checkConnection": "Check the connection",
+      "close": "Close",
+      "retrying": "Trying again…",
+      "refusedNotConnected": "This repository isn't connected to the project any more. Check the connection, then try again.",
+      "refusedTooLarge": "This repository is too large for Motir to index.",
+      "retryError": "Motir couldn't start that again. Try once more in a moment.",
+      "importHeading": "Work items import",
+      "importProgress": "{done} so far"
     }
   },
   "repositorySet": {

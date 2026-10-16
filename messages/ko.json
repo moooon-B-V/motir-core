@@ -8588,7 +8588,9 @@
       "perRepo": "저장소별",
       "state": {
         "indexed": "인덱싱됨",
-        "queued": "대기 중"
+        "queued": "대기 중",
+        "indexing": "진행 중",
+        "failed": "실패"
       },
       "callout": "Motir는 프로젝트 전체에서 규칙과 코드 상태 점검(및 계획)을 도출하므로 모든 저장소가 인덱싱되어야 합니다 — 모든 저장소가 완료될 때까지 다음 버튼은 비활성화됩니다.",
       "completeTitle": "코드 그래프 빌드 완료",
@@ -8628,6 +8630,22 @@
       "readyTitle": "첫 계획이 준비되었습니다",
       "readyBody": "{project}에 대해 {count, plural, other {항목 #개}}의 초안을 만들었습니다. 승인하기 전까지는 확정되지 않습니다.",
       "readyCta": "계획 검토"
+    },
+    "indexing": {
+      "doneTitle": "{repos} 인덱싱 완료",
+      "repoCount": "{count, plural, other {저장소 #개}}",
+      "aggregateTail": "{total}개 중 {done}개 완료",
+      "failedTail": "{count}개 실패",
+      "detailBody": "이 작업은 백그라운드에서 계속됩니다. 지금 바로 Motir에 들어갈 수 있으며, 완료를 기다리는 단계는 없습니다.",
+      "rowFailed": "Motir가 이 저장소를 인덱싱하지 못했습니다. 지금까지 한 작업은 사라지지 않았습니다.",
+      "checkConnection": "연결 확인",
+      "close": "닫기",
+      "retrying": "다시 시도하는 중…",
+      "refusedNotConnected": "이 저장소는 더 이상 프로젝트에 연결되어 있지 않습니다. 연결을 확인한 뒤 다시 시도하세요.",
+      "refusedTooLarge": "이 저장소는 너무 커서 Motir가 인덱싱할 수 없습니다.",
+      "retryError": "Motir가 다시 시작하지 못했습니다. 잠시 후 다시 시도하세요.",
+      "importHeading": "작업 항목 가져오기",
+      "importProgress": "지금까지 {done}개"
     }
   },
   "repositorySet": {

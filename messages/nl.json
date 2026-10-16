@@ -8594,7 +8594,9 @@
       "perRepo": "Per repository",
       "state": {
         "indexed": "Geïndexeerd",
-        "queued": "In wachtrij"
+        "queued": "In wachtrij",
+        "indexing": "Bezig",
+        "failed": "Mislukt"
       },
       "callout": "Motir leidt je conventies + een codegezondheidscheck (en eventueel een plan) af uit het hele project, dus elke repo moet geïndexeerd zijn — Volgende blijft uitgeschakeld totdat elke repository klaar is.",
       "completeTitle": "Codegraaf gebouwd",
@@ -8634,6 +8636,22 @@
       "readyTitle": "Je eerste plan is klaar",
       "readyBody": "{count, plural, one {# item is} other {# items zijn}} opgesteld voor {project}. Niets is definitief totdat je het goedkeurt.",
       "readyCta": "Je plan bekijken"
+    },
+    "indexing": {
+      "doneTitle": "{repos} geïndexeerd",
+      "repoCount": "{count, plural, one {# repository} other {# repository's}}",
+      "aggregateTail": "{done} van {total} klaar",
+      "failedTail": "{count} mislukt",
+      "detailBody": "Dit gaat op de achtergrond door. Je kunt Motir nu openen; niets wacht tot het klaar is.",
+      "rowFailed": "Motir kon deze repository niet indexeren. Niets van wat je hebt gedaan is verloren.",
+      "checkConnection": "Verbinding controleren",
+      "close": "Sluiten",
+      "retrying": "Opnieuw proberen…",
+      "refusedNotConnected": "Deze repository is niet meer met het project verbonden. Controleer de verbinding en probeer het opnieuw.",
+      "refusedTooLarge": "Deze repository is te groot voor Motir om te indexeren.",
+      "retryError": "Motir kon dat niet opnieuw starten. Probeer het zo nog eens.",
+      "importHeading": "Import van werkitems",
+      "importProgress": "{done} tot nu toe"
     }
   },
   "repositorySet": {

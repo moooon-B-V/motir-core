@@ -8594,7 +8594,9 @@
       "perRepo": "Według repozytorium",
       "state": {
         "indexed": "Zindeksowane",
-        "queued": "W kolejce"
+        "queued": "W kolejce",
+        "indexing": "W toku",
+        "failed": "Niepowodzenie"
       },
       "callout": "Motir wyprowadza konwencje i weryfikację kondycji kodu (oraz ewentualny plan) z całego projektu, więc potrzebuje zindeksowania każdego repozytorium — przycisk Dalej pozostaje nieaktywny, dopóki wszystkie repozytoria nie zostaną ukończone.",
       "completeTitle": "Graf kodu zbudowany",
@@ -8634,6 +8636,22 @@
       "readyTitle": "Twój pierwszy plan jest gotowy",
       "readyBody": "{count, plural, one {# element przygotowano} few {# elementy przygotowano} many {# elementów przygotowano} other {# elementu przygotowano}} dla {project}. Nic nie jest ostateczne, dopóki tego nie zatwierdzisz.",
       "readyCta": "Przejrzyj plan"
+    },
+    "indexing": {
+      "doneTitle": "Zindeksowano {repos}",
+      "repoCount": "{count, plural, one {# repozytorium} few {# repozytoria} many {# repozytoriów} other {# repozytorium}}",
+      "aggregateTail": "Gotowe: {done} z {total}",
+      "failedTail": "Nieudane: {count}",
+      "detailBody": "To trwa dalej w tle. Możesz już wejść do Motir; nic nie czeka na zakończenie.",
+      "rowFailed": "Motir nie mógł zindeksować tego repozytorium. Nic z tego, co zrobiłeś, nie przepadło.",
+      "checkConnection": "Sprawdź połączenie",
+      "close": "Zamknij",
+      "retrying": "Ponawianie…",
+      "refusedNotConnected": "To repozytorium nie jest już połączone z projektem. Sprawdź połączenie i spróbuj ponownie.",
+      "refusedTooLarge": "To repozytorium jest za duże, by Motir mógł je zindeksować.",
+      "retryError": "Motir nie mógł uruchomić tego ponownie. Spróbuj jeszcze raz za chwilę.",
+      "importHeading": "Import elementów pracy",
+      "importProgress": "Dotąd: {done}"
     }
   },
   "repositorySet": {

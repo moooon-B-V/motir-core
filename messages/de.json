@@ -8594,7 +8594,9 @@
       "perRepo": "Pro Repository",
       "state": {
         "indexed": "Indexiert",
-        "queued": "Eingereiht"
+        "queued": "Eingereiht",
+        "indexing": "Läuft",
+        "failed": "Fehlgeschlagen"
       },
       "callout": "Motir leitet Ihre Konventionen und eine Code-Gesundheitsprüfung (und jeden Plan) aus dem gesamten Projekt ab und benötigt daher jedes Repository indexiert – „Weiter“ bleibt deaktiviert, bis alle Repositorys fertig sind.",
       "completeTitle": "Code-Graph erstellt",
@@ -8634,6 +8636,22 @@
       "readyTitle": "Ihr erster Plan ist fertig",
       "readyBody": "{count, plural, one {# Element ist} other {# Elemente sind}} für {project} entworfen. Nichts ist endgültig, bis Sie es genehmigen.",
       "readyCta": "Plan prüfen"
+    },
+    "indexing": {
+      "doneTitle": "{repos} indexiert",
+      "repoCount": "{count, plural, one {# Repository} other {# Repositorys}}",
+      "aggregateTail": "{done} von {total} fertig",
+      "failedTail": "{count} fehlgeschlagen",
+      "detailBody": "Das läuft im Hintergrund weiter. Du kannst Motir jetzt betreten; nichts wartet darauf, dass es fertig wird.",
+      "rowFailed": "Motir konnte dieses Repository nicht indexieren. Nichts, was du getan hast, geht verloren.",
+      "checkConnection": "Verbindung prüfen",
+      "close": "Schließen",
+      "retrying": "Wird erneut versucht …",
+      "refusedNotConnected": "Dieses Repository ist nicht mehr mit dem Projekt verbunden. Prüfe die Verbindung und versuche es dann erneut.",
+      "refusedTooLarge": "Dieses Repository ist zu groß, als dass Motir es indexieren könnte.",
+      "retryError": "Motir konnte das nicht neu starten. Versuche es gleich noch einmal.",
+      "importHeading": "Import der Arbeitselemente",
+      "importProgress": "{done} bisher"
     }
   },
   "repositorySet": {

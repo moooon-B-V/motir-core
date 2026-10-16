@@ -8594,7 +8594,9 @@
       "perRepo": "Par dépôt",
       "state": {
         "indexed": "Indexé",
-        "queued": "En file d'attente"
+        "queued": "En file d'attente",
+        "indexing": "En cours",
+        "failed": "Échec"
       },
       "callout": "Motir déduit vos conventions et un bilan de santé du code (ainsi que tout plan) de l'ensemble du projet ; il a donc besoin que chaque dépôt soit indexé — Suivant reste désactivé jusqu'à ce que tous les dépôts soient terminés.",
       "completeTitle": "Graphe de code construit",
@@ -8634,6 +8636,22 @@
       "readyTitle": "Votre premier plan est prêt",
       "readyBody": "{count, plural, one {# élément est rédigé} other {# éléments sont rédigés}} pour {project}. Rien n'est définitif tant que vous ne l'avez pas approuvé.",
       "readyCta": "Examiner votre plan"
+    },
+    "indexing": {
+      "doneTitle": "{repos} indexé",
+      "repoCount": "{count, plural, one {# dépôt} other {# dépôts}}",
+      "aggregateTail": "{done} sur {total} terminés",
+      "failedTail": "{count} en échec",
+      "detailBody": "Cela continue en arrière-plan. Vous pouvez entrer dans Motir dès maintenant ; rien n’attend que ce soit terminé.",
+      "rowFailed": "Motir n’a pas pu indexer ce dépôt. Rien de ce que vous avez fait n’est perdu.",
+      "checkConnection": "Vérifier la connexion",
+      "close": "Fermer",
+      "retrying": "Nouvelle tentative…",
+      "refusedNotConnected": "Ce dépôt n’est plus connecté au projet. Vérifiez la connexion, puis réessayez.",
+      "refusedTooLarge": "Ce dépôt est trop volumineux pour que Motir l’indexe.",
+      "retryError": "Motir n’a pas pu relancer l’opération. Réessayez dans un instant.",
+      "importHeading": "Import des éléments de travail",
+      "importProgress": "{done} jusqu’ici"
     }
   },
   "repositorySet": {

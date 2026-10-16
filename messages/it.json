@@ -8594,7 +8594,9 @@
       "perRepo": "Per repository",
       "state": {
         "indexed": "Indicizzato",
-        "queued": "In coda"
+        "queued": "In coda",
+        "indexing": "In corso",
+        "failed": "Non riuscito"
       },
       "callout": "Motir ricava le tue convenzioni, un controllo della salute del codice (ed eventuali piani) dall’intero progetto, quindi ha bisogno che ogni repository sia indicizzato: Avanti resta disattivato finché tutti i repository non sono completati.",
       "completeTitle": "Grafo del codice creato",
@@ -8634,6 +8636,22 @@
       "readyTitle": "Il tuo primo piano è pronto",
       "readyBody": "{count, plural, one {# elemento in bozza} other {# elementi in bozza}} per {project}. Niente è definitivo finché non lo approvi.",
       "readyCta": "Rivedi il tuo piano"
+    },
+    "indexing": {
+      "doneTitle": "{repos} indicizzato",
+      "repoCount": "{count, plural, one {# repository} other {# repository}}",
+      "aggregateTail": "{done} di {total} completati",
+      "failedTail": "{count} non riusciti",
+      "detailBody": "Continua in background. Puoi entrare in Motir subito; niente aspetta che finisca.",
+      "rowFailed": "Motir non è riuscito a indicizzare questo repository. Niente di ciò che hai fatto è andato perso.",
+      "checkConnection": "Controlla la connessione",
+      "close": "Chiudi",
+      "retrying": "Nuovo tentativo…",
+      "refusedNotConnected": "Questo repository non è più collegato al progetto. Controlla la connessione, poi riprova.",
+      "refusedTooLarge": "Questo repository è troppo grande perché Motir possa indicizzarlo.",
+      "retryError": "Motir non è riuscito a ripartire. Riprova tra un momento.",
+      "importHeading": "Importazione degli elementi di lavoro",
+      "importProgress": "{done} finora"
     }
   },
   "repositorySet": {

@@ -27,6 +27,8 @@ import {
   WarmButton as Button,
 } from '@/components/onboarding/layout';
 import { ConnectPanel } from './ConnectPanel';
+import { IndexIndicator } from './IndexIndicator';
+import { useMigrateIndexStatus } from './useMigrateIndexStatus';
 import { StepHead } from './StepHead';
 import { DiscoveryChatBubble } from '@/components/onboarding/DiscoveryChatRail';
 import { setActiveProjectAction } from '@/app/(authed)/_project-actions';
@@ -268,8 +270,24 @@ export function MigrateWizard({
   const arriving = autoStart && run === null && !autoStartFailed;
   const saveExitHref = onboardingReturnHref(searchParams, 'abandoned') ?? '/roadmap';
 
+  // ONE index read for the page (MOTIR-8771): the Index step and the bar's
+  // indicator both render from it.
+  const pastConnect = run !== null && run.step !== 'connect';
+  const { status: indexStatus, refresh: refreshIndexStatus } = useMigrateIndexStatus(
+    pastConnect ? run.id : null,
+  );
+  const showIndicator = run !== null && run.step !== 'connect' && run.step !== 'index';
+
   const bar = (
     <OnboardingWizardBar flowName={t('brandBar.flowName')} userInitial={userInitial}>
+      {showIndicator ? (
+        <IndexIndicator
+          runId={run.id}
+          status={indexStatus}
+          latestImport={run.latestImport}
+          onRetried={refreshIndexStatus}
+        />
+      ) : null}
       <Link
         href="/onboarding/discovery"
         className={cn(
@@ -311,7 +329,7 @@ export function MigrateWizard({
   } else if (run.step === 'connect') {
     panel = <ConnectPanel runId={run.id} onAdvance={advance} busy={busy} />;
   } else if (run.step === 'index') {
-    panel = <IndexPanel runId={run.id} onAdvance={advance} busy={busy} />;
+    panel = <IndexPanel status={indexStatus} onAdvance={advance} busy={busy} />;
   } else if (run.step === 'import') {
     panel = (
       <ImportPanel
@@ -684,41 +702,17 @@ function StartPanel({
 }
 
 function IndexPanel({
-  runId,
+  status,
   onAdvance,
   busy,
 }: {
-  runId: string;
+  /** The wizard's one index read (`useMigrateIndexStatus`, MOTIR-8771). The
+   *  region is aria-live so a screen reader announces progress. */
+  status: MigrateIndexStatusDto | null;
   onAdvance: () => Promise<RunResult>;
   busy: boolean;
 }) {
   const t = useTranslations('onboardingMigrate');
-  const [status, setStatus] = useState<MigrateIndexStatusDto | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Poll the index-status route while the run sits on the `index` step. The
-  // region is aria-live so a screen reader announces progress; the poll stops
-  // on unmount / when every repo is indexed.
-  useEffect(() => {
-    const poll = async () => {
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      try {
-        const res = await fetch(`/api/onboarding/migrate/${runId}/index-status`, {
-          signal: ctrl.signal,
-        });
-        if (res.ok) setStatus((await res.json()) as MigrateIndexStatusDto);
-      } catch {
-        // a transient fetch failure is fine — the next tick retries
-      }
-    };
-    void poll();
-    const interval = window.setInterval(poll, 3000);
-    return () => {
-      window.clearInterval(interval);
-      abortRef.current?.abort();
-    };
-  }, [runId]);
 
   const total = status?.total ?? 0;
   const done = status?.indexedCount ?? 0;

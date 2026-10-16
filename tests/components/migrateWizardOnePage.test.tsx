@@ -252,3 +252,53 @@ describe('one page to finish onboarding (Revision 6)', () => {
     expect(screen.getByText('Your first plan is ready')).toBeTruthy();
   });
 });
+
+describe('the indexing indicator in the bar (MOTIR-8771)', () => {
+  const indexing = {
+    repos: [{ provider: 'github', repoRef: 'acme/widgets', status: 'indexing' }],
+    indexedCount: 0,
+    failedCount: 0,
+    total: 1,
+    hasRunning: true,
+    allIndexed: false,
+  };
+
+  it('shows on the import step from the one index read, and opening it keeps the step', async () => {
+    fakeFetch((url) => {
+      if (url.endsWith('/index-status')) return json(indexing);
+      return json({}, 404);
+    });
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({ step: 'import', connectedRepoRef: 'acme/widgets' })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+      />,
+    );
+    const chip = await screen.findByTestId('migrate-index-indicator');
+    expect(chip.textContent).toContain('Indexing widgets');
+    const current = () => document.querySelector('[aria-current="step"]')?.textContent ?? '(none)';
+    const before = current();
+    fireEvent.click(chip);
+    expect(await screen.findByTestId('migrate-index-detail')).toBeTruthy();
+    expect(current()).toBe(before);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it.each(['connect', 'index'] as const)('is not in the bar on %s', async (step) => {
+    fakeFetch((url) => {
+      if (url.endsWith('/index-status')) return json(indexing);
+      if (url.endsWith('/connect-state')) return json(connectState('not_started'));
+      return json({}, 404);
+    });
+    renderWithIntl(
+      <MigrateWizard
+        initialRun={makeRun({ step, connectedRepoRef: 'acme/widgets' })}
+        projectName="Quiet Harbor"
+        userInitial="Y"
+      />,
+    );
+    await act(async () => {});
+    expect(screen.queryByTestId('migrate-index-indicator')).toBeNull();
+  });
+});
