@@ -2,299 +2,299 @@
   "concepts": [
     {
       "concept": "epic",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Native issue type 'Epic'; the connector passes fields.issuetype.name through as SourceIssue.type.",
+      "linear": "No native issue type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:epic' to the issue; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the parent issue field. Linear has no epic type and a Linear Project is not an issue and is not read, so an epic is a top-level parent issue labelled 'kind:epic'.",
+      "plane": "No native work-item type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:epic' to the work item; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the work item's parent field. An epic is a top-level parent work item labelled 'kind:epic'; a Plane module or epic feature is not read by the connector and is not used.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuetype.name",
+        "linear": "labels.nodes[].name = 'kind:epic'",
+        "plane": "label_details[].name = 'kind:epic'"
       }
     },
     {
       "concept": "story",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Native issue type 'Story'; the connector passes fields.issuetype.name through as SourceIssue.type.",
+      "linear": "No native issue type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:story' to the issue; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the parent issue field.",
+      "plane": "No native work-item type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:story' to the work item; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the work item's parent field.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuetype.name",
+        "linear": "labels.nodes[].name = 'kind:story'",
+        "plane": "label_details[].name = 'kind:story'"
       }
     },
     {
       "concept": "task",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Native issue type 'Task'; the connector passes fields.issuetype.name through as SourceIssue.type.",
+      "linear": "No native issue type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:task' to the issue; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the parent issue field.",
+      "plane": "No native work-item type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:task' to the work item; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the work item's parent field.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuetype.name",
+        "linear": "labels.nodes[].name = 'kind:task'",
+        "plane": "label_details[].name = 'kind:task'"
       }
     },
     {
       "concept": "bug",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Native issue type 'Bug'; the connector passes fields.issuetype.name through as SourceIssue.type.",
+      "linear": "No native issue type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:bug' to the issue; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the parent issue field.",
+      "plane": "No native work-item type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:bug' to the work item; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the work item's parent field.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuetype.name",
+        "linear": "labels.nodes[].name = 'kind:bug'",
+        "plane": "label_details[].name = 'kind:bug'"
       }
     },
     {
       "concept": "subtask",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Native issue type 'Sub-task'; the connector passes fields.issuetype.name through as SourceIssue.type.",
+      "linear": "No native issue type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:subtask' to the issue; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the parent issue field. A subtask is a sub-issue: an issue whose parent is the story, task or bug issue.",
+      "plane": "No native work-item type (connector returns type: null, discoverFields types: []). The loader adds exactly one label 'kind:subtask' to the work item; it arrives in SourceIssue.labels beside the fixture's own labels, so the expected-result file does not count it as a fixture label. Hierarchy uses the work item's parent field. A subtask is a sub-work-item: a work item whose parent is the story, task or bug work item.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuetype.name (and fields.parent.key for its parent)",
+        "linear": "labels.nodes[].name = 'kind:subtask' (and parent.identifier)",
+        "plane": "label_details[].name = 'kind:subtask' (and parent)"
       }
     },
     {
       "concept": "orphan",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A Task with no parent: fields.parent is absent and it has no epic link, so SourceIssue.parentExternalId is null.",
+      "linear": "An issue labelled 'kind:task' with no parent issue, so parent.identifier is absent and SourceIssue.parentExternalId is null.",
+      "plane": "A work item labelled 'kind:task' with parent null, so SourceIssue.parentExternalId is null.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.parent (absent)",
+        "linear": "parent (null)",
+        "plane": "parent (null)"
       }
     },
     {
       "concept": "status_todo",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A status in the To Do category, named exactly as the fixture's statusName (e.g. 'Backlog', 'To do'). The connector passes only the state NAME (fields.status.name); mapping a name to a Motir category is the resolver's job, so the loader gives each state a distinct name.",
+      "linear": "A workflow state of type 'backlog' or 'unstarted', named as the fixture's statusName. The connector reads only state.name; the type is not read, so the name must be distinct.",
+      "plane": "A state in group 'backlog' or 'unstarted', named as the fixture's statusName. The connector reads only the state name (state or state_detail .name); the group is not read, so the name must be distinct.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.status.name",
+        "linear": "state.name",
+        "plane": "state.name (expanded) or state_detail.name"
       }
     },
     {
       "concept": "status_in_progress",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A status in the In Progress category, named as the fixture's statusName ('In progress', 'In review'). Only fields.status.name is read.",
+      "linear": "A workflow state of type 'started', named as the fixture's statusName. Only state.name is read.",
+      "plane": "A state in group 'started', named as the fixture's statusName. Only the state name is read.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.status.name",
+        "linear": "state.name",
+        "plane": "state.name (expanded) or state_detail.name"
       }
     },
     {
       "concept": "status_done",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A status in the Done category named 'Done', reached by a transition that sets a resolution (so resolutiondate is stamped). Only fields.status.name is read as the status.",
+      "linear": "A workflow state of type 'completed' named 'Done'; moving an issue there stamps completedAt. Only state.name is read as the status.",
+      "plane": "A state in group 'completed' named 'Done'; moving a work item there stamps completed_at. Only the state name is read as the status.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.status.name",
+        "linear": "state.name",
+        "plane": "state.name (expanded) or state_detail.name"
       }
     },
     {
       "concept": "status_cancelled",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A Done-category status the loader creates, named 'Won't do', reached by a transition that sets a resolution (e.g. 'Won't Do'). Only fields.status.name is read as the status.",
+      "linear": "A workflow state of type 'canceled' named 'Won't do'; moving an issue there stamps canceledAt. Only state.name is read as the status.",
+      "plane": "A state in group 'cancelled' named 'Won't do'. Only the state name is read as the status.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.status.name",
+        "linear": "state.name",
+        "plane": "state.name (expanded) or state_detail.name"
       }
     },
     {
       "concept": "priority",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Native priority: fixture highest/high/medium/low/lowest map to Highest/High/Medium/Low/Lowest; the connector passes fields.priority.name.",
+      "linear": "priorityLabel on Linear's fixed four-level scale: fixture highest maps to Urgent, high to High, medium to Medium, low to Low. Known collapse: Linear has four levels, not five, so fixture lowest has no distinct value and collapses into Low.",
+      "plane": "priority on Plane's fixed four-level scale: fixture highest maps to urgent, high to high, medium to medium, low to low. Known collapse: Plane has four levels, not five, so fixture lowest has no distinct value and collapses into low.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.priority.name",
+        "linear": "priorityLabel",
+        "plane": "priority"
       }
     },
     {
       "concept": "no_priority",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Priority left unset. Note a Jira project may apply a default priority scheme; the loader clears it, and the connector returns priority null when fields.priority is absent.",
+      "linear": "priorityLabel 'No priority' (priority 0); the connector passes the token 'No priority', which the resolver maps to medium (ADR §2).",
+      "plane": "priority 'none'; the connector passes the token 'none', which the resolver maps to medium (ADR §2).",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.priority (absent)",
+        "linear": "priorityLabel = 'No priority'",
+        "plane": "priority = 'none'"
       }
     },
     {
       "concept": "assignee",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "The fixture person is a user of the Jira site and is set as assignee; the connector reads fields.assignee.emailAddress and displayName (the email is only returned when the user's profile visibility allows it).",
+      "linear": "The fixture person is a member of the Linear workspace and is set as assignee; the connector reads assignee { email name }.",
+      "plane": "The fixture person is a member of the Plane workspace and is the work item's only assignee; the connector reads the FIRST of assignee_details (or of the expanded assignees), so any further assignee is not read.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.assignee.emailAddress / displayName",
+        "linear": "assignee.email / assignee.name",
+        "plane": "assignee_details[0].email / display_name"
       }
     },
     {
       "concept": "non_member_assignee",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "The person exists on the Jira site and is assigned, but is NOT made a member of the Motir workspace, so the importer has no member to match the email to.",
+      "linear": "The person exists in the Linear workspace and is assigned, but is NOT made a member of the Motir workspace, so the importer has no member to match the email to.",
+      "plane": "The person exists in the Plane workspace and is assigned (first assignee), but is NOT made a member of the Motir workspace, so the importer has no member to match the email to.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.assignee.emailAddress",
+        "linear": "assignee.email",
+        "plane": "assignee_details[0].email"
       }
     },
     {
       "concept": "reporter",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "The connector reads fields.reporter. The API user creating the issue becomes reporter unless the loader sets the reporter field to the fixture person (needs the Modify Reporter permission); otherwise the expected-result file records reporter as the loading account.",
+      "linear": "The connector reads creator { email name }. Linear sets creator to the API user and has no field to change it, so the loader must act as the fixture reporter or the expected-result file records reporter as the loading account.",
+      "plane": "The connector reads created_by_detail (or expanded created_by). Plane sets it to the API user, so the loader must act as the fixture reporter or the expected-result file records reporter as the loading account.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.reporter.emailAddress / displayName",
+        "linear": "creator.email / creator.name",
+        "plane": "created_by_detail.email / display_name"
       }
     },
     {
       "concept": "label",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A free-text label string in fields.labels; there is no label entity and each string keeps its case. Note a Jira label cannot contain a space.",
+      "linear": "A workspace or team issue label; the connector reads labels.nodes[].name.",
+      "plane": "A project label; the connector reads label_details[].name (or the expanded labels).",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.labels[]",
+        "linear": "labels.nodes[].name",
+        "plane": "label_details[].name"
       }
     },
     {
       "concept": "case_only_label_pair",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "Two strings that differ only in case (e.g. 'Customer' and 'customer') on separate issues; Jira keeps each string as written.",
+      "linear": "Two labels that differ only in case. Linear may refuse or merge a case-only duplicate label name; the loader tries to create both and records what the vendor did.",
+      "plane": "Two labels that differ only in case. Plane may refuse or merge a case-only duplicate label name; the loader tries to create both and records what the vendor did.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.labels[]",
+        "linear": "labels.nodes[].name",
+        "plane": "label_details[].name"
       }
     },
     {
       "concept": "comment",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "fields.comment.comments[]: body is ADF flattened to plain text by adfToText, so fixture Markdown is NOT preserved; author from author.emailAddress / displayName; time from created. The item DESCRIPTION arrives the same way: fields.description ADF flattened to plain text.",
+      "linear": "comments.nodes[]: body kept as Markdown; author from user { email name }; time from createdAt. The item DESCRIPTION arrives as Markdown (description).",
+      "plane": "One extra request per work item (/work-items/{id}/comments/): body is comment_stripped, falling back to comment_html, so Markdown is stripped; author from actor_detail; time from created_at. The item DESCRIPTION arrives as plain text (description_stripped).",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.comment.comments[].body / author / created",
+        "linear": "comments.nodes[].body / user / createdAt",
+        "plane": "comments[].comment_stripped / actor_detail / created_at"
       }
     },
     {
       "concept": "link_blocks",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "An issue link of type 'Blocks'. The connector maps each link to {type: type.name, targetExternalId} from outwardIssue or inwardIssue, so direction is NOT kept: 'blocks' and 'is blocked by' look the same on arrival, and the link appears on both issues. A fixture is_blocked_by link is loaded as the same 'Blocks' link from the other side.",
+      "linear": "An issue relation of type 'blocks' (an is_blocked_by link is created as 'blocks' from the other issue). NOT READ at main: connector returns links: []",
+      "plane": "A work-item relation 'blocking' (is_blocked_by as 'blocked_by'). NOT READ at main: connector returns links: []",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuelinks[].type.name = 'Blocks'",
+        "linear": "issue relation type 'blocks' (not queried)",
+        "plane": "relation 'blocking' / 'blocked_by' (not queried)"
       }
     },
     {
       "concept": "link_relates_to",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "An issue link of type 'Relates'; arrives as {type: 'Relates', targetExternalId} on both issues, direction not kept.",
+      "linear": "An issue relation of type 'related'. NOT READ at main: connector returns links: []",
+      "plane": "A work-item relation 'relates_to'. NOT READ at main: connector returns links: []",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuelinks[].type.name = 'Relates'",
+        "linear": "issue relation type 'related' (not queried)",
+        "plane": "relation 'relates_to' (not queried)"
       }
     },
     {
       "concept": "link_duplicates",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "An issue link of type 'Duplicate'; arrives as {type: 'Duplicate', targetExternalId} on both issues, so which side duplicates which is not kept.",
+      "linear": "An issue relation of type 'duplicate'. NOT READ at main: connector returns links: []",
+      "plane": "A work-item relation 'duplicate'. NOT READ at main: connector returns links: []",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuelinks[].type.name = 'Duplicate'",
+        "linear": "issue relation type 'duplicate' (not queried)",
+        "plane": "relation 'duplicate' (not queried)"
       }
     },
     {
       "concept": "cross_epic_link",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "The same issue-link mechanism with the two ends under different epics; the connector does not look at the epics, so it arrives like any other link.",
+      "linear": "The same issue-relation mechanism with the two ends under different 'kind:epic' parents. NOT READ at main: connector returns links: []",
+      "plane": "The same work-item relation mechanism with the two ends under different 'kind:epic' parents. NOT READ at main: connector returns links: []",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.issuelinks[]",
+        "linear": "issue relation (not queried)",
+        "plane": "relation (not queried)"
       }
     },
     {
       "concept": "attachment",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A file uploaded to the issue; the connector maps fields.attachment[] to {filename, url: content, contentType: mimeType, byteSize: size}.",
+      "linear": "A file attached to the issue (Linear keeps attachments on a separate connection the connector does not query). NOT READ at main: connector returns attachments: []",
+      "plane": "A file attached to the work item (Plane keeps attachments on a separate endpoint the connector does not call). NOT READ at main: connector returns attachments: []",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.attachment[].filename / content / mimeType / size",
+        "linear": "attachments connection (not queried)",
+        "plane": "work-item attachments endpoint (not called)"
       }
     },
     {
       "concept": "iteration",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "A Sprint on the project's Scrum board, in state closed / active / future; the loader creates the sprint and adds the issue to it through the Agile API (customfield for Sprint). NOT READ at main: no connector reads sprints or cycles; SourceIssue has no such field",
+      "linear": "A Cycle of the issue's team; the loader creates the cycle with the fixture dates and sets the issue's cycle. Linear cycles have no closed/active/future state of their own, so the state derives from the dates the loader sets. NOT READ at main: no connector reads sprints or cycles; SourceIssue has no such field",
+      "plane": "A Cycle in the project; the loader creates the cycle with the fixture dates and adds the work item to it. Plane cycles have no closed/active/future state of their own, so the state derives from the dates the loader sets. NOT READ at main: no connector reads sprints or cycles; SourceIssue has no such field",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "Sprint field (Agile board sprint)",
+        "linear": "cycle (not queried)",
+        "plane": "cycle work items (not called)"
       }
     },
     {
       "concept": "parent",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "The parent issue's key in fields.parent.key (a sub-task's parent, or an epic as parent of a standard issue). The importer's external id is the Jira key (e.g. 'HAR-12'), so the loader records a fixture-id to Jira-key map for the proofs to compare.",
+      "linear": "The parent issue's identifier in parent.identifier (a sub-issue). The importer's external id is the Linear identifier (e.g. 'HAR-12'), so the loader records a fixture-id to identifier map.",
+      "plane": "The parent work item's UUID in parent. The importer's external id is the work-item UUID, NOT the '{project}-{seq}' display ref, so the loader records a fixture-id to UUID map.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.parent.key",
+        "linear": "parent.identifier",
+        "plane": "parent"
       }
     },
     {
       "concept": "created_at",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "fields.created. Jira stamps creation with the load time and the normal API cannot set it, so the fixture's createdAt cannot be reproduced by the loader; the expected-result file decides how to compare.",
+      "linear": "createdAt. Linear stamps creation with the load time; the fixture's createdAt cannot be set through the normal API.",
+      "plane": "created_at. Plane stamps creation with the load time; the fixture's createdAt cannot be set through the normal API.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.created",
+        "linear": "createdAt",
+        "plane": "created_at"
       }
     },
     {
       "concept": "closed_at",
-      "jira": "TODO: written by MOTIR-8754",
-      "linear": "TODO: written by MOTIR-8754",
-      "plane": "TODO: written by MOTIR-8754",
+      "jira": "fields.resolutiondate, stamped when a transition sets a resolution (both the done and the cancelled status).",
+      "linear": "completedAt, falling back to canceledAt then archivedAt, so a cancelled issue still arrives with a closedAt.",
+      "plane": "completed_at only. A cancelled work item may arrive with closedAt null, because the connector reads no cancelled timestamp.",
       "vendorField": {
-        "jira": "TODO: written by MOTIR-8754",
-        "linear": "TODO: written by MOTIR-8754",
-        "plane": "TODO: written by MOTIR-8754"
+        "jira": "fields.resolutiondate",
+        "linear": "completedAt ?? canceledAt ?? archivedAt",
+        "plane": "completed_at"
       }
     }
   ]
