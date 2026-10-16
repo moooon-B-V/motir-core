@@ -31,14 +31,9 @@ export default async function NoProjectPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const ctx = await getWorkspaceContext();
-  if (!ctx) {
-    const { currentOrg } = await resolveActiveOrganizationAsShell(session.user.id);
-    redirect(
-      currentOrg && orgCan(currentOrg.role, 'manageOrgSettings')
-        ? NO_WORKSPACE_ADMIN_LANDING
-        : NO_WORKSPACE_MEMBER_LANDING,
-    );
-  }
+  // A separate path, not one more serial read: on it the page reads only the
+  // session, the context and the org.
+  if (!ctx) return landInTheActiveOrganization(session.user.id);
 
   if (await getActiveProject()) redirect(AUTHED_LANDING_PATH);
 
@@ -49,5 +44,15 @@ export default async function NoProjectPage() {
 
   return (
     <NoProjectShell workspaceName={workspace?.name ?? ''} canCreateProject={canCreateProject} />
+  );
+}
+
+/** No active workspace: send the reader to the active org (see the note above). */
+async function landInTheActiveOrganization(userId: string): Promise<never> {
+  const { currentOrg } = await resolveActiveOrganizationAsShell(userId);
+  redirect(
+    currentOrg && orgCan(currentOrg.role, 'manageOrgSettings')
+      ? NO_WORKSPACE_ADMIN_LANDING
+      : NO_WORKSPACE_MEMBER_LANDING,
   );
 }
