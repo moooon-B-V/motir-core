@@ -114,6 +114,65 @@ kill_timeout = "90s"
   # back, so that retry matters more here than it does in a build.
   release_command = "node /app/migrate/release-migrate.mjs"
 
+  # ⚠️ BLUEGREEN, SO ONE RUNNING MACHINE DOES NOT MEAN A GAP ON EVERY DEPLOY
+  # (2026-10-16, owner decision). Fly's default `rolling` strategy replaces each
+  # machine IN PLACE: stop the old one, start the new one on the same machine. With
+  # one running `app` machine and the spare suspended, that is an outage for the
+  # restart. `bluegreen` starts the new machines BESIDE the old ones, waits for
+  # their health checks to pass, moves traffic, then destroys the old ones. The
+  # check it waits on is `/api/health/ready` under [[http_service.checks]].
+  #
+  # WHAT THE DOCS AND flyctl's SOURCE SAY (read 2026-10-16; the docs are silent on
+  # most of it, so the answers below are from `internal/command/deploy/
+  # strategy_bluegreen.go` on flyctl master, read through a summariser, not run):
+  #  - REQUIRES A CHECK. docs.fly.io/reference/configuration: "You need to configure
+  #    at least one health check to use the `bluegreen` strategy." `app` has one
+  #    ([[http_service.checks]] above). Without any machine having a check the
+  #    deploy refuses with "app not in valid state for bluegreen deployments".
+  #  - THE WORKER HAS NO CHECK, AND THAT IS ONLY A WARNING. A machine with no
+  #    configured check logs "[WARN] Machine … doesn't have healthchecks setup. We
+  #    won't check its health." and is waited on for the STARTED state alone. It
+  #    does not hang the deploy.
+  #  - A STOPPED SPARE STAYS STOPPED. Each old (blue) machine gets a green copy that
+  #    inherits "skip launch", so a stopped blue yields a stopped green and no idle
+  #    machine is woken. flyctl force-starts one green per process group ONLY when
+  #    none in that group would start on its own; `app` has a running machine.
+  #  - A SUSPENDED SPARE IS NOT MENTIONED IN THE DOCS OR THE SOURCE, SO IT WAS RUN.
+  #    A throwaway Fly app (2026-10-16, destroyed afterwards) copied this shape: an
+  #    `app` group with an HTTP check, a check-less `worker` group, two `app`
+  #    machines with one SUSPENDED, `strategy = "bluegreen"`, `auto_stop_machines =
+  #    "suspend"`. A deploy of a new image, with a request every 0.4 s through it:
+  #      * 103 of 103 requests answered 200 across the ~64 s window (no gap);
+  #      * the check-less worker produced the `[WARN] … doesn't have healthchecks`
+  #        line and the deploy finished;
+  #      * the suspended spare WAS given a green copy, and that copy ended `stopped`
+  #        (not suspended) on the new image; one `app` machine running, one `app`
+  #        stopped, one worker, no old machines left. So the spare comes back COLD,
+  #        not from a snapshot, which also removes the stale-connection concern for
+  #        a machine freshly deployed (a later idle period re-suspends it).
+  #    NOT TESTED: the spare waking on `soft_limit` (nginx never reaches 60 in
+  #    flight), and a deploy of THIS app (a 2 GB Next.js image, a release command).
+  #  - NO VOLUMES. Neither canary nor bluegreen works with volumes; this app has none.
+  #  - ORDER: greens start (not registered for traffic) -> health -> uncordoned ->
+  #    blues cordoned after 10 s -> stopped after another 10 s -> destroyed. Failure
+  #    at any step rolls back to the previous release.
+  #  - KNOWN FLAKINESS, REPORTED NOT REPRODUCED: Fly's community forum has posts of a
+  #    bluegreen deploy leaving two image versions running, and one reporting both
+  #    colours destroyed. CI installs flyctl@master, so the stopped-machine bug fixed
+  #    in 0.1.119 is long gone. `scripts/assert-machine-pool.mjs` runs after every
+  #    deploy and fails the job on a missing or stopped `app` machine, which is the
+  #    net for both reports.
+  #
+  # STILL UNVERIFIED HERE: that THIS app's first deploy behaves like the test one
+  # (a much larger image, the release command). TRIGGER: the first deploy after this
+  # lands. Run
+  #   while true; do curl -s -o /dev/null -w '%{http_code} ' \
+  #     https://<app host>/api/health/ready; sleep 0.5; done
+  # through it; any non-200 means a gap, and `fly machine list` afterwards should
+  # show one `app` image version. If it misbehaves, delete the `strategy` line and
+  # deploys return to `rolling`.
+  strategy = "bluegreen"
+
 [env]
   PORT = "8080"
   # HOSTNAME=0.0.0.0 is set in the Dockerfile rather than here, because getting
@@ -161,7 +220,7 @@ kill_timeout = "90s"
   # more, and `flyctl deploy` updates the machines that exist without adding any
   # to a group that already has one. (It DOES create the first machine of a newly
   # declared group — the [processes] block above.)
-  auto_stop_machines   = "stop"
+  auto_stop_machines   = "suspend"
   auto_start_machines  = true
   # ⚠️ 2, AND IT IS AN AVAILABILITY DECISION — NOT A CAPACITY ONE (MOTIR-2785,
   # executing `docs/decisions/application-hosting.md` Amendment 7 §14).
@@ -192,7 +251,21 @@ kill_timeout = "90s"
   # (This used to read "Amendment 7 §21 is the standing argument against ever
   # adding an in-process poll here", and before MOTIR-3418 "scheduled work arrives
   # via Inngest over HTTP". The worker's poll made both obsolete.)
-  min_machines_running = 2
+  min_machines_running = 1
+  # ⚠️ ONE `app` MACHINE RUNS; THE OTHER IS SUSPENDED AND WAKES ON LOAD (2026-10-16,
+  # owner decision, REVERSING MOTIR-2785's floor of 2). The trade is availability for
+  # cost: with one running machine, a crash or a restart is a gap until the proxy
+  # starts the suspended one (a suspended machine resumes from a memory snapshot, so
+  # it is faster than a cold boot, but it is not instant). MOTIR-2785's own
+  # measurement is why this is a decision and not a default: "a pool of two with a
+  # floor of one is a single point of failure — the spare wakes on load, never on its
+  # sibling dying."
+  #
+  # ⚠️ A RESUMED MACHINE'S PG CONNECTIONS ARE STALE. Neon closes idle connections, so
+  # the first requests on a freshly resumed machine may hit dead sockets until the
+  # pool replaces them. NOT MEASURED. TRIGGER: watch the first minute after a wake
+  # for connection resets in `fly logs`; if they appear, use `stop` instead of
+  # `suspend` below (a cold boot opens a fresh pool).
 
   # ⚠️ `requests` IS the right signal for this app and the NUMBERS ARE NOT
   # MEASURED (Amendment 7 §15). Human web sessions are short requests, so HTTP
@@ -204,10 +277,19 @@ kill_timeout = "90s"
   # TRIGGER to revise: the first sustained request-concurrency or p95-latency
   # reading from Fly metrics. Changing it now would be a measurement with nothing
   # behind it — the failure ADR section 10 already names.
+  # ⚠️ THE SPARE WAKES ON REQUEST CONCURRENCY, NOT ON CPU. The owner asked for "wake
+  # at N% CPU, N = 60". Fly's proxy cannot do that: it only counts requests or
+  # connections against `soft_limit`. A CPU trigger is a separate app (Fly's metrics
+  # autoscaler reading the managed Prometheus) and is not wired here. `soft_limit`
+  # is the stand-in: 60 concurrent requests is an ESTIMATE of ~60% of one
+  # performance-1x core on an agent-dominated mix (the epic's ~500 req/s per
+  # instance at ~100 ms is ~50 in flight). It was 200 for a shared-cpu-2x box and,
+  # like that number, it has never been measured. TRIGGER to revise: the baseline
+  # run (MOTIR-8541) and the sizing task (MOTIR-8545).
   [http_service.concurrency]
     type       = "requests"
-    soft_limit = 200
-    hard_limit = 250
+    soft_limit = 60
+    hard_limit = 150
 
   # ⚠️ A NEW MACHINE TAKES NO TRAFFIC UNTIL IT IS WARM (MOTIR-8231). Without a
   # check, Fly routed requests to a freshly deployed `app` machine the moment it
@@ -288,10 +370,25 @@ kill_timeout = "90s"
 # machine size the process group inherits is larger than intended, stop and
 # re-scope rather than absorbing the spend silently."* It fired. This is the
 # re-scope.
+# ⚠️ THE `app` GROUP IS `performance-1x`, NOT `shared-cpu-2x` (2026-10-16).
+# A shared CPU can be taken away from the VM by the host. MEASURED on 2026-10-15
+# 23:36–23:43Z from Fly's managed Prometheus: machine 876934a003d658 (host a3b3)
+# showed `fly_instance_cpu{mode="steal"}` going from ~20 to 3,000–7,700 in two
+# bursts, and the app's event loop froze for 17.3 s with `loop_block_frame=not_in_js`
+# (Sentry, `GET /api/workbench/stream` and `/window`). The other `app` machine
+# (host 8487) and the worker stayed at 0–10 over the same minutes. Those freezes
+# made the health check fail (`/api/health/ready` does not touch the database) and
+# expired every transaction open at the time (P2028). Pool wait was 0 and GC was
+# ~6 s in ~1,000 s, so neither was the cause. A dedicated CPU is the remedy under
+# test, not a proven fix: if steal still appears on `performance`, this is the
+# wrong lever and MOTIR-8544's diagnosis stands as written.
+#
+# 2 GB is kept: `auto_stop_machines = "suspend"` below only works on machines of
+# 2 GB or less.
 [[vm]]
-  size      = "shared-cpu-2x"
+  size      = "performance-1x"
   memory    = "2gb"
-  cpus      = 2
+  cpus      = 1
   processes = ["app"]
 
 # The WORKER, sized on a MEASUREMENT rather than on a guess or on the web tier.
