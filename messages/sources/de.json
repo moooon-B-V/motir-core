@@ -11243,6 +11243,8 @@
   "sharpen.markers.nothingToAsk": "I have nothing to ask — this is clear enough to plan. I'm writing the plan now.",
   "sharpen.markers.stopped": "You stopped the grilling.",
   "sharpen.markers.stoppedNoAnswer": "You stopped the grilling before any answer. Nothing was written.",
+  "sharpen.markers.handoffFailed": "Grill me couldn't ask its questions, so the plan is being written without them. Your request stands as you wrote it.",
+  "sharpen.markers.handoffNoCredit": "Grill me needs AI credit to ask its questions, so the plan is being written without them.",
   "sharpen.summary.title": "What you settled",
   "sharpen.summary.counts": "{answers, plural, one {# answer} other {# answers}} · {assumptions, plural, one {# planner's assumption} other {# planner's assumptions}}",
   "sharpen.summary.groups.behaviour": "Behaviour",

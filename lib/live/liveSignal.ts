@@ -32,10 +32,11 @@ import { planPollSource } from './sources/planPollSource';
 //   · `workbench` — the SSE nudge (`sources/workbenchStreamSource.ts`), held by
 //     the shell's provider. With no provider the topic is QUIET: a surface
 //     rendered outside the shell is simply never nudged, as it was before.
-//   · `plan` — the generating-plan poll's cadence (`sources/planPollSource.ts`).
-//     It is a timer, not a connection, so it needs no shared holder and serves
-//     the plan topic with or without a provider: the onboarding reveal and the
-//     plan page poll exactly as they did before the seam existed.
+//   · `plan` — under the shell's provider, `plan` frames on that SAME stream
+//     (Story MOTIR-8542 · MOTIR-8732): the provider routes both topics to the one
+//     connection. With no provider it falls back to the generating-plan poll's
+//     timer (`sources/planPollSource.ts`), which needs no holder: the onboarding
+//     reveal, mounted outside the shell, still polls on its 2.5 s cadence.
 
 /** What a signal is about. */
 export type LiveTopic = { kind: 'workbench' } | { kind: 'plan'; planId: string };
@@ -55,6 +56,17 @@ export interface LiveSignal {
    * already in flight (`useGeneratingPlanPoll`'s `refresh()`).
    */
   forced?: boolean;
+  /**
+   * Read IN FULL rather than asking "changed since?" — the stream's plan
+   * backstop (MOTIR-8732), for what a review version cannot see.
+   */
+  full?: boolean;
+  /**
+   * A tick of a TIMER cadence (`planPollSource`): another tick is coming, so a
+   * reader that skips this one, or fails on it, loses nothing by waiting. A push
+   * signal carries no mark, because no further signal is promised.
+   */
+  cadence?: boolean;
 }
 
 export type LiveSignalListener = (signal: LiveSignal) => void;

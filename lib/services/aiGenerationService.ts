@@ -14,6 +14,7 @@ import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboard
 import { routeOnboardingContextFor } from '@/lib/ai/routeOnboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { resolveTenantLanguages } from '@/lib/ai/tenantLanguages';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -177,6 +178,12 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The two languages (MOTIR-8741): reached only from a click, so the clicker is
+    // the person who started it.
+    const languages = await resolveTenantLanguages({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.userId,
+    });
     return submitJob(
       'plan',
       {
@@ -186,6 +193,7 @@ export const aiGenerationService = {
         workspaceId: ctx.workspaceId,
         projectId: ctx.projectId,
         projectKey: ctx.project.identifier,
+        ...languages,
       },
       {
         // No prompt: nothing has been asked for yet. That is what makes this a
@@ -260,6 +268,12 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The two languages (MOTIR-8741): a generation starts from a click, so the
+    // clicker is the person who started the plan.
+    const languages = await resolveTenantLanguages({
+      workspaceId: ctx.workspaceId,
+      userId: ctx.userId,
+    });
     const tenant = {
       organizationId,
       isMeta,
@@ -267,6 +281,7 @@ export const aiGenerationService = {
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
+      ...languages,
     };
     const { jobId } = await submitJob(
       // ONE planning kind (ADR `session-model.md` §6 step 2). This submit names no

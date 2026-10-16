@@ -233,9 +233,9 @@ export const ko: McpSummaryTranslations = {
   },
   get_project_state: {
     summary:
-      '프로젝트의 계획 사전 조건 — established, code connected, indexed, repo set — 을 계획하기 전에 확인합니다.',
+      '프로젝트의 계획 사전 조건 — established, code connected, indexed, repo set — 과 조직의 콘텐츠 언어를 계획하기 전에 확인합니다.',
     source:
-      "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
+      "A project's planning preconditions — established, code connected, indexed, repo set — and its organisation's content language, before you plan.",
   },
   get_work_item: {
     summary:

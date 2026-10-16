@@ -14552,7 +14552,9 @@
       "completed": "To wszystko, o co musiałem zapytać.",
       "nothingToAsk": "Nie mam pytań: to wystarczająco jasne, by planować. Teraz piszę plan.",
       "stopped": "Przerwano przepytywanie.",
-      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią. Nic nie zostało zapisane."
+      "stoppedNoAnswer": "Przerwano przepytywanie przed jakąkolwiek odpowiedzią. Nic nie zostało zapisane.",
+      "handoffFailed": "Przepytaj mnie nie mogło zadać pytań, więc plan powstaje bez nich. Twoja prośba pozostaje taka, jak ją napisano.",
+      "handoffNoCredit": "Przepytaj mnie potrzebuje środków AI, aby zadać pytania, więc plan powstaje bez nich."
     },
     "summary": {
       "title": "Co ustalono",

@@ -259,7 +259,7 @@ export const planRepository = {
     return tx.plan.findFirst({
       where: { sessionId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { id: true, status: true, sourceJobId: true, projectId: true },
+      select: { id: true, status: true, sourceJobId: true, projectId: true, createdById: true },
     });
   },
 

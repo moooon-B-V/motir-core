@@ -4027,3 +4027,67 @@ Mock: `workbench--to-resume--situation-2.mock.html` (a DELTA; edits no existing 
 - **Absent:** an `idle`- or `restarted`-ended session never takes form (C) (`restarted` is the carry story's situation 1, in Waiting on you); a decided plan, an MCP-authored plan and a `guide` session take no form.
 - **Strings (en / zh):** `workbench.planningSession.form.b.badChange|stateWaiting|stateStale|nextReply|nextAgain`, `.form.c.ended|gloss|chip`, `.form.walk.alsoWaiting`, `.left.turn|carry|decided|again` — as drawn in panels 1–9. The stale and carry strings are the carry design's and are cited, not re-worded.
 - **GIVES / TAKES:** GIVES MOTIR-7940 (the (B) and (C) entries and strings; 45 min still fits — it composes § 37's frame), MOTIR-7939 (fields: form, waiting plan, failure, ended-when). TAKES nothing from MOTIR-7907: forms (A) and (A+) reuse its panel 5 unchanged.
+
+## 39 · THE TAB RESUMED — everything that moved while it was hidden lands at once — MOTIR-8726 (Story MOTIR-8542)
+
+**EXTENDS § 26 and amends none of it.** § 26 ([MOTIR-5239](motir:cmtxm4x5800fyhztxp88bxw52)) draws ONE live change at a time: the `New` chip on an arrival, the held row with _Decided elsewhere_, a count that moves unmarked, _Reconnecting…_, and the moved notice in an open approval. Story MOTIR-8542 closes a hidden tab's stream after a grace period and, on show, reopens it with the cursor it held and catches up in ONE read. This section draws that read landing: **several changes at once**.
+
+| Surface              | Asset                                                 | Notes                                                                                                                                                           |
+| -------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The tab, RESUMED** | **`workbench--live--resumed.mock.html`** (HTML delta) | 1 In progress at resume · 2 Waiting on you at resume · 3 the open approval shown after hidden · 4 the generating plan on resume · 5 narrow (`< md`) of Panel 2. |
+
+**It is a DELTA.** It edits no existing mock (`workbench--live.mock.html` included). The rows are `ApprovalRow`'s emitted markup as § 26's asset dumps it and `WorkbenchList`'s row as § 36's asset draws it; the strip is the shipped eight-tab `WorkbenchTabs`; Panel 3 is § 26 Panel 4 verbatim; Panel 4 is `design/ai-planning/plan-review--live-drawing.mock.html` Sheet 1 boards A and B verbatim. **Access path:** nothing new is reached and no entry affordance is drawn — the surfaces are the existing Workbench, approval overlay and plan overlay.
+
+### 39.1 The six rules
+
+1. **A CATCH-UP IS THE SAME GRAMMAR, APPLIED IN ONE PAGE STATE.** No "while you were away" banner, no summary toast, no animation. Every arrival carries the shipped `New` chip, every row that left its set is HELD (a To-approve row with _Decided elsewhere_; a work row with its status updated in place, because a nudge adds and updates and never removes), and the strip counts and the list move together in ONE state. Panel 1 draws the burst the card names: **six arrivals, two rows that left, and a count that jumps by four** (In progress 5 → 9; Recently finished 4 → 6 with it).
+2. **SHOW IS NOT A FAULT.** A stream closed because the tab was hidden was closed on purpose. On show there is **no _Reconnecting…_ chip** while the catch-up read is in flight, **no skeleton and no dimming**: the rows the reader last saw keep full ink. The chip appears only if the reopen then FAILS, which is the drop case — § 26 Panel 2, unchanged. Every panel here draws the chip ABSENT, at `≥ md` beside the strip and at `< md` below it.
+3. **SCROLL ANCHORING ON A BURST.** On the `updatedAt desc` tabs (In progress, To do, Recently finished) arrivals land at the TOP and shift the rows below. For a burst, **the row the reader was looking at keeps its on-screen position**: the new rows accumulate above the fold and the reader's place does not move; the first row in view is never replaced silently. Panel 1's dashed line is board chrome marking that anchor. On Waiting on you (`createdAt asc`) arrivals are appended at the BOTTOM of its one list and nothing moves (Panel 2). **That tab has no pager** (§ 28 DECISION 5): no page to land on, no page to jump to and no _Showing … of …_ footer to move; only a list at the service's 500-row ceiling shows § 28's ceiling line, and a burst changes only the two numbers in it.
+4. **THE `New` CHIPS ARE UNBOUNDED BY DESIGN, BOUNDED BY THE NEXT LOAD.** 189 arrivals show 189 chips: no cap, no "+N more" collapse, because a cap is the silent removal § 26 refuses (its planning flag 2). On the work tabs the shipped pager's window decides how many rows exist on screen, and the strip shows the tab's real count above it.
+5. **AN OPEN APPROVAL ON RESUME.** If the reader was inside the full-screen approval when the tab went hidden and the subject was republished meanwhile, the moved notice (§ 26 Decision 2) is **already** band 3's first child when the tab is shown, and the port keeps its `scrollTop`. There is **no notice for "tab resumed"**, and several republishes while hidden still draw ONE notice — _Reopen_ opens the current version either way.
+6. **A GENERATING PLAN ON RESUME.** The plan pane takes the catch-up as the lay batch it already draws (live-drawing Sheet 2: the drawn cards glide, the new cards enter together, staggered, then their arrows fade in). **No _resumed_ marker, no count of what was missed, no one-by-one replay.** Arrivals on a level the reader is not viewing are counted in the breadcrumb row, exactly as live-drawing Sheet 7 draws.
+
+**States not drawn, on purpose:** resume has no loading state (rule 2); the empty states are unchanged; a failed reopen is § 26 Panel 2.
+
+**One number in the card, corrected by the arithmetic.** The card's Panel 2 line reads "count down". Three arrivals and two held rows move Waiting on you from 4 to **5**, and that is what is drawn: the count is whatever the awaiting set now holds (§ 26), and a count that goes DOWN is § 26 Panel 3's single held row, unchanged.
+
+### 39.2 Token map — no new token
+
+| Element                      | Colour                                                      | Shape                                   |
+| ---------------------------- | ----------------------------------------------------------- | --------------------------------------- |
+| the `New` chip (both lists)  | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary` | `--radius-badge` · `--spacing-chip-x/y` |
+| the `Decided elsewhere` pill | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary` | `--radius-badge` · `--spacing-chip-x/y` |
+| a HELD To-approve row's ink  | `--el-text-secondary` (§ 26)                                | —                                       |
+| a held work row's status     | the shipped status pill for its new status (`Done`)         | `--radius-badge`                        |
+| the strip counts             | `--el-count-bg` · `--el-count-text`, unmarked               | `--radius-badge` · `--spacing-chip-x`   |
+| the moved notice (Panel 3)   | `--el-surface-soft` · `--el-border` · `--el-text-strong`    | `--radius-card`                         |
+| _Reconnecting…_              | **not drawn** — absent on show (rule 2)                     | —                                       |
+
+Every token is § 26's or the composed asset's. No raw hex and no raw shape utility in anything this section adds; the dashed anchor line is board chrome (`--el-accent`), never an app element.
+
+### 39.3 The copy — `en` and `zh`
+
+**No new strings.** Everything on screen reuses keys that ship:
+
+| key                                 | `en`                                                | `zh`                               |
+| ----------------------------------- | --------------------------------------------------- | ---------------------------------- |
+| `workbench.live.new`                | New                                                 | 新增                               |
+| `workbench.live.decidedElsewhere`   | Decided elsewhere                                   | 已由他人决定                       |
+| `approvalOverlay.moved.title`       | This design was republished while you were reading. | 你正在阅读时，该设计已被重新发布。 |
+| `approvalOverlay.moved.consequence` | Approving this version will be refused.             | 批准此版本将被拒绝。               |
+| `approvalOverlay.moved.action`      | Reopen                                              | 重新打开                           |
+
+`workbench.live.reconnecting` (_Reconnecting…_ / _正在重新连接…_) is deliberately NOT shown on resume (rule 2); it stays the drop case's string.
+
+### 39.4 GIVES / TAKES — every card this section names
+
+| card                                             | GIVES                                                                                                                                                                                                                                                                                         | TAKES                                                                                                 |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **MOTIR-8731** (the host-held stream client)     | **PREMISE:** a resume after the hidden grace period is not a drop — `reconnecting` stays false while the catch-up read is in flight, and only a FAILED reopen enters the drop path. **STRUCTURE:** scroll anchoring on the `updatedAt desc` lists (rule 3). Panels 1–5 are what it builds to. | Nothing. Its close, reopen and backoff mechanism is its own.                                          |
+| **MOTIR-8732** (the plan poll over the stream)   | **PREMISE:** a burst of plan proposals is applied as one read, under the live-drawing batch treatment, with no resumed marker (rule 6).                                                                                                                                                       | Nothing.                                                                                              |
+| **MOTIR-8734** (the E2E)                         | **ELEMENT:** what to assert on resume — the `New` chips, the held rows, the counts in one state, and the ABSENCE of the reconnecting chip.                                                                                                                                                    | Nothing.                                                                                              |
+| **MOTIR-8542** (the story)                       | The resume half of "paused in a background tab, resuming without a page refresh", drawn.                                                                                                                                                                                                      | Nothing.                                                                                              |
+| **MOTIR-5239** (§ 26)                            | Nothing new — every treatment here is its own.                                                                                                                                                                                                                                                | **Nothing is taken**: this section extends § 26 and does not amend a rule, a token or a string of it. |
+| **MOTIR-5238 / MOTIR-5242** (the live Workbench) | Nothing they do not own: the held-row and arrival appliers are theirs and are reused as they ship.                                                                                                                                                                                            | Nothing.                                                                                              |
+
+No card's criteria are contradicted by this section, so no card is amended in this pass.

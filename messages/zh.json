@@ -14546,7 +14546,9 @@
       "completed": "我需要问的都问完了。",
       "nothingToAsk": "没有需要问的：这已经足够清楚，可以规划了。我现在开始写计划。",
       "stopped": "你停止了追问。",
-      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。"
+      "stoppedNoAnswer": "你在回答任何一问之前停止了追问。没有写入任何内容。",
+      "handoffFailed": "追问我没能提问，所以计划会在不提问的情况下写出。你的请求保持原样。",
+      "handoffNoCredit": "追问我需要AI额度才能提问，所以计划会在不提问的情况下写出。"
     },
     "summary": {
       "title": "你确定的内容",
@@ -14582,7 +14584,7 @@
     "hintShowingOriginal": "正在显示原文",
     "hintPartial": "已译为{language} · {n, plural, other {# 个字段无法翻译}}",
     "failedItem": "无法翻译此工作项。未产生任何费用。",
-    "noCredits": "翻译需要 AI 额度。未产生任何费用。",
+    "noCredits": "翻译需要AI额度。未产生任何费用。",
     "noCreditsMember": "组织所有者或管理员可以补充额度。",
     "addCredits": "补充额度",
     "markTranslatedFrom": "译自{language}",
@@ -14605,7 +14607,7 @@
     "liveTranslated": "已译为{language}。",
     "liveShowingOriginal": "正在显示原文。",
     "liveFailedCount": "{n, plural, other {# 个字段无法翻译。}}",
-    "liveNoCredits": "翻译需要 AI 额度。",
+    "liveNoCredits": "翻译需要AI额度。",
     "liveEdited": "{field}已编辑并重新翻译。"
   }
 }

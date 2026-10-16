@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
-import { isValidElement, memo, useId, useMemo, useState } from 'react';
+import { isValidElement, memo, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -16,6 +16,7 @@ import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import { HostedModelsProvider } from '@/components/hosted/HostedModelsProvider';
 import { INDENT_PX } from '@/components/ui/TreeTable';
 import { useLiveRows } from './useLiveRows';
+import { useHoldReaderPlace } from './useHoldReaderPlace';
 import { ContextMarker, GroupChevron, GroupCount, GroupSlot } from './WorkbenchGroupRow';
 import { WorkbenchFixLine } from './WorkbenchFixLine';
 import { WorkbenchResumeLine } from './WorkbenchResumeLine';
@@ -860,6 +861,15 @@ export function WorkbenchList({
   );
   const liveMembers = useLiveRows(memberEntries, resetKey, (entry) => entry.row.id);
   const [expanded, toggleGroup] = useExpandedGroups(rows, resetKey);
+  // THE READER'S PLACE ON A BURST (§ 39 rule 3): a catch-up that lands several
+  // rows above the row in view leaves that row where it was on screen.
+  const listRef = useRef<HTMLDivElement>(null);
+  useHoldReaderPlace(
+    listRef,
+    [...liveSessions.rows.map((e) => e.sessionId), ...live.rows.map((r) => r.id)]
+      .concat(liveMembers.rows.map((e) => e.row.id))
+      .join(','),
+  );
 
   // These tabs hold nothing (see the note above), so `live.rows` empties exactly
   // when the server's does — the branch reads the live set anyway, so the two
@@ -905,6 +915,7 @@ export function WorkbenchList({
   }
   const list = (
     <div
+      ref={listRef}
       data-surface="card"
       className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
     >

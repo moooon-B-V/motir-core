@@ -358,7 +358,7 @@ export function CoreFieldsPanel({
     });
   }
 
-  function patch(input: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt'>) {
+  function patch(input: Omit<UpdateIssueInput, 'id' | 'expectedUpdatedAt' | 'languages'>) {
     setEditing(null);
     setOverrides((o) => ({ ...o, ...input }));
     startTransition(async () => {

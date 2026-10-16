@@ -14552,7 +14552,9 @@
       "completed": "Das war alles, was ich fragen musste.",
       "nothingToAsk": "Ich habe nichts zu fragen – das ist klar genug für die Planung. Ich schreibe jetzt den Plan.",
       "stopped": "Sie haben die Befragung beendet.",
-      "stoppedNoAnswer": "Sie haben die Befragung vor der ersten Antwort beendet. Es wurde nichts geschrieben."
+      "stoppedNoAnswer": "Sie haben die Befragung vor der ersten Antwort beendet. Es wurde nichts geschrieben.",
+      "handoffFailed": "„Löchere mich“ konnte seine Fragen nicht stellen, daher wird der Plan ohne sie geschrieben. Ihre Anfrage bleibt so, wie Sie sie geschrieben haben.",
+      "handoffNoCredit": "„Löchere mich“ braucht KI-Guthaben, um seine Fragen zu stellen, daher wird der Plan ohne sie geschrieben."
     },
     "summary": {
       "title": "Was Sie festgelegt haben",
