@@ -14472,7 +14472,7 @@
       "nothingToAsk": "Je n’ai aucune question : c’est assez clair pour planifier. J’écris le plan maintenant.",
       "stopped": "Vous avez arrêté les questions.",
       "stoppedNoAnswer": "Vous avez arrêté les questions avant toute réponse. Rien n’a été écrit.",
-      "handoffFailed": "Cuisine-moi n’a pas pu poser ses questions, le plan est donc rédigé sans elles. Votre demande reste telle que vous l’avez écrite.",
+      "handoffFailed": "Cuisine-moi n’a pas pu poser ses questions, le plan est donc rédigé sans elles. Votre requête reste telle que vous l’avez écrite.",
       "handoffNoCredit": "Cuisine-moi a besoin de crédit IA pour poser ses questions, le plan est donc rédigé sans elles."
     },
     "summary": {
