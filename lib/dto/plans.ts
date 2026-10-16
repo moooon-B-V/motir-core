@@ -16,6 +16,7 @@ import type {
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
+import type { Locale } from '@/lib/i18n/locales';
 
 /** Wire form of the Prisma `PlanStatus` enum, as a VALUE — so a surface that
  *  must be total over the lifecycle (the tab strip, the per-status counts) can
@@ -138,6 +139,23 @@ export interface ProposedTodoInput {
 }
 
 /**
+ * The language each of a proposal's text fields was WRITTEN in (Story MOTIR-7734 ·
+ * MOTIR-8743) — the planner's statement, FIXED AT GENERATION and never re-read
+ * from the organisation's setting: approve records `title` on the title,
+ * `description` on the description, `explanation` on the explanation and `todos`
+ * on each step's text and notes, and falls back to the setting only for a field
+ * with no key. Every key is optional; a key means "this field's current text was
+ * written in this language". Validated at every door
+ * (`lib/plans/validateProposedLanguages.ts`).
+ */
+export interface ProposalLanguages {
+  title?: Locale;
+  description?: Locale;
+  explanation?: Locale;
+  todos?: Locale;
+}
+
+/**
  * The proposed fields of an `add` PlanItem — the new node's values, which live
  * HERE until materialize (no WorkItem exists yet). `kind` defaults to `task`
  * (a standalone leaf) when omitted; `parentRef` (on the PlanItem) decides the
@@ -190,6 +208,10 @@ export interface PlanItemProposedFields {
    */
   explanationMd?: string | null;
   explanationSource?: string | null;
+  /** The language each text field was written in (MOTIR-8743) — fixed at
+   *  generation, never re-read from the setting. Stored here, inside the one
+   *  place a proposal's fields live, so it survives edits to the row. */
+  languages?: ProposalLanguages;
   /**
    * Native PLANNING provenance (Story MOTIR-1685) — motir-ai attaches how it
    * planned this item so `materialize` can stamp it (docs/decisions/work-item-provenance.md,
@@ -408,6 +430,11 @@ export type ModifyKindTarget = (typeof MODIFY_KIND_TARGETS)[number];
  * changes carry refs (a real work-item id or an intra-plan temp-ref).
  */
 export interface PlanItemPatch {
+  /** The language of each text field THIS patch sets (MOTIR-8743) — fixed at
+   *  generation, never re-read from the setting. An ANNOTATION on the patch, not
+   *  a change to the card: it is outside {@link PLAN_ITEM_PATCH_KEYS} and rides
+   *  only beside the field it describes. */
+  languages?: ProposalLanguages;
   title?: string;
   descriptionMd?: string | null;
   /**
@@ -734,7 +761,9 @@ export const PLAN_ITEM_REASON_MAX = 2000;
  * Adding a field to the interface without adding it to the constant (or the
  * reverse) fails `pnpm build` before any test runs.
  */
-type PatchKeyMissingFromConstant = Exclude<keyof PlanItemPatch, PlanItemPatchKey>;
+// `languages` (MOTIR-8743) is the one member outside the constant, by design: it
+// annotates the text keys beside it and changes nothing on the card by itself.
+type PatchKeyMissingFromConstant = Exclude<keyof PlanItemPatch, PlanItemPatchKey | 'languages'>;
 type PatchKeyMissingFromInterface = Exclude<PlanItemPatchKey, keyof PlanItemPatch>;
 const _planItemPatchKeysAreExhaustive: [
   PatchKeyMissingFromConstant,
@@ -1034,6 +1063,10 @@ export interface ProposalInput {
   workItemId?: string | null;
   /** `add` only. */
   proposedFields?: PlanItemProposedFields | null;
+  /** `add` only: the language each proposed text field was written in
+   *  (MOTIR-8743), beside `proposedFields` on the wire and copied INTO them on
+   *  append. Fixed at generation, never re-read from the setting. */
+  languages?: ProposalLanguages;
   /** `modify` only. */
   patch?: PlanItemPatch | null;
   /**
@@ -1133,6 +1166,10 @@ export interface UpdateProposalInput {
    * reads the merge, not the patch alone.
    */
   todos?: ProposedTodoInput[] | null;
+  /** The language of each text field this edit writes (MOTIR-8743) — merged per
+   *  key, and a field this edit rewrites WITHOUT naming its language drops its
+   *  recorded one. Fixed at generation, never re-read from the setting. */
+  languages?: ProposalLanguages;
 }
 
 /**
@@ -1264,6 +1301,8 @@ export const UPDATE_PROPOSAL_KEYS = [
   'explanationMd',
   'executor',
   'todos',
+  // The language of each text field the edit writes (MOTIR-8743).
+  'languages',
 ] as const;
 
 export type UpdateProposalKey = (typeof UPDATE_PROPOSAL_KEYS)[number];
