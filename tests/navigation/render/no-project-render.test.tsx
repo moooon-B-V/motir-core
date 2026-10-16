@@ -13,6 +13,9 @@ const { getWorkspaceContext } = vi.hoisted(() => ({ getWorkspaceContext: vi.fn()
 const { getActiveProject } = vi.hoisted(() => ({ getActiveProject: vi.fn() }));
 const { canOfferCreateProject } = vi.hoisted(() => ({ canOfferCreateProject: vi.fn() }));
 const { getWorkspaceSummary } = vi.hoisted(() => ({ getWorkspaceSummary: vi.fn() }));
+const { resolveActiveOrganizationAsShell } = vi.hoisted(() => ({
+  resolveActiveOrganizationAsShell: vi.fn(),
+}));
 const { redirect } = vi.hoisted(() => ({
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT:${path}`);
@@ -29,6 +32,7 @@ vi.mock('next-intl/server', async () => ({
 vi.mock('@/lib/auth', () => ({ getSession }));
 vi.mock('@/lib/workspaces', () => ({ getWorkspaceContext }));
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
+vi.mock('@/lib/workspaces/tierDisclosure.server', () => ({ resolveActiveOrganizationAsShell }));
 vi.mock('@/lib/services/projectsService', () => ({
   projectsService: { canOfferCreateProject },
 }));
@@ -73,10 +77,26 @@ describe('/no-project', () => {
     await expect(renderTree(NoProjectPage)).rejects.toThrow('REDIRECT:/sign-in');
   });
 
-  it('sends a reader with no workspace to sign-in too', async () => {
+  // MOTIR-8777 — no workspace means the active org has none: land on that ORG,
+  // never on `/sign-in`, which bounced a signed-in reader straight back here.
+  function inAnEmptyOrg(role: string) {
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     getWorkspaceContext.mockResolvedValue(null);
-    await expect(renderTree(NoProjectPage)).rejects.toThrow('REDIRECT:/sign-in');
+    resolveActiveOrganizationAsShell.mockResolvedValue({
+      currentOrg: { organization: { id: 'o2', name: 'Nifer' }, role },
+      workspaces: [],
+    });
+  }
+
+  it('sends an org admin with no workspace to the org, where its first workspace is created', async () => {
+    inAnEmptyOrg('owner');
+    await expect(renderTree(NoProjectPage)).rejects.toThrow('REDIRECT:/settings/organization');
+    expect(resolveActiveOrganizationAsShell).toHaveBeenCalledWith('u1');
+  });
+
+  it('sends a plain org member with no workspace to their account, not to sign-in', async () => {
+    inAnEmptyOrg('member');
+    await expect(renderTree(NoProjectPage)).rejects.toThrow('REDIRECT:/settings/account');
   });
 
   it('renders with an empty workspace name when the summary cannot be read', async () => {

@@ -426,6 +426,18 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'the first bind (the actor’s workspace memberships and owner rows) run under the user ' +
       'context alone and are not org-context reads.',
   },
+  'lib/services/workspacesService.ts#isEmptyOrganizationOfMember': {
+    tables: ['workspace'],
+    source: 'scan',
+    why:
+      'MOTIR-8777 — whether the org cookie names an org the user belongs to that has NO ' +
+      'workspace. Inside one `withUserContext` transaction it reads the actor’s own ' +
+      'organization_membership row first (user context alone), and only when that row exists ' +
+      'binds app.organization_id to that org and counts its workspaces through ' +
+      '`workspaceRepository.countByOrganization`. workspace_org_member_read admits it: the org ' +
+      'GUC just bound, and the organization_membership row for app.user_id just read — the same ' +
+      'shape as listUserWorkspaces.',
+  },
   'lib/services/workspacesService.ts#isOrgManagerTarget': {
     tables: ['organization_membership', 'workspace'],
     source: 'scan',
@@ -671,7 +683,7 @@ describe('the guard has been SEEN to fail', () => {
     expect(withoutJoinArm.has('attachment'), 'the FROM clause is still armed').toBe(true);
     expect(withoutJoinArm.has('workspace'), 'the JOIN target is not').toBe(false);
 
-    // ⚠️ FOUR members since MOTIR-6308 (three since MOTIR-4839), not one. The control removes `workspace`'s
+    // ⚠️ FIVE members since MOTIR-8777 (four since MOTIR-6308, three since MOTIR-4839), not one. The control removes `workspace`'s
     // org arms wholesale, so it reports every swept site that reaches that table
     // under the org context — and CI attribution now does, at both of its sites,
     // for the tenancy reason their sweep entries carry. Their presence here is the
@@ -690,6 +702,10 @@ describe('the guard has been SEEN to fail', () => {
       'lib/services/workspacesService.ts#isOrgManagerTarget :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via organizationMembershipRepository.isOrgManagerOfWorkspaceOrg)',
+      'lib/services/workspacesService.ts#isEmptyOrganizationOfMember :: workspace -> "workspace" ' +
+        'has RLS and NO app.organization_id read arm ' +
+        '(reached via organizationMembershipRepository.findByOrgAndUserInTx, ' +
+        'workspaceRepository.countByOrganization)',
       'lib/services/workspacesService.ts#listUserWorkspaces :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via organizationMembershipRepository.findManagedOrganizationsByUser, ' +
