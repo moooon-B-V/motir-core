@@ -6,6 +6,7 @@ import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
+  isTitleCoverageAdvisory,
   isBlockerCountAdvisory,
   isPathReferenceAdvisory,
   isOrderingAdvisory,
@@ -95,6 +96,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
+  const unnamedTitles = result.advisories.filter(isTitleCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
@@ -284,6 +286,22 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         "subtree is evidence about the children, not about the container's own criteria. Noun " +
         'overlap is not delivery: a child whose BODY delivers the criterion under a title that does ' +
         'not name it is reported here too, and a criterion over every child ("Each story …") never is.',
+    );
+  }
+  // The TITLE-COVERAGE family (MOTIR-8647) — the container's body against its own
+  // TITLE. Everything under a container is laid against the body, so a body that
+  // silently drops a part of the title narrows the whole subtree unmarked.
+  if (unnamedTitles.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these containers have a title word their body never mentions, ` +
+        'so the work laid under them is laid against a narrower scope than the title promises:',
+      ...unnamedTitles.map(
+        (a) => `  ${a.item} body never mentions: ${a.words.join(', ')} (${a.severity})`,
+      ),
+      'Restore the part in the body, or state it as excluded with the work item that owns it — ' +
+        'never trim the title to fit the body. A part the body delivers under another word is ' +
+        'reported here too.',
     );
   }
   // The PATH-REFERENCE family (MOTIR-5424) — gate 4 read on a PATH rather than a
@@ -538,7 +556,7 @@ export function registerValidateWorkItem(
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +
         '`adoptedChildren`; the remedy is to widen the adopted work item on the record or file the ' +
-        'sibling that covers the difference. A `path-reference` advisory (`kind: ' +
+        'sibling that covers the difference. A `title-coverage` advisory (`kind: "title-coverage"`, `likely-unnamed-title-part`) names a CONTAINER whose body never mentions one or more distinguishing words its TITLE carries — with the `words`; the remedy is to restore the part in the body or state it as excluded with its owner. A `path-reference` advisory (`kind: ' +
         '"path-reference"`, `likely-missing-path-edge`) names a card whose acceptance criterion ' +
         'names a FILE PATH that does not exist yet on the default branch of its repository (its ' +
         'top-level directory does) while ANOTHER not-done work item also names that path, with no ' +

@@ -2241,7 +2241,7 @@ describe('validate_work_item (MCP) — the CONTAINER-COVERAGE advisory reaches t
     })) as CallToolResult;
 
     expect(struct(res).valid).toBe(true);
-    expect(struct(res).advisories).toMatchObject([
+    expect(struct(res).advisories.filter((a) => a.kind === 'coverage')).toMatchObject([
       { kind: 'coverage', severity: 'likely-unowned-criterion', criterionIndex: 1 },
     ]);
     expect(text(res)).toContain('is VALID');
@@ -2300,7 +2300,7 @@ describe('validate_work_item (MCP) with `planId` — the COVERAGE advisory reach
     })) as CallToolResult;
 
     expect(struct(res).valid).toBe(true);
-    expect(struct(res).advisories).toMatchObject([
+    expect(struct(res).advisories.filter((a) => a.kind === 'coverage')).toMatchObject([
       {
         kind: 'coverage',
         item: story.identifier,
