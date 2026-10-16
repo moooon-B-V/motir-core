@@ -104,6 +104,14 @@ describe('the repository SET on the detail rail', () => {
     expect(screen.getByText(t.repositoriesAllDelivered)).toBeTruthy();
   });
 
+  it('counts a repository a CHILD delivered as landed, and names it so (MOTIR-8811)', () => {
+    renderField({
+      delivery: [d('motir-core', 'delivered', true), d('motir-ai', 'delivered_by_child')],
+    });
+    expect(screen.getByText(t.repositoriesAllDelivered)).toBeTruthy();
+    expect(screen.getAllByText(t.repositoryDelivery.delivered_by_child).length).toBeGreaterThan(0);
+  });
+
   it('says which branch is UNRECORDED rather than asserting one Motir does not know', () => {
     renderField({ delivery: [d('motir-core', 'delivered', true), d('motir-ai', 'unknown')] });
     expect(

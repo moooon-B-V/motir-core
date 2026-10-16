@@ -1736,7 +1736,8 @@
       "unknown": "Onbekend",
       "unestablished": "Niet aangemaakt",
       "excluded": "Overgeslagen",
-      "delivered_without_change_request": "Opgeleverd zonder PR"
+      "delivered_without_change_request": "Opgeleverd zonder PR",
+      "delivered_by_child": "Opgeleverd via onderliggend item"
     }
   },
   "comments": {
@@ -7289,11 +7290,13 @@
         "delivered": "Opgeleverd",
         "unestablished": "Niet aangemaakt",
         "excluded": "Overgeslagen",
-        "delivered_without_change_request": "Opgeleverd zonder PR"
+        "delivered_without_change_request": "Opgeleverd zonder PR",
+        "delivered_by_child": "Opgeleverd via onderliggend item"
       },
       "repositoryNotCreated": "Repository nog niet aangemaakt",
       "repositorySkipped": "Overgeslagen voor dit project",
       "shippedWithoutPullRequest": "Opgeleverd zonder pull request",
+      "deliveredByChildPullRequest": "Opgeleverd via de pull request van een onderliggend werkitem",
       "unlinkAria": "De koppeling met {target} verwijderen",
       "unlinkConfirmBefore": "De koppeling verwijderen met",
       "unlinkConfirmAfter": "? De pull request op GitHub blijft onaangeroerd — alleen de koppeling verdwijnt.",

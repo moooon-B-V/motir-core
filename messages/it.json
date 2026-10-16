@@ -1736,7 +1736,8 @@
       "unknown": "Sconosciuto",
       "unestablished": "Non creato",
       "excluded": "Saltato",
-      "delivered_without_change_request": "Rilasciato senza PR"
+      "delivered_without_change_request": "Rilasciato senza PR",
+      "delivered_by_child": "Rilasciato da un elemento figlio"
     }
   },
   "comments": {
@@ -7289,11 +7290,13 @@
         "delivered": "Consegnato",
         "unestablished": "Non creato",
         "excluded": "Saltato",
-        "delivered_without_change_request": "Rilasciato senza PR"
+        "delivered_without_change_request": "Rilasciato senza PR",
+        "delivered_by_child": "Rilasciato da un elemento figlio"
       },
       "repositoryNotCreated": "Repository non ancora creato",
       "repositorySkipped": "Saltato per questo progetto",
       "shippedWithoutPullRequest": "Rilasciato senza pull request",
+      "deliveredByChildPullRequest": "Rilasciato dalla pull request di un elemento di lavoro figlio",
       "unlinkAria": "Rimuovi il collegamento a {target}",
       "unlinkConfirmBefore": "Rimuovere il collegamento a",
       "unlinkConfirmAfter": "? La pull request non viene modificata su GitHub: viene rimosso solo il collegamento.",

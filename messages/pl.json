@@ -1736,7 +1736,8 @@
       "unknown": "Nieznany",
       "unestablished": "Nieutworzone",
       "excluded": "Pominięto",
-      "delivered_without_change_request": "Dostarczono bez pull requesta"
+      "delivered_without_change_request": "Dostarczono bez pull requesta",
+      "delivered_by_child": "Dostarczono przez element podrzędny"
     }
   },
   "comments": {
@@ -7289,11 +7290,13 @@
         "delivered": "Dostarczono",
         "unestablished": "Nie utworzono",
         "excluded": "Pominięto",
-        "delivered_without_change_request": "Dostarczono bez PR"
+        "delivered_without_change_request": "Dostarczono bez PR",
+        "delivered_by_child": "Dostarczono przez element podrzędny"
       },
       "repositoryNotCreated": "Repozytorium jeszcze nie utworzone",
       "repositorySkipped": "Pominięte w tym projekcie",
       "shippedWithoutPullRequest": "Dostarczono bez pull requesta",
+      "deliveredByChildPullRequest": "Dostarczono przez pull request podrzędnego elementu roboczego",
       "unlinkAria": "Usuń powiązanie z {target}",
       "unlinkConfirmBefore": "Usunąć powiązanie z",
       "unlinkConfirmAfter": "? Pull request na GitHubie pozostaje nietknięty — usuwane jest tylko powiązanie.",

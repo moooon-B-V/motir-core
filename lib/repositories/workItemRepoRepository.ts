@@ -134,14 +134,34 @@ export const workItemRepoRepository = {
 
   /**
    * Per repository a CONTAINER's live leaves reference: how many leaves target
-   * it, and how many of those SHIPPED WITHOUT A CHANGE REQUEST — in a
-   * done-category status and carrying no linked delivery at all (MOTIR-7180).
+   * it, and how many of those have SETTLED it — finished in a done-category
+   * status in one of the two ways a leaf can ship a repository's work:
+   *
+   * - WITHOUT A CHANGE REQUEST (MOTIR-7180) — the leaf carries no linked
+   *   delivery at all: a tag pushed, a package published, a setting changed.
+   * - THROUGH ITS OWN CHANGE REQUEST (MOTIR-8811) — the leaf has a linked
+   *   delivery IN THIS REPOSITORY that merged onto this repository's own
+   *   default branch, and no linked delivery still OPEN anywhere. That is the
+   *   standard cross-repository story: one subtask per repository, each with its
+   *   own pull request, linked to the subtask rather than to the story.
+   *   `settledByChangeRequest` counts these, so the caller can say which way the
+   *   repository was delivered.
+   *
+   * A leaf whose only change requests in this repository are closed unmerged,
+   * merged onto another branch, or merged with an unknown base (`base_ref` null)
+   * has NOT settled it, whatever its status says — the work there did not reach
+   * the trunk, or nobody can say it did. A closed attempt BESIDE the merge that
+   * shipped is ignored, exactly as the completion gate ignores one on the
+   * container's own set (`classifyRepoDelivery`).
    *
    * The same walk and the same leaf rule as {@link listDerivedRefsForContainer}
    * (non-archived, childless, the container itself excluded), so it reasons
    * about exactly the leaves that put each repository into the container's set.
    * A done category is read from the leaf's own project workflow, never from a
-   * status key, because a project may name its done statuses anything.
+   * status key, because a project may name its done statuses anything. The
+   * repository is matched through the reference row's realized `github_repo_id`
+   * — the delivery's own repository — never by name, so a rename on the host
+   * cannot unmatch it.
    *
    * A repository no leaf references does not appear, and a leaf container
    * (no children) returns `[]`.
@@ -150,8 +170,12 @@ export const workItemRepoRepository = {
     containerId: string,
     workspaceId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ projectRepoId: string; leaves: number; settled: number }[]> {
-    const rows = await tx.$queryRaw<{ projectRepoId: string; leaves: bigint; settled: bigint }[]>`
+  ): Promise<
+    { projectRepoId: string; leaves: number; settled: number; settledByChangeRequest: number }[]
+  > {
+    const rows = await tx.$queryRaw<
+      { projectRepoId: string; leaves: bigint; settled: bigint; settledByChangeRequest: bigint }[]
+    >`
       WITH RECURSIVE descendants AS (
         SELECT w."id", w."archivedAt"
           FROM "work_item" w
@@ -161,31 +185,59 @@ export const workItemRepoRepository = {
           FROM "work_item" c
           JOIN descendants d ON c."parentId" = d."id"
           WHERE c."workspaceId" = ${workspaceId} AND c."archivedAt" IS NULL
+      ),
+      leaf_repo AS (
+        SELECT wir."project_repo_id" AS "projectRepoId",
+               ws."category" = 'done' AS "isDone",
+               NOT EXISTS (
+                 SELECT 1 FROM "work_item_delivery" del WHERE del."work_item_id" = leaf."id"
+               ) AS "noDelivery",
+               EXISTS (
+                 SELECT 1
+                   FROM "work_item_delivery" del
+                   JOIN "github_pull_request" gpr ON gpr."id" = del."github_pull_request_id"
+                   JOIN "github_repo" gr ON gr."id" = del."repo_id"
+                  WHERE del."work_item_id" = leaf."id"
+                    AND del."repo_id" = prepo."github_repo_id"
+                    AND gpr."merged" = true
+                    AND gpr."base_ref" = gr."default_branch"
+               ) AS "mergedHere",
+               EXISTS (
+                 SELECT 1
+                   FROM "work_item_delivery" del
+                   JOIN "github_pull_request" gpr ON gpr."id" = del."github_pull_request_id"
+                  WHERE del."work_item_id" = leaf."id"
+                    AND gpr."merged" = false
+                    AND gpr."state" = 'open'
+               ) AS "hasOpen"
+          FROM descendants d
+          JOIN "work_item" leaf ON leaf."id" = d."id"
+          JOIN "work_item_repository" wir ON wir."work_item_id" = d."id"
+          JOIN "project_repository" prepo ON prepo."id" = wir."project_repo_id"
+          LEFT JOIN "workflow_status" ws
+                 ON ws."project_id" = leaf."projectId" AND ws."key" = leaf."status"
+         WHERE d."id" <> ${containerId}
+           AND d."archivedAt" IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM "work_item" k
+              WHERE k."parentId" = d."id" AND k."archivedAt" IS NULL
+           )
       )
-      SELECT wir."project_repo_id" AS "projectRepoId",
+      SELECT "projectRepoId",
              COUNT(*) AS "leaves",
              COUNT(*) FILTER (
-               WHERE ws."category" = 'done'
-                 AND NOT EXISTS (
-                   SELECT 1 FROM "work_item_delivery" del WHERE del."work_item_id" = leaf."id"
-                 )
-             ) AS "settled"
-        FROM descendants d
-        JOIN "work_item" leaf ON leaf."id" = d."id"
-        JOIN "work_item_repository" wir ON wir."work_item_id" = d."id"
-        LEFT JOIN "workflow_status" ws
-               ON ws."project_id" = leaf."projectId" AND ws."key" = leaf."status"
-       WHERE d."id" <> ${containerId}
-         AND d."archivedAt" IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM "work_item" k
-            WHERE k."parentId" = d."id" AND k."archivedAt" IS NULL
-         )
-       GROUP BY wir."project_repo_id"`;
+               WHERE "isDone" AND ("noDelivery" OR ("mergedHere" AND NOT "hasOpen"))
+             ) AS "settled",
+             COUNT(*) FILTER (
+               WHERE "isDone" AND "mergedHere" AND NOT "hasOpen"
+             ) AS "settledByChangeRequest"
+        FROM leaf_repo
+       GROUP BY "projectRepoId"`;
     return rows.map((r) => ({
       projectRepoId: r.projectRepoId,
       leaves: Number(r.leaves),
       settled: Number(r.settled),
+      settledByChangeRequest: Number(r.settledByChangeRequest),
     }));
   },
 

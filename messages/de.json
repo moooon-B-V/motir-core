@@ -1736,7 +1736,8 @@
       "unknown": "Unbekannt",
       "unestablished": "Nicht erstellt",
       "excluded": "Übersprungen",
-      "delivered_without_change_request": "Ohne PR ausgeliefert"
+      "delivered_without_change_request": "Ohne PR ausgeliefert",
+      "delivered_by_child": "Über untergeordnetes Element geliefert"
     }
   },
   "comments": {
@@ -7289,11 +7290,13 @@
         "delivered": "Geliefert",
         "unestablished": "Nicht erstellt",
         "excluded": "Übersprungen",
-        "delivered_without_change_request": "Ohne PR ausgeliefert"
+        "delivered_without_change_request": "Ohne PR ausgeliefert",
+        "delivered_by_child": "Über untergeordnetes Element geliefert"
       },
       "repositoryNotCreated": "Repository noch nicht erstellt",
       "repositorySkipped": "Für dieses Projekt übersprungen",
       "shippedWithoutPullRequest": "Ohne Pull Request ausgeliefert",
+      "deliveredByChildPullRequest": "Über den Pull Request eines untergeordneten Arbeitselements geliefert",
       "unlinkAria": "Verknüpfung mit {target} entfernen",
       "unlinkConfirmBefore": "Verknüpfung entfernen mit",
       "unlinkConfirmAfter": "? Der Pull Request auf GitHub bleibt unberührt – nur die Verknüpfung wird entfernt.",

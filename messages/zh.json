@@ -1736,7 +1736,8 @@
       "unknown": "未知",
       "unestablished": "尚未创建",
       "excluded": "已跳过",
-      "delivered_without_change_request": "未经 PR 交付"
+      "delivered_without_change_request": "未经 PR 交付",
+      "delivered_by_child": "由子工作项交付"
     }
   },
   "comments": {
@@ -7283,11 +7284,13 @@
         "delivered": "已交付",
         "unestablished": "尚未创建",
         "excluded": "已跳过",
-        "delivered_without_change_request": "未经 PR 交付"
+        "delivered_without_change_request": "未经 PR 交付",
+        "delivered_by_child": "由子工作项交付"
       },
       "repositoryNotCreated": "仓库尚未创建",
       "repositorySkipped": "此项目已跳过",
       "shippedWithoutPullRequest": "未经拉取请求交付",
+      "deliveredByChildPullRequest": "由子工作项的拉取请求交付",
       "unlinkAria": "移除与 {target} 的关联",
       "unlinkConfirmBefore": "移除与",
       "unlinkConfirmAfter": " 的关联吗？GitHub 上的拉取请求不会受到影响——只会移除此关联。",
