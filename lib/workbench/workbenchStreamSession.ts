@@ -41,6 +41,14 @@ import type { WatchedPlan, WorkbenchStreamPlanFrame } from '@/lib/workbench/plan
 // Each plan has its own one-in-flight / one-dirty pair, so plans never wait on
 // each other, and every plan read shares the same process limiter.
 //
+// ⚠️ CLOSING SETTLES (MOTIR-8812). `close()` is synchronous in everything it
+// STOPS — the subscription, the timers, any read not yet started — and its
+// promise settles once every read ALREADY RUNNING has. A read is a transaction
+// under the reader's context, and one left open after its reader has gone is a
+// connection held for nobody: a cancel that returns while it runs ends the
+// request with that transaction still idle in the pool. So the route awaits it
+// in `cancel()`, and a caller that only needs the stream stopped may ignore it.
+//
 // No state beyond the cursor, the per-plan last-seen version, the flags and the
 // timers. Nothing remembers what was sent: a redeploy loses nothing a
 // reconnect's cursor and watched versions do not restore.
@@ -90,8 +98,12 @@ export interface WorkbenchStreamSession {
    * closes the session and propagates, so the route still answers with a status.
    */
   start(since: string | null): Promise<WorkbenchWatermarkDto>;
-  /** Unsubscribe and clear every timer. Idempotent; nothing runs or writes afterwards. */
-  close(): void;
+  /**
+   * Unsubscribe and clear every timer, at once; nothing starts or writes
+   * afterwards. The promise settles once every read already in flight has
+   * settled, and never rejects. Idempotent: a second call answers the same wait.
+   */
+  close(): Promise<void>;
 }
 
 export function createWorkbenchStreamSession(
@@ -146,6 +158,20 @@ export function createWorkbenchStreamSession(
   let backstop: ReturnType<typeof setTimeout> | undefined;
   let catchUp: ReturnType<typeof setTimeout> | undefined;
   const releases: Array<() => void> = [];
+  // Every read that has STARTED and not yet settled — the watermark reads, the
+  // opening one included, and the plan reads. `close()` waits on exactly these.
+  const running = new Set<Promise<unknown>>();
+  let closing: Promise<void> | undefined;
+
+  /** Track a read until it settles, and hand it back unchanged. */
+  function track<T>(work: Promise<T>): Promise<T> {
+    running.add(work);
+    const forget = (): void => {
+      running.delete(work);
+    };
+    work.then(forget, forget);
+    return work;
+  }
 
   function clearBackstop(): void {
     if (backstop === undefined) return;
@@ -186,7 +212,7 @@ export function createWorkbenchStreamSession(
     dirty = false;
     clearBackstop();
     try {
-      const reading = await read(actor, cursor);
+      const reading = await track(read(actor, cursor));
       if (closed) return;
       cursor = reading.cursor;
       // A frame ONLY when something moved; the held cursor moves either way.
@@ -240,7 +266,7 @@ export function createWorkbenchStreamSession(
     state.inFlight = true;
     state.dirty = false;
     try {
-      const reading = await readPlan!(planId);
+      const reading = await track(readPlan!(planId));
       // `null` is a refusal or a plan that is gone: no frame, no error, and no
       // hint that it exists. A later read that answers still compares as usual.
       if (closed || !reading) return;
@@ -290,8 +316,8 @@ export function createWorkbenchStreamSession(
     catchUp.unref?.();
   }
 
-  function close(): void {
-    if (closed) return;
+  function close(): Promise<void> {
+    if (closing) return closing;
     closed = true;
     dirty = false;
     clearBackstop();
@@ -301,6 +327,9 @@ export function createWorkbenchStreamSession(
     }
     for (const release of releases.splice(0)) release();
     plans.clear();
+    // Only the reads already running: nothing new can start once `closed` is set.
+    closing = Promise.allSettled([...running]).then(() => undefined);
+    return closing;
   }
 
   return {
@@ -324,10 +353,10 @@ export function createWorkbenchStreamSession(
       inFlight = true;
       let opening: WorkbenchWatermarkDto;
       try {
-        opening = await read(actor, since);
+        opening = await track(read(actor, since));
       } catch (err) {
         inFlight = false;
-        close();
+        void close();
         throw err;
       }
       cursor = opening.cursor;

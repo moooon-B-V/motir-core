@@ -322,6 +322,98 @@ describe('CLEANUP — nothing runs and nothing is written after the session clos
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  // ⚠️ CLOSING SETTLES (MOTIR-8812). A re-read is a transaction under the
+  // reader's context; a close that returned while one ran let the route's
+  // `cancel()` end the request with that transaction still open in the pool.
+  it('close() settles only once a re-read already in flight has settled', async () => {
+    let release: (() => void) | undefined;
+    let n = 0;
+    const read = vi.fn(async () => {
+      n += 1;
+      const mine = n;
+      if (mine === 2) await new Promise<void>((resolve) => (release = resolve));
+      return reading(`c${mine}`, ['toDo']);
+    });
+    const { hub, write, session } = open({ read });
+    await session.start(null);
+    hub.signal();
+    await vi.advanceTimersByTimeAsync(WORKBENCH_STREAM_COALESCE_MS);
+    expect(read).toHaveBeenCalledTimes(2);
+
+    let settled = false;
+    const closing = session.close().then(() => {
+      settled = true;
+    });
+    // Everything else stops AT ONCE — only the running read is waited for.
+    expect(hub.count).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+
+    release!();
+    await closing;
+    expect(settled).toBe(true);
+    expect(write).not.toHaveBeenCalled();
+    // A second close answers the same, already-settled wait.
+    await expect(session.close()).resolves.toBeUndefined();
+  });
+
+  it('close() during the OPENING read waits for it, and a throw there never rejects the close', async () => {
+    let fail!: (e: unknown) => void;
+    const read = vi.fn(() => new Promise<WorkbenchWatermarkDto>((_, reject) => (fail = reject)));
+    const { session } = open({ read: read as unknown as ReturnType<typeof steppingRead> });
+    const starting = session.start(null);
+
+    let settled = false;
+    const closing = session.close().then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+
+    fail(new Error('the reader left'));
+    await expect(starting).rejects.toThrow('the reader left');
+    await closing;
+    expect(settled).toBe(true);
+  });
+
+  it('close() waits for a watched plan read in flight too', async () => {
+    let answer!: (r: { status: string; reviewVersion: string }) => void;
+    const writePlan = vi.fn();
+    const session = createWorkbenchStreamSession({
+      actor: ACTOR,
+      hub: fakeHub(),
+      read: steppingRead(),
+      write: vi.fn(),
+      watched: [{ planId: 'plan-a', version: null }],
+      readPlan: () => new Promise((resolve) => (answer = resolve)),
+      writePlan,
+      coalescer,
+      random: () => 0.5,
+      logger: quiet,
+    });
+    await session.start(null);
+    await vi.advanceTimersByTimeAsync(0);
+
+    let settled = false;
+    const closing = session.close().then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+
+    answer({ status: 'planned', reviewVersion: 'v2' });
+    await closing;
+    expect(settled).toBe(true);
+    expect(writePlan).not.toHaveBeenCalled();
+  });
+
+  it('close() with no read in flight settles at once', async () => {
+    const { session } = open();
+    await session.start(null);
+    await expect(session.close()).resolves.toBeUndefined();
+  });
+
   it('a throw in the opening read closes the session and propagates', async () => {
     const read = vi.fn(async () => {
       throw new Error('the database went away');
