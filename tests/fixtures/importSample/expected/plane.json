@@ -3,10 +3,416 @@
   "facts": [
     {
       "id": "PLANE-01",
-      "subject": "count:items",
-      "assertion": "TODO: written by MOTIR-8755",
+      "subject": "count:kind:epic",
+      "assertion": "Motir holds exactly 3 imported work items of kind 'epic'.",
       "arrival": "must_arrive",
-      "reason": "TODO: written by MOTIR-8755"
+      "reason": "The kind is derived from the kind: label, which planeConnector.mapItem reads."
+    },
+    {
+      "id": "PLANE-02",
+      "subject": "count:kind:story",
+      "assertion": "Motir holds exactly 10 imported work items of kind 'story'.",
+      "arrival": "must_arrive",
+      "reason": "The kind is derived from the kind: label, which planeConnector.mapItem reads."
+    },
+    {
+      "id": "PLANE-03",
+      "subject": "count:kind:task",
+      "assertion": "Motir holds exactly 4 imported work items of kind 'task' (including the orphan F-41).",
+      "arrival": "must_arrive",
+      "reason": "The kind is derived from the kind: label, which planeConnector.mapItem reads."
+    },
+    {
+      "id": "PLANE-04",
+      "subject": "count:kind:bug",
+      "assertion": "Motir holds exactly 4 imported work items of kind 'bug'.",
+      "arrival": "must_arrive",
+      "reason": "The kind is derived from the kind: label, which planeConnector.mapItem reads."
+    },
+    {
+      "id": "PLANE-05",
+      "subject": "count:kind:subtask",
+      "assertion": "Motir holds exactly 20 imported work items of kind 'subtask'.",
+      "arrival": "must_arrive",
+      "reason": "The kind is derived from the kind: label, which planeConnector.mapItem reads."
+    },
+    {
+      "id": "PLANE-06",
+      "subject": "count:items",
+      "assertion": "Motir holds exactly 41 imported work items in total.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem returns every item: the connector applies no status filter (whole-history scope, ADR §1)."
+    },
+    {
+      "id": "PLANE-07",
+      "subject": "items:*",
+      "assertion": "Every item's Motir parent is the fixture parentId, translated through the fixture-id to Plane work-item UUID map the loader records.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads raw.parent into parentExternalId; the importer resolves it in a second pass."
+    },
+    {
+      "id": "PLANE-08",
+      "subject": "F-41",
+      "assertion": "The orphan task arrives with no parent.",
+      "arrival": "must_arrive",
+      "reason": "raw.parent is empty, so parentExternalId is null."
+    },
+    {
+      "id": "PLANE-09",
+      "subject": "parent",
+      "assertion": "The hierarchy reaches depth 3 (epic > story > subtask) and no deeper than the fixture.",
+      "arrival": "must_arrive",
+      "reason": "Every parent edge arrives through raw.parent."
+    },
+    {
+      "id": "PLANE-10",
+      "subject": "items:*",
+      "assertion": "Every item arrives with exactly one 'kind:<kind>' label in labels, naming its fixture kind; the kind is derived from it.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads label_details[].name; the loader writes the kind: label (translation table, kind rows)."
+    },
+    {
+      "id": "PLANE-11",
+      "subject": "subtask",
+      "assertion": "The native issue type is not available: type arrives null for every item, and kind (epic, story, task, bug, subtask) is label-derived.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns type: null and discoverFields returns types: [] — the vendor has no native issue type."
+    },
+    {
+      "id": "PLANE-12",
+      "subject": "items:*",
+      "assertion": "Every item's status token equals the vendor state name the loader set, which is the fixture statusName.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads only the state name (state.name / state_detail.name)."
+    },
+    {
+      "id": "PLANE-13",
+      "subject": "F-28",
+      "assertion": "The cancelled item arrives with status token 'Won't do'.",
+      "arrival": "must_arrive",
+      "reason": "state.name / state_detail.name is read."
+    },
+    {
+      "id": "PLANE-14",
+      "subject": "F-40",
+      "assertion": "The cancelled item arrives with status token 'Won't do'.",
+      "arrival": "must_arrive",
+      "reason": "state.name / state_detail.name is read."
+    },
+    {
+      "id": "PLANE-15",
+      "subject": "status_done",
+      "assertion": "The done items (F-8, F-14, F-21, F-22, F-35, F-37, F-39) arrive with status token 'Done'.",
+      "arrival": "must_arrive",
+      "reason": "state.name / state_detail.name is read."
+    },
+    {
+      "id": "PLANE-16",
+      "subject": "items:*",
+      "assertion": "Each item's resulting Motir status category equals the fixture statusCategory (status_todo, status_in_progress, status_done; status_cancelled lands in the done category).",
+      "arrival": "must_arrive",
+      "reason": "The status CATEGORY is derived by the mapping resolver from the state name, not read by the connector (docs/decisions/issue-importer.md §2); this is the proof's assertion about Motir."
+    },
+    {
+      "id": "PLANE-17",
+      "subject": "status_done",
+      "assertion": "Every done item arrives with a non-null closedAt later than its createdAt.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads completed_at."
+    },
+    {
+      "id": "PLANE-18",
+      "subject": "F-28",
+      "assertion": "The cancelled item's closedAt does not arrive (null).",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem sets closedAt: raw.completed_at ?? null; Plane stamps no completed_at on a cancelled work item and no cancelled timestamp is read."
+    },
+    {
+      "id": "PLANE-19",
+      "subject": "F-40",
+      "assertion": "The cancelled item's closedAt does not arrive (null).",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem sets closedAt: raw.completed_at ?? null; Plane stamps no completed_at on a cancelled work item and no cancelled timestamp is read."
+    },
+    {
+      "id": "PLANE-20",
+      "subject": "closed_at",
+      "assertion": "Arriving closedAt values equal the fixture's closedAt values.",
+      "arrival": "known_not_read",
+      "reason": "The vendor stamps completed_at at the time of the loader's transition, not the fixture's date; the fact checked is that the value is non-null and ordered, not equal."
+    },
+    {
+      "id": "PLANE-21",
+      "subject": "items:*",
+      "assertion": "Every item arrives with a non-null createdAt, and a parent's createdAt is earlier than its children's (the loader creates parents first).",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads created_at."
+    },
+    {
+      "id": "PLANE-22",
+      "subject": "created_at",
+      "assertion": "Arriving item createdAt values equal the fixture's createdAt values.",
+      "arrival": "known_not_read",
+      "reason": "The vendor stamps created_at at load time; the connector reads it, but it is not the fixture value."
+    },
+    {
+      "id": "PLANE-23",
+      "subject": "comment",
+      "assertion": "Every comment arrives with a non-null createdAt.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads the comment's creation time."
+    },
+    {
+      "id": "PLANE-24",
+      "subject": "comment",
+      "assertion": "Arriving comment createdAt values equal the fixture's comment createdAt values.",
+      "arrival": "known_not_read",
+      "reason": "The vendor stamps a comment at load time; the connector reads it, but it is not the fixture value."
+    },
+    {
+      "id": "PLANE-25",
+      "subject": "label",
+      "assertion": "Each fixture label (Customer, backend, billing, customer, frontend, security, tech-debt, ux) arrives on exactly the items that carry it, beside the item's kind: label, which is not counted as a fixture label.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads label_details[].name."
+    },
+    {
+      "id": "PLANE-26",
+      "subject": "F-40",
+      "assertion": "The item with no fixture labels arrives with only its kind: label.",
+      "arrival": "must_arrive",
+      "reason": "label_details[].name is read."
+    },
+    {
+      "id": "PLANE-27",
+      "subject": "case_only_label_pair",
+      "assertion": "Both 'Customer' and 'customer' arrive as written, on their own items.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads label_details[].name. The vendor may merge or refuse a case-only duplicate label; the proof records that as a vendor-side outcome, not an importer bug."
+    },
+    {
+      "id": "PLANE-28",
+      "subject": "priority",
+      "assertion": "Fixture highest arrives as urgent, and high, medium and low as high, medium and low.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads priority."
+    },
+    {
+      "id": "PLANE-29",
+      "subject": "priority",
+      "assertion": "Fixture lowest arrives as a distinct value.",
+      "arrival": "known_not_read",
+      "reason": "The vendor has four levels, not five: lowest collapses into low (translation table, priority row)."
+    },
+    {
+      "id": "PLANE-30",
+      "subject": "no_priority",
+      "assertion": "Items with priority null (F-3, F-20, F-33) arrive with token 'none' and become Motir priority medium.",
+      "arrival": "must_arrive",
+      "reason": "The connector passes the token; the resolver maps an absent or unmatched priority to medium (ADR §2)."
+    },
+    {
+      "id": "PLANE-31",
+      "subject": "assignee",
+      "assertion": "Every assigned item arrives with its fixture assignee's email and name.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads assignee_details[0]."
+    },
+    {
+      "id": "PLANE-32",
+      "subject": "non_member_assignee",
+      "assertion": "The items assigned to P-5 (F-16, F-24, F-36) arrive with assignee email elif.marchetti-saar@sample.motir.co.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads assignee_details[0]."
+    },
+    {
+      "id": "PLANE-33",
+      "subject": "P-5",
+      "assertion": "The resulting Motir assignee of P-5's items (left unassigned or invited) is recorded, not asserted.",
+      "arrival": "must_arrive",
+      "reason": "This is the importer's choice for an unmatched user, so no expectation is made on it; the assignee EMAIL is the must-arrive fact."
+    },
+    {
+      "id": "PLANE-34",
+      "subject": "reporter",
+      "assertion": "Every item with a fixture reporterId arrives with that person's email and name as reporter. The loading account is the creator unless the loader acts as the fixture person (translation table, reporter row).",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads created_by_detail. The loading account is the creator unless the loader acts as the fixture person (translation table, reporter row)."
+    },
+    {
+      "id": "PLANE-35",
+      "subject": "assignee",
+      "assertion": "A second assignee on a work item arrives.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem reads only the first of assignee_details; the fixture has one assignee per item, so this is a limit, not a count."
+    },
+    {
+      "id": "PLANE-36",
+      "subject": "comment",
+      "assertion": "Each commented item (F-4, F-8, F-16, F-23, F-34, F-36, F-37) arrives with the fixture's comment count and comment author emails.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads every comment and its author."
+    },
+    {
+      "id": "PLANE-37",
+      "subject": "comment",
+      "assertion": "Comments arrive in fixture order by createdAt.",
+      "arrival": "must_arrive",
+      "reason": "Each comment's creation time is read and the loader writes them in order."
+    },
+    {
+      "id": "PLANE-38",
+      "subject": "comment",
+      "assertion": "Comment body text arrives.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads the comment body."
+    },
+    {
+      "id": "PLANE-39",
+      "subject": "comment",
+      "assertion": "Markdown formatting inside comment bodies arrives intact.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector reads comment_stripped, which strips formatting."
+    },
+    {
+      "id": "PLANE-40",
+      "subject": "items:*",
+      "assertion": "Every item's description text arrives.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads the description."
+    },
+    {
+      "id": "PLANE-41",
+      "subject": "items:*",
+      "assertion": "Markdown formatting in descriptions arrives intact.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem reads description_stripped, which is plain text."
+    },
+    {
+      "id": "PLANE-42",
+      "subject": "F-37",
+      "assertion": "The long description arrives in full, not truncated.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads the description without a length limit."
+    },
+    {
+      "id": "PLANE-43",
+      "subject": "F-7",
+      "assertion": "The Chinese title and description arrive with every character intact (UTF-8).",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem reads title and description as strings."
+    },
+    {
+      "id": "PLANE-44",
+      "subject": "F-30",
+      "assertion": "Items with an empty description (F-30, F-33) arrive with a null or empty description.",
+      "arrival": "must_arrive",
+      "reason": "planeConnector.mapItem maps an empty description to null."
+    },
+    {
+      "id": "PLANE-45",
+      "subject": "F-21",
+      "assertion": "[link_blocks] The blocks link from F-21 to F-22 arrives.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns links: []."
+    },
+    {
+      "id": "PLANE-46",
+      "subject": "F-5",
+      "assertion": "[link_blocks] The is_blocked_by link from F-5 to F-8 arrives.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns links: []."
+    },
+    {
+      "id": "PLANE-47",
+      "subject": "F-6",
+      "assertion": "[link_relates_to] The relates_to link from F-6 to F-12 arrives.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns links: []."
+    },
+    {
+      "id": "PLANE-48",
+      "subject": "F-36",
+      "assertion": "[link_duplicates] The duplicates link from F-36 to F-18 arrives.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns links: []."
+    },
+    {
+      "id": "PLANE-49",
+      "subject": "cross_epic_link",
+      "assertion": "The cross-epic is_blocked_by link from F-5 to F-8 arrives.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns links: []."
+    },
+    {
+      "id": "PLANE-50",
+      "subject": "F-34",
+      "assertion": "The attachment on F-34 arrives with filename launcher-over-banner.png.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns attachments: []."
+    },
+    {
+      "id": "PLANE-51",
+      "subject": "F-34",
+      "assertion": "The attachment on F-34 arrives with content type image/png.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns attachments: []."
+    },
+    {
+      "id": "PLANE-52",
+      "subject": "F-34",
+      "assertion": "The attachment on F-34 arrives with size in bytes 184320.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns attachments: []."
+    },
+    {
+      "id": "PLANE-53",
+      "subject": "F-37",
+      "assertion": "The attachment on F-37 arrives with filename renewal-job-2026-09-23.log.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns attachments: []."
+    },
+    {
+      "id": "PLANE-54",
+      "subject": "F-37",
+      "assertion": "The attachment on F-37 arrives with content type text/plain.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns attachments: []."
+    },
+    {
+      "id": "PLANE-55",
+      "subject": "F-37",
+      "assertion": "The attachment on F-37 arrives with size in bytes 52418.",
+      "arrival": "known_not_read",
+      "reason": "planeConnector.mapItem returns attachments: []."
+    },
+    {
+      "id": "PLANE-56",
+      "subject": "IT-1",
+      "assertion": "The closed iteration 'Harbor Sprint 14' arrives in Motir.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and no connector reads one; the vendor object is a Plane Cycle."
+    },
+    {
+      "id": "PLANE-57",
+      "subject": "IT-2",
+      "assertion": "The active iteration 'Harbor Sprint 15' arrives in Motir.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and no connector reads one; the vendor object is a Plane Cycle."
+    },
+    {
+      "id": "PLANE-58",
+      "subject": "IT-3",
+      "assertion": "The future iteration 'Harbor Sprint 16' arrives in Motir.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and no connector reads one; the vendor object is a Plane Cycle."
+    },
+    {
+      "id": "PLANE-59",
+      "subject": "iteration",
+      "assertion": "Each item's iteration assignment (iterationId) arrives.",
+      "arrival": "known_not_read",
+      "reason": "SourceIssue has no sprint or cycle field and planeConnector.mapItem reads no Plane Cycle."
     }
   ]
 }
