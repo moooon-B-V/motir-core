@@ -14471,7 +14471,9 @@
       "completed": "That's everything I needed to ask.",
       "nothingToAsk": "I have nothing to ask — this is clear enough to plan. I'm writing the plan now.",
       "stopped": "You stopped the grilling.",
-      "stoppedNoAnswer": "You stopped the grilling before any answer. Nothing was written."
+      "stoppedNoAnswer": "You stopped the grilling before any answer. Nothing was written.",
+      "handoffFailed": "Grill me couldn't ask its questions, so the plan is being written without them. Your request stands as you wrote it.",
+      "handoffNoCredit": "Grill me needs AI credit to ask its questions, so the plan is being written without them."
     },
     "summary": {
       "title": "What you settled",

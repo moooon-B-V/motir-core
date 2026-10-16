@@ -34,6 +34,7 @@ import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { GrillMeControl } from '@/components/planning/GrillMeControl';
 import { SharpenThread } from '@/components/planning/SharpenThread';
 import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
+import { grillFailedAfterHandoff } from '@/lib/planning/grillHandoff';
 import { useGrillSession } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
@@ -693,6 +694,17 @@ export function PlanChangeRail({
       </div>
     ) : null;
   const tGrill = useTranslations('sharpen.question');
+  const tGrillMarkers = useTranslations('sharpen.markers');
+  // GRILL ME FAILED, AND THE RUN HANDED OFF ANYWAY (MOTIR-8781): the thread is drawn only
+  // in the conversation phase, and the plan run leaves that phase at once, so a grilling
+  // whose turn failed (or never opened) would otherwise be invisible — the person turned
+  // it on, was never asked, and the plan was written without them. Say so, once.
+  const grillFailedNotice = grillFailedAfterHandoff({
+    writing,
+    on: grillOptIn.on,
+    session: grill.session,
+    error: grill.error,
+  });
   const composerPlaceholder = heldBlocks
     ? ts('refused.placeholder', { key: held.target })
     : grillQuestion
@@ -1099,6 +1111,11 @@ export function PlanChangeRail({
             }}
             onRetry={grill.retry}
           />
+        ) : null}
+        {grillFailedNotice ? (
+          <Bubble role="assistant" testId="grill-handoff-failed">
+            {tGrillMarkers(grill.error === 'outOfCredits' ? 'handoffNoCredit' : 'handoffFailed')}
+          </Bubble>
         ) : null}
         {conversing ? (
           <Bubble role="assistant" testId="plan-conversation-phase">
