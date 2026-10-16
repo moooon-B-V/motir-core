@@ -11,6 +11,11 @@ import {
   type CiRunnerProvisioningIntentCreateInput,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { isMotirFleetJob } from '@/lib/ciFleet/config';
+import {
+  provisioningInstallationIdFor,
+  RepoProvisioningApiError,
+  RepoProvisioningNotConfiguredError,
+} from '@/lib/github/repoProvisioning';
 
 // The runner-FLEET ENTRY POINT (Story MOTIR-1916 · MOTIR-1920) — turning a
 // `workflow_job` `queued` delivery into an attributed provisioning intent, or,
@@ -121,7 +126,7 @@ export const ciRunnerProvisioningService = {
     // `notes.html` #186). Under Motir's shared provisioning installation
     // `GithubInstallation.workspaceId` is NULL and names no workspace at all —
     // reading it here would attribute every tenant's jobs to nobody.
-    const connection = await withSystemContext(async (tx) => {
+    const mirrored = await withSystemContext(async (tx) => {
       const installation = await githubInstallationRepository.findByInstallationId(
         installationId,
         tx,
@@ -143,17 +148,42 @@ export const ciRunnerProvisioningService = {
       };
     });
 
+    // 2b · The CONNECTED-ORG fallback (MOTIR-8720). An installation with no
+    // mirror row is, in one case, still Motir's to serve: the PROVISIONING App
+    // installed on an org whose repositories are mirrored under ANOTHER App's
+    // installation (a `connected` repo reached through Motir Integration, while
+    // only the provisioning App subscribes to `workflow_job`). The fallback is
+    // keyed on PROOF, never on the missing row alone — the delivery's
+    // installation must BE the provisioning App's installation on the repo's
+    // owner, read with the App JWT — so no other App's installation can turn a
+    // forged label into a billed machine. Every other installation miss is
+    // refused exactly as before.
+    const connection =
+      mirrored.kind === 'unknown_installation'
+        ? await resolveConnectedOrgRepo(event, installationId)
+        : mirrored;
+
     if (connection.kind === 'unknown_installation') {
       console.warn(
         '[ciRunnerProvisioningService] fleet-labelled job on an unknown installation — not provisioned',
-        { installationId, repoOwner: event.repoOwner, repoName: event.repoName },
+        {
+          installationId,
+          repoOwner: event.repoOwner,
+          repoName: event.repoName,
+          ...('reason' in connection ? { reason: connection.reason } : {}),
+        },
       );
       return { outcome: 'unknown_installation' };
     }
     if (connection.kind === 'unknown_repo') {
       console.warn(
         '[ciRunnerProvisioningService] fleet-labelled job in a repo Motir does not mirror — not provisioned',
-        { installationId, repoOwner: event.repoOwner, repoName: event.repoName },
+        {
+          installationId,
+          repoOwner: event.repoOwner,
+          repoName: event.repoName,
+          ...('reason' in connection ? { reason: connection.reason } : {}),
+        },
       );
       return { outcome: 'unknown_repo' };
     }
@@ -326,4 +356,76 @@ export const ciRunnerProvisioningService = {
 /** A Postgres unique-constraint violation, surfaced by Prisma as P2002. */
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
+type ConnectedOrgResolution =
+  | {
+      kind: 'connected';
+      workspaceId: string;
+      organizationId: string;
+      githubRepoId: string;
+    }
+  | {
+      kind: 'unknown_installation';
+      reason:
+        | 'not_configured'
+        | 'github_unreachable'
+        | `github_status_${number}`
+        | 'installation_mismatch';
+    }
+  | {
+      kind: 'unknown_repo';
+      reason: 'no_mirror_row' | 'ambiguous_mirror_rows' | 'owner_mismatch';
+    };
+
+/**
+ * MOTIR-8720 — attribute a fleet-labelled job delivered on an installation
+ * Motir has no mirror row for, IF AND ONLY IF that installation is the
+ * provisioning App's installation on the repository's owner.
+ *
+ * 1. GitHub is asked OUTSIDE any transaction (an HTTP call never holds one open)
+ *    which installation the provisioning App has on `event.repoOwner`; anything
+ *    but the delivery's own id ends here.
+ * 2. The repository's mirror rows are read across installations; exactly ONE is
+ *    required — never `rows[0]` of several.
+ * 3. That row's owner must be the delivery's owner (case-insensitive).
+ *
+ * The row may belong to ANY installation: the REPO row is the tenant, never the
+ * installation (MOTIR-1931).
+ */
+async function resolveConnectedOrgRepo(
+  event: NormalizedWorkflowJobEvent,
+  installationId: string,
+): Promise<ConnectedOrgResolution> {
+  let provisioningInstallationId: string;
+  try {
+    provisioningInstallationId = await provisioningInstallationIdFor(event.repoOwner);
+  } catch (err) {
+    if (err instanceof RepoProvisioningNotConfiguredError) {
+      return { kind: 'unknown_installation', reason: 'not_configured' };
+    }
+    if (err instanceof RepoProvisioningApiError && err.status !== null) {
+      return { kind: 'unknown_installation', reason: `github_status_${err.status}` };
+    }
+    return { kind: 'unknown_installation', reason: 'github_unreachable' };
+  }
+  if (String(provisioningInstallationId) !== String(installationId)) {
+    return { kind: 'unknown_installation', reason: 'installation_mismatch' };
+  }
+
+  const rows = await withSystemContext((tx) =>
+    githubRepoRepository.listByRepoId(event.providerRepoId, tx),
+  );
+  if (rows.length === 0) return { kind: 'unknown_repo', reason: 'no_mirror_row' };
+  if (rows.length > 1) return { kind: 'unknown_repo', reason: 'ambiguous_mirror_rows' };
+  const repo = rows[0]!;
+  if (repo.owner.toLowerCase() !== event.repoOwner.toLowerCase()) {
+    return { kind: 'unknown_repo', reason: 'owner_mismatch' };
+  }
+  return {
+    kind: 'connected',
+    workspaceId: repo.workspaceId,
+    organizationId: repo.organizationId,
+    githubRepoId: repo.id,
+  };
 }

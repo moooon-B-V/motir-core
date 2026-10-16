@@ -1048,7 +1048,7 @@ describe('the boot’s defensive paths', () => {
     // of the two happened.
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
-    vi.spyOn(projectRunnerGroupService, 'requireRunnerGroupId').mockRejectedValue(
+    vi.spyOn(projectRunnerGroupService, 'requireRunnerGroupIdFor').mockRejectedValue(
       new Error('the project read failed'),
     );
 

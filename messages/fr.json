@@ -9340,7 +9340,8 @@
       "navPlanningLessons": "Leçons de planification",
       "navIdeas": "Idées",
       "navEnterpriseRequests": "Demandes Enterprise",
-      "navRunModels": "Modèles des exécutions hébergées"
+      "navRunModels": "Modèles des exécutions hébergées",
+      "navFleetSettings": "Paramètres de la flotte"
     },
     "nav": {
       "overview": "Vue d'ensemble",
@@ -9520,7 +9521,11 @@
             }
           },
           "fleet": {
-            "stop": "A arrêté les conteneurs de la flotte"
+            "stop": "A arrêté les conteneurs de la flotte",
+            "org_ci": {
+              "enable": "A activé la CI de la flotte",
+              "disable": "A désactivé la CI de la flotte"
+            }
           },
           "enterprise_request": {
             "transition": "A changé l’état d’une demande Enterprise"
@@ -11446,6 +11451,186 @@
         "notPermitted": "Non effectué — votre rôle dans l'équipe de la plateforme ne le permet pas. Rien n'a été modifié.",
         "notFound": "Cette idée n'existe plus. Quelqu'un l'a supprimée pendant que la page était ouverte.",
         "failed": "Une erreur s'est produite, donc rien n'a été modifié. Réessayez."
+      }
+    },
+    "fleetSettings": {
+      "breadcrumb": "Opérations · Paramètres de la flotte",
+      "title": "Paramètres de la flotte",
+      "subtitle": "Ici, un superadmin décide quelle CI s’exécute sur les propres machines de Motir. Chaque changement exige un motif et est consigné dans le journal d’audit.",
+      "empty": "Aucun projet ne propose la CI sur la flotte : aucun projet de la méta-organisation n’a de dépôt privé dans une organisation connectée.",
+      "setting": {
+        "title": "Exécuter la CI des dépôts privés de Motir sur la flotte",
+        "pair": "Projet {project} · Organisation GitHub {org}",
+        "superadminOnly": "Superadmin uniquement",
+        "explanation": "Activé, chaque job de CI des dépôts privés de Motir sur {org} requiert le libellé {label} et s’exécute sur les machines partagées {fleet}, imputé à moooon B.V. Désactivé, ils s’exécutent sur des runners hébergés par GitHub. Aucun fichier de workflow ne change dans un cas comme dans l’autre."
+      },
+      "state": {
+        "on": "Activé",
+        "off": "Désactivé"
+      },
+      "action": {
+        "turnOn": "Activer",
+        "turnOff": "Désactiver"
+      },
+      "blocked": "Impossible d’activer tant que toutes les conditions ne sont pas remplies.",
+      "offNeverBlocked": "La désactivation n’attend jamais la disponibilité.",
+      "meta": {
+        "lastChanged": "Dernière modification",
+        "changedBy": "par {email}, {when} — « {reason} »",
+        "neverChanged": "Jamais modifié",
+        "auditLink": "Journal d’audit",
+        "variable": "Variable GitHub",
+        "repositories": "Dépôts"
+      },
+      "variable": {
+        "present": "{name} = {value} sur {org} (dépôts privés) : les nouveaux jobs sollicitent la flotte.",
+        "absent": "{name} n’est pas définie sur {org} : les jobs se rabattent sur les runners hébergés par GitHub.",
+        "unknown": "Impossible de lire {name} sur {org} : GitHub a répondu HTTP {status}.",
+        "unreachable": "Impossible de lire {name} sur {org} : GitHub était injoignable."
+      },
+      "drift": {
+        "onAbsent": {
+          "title": "Enregistré comme activé, mais GitHub n’est pas d’accord.",
+          "body": "{name} n’est pas définie sur {org}, donc les nouveaux jobs s’exécutent toujours sur des runners hébergés par GitHub. Désactivez puis réactivez le paramètre pour l’écrire."
+        },
+        "offPresent": {
+          "title": "Enregistré comme désactivé, mais GitHub n’est pas d’accord.",
+          "body": "{name} est toujours définie sur {org}, donc les nouveaux jobs sollicitent toujours la flotte. Activez puis désactivez le paramètre pour la supprimer."
+        }
+      },
+      "repositories": {
+        "count": "{count, plural, one {# dépôt privé} other {# dépôts privés}}, lus à l’exécution parmi les dépôts privés du projet {project} sur {org}"
+      },
+      "monitoringLine": "Les machines de Motir apparaissent sous moooon B.V. dans Supervision › Flotte",
+      "onCallout": {
+        "title": "La CI de Motir est sur la flotte.",
+        "link": "Ouvrir Supervision › Flotte"
+      },
+      "degraded": {
+        "title": "Activé mais pas prêt.",
+        "body": "Les nouveaux jobs resteront en file d’attente jusqu’à ce que ce soit corrigé ou que le paramètre soit désactivé."
+      },
+      "readiness": {
+        "title": "Disponibilité",
+        "subtitle": "Neuf conditions, dans l’ordre où un job les rencontre. Une condition qui n’a pas pu être vérifiée compte comme non remplie.",
+        "ready": "Prêt",
+        "readySub": "Les {count} conditions sont remplies",
+        "notReady": "Pas prêt — {count, plural, one {# condition non remplie} other {# conditions non remplies}}",
+        "unmetCount": "{count} non remplie(s)",
+        "unknownCount": "{count} non vérifiable(s)",
+        "checked": "Vérifié {when}",
+        "checkedAgain": "Revérifié {when}",
+        "recheck": "Vérifier à nouveau"
+      },
+      "mark": {
+        "met": "Remplie",
+        "unmet": "Non remplie",
+        "unknown": "Non vérifiable"
+      },
+      "cond": {
+        "kill_switch": {
+          "label": "Arrêt d’urgence de la flotte"
+        },
+        "app_installed": {
+          "label": "App installée"
+        },
+        "app_runner_permission": {
+          "label": "Autorisation de l’App : runners auto-hébergés"
+        },
+        "app_variables_permission": {
+          "label": "Autorisation de l’App : variables (écriture)"
+        },
+        "workflow_job_subscription": {
+          "label": "Livraison de workflow_job"
+        },
+        "app_repositories": {
+          "label": "L’App atteint les dépôts"
+        },
+        "delivery_attributable": {
+          "label": "Jobs attribués au projet {project}"
+        },
+        "runner_group": {
+          "label": "Groupe de runners"
+        },
+        "image_coverage": {
+          "label": "Couverture de l’image"
+        }
+      },
+      "why": {
+        "kill_switch_engaged": "L’arrêt d’urgence de la flotte est enclenché ({variable}=0), donc aucune machine de la flotte ne démarre. Un opérateur le retire ou l’augmente.",
+        "app_not_installed": "L’App motir-studio n’est pas installée sur {org}. Un propriétaire de {org} l’installe.",
+        "app_suspended": "L’App motir-studio sur {org} est suspendue depuis le {date}. Un propriétaire de {org} lève la suspension.",
+        "permission_missing": "L’App motir-studio sur {org} détient {permission} : aucune, et a besoin de l’écriture. Un propriétaire de {org} accepte la requête d’autorisation.",
+        "permission_insufficient": "L’App motir-studio sur {org} détient {permission} : {granted}, et a besoin de l’écriture. Un propriétaire de {org} accepte la requête d’autorisation.",
+        "not_subscribed": "L’App n’est pas abonnée aux événements workflow_job, donc GitHub ne signale jamais à Motir qu’un job est en file d’attente. La personne qui administre l’App motir-studio l’abonne dans les paramètres de l’App.",
+        "repositories_not_granted": "L’installation de l’App sur {org} n’atteint pas {repositories}. Un propriétaire de {org} les ajoute à l’accès aux dépôts de l’installation.",
+        "no_private_repositories": "Le projet {project} n’a aucun dépôt privé dans {org}, donc la flotte n’a rien à exécuter.",
+        "not_attributable": "Un job en file d’attente provenant de {repositories} ne serait pas attribué au projet {project} et resterait donc en attente jusqu’à ce que GitHub l’expire. Reconnectez le dépôt au projet pour que sa ligne miroir soit à jour.",
+        "no_runner_group": "Le projet {project} n’a aucun groupe de runners dans {org}. Un opérateur exécute {script} --project {project}.",
+        "sync_pending": "Le groupe de runners du projet dans {org} n’est pas synchronisé avec ses dépôts. Un opérateur exécute {script} --project {project}.",
+        "jobs_not_runnable": "{count, plural, one {# job ne peut} other {# jobs ne peuvent}} pas encore s’exécuter sur l’image de runner de la flotte. La personne qui maintient l’image de la flotte ajoute l’outil manquant ; un job qui exige un autre système d’exploitation reste non exécutable tant qu’il ne quitte pas l’ensemble privé.",
+        "not_inventoried": "{repositories} {count, plural, one {n’est pas} other {ne sont pas}} dans l’inventaire des jobs de la flotte, donc personne n’a vérifié que l’image de runner peut exécuter {count, plural, one {ses} other {leurs}} jobs. La personne qui maintient l’inventaire le relance.",
+        "inventory_stale": "Les workflows de {repositories} ont changé après que l’inventaire des jobs de la flotte les a mesurés. La personne qui maintient l’inventaire le relance.",
+        "read_failed": "Vérification impossible : GitHub a répondu HTTP {status}. Compte comme non remplie jusqu’à ce qu’une vérification réussisse.",
+        "read_unreachable": "Vérification impossible : GitHub était injoignable. Compte comme non remplie jusqu’à ce qu’une vérification réussisse.",
+        "read_failedNoStatus": "Vérification impossible. Compte comme non remplie jusqu’à ce qu’une vérification réussisse.",
+        "app_not_readable": "Ne peut pas être vérifiée tant que l’App motir-studio n’est pas installée et lisible sur {org}."
+      },
+      "jobs": {
+        "missing": "{repo} · {workflow} · {job} — manque {tools}",
+        "cannotHost": "{repo} · {workflow} · {job} — impossible à héberger : {reason}",
+        "more": "+{count} de plus",
+        "scope": "Ceci couvre l’image inventoriée construite depuis main, pas l’image que la production démarre."
+      },
+      "confirm": {
+        "onTitle": "Activer la CI sur la flotte pour {org} ?",
+        "onBody": "Désactivé → Activé. Chaque nouveau job de CI dans {count, plural, one {# dépôt} other {# dépôts}} s’exécutera sur la flotte et sera imputé au quota de moooon B.V. : {repositories}. Les jobs déjà en cours se terminent là où ils ont démarré.",
+        "offTitle": "Désactiver la CI sur la flotte pour {org} ?",
+        "offBody": "Activé → Désactivé. Les nouveaux jobs repassent sur les runners hébergés par GitHub ; les jobs déjà en cours sur la flotte s’y terminent. La désactivation n’attend jamais la disponibilité.",
+        "reasonLabel": "Motif — obligatoire, consigné dans le journal d’audit",
+        "reasonPlaceholderOn": "Pourquoi activez-vous ce paramètre ?",
+        "reasonPlaceholderOff": "Pourquoi désactivez-vous ce paramètre ?",
+        "reasonHint": "Affiché à tout opérateur qui lira ce changement plus tard. « Test » seul ne répond à rien.",
+        "reasonHintEmpty": "Le bouton reste désactivé tant qu’aucun motif n’est saisi — la même règle que celle appliquée par le serveur.",
+        "cancel": "Annuler",
+        "confirmOn": "Activer",
+        "confirmOff": "Désactiver"
+      },
+      "refused": {
+        "reasonMissing": "Non {direction} : un motif est obligatoire, et il est consigné dans le journal d’audit avec ce changement. Rien n’a changé.",
+        "alreadyOn": "Déjà activé — rien n’a changé.",
+        "alreadyOff": "Déjà désactivé — rien n’a changé.",
+        "alreadyBody": "Un autre superadmin l’a modifié en premier, donc rien n’a été écrit et aucune ligne d’audit n’a été ajoutée.",
+        "githubStatus": "Non {direction} : GitHub a refusé de {operation} {name} sur {org} (HTTP {status}).",
+        "githubUnreachable": "Non {direction} : GitHub était injoignable pour {operation} {name} sur {org}.",
+        "nothingChanged": "Rien n’a changé : le paramètre et la variable GitHub sont tels qu’ils étaient.",
+        "notReady": "Non activé : la flotte a cessé d’être prête après le chargement de cette page.",
+        "notReadyList": "Non remplies maintenant : {conditions}. Rien n’a changé. La disponibilité ci-dessous a été revérifiée.",
+        "notPermitted": "Non modifié : seul un superadmin peut modifier ce paramètre.",
+        "targetUnknown": "Non modifié : ce paramètre n’est plus proposé pour ce projet et cette organisation. Rechargez la page.",
+        "failed": "Non {direction} : un problème est survenu. Rechargez la page pour voir l’état actuel du paramètre."
+      },
+      "done": {
+        "on": "Activé. Les nouveaux jobs sollicitent désormais la flotte.",
+        "off": "Désactivé. Les nouveaux jobs repassent sur les runners hébergés par GitHub."
+      },
+      "direction": {
+        "on": "activé",
+        "off": "désactivé"
+      },
+      "operation": {
+        "read": "lire",
+        "set": "définir",
+        "delete": "supprimer"
+      },
+      "permission": {
+        "organization_self_hosted_runners": "Runners auto-hébergés",
+        "organization_actions_variables": "Variables"
+      },
+      "unavailable": {
+        "title": "Impossible de charger le paramètre de la flotte",
+        "body": "Le paramètre ou sa disponibilité n’a pas pu être lu, donc aucun état n’est affiché et aucun interrupteur n’est proposé. Il s’agit d’une erreur de lecture : rien n’a changé, et aucune valeur n’est devinée.",
+        "retry": "Réessayer"
       }
     }
   },

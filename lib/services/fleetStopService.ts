@@ -9,6 +9,7 @@ import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { actionsRunsClient, type ActionsRepoRef } from '@/lib/github/actionsRuns';
 import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   getOrchestrator,
@@ -209,7 +210,8 @@ async function stopIntent(
 
   if (intent.githubRunnerId !== null) {
     try {
-      await runnerJitConfigClient.deleteRunner(intent.githubRunnerId);
+      // In the org that owns the job's repository (MOTIR-8711).
+      await runnerJitConfigClient.deleteRunner(intent.githubRunnerId, fleetRunnerTargetFor(intent));
     } catch (err) {
       console.error('[fleetStopService] could not de-register a runner', {
         intentId: intent.id,
