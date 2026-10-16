@@ -8582,6 +8582,58 @@
         "installation_not_accessibleHint": "Votre utilisateur GitHub ne voit pas cette installation : rien n'a donc été associé. Un propriétaire du compte GitHub peut vous donner accès.",
         "not_configuredTitle": "GitHub n'est pas configuré sur ce déploiement",
         "not_configuredHint": "Ce déploiement de Motir n'a pas encore d'application GitHub, donc GitHub ne peut pas être connecté ici. La personne qui gère ce déploiement peut la configurer."
+      },
+      "existing": {
+        "title": "Vos comptes GitHub avec l'application Motir",
+        "hint": "L'application Motir est déjà installée sur ces comptes. Choisissez-en un pour connecter ses dépôts ici. Inutile de l'installer à nouveau.",
+        "loading": "Recherche de vos comptes GitHub…",
+        "typeUser": "Compte personnel",
+        "typeOrg": "Organisation GitHub",
+        "linkedHere": "Déjà lié à cette organisation",
+        "pickCta": "Choisir les dépôts",
+        "pickAria": "Choisir les dépôts de {login}",
+        "installAnotherCta": "Installer sur un autre compte",
+        "installAnotherHint": "Utilisez cette option si le compte voulu n'est pas dans la liste.",
+        "loadErrorTitle": "Impossible de lire vos comptes GitHub",
+        "loadErrorHint": "Rien n'a été modifié. Réessayez, ou installez sur un autre compte.",
+        "retryCta": "Réessayer",
+        "identity": {
+          "title": "Connectez-vous avec GitHub pour trouver vos installations.",
+          "hint": "Motir vérifie seulement sur quels comptes l'application Motir est installée et lesquels vous sont accessibles. Vous pouvez passer cette étape et installer sur un nouveau compte.",
+          "cta": "Se connecter avec GitHub",
+          "skipCta": "Passer et installer",
+          "declinedHint": "GitHub ne vous a pas connecté, donc rien n'a été modifié. Réessayez, ou passez cette étape et installez à la place."
+        },
+        "picker": {
+          "heading": "Dépôts de {login}",
+          "hint": "Choisissez les dépôts que cette organisation connecte. Rien n'est connecté avant votre confirmation.",
+          "fromInstallHint": "Vous avez choisi un compte sur lequel l'application Motir est déjà installée. Choisissez lesquels de ses dépôts cette organisation connecte.",
+          "loading": "Chargement des dépôts…",
+          "available": "Disponible",
+          "connectedHere": "Connecté ici",
+          "connectedElsewhere": "Connecté à une autre organisation",
+          "connectedElsewhereHint": "Ce dépôt ne peut pas être choisi ici.",
+          "selectedCount": "{count, plural, one {# dépôt sélectionné} other {# dépôts sélectionnés}}",
+          "confirmCta": "{count, plural, one {Connecter # dépôt} other {Connecter # dépôts}}",
+          "backCta": "Retour aux comptes",
+          "nothingLeftTitle": "Plus rien à connecter depuis ce compte",
+          "nothingLeftHint": "Chaque dépôt ici est déjà connecté, à cette organisation ou à une autre. Pour en proposer davantage, ajoutez des dépôts à l'installation sur GitHub.",
+          "nothingLeftCta": "Ajouter des dépôts sur GitHub"
+        },
+        "outcome": {
+          "linkedTitle": "Dépôts connectés",
+          "linkedHint": "Motir peut maintenant lire les dépôts choisis. Rien d'autre de ce compte n'a été connecté.",
+          "takenTitle": "Un dépôt a été pris pendant votre choix",
+          "takenHint": "Une autre organisation a connecté {repos}. Rien n'a été connecté. La liste est à jour, faites un nouveau choix.",
+          "notAccessibleTitle": "Vous n'avez plus accès à ce compte",
+          "notAccessibleHint": "GitHub ne vous permet plus de voir cette installation, elle a donc été retirée de la liste. Obtenez l'accès auprès d'un propriétaire du compte GitHub, ou installez sur un autre compte.",
+          "notAdminTitle": "Seul un administrateur de l'organisation peut lier une installation existante",
+          "notAdminHint": "Invitez un administrateur de cette organisation à la lier, ou installez vous-même sur un autre compte.",
+          "selectionRequiredTitle": "Choisissez au moins un dépôt",
+          "selectionRequiredHint": "Rien n'a été connecté. Cochez les dépôts voulus, puis confirmez.",
+          "notVisibleTitle": "Un dépôt ne fait plus partie de cette installation",
+          "notVisibleHint": "Rien n'a été connecté. La liste est à jour, faites un nouveau choix."
+        }
       }
     },
     "index": {

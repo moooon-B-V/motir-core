@@ -8582,6 +8582,58 @@
         "installation_not_accessibleHint": "Je GitHub-gebruiker kan deze installatie niet zien, dus er is niets gekoppeld. Een eigenaar van het GitHub-account kan je toegang geven.",
         "not_configuredTitle": "GitHub is niet ingesteld op deze installatie",
         "not_configuredHint": "Deze Motir-installatie heeft nog geen GitHub-app, dus GitHub kan hier niet worden gekoppeld. Wie de installatie beheert, kan dit instellen."
+      },
+      "existing": {
+        "title": "Je GitHub-accounts met de Motir-app",
+        "hint": "De Motir-app is al geïnstalleerd op deze accounts. Kies er een om de repository's ervan hier te koppelen. Je hoeft niet opnieuw te installeren.",
+        "loading": "Je GitHub-accounts worden gezocht…",
+        "typeUser": "Persoonlijk account",
+        "typeOrg": "GitHub-organisatie",
+        "linkedHere": "Al gekoppeld aan deze organisatie",
+        "pickCta": "Repository's kiezen",
+        "pickAria": "Repository's kiezen uit {login}",
+        "installAnotherCta": "Op een ander account installeren",
+        "installAnotherHint": "Gebruik dit als het account dat je wilt niet in de lijst staat.",
+        "loadErrorTitle": "We konden je GitHub-accounts niet lezen",
+        "loadErrorHint": "Er is niets gewijzigd. Probeer het opnieuw of installeer op een ander account.",
+        "retryCta": "Opnieuw proberen",
+        "identity": {
+          "title": "Log in met GitHub om je installaties te vinden.",
+          "hint": "Motir controleert alleen op welke accounts de Motir-app is geïnstalleerd en welke daarvan je kunt bereiken. Je kunt dit overslaan en in plaats daarvan op een nieuw account installeren.",
+          "cta": "Inloggen met GitHub",
+          "skipCta": "Overslaan en installeren",
+          "declinedHint": "GitHub heeft je niet ingelogd, dus er is niets gewijzigd. Probeer het opnieuw, of sla dit over en installeer in plaats daarvan."
+        },
+        "picker": {
+          "heading": "Repository's in {login}",
+          "hint": "Kies de repository's die deze organisatie koppelt. Er wordt niets gekoppeld tot je bevestigt.",
+          "fromInstallHint": "Je hebt een account gekozen waarop de Motir-app al is geïnstalleerd. Kies welke repository's ervan deze organisatie koppelt.",
+          "loading": "Repository's laden…",
+          "available": "Beschikbaar",
+          "connectedHere": "Hier gekoppeld",
+          "connectedElsewhere": "Gekoppeld aan een andere organisatie",
+          "connectedElsewhereHint": "Deze repository kan hier niet worden gekozen.",
+          "selectedCount": "{count, plural, one {# repository geselecteerd} other {# repository's geselecteerd}}",
+          "confirmCta": "{count, plural, one {# repository koppelen} other {# repository's koppelen}}",
+          "backCta": "Terug naar accounts",
+          "nothingLeftTitle": "Niets meer te koppelen uit dit account",
+          "nothingLeftHint": "Elke repository hier is al gekoppeld, aan deze organisatie of aan een andere. Voeg op GitHub repository's toe aan de installatie om er meer aan te bieden.",
+          "nothingLeftCta": "Repository's toevoegen op GitHub"
+        },
+        "outcome": {
+          "linkedTitle": "Repository's gekoppeld",
+          "linkedHint": "Motir kan nu de repository's lezen die je hebt gekozen. Verder is er niets van dit account gekoppeld.",
+          "takenTitle": "Er is een repository bezet geraakt terwijl je koos",
+          "takenHint": "Een andere organisatie heeft {repos} gekoppeld. Er is niets gekoppeld. De lijst is bijgewerkt, dus kies opnieuw.",
+          "notAccessibleTitle": "Je kunt dat account niet meer bereiken",
+          "notAccessibleHint": "GitHub laat je deze installatie niet meer zien, dus hij is uit de lijst gehaald. Vraag een eigenaar van het GitHub-account om toegang, of installeer op een ander account.",
+          "notAdminTitle": "Alleen een beheerder van de organisatie kan een bestaande installatie koppelen",
+          "notAdminHint": "Vraag een beheerder van deze organisatie om hem te koppelen, of installeer zelf op een ander account.",
+          "selectionRequiredTitle": "Kies ten minste één repository",
+          "selectionRequiredHint": "Er is niets gekoppeld. Vink de repository's aan die je wilt en bevestig daarna.",
+          "notVisibleTitle": "Een repository hoort niet meer bij deze installatie",
+          "notVisibleHint": "Er is niets gekoppeld. De lijst is bijgewerkt, dus kies opnieuw."
+        }
       }
     },
     "index": {

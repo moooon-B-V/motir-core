@@ -8582,6 +8582,58 @@
         "installation_not_accessibleHint": "Użytkownik GitHub, z którego korzystasz, nie widzi tej instalacji, więc nic nie zostało powiązane. Dostęp może nadać właściciel konta GitHub.",
         "not_configuredTitle": "GitHub nie jest skonfigurowany w tym wdrożeniu",
         "not_configuredHint": "To wdrożenie Motir nie ma jeszcze aplikacji GitHub App, więc nie można tu połączyć GitHuba. Osoba, która zarządza wdrożeniem, może to skonfigurować."
+      },
+      "existing": {
+        "title": "Twoje konta GitHub z aplikacją Motir",
+        "hint": "Aplikacja Motir jest już zainstalowana na tych kontach. Wybierz jedno, aby połączyć tutaj jego repozytoria. Nie musisz instalować jej ponownie.",
+        "loading": "Szukamy Twoich kont GitHub…",
+        "typeUser": "Konto osobiste",
+        "typeOrg": "Organizacja GitHub",
+        "linkedHere": "Już powiązane z tą organizacją",
+        "pickCta": "Wybierz repozytoria",
+        "pickAria": "Wybierz repozytoria z {login}",
+        "installAnotherCta": "Zainstaluj na innym koncie",
+        "installAnotherHint": "Użyj tej opcji, jeśli konta, którego szukasz, nie ma na liście.",
+        "loadErrorTitle": "Nie udało się odczytać Twoich kont GitHub",
+        "loadErrorHint": "Nic nie zostało zmienione. Spróbuj ponownie lub zainstaluj na innym koncie.",
+        "retryCta": "Spróbuj ponownie",
+        "identity": {
+          "title": "Zaloguj się przez GitHub, aby znaleźć swoje instalacje.",
+          "hint": "Motir sprawdza tylko, na których kontach jest zainstalowana aplikacja Motir i do których z nich masz dostęp. Możesz pominąć ten krok i zainstalować aplikację na nowym koncie.",
+          "cta": "Zaloguj się przez GitHub",
+          "skipCta": "Pomiń i zainstaluj",
+          "declinedHint": "GitHub nie zalogował Cię, więc nic nie zostało zmienione. Spróbuj ponownie albo pomiń ten krok i zainstaluj aplikację."
+        },
+        "picker": {
+          "heading": "Repozytoria w {login}",
+          "hint": "Wybierz repozytoria, które połączy ta organizacja. Nic nie zostanie połączone, dopóki nie potwierdzisz.",
+          "fromInstallHint": "Wybrano konto, na którym aplikacja Motir jest już zainstalowana. Wybierz, które z jego repozytoriów połączy ta organizacja.",
+          "loading": "Wczytywanie repozytoriów…",
+          "available": "Dostępne",
+          "connectedHere": "Połączone tutaj",
+          "connectedElsewhere": "Połączone z inną organizacją",
+          "connectedElsewhereHint": "Tego repozytorium nie można tutaj wybrać.",
+          "selectedCount": "{count, plural, one {Wybrano # repozytorium} few {Wybrano # repozytoria} many {Wybrano # repozytoriów} other {Wybrano # repozytorium}}",
+          "confirmCta": "{count, plural, one {Połącz # repozytorium} few {Połącz # repozytoria} many {Połącz # repozytoriów} other {Połącz # repozytorium}}",
+          "backCta": "Wróć do kont",
+          "nothingLeftTitle": "Z tego konta nie ma już nic do połączenia",
+          "nothingLeftHint": "Każde repozytorium tutaj jest już połączone, z tą organizacją lub z inną. Aby udostępnić więcej, dodaj repozytoria do instalacji w GitHubie.",
+          "nothingLeftCta": "Dodaj repozytoria w GitHubie"
+        },
+        "outcome": {
+          "linkedTitle": "Repozytoria połączone",
+          "linkedHint": "Motir może teraz odczytywać wybrane repozytoria. Nic więcej z tego konta nie zostało połączone.",
+          "takenTitle": "Podczas wybierania ktoś zajął repozytorium",
+          "takenHint": "Inna organizacja połączyła {repos}. Nic nie zostało połączone. Lista jest zaktualizowana, więc wybierz ponownie.",
+          "notAccessibleTitle": "Nie masz już dostępu do tego konta",
+          "notAccessibleHint": "GitHub nie pozwala Ci już widzieć tej instalacji, więc została usunięta z listy. Poproś właściciela konta GitHub o dostęp lub zainstaluj na innym koncie.",
+          "notAdminTitle": "Tylko administrator organizacji może powiązać istniejącą instalację",
+          "notAdminHint": "Poproś administratora tej organizacji o jej powiązanie albo sam zainstaluj na innym koncie.",
+          "selectionRequiredTitle": "Wybierz co najmniej jedno repozytorium",
+          "selectionRequiredHint": "Nic nie zostało połączone. Zaznacz wybrane repozytoria, a potem potwierdź.",
+          "notVisibleTitle": "Repozytorium nie należy już do tej instalacji",
+          "notVisibleHint": "Nic nie zostało połączone. Lista jest zaktualizowana, więc wybierz ponownie."
+        }
       }
     },
     "index": {

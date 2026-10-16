@@ -8579,6 +8579,58 @@
         "installation_not_accessibleHint": "あなたの GitHub ユーザーからこのインストールが見えないため、何もリンクされていません。GitHub アカウントのオーナーがアクセス権を付与できます。",
         "not_configuredTitle": "このデプロイでは GitHub が設定されていません",
         "not_configuredHint": "この Motir のデプロイにはまだ GitHub App がないため、ここから GitHub を接続できません。デプロイの運用者が設定できます。"
+      },
+      "existing": {
+        "title": "Motir アプリがインストールされている GitHub アカウント",
+        "hint": "これらのアカウントには Motir アプリがすでにインストールされています。アカウントを選ぶと、そのリポジトリをここに接続できます。もう一度インストールする必要はありません。",
+        "loading": "GitHub アカウントを探しています…",
+        "typeUser": "個人アカウント",
+        "typeOrg": "GitHub 組織",
+        "linkedHere": "この組織にリンク済み",
+        "pickCta": "リポジトリを選択",
+        "pickAria": "{login}からリポジトリを選択",
+        "installAnotherCta": "別のアカウントにインストール",
+        "installAnotherHint": "目的のアカウントが一覧にない場合はこちらを使います。",
+        "loadErrorTitle": "GitHub アカウントを読み込めませんでした",
+        "loadErrorHint": "何も変更されていません。もう一度試すか、別のアカウントにインストールしてください。",
+        "retryCta": "もう一度試す",
+        "identity": {
+          "title": "GitHub でサインインして、インストール済みのアカウントを探します。",
+          "hint": "Motir が確認するのは、Motir アプリがどのアカウントにインストールされているか、そのうちどれにあなたがアクセスできるかだけです。この手順をスキップして、新しいアカウントにインストールすることもできます。",
+          "cta": "GitHub でサインイン",
+          "skipCta": "スキップしてインストール",
+          "declinedHint": "GitHub でサインインが完了しなかったため、何も変更されていません。もう一度試すか、スキップしてインストールしてください。"
+        },
+        "picker": {
+          "heading": "{login}のリポジトリ",
+          "hint": "この組織に接続するリポジトリを選択してください。確定するまで何も接続されません。",
+          "fromInstallHint": "Motir アプリがすでにインストールされているアカウントが選ばれました。この組織に接続するリポジトリを選択してください。",
+          "loading": "リポジトリを読み込んでいます…",
+          "available": "接続可能",
+          "connectedHere": "この組織に接続済み",
+          "connectedElsewhere": "別の組織に接続済み",
+          "connectedElsewhereHint": "このリポジトリはここでは選択できません。",
+          "selectedCount": "{count, plural, other {# 件のリポジトリを選択中}}",
+          "confirmCta": "{count, plural, other {# 件のリポジトリを接続}}",
+          "backCta": "アカウント一覧に戻る",
+          "nothingLeftTitle": "このアカウントから接続できるリポジトリはもうありません",
+          "nothingLeftHint": "ここにあるリポジトリはすべて、この組織か別の組織にすでに接続されています。さらに追加するには、GitHub でインストールにリポジトリを追加してください。",
+          "nothingLeftCta": "GitHub でリポジトリを追加"
+        },
+        "outcome": {
+          "linkedTitle": "リポジトリを接続しました",
+          "linkedHint": "Motir は選択したリポジトリを読み込めるようになりました。このアカウントのそれ以外のリポジトリは接続されていません。",
+          "takenTitle": "選択中にリポジトリが別の組織に接続されました",
+          "takenHint": "別の組織が{repos}を接続しました。何も接続されていません。一覧を更新したので、もう一度選択してください。",
+          "notAccessibleTitle": "そのアカウントにアクセスできなくなりました",
+          "notAccessibleHint": "GitHub でこのインストールが表示できなくなったため、一覧から削除しました。GitHub アカウントのオーナーにアクセスを依頼するか、別のアカウントにインストールしてください。",
+          "notAdminTitle": "既存のインストールをリンクできるのは組織の管理者だけです",
+          "notAdminHint": "この組織の管理者にリンクを依頼するか、ご自身で別のアカウントにインストールしてください。",
+          "selectionRequiredTitle": "リポジトリを 1 つ以上選択してください",
+          "selectionRequiredHint": "何も接続されていません。接続したいリポジトリにチェックを入れてから確定してください。",
+          "notVisibleTitle": "このインストールに含まれなくなったリポジトリがあります",
+          "notVisibleHint": "何も接続されていません。一覧を更新したので、もう一度選択してください。"
+        }
       }
     },
     "index": {
