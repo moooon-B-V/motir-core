@@ -136,6 +136,17 @@ export interface MigrateIndexStatusDto {
 }
 
 /**
+ * What `POST …/index-retry` answers (MOTIR-8769): the repository and the state it
+ * is in after the call. `queued` when a failed index was re-enqueued (or a
+ * concurrent retry already did it); the current state, unchanged, when the
+ * repository was not failed — a retry never enqueues twice.
+ */
+export interface MigrateIndexRetryResultDto {
+  repoRef: string;
+  status: MigrateIndexRepoStatusDto;
+}
+
+/**
  * The plan a migrate run's generate step drafted (MOTIR-8254, design
  * `design/onboarding-migrate/` § Revision 6, Panel 6c) — what the wizard's
  * "A few questions" step reads to say the plan is ready, how many items it

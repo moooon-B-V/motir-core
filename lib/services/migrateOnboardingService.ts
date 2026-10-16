@@ -15,6 +15,7 @@ import {
   migrateOnboardingRepository,
   type MigrateOnboardingUpdateInput,
 } from '@/lib/repositories/migrateOnboardingRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -47,11 +48,13 @@ import type {
   MigrateConnectOutcome,
   MigrateConnectStateDto,
   MigrateGeneratedPlanDto,
+  MigrateIndexRetryResultDto,
   MigrateIndexStatusDto,
   MigrateOnboardingDto,
   StartMigrateOnboardingInput,
 } from '@/lib/dto/migrateOnboarding';
 import {
+  MigrateIndexRetryRefusedError,
   MigrateOnboardingExistsError,
   MigrateOnboardingExitConditionError,
   MigrateOnboardingNotFoundError,
@@ -222,6 +225,43 @@ async function resolveRunConnectedRepoIndexPointers(ctx: {
   });
 }
 
+/**
+ * Enqueue ONE repository's code-graph index for this workspace — the tail the
+ * connect step's kick and the failed-index retry (MOTIR-8769) share, so a retry
+ * goes through exactly the enqueue a first index does and the indexer's
+ * admission, debounce and pause rules apply to it unchanged. Resolves the
+ * organisation's index target for the ref; a ref the organisation no longer has
+ * enqueues nothing. Best-effort and post-read, like every index enqueue: call it
+ * OUTSIDE any transaction.
+ */
+async function enqueueIndexForRepoRef(
+  ctx: { userId: string; workspaceId: string },
+  repoRef: string,
+): Promise<void> {
+  const organizationId = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => resolveOrganizationId(ctx.workspaceId, tx),
+  );
+  const target = await githubInstallationService.resolveOrganizationIndexTarget({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    organizationId,
+    repoRef,
+  });
+  // A recorded ref the organisation no longer has: nothing to index, and the
+  // caller's own read decides what that means.
+  if (!target) return;
+  // A dropped event is re-sent on the next attempt, because the ledger still has
+  // no row for it.
+  await enqueueCodeGraphIndex({
+    installationId: target.installationRef,
+    workspaceId: ctx.workspaceId,
+    repoOwner: target.repoOwner,
+    repoName: target.repoName,
+    defaultBranch: target.defaultBranch,
+  });
+}
+
 /** connect → index. Exit: the run's ORGANISATION has a connected repository
  *  (MOTIR-8480 — whichever of its workspaces connected it). The user connects the
  *  repo on GitHub; the wizard observes it.
@@ -258,28 +298,7 @@ const CONNECT: StepWiring = {
       },
     );
     if (covered) return;
-    const organizationId = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) => resolveOrganizationId(ctx.workspaceId, tx),
-    );
-    const target = await githubInstallationService.resolveOrganizationIndexTarget({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-      organizationId,
-      repoRef,
-    });
-    // A recorded ref the organisation no longer has: nothing to index, and the
-    // gate below decides on its own read.
-    if (!target) return;
-    // Best-effort and post-read, like every index enqueue: a dropped event is
-    // re-sent on the next advance attempt, because the ledger still has no row.
-    await enqueueCodeGraphIndex({
-      installationId: target.installationRef,
-      workspaceId: ctx.workspaceId,
-      repoOwner: target.repoOwner,
-      repoName: target.repoName,
-      defaultBranch: target.defaultBranch,
-    });
+    await enqueueIndexForRepoRef(ctx, repoRef);
   },
   async checkExit({ run, ctx }) {
     const code = await resolveRunConnectedRepos(ctx);
@@ -1355,6 +1374,86 @@ export const migrateOnboardingService = {
         ),
     );
     return toMigrateOnboardingDto(row);
+  },
+
+  /**
+   * RETRY A FAILED INDEX from the onboarding run (MOTIR-8769). Edit-gated like
+   * `skipImport`. Acts only on a repository that reads `failed` by the shared
+   * derivation, and only through the connect step's own enqueue
+   * (`enqueueIndexForRepoRef`), so nothing about the indexer changes.
+   *
+   *  - A ref outside the run's connected set → `not_connected`.
+   *  - `indexed`, `indexing` or `queued` → that state, and nothing is enqueued,
+   *    so a double click or a retry racing the sweep never sends twice.
+   *  - Failed because the index refused the repository for its SIZE →
+   *    `refused_too_large`: a re-enqueue would be refused the same way.
+   *  - Failed because its claimed run ended `failed` / `abandoned` → the dead
+   *    claim is released and the index re-enqueued, answering `queued`.
+   *
+   * ⚠️ WHY THE CLAIM IS RELEASED. `GithubRepo.indexingRunId` moves only when a
+   * run CLAIMS the repository (`markIndexStarted`), and a failed run never
+   * settles it, so after a bare enqueue the repository would keep reading
+   * `failed` until the new run starts and the indicator would flicker back. The
+   * release is conditional on the pointer still naming the dead run, which is
+   * also the race guard: of two concurrent retries only the one that released a
+   * row enqueues. It runs in the system context the index fleet writes the
+   * pointer in, because an organisation repository's row can belong to a sibling
+   * workspace; the ref was already checked against the caller's connected set,
+   * and the run id against this workspace's own ledger.
+   */
+  async retryIndex(
+    id: string,
+    repoRef: string,
+    ctx: ServiceContext,
+  ): Promise<MigrateIndexRetryResultDto> {
+    const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
+    if (!run) throw new MigrateOnboardingNotFoundError(id);
+    await projectAccessService.assertCanEdit(run.projectId, ctx);
+
+    const code = await resolveRunConnectedRepos(ctx);
+    if (!(code?.repos ?? []).some((repo) => repo.repoRef === repoRef)) {
+      throw new MigrateIndexRetryRefusedError(repoRef, 'not_connected');
+    }
+    const pointer = (await resolveRunConnectedRepoIndexPointers(ctx)).find(
+      (row) => row.repoRef === repoRef,
+    );
+    const indexingRunId = pointer?.indexingRunId ?? null;
+    const refusedForSize = (pointer?.indexRefusedAt ?? null) !== null;
+
+    const status = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const succeededRefs = new Set(
+          await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
+        );
+        const runningRunIds = new Set(
+          await jobRunRepository.listRunningCodeGraphIndexRunIds(ctx.workspaceId, tx),
+        );
+        const terminalRunIds = new Set(
+          await jobRunRepository.listTerminalCodeGraphRunIds(ctx.workspaceId, tx),
+        );
+        return deriveMigrateIndexRepoState({
+          hasSucceededIndex: succeededRefs.has(repoRef),
+          hasRunningIndex: indexingRunId !== null && runningRunIds.has(indexingRunId),
+          refreshFailing: deriveRefreshFailing({ indexingRunId, terminalRunIds }),
+          refusedForSize,
+        });
+      },
+    );
+    if (status !== 'failed') return { repoRef, status };
+    if (refusedForSize) throw new MigrateIndexRetryRefusedError(repoRef, 'refused_too_large');
+
+    // `failed` and not refused ⇒ the pointer names a dead run (the derivation's
+    // only other `failed` input), so `indexingRunId` is set here.
+    const released = await withSystemContext((tx) =>
+      githubRepoRepository.releaseIndexClaim(repoRef, indexingRunId as string, tx),
+    );
+    // A concurrent retry released it first and is enqueueing; this one is a no-op.
+    if (released === 0) return { repoRef, status: 'queued' };
+    await enqueueIndexForRepoRef(ctx, repoRef);
+    return { repoRef, status: 'queued' };
   },
 
   /**

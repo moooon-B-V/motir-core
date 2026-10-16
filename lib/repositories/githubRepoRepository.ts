@@ -330,6 +330,27 @@ export const githubRepoRepository = {
     return result.count;
   },
 
+  /** Release a claim that a DEAD run still holds (MOTIR-8769): clear
+   *  `indexingRunId` only while it still names `runId`, so a run that claimed the
+   *  repository since the caller read the pointer keeps its claim. A failed run
+   *  never reaches `markIndexSettled`, so its pointer stays until the next run is
+   *  claimed; a retry clears it so the repository reads `queued`, not `failed`,
+   *  while the re-enqueued run waits. Returns how many rows it released, which is
+   *  what lets two racing retries enqueue once. */
+  async releaseIndexClaim(
+    repoRef: string,
+    runId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name, indexingRunId: runId },
+      data: { indexingRunId: null },
+    });
+    return result.count;
+  },
+
   /** Record that indexing is PAUSED for a repository by a hard stop of its
    *  organisation's internal index allowance (MOTIR-4593), and release any claim —
    *  a refused dispatch booted nothing, so no run is in flight for it. The
