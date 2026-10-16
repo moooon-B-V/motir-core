@@ -1,9 +1,7 @@
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
-import { organizationsService } from '@/lib/services/organizationsService';
-import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
+import { resolveActiveOrganizationForPane } from '@/lib/workspaces/tierDisclosure.server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { OrgUsageClient } from './_components/OrgUsageClient';
 
@@ -23,8 +21,7 @@ export default async function OrganizationUsagePage() {
   const t = await getTranslations('aiUsage');
   const tOrg = await getTranslations('orgAdmin');
 
-  const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
-  const current = await organizationsService.resolveActiveOrganization(session.user.id, orgCookie);
+  const current = await resolveActiveOrganizationForPane(session.user.id);
 
   if (!current) {
     return (
