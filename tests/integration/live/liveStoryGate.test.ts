@@ -667,27 +667,44 @@ describe('7 · a quiet stream', () => {
     async () => {
       const { reader } = lf;
       const timers = manualTimers();
+      // A notification an EARLIER case's write raised can still be on its way to
+      // the process hub when this case opens, and it costs one read here. That
+      // read is the stream doing its job, not the quiet stream's cost, so each
+      // read is attributed: to the backstop that was just fired, or to a signal.
+      let backstopFired = false;
+      let backstopReads = 0;
       let reads = 0;
+      let active = 0;
       const written: WorkbenchWatermarkDto[] = [];
       const session = createWorkbenchStreamSession({
         actor: actorOf(reader),
         hub: getLiveSignalHub(),
         read: async (actor, cursor) => {
           reads += 1;
-          return workbenchWatermarkService.read(actor, cursor);
+          if (backstopFired) backstopReads += 1;
+          backstopFired = false;
+          active += 1;
+          try {
+            return await workbenchWatermarkService.read(actor, cursor);
+          } finally {
+            active -= 1;
+          }
         },
         write: (reading) => written.push(reading),
         timers,
       });
       await session.start(null);
       expect(reads).toBe(1);
-      // Five simulated minutes: the backstop is the only timer, re-armed after each read.
+      const armed = () => active === 0 && timers.pending().includes(WORKBENCH_STREAM_BACKSTOP_MS);
+      // Five simulated minutes: the backstop is re-armed after each read.
       for (let minute = 0; minute < 5; minute++) {
+        await until(armed, `the backstop armed for minute ${minute + 1}`);
+        backstopFired = true;
         expect(timers.fire((ms) => ms === WORKBENCH_STREAM_BACKSTOP_MS)).toBe(1);
-        await until(() => reads === minute + 2, `the backstop read of minute ${minute + 1}`);
-        await until(() => timers.pending().length === 1, 'the backstop to re-arm');
+        await until(() => !backstopFired, `the backstop read of minute ${minute + 1}`);
       }
-      expect(reads).toBeLessThanOrEqual(1 + 5);
+      await until(armed, 'the last backstop read to settle');
+      expect(backstopReads).toBe(5);
       expect(written).toEqual([]);
       session.close();
     },

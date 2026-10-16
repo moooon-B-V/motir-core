@@ -439,11 +439,13 @@ describe('A RE-READ THAT FAILS after the stream opened is logged, and the stream
     // hands back the same service object this spy patched, so calling through it
     // re-enters the mock.
     const real = workbenchWatermarkService.read.bind(workbenchWatermarkService);
-    vi.spyOn(workbenchWatermarkService, 'read').mockImplementation(async (...args) => {
-      call += 1;
-      if (call === 2) throw new Error('the database went away');
-      return real(...args);
-    });
+    const reads = vi
+      .spyOn(workbenchWatermarkService, 'read')
+      .mockImplementation(async (...args) => {
+        call += 1;
+        if (call === 2) throw new Error('the database went away');
+        return real(...args);
+      });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const res = await GET(req('/api/workbench/stream'));
@@ -463,6 +465,9 @@ describe('A RE-READ THAT FAILS after the stream opened is logged, and the stream
       expect.stringContaining('[workbench-stream] re-read failed'),
       'the database went away',
     );
+    // The second write can start one more re-read that is still on the wire when
+    // its frame lands; the stream is closed, so settle what it started.
+    await Promise.allSettled(reads.mock.results.map((r) => r.value));
   });
 });
 
