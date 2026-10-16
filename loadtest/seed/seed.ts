@@ -66,6 +66,12 @@ export function validRunTag(tag: string): boolean {
 }
 
 /**
+ * What the seed's client widens, exported so a test reads the two numbers instead of Prisma's
+ * private config. Prisma's interactive transactions default to 5 s / 2 s.
+ */
+export const SEED_TRANSACTION_OPTIONS = { timeout: 60_000, maxWait: 30_000 } as const;
+
+/**
  * Plant a seed-only Prisma client on `globalThis` BEFORE `./tenants` loads `@/lib/db`, which reuses
  * a client already there (its own header names this seam). Prisma's interactive transactions
  * default to 5 s, and the services the seed calls (`createProject` seeds a workflow in one
@@ -73,8 +79,11 @@ export function validRunTag(tag: string): boolean {
  * same transaction ran 5.26 s and expired, twice (MOTIR-8674, `prisma.workflowTransition.create()`
  * on an expired transaction). A seed writes once to a branch nobody else uses, so 60 s costs nothing.
  * The app's own client, and its 5 s, are not touched. A client planted by something else wins.
+ *
+ * Exported for `tests/loadtest/coverage.seed.test.ts`: `runSeed` only ever reaches the early return
+ * there, because every caller in the suite has already imported `@/lib/db`.
  */
-async function plantSeedClient(url: string): Promise<void> {
+export async function plantSeedClient(url: string): Promise<void> {
   const g = globalThis as unknown as { prisma?: unknown; prismaPool?: unknown };
   if (g.prisma) return;
   const [{ PrismaClient }, { PrismaPg }, { Pool }] = await Promise.all([
@@ -86,7 +95,7 @@ async function plantSeedClient(url: string): Promise<void> {
   const adapter = new PrismaPg(pool, { disposeExternalPool: true });
   g.prisma = new PrismaClient({
     adapter,
-    transactionOptions: { timeout: 60_000, maxWait: 30_000 },
+    transactionOptions: { ...SEED_TRANSACTION_OPTIONS },
   });
   g.prismaPool = pool;
 }

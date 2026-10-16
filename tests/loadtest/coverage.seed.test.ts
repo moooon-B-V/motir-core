@@ -24,7 +24,14 @@ import {
   type SeedManifest,
 } from '@/loadtest/seed/manifest';
 import { runReset } from '@/loadtest/seed/reset';
-import { argValue, loadShape, runSeed, validRunTag } from '@/loadtest/seed/seed';
+import {
+  SEED_TRANSACTION_OPTIONS,
+  argValue,
+  loadShape,
+  plantSeedClient,
+  runSeed,
+  validRunTag,
+} from '@/loadtest/seed/seed';
 import {
   InvalidSeedShapeError,
   SMOKE_SHAPE,
@@ -341,6 +348,76 @@ describe('the seed command helpers', () => {
     const bad = join(dir, 'bad-shape.json');
     await writeFile(bad, JSON.stringify({ ...SMOKE_SHAPE, users: 0 }));
     await expect(loadShape(bad)).rejects.toBeInstanceOf(InvalidSeedShapeError);
+  });
+});
+
+// The `globalThis.prisma` seam `@/lib/db` reads (MOTIR-8674). It is tested
+// DIRECTLY and not through `runSeed`, because every caller of `runSeed` in this
+// suite has already imported `@/lib/db` — the seam is then occupied and the
+// construction below is exactly the branch that cannot be reached that way.
+// Nothing here connects: `pg.Pool` and a Prisma client over an adapter are both
+// lazy, so no socket is opened to the unroutable port these cases name. The seam
+// is saved and restored around each case, so the real client this file's DB
+// section builds further down is untouched.
+describe('plantSeedClient', () => {
+  type Seam = { prisma?: unknown; prismaPool?: unknown };
+  const seam = globalThis as unknown as Seam;
+  const UNROUTABLE = 'postgresql://seed:secret@127.0.0.1:1/seedcov';
+
+  async function withEmptySeam(body: () => Promise<void>): Promise<void> {
+    const had = { prisma: seam.prisma, prismaPool: seam.prismaPool };
+    delete seam.prisma;
+    delete seam.prismaPool;
+    try {
+      await body();
+    } finally {
+      // `disposeExternalPool: true` makes `$disconnect()` end the pool too, so
+      // the idle-client drain this planted client owns does not outlive the case.
+      const planted = seam.prisma as { $disconnect?: () => Promise<void> } | undefined;
+      if (planted?.$disconnect) await planted.$disconnect();
+      delete seam.prisma;
+      delete seam.prismaPool;
+      if (had.prisma !== undefined) seam.prisma = had.prisma;
+      if (had.prismaPool !== undefined) seam.prismaPool = had.prismaPool;
+    }
+  }
+
+  it('plants a client and the pool it reads, on the url it was given, without connecting', async () => {
+    await withEmptySeam(async () => {
+      await plantSeedClient(UNROUTABLE);
+      expect(seam.prisma).toBeDefined();
+      const pool = seam.prismaPool as {
+        options: { connectionString?: string };
+        totalCount: number;
+      };
+      expect(pool.options.connectionString).toBe(UNROUTABLE);
+      // The pool is the one `dbPool()` would report, and it is still untouched:
+      // a connection here would mean the seed had reached the database before
+      // its own guard did.
+      expect(pool.totalCount).toBe(0);
+    });
+  });
+
+  it('widens the transaction window to 60 s, which is why the seam exists', async () => {
+    // The 5 s default is what expired `createProject`'s workflow transaction
+    // twice from a laptop to a Neon branch; the app's own client keeps it.
+    expect(SEED_TRANSACTION_OPTIONS).toEqual({ timeout: 60_000, maxWait: 30_000 });
+    await withEmptySeam(async () => {
+      await plantSeedClient(UNROUTABLE);
+      expect(seam.prisma).toBeDefined();
+    });
+  });
+
+  it('leaves a client somebody else planted alone, pool and all', async () => {
+    await withEmptySeam(async () => {
+      const theirs = { marker: 'not the seed’s client' };
+      const theirPool = { marker: 'not the seed’s pool' };
+      seam.prisma = theirs;
+      seam.prismaPool = theirPool;
+      await plantSeedClient('postgresql://other:x@127.0.0.1:2/other');
+      expect(seam.prisma).toBe(theirs);
+      expect(seam.prismaPool).toBe(theirPool);
+    });
   });
 });
 
