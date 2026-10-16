@@ -81,7 +81,9 @@ async function indexToImport(page: Page): Promise<void> {
 async function enterMotir(page: Page): Promise<void> {
   const enter = page.getByRole('button', { name: 'Enter Motir' });
   await expect(enter).toBeEnabled();
-  await expect(page.getByText('Indexing and any import keep going after you enter.')).toBeVisible();
+  await expect(
+    enter.locator('xpath=..').getByText('Indexing and any import keep going after you enter.'),
+  ).toBeVisible();
   const resp = page.waitForResponse(isEnter);
   await enter.click();
   expect((await resp).status()).toBe(200);
@@ -205,7 +207,8 @@ test('migrate wizard — index: Next opens while every repo is still queued', as
 
   // Nothing is indexed, and the person can move on anyway (MOTIR-8768).
   await indexToImport(page);
-  await expect(page.getByTestId('migrate-index-indicator')).toBeVisible();
+  // Client state drawn after the first status read: no streamed copy to match.
+  await expect(page.getByTestId('migrate-index-indicator').first()).toBeVisible();
   await enterMotir(page);
 });
 

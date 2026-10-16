@@ -28,6 +28,7 @@
 // lane can reach Fly, need a fleet token, or boot a real container.
 
 import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { repoRefOf } from '@/lib/github/indexEnqueue';
 
@@ -200,7 +201,7 @@ export async function claimIndexRun(
   repo: { owner: string; name: string },
   runId: string,
 ): Promise<void> {
-  await db.githubRepo.updateMany({
+  await adminDb.githubRepo.updateMany({
     where: { workspaceId, owner: repo.owner, name: repo.name },
     data: { indexingRunId: runId },
   });

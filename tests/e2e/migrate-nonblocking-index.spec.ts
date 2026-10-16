@@ -15,7 +15,7 @@
 
 import { expect, test, type Page, type Response } from '@playwright/test';
 import type { MigrateIndexStatusDto } from '@/lib/dto/migrateOnboarding';
-import { resetDatabase, db, truncateJobTables } from './_helpers/db-reset';
+import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
 import { assertNoRawKeys, msg } from './_helpers/i18n-walk';
 import {
@@ -38,7 +38,7 @@ test.beforeEach(async () => {
 });
 
 test.afterAll(async () => {
-  await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -65,10 +65,14 @@ async function waitForIndexStatus(
 const repoStatus = (s: MigrateIndexStatusDto) =>
   s.repos.find((r) => r.repoRef === STOREFRONT_REF)?.status;
 
-const indicator = (page: Page) => page.getByTestId('migrate-index-indicator');
-const detail = (page: Page) => page.getByTestId('migrate-index-detail');
-const detailRow = (page: Page) =>
-  detail(page).locator(
+// The chip is client state, drawn only after the run's first status read, so it
+// has no streamed or outgoing copy; `.first()` resolves the one there is. Its
+// detail is a Popover dialog named by the step heading, reached by role.
+const indicator = (page: Page) => page.getByTestId('migrate-index-indicator').first();
+const detail = (page: Page, locale: Locale = 'en') =>
+  page.getByRole('dialog', { name: msg(locale, 'onboardingMigrate.index.heading') });
+const detailRow = (page: Page, locale: Locale = 'en') =>
+  detail(page, locale).locator(
     `[data-testid="migrate-index-detail-repo"][data-repo-ref="${STOREFRONT_REF}"]`,
   );
 const enterButton = (page: Page, locale: Locale) =>
@@ -89,9 +93,9 @@ async function reachImportStep(
   await signUp(page, email);
   await createFirstProject(page, 'Invoicer');
   const local = email.split('@')[0]!;
-  const ws = await db.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
+  const ws = await adminDb.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
   const workspaceId = ws.id;
-  if (locale !== 'en') await db.user.update({ where: { email }, data: { locale } });
+  if (locale !== 'en') await adminDb.user.update({ where: { email }, data: { locale } });
 
   await seedConnectedRepos(workspaceId, [STOREFRONT]);
   const runRow =
@@ -157,7 +161,7 @@ async function enterMotir(page: Page, locale: Locale, runId: string): Promise<vo
   expect(await resp.json()).toMatchObject({ id: runId, step: 'done', status: 'completed' });
   await page.waitForURL((url) => url.pathname === '/roadmap', { timeout: 30_000 });
 
-  const run = await db.migrateOnboarding.findUniqueOrThrow({ where: { id: runId } });
+  const run = await adminDb.migrateOnboarding.findUniqueOrThrow({ where: { id: runId } });
   expect(run).toMatchObject({ step: 'done', status: 'completed', generateJobId: null });
   expect(planRequests).toEqual([]);
 }
@@ -200,10 +204,10 @@ test('walks past a running index to Import, shows the indicator, and enters Moti
   await expect(enterButton(page, 'en')).toBeEnabled();
   await enterMotir(page, 'en', runId);
   // …and the index was left exactly where it was.
-  const repo = await db.githubRepo.findFirstOrThrow({
+  const repo = await adminDb.githubRepo.findFirstOrThrow({
     where: { owner: STOREFRONT.owner, name: STOREFRONT.name },
   });
-  const claimed = await db.jobRun.findUniqueOrThrow({ where: { id: repo.indexingRunId! } });
+  const claimed = await adminDb.jobRun.findUniqueOrThrow({ where: { id: repo.indexingRunId! } });
   expect(claimed.status).toBe('running');
 });
 
@@ -244,22 +248,32 @@ test('in Chinese: the indicator, its detail, Enter Motir and the failed state', 
   // Case 1 and 5 under zh: a failed index reached past Index, read in the bar.
   await reachImportStep(page, 'failed', 'zh');
   await expect(indicator(page)).toHaveAttribute('data-state-summary', 'failed');
+  // The hint sits beside Enter Motir in the step's footer.
   await expect(
-    page.getByText(msg('zh', 'onboardingMigrate.enter.hint'), { exact: true }),
+    enterButton(page, 'zh')
+      .locator('xpath=..')
+      .getByText(msg('zh', 'onboardingMigrate.enter.hint'), { exact: true }),
   ).toBeVisible();
   await indicator(page).click();
-  await expect(detail(page)).toContainText(msg('zh', 'onboardingMigrate.index.heading'));
-  await expect(detailRow(page)).toContainText(msg('zh', 'onboardingMigrate.index.state.failed'));
-  await expect(detailRow(page)).toContainText(msg('zh', 'onboardingMigrate.indexing.rowFailed'));
+  await expect(detail(page, 'zh')).toContainText(msg('zh', 'onboardingMigrate.index.heading'));
+  await expect(detailRow(page, 'zh')).toContainText(
+    msg('zh', 'onboardingMigrate.index.state.failed'),
+  );
+  await expect(detailRow(page, 'zh')).toContainText(
+    msg('zh', 'onboardingMigrate.indexing.rowFailed'),
+  );
   await expect(
-    detailRow(page).getByRole('button', { name: msg('zh', 'planningWorkspace.indexing.retry') }),
+    detailRow(page, 'zh').getByRole('button', {
+      name: msg('zh', 'planningWorkspace.indexing.retry'),
+    }),
   ).toBeVisible();
   await assertNoRawKeys(page, 'the migrate Import step with the index detail open (zh)');
   await page.keyboard.press('Escape');
 
   // Case 4 under zh.
-  const runId = (await db.migrateOnboarding.findFirstOrThrow({ orderBy: { createdAt: 'desc' } }))
-    .id;
+  const runId = (
+    await adminDb.migrateOnboarding.findFirstOrThrow({ orderBy: { createdAt: 'desc' } })
+  ).id;
   await expect(enterButton(page, 'zh')).toBeEnabled();
   await enterMotir(page, 'zh', runId);
 });

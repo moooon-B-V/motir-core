@@ -150,8 +150,11 @@ const nextButton = (page: Page) =>
   indexPanel(page).getByRole('button', { name: 'Next: import your work' });
 
 /** The bar's indexing chip past the Index step (MOTIR-8771), and its detail. */
-const indicator = (page: Page) => page.getByTestId('migrate-index-indicator');
-const detail = (page: Page) => page.getByTestId('migrate-index-detail');
+// The chip is client state, drawn only after the run's first status read, so it
+// has no streamed or outgoing copy; `.first()` resolves the one there is. Its
+// detail is a Popover dialog named by the step heading, reached by role.
+const indicator = (page: Page) => page.getByTestId('migrate-index-indicator').first();
+const detail = (page: Page) => page.getByRole('dialog', { name: 'Indexing your codebase' });
 const detailRow = (page: Page, repo: { owner: string; name: string }) =>
   detail(page).locator(
     `[data-testid="migrate-index-detail-repo"][data-repo-ref="${indexRepoRef(repo)}"]`,
