@@ -1356,13 +1356,14 @@ loadtest/k6/build.sh
 _Output — format, not a captured run (`loadtest/k6/build.sh`):_
 
 ```text
-building k6 v1.2.1 with github.com/phymbert/xk6-sse@v0.1.12 in grafana/xk6 -> <repo>/loadtest/.out/k6
+building k6 v1.2.1 with github.com/phymbert/xk6-sse@v0.1.12 in grafana/xk6:1.4.14 -> <repo>/loadtest/.out/k6
 <k6 version output>
 ```
 
 **Check:** the version output lists `xk6-sse`; the script exits `1` otherwise. It
-uses Docker when a daemon answers, else `go` and `xk6` on `PATH`. The pinned pair
-lives in `loadtest/k6/versions.env`; do not move one pin without the other.
+uses Docker when a daemon answers, else `go` and `xk6` on `PATH`. The pinned pair,
+and the `grafana/xk6` builder image tag, live in `loadtest/k6/versions.env`; do not move
+one pin without the other.
 
 When a CLI gains or renames a flag, update this page in the same PR:
 `tests/loadtest/readme.test.ts` fails when a documented `pnpm loadtest:*` script
