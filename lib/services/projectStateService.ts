@@ -3,6 +3,8 @@ import type { ProjectPlanningGateDto, ProjectStateDto } from '@/lib/dto/projectS
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { toOrgContentLanguage } from '@/lib/workItems/contentLanguage';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -175,6 +177,14 @@ export const projectStateService = {
     const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       migrateOnboardingRepository.findByProjectId(project.id, ctx.workspaceId, tx),
     );
+    // The organisation's CONTENT LANGUAGE (MOTIR-8746), through the same
+    // bound-workspace function every content-language reader uses — the project
+    // was resolved inside `ctx.workspaceId`, so its organisation is that one.
+    const contentLanguage = toOrgContentLanguage(
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        organizationRepository.findContentLanguageByWorkspaceId(ctx.workspaceId, tx),
+      ),
+    );
 
     return {
       project: {
@@ -187,6 +197,7 @@ export const projectStateService = {
       code,
       repoSet,
       onboarding: run ? toMigrateOnboardingDto(run) : null,
+      contentLanguage,
     };
   },
 };
