@@ -7539,7 +7539,9 @@
         "aria": "打开 {key}，即此对话重新规划的工作项",
         "pickLabel": "<mono>{key}</mono> 的后续规划",
         "chose": "选择了 {label}",
-        "pickAria": "打开 {key}，这段对话是它的后续规划（选择了 {label}）"
+        "pickAria": "打开 {key}，这段对话是它的后续规划（选择了 {label}）",
+        "guideLabel": "来自对 <mono>{key}</mono> 的引导",
+        "guideAria": "打开 {key}，即 Motir AI 提出此重新规划时正在引导你完成的工作项"
       },
       "end": {
         "failed": "已关闭 · 尝试失败 · {time}",
@@ -7969,6 +7971,16 @@
     "followUpCard": {
       "label": "选择的后续规划"
     },
+    "guideSeed": {
+      "chip": "来自引导",
+      "lead": "已在 {target} 上打开，来自 Motir AI 对 {guided} 的引导。",
+      "card": "来自引导",
+      "cardBy": "由{who}确认 · {when}",
+      "justNow": "刚刚",
+      "you": "你",
+      "status": "规划中",
+      "offerClosed": "此重新规划提议已不再有效。请回到引导查看当前进展。"
+    },
     "guide": {
       "openedFrom": "从 {key} 打开",
       "reading": "正在读取 {key} 及其待办清单…",
@@ -8000,7 +8012,8 @@
       "errors": {
         "notManual": "Motir AI 引导人完成手动工作，而这个工作项是交给智能体的，因此这里没有可引导的内容。",
         "closed": "这个工作项已完成或已归档，没有需要引导的内容了。",
-        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。"
+        "forbidden": "你需要拥有编辑这个工作项以及使用 Motir AI 规划的权限，才能被引导完成它。",
+        "offerClosed": "这个提议已经有结果，无法再更改。请刷新工作项查看最新状态。"
       },
       "youTicked": "你在清单上勾选了第 {n} 步",
       "youUnticked": "你在清单上取消勾选了第 {n} 步",
@@ -8055,6 +8068,32 @@
         "typeText": "文本",
         "typeMarkdown": "Markdown",
         "typeFile": "文件"
+      },
+      "offer": {
+        "label": "重新规划请求",
+        "target": "目标",
+        "targetElsewhere": "重新规划将从 {key} 开始，而不是这个工作项。",
+        "resolved": "{done} 已完成，所以重新规划从 {open} 开始。",
+        "noTarget": "没有可以作为起点的未完成工作项。",
+        "confirm": "确认",
+        "confirming": "正在开始…",
+        "openSession": "打开规划会话",
+        "decline": "拒绝",
+        "declining": "正在拒绝…",
+        "showAll": "展开全部",
+        "showLess": "收起",
+        "confirmHelp": "在 {key} 上打开 Motir AI 规划，并发送此请求。会消耗额度。",
+        "declineHelp": "关闭此提议，不会规划任何内容。",
+        "replaced": "已被更新的提议取代",
+        "started": "已开始重新规划",
+        "startedBy": "已确认 · {when}",
+        "declined": "已拒绝",
+        "declinedBy": "已拒绝 · {when}",
+        "recorded": "已记录在工作项上",
+        "resumeAt": "再次点击“带我完成”会从第 {n} 步继续。",
+        "walkStopped": "引导已停止。",
+        "cannotPlan": "你无法在这里开始规划——请联系有权限的人，或把此请求分享给他们。",
+        "noAi": "这里还没有配置 Motir AI，无法开始规划。你仍可以分享此请求。"
       }
     },
     "restart": {

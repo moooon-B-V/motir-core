@@ -87,6 +87,15 @@ export interface ContextualPlanRequest {
    * by THIS gate, never the caller's ordinary resumable one.
    */
   seedGateId?: string;
+  /**
+   * The GUIDE REPLY TURN whose re-plan offer this conversation is seeded from
+   * (story MOTIR-8684 · MOTIR-8691). Same posture as `seedGateId`: sent only on a
+   * first turn (no session yet) and IGNORED when `sessionId` is present. Unlike a
+   * gate seed it never resumes and re-sends — a confirmed offer is refused with
+   * `GuideReplanOfferAlreadyConfirmedError` naming the session. The route refuses
+   * both seeds together (400), so the service never sees the pair.
+   */
+  seedGuideTurnId?: string;
 }
 
 /**
@@ -197,11 +206,12 @@ export const contextualPlanningService = {
     // `PlanSeedNotApplicableError`, nothing written), resumes only a session of
     // the SAME seed, or creates one stamped with it.
     const seeded = !req.sessionId && req.seedGateId ? req.seedGateId : null;
+    const guideSeeded = !req.sessionId && req.seedGuideTurnId ? req.seedGuideTurnId : null;
     // The ADDRESSED session, else the caller's resumable one; with neither, this
     // first turn STARTS the session (AMENDMENT 17 §1, §3). The submit then sends
     // the ACCUMULATED intent — the session's own `targetKeys` make it contextual.
-    const resumed = seeded || req.sessionId ? null : await resumable(pctx, scope);
-    const target = seeded ? null : (req.sessionId ?? resumed?.id ?? null);
+    const resumed = seeded || guideSeeded || req.sessionId ? null : await resumable(pctx, scope);
+    const target = seeded || guideSeeded ? null : (req.sessionId ?? resumed?.id ?? null);
     // A CONTINUING conversation re-takes its targets, as opening one always did
     // (MOTIR-2786): an earlier plan's decision may have handed them back, and a
     // turn that plans them again must hold them again. Idempotent for the holder.
@@ -222,21 +232,30 @@ export const contextualPlanningService = {
             },
           )
         ).id
-      : seeded
+      : guideSeeded
         ? (
-            await planChangeSessionsService.startSeededWithFirstTurn(
+            await planChangeSessionsService.startGuideSeededWithFirstTurn(
               pctx,
               scope,
               req.prompt,
-              seeded,
-              { isAnswer: req.isAnswer === true },
+              guideSeeded,
             )
           ).id
-        : (
-            await planChangeSessionsService.startWithFirstTurn(pctx, scope, req.prompt, {
-              isAnswer: req.isAnswer === true,
-            })
-          ).id;
+        : seeded
+          ? (
+              await planChangeSessionsService.startSeededWithFirstTurn(
+                pctx,
+                scope,
+                req.prompt,
+                seeded,
+                { isAnswer: req.isAnswer === true },
+              )
+            ).id
+          : (
+              await planChangeSessionsService.startWithFirstTurn(pctx, scope, req.prompt, {
+                isAnswer: req.isAnswer === true,
+              })
+            ).id;
     const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, {
       sessionId,
     });

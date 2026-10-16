@@ -50,3 +50,43 @@ export interface PlanningSeedPickDTO {
 export interface PlanningSeedReadDTO {
   seed: PlanningSeedDTO;
 }
+
+/**
+ * THE GUIDE-OFFER SEED (story MOTIR-8684 · MOTIR-8692; decision MOTIR-8685) — what
+ * the planning surface opens with when it is launched from a guide's re-plan offer.
+ * Read by the offer's turn id through
+ * `GET /api/ai/guide/offer/{turnId}/planning-seed`, and a SEPARATE shape beside
+ * {@link PlanningSeedDTO} so the gate seed's required `gateId` / `gateKind` stay
+ * true for every consumer of it.
+ *
+ *  - `anchorKey` — the offer's RESOLVED target (the landing resolved it once);
+ *  - `firstTurn` — the guide's request VERBATIM; `intent: 'plan'` means the
+ *    overlay SENDS it once on Confirm rather than pre-filling it;
+ *  - `seededSessionId` / `seededSessionOpen` — the planning session this offer
+ *    already started, if any; the surface reopens it and never sends again.
+ */
+export interface PlanningGuideSeedDTO {
+  source: 'guide';
+  guideTurnId: string;
+  intent: 'plan';
+  anchorKey: string;
+  firstTurn: string;
+  offerState: 'undecided' | 'confirmed';
+  seededSessionId: string | null;
+  seededSessionOpen: boolean;
+  guide: PlanningSeedGuideDTO;
+}
+
+/** The *from a guide* framing the rail draws. There is no "confirmed by": only the
+ *  offer's owner can read this seed, and only they can confirm it. */
+export interface PlanningSeedGuideDTO {
+  guidedKey: string;
+  guidedTitle: string;
+  targetResolution: 'as_asked' | 'guided_card' | 'nearest_open_ancestor';
+  confirmedAt: string | null;
+}
+
+/** The guide-offer seed route's 200 body. */
+export interface PlanningGuideSeedReadDTO {
+  seed: PlanningGuideSeedDTO;
+}

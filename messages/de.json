@@ -7545,7 +7545,9 @@
         "aria": "{key} öffnen, das Arbeitselement, das dieses Gespräch neu plant",
         "pickLabel": "Folgeplanung zu <mono>{key}</mono>",
         "chose": "hat {label} gewählt",
-        "pickAria": "{key} öffnen, die Auswahl, zu der dieses Gespräch die Folgeplanung ist ({label} gewählt)"
+        "pickAria": "{key} öffnen, die Auswahl, zu der dieses Gespräch die Folgeplanung ist ({label} gewählt)",
+        "guideLabel": "Aus der Anleitung zu <mono>{key}</mono>",
+        "guideAria": "{key} öffnen, das Arbeitselement, durch das Motir AI Sie geführt hat, als es diese Neuplanung angeboten hat"
       },
       "end": {
         "failed": "Geschlossen · der Versuch ist fehlgeschlagen · {time}",
@@ -7975,6 +7977,16 @@
     "followUpCard": {
       "label": "Folgeplanung zu einer Auswahl"
     },
+    "guideSeed": {
+      "chip": "aus einer Anleitung",
+      "lead": "Geöffnet auf {target} aus der Anleitung von Motir AI zu {guided}.",
+      "card": "Aus einer Anleitung",
+      "cardBy": "Bestätigt von {who} · {when}",
+      "justNow": "gerade eben",
+      "you": "Sie",
+      "status": "In Planung",
+      "offerClosed": "Dieses Angebot zur Neuplanung ist nicht mehr offen. Kehren Sie zur Anleitung zurück, um den Stand zu sehen."
+    },
     "guide": {
       "openedFrom": "Geöffnet aus {key}",
       "reading": "{key} und seine Aufgabenliste werden gelesen…",
@@ -8006,7 +8018,8 @@
       "errors": {
         "notManual": "Motir AI führt Personen durch manuelle Arbeit, und dieses Arbeitselement ist für einen Agenten bestimmt, daher gibt es hier nichts zu führen.",
         "closed": "Dieses Arbeitselement ist erledigt oder archiviert, daher gibt es nichts mehr zu führen.",
-        "forbidden": "Sie benötigen die Berechtigung, dieses Arbeitselement zu bearbeiten und mit Motir AI zu planen, um hindurchgeführt zu werden."
+        "forbidden": "Sie benötigen die Berechtigung, dieses Arbeitselement zu bearbeiten und mit Motir AI zu planen, um hindurchgeführt zu werden.",
+        "offerClosed": "Dieses Angebot wurde bereits entschieden und kann nicht mehr geändert werden. Laden Sie das Arbeitselement neu, um den Stand zu sehen."
       },
       "youTicked": "Sie haben Schritt {n} auf der Liste abgehakt",
       "youUnticked": "Sie haben den Haken bei Schritt {n} auf der Liste entfernt",
@@ -8061,6 +8074,32 @@
         "typeText": "Text",
         "typeMarkdown": "Markdown",
         "typeFile": "Datei"
+      },
+      "offer": {
+        "label": "Anfrage zur Neuplanung",
+        "target": "Gerichtet an",
+        "targetElsewhere": "Die Neuplanung beginnt bei {key}, nicht bei diesem Arbeitselement.",
+        "resolved": "{done} ist erledigt, daher beginnt die Neuplanung bei {open}.",
+        "noTarget": "Es gibt kein offenes Arbeitselement, von dem aus neu geplant werden kann.",
+        "confirm": "Bestätigen",
+        "confirming": "Wird gestartet…",
+        "openSession": "Planungssitzung öffnen",
+        "decline": "Ablehnen",
+        "declining": "Wird abgelehnt…",
+        "showAll": "Alle anzeigen",
+        "showLess": "Weniger anzeigen",
+        "confirmHelp": "Öffnet die Planung von Motir AI bei {key} und sendet diese Anfrage mit. Das verbraucht Credits.",
+        "declineHelp": "Schließt dieses Angebot. Es wird nichts geplant.",
+        "replaced": "Durch ein neueres Angebot ersetzt",
+        "started": "Neuplanung gestartet",
+        "startedBy": "Bestätigt · {when}",
+        "declined": "Abgelehnt",
+        "declinedBy": "Abgelehnt · {when}",
+        "recorded": "Am Arbeitselement festgehalten",
+        "resumeAt": "„Führe mich durch“ setzt bei Schritt {n} fort.",
+        "walkStopped": "Der Durchgang ist angehalten.",
+        "cannotPlan": "Sie können die Planung hier nicht starten – bitten Sie jemanden, der es kann, oder teilen Sie diese Anfrage.",
+        "noAi": "Motir AI ist hier nicht eingerichtet, daher kann die Planung nicht starten. Sie können diese Anfrage trotzdem teilen."
       }
     },
     "restart": {

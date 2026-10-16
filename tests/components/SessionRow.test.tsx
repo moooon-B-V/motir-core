@@ -282,6 +282,46 @@ describe('the SEED link — Re-plan of {KEY} · {verb} (MOTIR-6209, design MOTIR
     expect(within(link).getByText('chose Managed object storage').className).toContain('truncate');
   });
 
+  const guideSeed = {
+    cardKey: 'ACME-31',
+    gateKind: null,
+    origin: 'guide',
+    chosenLabel: null,
+  } as const;
+
+  it('a GUIDE seed reads `From the guide on ACME-31`, opens the GUIDED card, and names no gate verb (MOTIR-8697)', () => {
+    renderWithIntl(<SessionRow view={view({ seed: guideSeed })} />);
+    const link = screen.getByRole('link', {
+      name: 'Open ACME-31, the work item Motir AI was guiding you through when it offered this re-plan',
+    });
+    expect(link.getAttribute('href')).toBe('/items/ACME-31');
+    expect(link.getAttribute('data-seed-origin')).toBe('guide');
+    expect(link.textContent).toBe('From the guide on ACME-31');
+    expect(link.textContent).not.toMatch(
+      /re-plan|follow-up|·|request changes|overturn|none of these/i,
+    );
+    expect(within(link).getByText('ACME-31').className).toBe('font-mono');
+    // The label truncates as the pick row's does; the accessible name is whole.
+    expect(link.firstElementChild!.className).toContain('truncate');
+    // Raised above the stretched title link, the meta line's last item.
+    expect(link.className).toContain('z-10');
+    expect(link.parentElement!.lastElementChild).toBe(link);
+    fireEvent.click(link);
+    expect(shallowPush).not.toHaveBeenCalled();
+  });
+
+  it('zh reads `来自对 ACME-31 的引导`', () => {
+    renderWithIntl(<SessionRow view={view({ seed: guideSeed })} />, {
+      locale: 'zh',
+      messages: zhMessages,
+    });
+    const link = screen.getByRole('link', {
+      name: '打开 ACME-31，即 Motir AI 提出此重新规划时正在引导你完成的工作项',
+    });
+    expect(link.getAttribute('href')).toBe('/items/ACME-31');
+    expect(link.textContent).toBe('来自对 ACME-31 的引导');
+  });
+
   it('a row with no seed draws nothing extra — the same meta line and links as before', () => {
     renderWithIntl(<SessionRow view={view()} />);
     expect(screen.queryByTestId('plan-session-seed')).toBeNull();

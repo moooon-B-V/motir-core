@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GUIDE_ACTION_TYPES,
+  GUIDE_ANCESTORS_MAX,
   GUIDE_CONTEXT_TURNS_MAX,
+  GUIDE_REPLAN_REQUEST_MAX,
   InvalidGuideTurnError,
   buildGuideContext,
   deriveTemporaryList,
@@ -57,6 +59,8 @@ describe('buildGuideContext', () => {
       pullRequests: [{ url: 'https://github.com/acme/web/pull/7', state: 'open' }],
       // Absent on the input reads as none (MOTIR-7800).
       openBugs: [],
+      // …and so does an absent parent chain (MOTIR-8685).
+      ancestors: [],
     });
     expect(ctx.todos.temporary).toBe(false);
     expect(ctx.todos.rows.map((r) => [r.id, r.done, r.executor])).toEqual([
@@ -114,6 +118,28 @@ describe('buildGuideContext', () => {
     expect(ctx.card.openBugs).toEqual([
       { key: 'MOTIR-12', title: 'The console 500s on save', status: 'todo' },
     ]);
+  });
+
+  it('carries the card’s ancestors root → parent, and keeps the NEAREST when capped (MOTIR-8685)', () => {
+    const chain = Array.from({ length: GUIDE_ANCESTORS_MAX + 2 }, (_, i) => ({
+      key: `MOTIR-${i + 1}`,
+      title: `Level ${i + 1}`,
+      type: 'story',
+      status: i === 0 ? 'done' : 'in_progress',
+      statusCategory: i === 0 ? 'done' : 'in_progress',
+    }));
+    const ctx = buildGuideContext({ ...card, ancestors: chain }, [], []);
+    expect(ctx.card.ancestors).toHaveLength(GUIDE_ANCESTORS_MAX);
+    // Root → parent order is kept, and the cut drops the FAR end.
+    expect(ctx.card.ancestors[0]!.key).toBe('MOTIR-3');
+    expect(ctx.card.ancestors.at(-1)!.key).toBe(`MOTIR-${GUIDE_ANCESTORS_MAX + 2}`);
+    expect(ctx.card.ancestors[0]).toEqual({
+      key: 'MOTIR-3',
+      title: 'Level 3',
+      type: 'story',
+      status: 'in_progress',
+      statusCategory: 'in_progress',
+    });
   });
 
   it('marks a temporary list only when it has rows, and drops an unknown executor', () => {
@@ -244,6 +270,53 @@ describe('parseGuideTurn', () => {
     ]);
   });
 
+  it('reads a needs_replan OFFER: a trimmed request and target beside the reason (MOTIR-8685)', () => {
+    const turn = parseGuideTurn({
+      messageMd: 'This work item is wrong.',
+      actions: [
+        {
+          type: 'needs_replan',
+          reason: 'The domain is being retired',
+          requestMd: '  Re-plan MOTIR-9: the domain is retired, step 1 is ticked.  ',
+          targetKey: 'MOTIR-4',
+        },
+      ],
+    });
+    expect(turn.actions).toEqual([
+      {
+        type: 'needs_replan',
+        reason: 'The domain is being retired',
+        requestMd: 'Re-plan MOTIR-9: the domain is retired, step 1 is ticked.',
+        targetKey: 'MOTIR-4',
+      },
+    ]);
+  });
+
+  it('reads an offer with no target (the guided card), and a blank request as no offer (MOTIR-8689)', () => {
+    const noTarget = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [{ type: 'needs_replan', reason: 'x', requestMd: 'Re-plan it.' }],
+    });
+    expect(noTarget.actions).toEqual([
+      { type: 'needs_replan', reason: 'x', requestMd: 'Re-plan it.' },
+    ]);
+    const blank = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [{ type: 'needs_replan', reason: 'x', requestMd: '   ', targetKey: 'MOTIR-4' }],
+    });
+    expect(blank.actions).toEqual([{ type: 'needs_replan', reason: 'x', targetKey: 'MOTIR-4' }]);
+  });
+
+  it('still reads a reason-only needs_replan, which offers nothing (MOTIR-8685)', () => {
+    const turn = parseGuideTurn({
+      messageMd: 'ok',
+      actions: [{ type: 'needs_replan', reason: 'The target moved' }],
+    });
+    expect(turn.actions).toEqual([{ type: 'needs_replan', reason: 'The target moved' }]);
+    expect(turn.actions[0]).not.toHaveProperty('requestMd');
+    expect(turn.actions[0]).not.toHaveProperty('targetKey');
+  });
+
   it('reads a file_bug: a trimmed one-line title, and `blocksGuidedCard` / `explanationMd` defaulted when absent', () => {
     const turn = parseGuideTurn({
       messageMd: 'ok',
@@ -329,6 +402,21 @@ describe('parseGuideTurn', () => {
     ['a bug naming a kind', { ...VALID.file_bug, kind: 'task' }, 'actions[0]'],
     ['a bug naming a project', { ...VALID.file_bug, projectKey: 'OTHER' }, 'actions[0]'],
     ['a needs_replan with no reason', { type: 'needs_replan' }, 'actions[0].reason'],
+    [
+      'a needs_replan request over the cap',
+      {
+        type: 'needs_replan',
+        reason: 'x',
+        requestMd: 'x'.repeat(GUIDE_REPLAN_REQUEST_MAX + 1),
+        targetKey: 'MOTIR-4',
+      },
+      'actions[0].requestMd',
+    ],
+    [
+      'a needs_replan target that is not a work-item key',
+      { type: 'needs_replan', reason: 'x', requestMd: 'Re-plan it.', targetKey: 'the parent' },
+      'actions[0].targetKey',
+    ],
     [
       'a local-agent prompt with no row',
       { type: 'local_agent_prompt', prompt: 'x' },
@@ -473,6 +561,52 @@ describe('readGuideTurnRecord', () => {
         workItemKey: 'PROD-7',
       },
     ]);
+  });
+
+  it('reads a stored re-plan offer field by field, and a malformed one as no offer (MOTIR-8689)', () => {
+    const offer = {
+      reason: 'The domain is retired',
+      requestMd: 'Re-plan MOTIR-4.',
+      requestedTargetKey: 'MOTIR-4',
+      targetKey: 'MOTIR-4',
+      targetResolution: 'as_asked',
+      declinedAt: null,
+      declinedById: null,
+      confirmedAt: null,
+      confirmedById: null,
+      confirmedSessionId: null,
+    };
+    const base = { actions: [VALID.needs_replan], outcomes: [{ outcome: 'landed' }] };
+    expect(readGuideTurnRecord({ ...base, replanOffer: offer })?.replanOffer).toEqual(offer);
+    // Absent fields of a stored offer read as null.
+    const sparse = { reason: 'r', requestMd: 'q', targetResolution: 'none' };
+    expect(readGuideTurnRecord({ ...base, replanOffer: sparse })?.replanOffer).toEqual({
+      reason: 'r',
+      requestMd: 'q',
+      requestedTargetKey: null,
+      targetKey: null,
+      targetResolution: 'none',
+      declinedAt: null,
+      declinedById: null,
+      confirmedAt: null,
+      confirmedById: null,
+      confirmedSessionId: null,
+    });
+    // A record with no offer reads exactly as before; a malformed offer drops
+    // alone, the actions still read.
+    expect(readGuideTurnRecord(base)).not.toHaveProperty('replanOffer');
+    for (const bad of [
+      'x',
+      { ...offer, requestMd: 3 },
+      { ...offer, targetResolution: 'sideways' },
+      { ...offer, targetKey: 7 },
+      { ...offer, declinedAt: 7 },
+      { ...offer, confirmedSessionId: 7 },
+    ]) {
+      const read = readGuideTurnRecord({ ...base, replanOffer: bad });
+      expect(read?.replanOffer ?? null).toBeNull();
+      expect(read?.actions).toHaveLength(1);
+    }
   });
 
   it('reads anything that no longer parses as null', () => {
