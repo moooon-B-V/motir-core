@@ -107,7 +107,15 @@ fi
 # waits on, so its exit is the container's exit (§7.1). `setpriv` over `su`/`sudo`
 # because it neither forks nor leaves a supervising parent between PID 1 and the
 # runner — a signal Fly sends the container reaches the runner directly.
+#
+# ⚠️ `setpriv` changes the uid, gid and groups and NOTHING ELSE: the environment
+# is inherited from this root shell. So `HOME`, `USER` and `LOGNAME` are set to
+# the runner user's here, explicitly. Left as root's, every step reads
+# `HOME=/root` — mode 0700, unreadable to `runner` — and `actions/checkout`'s
+# `git config --global` dies on `EACCES … stat '/root/.gitconfig'` before the
+# job runs a line of its own (MOTIR-8820). The rest of the environment, `PATH`
+# included, is kept as is.
 log "exec run.sh (JIT config, one job, then de-register and exit)"
 exec setpriv --reuid=runner --regid=runner --init-groups \
-  env -u ACTIONS_RUNNER_INPUT_JITCONFIG \
+  env -u ACTIONS_RUNNER_INPUT_JITCONFIG HOME=/home/runner USER=runner LOGNAME=runner \
   /home/runner/actions-runner/run.sh --jitconfig "${JITCONFIG}"
