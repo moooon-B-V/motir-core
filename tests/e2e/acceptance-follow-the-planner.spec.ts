@@ -7,6 +7,7 @@ import {
   addPlanProgressStory,
   backdatePlanActivity,
   makePlanProgressPublic,
+  nudgePlan,
   seedPlanProgress,
   PLAN_PROGRESS_PASSWORD,
 } from './_helpers/plan-progress-seed';
@@ -317,7 +318,8 @@ test('the canvas follows the planner while a plan is written, stops when the rea
       for (let i = 0; i < 2; i += 1) {
         const settled = (b: PlanReviewDto) => stepOf(b.inFlightSteps, 'walk')?.kind === 'settle';
         read = i === 0 ? polled(page, planId, settled) : held(page, planId, settled);
-        if (i === 0) await mcpStep(agent, planId, 'walk', 'settle');
+        // The pane reads on a push, so the second read is caused by a quiet touch.
+        await (i === 0 ? mcpStep(agent, planId, 'walk', 'settle') : nudgePlan(planId));
         await read;
         await expectLevel(page, T_TITLE);
       }
@@ -347,7 +349,9 @@ test('the canvas follows the planner while a plan is written, stops when the rea
 
       // Three more responses, each still carrying both: the canvas does not hop.
       for (let i = 0; i < 3; i += 1) {
-        await held(page, planId, (b) => carries(b, 'draft-s2', 'draft-s'));
+        const still = held(page, planId, (b) => carries(b, 'draft-s2', 'draft-s'));
+        await nudgePlan(planId);
+        await still;
         await expectLevel(page, earlierLevel);
       }
       await beat();

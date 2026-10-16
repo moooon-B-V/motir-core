@@ -80,7 +80,10 @@ const OUT_OF_STORY = new Set(['/api/notifications/unread-count']);
 
 /** A window short enough for the stream's watchdog, long enough for four poll ticks. */
 const QUIET_WINDOW_MS = 4 * POLL_MS + 1;
-if (QUIET_WINDOW_MS + 15_000 >= STREAM_STALE_MS) {
+// The route's `WORKBENCH_STREAM_HEARTBEAT_MS`, retyped: importing the route
+// module would load its auth and session wiring into the runner.
+const HEARTBEAT_MS = 15_000;
+if (QUIET_WINDOW_MS + HEARTBEAT_MS >= STREAM_STALE_MS) {
   throw new Error('the quiet window would outlast the stream watchdog');
 }
 
@@ -169,9 +172,14 @@ test.describe('live updates reach an open page by server push', () => {
     await setLoadMarker(page, 'live-push');
     await watchForReconnecting(page);
 
+    // ONE quiet window serves cases 1 and 2. Two back-to-back jumps would sum past
+    // what the stream's silence watchdog allows between two heartbeats (two
+    // windows plus a heartbeat interval reach `STREAM_STALE_MS`), and the
+    // reconnect it then made would be a request the spec caused, not the page.
+    let window = 0;
     await chapter('The Workbench holds one connection, and nothing repeats', async () => {
       // CASE 1 — fast-forward the window: every timer due in it fires.
-      const window = log.mark();
+      window = log.mark();
       await page.clock.runFor(QUIET_WINDOW_MS);
       expect(log.eventStreams().length, 'text/event-stream connections').toBe(1);
       expect(log.streams(window), 'no new stream request').toEqual([]);
@@ -181,9 +189,7 @@ test.describe('live updates reach an open page by server push', () => {
     await beat();
 
     await chapter('A quiet tab sends nothing at all', async () => {
-      // CASE 2 — not a repeat, and not even a single request.
-      const window = log.mark();
-      await page.clock.runFor(QUIET_WINDOW_MS);
+      // CASE 2 — not a repeat, and not even a single request, in that same window.
       const sent = log.since(window).filter(inStory);
       expect(
         sent.map((r) => `${r.method} ${r.url.pathname}`),
@@ -290,12 +296,18 @@ test.describe('live updates reach an open page by server push', () => {
 
     await page.clock.install();
     await signIn(page, seed.reviewerEmail, seed.password);
+    // A member's `/plans/<id>` for an undecided plan is REPLACED by the planning
+    // overlay on the plan's session (MOTIR-7888), which drops the query. So the
+    // overlay's own address is read from that redirect, and the approval overlay
+    // (mounted once by the authed layout) is opened over it.
+    await page.goto(`/plans/${plan.id}`);
+    await page.waitForURL((u) => u.searchParams.has('planSession'));
+    const overlay = new URL(page.url());
+    overlay.searchParams.set('approval', seed.designKey);
+    overlay.searchParams.set('approvalKind', 'design_result');
+    // The log starts with the page the spec reads; the bounce's own stream is not it.
     const log = attachLiveNetworkLog(page);
-    // The plan page renders the generating plan through `PlanDetail`, whose
-    // reads are `useGeneratingPlanPoll`'s; the approval overlay opens over it.
-    await page.goto(
-      `/plans/${plan.id}?approval=${encodeURIComponent(seed.designKey)}&approvalKind=design_result`,
-    );
+    await page.goto(`${overlay.pathname}${overlay.search}`);
     const dialog = page.getByRole('dialog', {
       name: `${en.workbench.approvals.kind.design_result} for ${seed.designKey}`,
     });
@@ -336,9 +348,9 @@ test.describe('live updates reach an open page by server push', () => {
     );
     expect((await read).status()).toBe(200);
     expect(log.planReads(plan.id, opened).every((r) => r.seq >= beforeWrite)).toBe(true);
-    await expect(
-      page.getByRole('main', { includeHidden: true }).getByText(PROPOSAL_TITLE),
-    ).toBeVisible({ timeout: 30_000 });
+    // The proposal is drawn by the planning overlay, which sits beneath the open
+    // approval — present in the page, painted from the read that followed the write.
+    await expect(page.getByText(PROPOSAL_TITLE).first()).toBeAttached({ timeout: 30_000 });
 
     expect(log.maxOpenStreams).toBe(1);
     expect(log.eventStreams(opened), 'no new connection for the plan').toEqual([]);
