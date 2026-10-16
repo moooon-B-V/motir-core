@@ -49,7 +49,6 @@ import { signUpToOnboarding } from './_helpers/shell-session';
 import { setReaderLanguage } from './_helpers/reader-language';
 import { E2E_GITHUB_TOKEN_ENCRYPTION_KEY } from './_helpers/github-const';
 import { adminDb } from '../helpers/adminDb';
-import { projectsService } from '@/lib/services/projectsService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { withUserContext } from '@/lib/workspaces/context';
 import { encryptToken } from '@/lib/github/tokenCrypto';
@@ -110,12 +109,14 @@ interface Person {
 }
 
 /** Sign a person up by email through the UI (their own workspace and
- *  organisation, owner role) and give them one active project, which is what the
- *  entrance's "bring your existing project" door expects. */
+ *  organisation, owner role) and name the ONE project that sign-up made for
+ *  them. One project is what the entrance's "bring your existing project" door
+ *  starts on at once; a second would open the wizard on its project choice,
+ *  which makes no connect read (MOTIR-8254). */
 async function signUpWithProject(
   page: Page,
   email: string,
-  project: { name: string; identifier: string },
+  project: { name: string },
 ): Promise<Person> {
   await signUpToOnboarding(page, email);
   const user = await adminDb.user.findFirstOrThrow({ where: { email } });
@@ -126,15 +127,13 @@ async function signUpWithProject(
   const workspace = await adminDb.workspace.findFirstOrThrow({
     where: { organizationId: membership.organizationId },
   });
-  const created = await projectsService.createProject({
-    workspaceId: workspace.id,
-    actorUserId: user.id,
-    name: project.name,
-    identifier: project.identifier,
+  const signedUp = await adminDb.project.findFirstOrThrow({
+    where: { workspaceId: workspace.id },
   });
+  await adminDb.project.update({ where: { id: signedUp.id }, data: { name: project.name } });
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: user.id, workspaceId: workspace.id } },
-    data: { activeProjectId: created.id },
+    data: { activeProjectId: signedUp.id },
   });
   await pinContextCookies(page, {
     workspaceId: workspace.id,
@@ -190,7 +189,6 @@ async function linkAs(person: Person, names: string[]): Promise<void> {
 async function seedOtherOrganisation(page: Page): Promise<Person> {
   const x = await signUpWithProject(page, 'existing-install-x@e2e.motir.test', {
     name: 'Northwind Secret',
-    identifier: 'NWS',
   });
   await grantGithubIdentity(x, '7300001');
   await linkAs(x, ['alpha', 'bravo']);
@@ -269,7 +267,6 @@ for (const lang of LANGS) {
     const x = await seedOtherOrganisation(page);
     const y = await signUpWithProject(page, `existing-install-y-${lang}@e2e.motir.test`, {
       name: 'Harbor',
-      identifier: 'HAR',
     });
     await setReaderLanguage(page, y.email, lang);
     const c = words(lang).connect;
@@ -418,7 +415,6 @@ test('English: the install round trip opens the picker, and a repository taken m
   const x = await seedOtherOrganisation(page);
   const y = await signUpWithProject(page, 'existing-install-y-return@e2e.motir.test', {
     name: 'Harbor',
-    identifier: 'HAR',
   });
   await grantGithubIdentity(y, '7300004');
   // Y's organisation connected `echo` earlier.
