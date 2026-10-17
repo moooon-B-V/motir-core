@@ -72,6 +72,7 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // They make `page:edit` grantable; `CLI_TOKEN_GRANT` is widened by MOTIR-7412.
   create_page: 'page:edit',
   update_page: 'page:edit',
+  rename_page: 'page:edit',
   // `publish_decision_page` (MOTIR-7434) — publishing a decision is EDITING the card,
   // the key both evidence publishers assert; the service also asserts `page:view` on
   // the page. `CLI_TOKEN_GRANT` already carries `work_item:edit`: not widened here.
