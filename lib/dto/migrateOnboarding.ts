@@ -223,6 +223,33 @@ export interface MigrateConnectInstallationAccountDto {
   accountType: string;
 }
 
+/** One GitHub account the Motir App is already installed on, as the connect
+ *  step lists it (Story MOTIR-8245 · MOTIR-8762). The CLIENT-side name for a
+ *  row of MOTIR-8220's `GET /api/organizations/{orgId}/github/accounts`: it
+ *  copies the fields that route returns and no rule about them — what the person
+ *  may reach and what is linked is the route's to decide. */
+export interface MigrateConnectExistingAccountDto {
+  /** GitHub's installation id — the key every account route takes. */
+  installationId: string;
+  accountLogin: string;
+  /** GitHub's own word: `Organization` or `User`. */
+  accountType: string;
+  avatarUrl: string | null;
+  linkState: 'not_linked' | 'linked_here';
+}
+
+/** One repository of an already-installed account, as the connect step's
+ *  picker offers it (Story MOTIR-8245 · MOTIR-8763) — a row of MOTIR-8220's
+ *  `GET …/github/accounts/{installationId}/repositories`. The three values are
+ *  the route's; nothing here decides which a repository is. */
+export interface MigrateConnectExistingRepositoryDto {
+  /** GitHub's numeric repository id, as a string — what the link route takes. */
+  repoId: string;
+  /** `owner/name`. */
+  fullName: string;
+  availability: 'available' | 'connected_here' | 'connected_elsewhere';
+}
+
 /** One repository Motir can use for this run, as the connect step lists it. */
 export interface MigrateConnectRepositoryDto {
   provider: string;

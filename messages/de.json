@@ -8629,6 +8629,58 @@
         "installation_not_accessibleHint": "Ihr GitHub-Benutzer kann diese Installation nicht sehen, daher wurde nichts verknüpft. Ein Inhaber des GitHub-Kontos kann Ihnen Zugriff geben.",
         "not_configuredTitle": "GitHub ist in dieser Bereitstellung nicht eingerichtet",
         "not_configuredHint": "Diese Motir-Bereitstellung hat noch keine GitHub App, daher lässt sich GitHub hier nicht verbinden. Wer diese Bereitstellung betreibt, kann sie einrichten."
+      },
+      "existing": {
+        "title": "Ihre GitHub-Konten mit der Motir App",
+        "hint": "Die Motir App ist auf diesen Konten bereits installiert. Wählen Sie eines aus, um seine Repositorys hier zu verbinden. Eine erneute Installation ist nicht nötig.",
+        "loading": "Ihre GitHub-Konten werden gesucht…",
+        "typeUser": "Persönliches Konto",
+        "typeOrg": "GitHub-Organisation",
+        "linkedHere": "Bereits mit dieser Organisation verknüpft",
+        "pickCta": "Repositorys auswählen",
+        "pickAria": "Repositorys aus {login} auswählen",
+        "installAnotherCta": "Auf einem anderen Konto installieren",
+        "installAnotherHint": "Verwenden Sie dies, wenn das gewünschte Konto nicht aufgeführt ist.",
+        "loadErrorTitle": "Ihre GitHub-Konten konnten nicht gelesen werden",
+        "loadErrorHint": "Es wurde nichts geändert. Versuchen Sie es erneut, oder installieren Sie auf einem anderen Konto.",
+        "retryCta": "Erneut versuchen",
+        "identity": {
+          "title": "Melden Sie sich mit GitHub an, um Ihre Installationen zu finden.",
+          "hint": "Motir prüft nur, auf welchen Konten die Motir App installiert ist und auf welche davon Sie zugreifen können. Sie können diesen Schritt überspringen und stattdessen auf einem neuen Konto installieren.",
+          "cta": "Mit GitHub anmelden",
+          "skipCta": "Überspringen und installieren",
+          "declinedHint": "GitHub hat Sie nicht angemeldet, daher wurde nichts geändert. Versuchen Sie es erneut, oder überspringen Sie den Schritt und installieren Sie stattdessen."
+        },
+        "picker": {
+          "heading": "Repositorys in {login}",
+          "hint": "Wählen Sie die Repositorys, die diese Organisation verbindet. Erst nach Ihrer Bestätigung wird etwas verbunden.",
+          "fromInstallHint": "Sie haben ein Konto gewählt, auf dem die Motir App bereits installiert ist. Wählen Sie, welche seiner Repositorys diese Organisation verbindet.",
+          "loading": "Repositorys werden geladen…",
+          "available": "Verfügbar",
+          "connectedHere": "Hier verbunden",
+          "connectedElsewhere": "Mit einer anderen Organisation verbunden",
+          "connectedElsewhereHint": "Dieses Repository kann hier nicht ausgewählt werden.",
+          "selectedCount": "{count, plural, one {# Repository ausgewählt} other {# Repositorys ausgewählt}}",
+          "confirmCta": "{count, plural, one {# Repository verbinden} other {# Repositorys verbinden}}",
+          "backCta": "Zurück zu den Konten",
+          "nothingLeftTitle": "Von diesem Konto ist nichts mehr zu verbinden",
+          "nothingLeftHint": "Jedes Repository hier ist bereits verbunden, mit dieser oder einer anderen Organisation. Um mehr anzubieten, fügen Sie der Installation auf GitHub Repositorys hinzu.",
+          "nothingLeftCta": "Repositorys auf GitHub hinzufügen"
+        },
+        "outcome": {
+          "linkedTitle": "Repositorys verbunden",
+          "linkedHint": "Motir kann jetzt die ausgewählten Repositorys lesen. Sonst wurde nichts von diesem Konto verbunden.",
+          "takenTitle": "Ein Repository wurde während Ihrer Auswahl vergeben",
+          "takenHint": "Eine andere Organisation hat {repos} verbunden. Es wurde nichts verbunden. Die Liste ist aktualisiert, wählen Sie bitte erneut.",
+          "notAccessibleTitle": "Sie haben keinen Zugriff mehr auf dieses Konto",
+          "notAccessibleHint": "GitHub zeigt Ihnen diese Installation nicht mehr an, daher wurde sie aus der Liste entfernt. Bitten Sie einen Inhaber des GitHub-Kontos um Zugriff, oder installieren Sie auf einem anderen Konto.",
+          "notAdminTitle": "Nur ein Organisationsadmin kann eine bestehende Installation verknüpfen",
+          "notAdminHint": "Bitten Sie einen Admin dieser Organisation, sie zu verknüpfen, oder installieren Sie selbst auf einem anderen Konto.",
+          "selectionRequiredTitle": "Wählen Sie mindestens ein Repository",
+          "selectionRequiredHint": "Es wurde nichts verbunden. Markieren Sie die gewünschten Repositorys und bestätigen Sie dann.",
+          "notVisibleTitle": "Ein Repository ist nicht mehr Teil dieser Installation",
+          "notVisibleHint": "Es wurde nichts verbunden. Die Liste ist aktualisiert, wählen Sie bitte erneut."
+        }
       }
     },
     "index": {

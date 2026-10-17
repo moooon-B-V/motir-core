@@ -71,10 +71,16 @@ export function PlanningHandOff({ verdict, sources, onGo, onDismiss }: PlanningH
   const t = useTranslations('planningWorkspace.handoff');
   const existing = verdict.outcome === 'onboard_existing_project';
   const missing = verdict.missing ?? [];
-  const kept = verdict.keptSteps ?? [];
+  // The wizard ends at the Import step and no longer walks the questions step
+  // (MOTIR-8770 / MOTIR-8772), so the strip never names it — neither as kept
+  // ("A few questions" would promise a step that never comes) nor as skipped.
+  const walked = (s: MigrateRoutingStep) => s !== 'discovery';
+  const kept = (verdict.keptSteps ?? []).filter(walked);
   // What the wizard will NOT run — the strip's second half, and the reason the
   // first half is worth showing at all.
-  const skipped = existing ? MIGRATE_ROUTING_STEPS.filter((s) => !kept.includes(s)) : [];
+  const skipped = existing
+    ? MIGRATE_ROUTING_STEPS.filter((s) => walked(s) && !kept.includes(s))
+    : [];
 
   return (
     <div

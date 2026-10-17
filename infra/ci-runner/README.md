@@ -8,6 +8,8 @@ The container every ephemeral fleet runner boots from — the thing
 | ----------------------- | --------------------------------------------------------------------------- |
 | `Dockerfile`            | The image. Its header carries the toolchain derivation + evidence table.    |
 | `entrypoint.sh`         | dockerd → drop to `runner` → `exec run.sh --jitconfig`. One job, then exit. |
+| `start-dockerd.sh`      | Starts dockerd and proves it can unpack a whiteout layer (MOTIR-8821).      |
+| `job-started.sh`        | Runner hook: prints the dockerd storage outcome into the job log.           |
 | `smoke/assert-image.sh` | The mechanical §7.2 / §7.4 assertions, on sources and on the built image.   |
 | `smoke/prove-boot.sh`   | Boots the real image; proves dockerd + `run.sh` + a `services:` container.  |
 
@@ -48,6 +50,18 @@ The orchestrator puts these on the Machine
 flag and this image has no `config.sh`. The guarantee it restates — no default
 labels — is already made at mint time, because a JIT config's `labels` array is
 the runner's complete label set and GitHub adds no defaults to a JIT runner.
+
+## dockerd storage (MOTIR-8821)
+
+`start-dockerd.sh` does not trust a daemon that merely answers. It loads a
+two-layer image whose second layer deletes a file (an overlay whiteout) and
+creates a container from it, and tries storage candidates in order until that
+works: `default` (containerd store + overlayfs), `overlay2` (classic graph
+driver), `vfs`. A boot where none works fails. The winning candidate is printed
+into every job log by the runner's job-started hook.
+
+To measure a Machine, boot the image with `MOTIR_RUNNER_DOCKER_STORAGE=<candidate>`
+to force one candidate; the boot log shows which are refused and why.
 
 ## What is not proven in CI
 

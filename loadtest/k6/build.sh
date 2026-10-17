@@ -20,8 +20,9 @@
 # A host that cannot execute it (macOS, or arm64 Linux) skips the `k6 version` check below and
 # prints it to run on the generator instead.
 #
-# Uses the grafana/xk6 image when a Docker daemon answers; otherwise needs `go`
-# and `xk6` on PATH (`go install go.k6.io/xk6/cmd/xk6@latest`, or `brew install xk6`).
+# Uses the grafana/xk6 image (tag pinned as XK6_IMAGE_TAG in versions.env) when a Docker daemon
+# answers; otherwise needs `go` and `xk6` on PATH (`go install go.k6.io/xk6/cmd/xk6@latest`, or
+# `brew install xk6`).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,8 +37,8 @@ out_name="$(basename "$out")"
 module="${XK6_SSE_MODULE}@${XK6_SSE_VERSION}"
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  echo "building k6 ${K6_VERSION} with ${module} in grafana/xk6 -> ${out_dir}/${out_name}"
-  (cd "$out_dir" && docker run --rm -u "$(id -u):$(id -g)" -v "${PWD}:/xk6" grafana/xk6 \
+  echo "building k6 ${K6_VERSION} with ${module} in grafana/xk6:${XK6_IMAGE_TAG} -> ${out_dir}/${out_name}"
+  (cd "$out_dir" && docker run --rm -u "$(id -u):$(id -g)" -v "${PWD}:/xk6" "grafana/xk6:${XK6_IMAGE_TAG}" \
     build "${K6_VERSION}" --with "${module}" --os linux --arch amd64 --output "${out_name}")
 else
   missing=()

@@ -990,7 +990,9 @@ describe('the ROUTING VERDICT is HONOURED (MOTIR-4769)', () => {
     // Every word of it is the planner's; this surface renders it and writes none.
     expect(screen.getByText('The repository is still mostly the starter template.')).toBeTruthy();
     // What will be asked, and what is already there — the apology this route owes.
-    expect(screen.getByText('A few questions')).toBeTruthy();
+    // The wizard no longer walks the questions step (MOTIR-8783), whatever the
+    // verdict kept, so the strip must not promise it.
+    expect(screen.queryByText('A few questions')).toBeNull();
     expect(screen.getByText('Import work items')).toBeTruthy();
     // The FOUND block names what was read, from the substrate already in hand.
     expect(screen.getByText(/acme\/widgets/)).toBeTruthy();

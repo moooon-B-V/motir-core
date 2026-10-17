@@ -8623,6 +8623,58 @@
         "installation_not_accessibleHint": "你的 GitHub 用户看不到此安装，因此没有关联任何内容。该 GitHub 账号的所有者可以为你开通访问权限。",
         "not_configuredTitle": "此部署尚未设置 GitHub",
         "not_configuredHint": "此 Motir 部署还没有 GitHub App，所以无法在这里连接 GitHub。运行此部署的人可以完成设置。"
+      },
+      "existing": {
+        "title": "已安装 Motir 应用的 GitHub 账号",
+        "hint": "这些账号上已经安装了 Motir 应用。选择一个账号，即可把它的仓库连接到这里，无需重新安装。",
+        "loading": "正在查找你的 GitHub 账号…",
+        "typeUser": "个人账号",
+        "typeOrg": "GitHub 组织",
+        "linkedHere": "已关联到当前组织",
+        "pickCta": "选择仓库",
+        "pickAria": "从 {login} 选择仓库",
+        "installAnotherCta": "安装到其他账号",
+        "installAnotherHint": "如果列表里没有你要的账号，请用这个方式。",
+        "loadErrorTitle": "无法读取你的 GitHub 账号",
+        "loadErrorHint": "没有做任何更改。请重试，或安装到其他账号。",
+        "retryCta": "重试",
+        "identity": {
+          "title": "登录 GitHub，查找你的已安装账号。",
+          "hint": "Motir 只会检查哪些账号已安装 Motir 应用，以及你能访问其中哪些。你也可以跳过，改为安装到新账号。",
+          "cta": "使用 GitHub 登录",
+          "skipCta": "跳过，改为安装",
+          "declinedHint": "GitHub 未完成登录，因此没有做任何更改。请重试，或跳过并改为安装。"
+        },
+        "picker": {
+          "heading": "{login} 中的仓库",
+          "hint": "选择当前组织要连接的仓库。确认之前不会连接任何仓库。",
+          "fromInstallHint": "你选择了一个已安装 Motir 应用的账号。请选择当前组织要连接它的哪些仓库。",
+          "loading": "正在加载仓库…",
+          "available": "可用",
+          "connectedHere": "已连接到当前组织",
+          "connectedElsewhere": "已连接到其他组织",
+          "connectedElsewhereHint": "无法在此处选择这个仓库。",
+          "selectedCount": "{count, plural, other {已选择 # 个仓库}}",
+          "confirmCta": "{count, plural, other {连接 # 个仓库}}",
+          "backCta": "返回账号列表",
+          "nothingLeftTitle": "这个账号已没有可连接的仓库",
+          "nothingLeftHint": "这里的每个仓库都已连接，不是连接到当前组织，就是连接到其他组织。要提供更多仓库，请在 GitHub 上把仓库添加到该安装。",
+          "nothingLeftCta": "在 GitHub 上添加仓库"
+        },
+        "outcome": {
+          "linkedTitle": "仓库已连接",
+          "linkedHint": "Motir 现在可以读取你选择的仓库。这个账号的其他仓库没有被连接。",
+          "takenTitle": "你选择期间有仓库被占用",
+          "takenHint": "其他组织连接了 {repos}。没有连接任何仓库。列表已更新，请重新选择。",
+          "notAccessibleTitle": "你已无法访问该账号",
+          "notAccessibleHint": "GitHub 不再允许你查看这个安装，因此已从列表中移除。请向该 GitHub 账号的所有者申请访问权限，或安装到其他账号。",
+          "notAdminTitle": "只有组织管理员可以关联已有的安装",
+          "notAdminHint": "请让当前组织的管理员来关联，或者你自己安装到其他账号。",
+          "selectionRequiredTitle": "请至少选择一个仓库",
+          "selectionRequiredHint": "没有连接任何仓库。请勾选想要的仓库，然后确认。",
+          "notVisibleTitle": "有仓库已不在这个安装中",
+          "notVisibleHint": "没有连接任何仓库。列表已更新，请重新选择。"
+        }
       }
     },
     "index": {

@@ -662,3 +662,126 @@ describe('the run survives the detours that reach the callback with no session',
     expect(await installationRowsFor(a.workspaceId)).toBe(1);
   });
 });
+
+// ── An already-installed account, picked from onboarding (MOTIR-8760) ─────────
+//
+// The onboarding connect step mints a WORKSPACE-binding state (no `g`), so a
+// pick of an account another organisation already uses reaches the callback's
+// workspace branch — not the org branch the `select_repos` case above drives.
+// `bindInstallationForWorkspace` refuses with `RepoSelectionRequiredError`, and
+// the route answers `select_repos` at the state's origin with the installation
+// named: the redirect the connect step's repository picker opens on. Pinned
+// here, against the datastore, because the defect that matters is a
+// `select_repos` that ALSO wrote a row.
+describe('onboarding picks an account another organisation already uses', () => {
+  let b: Org;
+
+  /** A already links INSTALLATION with repository 1; B's owner can see it. */
+  async function shareInstallation(): Promise<Awaited<ReturnType<typeof snapshotOf>>> {
+    await githubInstallationService.linkInstallationToOrganization({
+      workspaceId: a.workspaceId,
+      installationId: INSTALLATION,
+      repoIds: ['1'],
+    });
+    const aBefore = await snapshotOf(a);
+    b = await makeOrg('borg');
+    await connectIdentity(b.ownerId, 'gho_b');
+    userInstallations['gho_b'] = [Number(INSTALLATION)];
+    session.userId = b.ownerId;
+    return aBefore;
+  }
+
+  it('the workspace branch → select_repos at /onboarding/migrate with installation_id, nothing written for B', async () => {
+    const aBefore = await shareInstallation();
+    const out = await setup(workspaceState(b, 'onboardingMigrateConnect'));
+    expect(out.github).toBe('select_repos');
+    expect(out.path).toBe(ONBOARDING_PATH);
+    expect(out.location.searchParams.get('installation_id')).toBe(INSTALLATION);
+    expect(await linksOf(b)).toBe(0);
+    expect(await reposOf(b)).toEqual([]);
+    expect(await installationRowsFor(b.workspaceId)).toBe(0);
+    expect(await snapshotOf(a)).toEqual(aBefore);
+  });
+
+  it("the step's own context rides ahead of github=select_repos, so the wizard reopens as left", async () => {
+    const aBefore = await shareInstallation();
+    const state = encodeInstallState({
+      workspaceId: b.workspaceId,
+      userId: b.ownerId,
+      origin: 'onboardingMigrateConnect',
+      context: {
+        via: 'onboard_existing_project',
+        steps: 'connect,index',
+        backKind: 'work-item',
+        backItem: 'MOTIR-12',
+      },
+    });
+    const out = await setup(state);
+    expect(out.github).toBe('select_repos');
+    expect(out.path).toBe(ONBOARDING_PATH);
+    expect(out.location.searchParams.get('via')).toBe('onboard_existing_project');
+    expect(out.location.searchParams.get('steps')).toBe('connect,index');
+    expect(out.location.searchParams.get('backItem')).toBe('MOTIR-12');
+    const search = out.location.search;
+    expect(search.indexOf('via=')).toBeGreaterThanOrEqual(0);
+    expect(search.indexOf('via=')).toBeLessThan(search.indexOf('github=select_repos'));
+    expect(out.location.searchParams.get('installation_id')).toBe(INSTALLATION);
+    expect(await linksOf(b)).toBe(0);
+    expect(await reposOf(b)).toEqual([]);
+    expect(await snapshotOf(a)).toEqual(aBefore);
+  });
+
+  it('an EXPIRED onboarding state → install_expired at /onboarding/migrate, nothing bound', async () => {
+    const aBefore = await shareInstallation();
+    const expired = encodeInstallState(
+      { workspaceId: b.workspaceId, userId: b.ownerId, origin: 'onboardingMigrateConnect' },
+      Math.floor(Date.now() / 1000) - 1000,
+    );
+    const out = await setup(expired);
+    expect(out.github).toBe('install_expired');
+    expect(out.path).toBe(ONBOARDING_PATH);
+    expect(await linksOf(b)).toBe(0);
+    expect(await reposOf(b)).toEqual([]);
+    expect(await snapshotOf(a)).toEqual(aBefore);
+  });
+
+  it('a plain member, not an organisation admin → still select_repos at /onboarding/migrate', async () => {
+    const aBefore = await shareInstallation();
+    const member = await usersService.createUser({
+      email: 'bmember@example.com',
+      password: PASSWORD,
+      name: 'Member',
+    });
+    await adminDb.organizationMembership.create({
+      data: { organizationId: b.organizationId, userId: member.id, role: 'member' },
+    });
+    await adminDb.workspaceMembership.create({
+      data: { workspaceId: b.workspaceId, userId: member.id, workspaceRole: 'member' },
+    });
+    await connectIdentity(member.id, 'gho_bmember');
+    userInstallations['gho_bmember'] = [Number(INSTALLATION)];
+    session.userId = member.id;
+
+    const out = await setup(workspaceState(b, 'onboardingMigrateConnect', member.id));
+    expect(out.github).toBe('select_repos');
+    expect(out.path).toBe(ONBOARDING_PATH);
+    expect(out.location.searchParams.get('installation_id')).toBe(INSTALLATION);
+    expect(await linksOf(b)).toBe(0);
+    expect(await reposOf(b)).toEqual([]);
+    expect(await snapshotOf(a)).toEqual(aBefore);
+  });
+
+  it('the state the onboarding mint signs carries no organisation', async () => {
+    const url = await githubInstallationService.installUrlForOnboardingConnect({
+      workspaceId: a.workspaceId,
+      actorUserId: a.ownerId,
+      context: { via: 'onboard_existing_project', steps: 'connect,index' },
+    });
+    const decoded = decodeInstallStateResult(new URL(url!).searchParams.get('state')!);
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) return;
+    expect(decoded.state.origin).toBe('onboardingMigrateConnect');
+    expect(decoded.state.organizationId).toBeUndefined();
+    expect(decoded.state.workspaceId).toBe(a.workspaceId);
+  });
+});
