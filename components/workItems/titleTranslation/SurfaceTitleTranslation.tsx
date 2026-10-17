@@ -72,16 +72,25 @@ function useSurface(): SurfaceValue | null {
 export function SurfaceTitleTranslationProvider({
   projectKey,
   context,
+  followView,
   children,
 }: {
   projectKey: string;
   /** The reader's resolved context, or `null` (a Visitor). */
   context: AutoTranslateContextDTO | null;
+  /**
+   * Titles that sit INSIDE an opened work item follow that item's own host (its
+   * single Show original) instead of carrying a switch of their own: pass the
+   * host's view here and the titles show the original exactly while it does. The
+   * host also owns the announcement and the no-credit message, so the live region
+   * is not drawn.
+   */
+  followView?: 'original' | 'translated';
   children: ReactNode;
 }) {
   if (!context || !context.autoTranslateWorkContent) return <>{children}</>;
   return (
-    <ActiveProvider projectKey={projectKey} context={context}>
+    <ActiveProvider projectKey={projectKey} context={context} followView={followView}>
       {children}
     </ActiveProvider>
   );
@@ -90,10 +99,12 @@ export function SurfaceTitleTranslationProvider({
 function ActiveProvider({
   projectKey,
   context,
+  followView,
   children,
 }: {
   projectKey: string;
   context: AutoTranslateContextDTO;
+  followView?: 'original' | 'translated';
   children: ReactNode;
 }) {
   const uiLocale = useLocale();
@@ -164,10 +175,17 @@ function ActiveProvider({
     [flush],
   );
 
+  // A title inside an opened item reads the host's view; the surface's own flag
+  // is then never the one that counts.
+  const effective = useMemo(
+    () => (followView === undefined ? state : setShowOriginal(state, followView === 'original')),
+    [state, followView],
+  );
+
   const value = useMemo<SurfaceValue>(
     () => ({
       projectKey,
-      state,
+      state: effective,
       items,
       canAddCredit: context.canAddCredit,
       uiLocale,
@@ -177,7 +195,7 @@ function ActiveProvider({
     }),
     [
       projectKey,
-      state,
+      effective,
       items,
       context.canAddCredit,
       context.targetLanguage,
@@ -190,7 +208,7 @@ function ActiveProvider({
   return (
     <SurfaceContext.Provider value={value}>
       {children}
-      <SurfaceLiveRegion />
+      {followView === undefined ? <SurfaceLiveRegion /> : null}
     </SurfaceContext.Provider>
   );
 }
@@ -253,9 +271,14 @@ function displayedTitle(
   };
 }
 
-function useDisplayedTitle(id: string, stored: string): DisplayedTitle {
+function useDisplayedTitle(id: string, stored: string, register = false): DisplayedTitle {
   const t = useTranslations('titleTranslation');
-  return displayedTitle(useSurface(), t, id, stored);
+  const surface = useSurface();
+  const registerTitles = surface?.register;
+  useEffect(() => {
+    if (register && id) registerTitles?.([{ id, title: stored }]);
+  }, [register, registerTitles, id, stored]);
+  return displayedTitle(surface, t, id, stored);
 }
 
 /**
@@ -269,14 +292,16 @@ export function useSurfaceTitleResolver(): (id: string, stored: string) => Displ
   return (id, stored) => displayedTitle(surface, t, id, stored);
 }
 
-/** The title as a string — for an `aria-label`, a native `title`, a search text. */
+/** The title as a string — for an `aria-label`, a native `title`, a sentence. It
+ *  registers the title with the surface, like {@link SurfaceTitle} does; an empty
+ *  `id` registers nothing (a title that may be absent). */
 export function useSurfaceTitleText(id: string, stored: string): string {
-  return useDisplayedTitle(id, stored).text;
+  return useDisplayedTitle(id, stored, true).text;
 }
 
 /** The title with its mark's meaning appended — the row's accessible name part. */
 export function useSurfaceTitleName(id: string, stored: string): string {
-  return useDisplayedTitle(id, stored).name;
+  return useDisplayedTitle(id, stored, true).name;
 }
 
 const MARK = 'inline-flex h-4 w-4 shrink-0 items-center justify-center text-(--el-text-secondary)';

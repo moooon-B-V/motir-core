@@ -1,5 +1,7 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
+import { RelatedTitles } from '../[key]/_components/translation/RelatedTitles';
 import { personDisplayName } from '@/lib/people/personLabel';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
@@ -909,6 +911,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               blockedByAncestor={
                 data.readiness.blockedByAncestor
                   ? {
+                      id: data.readiness.blockedByAncestor.id,
                       identifier: data.readiness.blockedByAncestor.identifier,
                       title: data.readiness.blockedByAncestor.title,
                       href: routes.item(data.readiness.blockedByAncestor.identifier),
@@ -1415,7 +1418,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               >
                 <IssueTypeIcon type={view.parent.kind} className="h-3.5 w-3.5 shrink-0" />
                 <span className="shrink-0 font-mono text-xs">{view.parent.identifier}</span>
-                <span className="truncate text-(--el-text-secondary)">{view.parent.title}</span>
+                <span className="truncate text-(--el-text-secondary)">
+                  <SurfaceTitle id={view.parentId ?? ''} title={view.parent.title} />
+                </span>
               </Link>
             ) : (
               <span className="text-(--el-text-secondary)">{t('none')}</span>
@@ -1434,7 +1439,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             control={
               <QuickViewFolderControl
                 folderId={view.folderId}
-                parent={view.parent}
+                parent={view.parent && view.parentId ? { ...view.parent, id: view.parentId } : null}
                 onDismiss={edit.close}
                 onPick={(folderId, folderPath) => {
                   edit.close();
@@ -1791,7 +1796,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const translation = proposal ? null : (data.translation ?? null);
   return translation ? (
     <TranslationProvider itemId={data.id} translation={translation} fields={QUICK_VIEW_FIELDS}>
-      {peek}
+      <RelatedTitles projectKey={data.projectIdentifier}>{peek}</RelatedTitles>
     </TranslationProvider>
   ) : (
     peek

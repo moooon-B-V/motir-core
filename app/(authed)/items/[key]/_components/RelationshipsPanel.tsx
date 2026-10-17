@@ -1,5 +1,6 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -177,7 +178,7 @@ function LinkRow({
         <span className="min-w-0 flex-1 truncate">
           <span className="text-(--el-text-secondary) font-mono text-xs">{item.identifier}</span>
           <span className="text-(--el-text) ml-2 font-sans text-sm group-hover:underline">
-            {item.title}
+            <SurfaceTitle id={item.id} title={item.title} />
           </span>
         </span>
         {statusMeta ? (
@@ -440,6 +441,7 @@ export function RelationshipsPanel({
             blockedByAncestor={
               effectiveReadiness.blockedByAncestor
                 ? {
+                    id: effectiveReadiness.blockedByAncestor.id,
                     identifier: effectiveReadiness.blockedByAncestor.identifier,
                     title: effectiveReadiness.blockedByAncestor.title,
                     href: routes.item(effectiveReadiness.blockedByAncestor.identifier),

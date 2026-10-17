@@ -1,3 +1,4 @@
+import { RelatedTitles } from './_components/translation/RelatedTitles';
 import { Suspense } from 'react';
 import { personDisplayName } from '@/lib/people/personLabel';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -956,7 +957,7 @@ export default async function ItemView({
   // wrap does not re-indent four hundred lines.
   return readerTranslation ? (
     <TranslationProvider itemId={item.id} translation={readerTranslation} liveRefresh>
-      {page}
+      <RelatedTitles projectKey={ctx.project.identifier}>{page}</RelatedTitles>
     </TranslationProvider>
   ) : (
     page

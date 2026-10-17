@@ -1,3 +1,9 @@
+import { startSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import { SurfaceTitleHost } from '@/components/workItems/titleTranslation/SurfaceTitleHost';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
@@ -224,6 +230,10 @@ async function renderWorkbenchPage({ searchParams }: WorkbenchPageProps) {
   // bounce a signed-in reader straight back.
   if (!ctx) redirect(NO_PROJECT_PATH);
 
+  // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8834),
+  // started beside the page's own reads and awaited by the host that mounts it.
+  const titleContext = startSurfaceTranslation(ctx.project, ctx);
+
   const params = await searchParams;
   const tab = parseWorkbenchTab(params['tab']);
 
@@ -290,17 +300,21 @@ async function renderWorkbenchPage({ searchParams }: WorkbenchPageProps) {
     : [];
 
   return (
-    <div data-testid={WORKBENCH_TESTID} className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-          <p className="text-sm text-(--el-text-muted)">
-            {t('subtitle', { project: ctx.project.name })}
-          </p>
-        </div>
-      </header>
+    <SurfaceTitleHost projectKey={ctx.project.identifier} contextRead={titleContext}>
+      <div data-testid={WORKBENCH_TESTID} className="flex flex-col gap-6">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+            <p className="text-sm text-(--el-text-muted)">
+              {t('subtitle', { project: ctx.project.name })}
+            </p>
+          </div>
+          <SurfaceShowOriginalSwitch />
+        </header>
 
-      {/* ⚠️ THE STRIP AND THE LIST ARE LIVE FROM CLIENT STATE (Story MOTIR-8539 ·
+        <SurfaceTitlesNotice />
+
+        {/* ⚠️ THE STRIP AND THE LIST ARE LIVE FROM CLIENT STATE (Story MOTIR-8539 ·
           MOTIR-8574). `<WorkbenchLiveView>` is seeded with this render's window
           and counts and, on a nudge, re-reads both from `GET
           /api/workbench/window` — the same `workbenchWindowService.read` above —
@@ -313,59 +327,60 @@ async function renderWorkbenchPage({ searchParams }: WorkbenchPageProps) {
           of its states, because a component that did not exist until the first
           row landed could not know the row had ARRIVED (MOTIR-5245, § 26
           Panel 1). */}
-      <WorkbenchLiveView
-        tab={tab}
-        page={page}
-        rows={rows}
-        pagination={{
-          total: window?.page.total ?? 0,
-          page: window?.page.page ?? 1,
-          pageSize: window?.page.pageSize ?? HOME_PAGE_SIZE,
-        }}
-        planningSessions={tab === 'to-resume' ? (window?.page.planningSessions ?? []) : []}
-        counts={counts}
-        label={t(TAB_LABEL_KEY[tab])}
-        caption={
-          /* The window caption — a bounded list that does not say what bounds it
+        <WorkbenchLiveView
+          tab={tab}
+          page={page}
+          rows={rows}
+          pagination={{
+            total: window?.page.total ?? 0,
+            page: window?.page.page ?? 1,
+            pageSize: window?.page.pageSize ?? HOME_PAGE_SIZE,
+          }}
+          planningSessions={tab === 'to-resume' ? (window?.page.planningSessions ?? []) : []}
+          counts={counts}
+          label={t(TAB_LABEL_KEY[tab])}
+          caption={
+            /* The window caption — a bounded list that does not say what bounds it
              reads as a list that is missing things. It sits above the EMPTY state
              too: "nothing finished this week" is the same claim about the same
              window. */
-          tab === 'finished' ? (
-            <p className="text-xs text-(--el-text-secondary)">
-              {t('finishedWindow', { days: HOME_FINISHED_WINDOW_DAYS })}
-            </p>
-          ) : null
-        }
-        empty={<EmptyTab tab={tab} />}
-        viewerId={ctx.userId}
-      >
-        {isApprovals ? (
-          /* ⚠️ WINDOW 2, and it is INSIDE the page rather than a `loading.tsx`.
+            tab === 'finished' ? (
+              <p className="text-xs text-(--el-text-secondary)">
+                {t('finishedWindow', { days: HOME_FINISHED_WINDOW_DAYS })}
+              </p>
+            ) : null
+          }
+          empty={<EmptyTab tab={tab} />}
+          viewerId={ctx.userId}
+        >
+          {isApprovals ? (
+            /* ⚠️ WINDOW 2, and it is INSIDE the page rather than a `loading.tsx`.
              `design/shell/design-notes.md`'s navigation-pending grammar is
              explicit that a route boundary can flush the response head before
              the page's gate has run — which is why this repo has none, and why
              the boundary sits here, below the session and active-project reads
              that decide who may see this page. The fallback is the list's own
              shape so the frame does not shift when the rows arrive. */
-          <Suspense fallback={<ListPending />}>
-            <ApprovalsTab ctx={ctx} />
-          </Suspense>
-        ) : isPlanning ? (
-          /* PLANNING (§ 36) — the same instrument for the same reason: the read is
+            <Suspense fallback={<ListPending />}>
+              <ApprovalsTab ctx={ctx} />
+            </Suspense>
+          ) : isPlanning ? (
+            /* PLANNING (§ 36) — the same instrument for the same reason: the read is
              inside the tab, so the boundary sits between the page's gate and it.
              No `page` is passed, because the tab has no pager: it reads page 1 at
              its 50-row ceiling (§ 36.10) and the note under the last row says when
              the set is larger. */
-          <Suspense fallback={<ListPending />}>
-            <PlanningTab ctx={ctx} projectName={ctx.project.name} />
-          </Suspense>
-        ) : null}
-      </WorkbenchLiveView>
+            <Suspense fallback={<ListPending />}>
+              <PlanningTab ctx={ctx} projectName={ctx.project.name} />
+            </Suspense>
+          ) : null}
+        </WorkbenchLiveView>
 
-      {/* The quick-view peek — the SAME `?peek=` island /items, /ready and the
+        {/* The quick-view peek — the SAME `?peek=` island /items, /ready and the
           board mount. Opening a row here is not a different interaction, so it
           is not a different surface. */}
-      <IssueQuickViewController />
-    </div>
+        <IssueQuickViewController />
+      </div>
+    </SurfaceTitleHost>
   );
 }

@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  SurfaceTitle,
+  useSurfaceTitleText,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { personDisplayName } from '@/lib/people/personLabel';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -242,7 +246,7 @@ export function CoreFieldsPanel({
   // identifier/title from the id alone, so the picker hands it over (`undefined`
   // = no pending change → show the server `parent`).
   const [parentOverride, setParentOverride] = useState<
-    Pick<WorkItemSummaryDto, 'identifier' | 'title'> | null | undefined
+    Pick<WorkItemSummaryDto, 'id' | 'identifier' | 'title'> | null | undefined
   >(undefined);
   // THE STATUS ANOTHER ISLAND ON THIS PAGE JUST MOVED (Bug MOTIR-5212). An
   // approval gate is decided in its own frame further down the page, and the
@@ -293,6 +297,7 @@ export function CoreFieldsPanel({
       ? null
       : { path: pendingFolder.path, via: null }
     : (placement?.placementFolder ?? null);
+  const viaTitle = useSurfaceTitleText(shownFolder?.via?.id ?? '', shownFolder?.via?.title ?? '');
 
   const typeMeta = ISSUE_TYPE_META[eff.kind];
   const reporter = members.find((m) => m.userId === eff.reporterId);
@@ -763,7 +768,7 @@ export function CoreFieldsPanel({
             onChange={(parentId, picked) => {
               // The picker hands over the chosen parent's label so the display
               // shows it immediately (optimistic) without a server re-read.
-              setParentOverride(picked ?? null);
+              setParentOverride(picked && parentId ? { ...picked, id: parentId } : null);
               patch({ parentId });
             }}
             disabled={isPending || readOnly}
@@ -776,7 +781,9 @@ export function CoreFieldsPanel({
             <span className="text-(--el-text-secondary) font-mono text-xs">
               {effParent.identifier}
             </span>
-            <span className="truncate">{effParent.title}</span>
+            <span className="truncate">
+              <SurfaceTitle id={effParent.id} title={effParent.title} />
+            </span>
           </Link>
         ) : (
           muted(t('none'))
@@ -811,7 +818,7 @@ export function CoreFieldsPanel({
                 <span className="text-xs text-(--el-text-secondary)">
                   {tf('placedThrough', {
                     key: shownFolder.via.identifier,
-                    title: shownFolder.via.title,
+                    title: viaTitle,
                   })}
                 </span>
               ) : null}

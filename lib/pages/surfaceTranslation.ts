@@ -20,3 +20,16 @@ export async function resolveSurfaceTranslation(
   const readerLocale = (await getLocale()) as Locale;
   return readerTranslationContextService.resolveContext({ project, reader, readerLocale });
 }
+
+/**
+ * Starts the context read WITHOUT awaiting it, for a page that hands it to
+ * `<SurfaceTitleHost>`: the read (which crosses to motir-ai only when the switch is
+ * on) then runs beside the page's own reads instead of after them. A failed read
+ * degrades to "no translation" — the page renders as stored.
+ */
+export function startSurfaceTranslation(
+  project: Pick<ProjectDTO, 'autoTranslateWorkContent'>,
+  reader: TranslationReader,
+): Promise<AutoTranslateContextDTO | null> {
+  return resolveSurfaceTranslation(project, reader).catch(() => null);
+}

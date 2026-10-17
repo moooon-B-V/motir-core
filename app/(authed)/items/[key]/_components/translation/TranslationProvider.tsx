@@ -55,6 +55,8 @@ import {
 interface TranslationContextValue {
   offer: TranslationOfferDTO;
   canAddCredits: boolean;
+  /** The reader's auto-translate context, when the project's switch is on. */
+  auto: ReaderTranslationDTO['auto'];
   /** The fieldRefs this host draws; the bar and the marks count only these. */
   scope: readonly string[];
   state: TranslationState;
@@ -333,6 +335,7 @@ export function TranslationProvider({
     () => ({
       offer,
       canAddCredits,
+      auto,
       scope,
       state,
       phase,
@@ -342,7 +345,7 @@ export function TranslationProvider({
       retryField: (ref) => void run([ref]),
       setView,
     }),
-    [offer, canAddCredits, scope, state, phase, languageName, uiLocale, run, setView],
+    [offer, canAddCredits, auto, scope, state, phase, languageName, uiLocale, run, setView],
   );
   return (
     <TranslationContext.Provider value={value}>

@@ -1,3 +1,9 @@
+import { startSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import { SurfaceTitleHost } from '@/components/workItems/titleTranslation/SurfaceTitleHost';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -37,6 +43,8 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
   if (!ctx) notFound();
 
   const accessCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  // Title translation (Story MOTIR-7738 · MOTIR-8834), started beside the page's reads.
+  const titleContext = startSurfaceTranslation(ctx.project, ctx);
 
   // The sprint must belong to the active project — keeps the status-pill workflow
   // correct and tenant-gates the lookup (a foreign sprint 404s).
@@ -67,27 +75,34 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
   const statusByKey = buildStatusByKey(workflow.statuses);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link
-          href="/backlog"
-          className="inline-flex w-fit items-center gap-1 text-sm text-(--el-text-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-          {t('sprintReport.backToBacklog')}
-        </Link>
-        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-          {t('sprintReport.title', { name: sprint.name })}
-        </h1>
-      </div>
+    <SurfaceTitleHost projectKey={ctx.project.identifier} contextRead={titleContext}>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <Link
+              href="/backlog"
+              className="inline-flex w-fit items-center gap-1 text-sm text-(--el-text-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              {t('sprintReport.backToBacklog')}
+            </Link>
+            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+              {t('sprintReport.title', { name: sprint.name })}
+            </h1>
+          </div>
+          <SurfaceShowOriginalSwitch />
+        </div>
 
-      <SprintReport
-        report={report}
-        sprint={sprint}
-        statusByKey={statusByKey}
-        velocity={velocity}
-        cycle={cycle}
-      />
-    </div>
+        <SurfaceTitlesNotice />
+
+        <SprintReport
+          report={report}
+          sprint={sprint}
+          statusByKey={statusByKey}
+          velocity={velocity}
+          cycle={cycle}
+        />
+      </div>
+    </SurfaceTitleHost>
   );
 }
