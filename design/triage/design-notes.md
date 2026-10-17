@@ -409,3 +409,7 @@ submitted" / "Filed as {key}, now waiting in Requested features." (existing, unc
 > (which the card says not to change), the nav label and the inbox heading all still say
 > **"Requested features"**. So the success panel reads "Requested features" while the rail reads
 > "Triage". Reconciling the two is a copy decision outside this card.
+
+## Auto-translate: titles on this surface (Story MOTIR-7738 · MOTIR-8824, DATED 2026-10-17)
+
+Amends the inbox header and rows by delta mock `design/work-items/translation--titles.mock.html` (panel 9), decisions in the `⭐ The title surfaces under auto-translate` section of `design/work-items/design-notes.md`. Changes here: the one **Show original / Show translation** switch in the inbox header and the per-title mark on a differing title. The row title keeps its `line-clamp-2` over the `line-clamp-1` snippet; the snippet is not translated by this design.
