@@ -210,9 +210,13 @@ function storyRefs(): string[] {
   return itemTranslations(seed.story, seed.text.ko).map((t) => t.fieldRef);
 }
 
-/** Wait for the `ordinal`-th `translate` submit and return what it carried. */
+/**
+ * Wait for the `ordinal`-th `translate` submit and return what it carried. "At
+ * least": an item page also submits its related items' titles, so more than one
+ * submit can follow an open — the ordinal still names the one this step scripted.
+ */
 async function submitAt(ordinal: number) {
-  await expect.poll(() => translateSubmits().length).toBe(ordinal + 1);
+  await expect.poll(() => translateSubmits().length).toBeGreaterThan(ordinal);
   const sent = translateSubmits()[ordinal]!.translate!;
   return { target: sent.targetLanguage, refs: sent.fields.map((f) => f.fieldRef) };
 }
