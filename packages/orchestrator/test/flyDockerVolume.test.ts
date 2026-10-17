@@ -202,7 +202,7 @@ describe('teardown — the volume goes with its machine', () => {
   it('deletes the handle’s volume after destroying the machine', async () => {
     handler = (c) => (c.method === 'GET' ? json(404, {}) : json(200, {}));
 
-    await flyOrchestrator.teardown({ ...HANDLE, volumeId: 'vol_1' }, 'completed', ATTRIBUTION);
+    await flyOrchestrator.teardown({ ...HANDLE, volumeId: 'vol_1' }, 'job_completed', ATTRIBUTION);
 
     const deletes = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
     expect(deletes[0]).toContain('/machines/d8901ab');
@@ -225,7 +225,7 @@ describe('teardown — the volume goes with its machine', () => {
 
     const done = flyOrchestrator.teardown(
       { ...HANDLE, volumeId: 'vol_1' },
-      'completed',
+      'job_completed',
       ATTRIBUTION,
     );
     await vi.runAllTimersAsync();
@@ -243,7 +243,7 @@ describe('teardown — the volume goes with its machine', () => {
 
     const done = flyOrchestrator.teardown(
       { ...HANDLE, volumeId: 'vol_1' },
-      'completed',
+      'job_completed',
       ATTRIBUTION,
     );
     await vi.runAllTimersAsync();
@@ -285,7 +285,7 @@ describe('teardown — the volume goes with its machine', () => {
 
   it('a machine with no handle volume and no mounts deletes no volume', async () => {
     handler = (c) => (c.method === 'GET' ? json(404, {}) : json(200, {}));
-    await flyOrchestrator.teardown(HANDLE, 'completed', ATTRIBUTION);
+    await flyOrchestrator.teardown(HANDLE, 'job_completed', ATTRIBUTION);
     expect(calls.some((c) => c.url.includes('/volumes/'))).toBe(false);
   });
 });
