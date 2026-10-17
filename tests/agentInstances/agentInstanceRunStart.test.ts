@@ -750,6 +750,16 @@ describe('the card’s agent picker', () => {
     ]);
   });
 
+  it('a running agent recorded signed out is still offered — the start asks live (MOTIR-8869)', async () => {
+    const id = await agent();
+    await adminDb.agentInstance.update({ where: { id }, data: { signInState: 'signed_out' } });
+    const item = await card();
+    const { agents } = await runs.listAgentsForCard(item.identifier, fx.ctx);
+    expect(agents).toMatchObject([
+      { id, state: 'running', signInState: 'signed_out', refusal: null },
+    ]);
+  });
+
   it('any other failure of the permission read is not swallowed', async () => {
     const item = await card();
     vi.spyOn(projectAccessService, 'assertPermission').mockRejectedValueOnce(new Error('db down'));
