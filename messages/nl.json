@@ -14643,6 +14643,8 @@
     "translate": "Vertalen",
     "translating": "Bezig met vertalen…",
     "showOriginal": "Origineel tonen",
+    "originalIn": "Origineel: {language}",
+    "originalNotRecorded": "Oorspronkelijke taal niet vastgelegd",
     "showTranslation": "Vertaling tonen",
     "retry": "Opnieuw proberen",
     "hintInto": "naar het {language}",

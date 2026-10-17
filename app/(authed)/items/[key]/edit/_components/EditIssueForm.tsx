@@ -38,6 +38,10 @@ import type { WorkItemDto, WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dt
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { updateIssueAction, changeStatusAction } from '../actions';
+import {
+  OriginalLanguageAccessory,
+  useOriginalLanguageNote,
+} from '../../_components/translation/OriginalLanguageNote';
 
 // The full edit form (Subtask 2.3.6). Status and non-status fields submit via
 // TWO distinct Server Actions (finding #46): `changeStatusAction` → the gated
@@ -100,6 +104,10 @@ export function EditIssueForm({
   );
   const router = useRouter();
   const t = useTranslations('issueViews');
+  // The language the STORED title is recorded in (MOTIR-8832, design MOTIR-8837).
+  // `FormField` shows an error in place of the helper, so the note returns the
+  // moment a title error clears.
+  const titleNote = useOriginalLanguageNote(issue.languages.title, issue.title.trim() !== '');
   const tc = useTranslations('common');
   const tErr = useTranslations('errors');
   const { toast } = useToast();
@@ -263,6 +271,7 @@ export function EditIssueForm({
 
       <Input
         label={t('title')}
+        helperText={titleNote ?? undefined}
         value={title}
         onChange={(e) => {
           setTitle(e.target.value);
@@ -278,6 +287,12 @@ export function EditIssueForm({
           wrapping <label>/span, else "Description" shows twice. */}
       <MarkdownEditor
         label={t('description')}
+        labelAccessory={
+          <OriginalLanguageAccessory
+            language={issue.languages.description}
+            hasText={issue.descriptionMd != null && issue.descriptionMd.trim() !== ''}
+          />
+        }
         value={description}
         onChange={setDescription}
         size="full"
@@ -388,6 +403,10 @@ export function EditIssueForm({
             <span className="text-(--el-text-secondary) font-normal">
               — {t('explanationGloss')}
             </span>
+            <OriginalLanguageAccessory
+              language={issue.languages.explanation}
+              hasText={issue.explanationMd != null && issue.explanationMd.trim() !== ''}
+            />
             {showAiDraftedPill ? <Pill severity="info">{t('aiDrafted')}</Pill> : null}
             <DraftWithAiButton
               phase={draft.phase}

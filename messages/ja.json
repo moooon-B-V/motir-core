@@ -14640,6 +14640,8 @@
     "translate": "翻訳",
     "translating": "翻訳しています…",
     "showOriginal": "原文を表示",
+    "originalIn": "原文の言語：{language}",
+    "originalNotRecorded": "原文の言語は記録されていません",
     "showTranslation": "翻訳を表示",
     "retry": "再試行",
     "hintInto": "{language}に翻訳",

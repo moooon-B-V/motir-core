@@ -1,3 +1,4 @@
+import type { AutoTranslateContextDTO } from '@/lib/dto/autoTranslate';
 import type { Locale } from '@/lib/i18n/locales';
 
 // The translation DTOs the item page and the translate route share (Story
@@ -57,6 +58,13 @@ export interface TranslateResponseDTO {
 export interface ReaderTranslationDTO {
   offer: TranslationOfferDTO;
   canAddCredits: boolean;
+  /**
+   * The reader's auto-translate context (Story MOTIR-7738 · MOTIR-8832): whether
+   * the project's switch is on and whether the organisation can pay. When the
+   * switch is on the host starts the translation on mount instead of waiting for
+   * a press. Absent (or `null`) means "no auto" — the shipped on-demand host.
+   */
+  auto?: AutoTranslateContextDTO | null;
 }
 
 /**

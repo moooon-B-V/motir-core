@@ -14643,6 +14643,8 @@
     "translate": "Übersetzen",
     "translating": "Wird übersetzt…",
     "showOriginal": "Original anzeigen",
+    "originalIn": "Original: {language}",
+    "originalNotRecorded": "Originalsprache nicht erfasst",
     "showTranslation": "Übersetzung anzeigen",
     "retry": "Erneut versuchen",
     "hintInto": "nach {language}",

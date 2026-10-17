@@ -14637,6 +14637,8 @@
     "translate": "번역",
     "translating": "번역하는 중…",
     "showOriginal": "원문 보기",
+    "originalIn": "원문 언어: {language}",
+    "originalNotRecorded": "원문 언어가 기록되지 않았습니다",
     "showTranslation": "번역 보기",
     "retry": "다시 시도",
     "hintInto": "{language}(으)로",

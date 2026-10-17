@@ -14637,6 +14637,8 @@
     "translate": "翻译",
     "translating": "正在翻译…",
     "showOriginal": "显示原文",
+    "originalIn": "原文语言：{language}",
+    "originalNotRecorded": "未记录原文语言",
     "showTranslation": "显示译文",
     "retry": "重试",
     "hintInto": "译为{language}",

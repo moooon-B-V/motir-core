@@ -19,6 +19,7 @@ import type { ReaderTranslationDTO, TranslationOfferDTO } from '@/lib/dto/workIt
 import {
   barPhase,
   initialTranslationState,
+  type AutoEntry,
   revisionsToSend,
   translationReducer,
   type BarPhase,
@@ -141,10 +142,12 @@ function useTranslationActions(
   lines: TranslationLines,
 ) {
   const run = useCallback(
-    async (only?: readonly string[], quiet?: boolean) => {
+    async (only?: readonly string[], quiet?: boolean, silent?: boolean) => {
       const sent = revisionsToSend(stateRef.current, only);
       dispatch({ type: 'start', sent, quiet });
-      if (!quiet) announce(lines.translating);
+      // The auto start is the press without its announcement (design A5): the
+      // page's own arrival is what the reader hears; the settled line comes once.
+      if (!quiet && !silent) announce(lines.translating);
       const results = await postTranslate(itemId);
       if (!results) return dispatch({ type: 'requestFailed', sent, quiet });
       const edited = quiet ? editedNowReady(stateRef.current, sent, results) : [];
@@ -258,6 +261,32 @@ function LiveOfferRefresh() {
   return null;
 }
 
+/**
+ * How this host opens (MOTIR-8832): `start` when the project's switch is on, the
+ * organisation can pay and the host draws a field that differs; `no_credit` when
+ * it cannot pay (no request is made); otherwise the on-demand host, unchanged.
+ */
+function autoEntryOf(
+  auto: ReaderTranslationDTO['auto'],
+  scope: readonly string[],
+): AutoEntry | null {
+  if (!auto?.autoTranslateWorkContent || scope.length === 0) return null;
+  return auto.credit === 'no_credit' ? 'no_credit' : 'start';
+}
+
+/** Run the auto start ONCE on mount — the press, entered earlier. */
+function useAutoStart(
+  entry: AutoEntry | null,
+  run: (only?: readonly string[], quiet?: boolean, silent?: boolean) => Promise<void>,
+) {
+  const started = useRef(false);
+  useEffect(() => {
+    if (entry !== 'start' || started.current) return;
+    started.current = true;
+    void run(undefined, false, true);
+  }, [entry, run]);
+}
+
 export function TranslationProvider({
   itemId,
   translation,
@@ -273,13 +302,19 @@ export function TranslationProvider({
   liveRefresh?: boolean;
   children: ReactNode;
 }) {
-  const { offer, canAddCredits } = translation;
+  const { offer, canAddCredits, auto } = translation;
   const t = useTranslations('itemTranslation');
   const uiLocale = useLocale();
-  const [state, dispatch] = useReducer(translationReducer, offer, initialTranslationState);
+  const scope = useMemo(() => scopeOf(offer, fields), [offer, fields]);
+  const autoEntry = autoEntryOf(auto, scope);
+  const [state, dispatch] = useReducer(
+    translationReducer,
+    { offer, autoEntry },
+    (init: { offer: TranslationOfferDTO; autoEntry: AutoEntry | null }) =>
+      initialTranslationState(init.offer, init.autoEntry),
+  );
   const stateRef = useLatest(state);
   const [announcement, setAnnouncement] = useState('');
-  const scope = useMemo(() => scopeOf(offer, fields), [offer, fields]);
   const phase = barPhase(state, scope);
   const languageName = languageDisplayName(offer.targetLanguage, uiLocale);
   const lines = useLiveLines(t, languageName);
@@ -291,6 +326,7 @@ export function TranslationProvider({
     lines,
   );
   useStaleFields(offer, state, dispatch, run);
+  useAutoStart(autoEntry, run);
   useSettledAnnouncement(state.busy, phase, setAnnouncement, t, languageName);
 
   const value = useMemo<TranslationContextValue>(

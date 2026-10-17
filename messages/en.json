@@ -14643,6 +14643,8 @@
     "translate": "Translate",
     "translating": "Translating…",
     "showOriginal": "Show original",
+    "originalIn": "Original in {language}",
+    "originalNotRecorded": "Original language not recorded",
     "showTranslation": "Show translation",
     "retry": "Retry",
     "hintInto": "into {language}",

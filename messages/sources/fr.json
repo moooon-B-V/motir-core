@@ -11306,6 +11306,8 @@
   "itemTranslation.translate": "Translate",
   "itemTranslation.translating": "Translating…",
   "itemTranslation.showOriginal": "Show original",
+  "itemTranslation.originalIn": "Original in {language}",
+  "itemTranslation.originalNotRecorded": "Original language not recorded",
   "itemTranslation.showTranslation": "Show translation",
   "itemTranslation.retry": "Retry",
   "itemTranslation.hintInto": "into {language}",

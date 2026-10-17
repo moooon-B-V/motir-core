@@ -1784,7 +1784,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // 1–5): the same provider, bar and marks as the item page, from the offer this
   // peek read carried. It draws only the title and the description, so it offers
   // and marks only those (D3) — its press is the page's request and translates
-  // every differing field. No offer (a Visitor, a proposal, a failed read): the
+  // every differing field. Under auto-translate (MOTIR-8832) the offer carries the
+  // reader's context (`translation.auto`) and the host starts on mount with the
+  // same two-field scope. No offer (a Visitor, a proposal, a failed read): the
   // peek renders exactly as before. Bound to `peek` so the wrap re-indents nothing.
   const translation = proposal ? null : (data.translation ?? null);
   return translation ? (

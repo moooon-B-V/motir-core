@@ -72,6 +72,13 @@ export interface ItemTranslationContext {
   context: AutoTranslateContextDTO;
   /** The SAME offer `workItemTranslationReadService.getReaderTranslation` produces. */
   offer: TranslationOfferDTO;
+  /**
+   * The offer read's own `canAddCredits` (MOTIR-8832): what the shipped press's
+   * no-credit message links on. Unlike `context.canAddCredit` it is answered
+   * whenever something differs, so a press that meets a refusal the context did
+   * not predict still knows whether to offer the link.
+   */
+  canAddCredits: boolean;
 }
 
 export interface TitlesTranslationContext {
@@ -130,10 +137,14 @@ export const readerTranslationContextService = {
       ctx: reader,
     });
     if (!input.project.autoTranslateWorkContent || !offer.anyNeedsTranslation) {
-      return { context: context(input, 'ok', false), offer };
+      return { context: context(input, 'ok', false), offer, canAddCredits };
     }
     const credit = creditOf(await deps.getAiAccess(reader));
-    return { context: context(input, credit, credit === 'no_credit' && canAddCredits), offer };
+    return {
+      context: context(input, credit, credit === 'no_credit' && canAddCredits),
+      offer,
+      canAddCredits,
+    };
   },
 
   /**
