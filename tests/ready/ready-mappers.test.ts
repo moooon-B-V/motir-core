@@ -74,6 +74,9 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     titleLanguage: null,
     descriptionLanguage: null,
     explanationLanguage: null,
+    // No embedding failure recorded (Story MOTIR-8226 · MOTIR-8227).
+    embeddingFailedHash: null,
+    embeddingFailedAttempts: null,
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,
     ...overrides,

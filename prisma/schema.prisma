@@ -3136,6 +3136,16 @@ model WorkItem {
   // is; `SetNull` so a pruned run can never leave a dangling pointer.
   resumeRunId           String?                       @map("resume_run_id")
   resumeRun             DispatchRun?                  @relation("WorkItemResumeRun", fields: [resumeRunId], references: [id], onDelete: SetNull)
+  // The EMBEDDING SWEEP's poison-item bookkeeping (Story MOTIR-8226 · MOTIR-8227):
+  // the content hash of the document the provider REJECTED, and how many runs have
+  // rejected it. Both NULL until a rejection is recorded. A work item with no
+  // embedding row has nowhere else to keep an attempt count (the row exists only
+  // once a vector does), and a per-run result is not durable. A changed title or
+  // description is a different hash, so the count restarts without any cleanup;
+  // a successful embed clears both. Written by raw SQL in the workspace context,
+  // so neither bumps `updatedAt` nor emits a work-item event.
+  embeddingFailedHash   String?                       @map("embedding_failed_hash")
+  embeddingFailedAttempts Int?                        @map("embedding_failed_attempts")
   // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
   // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
   // Workbench's "Recently finished" tab is the first reader; it is also the
