@@ -687,6 +687,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-17T19:12:40Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
+      "structureFingerprint": "bfa0328c1b22f8286e1aa4047cc580d3f305568afbbff6af9526203f22cdd6df",
       "workflows": [
         {
           "path": ".github/workflows/ci.yml",
@@ -943,6 +944,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-16T19:25:32Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
+      "structureFingerprint": "1f85a8adb4ec942d1eebff359be2da1d21ab91e498f9098d1f483ee308ca8638",
       "workflows": [
         {
           "path": ".github/workflows/catalog-refresh.yml",
@@ -1046,6 +1048,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-16T19:27:50Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
+      "structureFingerprint": "81c7d90f2dfc65772318cd6f54161e00281b017b5470c0a988911193fdf70319",
       "workflows": [
         {
           "path": ".github/workflows/guards.yml",

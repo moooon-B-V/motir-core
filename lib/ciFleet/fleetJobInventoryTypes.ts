@@ -25,6 +25,10 @@ export interface FleetInventoryRepo {
   /** ISO-8601. */
   measuredAt: string;
   imageDockerfileSha: string;
+  /** `workflowFingerprint` of the repository's workflows at `sha` (MOTIR-8870).
+   *  When present, a newer workflow commit makes the entry stale only if the
+   *  fingerprint at the new head differs. Absent: any newer commit does. */
+  structureFingerprint?: string;
   jobCount: number;
   workflows: Array<{ path: string; jobs: FleetInventoryJob[] }>;
 }

@@ -10,6 +10,7 @@ import {
   type FleetReadiness,
 } from '@/lib/services/fleetReadinessService';
 import type { FleetJobInventory, FleetInventoryJob } from '@/lib/ciFleet/fleetJobInventoryTypes';
+import { workflowFingerprint } from '@/lib/ciFleet/workflowFingerprint';
 import checkedInInventory from '@/lib/ciFleet/fleetJobInventory.json';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
@@ -45,6 +46,8 @@ interface World {
   visibility: Map<string, boolean>;
   reachable: Set<number> | null;
   head: Map<string, { sha: string; date: string } | 'fail'>;
+  /** The workflow files each repository has at its head (MOTIR-8870); absent ⇒ the read is refused. */
+  files: Map<string, Array<{ path: string; text: string }>>;
 }
 
 let world: World;
@@ -92,6 +95,26 @@ function installGitHub(): void {
           200,
           head ? [{ sha: head.sha, commit: { committer: { date: head.date } } }] : [],
         );
+      }
+      const tree = /^\/repos\/([^/]+)\/([^/]+)\/git\/trees\/[^/]+$/.exec(u.pathname);
+      if (tree) {
+        const files = world.files.get(tree[2]!);
+        if (!files) return json(500, { message: 'boom' });
+        return json(200, {
+          truncated: false,
+          tree: files.map((f) => ({ type: 'blob', path: f.path })),
+        });
+      }
+      const contents = /^\/repos\/([^/]+)\/([^/]+)\/contents\/(.+)$/.exec(u.pathname);
+      if (contents) {
+        const found = world.files
+          .get(contents[2]!)
+          ?.find((f) => f.path === decodeURI(contents[3]!));
+        if (!found) return json(404, { message: 'Not Found' });
+        return json(200, {
+          encoding: 'base64',
+          content: Buffer.from(found.text).toString('base64'),
+        });
       }
       const repo = /^\/repos\/([^/]+)\/([^/]+)$/.exec(u.pathname);
       if (repo) {
@@ -253,6 +276,7 @@ beforeEach(async () => {
       ['api', { sha: 'sha-api', date: MEASURED_AT }],
       ['web', { sha: 'sha-web', date: MEASURED_AT }],
     ]),
+    files: new Map(),
   };
   installGitHub();
 });
@@ -639,6 +663,55 @@ describe('image_coverage', () => {
     world.head.set('web', 'fail');
     const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
     expectOnly(result, 'image_coverage', 'unknown');
+  });
+
+  describe('a newer workflow commit that leaves the structure alone (MOTIR-8870)', () => {
+    const CI = '.github/workflows/ci.yml';
+    const ci = (steps: string) =>
+      `jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pnpm test\n${steps}`;
+    const measured = [{ path: CI, text: ci('') }];
+
+    function recorded(): FleetJobInventory {
+      const inv = inventory();
+      inv.repos[`${ORG}/api`]!.structureFingerprint = workflowFingerprint(measured);
+      return inv;
+    }
+
+    beforeEach(() => {
+      world.head.set('api', { sha: 'newer', date: '2026-10-12T00:00:00Z' });
+    });
+
+    it('a new step with tools the repository already uses ⇒ met', async () => {
+      world.files.set('api', [{ path: CI, text: ci('      - run: pnpm lint\n') }]);
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
+      expect(result.ready).toBe(true);
+      expect(cond(result, 'image_coverage').state).toBe('met');
+    });
+
+    it('a new executable ⇒ inventory_stale', async () => {
+      world.files.set('api', [{ path: CI, text: ci('      - run: gh pr list\n') }]);
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
+      expectOnly(result, 'image_coverage', 'unmet');
+      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
+    });
+
+    it('a head whose files cannot be read ⇒ inventory_stale, never met', async () => {
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
+      expectOnly(result, 'image_coverage', 'unmet');
+      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
+    });
+
+    it('invalid YAML at the head ⇒ inventory_stale', async () => {
+      world.files.set('api', [{ path: CI, text: 'jobs: [unclosed' }]);
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
+      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
+    });
+
+    it('an entry with no recorded fingerprint is stale on any newer commit, as before', async () => {
+      world.files.set('api', [{ path: CI, text: ci('') }]);
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
+    });
   });
 });
 

@@ -7,11 +7,13 @@ import {
   getOrgInstallation,
   latestWorkflowCommit,
   listInstallationRepositoryIds,
+  readWorkflowSources,
   OrgInstallationReadError,
   type OrgInstallation,
 } from '@/lib/github/orgInstallation';
 import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import { repoVisibilityClient, RepoVisibilityApiError } from '@/lib/github/repoVisibility';
+import { workflowFingerprint } from '@/lib/ciFleet/workflowFingerprint';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
@@ -601,6 +603,32 @@ async function runnerGroupCondition(
   );
 }
 
+/**
+ * A newer workflow commit does not move a verdict unless it changes a runner, a
+ * reusable workflow, an action or an executable (MOTIR-8870). True only when the
+ * entry recorded a fingerprint AND the head's workflows digest to the same one.
+ * ⚠️ FAILS CLOSED: no recorded fingerprint, an unreadable file or invalid YAML
+ * all answer false, so the entry is stale exactly as it was before this check.
+ */
+async function structureUnchanged(
+  orgTarget: GithubOrgTarget,
+  repo: OrgRepo,
+  headSha: string,
+  entry: FleetInventoryRepo,
+): Promise<boolean> {
+  if (!entry.structureFingerprint) return false;
+  try {
+    const files = await readWorkflowSources(orgTarget, repo.owner, repo.name, headSha);
+    return workflowFingerprint(files) === entry.structureFingerprint;
+  } catch (err) {
+    console.warn('[fleetReadinessService] the workflow structure read failed', {
+      repository: fullName(repo),
+      status: statusOf(err),
+    });
+    return false;
+  }
+}
+
 async function imageCoverageCondition(
   orgTarget: GithubOrgTarget,
   privateRepos: OrgRepo[],
@@ -640,7 +668,8 @@ async function imageCoverageCondition(
     if (
       head &&
       head.sha !== entry.sha &&
-      new Date(head.committedAt).getTime() > new Date(entry.measuredAt).getTime()
+      new Date(head.committedAt).getTime() > new Date(entry.measuredAt).getTime() &&
+      !(await structureUnchanged(orgTarget, repo, head.sha, entry))
     ) {
       stale.push({ repository: fullName(repo), measuredSha: entry.sha, headSha: head.sha });
     }

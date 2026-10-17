@@ -8,6 +8,7 @@ import {
   latestWorkflowCommit,
   listInstallationRepositoryIds,
   OrgInstallationReadError,
+  readWorkflowSources,
 } from '@/lib/github/orgInstallation';
 import { RepoVisibilityApiError, repoVisibilityClient } from '@/lib/github/repoVisibility';
 import { ActionsVariableApiError, actionsVariableClient } from '@/lib/github/actionsVariables';
@@ -314,6 +315,95 @@ describe('latestWorkflowCommit', () => {
     );
     await expect(latestWorkflowCommit(TARGET, 'acme-connected', 'acme-core')).rejects.toThrow(
       'no sha or date',
+    );
+  });
+});
+
+describe('readWorkflowSources', () => {
+  const REPO = '/repos/acme-connected/acme-core';
+  const TREE = `GET ${REPO}/git/trees/abc?recursive=1`;
+  const file = (path: string, text: string) => ({
+    status: 200,
+    body: { encoding: 'base64', content: Buffer.from(text).toString('base64') },
+    path,
+  });
+
+  it('reads the workflow files and composite actions, and nothing else', async () => {
+    route(TREE, {
+      status: 200,
+      body: {
+        truncated: false,
+        tree: [
+          { type: 'blob', path: '.github/workflows/ci.yml' },
+          { type: 'blob', path: '.github/workflows/notes.md' },
+          { type: 'blob', path: '.github/workflows/sub/x.yml' },
+          { type: 'blob', path: '.github/actions/pnpm/action.yml' },
+          { type: 'tree', path: '.github/workflows' },
+          { type: 'blob', path: 'src/index.ts' },
+        ],
+      },
+    });
+    route(`GET ${REPO}/contents/.github/workflows/ci.yml?ref=abc`, file('', 'jobs: {}'));
+    route(`GET ${REPO}/contents/.github/actions/pnpm/action.yml?ref=abc`, file('', 'runs: {}'));
+    await expect(
+      readWorkflowSources(TARGET, 'acme-connected', 'acme-core', 'abc'),
+    ).resolves.toEqual([
+      { path: '.github/workflows/ci.yml', text: 'jobs: {}' },
+      { path: '.github/actions/pnpm/action.yml', text: 'runs: {}' },
+    ]);
+  });
+
+  it('refuses a refused tree, a truncated tree and a tree that is not a list', async () => {
+    route(
+      TREE,
+      { status: 404, body: { message: 'Not Found' } },
+      { status: 200, body: { truncated: true, tree: [] } },
+      { status: 200, body: { tree: 'nope' } },
+    );
+    await expect(
+      readWorkflowSources(TARGET, 'acme-connected', 'acme-core', 'abc'),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(readWorkflowSources(TARGET, 'acme-connected', 'acme-core', 'abc')).rejects.toThrow(
+      'truncated',
+    );
+    await expect(readWorkflowSources(TARGET, 'acme-connected', 'acme-core', 'abc')).rejects.toThrow(
+      'truncated',
+    );
+  });
+
+  it('refuses a tree with more files than the cap', async () => {
+    route(TREE, {
+      status: 200,
+      body: {
+        truncated: false,
+        tree: Array.from({ length: 121 }, (_, i) => ({
+          type: 'blob',
+          path: `.github/workflows/w${i}.yml`,
+        })),
+      },
+    });
+    await expect(readWorkflowSources(TARGET, 'acme-connected', 'acme-core', 'abc')).rejects.toThrow(
+      'too many',
+    );
+  });
+
+  it('refuses a file read that is refused or is not base64 text', async () => {
+    const one = {
+      status: 200,
+      body: { truncated: false, tree: [{ type: 'blob', path: '.github/workflows/ci.yml' }] },
+    };
+    const FILE = `GET ${REPO}/contents/.github/workflows/ci.yml?ref=abc`;
+    route(TREE, one);
+    route(
+      FILE,
+      { status: 403, body: { message: 'forbidden' } },
+      { status: 200, body: { encoding: 'none' } },
+    );
+    await expect(
+      readWorkflowSources(TARGET, 'acme-connected', 'acme-core', 'abc'),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(readWorkflowSources(TARGET, 'acme-connected', 'acme-core', 'abc')).rejects.toThrow(
+      'base64',
     );
   });
 });
