@@ -395,6 +395,79 @@ export function isOrderingCheckExempt(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// THE POST-MERGE CHILD CHECK (MOTIR-8863) — a runnable container is ONE
+// deliverable that ends at its pull request.
+//
+// A child whose own body says it can only start once the deployment exists
+// (`verification` / `deploy` / `manual` / human work that reads production) has no
+// legal position INSIDE the container whose merge it waits on: the parent run's
+// pull request stays a draft until the last child lands so it never merges,
+// `CONTAINER_HAS_OPEN_CHILDREN` refuses the container's flip to `implemented`,
+// and a forced merge cascades `done` onto the child unperformed. The remedy is
+// placement — a sibling the container `blocks`, or a second container.
+//
+// The rule existed in both planners as prose and was missed seven times
+// (MOTIR-3270 · 7498 · 7870 · 8559 · 8589 · 8634 · 8863); this makes the miss
+// visible at `validate_work_item` / `validate_plan`, where it can be repaired
+// before an approval.
+//
+// ⚠️ UNLIKE gate 14's ordering check this scans the WHOLE body, not the AC span:
+// MOTIR-8860 stated its tell in the Context ("Earliest legal start: after the
+// deploy …"), not in a criterion. The scope that keeps that affordable is the
+// CHILD's type/executor — a `code` card is never asked — and the container's kind
+// (an epic's children are SIBLINGS of a story, which is where the remedy puts it).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Phrases that read the deployment, matched whitespace- and markup-tolerantly. */
+export const POST_MERGE_CHILD_PHRASES = [
+  'earliest legal start',
+  'after the deploy',
+  'after the deployment',
+  'once deployed',
+  'once the deploy',
+  'post-deploy',
+  'on production',
+  'in production',
+  'against production',
+  'live tenant',
+  'merged to main',
+  'once this lands',
+  'once it lands',
+  'after release',
+] as const;
+
+const POST_MERGE_CHILD_MATCHERS: ReadonlyArray<{ phrase: string; re: RegExp }> =
+  POST_MERGE_CHILD_PHRASES.map((phrase) => ({
+    phrase,
+    re: new RegExp(`\\b${phrase.split(' ').join('\\s+')}\\b`, 'i'),
+  }));
+
+/** Container kinds whose children may legitimately wait on a SIBLING's merge. */
+export function isPostMergeChildCheckExemptContainer(
+  containerKind: string | null | undefined,
+): boolean {
+  return containerKind == null || containerKind === 'epic';
+}
+
+/** Whether a card of this type/executor is the kind that waits on a deployment. */
+export function isPostMergeChildCandidate(
+  type: string | null | undefined,
+  executor: string | null | undefined,
+): boolean {
+  return type === 'verification' || type === 'deploy' || type === 'manual' || executor === 'human';
+}
+
+/** The first deployment-reading phrase anywhere in a body, or `null`. */
+export function firstPostMergeChildTell(md: string | null | undefined): string | null {
+  if (!md) return null;
+  const text = md.replace(INLINE_MARKUP_RE, '');
+  for (const { phrase, re } of POST_MERGE_CHILD_MATCHERS) {
+    if (re.test(text)) return phrase;
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // THE REPO-STRADDLE CHECK (MOTIR-2177) — gate 1's criterion-by-criterion repo
 // column, mechanized as far as it mechanizes and NO FURTHER.
 //
