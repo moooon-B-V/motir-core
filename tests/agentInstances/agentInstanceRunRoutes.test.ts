@@ -1,4 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AGENT_PROFILES } from '@/packages/cli/src/agentProfiles';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
@@ -254,6 +258,35 @@ describe('the pure pieces', () => {
       'run-1',
     ]);
     expect(AGENT_SIGN_IN_COMMAND.slice(0, 3)).toEqual(['runuser', '-u', 'node']);
+  });
+
+  it('the sign-in query sources the agent-config environment before it runs (MOTIR-8869)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'signin-env-'));
+    try {
+      mkdirSync(join(dir, 'home/.motir-sandbox/agent-config'), { recursive: true });
+      mkdirSync(join(dir, 'bin'));
+      writeFileSync(
+        join(dir, 'home/.motir-sandbox/agent-config/env.sh'),
+        "export CLAUDE_CONFIG_DIR='/agent-config/.claude'\n",
+      );
+      // A stand-in `motir` that prints what the real one would stat from.
+      writeFileSync(join(dir, 'bin/motir'), '#!/bin/sh\necho "$CLAUDE_CONFIG_DIR $*"\n', {
+        mode: 0o755,
+      });
+      // Drop `runuser -u node -- env HOME=…`: only the `sh -c` tail is under test.
+      const tail = AGENT_SIGN_IN_COMMAND.slice(AGENT_SIGN_IN_COMMAND.indexOf('sh'));
+      const out = execFileSync(tail[0]!, tail.slice(1), {
+        env: {
+          ...process.env,
+          PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
+          HOME: join(dir, 'home'),
+        },
+        encoding: 'utf8',
+      });
+      expect(out.trim()).toBe('/agent-config/.claude agent-terminal signin');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('reads the sign-in answer, and gives none for a failure or an unknown word', () => {
