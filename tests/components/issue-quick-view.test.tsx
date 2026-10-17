@@ -329,7 +329,7 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
           readiness: {
             ready: false,
             blockers: [],
-            blockedByAncestor: { identifier: 'PROD-8', title: '7.19 Roadmap' },
+            blockedByAncestor: { id: 'ancestor-8', identifier: 'PROD-8', title: '7.19 Roadmap' },
           },
         }}
       />,

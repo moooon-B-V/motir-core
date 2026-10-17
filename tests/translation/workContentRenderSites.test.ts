@@ -17,7 +17,7 @@ const KEY = /\.identifier|workItemKey/;
 /** The files in `files` (path → source) that draw a title next to a key. */
 export function titleRenderSites(files: Record<string, string>): string[] {
   return Object.keys(files).filter((file) => {
-    const code = stripSourceComments(files[file]);
+    const code = stripSourceComments(files[file] ?? '');
     return TITLE_JSX.test(code) && KEY.test(code) && !file.includes('titleTranslation/');
   });
 }

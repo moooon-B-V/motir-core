@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import en from '@/messages/en.json';
 import type { AutoTranslateContextDTO } from '@/lib/dto/autoTranslate';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
@@ -84,7 +84,7 @@ function stub() {
   );
 }
 
-async function renderRow(wrap: (ui: ReactNode) => ReactNode) {
+async function renderRow(wrap: (ui: ReactElement) => ReactElement) {
   const r = renderWithIntl(wrap(<ApprovalRow record={{ section: 'awaiting', row }} />), {
     locale: 'en',
     messages: en,

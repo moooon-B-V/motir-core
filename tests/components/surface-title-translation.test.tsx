@@ -128,7 +128,7 @@ describe('with the switch on', () => {
     rerender(<Surface context={ctx()} rows={[...ROWS, { id: 'c', title: 'Third one' }]} />);
     await settle();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string)).toEqual({
       workItemIds: ['c'],
     });
     expect(screen.getByTestId('row-c').textContent).toContain('세 번째');
@@ -139,10 +139,10 @@ describe('with the switch on', () => {
     await settle();
     fetchMock.mockImplementationOnce(async () => answer([ready('a', '새 제목')]));
     rerender(
-      <Surface context={ctx()} rows={[{ id: 'a', title: 'Build the export v2' }, ROWS[1]]} />,
+      <Surface context={ctx()} rows={[{ id: 'a', title: 'Build the export v2' }, ROWS[1]!]} />,
     );
     await settle();
-    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string)).toEqual({
       workItemIds: ['a'],
     });
     expect(screen.getByTestId('row-a').textContent).toContain('새 제목');

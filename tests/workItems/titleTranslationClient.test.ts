@@ -49,7 +49,7 @@ describe('requestTitleTranslations', () => {
       fetchImpl as unknown as typeof fetch,
     );
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    const second = JSON.parse((fetchImpl.mock.calls[1][1] as RequestInit).body as string);
+    const second = JSON.parse((fetchImpl.mock.calls[1]![1] as RequestInit).body as string);
     expect(second.workItemIds).toEqual(all.slice(TITLE_TRANSLATION_MAX_ITEMS));
     expect(merged.truncated).toBe(false);
     expect(merged.titles).toHaveLength(all.length);
@@ -70,7 +70,7 @@ describe('requestTitleTranslations', () => {
       fetchImpl as unknown as typeof fetch,
     );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(merged.titles[0].status).toBe('no_credit');
+    expect(merged.titles[0]!.status).toBe('no_credit');
   });
 
   it('returns a switched-off answer as nothing, without further requests', async () => {

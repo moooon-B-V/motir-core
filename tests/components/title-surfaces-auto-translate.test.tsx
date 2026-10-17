@@ -122,7 +122,7 @@ describe('triage row', () => {
     descriptionSnippet: null,
     status: 'triage',
     priority: 'medium',
-    submitter: { kind: 'member', userId: 'u1', name: 'Ana', email: null },
+    submitter: { kind: 'member', userId: 'u1', name: 'Ana', email: null, image: null },
     triagedAt: '2026-10-01T00:00:00.000Z',
     snoozedUntil: null,
     voteCount: 0,
