@@ -254,13 +254,19 @@ describe('start — a ready leaf in a running, signed-in agent', () => {
     expect(minted[0]).toMatchObject({ dispatchRunId: run.id, userId: fx.ownerId });
 
     const [exec] = launches();
-    expect(exec!.command).toEqual([
+    // The agent-config environment is sourced before `motir` runs (MOTIR-8869).
+    expect(exec!.command.slice(0, 7)).toEqual([
       'runuser',
       '-u',
       'node',
       '--',
       'env',
       'HOME=/home/node',
+      'sh',
+    ]);
+    expect(exec!.command[8]).toContain('agent-config/env.sh');
+    expect(exec!.command.slice(-7)).toEqual([
+      'sh',
       'motir',
       'agent-terminal',
       'run',
