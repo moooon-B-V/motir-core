@@ -92,6 +92,8 @@ const BOOT_READ_STATES = new Set(['starting', 'waking', 'running', 'failed']);
 const MIN_PANEL_PX = 420;
 /** Room left under the panel so its border is not flush with the window edge. */
 const PANEL_BOTTOM_GAP_PX = 24;
+/** The terminal / chat area never collapses below this, whatever sits above the tab strip (MOTIR-8845). */
+const TAB_BODY_MIN = 'min-h-40';
 
 export interface AgentPanelActions {
   onClose: () => void;
@@ -535,7 +537,10 @@ function OpenAgent({
       {tab === 'terminal' ? run.bar : null}
       {watchingRun ? run.strip : area.strip}
       {/* The terminal stays mounted under the chat, so its screen and socket survive a tab switch. */}
-      <div className={`min-h-0 flex-1 flex-col ${tab === 'terminal' ? 'flex' : 'hidden'}`}>
+      <div
+        data-testid="agent-terminal-body"
+        className={`${TAB_BODY_MIN} flex-1 flex-col ${tab === 'terminal' ? 'flex' : 'hidden'}`}
+      >
         {/* The shell stays mounted while the run is watched, so switching back is instant. */}
         <div className={run.watching ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
           {terminalArea.body}
@@ -545,7 +550,7 @@ function OpenAgent({
       {chatOpened ? (
         <div
           data-testid="agent-chat-tab"
-          className={`min-h-0 flex-1 flex-col ${tab === 'chat' ? 'flex' : 'hidden'}`}
+          className={`${TAB_BODY_MIN} flex-1 flex-col ${tab === 'chat' ? 'flex' : 'hidden'}`}
         >
           {chatArea.body}
         </div>
