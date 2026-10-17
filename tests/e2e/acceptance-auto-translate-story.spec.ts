@@ -592,39 +592,20 @@ async function editDescription(page: Page, baseURL: string, beat: Beat) {
 /** The page re-enters the translated view; only the description goes out again. */
 async function retranslateEdit(page: Page, beat: Beat) {
   const ordinal = await holdNextJob();
-  const trail: string[] = [];
-  const note = (what: string) => trail.push(`${new Date().toISOString().slice(14, 23)} ${what}`);
-  page.on('response', async (r) => {
-    if (isTranslatePost(r)) note(`POST translate ${r.status()} ${(await r.text()).slice(0, 300)}`);
-  });
-  page.on('console', (m) => m.type() === 'error' && note(`console ${m.text().slice(0, 200)}`));
   await item(page, seed.story.key);
-  await expect(titleOf(page)).toHaveText(seed.text.ko.title, { timeout: FIRST_PAINT_MS });
-  note('title shown');
+  // The request carries every field and answers once, so while the description's
+  // job is held the whole page waits on it: the pending mark is what shows, and
+  // the stored 한국어 title returns with the answer, not before it.
   expect(await submitAt(ordinal)).toEqual({ target: 'ko', refs: ['description'] });
-  note('submit seen');
-  try {
-    await expect(mark(page, 'ko', 'fieldDescription', 'markTranslating')).toBeVisible();
-  } catch (err) {
-    const seen = await page
-      .locator('[data-translation-mark]')
-      .evaluateAll((els) =>
-        els.map((e) => `${e.getAttribute('data-translation-mark')}:${e.textContent}`),
-      );
-    const sent = translateSubmits().map((s, i) => {
-      const fields = s.translate?.fields.map((f) => f.fieldRef).join(',');
-      return `${i}:${s.translate?.targetLanguage}:${fields}:${s.refused ? 'refused' : 'ok'}`;
-    });
-    throw new Error(
-      `description mark missing; ordinal=${ordinal} marks=${JSON.stringify(seen)} submits=${JSON.stringify(sent)} trail=${JSON.stringify(trail)}\n${String(err)}`,
-    );
-  }
+  await expect(mark(page, 'ko', 'fieldDescription', 'markTranslating')).toBeVisible({
+    timeout: FIRST_PAINT_MS,
+  });
   await beat();
 
   const edited = [{ fieldRef: 'description', text: seed.text.ko.edited }];
   release(ordinal, { status: 'succeeded', translations: edited });
+  await expect(titleOf(page)).toHaveText(seed.text.ko.title, { timeout: FIRST_PAINT_MS });
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.added);
-  await expect(titleOf(page)).toHaveText(seed.text.ko.title);
   expect(jobSubmits()).toHaveLength(4);
   expect(reportedTranslation(seed.org.orgId)).toEqual(spend(K * 4));
   await beat();
