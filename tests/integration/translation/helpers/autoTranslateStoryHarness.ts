@@ -7,6 +7,9 @@ import { POST as titlesRoute } from '@/app/api/projects/[key]/translate-titles/r
 import type { ProjectAutoTranslateSettingsDTO } from '@/lib/dto/projectAutoTranslateSettings';
 import type { TitlesTranslateResponseDTO } from '@/lib/dto/workItemTranslation';
 import type { Locale } from '@/lib/i18n/locales';
+import { fieldRef } from '@/lib/translation/fieldRefs';
+import { projectsService } from '@/lib/services/projectsService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -15,6 +18,7 @@ import { createV1ProjectCaller } from '../../../fixtures/apiV1Fixtures';
 import { createTestWorkItem } from '../../../fixtures/workItemFixtures';
 import { adminDb } from '../../../helpers/adminDb';
 import { memberOf, readerScope, type Reader } from './translationStoryFixture';
+import type { Story } from './translationStoryHarness';
 
 // The auto-translate story's harness (Story MOTIR-7738 · Subtask MOTIR-8835): the
 // real settings and batch routes, driven as a given reader, over the translation
@@ -30,6 +34,8 @@ export interface AutoStory {
   key: string;
   /** English-titled items, each recorded as English. */
   ids: string[];
+  /** The same items' keys, in the same order. */
+  keys: string[];
   /** The workspace owner, reading in Korean. */
   owner: Reader;
 }
@@ -38,6 +44,7 @@ export interface AutoStory {
 export async function autoStory(count = 3): Promise<AutoStory> {
   const caller = await createV1ProjectCaller({ scopes: ['read'] });
   const ids: string[] = [];
+  const keys: string[] = [];
   for (let i = 1; i <= count; i += 1) {
     const item = await createTestWorkItem(caller.fixture, {
       kind: 'task',
@@ -45,12 +52,14 @@ export async function autoStory(count = 3): Promise<AutoStory> {
     });
     await adminDb.workItem.update({ where: { id: item.id }, data: { titleLanguage: 'en' } });
     ids.push(item.id);
+    keys.push(item.identifier);
   }
   return {
     caller,
     projectId: caller.fixture.projectId,
     key: caller.projectKey,
     ids,
+    keys,
     owner: { ctx: caller.ctx as WorkspaceContext, locale: 'ko' },
   };
 }
@@ -154,3 +163,52 @@ export const echoedTitle = (lang: string, n: number) => `[${lang}] Build export 
 
 /** How many kept translations exist, of any field, across every tenant. */
 export const rowsOfTitles = () => adminDb.workItemTranslation.count();
+
+/** The translation story's per-item shape over the `index`-th item, for its press and agent reads. */
+export function storyOf(s: AutoStory, index = 0): Story {
+  return {
+    caller: s.caller,
+    itemId: s.ids[index]!,
+    key: s.keys[index]!,
+    refs: [fieldRef.title()],
+    owner: s.owner,
+  };
+}
+
+/** The batch route with NO reader in scope: no workspace context, so no session. */
+export async function titlesWithoutSession(s: AutoStory) {
+  const res = await titlesRoute(
+    new Request(`${BASE}/api/projects/${s.key}/translate-titles`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workItemIds: s.ids }),
+    }),
+    params(s.key),
+  );
+  return res.status;
+}
+
+/** An English item in a SECOND project of the same workspace. */
+export async function itemInOtherProject(s: AutoStory): Promise<string> {
+  const project = await projectsService.createProject({
+    name: 'Other project',
+    identifier: 'OTHR',
+    workspaceId: s.owner.ctx.workspaceId,
+    actorUserId: s.owner.ctx.userId,
+  });
+  const item = await workItemsService.createWorkItem(
+    { projectId: project.id, kind: 'task', title: 'Elsewhere in the workspace' },
+    s.owner.ctx,
+  );
+  await adminDb.workItem.update({ where: { id: item.id }, data: { titleLanguage: 'en' } });
+  return item.id;
+}
+
+/** Edit the `index`-th item's title through the normal update path, recorded as English. */
+export async function retitle(s: AutoStory, index: number, title: string): Promise<void> {
+  await workItemsService.updateWorkItem(
+    s.ids[index]!,
+    { title, languages: { title: 'en' } },
+    s.owner.ctx,
+  );
+}

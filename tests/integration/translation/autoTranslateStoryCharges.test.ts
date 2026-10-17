@@ -3,24 +3,40 @@ import { getLocale } from 'next-intl/server';
 import { resolveSurfaceTranslation, startSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
 import { readerTranslationContextService } from '@/lib/services/readerTranslationContextService';
 import {
+  AI_TOTAL_SPEND,
+  UNIT,
   billedUnits,
   readerScope,
+  resetJobs,
   script,
   sessionUser,
   translateJobs,
   translateSubmits,
 } from './helpers/translationStoryFixture';
-import { registerStorySeam } from './helpers/translationStoryHarness';
+import {
+  agentReads,
+  lockWaiters,
+  mcpClient,
+  nextSubmit,
+  press,
+  registerStorySeam,
+  release,
+  usageJson,
+} from './helpers/translationStoryHarness';
 import {
   autoStory,
   cloudBilling,
   enable,
+  flip,
   readerIn,
+  retitle,
   rowsOfTitles,
+  storyOf,
   titles,
   type AutoStory,
 } from './helpers/autoTranslateStoryHarness';
 import { projectsService } from '@/lib/services/projectsService';
+import { truncateAuthTables } from '../../helpers/db';
 
 // THE AUTO-TRANSLATE STORY, ASSEMBLED — what it costs and who is told (Story
 // MOTIR-7738 · Subtask MOTIR-8835). The same assembled path as
@@ -72,6 +88,18 @@ describe('the credit verdict', () => {
     const res = await verdictFor(s, s.owner);
 
     expect(res!.context).toMatchObject({ credit: 'no_credit', canAddCredit: true });
+    expect(seam().usageReads).toBe(1);
+  });
+
+  it('on a cloud build a paid organisation with a balance is translated through the batch', async () => {
+    cloudBilling(true);
+    const s = await autoStory(2);
+    await enable(s);
+    seam().subscriptionStatus = 'active';
+    const res = await titles(s.owner, s);
+
+    expect(res.body.titles.every((t) => t.status === 'ready')).toBe(true);
+    expect(billedUnits(seam())).toBe(1);
   });
 
   it('a plain member of a free cloud organisation is told, with no link to add credit', async () => {
@@ -213,5 +241,110 @@ describe('a refused or failed job leaves no charge', () => {
     expect(a.body.titles.every((t) => t.status === 'ready')).toBe(true);
     expect(b.body.titles.every((t) => t.status === 'ready')).toBe(true);
     expect(billedUnits(seam())).toBe(1);
+  });
+});
+
+describe('one title, two entry points, one charge', () => {
+  it('a batch and an item press for the same title make one submit, 20 fresh tenants in a row', async () => {
+    for (let round = 0; round < 20; round += 1) {
+      await truncateAuthTables();
+      resetJobs(seam());
+      const s = await autoStory(1);
+      await enable(s);
+      const other = await readerIn(s, `ko2-${round}@example.com`, 'ko');
+      script(seam(), [{ status: 'running' }]);
+      const submitted = nextSubmit(seam());
+
+      const batch = titles(s.owner, s);
+      await submitted;
+      const pressed = press(other, s.ids[0]!);
+      await expect.poll(lockWaiters, { timeout: 20_000 }).toBeGreaterThan(0);
+      release(seam());
+      const [b, p] = await Promise.all([batch, pressed]);
+
+      expect(b.body.titles.map((t) => t.status)).toEqual(['ready']);
+      expect(p.body.fields.map((f) => f.status)).toEqual(['ready']);
+      expect(translateJobs(seam())).toHaveLength(1);
+      expect(translateJobs(seam())[0]!.translate!.fields.map((f) => f.fieldRef)).toEqual([
+        `title:${s.ids[0]}`,
+      ]);
+      expect(billedUnits(seam())).toBe(1);
+      expect(await rowsOfTitles()).toBe(1);
+    }
+  }, 280_000);
+});
+
+describe('an edit', () => {
+  it('re-sends the edited title alone and serves its siblings from the store', async () => {
+    const s = await autoStory(3);
+    await enable(s);
+    await titles(s.owner, s);
+    await retitle(s, 1, 'Build export number 2, now with dates');
+    const again = await titles(s.owner, s);
+
+    expect(again.body.titles.every((t) => t.status === 'ready')).toBe(true);
+    const jobs = translateJobs(seam());
+    expect(jobs).toHaveLength(2);
+    expect(jobs[1]!.translate!.fields.map((f) => f.text)).toEqual([
+      'Build export number 2, now with dates',
+    ]);
+    expect(await rowsOfTitles()).toBe(3);
+  });
+});
+
+describe('the Translation line and the agents', () => {
+  it('moves by exactly the billed units and leaves the AI total where it was', async () => {
+    const s = await autoStory(2);
+    await enable(s);
+    await titles(s.owner, s);
+    await titles(await readerIn(s, 'de@example.com', 'de'), s);
+    const usage = await usageJson(storyOf(s));
+
+    expect(billedUnits(seam())).toBe(2);
+    expect(usage.translation).toEqual({ totalSpend: 2 * UNIT, monthSpend: 2 * UNIT });
+    expect(usage.totalSpend).toBe(AI_TOTAL_SPEND);
+  });
+
+  it('agents read the stored original, word for word, with the switch on or off', async () => {
+    const s = await autoStory(1);
+    const client = await mcpClient(storyOf(s));
+    try {
+      const off = await agentReads(storyOf(s), client);
+      await enable(s);
+      await titles(s.owner, s);
+      await titles(await readerIn(s, 'de@example.com', 'de'), s);
+      const on = await agentReads(storyOf(s), client);
+
+      expect(on).toEqual(off);
+      for (const wire of Object.values(on)) {
+        expect(wire).toContain('Build export number 1');
+        expect(wire).not.toContain('[ko]');
+        expect(wire).not.toContain('[de]');
+      }
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+describe('turning it off again', () => {
+  it('spends nothing in the batch, keeps the rows, and the press serves them free', async () => {
+    const s = await autoStory(2);
+    await flip(s.owner, s, true);
+    await titles(s.owner, s);
+    await flip(s.owner, s, false);
+
+    const batch = await titles(s.owner, s);
+    const kept = await press(s.owner, s.ids[0]!);
+
+    expect(batch.body).toMatchObject({ enabled: false, titles: [] });
+    expect(kept.body.fields.map((f) => f.status)).toEqual(['ready']);
+    expect(translateJobs(seam())).toHaveLength(1);
+    expect(await rowsOfTitles()).toBe(2);
+
+    await retitle(s, 0, 'Build export number 1, edited');
+    const fresh = await press(s.owner, s.ids[0]!);
+    expect(fresh.body.fields.map((f) => f.status)).toEqual(['ready']);
+    expect(translateJobs(seam())).toHaveLength(2);
   });
 });

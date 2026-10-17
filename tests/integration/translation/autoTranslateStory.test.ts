@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toProjectAutoTranslateChangeDTO } from '@/lib/mappers/projectAutoTranslateSettingsMappers';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -12,14 +12,20 @@ import {
   sessionUser,
   translateJobs,
 } from './helpers/translationStoryFixture';
-import { registerStorySeam } from './helpers/translationStoryHarness';
+import { press, registerStorySeam, story } from './helpers/translationStoryHarness';
+import { resolveSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import { readerTranslationContextService } from '@/lib/services/readerTranslationContextService';
+import { projectsService } from '@/lib/services/projectsService';
 import {
   autoStory,
   echoedTitle,
+  cloudBilling,
   enable,
   flip,
+  itemInOtherProject,
   outsiderOf,
   readSwitch,
+  titlesWithoutSession,
   readerIn,
   rowsOfTitles,
   switchOf,
@@ -53,7 +59,20 @@ vi.mock('@/lib/auth', async (importOriginal) => {
 
 const seam = registerStorySeam();
 
+// Billing is self-host unless a case turns the cloud on, so none inherits it.
+beforeEach(() => cloudBilling(false));
+
 describe('the switch', () => {
+  it('while OFF the on-demand press still translates and bills exactly one job', async () => {
+    const s = await autoStory(1);
+    const res = await press(s.owner, s.ids[0]!);
+
+    expect(res.status).toBe(200);
+    expect(res.body.fields.map((f) => f.status)).toEqual(['ready']);
+    expect(translateJobs(seam())).toHaveLength(1);
+    expect(billedUnits(seam())).toBe(1);
+  });
+
   it('is OFF by default: the batch answers enabled:false, spends nothing, keeps nothing', async () => {
     const s = await autoStory();
     const res = await titles(s.owner, s);
@@ -227,6 +246,59 @@ describe('shared titles', () => {
     expect(await rowsOfTitles()).toBe(4);
   });
 
+  it('a Korean and a German reader asking at once each get their own language, from one job apiece', async () => {
+    const s = await autoStory(2);
+    await enable(s);
+    const de = await readerIn(s, 'de@example.com', 'de');
+    const [ko, german] = await Promise.all([titles(s.owner, s), titles(de, s)]);
+
+    expect(ko.body.titles.every((t) => t.status === 'ready' && t.text.startsWith('[ko] '))).toBe(
+      true,
+    );
+    expect(
+      german.body.titles.every((t) => t.status === 'ready' && t.text.startsWith('[de] ')),
+    ).toBe(true);
+    expect(ko.body.titles.every((t) => t.status === 'ready' && t.sourceLanguage === 'en')).toBe(
+      true,
+    );
+    expect(translateJobs(seam())).toHaveLength(2);
+    expect(await rowsOfTitles()).toBe(4);
+
+    const third = await titles(await readerIn(s, 'ko3@example.com', 'ko'), s);
+    expect(third.body.titles).toEqual(ko.body.titles);
+    expect(translateJobs(seam())).toHaveLength(2);
+  });
+
+  it('a Chinese title is never sent to a Chinese reader, and billing is not even asked', async () => {
+    cloudBilling(true);
+    const zh = await story();
+    const s = {
+      caller: zh.caller,
+      projectId: zh.caller.fixture.projectId,
+      key: zh.caller.projectKey,
+      ids: [zh.itemId],
+      keys: [zh.key],
+      owner: { ctx: zh.owner.ctx, locale: 'zh' as const },
+    };
+    await enable(s);
+    const res = await titles(s.owner, s);
+    const project = await projectsService.getByKey(s.key, s.owner.ctx);
+    const verdicts = await readerScope.run(s.owner, () =>
+      readerTranslationContextService.resolveForTitles({
+        project,
+        reader: s.owner.ctx,
+        readerLocale: 'zh',
+        titles: [{ id: zh.itemId, title: '为所有客户构建导出功能', language: 'zh' }],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.titles).toEqual([]);
+    expect(translateJobs(seam())).toHaveLength(0);
+    expect(verdicts!.context.credit).toBe('ok');
+    expect(seam().usageReads).toBe(0);
+  });
+
   it('a title already in the reader’s language is not sent', async () => {
     const s = await autoStory(2);
     await enable(s);
@@ -257,7 +329,95 @@ describe('shared titles', () => {
   });
 });
 
+describe('the item page path', () => {
+  it('the press the page makes on mount keeps every field, and a later reader is free', async () => {
+    const s = await autoStory(1);
+    await flip(s.owner, s, true);
+    const project = await projectsService.getByKey(s.key, s.owner.ctx);
+    const context = await readerScope.run(s.owner, () =>
+      resolveSurfaceTranslation(project, s.owner.ctx),
+    );
+    expect(context).toMatchObject({ autoTranslateWorkContent: true, targetLanguage: 'ko' });
+
+    const mine = await press(s.owner, s.ids[0]!);
+    expect(mine.body.fields.map((f) => f.status)).toEqual(['ready']);
+    const other = await press(await readerIn(s, 'ko2@example.com', 'ko'), s.ids[0]!);
+    expect(other.body).toEqual(mine.body);
+    expect(translateJobs(seam())).toHaveLength(1);
+    expect(await rowsOfTitles()).toBe(1);
+  });
+});
+
+describe('the switch is the ceiling', () => {
+  it('a surface that resolved ON before the flip is answered enabled:false and spends nothing', async () => {
+    const s = await autoStory(2);
+    await flip(s.owner, s, true);
+    const project = await projectsService.getByKey(s.key, s.owner.ctx);
+    const before = await readerScope.run(s.owner, () =>
+      resolveSurfaceTranslation(project, s.owner.ctx),
+    );
+    expect(before?.autoTranslateWorkContent).toBe(true);
+
+    await flip(s.owner, s, false);
+    const after = await titles(s.owner, s);
+
+    expect(after.body).toMatchObject({ enabled: false, titles: [] });
+    expect(translateJobs(seam())).toHaveLength(0);
+    expect(await rowsOfTitles()).toBe(0);
+  });
+});
+
 describe('the gates', () => {
+  it('another workspace’s and another project’s ids are absent, like an id that does not exist', async () => {
+    const s = await autoStory(1);
+    const foreign = await autoStory(1);
+    const sibling = await itemInOtherProject(s);
+    await enable(s);
+    const res = await titles(s.owner, s, [s.ids[0]!, foreign.ids[0]!, sibling, 'no-such-id']);
+
+    expect(res.status).toBe(200);
+    expect(res.body.titles.map((t) => t.workItemId)).toEqual([s.ids[0]]);
+    expect(translateJobs(seam())).toHaveLength(1);
+    expect(translateJobs(seam())[0]!.translate!.fields).toHaveLength(1);
+  });
+
+  it('no session is refused before anything is read or submitted', async () => {
+    const s = await autoStory(1);
+    await enable(s);
+
+    expect(await titlesWithoutSession(s)).toBe(401);
+    expect(translateJobs(seam())).toHaveLength(0);
+  });
+
+  it('a Visitor is answered no context at all', async () => {
+    const s = await autoStory(1);
+    await enable(s);
+    const project = await projectsService.getByKey(s.key, s.owner.ctx);
+    const visitor = {
+      kind: 'visitor' as const,
+      project: {} as never,
+      actorUserId: s.owner.ctx.userId,
+      permissions: new Set<never>(),
+      hiddenIds: new Set<string>(),
+    };
+
+    expect(
+      readerTranslationContextService.resolveContext({
+        project,
+        reader: visitor,
+        readerLocale: 'ko',
+      }),
+    ).toBeNull();
+    expect(
+      await readerTranslationContextService.resolveForTitles({
+        project,
+        reader: visitor,
+        readerLocale: 'ko',
+        titles: [],
+      }),
+    ).toBeNull();
+  });
+
   it('a reader who cannot open the project gets 404 from both doors and costs nothing', async () => {
     const s = await autoStory();
     await enable(s);
