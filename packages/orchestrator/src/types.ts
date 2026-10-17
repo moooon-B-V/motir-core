@@ -752,7 +752,9 @@ export interface PersistentContainerOrchestrator {
    *
    * `stdin` (`agent-instance-run.md` §1, §2 — MOTIR-7026) is written to the
    * command's standard input: how a run's credential reaches the agent's run
-   * launcher WITHOUT ever being an argument or an environment variable.
+   * launcher WITHOUT being an environment variable. (Fly's exec API drops a
+   * `stdin` field, so that adapter pipes it in through a wrapper whose argv
+   * carries it for the one exec — MOTIR-8872.)
    */
   exec(
     handle: PersistentContainerHandle,

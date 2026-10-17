@@ -208,6 +208,24 @@ function projectKeyOf(identifier: string): string {
   return dash > 0 ? identifier.slice(0, dash) : identifier;
 }
 
+/** Bound on the stderr tail a failed launch keeps in the run's detail. */
+const LAUNCH_STDERR_TAIL_CHARS = 300;
+
+/**
+ * A failed launch's exit code and the tail of its stderr, for the run's detail
+ * (MOTIR-8872) — the launcher prints its refusal there and never the token, so
+ * it is safe to keep. Empty when the exec exited 0 with nothing on stderr.
+ */
+function launchDiagnostic(result: { exitCode: number; stderr: string }): string {
+  const stderr = result.stderr.trim();
+  const tail =
+    stderr.length > LAUNCH_STDERR_TAIL_CHARS
+      ? `…${stderr.slice(-LAUNCH_STDERR_TAIL_CHARS)}`
+      : stderr;
+  if (result.exitCode === 0 && !tail) return '';
+  return ` — exit ${result.exitCode}${tail ? `, stderr: ${tail}` : ''}`;
+}
+
 function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : String(err);
 }
@@ -672,7 +690,7 @@ export const agentInstanceRunService = {
         await agentInstanceLifecycleService.touchActivity(agent.id);
         return 'launched';
       }
-      detail = `the agent’s terminal server refused it (${answer.error})`;
+      detail = `the agent’s terminal server refused it (${answer.error})${launchDiagnostic(result)}`;
     } catch (err) {
       detail = detailOf(err);
     }

@@ -159,7 +159,7 @@ from `POST /api/v1/dispatch-runs/{id}/git-credential`. Motir mints **no gateway 
 
 - **Not in any environment variable.** Only the state directory's PATH is in the session's
   environment, never a token.
-- **Not in `argv`.** The exec carries the run id and the card key, neither of which is a secret.
+- **Not in any long-lived `argv`.** The launcher's own argv carries the run id and the card key, neither of which is a secret. (See the amendment below for the one exec wrapper that holds the token.)
 - **Not in `$HOME`.** `/tmp` is on the rootfs, which is reset on every wake
   ([`agent-instances.md`](agent-instances.md) §1), so nothing survives a stop even if the run was
   killed.
@@ -427,6 +427,19 @@ the work left it, with the _run died_ marker, as [`run-death-keeps-work.md`](run
 | §4      | MOTIR-7026 (checks, probes, route, launch job) · MOTIR-7022, MOTIR-7028 (the refusals in words) |
 | §5      | MOTIR-7023                                                                                      |
 | §6      | MOTIR-7027 (supervise, couplings, end path) · MOTIR-7028 (Cancel) · MOTIR-7029 (the live run)   |
+
+## AMENDMENT 1 (MOTIR-8872) — Fly's exec API delivers no stdin
+
+§2 assumed the Machines exec API's `stdin` field reaches the command. On production it does not: a
+`stdin` field is accepted and the command reads zero bytes, so the launcher refused every run with no
+credentials. The contract `exec(…, { stdin })` is kept, and the Fly adapter now honours it by wrapping
+the command in a root `sh` that pipes the payload to it (`printf %s "$p" | exec "$@"`). The payload is a
+positional, so it is never quoted into a shell string. **What changes in §2:** the run token is in the
+argv of that one wrapper process for the length of the exec (at most 30 seconds), as the clone's token
+already is; it is still in no environment variable and in no argv of the launcher, the run session or
+anything it spawns. The token stays scoped to one run and is revoked at close. A failed launch now
+records its exit code and a bounded stderr tail (the launcher never prints the token) in the run's
+detail, instead of only the refusal code.
 
 ## Owed on acceptance
 
