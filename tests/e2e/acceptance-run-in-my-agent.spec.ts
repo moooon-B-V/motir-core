@@ -389,7 +389,10 @@ test.describe('Run a ready card in my own agent', () => {
       plain(r.refused.notSignedIn.open, { name: 'yue-claude' }),
     );
     expect(await runsOf(page, signedOut.key)).toEqual([]);
-    // The answer was recorded: the picker now says so on the row, in words.
+    // The answer was recorded. A RUNNING agent's picker row never refuses on that
+    // record (the start asks live, MOTIR-8869), so the agent sleeps first: the
+    // hibernate takes the sign-in again, and the picker now says so on the row.
+    await letIdleWindowPass(page, [agentId]);
     await openPicker(page, signedOut.key);
     await expect(agentRow(page, 'yue-claude')).toHaveAttribute(
       'data-refusal',
@@ -402,6 +405,7 @@ test.describe('Run a ready card in my own agent', () => {
 
     // A WAKE REFUSAL — the agent sleeps, signed in, and the credits are gone.
     signInCodingAgent(agentId);
+    await wakeAgent(page, seed, agentId);
     await letIdleWindowPass(page, [agentId]);
     setCredits(false);
     await openCard(page, noCredits.key);
