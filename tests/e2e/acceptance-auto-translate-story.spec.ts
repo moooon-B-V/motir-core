@@ -226,6 +226,33 @@ async function submitAt(ordinal: number) {
  * one related title its description's work item chip shows (a single `title:<id>`
  * field), which is not one of the story's jobs and is never scripted to succeed.
  */
+/**
+ * Hold the NEXT story job `running` (returning its ordinal), and script the ordinal
+ * after it `failed`, which every later unscripted submit then repeats. That second
+ * entry is the related chip's own title job (LANG-1): it neither bills nor stores,
+ * so it can neither inflate the charge nor change what a step reads. The submit
+ * count is read only once it has stopped moving, so a chip job still in flight
+ * from the page before cannot take the ordinal this step scripted.
+ */
+async function holdNextJob(): Promise<number> {
+  let last = -1;
+  await expect
+    .poll(
+      async () => {
+        const now = translateSubmits().length;
+        const settled = now === last;
+        last = now;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return settled;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  const ordinal = setNextTranslateOutcome({ status: 'running' });
+  setTranslateOutcome(ordinal + 1, { status: 'failed' });
+  return ordinal;
+}
+
 function jobSubmits() {
   return translateSubmits().filter(
     (s) =>
@@ -314,7 +341,7 @@ async function expectTranslatedMarks(page: Page) {
 }
 
 async function step3(page: Page, baseURL: string, beat: Beat) {
-  const ordinal = setNextTranslateOutcome({ status: 'running' });
+  const ordinal = await holdNextJob();
   await signInAs(page, baseURL, seed.people.minji);
   await item(page, seed.story.key);
   await expect(titleOf(page)).toHaveText(seed.text.en.title, { timeout: FIRST_PAINT_MS });
@@ -356,8 +383,9 @@ function boardTranslations() {
   return seed.others.map((o, i) => ({ fieldRef: `title:${o.id}`, text: KO_TITLES[i]! }));
 }
 
-async function step5Board(page: Page, beat: Beat) {
-  const ordinal = setNextTranslateOutcome({ status: 'running' });
+async function step5Board(page: Page, baseURL: string, beat: Beat) {
+  const ordinal = await holdNextJob();
+  await signInAs(page, baseURL, seed.people.minji);
   await page.goto('/boards');
   const heights: number[] = [];
   for (const [i, other] of seed.others.entries()) {
@@ -409,7 +437,7 @@ async function step6(page: Page, browser: Browser, baseURL: string, beat: Beat) 
   await item(page, seed.story.key);
   await expect(titleOf(page)).toHaveText(seed.text.ko.title, { timeout: FIRST_PAINT_MS });
   await expect(mark(page, 'ko', 'fieldTitle', 'markTranslating')).toHaveCount(0);
-  const ordinal = setNextTranslateOutcome({ status: 'running' });
+  const ordinal = await holdNextJob();
   const german = await browser.newContext({ baseURL });
   try {
     const greta = await german.newPage();
@@ -430,7 +458,7 @@ async function step6(page: Page, browser: Browser, baseURL: string, beat: Beat) 
   }
   await expect(titleOf(page)).toHaveText(seed.text.ko.title);
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.lead);
-  expect(jobSubmits()).toHaveLength(ordinal + 1);
+  expect(jobSubmits()).toHaveLength(3);
   await beat();
 }
 
@@ -520,7 +548,7 @@ async function editDescription(page: Page, baseURL: string, beat: Beat) {
 
 /** The page re-enters the translated view; only the description goes out again. */
 async function retranslateEdit(page: Page, beat: Beat) {
-  const ordinal = setNextTranslateOutcome({ status: 'running' });
+  const ordinal = await holdNextJob();
   await item(page, seed.story.key);
   await expect(titleOf(page)).toHaveText(seed.text.ko.title, { timeout: FIRST_PAINT_MS });
   expect(await submitAt(ordinal)).toEqual({ target: 'ko', refs: ['description'] });
@@ -531,7 +559,7 @@ async function retranslateEdit(page: Page, beat: Beat) {
   setTranslateOutcome(ordinal, { status: 'succeeded', translations: edited });
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.added);
   await expect(titleOf(page)).toHaveText(seed.text.ko.title);
-  expect(jobSubmits()).toHaveLength(ordinal + 1);
+  expect(jobSubmits()).toHaveLength(4);
   expect(reportedTranslation(seed.org.orgId)).toEqual(spend(K * 4));
   await beat();
 }
@@ -673,6 +701,7 @@ test('a 한국어 member opens an English work item and reads it in 한국어 un
 
 test('the board, the backlog and the list read in 한국어 without a card resizing', async ({
   page,
+  baseURL,
   chapter,
   beat,
   acceptanceStory,
@@ -681,7 +710,7 @@ test('the board, the backlog and the list read in 한국어 without a card resiz
   await chapter(
     '5 · The board’s titles are marked, then 한국어; the backlog and list are free',
     async () => {
-      await step5Board(page, beat);
+      await step5Board(page, baseURL!, beat);
       await step5Surfaces(page, beat);
     },
   );
