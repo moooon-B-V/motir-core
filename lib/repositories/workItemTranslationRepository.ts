@@ -48,6 +48,28 @@ export const workItemTranslationRepository = {
   },
 
   /**
+   * The rows still CURRENT for MANY work items' one field in one language — a
+   * title per item — in ONE query. `entries` pairs each item with the hash of its
+   * CURRENT text, so a row for older text is never returned (the same staleness
+   * rule as {@link findCurrent}).
+   */
+  async findCurrentForItems(
+    entries: readonly { workItemId: string; sourceHash: string }[],
+    fieldRef: string,
+    targetLanguage: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemTranslation[]> {
+    if (entries.length === 0) return [];
+    return tx.workItemTranslation.findMany({
+      where: {
+        fieldRef,
+        targetLanguage,
+        OR: entries.map(({ workItemId, sourceHash }) => ({ workItemId, sourceHash })),
+      },
+    });
+  },
+
+  /**
    * Store one kept translation, or — when a row already holds the key
    * `(workItemId, fieldRef, sourceHash, targetLanguage)` — leave that row as it
    * is. Either way the WINNING row comes back, so two writers racing on one key

@@ -95,6 +95,25 @@ export async function readWorkItem(
   return withWorkspaceContext(ctx, (t) => workItemRepository.findById(workItemId, t));
 }
 
+/**
+ * Many work items by id inside the caller's workspace, read through ONE bound
+ * transaction — the batch of {@link readWorkItem} (MOTIR-8829). An id in another
+ * workspace is simply not returned (RLS under the non-bypass role, the explicit
+ * `workspaceId` predicate under a bypass one), so a caller cannot tell it from an
+ * id that does not exist. Same `tx` contract as {@link readWorkItem}.
+ */
+export async function readWorkItems(
+  workItemIds: readonly string[],
+  ctx: TenantReadContext,
+  tx?: Prisma.TransactionClient,
+): Promise<WorkItem[]> {
+  const ids = [...workItemIds];
+  if (tx) return workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, tx);
+  return withWorkspaceContext(ctx, (t) =>
+    workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, t),
+  );
+}
+
 // ─── The USERLESS tier (MOTIR-2685) ────────────────────────────────────────────
 //
 // The readers above bind `{ userId, workspaceId }`, which covers every read whose

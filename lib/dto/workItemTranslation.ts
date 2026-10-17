@@ -58,3 +58,29 @@ export interface ReaderTranslationDTO {
   offer: TranslationOfferDTO;
   canAddCredits: boolean;
 }
+
+/**
+ * One work item's TITLE answer in the many-titles door (MOTIR-8829). Keyed by the
+ * item, with the per-item ref the title was sent under; an item whose title needs
+ * no translation is absent. Status, text and source language only.
+ */
+export type TitleTranslationResultDTO =
+  | {
+      workItemId: string;
+      fieldRef: string;
+      status: 'ready';
+      text: string;
+      /** The language the stored title is in, or `null` when it is not known. */
+      sourceLanguage: Locale | null;
+    }
+  | { workItemId: string; fieldRef: string; status: 'failed' | 'no_credit' | 'timeout' };
+
+/** `POST /api/projects/[key]/titles/translate` → 200 (MOTIR-8829). */
+export interface TitlesTranslateResponseDTO {
+  targetLanguage: Locale;
+  /** False when the project's auto-translate switch is off: nothing was read or spent. */
+  enabled: boolean;
+  /** True when more titles were asked for than one request answers; the first ones were. */
+  truncated: boolean;
+  titles: TitleTranslationResultDTO[];
+}
