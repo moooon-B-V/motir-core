@@ -870,6 +870,42 @@ function MotirCiLine({
   // META org) — no line at all, which is what §7.3.7 asks for.
   if (!ci) return null;
 
+  // The META org (§4.4, MOTIR-8886): bypassed, so no pool, meter, credits or buy
+  // control — only the minutes its own fleet runner has used, so the house can
+  // see what its CI costs on the one page every other org reads it on.
+  if (ci.variant === 'internal') {
+    return (
+      <Card
+        header={
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) text-(--el-text-strong)">
+                <Zap className="h-4 w-4" aria-hidden />
+              </span>
+              <div>
+                <h2 className="font-sans text-base font-semibold text-(--el-text)">
+                  {t('ci.name')}
+                </h2>
+                <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.tagline')}</p>
+              </div>
+            </div>
+            <CiStatePill variant={ci.variant} t={t} />
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="font-sans text-xs text-(--el-text-muted)">{t('ci.usedLabel')}</span>
+            <span className="font-sans text-sm font-medium text-(--el-text-strong)">
+              {t('ci.internalUsed', { used: fmt(ci.usedMinutes, locale) })}
+            </span>
+          </div>
+          <p className="font-sans text-xs text-(--el-text-secondary)">{t('ci.internalNote')}</p>
+        </div>
+      </Card>
+    );
+  }
+
   const paused = ci.variant === 'paused';
   const resets = fmtDate(ci.resetsAt, locale);
   const derivation = ci.floorApplied
@@ -1039,6 +1075,7 @@ function MotirCiLine({
 
 function CiStatePill({ variant, t }: { variant: CiLineVariant; t: T }) {
   if (variant === 'nothing_to_bill') return <Pill tone="neutral">{t('ci.stateNothing')}</Pill>;
+  if (variant === 'internal') return <Pill tone="neutral">{t('ci.stateInternal')}</Pill>;
   if (variant === 'within_allowance') {
     return (
       <Pill className="bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">

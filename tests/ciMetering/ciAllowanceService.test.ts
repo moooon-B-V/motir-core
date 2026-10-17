@@ -249,6 +249,12 @@ describe('the pool is derived from MEMBERSHIP (§1, §4.2, §4.3)', () => {
     const state = await ciAllowanceService.getEntitlementState(fx.organizationId, JULY_2026);
     expect(state.applicable).toBe(false);
     expect(state.state).toBe('bypassed');
+    // MOTIR-8886: bypassed is the ENTITLEMENT, not the measurement — the metered
+    // minutes ride out so Billing & plans can draw an internal CI line. Still no
+    // pool, no overage and no charge.
+    expect(state.internal).toBe(true);
+    expect(state.consumedMinutes).toBe(5000);
+    expect(state).toMatchObject({ poolMinutes: 0, overageMinutes: 0, chargedCredits: 0 });
 
     const charged = await ciAllowanceService.chargeForMeteredRun({
       organizationId: fx.organizationId,
@@ -275,7 +281,12 @@ describe('the pool is derived from MEMBERSHIP (§1, §4.2, §4.3)', () => {
     const { fetchMock } = stubMotirAi();
 
     const state = await ciAllowanceService.getEntitlementState(fx.organizationId, JULY_2026);
-    expect(state).toMatchObject({ applicable: false, state: 'bypassed', poolMinutes: 0 });
+    expect(state).toMatchObject({
+      applicable: false,
+      internal: false,
+      state: 'bypassed',
+      poolMinutes: 0,
+    });
     // Not merely "returns bypassed" — it must not TALK to motir-ai at all.
     expect(fetchMock).not.toHaveBeenCalled();
 
