@@ -383,17 +383,39 @@ function boardTranslations() {
   return seed.others.map((o, i) => ({ fieldRef: `title:${o.id}`, text: KO_TITLES[i]! }));
 }
 
+/** What a board card is made of, in CSS pixels — what a height that moved is read from. */
+async function cardAnatomy(page: Page, key: string) {
+  return card(page, key).evaluate((el) => {
+    const h = (node: Element | null) =>
+      node ? Math.round(node.getBoundingClientRect().height * 100) / 100 : null;
+    const mark = el.querySelector('[data-title-mark]');
+    const title = mark?.parentElement?.parentElement ?? null;
+    return {
+      card: h(el),
+      children: Array.from(el.children).map((c) => h(c)),
+      title: h(title),
+      titleLineHeight: title ? getComputedStyle(title).lineHeight : null,
+      titleFont: title ? getComputedStyle(title).fontFamily : null,
+      markWrapper: h(mark?.parentElement ?? null),
+      mark: h(mark ?? null),
+      titleHtml: title?.outerHTML.slice(0, 400) ?? null,
+    };
+  });
+}
+
 async function step5Board(page: Page, baseURL: string, beat: Beat) {
   const ordinal = await holdNextJob();
   await signInAs(page, baseURL, seed.people.minji);
   await page.goto('/boards');
   const heights: number[] = [];
+  const anatomies: Awaited<ReturnType<typeof cardAnatomy>>[] = [];
   for (const [i, other] of seed.others.entries()) {
     await expect(card(page, other.key).getByText(EN_TITLES[i]!)).toBeVisible({
       timeout: FIRST_PAINT_MS,
     });
     await expect(pendingMark(page, other.key)).toBeVisible();
     heights.push(await cardHeight(page, other.key));
+    anatomies.push(await cardAnatomy(page, other.key));
   }
   const sent = await submitAt(ordinal);
   expect(sent.target).toBe('ko');
@@ -409,7 +431,11 @@ async function step5Board(page: Page, baseURL: string, beat: Beat) {
   for (const [i, other] of seed.others.entries()) {
     await expect(card(page, other.key).getByText(KO_TITLES[i]!)).toBeVisible();
     await expect(pendingMark(page, other.key)).toHaveCount(0);
-    expect(await cardHeight(page, other.key)).toBe(heights[i]);
+    const settled = await cardHeight(page, other.key);
+    expect(
+      settled,
+      `${other.key} was ${heights[i]}px while pending and is ${settled}px translated\nbefore: ${JSON.stringify(anatomies[i])}\nafter: ${JSON.stringify(await cardAnatomy(page, other.key))}`,
+    ).toBe(heights[i]);
   }
   await beat();
 }
