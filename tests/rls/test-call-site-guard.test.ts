@@ -352,6 +352,7 @@ describe('the ratchets over the real test suite', () => {
       'tests/comments/repositories.test.ts',
       'tests/custom-fields/repositories.test.ts',
       'tests/integration/sprints/repository.test.ts',
+      'tests/integration/translation/autoTranslateStory.test.ts',
       'tests/labels-components-watch/repositories.test.ts',
       'tests/mcp/comment-counts.test.ts',
       'tests/notifications/repositories.test.ts',

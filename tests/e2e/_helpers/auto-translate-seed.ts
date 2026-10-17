@@ -87,7 +87,7 @@ export async function turnOnAutoTranslate(org: OrgSeed): Promise<void> {
 
 /** A board card's rendered height in CSS pixels. */
 export async function cardHeight(page: Page, key: string): Promise<number> {
-  const box = await page.getByTestId(`board-card-${key}`).boundingBox();
+  const box = await page.getByRole('main').getByTestId(`board-card-${key}`).boundingBox();
   if (!box) throw new Error(`board card ${key} has no box`);
   return Math.round(box.height);
 }

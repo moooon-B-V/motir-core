@@ -224,7 +224,7 @@ async function openSurface(page: Page, path: string) {
   expect((await answered).status()).toBe(200);
 }
 
-const card = (page: Page, key: string) => page.getByTestId(`board-card-${key}`);
+const card = (page: Page, key: string) => page.getByRole('main').getByTestId(`board-card-${key}`);
 
 // ── steps 1–2: the setting ──────────────────────────────────────────────────
 
@@ -498,7 +498,7 @@ async function editDescription(page: Page, baseURL: string, beat: Beat) {
     .click();
   expect((await saved).status()).toBe(200);
   const done = msg('ko', 'issueViews.issueSaved', { identifier: seed.story.key });
-  await expect(page.getByText(done, { exact: true })).toBeVisible();
+  await expect(page.getByText(done, { exact: true }).first()).toBeVisible();
   await beat();
 }
 

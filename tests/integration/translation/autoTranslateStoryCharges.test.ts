@@ -80,6 +80,8 @@ async function verdictFor(s: AutoStory, reader: Awaited<ReturnType<typeof reader
   );
 }
 
+const RACE_TEST_TIMEOUT_MS = 280_000;
+
 describe('the credit verdict', () => {
   it('a free cloud organisation is no_credit, and the owner may add credit', async () => {
     cloudBilling(true);
@@ -245,33 +247,39 @@ describe('a refused or failed job leaves no charge', () => {
 });
 
 describe('one title, two entry points, one charge', () => {
-  it('a batch and an item press for the same title make one submit, 20 fresh tenants in a row', async () => {
-    for (let round = 0; round < 20; round += 1) {
-      await truncateAuthTables();
-      resetJobs(seam());
-      const s = await autoStory(1);
-      await enable(s);
-      const other = await readerIn(s, `ko2-${round}@example.com`, 'ko');
-      script(seam(), [{ status: 'running' }]);
-      const submitted = nextSubmit(seam());
+  // 20 rounds, each a truncate plus a seeded tenant and a held lock; ~5 s a round on a loaded
+  // shard, so the budget is 280 s (the figure the third argument carried before).
+  it(
+    'a batch and an item press for the same title make one submit, 20 fresh tenants in a row',
+    { timeout: RACE_TEST_TIMEOUT_MS },
+    async () => {
+      for (let round = 0; round < 20; round += 1) {
+        await truncateAuthTables();
+        resetJobs(seam());
+        const s = await autoStory(1);
+        await enable(s);
+        const other = await readerIn(s, `ko2-${round}@example.com`, 'ko');
+        script(seam(), [{ status: 'running' }]);
+        const submitted = nextSubmit(seam());
 
-      const batch = titles(s.owner, s);
-      await submitted;
-      const pressed = press(other, s.ids[0]!);
-      await expect.poll(lockWaiters, { timeout: 20_000 }).toBeGreaterThan(0);
-      release(seam());
-      const [b, p] = await Promise.all([batch, pressed]);
+        const batch = titles(s.owner, s);
+        await submitted;
+        const pressed = press(other, s.ids[0]!);
+        await expect.poll(lockWaiters, { timeout: 20_000 }).toBeGreaterThan(0);
+        release(seam());
+        const [b, p] = await Promise.all([batch, pressed]);
 
-      expect(b.body.titles.map((t) => t.status)).toEqual(['ready']);
-      expect(p.body.fields.map((f) => f.status)).toEqual(['ready']);
-      expect(translateJobs(seam())).toHaveLength(1);
-      expect(translateJobs(seam())[0]!.translate!.fields.map((f) => f.fieldRef)).toEqual([
-        `title:${s.ids[0]}`,
-      ]);
-      expect(billedUnits(seam())).toBe(1);
-      expect(await rowsOfTitles()).toBe(1);
-    }
-  }, 280_000);
+        expect(b.body.titles.map((t) => t.status)).toEqual(['ready']);
+        expect(p.body.fields.map((f) => f.status)).toEqual(['ready']);
+        expect(translateJobs(seam())).toHaveLength(1);
+        expect(translateJobs(seam())[0]!.translate!.fields.map((f) => f.fieldRef)).toEqual([
+          `title:${s.ids[0]}`,
+        ]);
+        expect(billedUnits(seam())).toBe(1);
+        expect(await rowsOfTitles()).toBe(1);
+      }
+    },
+  );
 });
 
 describe('an edit', () => {
