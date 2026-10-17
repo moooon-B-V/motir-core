@@ -209,3 +209,25 @@ export function indexInFlightCap(): number {
 export function orgIndexInFlightCap(globalCap: number): number {
   return Math.ceil(globalCap / 2);
 }
+
+/** The env var sizing a CI runner's Docker volume, and its default (MOTIR-8839). */
+export const CI_DOCKER_VOLUME_GB_ENV = 'MOTIR_CI_DOCKER_VOLUME_GB';
+export const DEFAULT_CI_DOCKER_VOLUME_GB = 20;
+
+/**
+ * Gigabytes of native disk each CI runner gets for its Docker daemon at
+ * `/var/lib/docker` (MOTIR-8839).
+ *
+ * A Fly Machine's root filesystem takes neither overlay driver, and the `vfs`
+ * fallback copies every layer in full and fills the rootfs before a
+ * `services: postgres` job reaches its tests. A volume takes `overlay2`. 20 GB
+ * holds a Postgres service image, a buildx builder and a job's own images with
+ * room to spare; read on every call so an operator can move it without a
+ * deploy. `0` turns the volume off and returns the daemon to the rootfs; a
+ * malformed value falls back to the default, with the reader's warning.
+ */
+export function ciDockerVolumeGb(): number {
+  /* istanbul ignore next -- the `?? 0` is UNREACHABLE: a non-null fallback means
+     the shared reader cannot answer null here. */
+  return readCeilingEnv(CI_DOCKER_VOLUME_GB_ENV, DEFAULT_CI_DOCKER_VOLUME_GB) ?? 0;
+}

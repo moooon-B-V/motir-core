@@ -149,10 +149,16 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciActionsGateSweep.ts',
     shape: '{ applied: number; failed: number }',
   },
+  // MOTIR-8839 added the OPTIONAL `session.handle.volumeId` (the runner's Docker
+  // volume) WITHOUT an id bump, on purpose: this step PROVISIONS, so a new id
+  // would boot a second container on a resumed run. The replayed value is safe at
+  // the boundary instead — a session memoised before the field existed simply
+  // lacks it, and the settle's teardown then finds the volume in the machine's
+  // own mounts, or the fleet reconciler's orphan sweep deletes it.
   'boot-runner': {
     file: 'lib/services/ciRunnerBootService.ts',
     shape:
-      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "org_pool" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string }; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
+      '{ outcome: { billableSeconds: number; bootLatencyMs: null | number; containerId: string; costUsd: string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "gate_deferred"; reason: "ai_plan_required" | "balance_unavailable" | "ci_credits_exhausted" | "credits_insufficient" | "fleet_ceiling" | "gate_unavailable" | "org_pool" | "plan_unknown" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "no_runner_group" } | { detail: string; outcome: "provision_failed" } | { outcome: "already_claimed" } | { outcome: "not_configured" } | { outcome: "rate_limited"; retryAfterSeconds: null | number } | { outcome: "unknown_intent" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workflowJobId: number; workspaceId: string }; bootedAt: string; githubRunnerId: null | number; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string; volumeId?: string | undefined }; intentId: string; queuedAt: string; runnerTarget?: null | undefined | { installationId: string; org: string; role: "provisioning" | "user-facing" } } }',
   },
   'build-archive': {
     file: 'lib/jobs/definitions/dataExportBuild.ts',
@@ -371,10 +377,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/fleetDebitMonitor.ts',
     shape: '{ alerted: number; failures: number; mismatched: number; orgs: number }',
   },
+  // MOTIR-8839 added `orphanedVolumesDestroyed` WITHOUT an id bump: the result is
+  // only returned as the job's output — nothing branches on it — and a pass
+  // re-decides from the inventory rather than replaying, so a memo written
+  // before the field existed is read by no one who needs it.
   'reconcile-fleet-attribution': {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape:
-      '{ apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
+      '{ apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
   },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',

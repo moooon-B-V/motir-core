@@ -39,6 +39,7 @@ import {
   type SupervisionTerminalReason,
 } from '@/lib/jobs/supervision/driver';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { ciDockerVolumeGb } from '@/lib/ciFleet/limits';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
@@ -409,6 +410,10 @@ export interface SupervisionSession {
     readonly region: string;
     /** ISO-8601. */
     readonly createdAt: string;
+    /** The runner's Docker volume (MOTIR-8839), so the settle's teardown can
+     *  delete it after the machine destroyed itself. OPTIONAL on read: a session
+     *  memoised before it existed has none, and teardown reads the mounts. */
+    readonly volumeId?: string;
   };
   readonly githubRunnerId: number | null;
   /**
@@ -960,6 +965,10 @@ export const ciRunnerBootService = {
       size: FLEET_CONTAINER_SIZE,
       timeoutSeconds,
       region,
+      // Native disk for the runner's Docker daemon (MOTIR-8839): on the Machine's
+      // rootfs it can only use `vfs`, which fills the disk on the first
+      // `services:` job.
+      dockerVolumeGb: ciDockerVolumeGb(),
       env: {
         // The credential, injected at boot and never baked into the image (§4).
         ACTIONS_RUNNER_INPUT_JITCONFIG: encodedJitConfig,
@@ -1310,6 +1319,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         id: handle.id,
         region: handle.region,
         createdAt: handle.createdAt.toISOString(),
+        ...(handle.volumeId ? { volumeId: handle.volumeId } : {}),
       },
       githubRunnerId: jit.runnerId,
       runnerTarget: runnerTarget ?? null,
@@ -1374,6 +1384,7 @@ async function pollContainerOnce(
       id: session.handle.id,
       region: session.handle.region,
       createdAt: new Date(session.handle.createdAt),
+      ...(session.handle.volumeId ? { volumeId: session.handle.volumeId } : {}),
     });
   } catch (err) {
     // ⚠️ A SINGLE PROVIDER BLIP MUST NOT KILL A CUSTOMER'S JOB. Without this
@@ -1450,6 +1461,7 @@ async function settleSupervisedContainer(
     id: session.handle.id,
     region: session.handle.region,
     createdAt: new Date(session.handle.createdAt),
+    ...(session.handle.volumeId ? { volumeId: session.handle.volumeId } : {}),
   };
 
   // The started instant is recorded here rather than mid-loop: it is known once

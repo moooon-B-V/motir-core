@@ -327,11 +327,15 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
     }
 
     const createdAt = new Date();
+    const id = nextId();
     const handle: ContainerHandle = {
       provider: 'fake',
-      id: nextId(),
+      id,
       region: spec.region,
       createdAt,
+      // The Fly adapter's Docker volume (MOTIR-8839), named so a test can see a
+      // spec that asked for one got one. The fake keeps no volume of its own.
+      ...(spec.dockerVolumeGb && spec.dockerVolumeGb > 0 ? { volumeId: `${id}-docker` } : {}),
     };
     machines.set(handle.id, {
       handle,
