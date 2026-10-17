@@ -276,7 +276,11 @@ describe('the pure pieces', () => {
       // Drop `runuser -u node -- env HOME=…`: only the `sh -c` tail is under test.
       const tail = AGENT_SIGN_IN_COMMAND.slice(AGENT_SIGN_IN_COMMAND.indexOf('sh'));
       const out = execFileSync(tail[0]!, tail.slice(1), {
-        env: { PATH: `${join(dir, 'bin')}:${process.env.PATH}`, HOME: join(dir, 'home') },
+        env: {
+          ...process.env,
+          PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
+          HOME: join(dir, 'home'),
+        },
         encoding: 'utf8',
       });
       expect(out.trim()).toBe('/agent-config/.claude agent-terminal signin');
