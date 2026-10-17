@@ -290,12 +290,15 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
           // MOTIR-6995 — a third arm between the two: a non-admin who may EDIT
           // work (a member) sees exactly the Hosted agent room, read-only, because
           // its view key is `work_item:edit` (design MOTIR-6991).
+          // MOTIR-8830 — and a fourth: Translation's view key is `project:browse`, so
+          // anyone who can browse sees it, read-only, in registry order.
           if (held.has('project:administer')) {
             expect(visible).toEqual(PROJECT_SETTINGS_NAV);
-          } else if (held.has('work_item:edit')) {
-            expect(visible.map((e) => e.id)).toEqual(['hosted-agent']);
           } else {
-            expect(visible).toEqual([]);
+            expect(visible.map((e) => e.id)).toEqual([
+              ...(held.has('work_item:edit') ? ['hosted-agent'] : []),
+              ...(held.has('project:browse') ? ['translation'] : []),
+            ]);
           }
 
           // And the DOOR agrees with the ROWS — an actor is never handed a link

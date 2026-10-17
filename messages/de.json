@@ -1973,6 +1973,7 @@
       "components": "Komponenten",
       "aiPlanning": "KI-Planung",
       "hostedAgent": "Gehosteter Agent",
+      "translation": "Übersetzung",
       "rules": "Regeln",
       "repositories": "Repositorys",
       "monitoring": "Monitoring",
@@ -3874,6 +3875,61 @@
         "factKeptBy": "Beibehalten"
       }
     },
+    "translation": {
+      "title": "Übersetzung",
+      "pageDescription": "Wie Mitglieder, die in unterschiedlichen Sprachen lesen, die Arbeitsinhalte dieses Projekts sehen.",
+      "card": {
+        "title": "Automatisch übersetzen",
+        "subtitle": "Jedes Mitglied liest die Arbeit dieses Projekts in der eigenen Sprache und sieht weiterhin das Original."
+      },
+      "switch": {
+        "label": "Arbeitsinhalte automatisch übersetzen"
+      },
+      "hint": {
+        "off": "Aus. Arbeitsinhalte werden wie geschrieben angezeigt, und die Schaltfläche <b>Übersetzen</b> auf jeder Arbeitselement-Seite übersetzt dieses eine Arbeitselement, wenn ein Mitglied es anfordert.",
+        "on": "Ein. Jedes Mitglied liest Arbeitsinhalte in der eigenen Oberflächensprache, ohne etwas zu drücken, und <b>Original anzeigen</b> ist immer einen Klick entfernt."
+      },
+      "saving": "Wird gespeichert…",
+      "flipError": "Die automatische Übersetzung konnte nicht {to, select, on {eingeschaltet} other {ausgeschaltet}} werden. Es wurde nichts geändert.",
+      "retry": "Erneut versuchen",
+      "loadFailed": "Diese Einstellung konnte nicht geladen werden.",
+      "effects": {
+        "title": "Was Lesende bekommen",
+        "page": "Arbeitselement-Seiten und Schnellansichten zeigen jedes Feld in der Sprache der lesenden Person: Titel, Beschreibung, Erläuterung und jede Aufgabe.",
+        "lists": "Listen, Boards, das Backlog, Sprints, die Roadmap, „Bereit“ und die Triage zeigen Titel in der Sprache der lesenden Person, mit einem Schalter <b>Original anzeigen</b> in jeder Ansicht.",
+        "original": "Agenten, die API und E-Mails erhalten immer den Originaltext, und beim Bearbeiten wird immer das Original geöffnet."
+      },
+      "cost": "Jedes Feld wird pro Sprache einmal übersetzt und gespeichert, sodass spätere Lesende desselben Textes nichts zahlen und Text, der bereits in der Sprache der lesenden Person vorliegt, nie gesendet wird. Die Übersetzung verbraucht die KI-Guthaben Ihrer Organisation zu den Modellkosten plus 50 %. <link>Nutzung & Kosten</link>",
+      "noCredit": {
+        "body": "<b>Die Übersetzung braucht KI-Guthaben.</b> Arbeitsinhalte werden wie geschrieben angezeigt, bis Guthaben hinzugefügt wird. Es wird nichts berechnet.",
+        "add": "Guthaben hinzufügen",
+        "askAdmin": "Inhaber oder Administratoren der Organisation können es hinzufügen."
+      },
+      "readOnly": "Schreibgeschützt",
+      "readOnlyNote": "Nur Projektadministratoren können die automatische Übersetzung ändern.",
+      "readOnlyValue": {
+        "on": "Die automatische Übersetzung ist für dieses Projekt eingeschaltet. Arbeitsinhalte erscheinen in der Sprache des jeweiligen Mitglieds.",
+        "off": "Die automatische Übersetzung ist für dieses Projekt ausgeschaltet. Arbeitsinhalte werden wie geschrieben angezeigt."
+      },
+      "value": {
+        "on": "Ein",
+        "off": "Aus"
+      },
+      "history": {
+        "title": "Änderungsverlauf",
+        "subtitle": "Wer die automatische Übersetzung ein- oder ausgeschaltet hat, und wann.",
+        "col": {
+          "who": "Wer",
+          "change": "Änderung",
+          "when": "Wann"
+        },
+        "row": "{who} hat die automatische Übersetzung am {when} von {from} auf {to} geändert.",
+        "unknownActor": "Ein ehemaliges Mitglied",
+        "empty": "Noch keine Änderungen. Die automatische Übersetzung wurde in diesem Projekt noch nie geändert.",
+        "capped": "Es werden die {shown} neuesten von {total} Änderungen angezeigt.",
+        "failed": "<b>Der Änderungsverlauf konnte nicht geladen werden.</b> Die Einstellung oben ist unverändert."
+      }
+    },
     "hostedAgent": {
       "title": "Gehosteter Agent",
       "pageDescription": "Welches Modell ein gehosteter Lauf verwendet. „Gehostet ausführen“ wählt es anhand der Schwierigkeit des Arbeitselements vor; wer den Lauf startet, kann trotzdem ein anderes wählen.",
@@ -4159,6 +4215,7 @@
         "bugs": "Wo die Bugs dieses Projekts abgelegt werden, wird von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn das Ziel geändert werden muss.",
         "ai-planning": "Die KI-Planung dieses Projekts – ihr Rhythmus – wird von Projektadministratoren konfiguriert. Wenden Sie sich an einen Administrator, wenn sie geändert werden muss.",
         "hosted-agent": "Welches Modell ein gehosteter Lauf verwendet, sehen Personen, die in diesem Projekt einen gehosteten Lauf starten können. Wenden Sie sich an einen Projektadministrator, wenn Sie es sehen müssen.",
+        "translation": "Ob die Arbeitsinhalte dieses Projekts für jede lesende Person übersetzt werden, sehen Personen, die die Arbeitselemente des Projekts lesen können. Fragen Sie einen Projektadministrator, wenn Sie es sehen müssen.",
         "automation": "Die Projektautomatisierung wird von Projektadministratoren verwaltet. Wenden Sie sich an einen Administrator, wenn eine Regel geändert werden muss.",
         "monitoring": "Die Verbindung dieses Projekts zum Fehlermonitor wird von Personen verwaltet, die Integrationen verwalten dürfen. Wenden Sie sich an einen Projektadministrator, wenn Sentry verbunden oder neu verbunden werden muss."
       }

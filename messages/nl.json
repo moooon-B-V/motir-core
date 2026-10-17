@@ -1973,6 +1973,7 @@
       "components": "Componenten",
       "aiPlanning": "AI-planning",
       "hostedAgent": "Gehoste agent",
+      "translation": "Vertaling",
       "rules": "Regels",
       "repositories": "Repository's",
       "monitoring": "Monitoring",
@@ -3874,6 +3875,61 @@
         "factKeptBy": "Behouden"
       }
     },
+    "translation": {
+      "title": "Vertaling",
+      "pageDescription": "Hoe leden die in verschillende talen lezen de werkinhoud van dit project zien.",
+      "card": {
+        "title": "Automatisch vertalen",
+        "subtitle": "Laat elk lid het werk van dit project in de eigen taal lezen en toch het origineel zien."
+      },
+      "switch": {
+        "label": "Werkinhoud automatisch vertalen"
+      },
+      "hint": {
+        "off": "Uit. Werkinhoud wordt getoond zoals geschreven, en een knop <b>Vertalen</b> op elke werkitempagina vertaalt dat ene werkitem wanneer een lid erom vraagt.",
+        "on": "Aan. Elk lid leest werkinhoud in de eigen interfacetaal zonder iets in te drukken, en <b>Origineel tonen</b> is altijd één klik weg."
+      },
+      "saving": "Opslaan…",
+      "flipError": "Automatisch vertalen kon niet worden {to, select, on {ingeschakeld} other {uitgeschakeld}}. Er is niets gewijzigd.",
+      "retry": "Opnieuw proberen",
+      "loadFailed": "Deze instelling kon niet worden geladen.",
+      "effects": {
+        "title": "Wat lezers krijgen",
+        "page": "Werkitempagina’s en snelle weergaven tonen elk veld in de taal van de lezer: de titel, de beschrijving, de toelichting en elke taak.",
+        "lists": "Lijsten, borden, de backlog, sprints, de roadmap, gereed en triage tonen titels in de taal van de lezer, met een schakelaar <b>Origineel tonen</b> in elke weergave.",
+        "original": "Agents, de API en e-mails krijgen altijd de originele tekst, en bewerken opent altijd het origineel."
+      },
+      "cost": "Elk veld wordt per taal één keer vertaald en bewaard, dus een latere lezer van dezelfde tekst betaalt niets, en tekst die al in de taal van de lezer is, wordt nooit verstuurd. Vertalen verbruikt de AI-tegoeden van je organisatie tegen de kosten van het model plus 50%. <link>Gebruik en kosten</link>",
+      "noCredit": {
+        "body": "<b>Vertalen heeft AI-tegoed nodig.</b> Werkinhoud wordt getoond zoals geschreven totdat er tegoed is toegevoegd. Er wordt niets gefactureerd.",
+        "add": "Tegoed toevoegen",
+        "askAdmin": "Een eigenaar of beheerder van de organisatie kan dit toevoegen."
+      },
+      "readOnly": "Alleen-lezen",
+      "readOnlyNote": "Alleen een projectbeheerder kan automatisch vertalen wijzigen.",
+      "readOnlyValue": {
+        "on": "Automatisch vertalen staat aan voor dit project. Werkinhoud wordt getoond in de taal van elk lid.",
+        "off": "Automatisch vertalen staat uit voor dit project. Werkinhoud wordt getoond zoals geschreven."
+      },
+      "value": {
+        "on": "Aan",
+        "off": "Uit"
+      },
+      "history": {
+        "title": "Wijzigingsgeschiedenis",
+        "subtitle": "Wie automatisch vertalen aan- of uitzette, en wanneer.",
+        "col": {
+          "who": "Wie",
+          "change": "Wijziging",
+          "when": "Wanneer"
+        },
+        "row": "{who} wijzigde automatisch vertalen van {from} naar {to} op {when}.",
+        "unknownActor": "Een voormalig lid",
+        "empty": "Nog geen wijzigingen. Automatisch vertalen is in dit project nog nooit gewijzigd.",
+        "capped": "De {shown} meest recente van {total} wijzigingen worden getoond.",
+        "failed": "<b>De wijzigingsgeschiedenis kon niet worden geladen.</b> De instelling hierboven is ongewijzigd."
+      }
+    },
     "hostedAgent": {
       "title": "Gehoste agent",
       "pageDescription": "Welk model een gehoste run gebruikt. Gehost uitvoeren kiest het vooraf op basis van de moeilijkheid van het werkitem; wie de run start, kan nog een ander kiezen.",
@@ -4159,6 +4215,7 @@
         "bugs": "Waar de bugs van dit project worden opgeslagen, wordt beheerd door projectbeheerders. Vraag het een beheerder als de bestemming moet veranderen.",
         "ai-planning": "De AI-planning van dit project — het ritme — wordt geconfigureerd door projectbeheerders. Vraag het een beheerder als die moet veranderen.",
         "hosted-agent": "Welk model een gehoste run gebruikt, wordt getoond aan personen die in dit project een gehoste run kunnen starten. Vraag het een projectbeheerder als je het wilt zien.",
+        "translation": "Of de werkinhoud van dit project voor elke lezer wordt vertaald, wordt getoond aan mensen die de werkitems van het project kunnen lezen. Vraag het een projectbeheerder als je dit wilt zien.",
         "automation": "Projectautomatisering wordt beheerd door projectbeheerders. Vraag het een beheerder als je een regel wilt laten wijzigen.",
         "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld."
       }

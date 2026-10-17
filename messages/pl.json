@@ -1973,6 +1973,7 @@
       "components": "Komponenty",
       "aiPlanning": "Planowanie AI",
       "hostedAgent": "Hostowany agent",
+      "translation": "Tłumaczenie",
       "rules": "Reguły",
       "repositories": "Repozytoria",
       "monitoring": "Monitorowanie",
@@ -3874,6 +3875,61 @@
         "factKeptBy": "Zachowana"
       }
     },
+    "translation": {
+      "title": "Tłumaczenie",
+      "pageDescription": "Jak członkowie czytający w różnych językach widzą treść pracy w tym projekcie.",
+      "card": {
+        "title": "Automatyczne tłumaczenie",
+        "subtitle": "Pozwala każdemu członkowi czytać pracę w tym projekcie we własnym języku i nadal widzieć oryginał."
+      },
+      "switch": {
+        "label": "Automatycznie tłumacz treść pracy"
+      },
+      "hint": {
+        "off": "Wyłączone. Treść pracy jest pokazywana tak, jak została napisana, a przycisk <b>Tłumacz</b> na każdej stronie elementu pracy tłumaczy ten jeden element, gdy członek o to poprosi.",
+        "on": "Włączone. Każdy członek czyta treść pracy w języku swojego interfejsu bez naciskania czegokolwiek, a <b>Pokaż oryginał</b> jest zawsze o jedno kliknięcie dalej."
+      },
+      "saving": "Zapisywanie…",
+      "flipError": "Nie udało się {to, select, on {włączyć} other {wyłączyć}} automatycznego tłumaczenia. Nic nie zostało zmienione.",
+      "retry": "Spróbuj ponownie",
+      "loadFailed": "Nie udało się wczytać tego ustawienia.",
+      "effects": {
+        "title": "Co dostają czytelnicy",
+        "page": "Strony elementów pracy i szybkie podglądy pokazują każde pole w języku czytelnika: tytuł, opis, objaśnienie i każde zadanie do zrobienia.",
+        "lists": "Listy, tablice, backlog, sprinty, mapa drogowa, gotowe i triaż pokazują tytuły w języku czytelnika, z przełącznikiem <b>Pokaż oryginał</b> w każdym widoku.",
+        "original": "Agenci, API i wiadomości e-mail zawsze otrzymują oryginalny tekst, a edycja zawsze otwiera oryginał."
+      },
+      "cost": "Każde pole jest tłumaczone tylko raz na język i zachowywane, więc kolejny czytelnik tego samego tekstu nic nie płaci, a tekst, który jest już w języku czytelnika, nigdy nie jest wysyłany. Tłumaczenie zużywa kredyty AI Twojej organizacji po koszcie modelu plus 50%. <link>Użycie i koszty</link>",
+      "noCredit": {
+        "body": "<b>Tłumaczenie wymaga kredytów AI.</b> Treść pracy jest pokazywana tak, jak została napisana, dopóki nie zostaną dodane kredyty. Nic nie jest naliczane.",
+        "add": "Dodaj kredyty",
+        "askAdmin": "Może je dodać właściciel lub administrator organizacji."
+      },
+      "readOnly": "Tylko do odczytu",
+      "readOnlyNote": "Tylko administrator projektu może zmienić automatyczne tłumaczenie.",
+      "readOnlyValue": {
+        "on": "Automatyczne tłumaczenie jest włączone w tym projekcie. Treść pracy jest pokazywana w języku każdego członka.",
+        "off": "Automatyczne tłumaczenie jest wyłączone w tym projekcie. Treść pracy jest pokazywana tak, jak została napisana."
+      },
+      "value": {
+        "on": "Włączone",
+        "off": "Wyłączone"
+      },
+      "history": {
+        "title": "Historia zmian",
+        "subtitle": "Kto włączył lub wyłączył automatyczne tłumaczenie i kiedy.",
+        "col": {
+          "who": "Kto",
+          "change": "Zmiana",
+          "when": "Kiedy"
+        },
+        "row": "{who} zmienił(a) automatyczne tłumaczenie z {from} na {to} dnia {when}.",
+        "unknownActor": "Dawny członek",
+        "empty": "Brak zmian. Automatyczne tłumaczenie nigdy nie było zmieniane w tym projekcie.",
+        "capped": "Pokazano {shown} najnowszych z {total} zmian.",
+        "failed": "<b>Nie udało się wczytać historii zmian.</b> Ustawienie powyżej pozostało bez zmian."
+      }
+    },
     "hostedAgent": {
       "title": "Hostowany agent",
       "pageDescription": "Którego modelu używa hostowane uruchomienie. Opcja Uruchom hostowanie wstępnie wybiera go na podstawie trudności elementu roboczego; osoba uruchamiająca może wybrać inny.",
@@ -4159,6 +4215,7 @@
         "bugs": "Tym, gdzie trafiają błędy tego projektu, zarządzają administratorzy projektu. Poproś administratora, jeśli miejsce docelowe wymaga zmiany.",
         "ai-planning": "Planowanie AI w tym projekcie — jego częstotliwość — konfigurują administratorzy projektu. Poproś administratora, jeśli wymaga zmiany.",
         "hosted-agent": "Informacja o tym, którego modelu używa hostowane uruchomienie, jest widoczna dla osób, które mogą uruchamiać hostowane uruchomienia w tym projekcie. Poproś administratora projektu, jeśli musisz ją zobaczyć.",
+        "translation": "To, czy treść pracy w tym projekcie jest tłumaczona dla każdego czytelnika, widzą osoby, które mogą czytać elementy pracy projektu. Zapytaj administratora projektu, jeśli potrzebujesz to zobaczyć.",
         "automation": "Automatyzacją projektu zarządzają administratorzy projektu. Poproś administratora, jeśli reguła wymaga zmiany.",
         "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie."
       }

@@ -1973,6 +1973,7 @@
       "components": "Components",
       "aiPlanning": "AI planning",
       "hostedAgent": "Hosted agent",
+      "translation": "Translation",
       "rules": "Rules",
       "repositories": "Repositories",
       "monitoring": "Monitoring",
@@ -3874,6 +3875,61 @@
         "factKeptBy": "Kept"
       }
     },
+    "translation": {
+      "title": "Translation",
+      "pageDescription": "How members who read in different languages see this project's work content.",
+      "card": {
+        "title": "Auto-translate",
+        "subtitle": "Let every member read this project's work in their own language, and still see the original."
+      },
+      "switch": {
+        "label": "Auto-translate work content"
+      },
+      "hint": {
+        "off": "Off. Work content shows as written, and a <b>Translate</b> button on each work item page translates that one work item when a member asks.",
+        "on": "On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away."
+      },
+      "saving": "Saving…",
+      "flipError": "Couldn't turn auto-translate {to, select, on {on} other {off}}. Nothing was changed.",
+      "retry": "Try again",
+      "loadFailed": "Couldn't load this setting.",
+      "effects": {
+        "title": "What readers get",
+        "page": "Work item pages and quick views show every field in the reader's language: the title, description, explanation and each to-do.",
+        "lists": "Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader's language, with a <b>Show original</b> switch on each view.",
+        "original": "Agents, the API and emails always receive the original text, and editing always opens the original."
+      },
+      "cost": "Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader's language is never sent. Translation spends your organization's AI credits at the model's cost plus 50%. <link>Usage & cost</link>",
+      "noCredit": {
+        "body": "<b>Translation needs AI credits.</b> Work content shows as written until credit is added. Nothing is billed.",
+        "add": "Add credits",
+        "askAdmin": "An organization owner or admin can add them."
+      },
+      "readOnly": "Read-only",
+      "readOnlyNote": "Only a project admin can change auto-translate.",
+      "readOnlyValue": {
+        "on": "Auto-translate is on for this project. Work content shows in each member's own language.",
+        "off": "Auto-translate is off for this project. Work content shows as written."
+      },
+      "value": {
+        "on": "On",
+        "off": "Off"
+      },
+      "history": {
+        "title": "Change history",
+        "subtitle": "Who turned auto-translate on or off, and when.",
+        "col": {
+          "who": "Who",
+          "change": "Change",
+          "when": "When"
+        },
+        "row": "{who} changed auto-translate from {from} to {to} on {when}.",
+        "unknownActor": "A former member",
+        "empty": "No changes yet. Auto-translate has never been changed on this project.",
+        "capped": "Showing the {shown} most recent of {total} changes.",
+        "failed": "<b>Couldn't load the change history.</b> The setting above is unchanged."
+      }
+    },
     "hostedAgent": {
       "title": "Hosted agent",
       "pageDescription": "Which model a hosted run uses. Run hosted preselects it from the work item’s difficulty; whoever starts the run can still pick another.",
@@ -4159,6 +4215,7 @@
         "bugs": "Where this project's bugs are filed is managed by project admins. Ask an admin if the destination needs changing.",
         "ai-planning": "AI planning for this project — its cadence — is configured by project admins. Ask an admin if it needs changing.",
         "hosted-agent": "Which model a hosted run uses is shown to people who can start a hosted run on this project. Ask a project admin if you need to see it.",
+        "translation": "Whether this project's work content is translated for each reader is shown to people who can read the project's work items. Ask a project admin if you need to see it.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed.",
         "monitoring": "This project's error-monitor connection is managed by people who can manage integrations. Ask a project admin if Sentry needs connecting or reconnecting."
       }

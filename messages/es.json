@@ -1973,6 +1973,7 @@
       "components": "Componentes",
       "aiPlanning": "Planificación con IA",
       "hostedAgent": "Agente alojado",
+      "translation": "Traducción",
       "rules": "Reglas",
       "repositories": "Repositorios",
       "monitoring": "Monitorización",
@@ -3874,6 +3875,61 @@
         "factKeptBy": "Conservada"
       }
     },
+    "translation": {
+      "title": "Traducción",
+      "pageDescription": "Cómo ven el contenido de trabajo de este proyecto los miembros que leen en distintos idiomas.",
+      "card": {
+        "title": "Traducción automática",
+        "subtitle": "Permite que cada miembro lea el trabajo de este proyecto en su propio idioma y siga viendo el original."
+      },
+      "switch": {
+        "label": "Traducir automáticamente el contenido de trabajo"
+      },
+      "hint": {
+        "off": "Desactivada. El contenido de trabajo se muestra tal como se escribió, y un botón <b>Traducir</b> en cada página de elemento de trabajo traduce ese elemento cuando un miembro lo pide.",
+        "on": "Activada. Cada miembro lee el contenido de trabajo en el idioma de su interfaz sin pulsar nada, y <b>Mostrar original</b> siempre está a un clic."
+      },
+      "saving": "Guardando…",
+      "flipError": "No se pudo {to, select, on {activar} other {desactivar}} la traducción automática. No se cambió nada.",
+      "retry": "Reintentar",
+      "loadFailed": "No se pudo cargar este ajuste.",
+      "effects": {
+        "title": "Lo que obtienen los lectores",
+        "page": "Las páginas de elemento de trabajo y las vistas rápidas muestran cada campo en el idioma del lector: el título, la descripción, la explicación y cada tarea pendiente.",
+        "lists": "Las listas, los tableros, el backlog, los sprints, la hoja de ruta, «listo» y la clasificación muestran los títulos en el idioma del lector, con un conmutador <b>Mostrar original</b> en cada vista.",
+        "original": "Los agentes, la API y los correos siempre reciben el texto original, y al editar siempre se abre el original."
+      },
+      "cost": "Cada campo se traduce una sola vez por idioma y se conserva, así que un lector posterior del mismo texto no paga nada, y nunca se envía un texto que ya está en el idioma del lector. La traducción consume los créditos de IA de su organización al coste del modelo más un 50 %. <link>Uso y coste</link>",
+      "noCredit": {
+        "body": "<b>La traducción necesita créditos de IA.</b> El contenido de trabajo se muestra tal como se escribió hasta que se añadan créditos. No se factura nada.",
+        "add": "Añadir créditos",
+        "askAdmin": "Un propietario o administrador de la organización puede añadirlos."
+      },
+      "readOnly": "Solo lectura",
+      "readOnlyNote": "Solo un administrador del proyecto puede cambiar la traducción automática.",
+      "readOnlyValue": {
+        "on": "La traducción automática está activada en este proyecto. El contenido de trabajo se muestra en el idioma de cada miembro.",
+        "off": "La traducción automática está desactivada en este proyecto. El contenido de trabajo se muestra tal como se escribió."
+      },
+      "value": {
+        "on": "Activada",
+        "off": "Desactivada"
+      },
+      "history": {
+        "title": "Historial de cambios",
+        "subtitle": "Quién activó o desactivó la traducción automática, y cuándo.",
+        "col": {
+          "who": "Quién",
+          "change": "Cambio",
+          "when": "Cuándo"
+        },
+        "row": "{who} cambió la traducción automática de {from} a {to} el {when}.",
+        "unknownActor": "Un antiguo miembro",
+        "empty": "Aún no hay cambios. La traducción automática nunca se ha cambiado en este proyecto.",
+        "capped": "Mostrando los {shown} cambios más recientes de {total}.",
+        "failed": "<b>No se pudo cargar el historial de cambios.</b> El ajuste de arriba no ha cambiado."
+      }
+    },
     "hostedAgent": {
       "title": "Agente alojado",
       "pageDescription": "Qué modelo usa una ejecución alojada. Ejecutar en alojamiento lo preselecciona según la dificultad del elemento de trabajo; quien inicia la ejecución puede elegir otro.",
@@ -4159,6 +4215,7 @@
         "bugs": "Dónde se registran los errores de este proyecto lo gestionan los administradores del proyecto. Pide a un administrador que cambie el destino si hace falta.",
         "ai-planning": "La planificación con IA de este proyecto (su cadencia) la configuran los administradores del proyecto. Pide a un administrador que la cambie si hace falta.",
         "hosted-agent": "El modelo que usa una ejecución alojada se muestra a quienes pueden iniciar una ejecución alojada en este proyecto. Pide a un administrador del proyecto que te lo muestre si lo necesitas.",
+        "translation": "Si el contenido de trabajo de este proyecto se traduce para cada lector se muestra a las personas que pueden leer los elementos de trabajo del proyecto. Pregunte a un administrador del proyecto si necesita verlo.",
         "automation": "La automatización del proyecto la gestionan los administradores del proyecto. Pide a un administrador que cambie una regla si lo necesitas.",
         "monitoring": "La conexión del monitor de errores de este proyecto la gestionan las personas que pueden gestionar integraciones. Pide a un administrador del proyecto que conecte o vuelva a conectar Sentry si hace falta."
       }

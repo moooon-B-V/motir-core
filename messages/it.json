@@ -1973,6 +1973,7 @@
       "components": "Componenti",
       "aiPlanning": "Pianificazione AI",
       "hostedAgent": "Agente ospitato",
+      "translation": "Traduzione",
       "rules": "Regole",
       "repositories": "Repository",
       "monitoring": "Monitoraggio",
@@ -3874,6 +3875,61 @@
         "factKeptBy": "Mantenuta"
       }
     },
+    "translation": {
+      "title": "Traduzione",
+      "pageDescription": "Come i membri che leggono in lingue diverse vedono i contenuti di lavoro di questo progetto.",
+      "card": {
+        "title": "Traduzione automatica",
+        "subtitle": "Permette a ogni membro di leggere il lavoro di questo progetto nella propria lingua, continuando a vedere l’originale."
+      },
+      "switch": {
+        "label": "Traduci automaticamente i contenuti di lavoro"
+      },
+      "hint": {
+        "off": "Disattivata. I contenuti di lavoro vengono mostrati come scritti, e un pulsante <b>Traduci</b> in ogni pagina di elemento di lavoro traduce quell’elemento quando un membro lo chiede.",
+        "on": "Attivata. Ogni membro legge i contenuti di lavoro nella lingua della propria interfaccia senza premere nulla, e <b>Mostra originale</b> è sempre a un clic di distanza."
+      },
+      "saving": "Salvataggio…",
+      "flipError": "Impossibile {to, select, on {attivare} other {disattivare}} la traduzione automatica. Non è stato modificato nulla.",
+      "retry": "Riprova",
+      "loadFailed": "Impossibile caricare questa impostazione.",
+      "effects": {
+        "title": "Cosa ottengono i lettori",
+        "page": "Le pagine degli elementi di lavoro e le viste rapide mostrano ogni campo nella lingua del lettore: titolo, descrizione, spiegazione e ogni attività da fare.",
+        "lists": "Elenchi, board, backlog, sprint, roadmap, pronti e triage mostrano i titoli nella lingua del lettore, con un interruttore <b>Mostra originale</b> in ogni vista.",
+        "original": "Agenti, API ed e-mail ricevono sempre il testo originale, e la modifica apre sempre l’originale."
+      },
+      "cost": "Ogni campo viene tradotto una sola volta per lingua e conservato, quindi un lettore successivo dello stesso testo non paga nulla, e un testo già nella lingua del lettore non viene mai inviato. La traduzione consuma i crediti IA della tua organizzazione al costo del modello più il 50%. <link>Utilizzo e costi</link>",
+      "noCredit": {
+        "body": "<b>La traduzione richiede crediti IA.</b> I contenuti di lavoro vengono mostrati come scritti finché non vengono aggiunti crediti. Non viene addebitato nulla.",
+        "add": "Aggiungi crediti",
+        "askAdmin": "Un proprietario o un amministratore dell’organizzazione può aggiungerli."
+      },
+      "readOnly": "Sola lettura",
+      "readOnlyNote": "Solo un amministratore del progetto può modificare la traduzione automatica.",
+      "readOnlyValue": {
+        "on": "La traduzione automatica è attiva per questo progetto. I contenuti di lavoro vengono mostrati nella lingua di ciascun membro.",
+        "off": "La traduzione automatica è disattivata per questo progetto. I contenuti di lavoro vengono mostrati come scritti."
+      },
+      "value": {
+        "on": "Attivo",
+        "off": "Disattivato"
+      },
+      "history": {
+        "title": "Cronologia delle modifiche",
+        "subtitle": "Chi ha attivato o disattivato la traduzione automatica, e quando.",
+        "col": {
+          "who": "Chi",
+          "change": "Modifica",
+          "when": "Quando"
+        },
+        "row": "{who} ha cambiato la traduzione automatica da {from} a {to} il {when}.",
+        "unknownActor": "Un ex membro",
+        "empty": "Ancora nessuna modifica. La traduzione automatica non è mai stata modificata in questo progetto.",
+        "capped": "Vengono mostrate le {shown} modifiche più recenti su {total}.",
+        "failed": "<b>Impossibile caricare la cronologia delle modifiche.</b> L’impostazione qui sopra è invariata."
+      }
+    },
     "hostedAgent": {
       "title": "Agente ospitato",
       "pageDescription": "Quale modello usa un’esecuzione ospitata. Esegui in hosting lo preseleziona in base alla difficoltà dell’elemento di lavoro; chi avvia l’esecuzione può comunque sceglierne un altro.",
@@ -4159,6 +4215,7 @@
         "bugs": "Dove vengono archiviati i bug di questo progetto è gestito dagli amministratori del progetto. Chiedi a un amministratore se la destinazione deve cambiare.",
         "ai-planning": "La pianificazione AI di questo progetto, cioè la sua cadenza, è configurata dagli amministratori del progetto. Chiedi a un amministratore se deve cambiare.",
         "hosted-agent": "Il modello usato da un’esecuzione ospitata è visibile a chi può avviare un’esecuzione ospitata in questo progetto. Chiedi a un amministratore del progetto se devi vederlo.",
+        "translation": "Se i contenuti di lavoro di questo progetto vengono tradotti per ogni lettore è mostrato alle persone che possono leggere gli elementi di lavoro del progetto. Chiedi a un amministratore del progetto se hai bisogno di vederlo.",
         "automation": "L’automazione del progetto è gestita dagli amministratori del progetto. Chiedi a un amministratore se devi modificare una regola.",
         "monitoring": "Il collegamento al sistema di monitoraggio degli errori di questo progetto è gestito da chi può gestire le integrazioni. Chiedi a un amministratore del progetto se Sentry va collegato o ricollegato."
       }

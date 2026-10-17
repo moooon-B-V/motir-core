@@ -127,7 +127,10 @@ describe('a seeded role renders exactly what it holds', () => {
     //
     // 15 → 14 (MOTIR-6168 · MOTIR-6466): the `roles` room left project settings
     // for the workspace (`/settings/workspace/roles`).
-    expect(shell.settingsEntries.length).toBe(14);
+    //
+    // 14 → 15 (MOTIR-8830): the `translation` room joined `automation`, gated on
+    // `project:administer` (view `project:browse`), which an admin holds.
+    expect(shell.settingsEntries.length).toBe(15);
     expect(shell.settingsEntries).not.toContain('roles');
     expect(shell.settingsEntries).toContain('approvals');
     expect(shell.settingsEntries).toContain('monitoring');
@@ -140,15 +143,17 @@ describe('a seeded role renders exactly what it holds', () => {
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this to "a settings area of ONE room — Approvals".
-  it('a project MEMBER gets NO settings area, and keeps every nav row but Code health', async () => {
+  // ⚠️ RE-STATED BY MOTIR-8830: the Translation room opens on `project:browse`, so
+  // a member's settings area is ONE read-only room, not none.
+  it('a project MEMBER gets a settings area of ONE room — Translation — and keeps every nav row but Code health', async () => {
     const s = await seed('member-path');
     const shell = await renderFor(s.projectId, s.ctxs.member);
 
     // The complaint the story was raised about: nine sections a member could
     // change nothing in.
-    expect(shell.settingsEntries).toEqual([]);
-    expect(shell.settingsGroups).toEqual([]);
-    expect(shell.areaDoor).toBe(false);
+    expect(shell.settingsEntries).toEqual(['translation']);
+    expect(shell.settingsGroups).toEqual(['automation']);
+    expect(shell.areaDoor).toBe(true);
 
     // ⚠️ THE ONE ROW A MEMBER USED TO LOSE IS BACK (MOTIR-1768). This asserted
     // `not.toContain('/code-health')` — true of a destination that no longer
@@ -181,7 +186,10 @@ describe('a seeded role renders exactly what it holds', () => {
     // MOTIR-5394); MOTIR-5278's browse view is reverted.
     // MOTIR-5278 had set a viewer's `areaDoor` to true, with Approvals as its one
     // entry.
-    expect(shell.areaDoor).toBe(false);
+    // MOTIR-8830: a viewer holds `project:browse`, so the door is open onto the
+    // read-only Translation room — and onto nothing else.
+    expect(shell.settingsEntries).toEqual(['translation']);
+    expect(shell.areaDoor).toBe(true);
     // Three became two for the reason above: `/code` is browse-reachable, so a
     // viewer is offered the room and meets Health's own admin-only state inside
     // it rather than being denied the door (MOTIR-1768).
