@@ -663,12 +663,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   update_page: {
     summary:
       'Replace a page’s whole body with markdown at the revision you read; a page saved since is refused, not merged.',
-    descriptionFingerprint: '746804506616',
+    descriptionFingerprint: '24af12bc474b',
   },
   rename_page: {
     summary:
       'Change a page’s title only — no body write, no revision, and no new version of a published decision page.',
-    descriptionFingerprint: '31abd12ecf7d',
+    descriptionFingerprint: 'd1f07933be8e',
   },
   publish_decision_page: {
     summary:
