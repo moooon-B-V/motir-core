@@ -232,6 +232,16 @@ describe('workItemEmbeddingSweepService', () => {
     expect(await embeddedIds(b)).toEqual([other.id]);
   });
 
+  it('warns with the ids of the items it isolated', async () => {
+    const a = await scenario();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await workItemEmbeddingSweepService.sweep();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(a.bad.id));
+    warn.mockRestore();
+  });
+
   it('is idempotent: a second run makes no provider call for finished items', async () => {
     await scenario();
     await workItemEmbeddingSweepService.sweep();

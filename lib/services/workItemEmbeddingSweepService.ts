@@ -1,5 +1,6 @@
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
+  EMBEDDING_MAX_ATTEMPTS,
   motirAiConfigured,
   workItemEmbeddingsService,
   type WitnessProbe,
@@ -54,6 +55,21 @@ export interface WorkItemEmbeddingSweepSummary {
   truncated: boolean;
 }
 
+/** One warning per run that isolated or gave up on anything, so the ids are in the
+ *  logs: an item the provider will not embed is otherwise invisible. */
+function warnOnIsolated(summary: WorkItemEmbeddingSweepSummary): void {
+  if (summary.failedIds.length > 0) {
+    console.warn(
+      `[work-item-embedding-sweep] provider refused ${summary.failedIds.length} item(s) this run: ${summary.failedIds.join(', ')}`,
+    );
+  }
+  if (summary.givenUpIds.length > 0) {
+    console.warn(
+      `[work-item-embedding-sweep] gave up on ${summary.givenUpIds.length} item(s) after ${EMBEDDING_MAX_ATTEMPTS} refused attempts: ${summary.givenUpIds.join(', ')}`,
+    );
+  }
+}
+
 export const workItemEmbeddingSweepService = {
   async sweep(
     caps: { maxEmbeds?: number; maxPages?: number } = {},
@@ -95,6 +111,7 @@ export const workItemEmbeddingSweepService = {
         do {
           if (summary.embedded >= maxEmbeds || pages >= maxPages) {
             summary.truncated = true;
+            warnOnIsolated(summary);
             return summary;
           }
           const batch = await workItemEmbeddingsService.backfillBatch({
@@ -117,6 +134,7 @@ export const workItemEmbeddingSweepService = {
       if (projects.length < EMBEDDING_SWEEP_PROJECT_PAGE) break;
       projectCursor = projects[projects.length - 1]!.id;
     }
+    warnOnIsolated(summary);
     return summary;
   },
 };
