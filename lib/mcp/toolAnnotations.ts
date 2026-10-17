@@ -352,6 +352,16 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: false,
     openWorldHint: false,
   },
+  // `rename_page` OVERWRITES the title, and unlike a body replace there is no history row to
+  // restore it from — so it is a destructive write, as `update_folder`'s rename is. The same
+  // title twice is the same state, so it is idempotent.
+  // W: renamePage.ts → pagesService.renamePage — sets the title
+  rename_page: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   // A replay of the same version writes nothing, so it is idempotent; not destructive
   // (nothing is removed).
   // W: publishDecisionPage.ts → decisionPageService.publish — seals a version, records the publication, supersedes + raises the decision gate

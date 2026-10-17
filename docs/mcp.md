@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **98 tools**.
+`initialize` handshake and registers **99 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3097,7 +3097,7 @@ code:
 | `PAGE_VERSION_NOT_FOUND`    | `get_page`'s `version` names a number the page has no version for. The message names the number.                                                            |
 | `PAGE_REVISION_CONFLICT`    | `update_page` sent a `revision` the page has moved past. Nothing was written; the message names both revisions. Call `get_page`, redo the edit, send again. |
 | `PAGE_BODY_TOO_LARGE`       | The markdown is over 1 MiB, or the body it makes is over 2 MiB. The message names the size and the limit. Nothing was written.                              |
-| `PAGE_TITLE_TOO_LONG`       | `create_page`'s `title` is over 255 characters.                                                                                                             |
+| `PAGE_TITLE_TOO_LONG`       | `create_page`'s or `rename_page`'s `title` is over 255 characters.                                                                                          |
 | `PAGE_PARENT_NOT_ALLOWED`   | A `parent.kind` other than `root`, `folder` or `page` — a page cannot be filed under a work item.                                                           |
 | `PAGE_PARENT_ID_REQUIRED`   | A `folder` or `page` parent with no `id`.                                                                                                                   |
 | `FOLDER_NOT_FOUND`          | The parent folder is not in this project.                                                                                                                   |
@@ -3165,7 +3165,7 @@ erase what a person saved in between. The refusal names the page's revision and
 the one sent, and tells the agent to call `get_page`, apply its change to what
 that returns, and send the new revision. Whatever a write replaces stays a
 restorable version in the page's history, which is why the tool is annotated
-`destructiveHint: false`. It does not rename the page.
+`destructiveHint: false`. It does not rename the page — `rename_page` does.
 
 | Input        | Type    | Required | Notes                                                      |
 | ------------ | ------- | -------- | ---------------------------------------------------------- |
@@ -3175,6 +3175,22 @@ restorable version in the page's history, which is why the tool is annotated
 | `revision`   | integer | yes      | The `revision` `get_page` or `create_page` returned (≥ 1). |
 
 **Output** — the saved page, in `get_page`'s shape, at its new `revision`.
+
+#### `rename_page`
+
+**Set** a page's title. Gated on `page:edit`. It writes no body, so it takes no
+`revision`, cannot be refused `PAGE_REVISION_CONFLICT`, and does not start a new
+version: a published decision page renamed here stays at the version it was
+published at. An empty `title` makes the page untitled. To change the body, use
+`update_page`.
+
+| Input        | Type   | Required | Notes                                      |
+| ------------ | ------ | -------- | ------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                |
+| `pageId`     | string | yes      | The page id — the `<id>` in `/pages/<id>`. |
+| `title`      | string | yes      | The page's new title (may be empty).       |
+
+**Output** — the page's summary: `{ id, projectId, title, position, revision, updatedAt }`.
 
 #### `publish_decision_page`
 
