@@ -211,28 +211,32 @@ function storyRefs(): string[] {
 }
 
 /**
- * Wait for the `ordinal`-th `translate` submit and return what it carried. "At
- * least": an item page also submits its related items' titles, so more than one
- * submit can follow an open — the ordinal still names the one this step scripted.
+ * A submit that is one related title, not one of the story's jobs. An item page
+ * also submits the single `title:<id>` its description's work item chip shows,
+ * before or after the item's own job — the order is the page's, not the spec's.
  */
-async function submitAt(ordinal: number) {
-  await expect.poll(() => translateSubmits().length).toBeGreaterThan(ordinal);
-  const sent = translateSubmits()[ordinal]!.translate!;
-  return { target: sent.targetLanguage, refs: sent.fields.map((f) => f.fieldRef) };
+function isChipTitle(s: ReturnType<typeof translateSubmits>[number]) {
+  return s.translate?.fields.length === 1 && s.translate.fields[0]!.fieldRef.startsWith('title:');
+}
+
+/** The story's own jobs: every submit that is not a related chip's title. */
+function jobSubmits() {
+  return translateSubmits().filter((s) => !isChipTitle(s));
+}
+
+/** The index of the first story job at or after `ordinal`, or -1 while none has been sent. */
+function jobIndexFrom(ordinal: number) {
+  return translateSubmits().findIndex((s, i) => i >= ordinal && !isChipTitle(s));
 }
 
 /**
- * The submits that are a whole job's worth of work. An item page also submits the
- * one related title its description's work item chip shows (a single `title:<id>`
- * field), which is not one of the story's jobs and is never scripted to succeed.
- */
-/**
- * Hold the NEXT story job `running` (returning its ordinal), and script the ordinal
- * after it `failed`, which every later unscripted submit then repeats. That second
- * entry is the related chip's own title job (LANG-1): it neither bills nor stores,
- * so it can neither inflate the charge nor change what a step reads. The submit
- * count is read only once it has stopped moving, so a chip job still in flight
- * from the page before cannot take the ordinal this step scripted.
+ * Hold the next story job `running` and return the ordinal it was scripted from.
+ * The ordinal AFTER it is held too, because it is the chip's own title job and may
+ * come first (`release` settles both once the order is known); the one after that
+ * is `failed`, which every later unscripted submit repeats, so a chip job neither
+ * bills nor stores nor changes what a step reads. The submit count is read only
+ * once it has stopped moving, so a chip job still in flight from the page before
+ * cannot take the ordinal this step scripted.
  */
 async function holdNextJob(): Promise<number> {
   let last = -1;
@@ -249,15 +253,25 @@ async function holdNextJob(): Promise<number> {
     )
     .toBe(true);
   const ordinal = setNextTranslateOutcome({ status: 'running' });
-  setTranslateOutcome(ordinal + 1, { status: 'failed' });
+  setTranslateOutcome(ordinal + 1, { status: 'running' });
+  setTranslateOutcome(ordinal + 2, { status: 'failed' });
   return ordinal;
 }
 
-function jobSubmits() {
-  return translateSubmits().filter(
-    (s) =>
-      !(s.translate?.fields.length === 1 && s.translate.fields[0]!.fieldRef.startsWith('title:')),
-  );
+/** Wait for the story job scripted from `ordinal` and return what it carried. */
+async function submitAt(ordinal: number) {
+  await expect.poll(() => jobIndexFrom(ordinal)).toBeGreaterThanOrEqual(0);
+  const sent = translateSubmits()[jobIndexFrom(ordinal)]!.translate!;
+  return { target: sent.targetLanguage, refs: sent.fields.map((f) => f.fieldRef) };
+}
+
+/** Settle the story job scripted from `ordinal` as `outcome`, and the chip's title job as failed. */
+function release(ordinal: number, outcome: Parameters<typeof setTranslateOutcome>[1]) {
+  const job = jobIndexFrom(ordinal);
+  setTranslateOutcome(job, outcome);
+  for (const other of [ordinal, ordinal + 1]) {
+    if (other !== job) setTranslateOutcome(other, { status: 'failed' });
+  }
 }
 
 /** Open a browsing surface and wait for its batch request to answer 200. */
@@ -353,7 +367,7 @@ async function step3(page: Page, baseURL: string, beat: Beat) {
   await beat();
 
   const korean = itemTranslations(seed.story, seed.text.ko);
-  setTranslateOutcome(ordinal, { status: 'succeeded', translations: korean });
+  release(ordinal, { status: 'succeeded', translations: korean });
   await expectFields(page, seed.text.ko);
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.lead);
   await expectTranslatedMarks(page);
@@ -427,7 +441,7 @@ async function step5Board(page: Page, baseURL: string, beat: Beat) {
   expect(sent.refs.every((ref) => ref.startsWith('title:'))).toBe(true);
   await beat();
 
-  setTranslateOutcome(ordinal, { status: 'succeeded', translations: boardTranslations() });
+  release(ordinal, { status: 'succeeded', translations: boardTranslations() });
   for (const [i, other] of seed.others.entries()) {
     await expect(card(page, other.key).getByText(KO_TITLES[i]!)).toBeVisible();
     await expect(pendingMark(page, other.key)).toHaveCount(0);
@@ -475,7 +489,7 @@ async function step6(page: Page, browser: Browser, baseURL: string, beat: Beat) 
     await beat();
 
     const translations = itemTranslations(seed.story, seed.text.de);
-    setTranslateOutcome(ordinal, { status: 'succeeded', translations });
+    release(ordinal, { status: 'succeeded', translations });
     await expect(titleOf(greta)).toHaveText(seed.text.de.title);
     await expect(descriptionOf(greta, 'de')).toContainText(seed.text.de.lead);
     await expect(main(greta).getByText(seed.text.de.explanation, { exact: true })).toBeVisible();
@@ -582,7 +596,7 @@ async function retranslateEdit(page: Page, beat: Beat) {
   await beat();
 
   const edited = [{ fieldRef: 'description', text: seed.text.ko.edited }];
-  setTranslateOutcome(ordinal, { status: 'succeeded', translations: edited });
+  release(ordinal, { status: 'succeeded', translations: edited });
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.added);
   await expect(titleOf(page)).toHaveText(seed.text.ko.title);
   expect(jobSubmits()).toHaveLength(4);
