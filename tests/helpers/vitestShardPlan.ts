@@ -1143,7 +1143,6 @@ export const FILE_TEST_SECONDS: Readonly<Record<string, number>> = {
   'tests/pages/pageWorkItemLink.integration.test.ts': 12.6,
   'tests/pages/pageWorkItemLinks.story.integration.test.ts': 38.6,
   'tests/pages/pagesServerPages.test.tsx': 38.0,
-  'tests/passkeyBoundaryContract.test.ts': 48.8,
   'tests/passkeyService.test.ts': 15.7,
   'tests/password-reset.test.ts': 11.1,
   'tests/permissions/assertPermission.integration.test.ts': 21.6,
