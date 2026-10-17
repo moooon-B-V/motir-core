@@ -1082,6 +1082,11 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/login',
     why: "Not an address: Claude Code's own `/login` slash command, typed in the agent's terminal to sign in (docs/decisions/agent-terminal.md Q9: the sign-in completes through the vendor's own flow). The panel's not-signed-in line quotes it verbatim. PERMANENT.",
   },
+  {
+    file: 'design/settings/design-notes.md',
+    address: '/settings/project/translation',
+    why: 'NOT YET BUILT: the Auto-translate room (MOTIR-8822) names the route its build card (MOTIR-8830) adds. SELF-RETIRING: once `app/(authed)/settings/project/translation/page.tsx` exists the address resolves and this row fails as stale.',
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
