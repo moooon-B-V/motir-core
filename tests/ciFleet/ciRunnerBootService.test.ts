@@ -280,6 +280,12 @@ describe('the happy path — ONE intent produces ONE ephemeral runner', () => {
     expect(spec.env['MOTIR_RUNNER_LABEL']).toBe(MOTIR_RUNNER_LABEL);
     expect(spec.env['ACTIONS_RUNNER_INPUT_JITCONFIG']).toBe('ZW5jb2RlZC1qaXQ=');
     expect(spec.size).toEqual({ cpuKind: 'performance', cpus: 2, memoryMb: 8192 });
+    // MOTIR-8839: the runner's dockerd gets native disk, or `services:` jobs fill
+    // the rootfs under the `vfs` fallback.
+    expect(spec.dockerVolumeGb).toBe(20);
+    expect(fakeOrchestrator.provisioned[0]?.volumeId).toBe(
+      `${fakeOrchestrator.provisioned[0]?.id}-docker`,
+    );
   });
 
   it("RECORDS BOOT LATENCY, measured from GitHub's own queue instant", async () => {
