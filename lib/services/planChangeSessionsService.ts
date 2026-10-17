@@ -1410,7 +1410,7 @@ export const planChangeSessionsService = {
           )
         : null,
       withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-        planRepository.findLatestBySession(row.id, tx),
+        planRepository.findLatestUndecidedBySession(row.id, tx),
       ),
       assertCanPlan(pctx.projectId, ctx).then(
         () => true,
@@ -1420,8 +1420,9 @@ export const planChangeSessionsService = {
         },
       ),
     ]);
-    const undecided =
-      pending && pending.status !== 'approved' && pending.status !== 'declined' ? pending.id : null;
+    // The newest UNDECIDED plan, not the session's latest plan: a newer declined plan
+    // sitting on an older `planned` one must not hide the plan still waiting (MOTIR-8867).
+    const undecided = pending?.id ?? null;
     // An ENDED session whose plan a carry took away (MOTIR-7932; design state 4):
     // where that plan went, so the old session can say so and link to it.
     const movedTo =
