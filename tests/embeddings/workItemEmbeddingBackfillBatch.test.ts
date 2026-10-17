@@ -60,7 +60,7 @@ const witness = (): WitnessProbe => ({ confirmed: false });
 
 async function embeddedIds(fx: WorkItemFixture): Promise<string[]> {
   const rows = await adminDb.$queryRawUnsafe<Array<{ workItemId: string }>>(
-    `SELECT "workItemId" FROM "work_item_embedding" WHERE "projectId" = $1`,
+    `SELECT "work_item_id" AS "workItemId" FROM "work_item_embedding" WHERE "project_id" = $1`,
     fx.projectId,
   );
   return rows.map((r) => r.workItemId);
