@@ -2314,3 +2314,92 @@ describe('validate_work_item (MCP) with `planId` — the COVERAGE advisory reach
     await client.close();
   });
 });
+
+describe('workItemsService.validateWorkItem — the POST-MERGE-CHILD advisory (MOTIR-8863)', () => {
+  const make = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    kind: IssueType,
+    title: string,
+    over: {
+      parentId?: string;
+      type?: WorkItemTypeDto;
+      executor?: ExecutorDto;
+      descriptionMd?: string;
+    } = {},
+  ) =>
+    workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind,
+        title,
+        parentId: over.parentId,
+        descriptionMd: over.descriptionMd,
+        type: over.type,
+        executor: over.executor,
+      },
+      fx.ctx,
+    );
+
+  const VERIFY_BODY = [
+    '## Context',
+    '',
+    'Earliest legal start: after the deploy that ships the controller has finished.',
+  ].join('\n');
+
+  it('reports a production-verify child laid inside the story whose merge it waits on', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await make(fx, 'story', 'The graph service scales itself');
+    const child = await make(fx, 'task', 'Run the seven verification steps on production', {
+      parentId: story.id,
+      type: 'verification',
+      executor: 'human',
+      descriptionMd: VERIFY_BODY,
+    });
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(
+      result.advisories.filter((a) => a.severity === 'likely-post-merge-child-under-container'),
+    ).toEqual([
+      {
+        kind: 'shape',
+        item: child.identifier,
+        severity: 'likely-post-merge-child-under-container',
+        phrase: 'earliest legal start',
+        container: story.identifier,
+      },
+    ]);
+  });
+
+  it('is quiet when the same card sits beside the story under an epic', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await make(fx, 'epic', 'Planning capacity follows demand');
+    await make(fx, 'task', 'Run the seven verification steps on production', {
+      parentId: epic.id,
+      type: 'verification',
+      executor: 'human',
+      descriptionMd: VERIFY_BODY,
+    });
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, epic.identifier, fx.ctx);
+    expect(
+      result.advisories.filter((a) => a.severity === 'likely-post-merge-child-under-container'),
+    ).toEqual([]);
+  });
+
+  it('is quiet on an ordinary code child of a story', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await make(fx, 'story', 'A story');
+    await make(fx, 'task', 'Build it', {
+      parentId: story.id,
+      type: 'code',
+      executor: 'coding_agent',
+      descriptionMd: 'Read the live tenant in production.',
+    });
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(
+      result.advisories.filter((a) => a.severity === 'likely-post-merge-child-under-container'),
+    ).toEqual([]);
+  });
+});

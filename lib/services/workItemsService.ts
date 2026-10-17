@@ -9680,6 +9680,13 @@ async function computeSubtreeProseAdvisories(
         (blockerId) => blockerTypes.get(blockerId) === 'design',
       ),
       blockerCount: blockedByMember.get(member.id)?.size ?? 0,
+      // The POST-MERGE-CHILD check's input (MOTIR-8863): the parent, when it is
+      // inside the subtree (the root's own parent is above it and not a container
+      // of THIS validation, but a member's parent always is).
+      parent: (() => {
+        const p = member.parentId ? membersById.get(member.parentId) : undefined;
+        return p ? { identifier: p.identifier, kind: p.kind } : null;
+      })(),
     };
   });
 
