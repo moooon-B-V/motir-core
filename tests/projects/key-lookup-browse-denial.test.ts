@@ -209,6 +209,19 @@ const ROUTES: { route: string; call: Call }[] = [
       ),
   },
   {
+    route: 'GET auto-translate',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/auto-translate/route')).GET(get(), p({ key })),
+  },
+  {
+    route: 'POST translate-titles',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/translate-titles/route')).POST(
+        json('POST', { workItemIds: ['wi-1'] }),
+        p({ key }),
+      ),
+  },
+  {
     route: 'GET monitors',
     call: async (key) =>
       (await import('@/app/api/projects/[key]/monitors/route')).GET(get(), p({ key })),

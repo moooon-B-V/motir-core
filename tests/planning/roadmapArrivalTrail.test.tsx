@@ -94,6 +94,14 @@ beforeEach(() => {
 
 afterEach(() => vi.clearAllMocks());
 
+/**
+ * The page returns the title-translation provider (Story MOTIR-7738 · MOTIR-8833)
+ * with the roadmap view as its one child; the props this file asserts are the view's.
+ */
+function viewProps(element: { props: { children: { props: Record<string, unknown> } } }) {
+  return element.props.children.props;
+}
+
 describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
   it('resolves `ancestors ++ [the item]`, each crumb carrying its id, KEY and label', async () => {
     getWorkItemWithAncestors.mockResolvedValue({
@@ -108,7 +116,7 @@ describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
       workspaceId: 'ws1',
     });
     // The LAST crumb is the item itself — the level the canvas loads.
-    expect(element.props.initialTrail).toEqual([
+    expect(viewProps(element).initialTrail).toEqual([
       { id: 'E1', crumbKey: 'ACME-1', label: 'ACME-1 · The epic' },
       { id: 'S1', crumbKey: 'ACME-11', label: 'ACME-11 · The story' },
     ]);
@@ -122,7 +130,7 @@ describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
 
     const element = await RoadmapPage({ searchParams: params({ item: 'ACME-1' }) });
 
-    expect(element.props.initialTrail).toEqual([
+    expect(viewProps(element).initialTrail).toEqual([
       { id: 'E1', crumbKey: 'ACME-1', label: 'ACME-1 · The epic' },
     ]);
   });
@@ -131,14 +139,14 @@ describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
     const element = await RoadmapPage({ searchParams: params({}) });
 
     expect(getWorkItemWithAncestors).not.toHaveBeenCalled();
-    expect(element.props.initialTrail).toEqual([]);
+    expect(viewProps(element).initialTrail).toEqual([]);
   });
 
   it('passes an EMPTY trail when the page is rendered with no searchParams at all', async () => {
     const element = await RoadmapPage();
 
     expect(getWorkItemWithAncestors).not.toHaveBeenCalled();
-    expect(element.props.initialTrail).toEqual([]);
+    expect(viewProps(element).initialTrail).toEqual([]);
   });
 
   it.each([
@@ -152,8 +160,8 @@ describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
     const element = await RoadmapPage({ searchParams: params({ item: 'ACME-999' }) });
 
     // No throw, no redirect, no error surface — the roadmap simply opens at its root.
-    expect(element.props.initialTrail).toEqual([]);
-    expect(element.props.projectKey).toBe('ACME');
+    expect(viewProps(element).initialTrail).toEqual([]);
+    expect(viewProps(element).projectKey).toBe('ACME');
   });
 
   it('ignores a repeated `item` param rather than guessing which one is meant', async () => {
@@ -162,7 +170,7 @@ describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
     });
 
     expect(getWorkItemWithAncestors).not.toHaveBeenCalled();
-    expect(element.props.initialTrail).toEqual([]);
+    expect(viewProps(element).initialTrail).toEqual([]);
   });
 
   it('does not resolve a trail for an EMPTY project — the empty state has no canvas', async () => {
@@ -173,7 +181,7 @@ describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
     // The empty branch returns before the sprint read and before any trail resolve;
     // there is no canvas to arrive on.
     expect(getActiveSprint).not.toHaveBeenCalled();
-    expect(element.props.initialTrail).toBeUndefined();
+    expect((element.props as Record<string, unknown>).initialTrail).toBeUndefined();
   });
 });
 
@@ -189,7 +197,7 @@ describe('the roadmap ARRIVAL LEVEL — folders', () => {
     const element = await RoadmapPage({ searchParams: params({ folder: 'f2' }) });
 
     expect(getFolderTrail).toHaveBeenCalledWith('p1', 'f2', { userId: 'u1', workspaceId: 'ws1' });
-    expect(element.props.initialTrail).toEqual([
+    expect(viewProps(element).initialTrail).toEqual([
       { id: 'folder:f1', label: 'Parked' },
       { id: 'folder:f2', label: '2025' },
     ]);
@@ -200,7 +208,7 @@ describe('the roadmap ARRIVAL LEVEL — folders', () => {
 
     const element = await RoadmapPage({ searchParams: params({ folder: 'nope' }) });
 
-    expect(element.props.initialTrail).toEqual([]);
+    expect(viewProps(element).initialTrail).toEqual([]);
   });
 
   it('`?item=` for a FILED item prepends its folder chain to the work-item crumbs', async () => {
@@ -215,7 +223,7 @@ describe('the roadmap ARRIVAL LEVEL — folders', () => {
 
     const element = await RoadmapPage({ searchParams: params({ item: 'ACME-11' }) });
 
-    expect(element.props.initialTrail).toEqual([
+    expect(viewProps(element).initialTrail).toEqual([
       { id: 'folder:f1', label: 'Parked' },
       { id: 'E1', crumbKey: 'ACME-1', label: 'ACME-1 · The epic' },
       { id: 'S1', crumbKey: 'ACME-11', label: 'ACME-11 · The story' },
@@ -233,7 +241,7 @@ describe('the roadmap ARRIVAL LEVEL — folders', () => {
     });
 
     expect(getFolderTrail).not.toHaveBeenCalled();
-    expect(element.props.initialTrail).toEqual([
+    expect(viewProps(element).initialTrail).toEqual([
       { id: 'E1', crumbKey: 'ACME-1', label: 'ACME-1 · The epic' },
     ]);
   });
