@@ -1002,56 +1002,60 @@
       [data-theme='dark'][data-appearance-scope] {
         color-scheme: dark;
 
-  --color-background: #0f0f0f;
-  --color-foreground: #f3f4f6;
-  --color-surface: #1a1a1a;
-  --color-surface-soft: #161616;
-  --color-canvas: #0e0e0e; /* recessed board behind raised cards (planning canvas) */
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e; /* recessed board behind raised cards (planning canvas) */
 
-  --color-ink: #f3f4f6;
-  --color-charcoal: #e5e5e5;
-  --color-slate: #a4a097;
-  --color-steel: #787671;
-  --color-stone: #5d5b54;
-  --color-muted: #1a1a1a;
-  --color-muted-foreground: #a4a097;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
 
-  --color-hairline: #2a2a2a;
-  --color-hairline-soft: #1f1f1f;
-  --color-hairline-strong: #3a3a3a;
-  --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
 
-  /* Primary stays close to brand; brightened from the light theme so the accent
+        /* Primary stays close to brand; brightened from the light theme so the accent
      reads as TEXT/icon on the near-black canvas (#7b6ce5 on #0f0f0f ≈ 4.67:1, AA
      text). But white text ON this as a FILL is only 4.1:1 — so filled accent
      buttons use the darker --color-primary-fill below instead (MOTIR-757). */
-  --color-primary: #7b6ce5;
-  --color-primary-foreground: #ffffff;
-  --color-primary-pressed: #5645d4;
-  /* Darker accent fill for dark theme: white label text on #6c5cdd is 4.99:1
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        /* Darker accent fill for dark theme: white label text on #6c5cdd is 4.99:1
      (AA), while #6c5cdd still clears 3:1 as a fill against the dark canvas. */
-  --color-primary-fill: #6c5cdd;
+        --color-primary-fill: #6c5cdd;
 
-  /* Pastel tints dimmed for dark backgrounds */
-  --color-tint-peach: #3a2a1a;
-  --color-tint-rose: #3a1f2a;
-  --color-tint-mint: #1a2f25;
-  --color-tint-lavender: #2a253a;
-  --color-tint-sky: #1a2a3a;
-  --color-tint-yellow: #3a341a;
+        /* Pastel tints dimmed for dark backgrounds */
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
 
-  --color-link: #58a6ff;
-  --color-link-pressed: #79b8ff;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
       }
       [data-appearance-scope] {
         background: var(--el-page-bg);
         color: var(--el-page-text);
       }
 
-
       /* ═══ ADDED BY THIS ASSET — the Translation room ═══ */
-      .scard-head .grow { min-width: 0; flex: 1; }
-      .scard-head .act { flex: none; }
+      .scard-head .grow {
+        min-width: 0;
+        flex: 1;
+      }
+      .scard-head .act {
+        flex: none;
+      }
       /* Switch — components/ui/Switch: h-5 w-9 rounded-full border; knob size-3.5 */
       .switch {
         position: relative;
@@ -1074,14 +1078,37 @@
         transform: translateX(2px);
         background: var(--el-switch-knob-off);
       }
-      .switch.on { border-color: var(--el-switch-on-border); background: var(--el-switch-on); }
-      .switch.on .knob { transform: translateX(18px); background: var(--el-switch-knob); }
-      .switch[aria-busy='true'] { opacity: 0.5; cursor: progress; }
+      .switch.on {
+        border-color: var(--el-switch-on-border);
+        background: var(--el-switch-on);
+      }
+      .switch.on .knob {
+        transform: translateX(18px);
+        background: var(--el-switch-knob);
+      }
+      .switch[aria-busy='true'] {
+        opacity: 0.5;
+        cursor: progress;
+      }
       /* SwitchRow (components/settings/SwitchRow.tsx): switch, then label + hint */
-      .sw-row { display: flex; align-items: flex-start; gap: 14px; }
-      .sw-row .sw { margin-top: 2px; }
-      .sw-row .txt { min-width: 0; flex: 1; }
-      .sw-row .lab { display: block; font-size: 14px; font-weight: 500; color: var(--el-text); }
+      .sw-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .sw-row .sw {
+        margin-top: 2px;
+      }
+      .sw-row .txt {
+        min-width: 0;
+        flex: 1;
+      }
+      .sw-row .lab {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
       .sw-row .hint {
         margin: 2px 0 0;
         max-width: 54ch;
@@ -1099,30 +1126,91 @@
         font-size: 12px;
         color: var(--el-text-secondary);
       }
-      .sw-row .state .spin { border-color: var(--el-border-strong); border-top-color: var(--el-accent); }
+      .sw-row .state .spin {
+        border-color: var(--el-border-strong);
+        border-top-color: var(--el-accent);
+      }
       /* what the setting does for readers — only once it is on */
-      .effects { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+      .effects {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
       .effects li {
-        display: flex; gap: 10px; align-items: flex-start;
-        font-size: 13px; line-height: 1.55; color: var(--el-text);
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text);
       }
-      .effects li svg { color: var(--el-icon-muted); margin-top: 3px; }
-      .effects-h { margin: 0 0 8px; }
-      .rule { border: 0; border-top: 1px solid var(--el-border-soft); margin: 0; }
-      .cost { margin: 0; font-size: 12px; line-height: 1.6; color: var(--el-text-secondary); max-width: 62ch; }
-      .cost a, .co a { color: var(--el-link); font-weight: 500; text-decoration: underline; }
+      .effects li svg {
+        color: var(--el-icon-muted);
+        margin-top: 3px;
+      }
+      .effects-h {
+        margin: 0 0 8px;
+      }
+      .rule {
+        border: 0;
+        border-top: 1px solid var(--el-border-soft);
+        margin: 0;
+      }
+      .cost {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 62ch;
+      }
+      .cost a,
+      .co a {
+        color: var(--el-link);
+        font-weight: 500;
+        text-decoration: underline;
+      }
       .inline-err {
-        display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
-        font-size: 13px; line-height: 1.5; color: var(--el-text);
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text);
       }
-      .inline-err > svg { color: var(--el-danger-on-surface); margin-top: 2px; }
-      .inline-err .btn { margin-left: 4px; }
-      .val-line { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--el-text); }
-      .val-line .lab { font-weight: 500; }
-      .rd-note { margin: 0; font-size: 12px; line-height: 1.6; color: var(--el-text-secondary); }
+      .inline-err > svg {
+        color: var(--el-danger-on-surface);
+        margin-top: 2px;
+      }
+      .inline-err .btn {
+        margin-left: 4px;
+      }
+      .val-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .val-line .lab {
+        font-weight: 500;
+      }
+      .rd-note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
       /* THE READ-BACK — four fields per change, newest first */
-      .hist { display: flex; flex-direction: column; }
-      .hist-cols, .hist-row {
+      .hist {
+        display: flex;
+        flex-direction: column;
+      }
+      .hist-cols,
+      .hist-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 11rem 10.5rem;
         column-gap: 16px;
@@ -1132,7 +1220,10 @@
         padding-bottom: 8px;
         border-bottom: 1px solid var(--el-border);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
         color: var(--el-text-eyebrow);
       }
       .hist-row {
@@ -1141,52 +1232,161 @@
         border-bottom: 1px solid var(--el-border-soft);
         font-size: 13px;
       }
-      .hist-row:last-child { border-bottom: 0; }
-      .hist-row .who { color: var(--el-text); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
-      .hist-row .chg { display: inline-flex; align-items: center; gap: 6px; }
-      .hist-row .chg svg { color: var(--el-icon-muted); }
-      .hist-row time { color: var(--el-text-secondary); font-size: 12px; }
-      .hist-cap { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--el-text-secondary); }
-      .hist-empty { margin: 0; font-size: 13px; line-height: 1.6; color: var(--el-text-secondary); max-width: 58ch; }
-      .sk { display: inline-block; height: 14px; border-radius: var(--radius-control); background: var(--el-muted); }
-      .sk.pill-sk { height: 20px; border-radius: var(--radius-badge); }
+      .hist-row:last-child {
+        border-bottom: 0;
+      }
+      .hist-row .who {
+        color: var(--el-text);
+        font-weight: 500;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .hist-row .chg {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .hist-row .chg svg {
+        color: var(--el-icon-muted);
+      }
+      .hist-row time {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .hist-cap {
+        margin: 12px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .hist-empty {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 58ch;
+      }
+      .sk {
+        display: inline-block;
+        height: 14px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .sk.pill-sk {
+        height: 20px;
+        border-radius: var(--radius-badge);
+      }
       /* the refused door — NoAccessState inside the area chrome */
       .refused {
-        display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;
-        max-width: 46rem; margin: 0 auto; padding: 40px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 12px;
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 40px 24px;
       }
-      .refused svg { width: 48px; height: 48px; color: var(--el-icon-muted); }
-      .refused h4 { margin: 0; font-size: 18px; font-weight: 600; color: var(--el-text); }
-      .refused p { margin: 0; max-width: 52ch; font-size: 14px; line-height: 1.55; color: var(--el-text-secondary); }
+      .refused svg {
+        width: 48px;
+        height: 48px;
+        color: var(--el-icon-muted);
+      }
+      .refused h4 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .refused p {
+        margin: 0;
+        max-width: 52ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
       /* the pane-only arrival frame (design/settings/arrival.mock.html, Panel B) */
-      .frame-pending { border: 1px solid var(--el-border); border-radius: var(--radius-card); padding: var(--spacing-card-padding); max-width: 46rem; }
-      .frame-pending .bar { background: var(--el-muted); border-radius: var(--radius-control); }
-      .frame-pending .btn-sk { background: var(--el-muted); border-radius: var(--radius-btn); }
-      .stack { display: flex; flex-direction: column; gap: 18px; }
-      .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
-      .pair > .cap { grid-column: 1 / -1; }
+      .frame-pending {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        max-width: 46rem;
+      }
+      .frame-pending .bar {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      .frame-pending .btn-sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-btn);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      .pair > .cap {
+        grid-column: 1 / -1;
+      }
       .sub-cap {
-        margin: 0 0 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+        margin: 0 0 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
         color: var(--el-text-eyebrow);
       }
-      .bare { border: 1px solid var(--el-border); border-radius: var(--radius-card); background: var(--el-page-bg); padding: 20px; }
-      .bare.dk { background: var(--el-page-bg); }
+      .bare {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 20px;
+      }
+      .bare.dk {
+        background: var(--el-page-bg);
+      }
       /* ~400px */
       .narrow {
-        max-width: 400px; border: 1px solid var(--el-border); border-radius: var(--radius-card);
-        background: var(--el-page-bg); padding: 20px 16px; display: flex; flex-direction: column; gap: 16px;
+        max-width: 400px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
       }
-      .narrow .scard-body, .narrow .scard-head, .narrow .scard-foot { padding-inline: 16px; }
-      .narrow .hist-cols { display: none; }
-      .narrow .hist-row { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
-      .narrow .pane-head h3 { font-size: 20px; }
-      @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
-
+      .narrow .scard-body,
+      .narrow .scard-head,
+      .narrow .scard-foot {
+        padding-inline: 16px;
+      }
+      .narrow .hist-cols {
+        display: none;
+      }
+      .narrow .hist-row {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 4px;
+      }
+      .narrow .pane-head h3 {
+        font-size: 20px;
+      }
+      @media (max-width: 900px) {
+        .pair {
+          grid-template-columns: 1fr;
+        }
+      }
     </style>
   </head>
   <body>
-        <svg class="sr" aria-hidden="true">
+    <svg class="sr" aria-hidden="true">
       <defs>
         <!-- lucide `sliders-horizontal` — EXTRACTED from the installed `lucide-react@1.16.0` -->
         <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
@@ -1393,6 +1593,7 @@
           <path d="M12 7v5l4 2" />
         </symbol>
       </defs>
+    </svg>
     <div class="board">
       <header>
         <h1>Translation &mdash; Auto-translate work content</h1>
@@ -1403,538 +1604,1817 @@
         </p>
         <p>
           The control that returns when it is off is the predecessor&rsquo;s per-work-item
-          <b>Translate</b> button (the design published with
-          MOTIR-8112); the per-field and per-title reading surfaces are drawn by their own cards.
+          <b>Translate</b> button (the design published with MOTIR-8112); the per-field and
+          per-title reading surfaces are drawn by their own cards.
         </p>
       </header>
 
-<div class="panel-label">Panel 0 &middot; <b>The access path</b> &mdash; a new row in the Automation group, between Hosted agent and Rules</div><p class="panel-note">The room is reached the way every project-settings room is: its <b>rail row</b>, and the matching <code class="k">settings-translation</code> command-palette deep link the registry lights at the same time. It sits in <b>Automation</b>, directly under <b>Hosted agent</b> &mdash; the rooms that configure what Motir does on this project&rsquo;s behalf, and what it costs, sit together &mdash; and above Rules, which is user-authored automation and stays last. The glyph is <code class="k">Languages</code>, the one the per-work-item <b>Translate</b> control carries.</p>
+      <div class="panel-label">
+        Panel 0 &middot; <b>The access path</b> &mdash; a new row in the Automation group, between
+        Hosted agent and Rules
+      </div>
+      <p class="panel-note">
+        The room is reached the way every project-settings room is: its <b>rail row</b>, and the
+        matching <code class="k">settings-translation</code> command-palette deep link the registry
+        lights at the same time. It sits in <b>Automation</b>, directly under
+        <b>Hosted agent</b> &mdash; the rooms that configure what Motir does on this project&rsquo;s
+        behalf, and what it costs, sit together &mdash; and above Rules, which is user-authored
+        automation and stays last. The glyph is <code class="k">Languages</code>, the one the
+        per-work-item <b>Translate</b> control carries.
+      </p>
       <div class="panel">
         <div class="rail-solo">
-          <div class="set-rail"><div class="grp"><div class="h">General</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring</div></div><div class="grp"><div class="h">Access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp; permissions</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access</div></div><div class="grp"><div class="h">Work</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs</div></div><div class="grp"><div class="h">Automation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent</div><div class="rail-row active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules</div></div></div>
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp;
+                permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
           <div class="callout">
             <table class="statetable">
-              <thead><tr><th>Condition</th><th>The row</th><th>The route</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Condition</th>
+                  <th>The row</th>
+                  <th>The route</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td>holds <code class="k">project:administer</code></td><td>shown</td><td>renders the room, with the switch</td></tr>
-                <tr><td>holds <code class="k">project:browse</code> only</td><td>shown</td><td>renders the room, read-only (Panel 5)</td></tr>
-                <tr><td>cannot browse the project</td><td>absent</td><td>the project&rsquo;s not-found, as from every project room</td></tr>
-                <tr><td>holds neither key (a custom role)</td><td>absent</td><td>the area&rsquo;s no-access state (Panel 6)</td></tr>
+                <tr>
+                  <td>holds <code class="k">project:administer</code></td>
+                  <td>shown</td>
+                  <td>renders the room, with the switch</td>
+                </tr>
+                <tr>
+                  <td>holds <code class="k">project:browse</code> only</td>
+                  <td>shown</td>
+                  <td>renders the room, read-only (Panel 5)</td>
+                </tr>
+                <tr>
+                  <td>cannot browse the project</td>
+                  <td>absent</td>
+                  <td>the project&rsquo;s not-found, as from every project room</td>
+                </tr>
+                <tr>
+                  <td>holds neither key (a custom role)</td>
+                  <td>absent</td>
+                  <td>the area&rsquo;s no-access state (Panel 6)</td>
+                </tr>
               </tbody>
             </table>
             <p class="lands">
               <b>The room exists on every build.</b> It carries no build flag, so unlike Hosted
-              agent there is no availability condition. <b>Declaring the view key brings the
-              settings-area door back for every role that can browse the project, viewers
-              included</b> &mdash; the consequence the notes record in full.
+              agent there is no availability condition.
+              <b
+                >Declaring the view key brings the settings-area door back for every role that can
+                browse the project, viewers included</b
+              >
+              &mdash; the consequence the notes record in full.
             </p>
           </div>
         </div>
       </div>
-<div class="panel-label">Panel 0b &middot; <b>Arriving</b> &mdash; the settings area&rsquo;s own pending frame, composed rather than redrawn</div><p class="panel-note">While the room&rsquo;s read is in flight the pane shows the shipped in-page pending frame (<code class="k">design/settings/arrival.mock.html</code>, Panel B): header identical, one bordered block of muted bars, mounted after the page&rsquo;s own gate. The rail is not part of it. Nothing here is new.</p>
+      <div class="panel-label">
+        Panel 0b &middot; <b>Arriving</b> &mdash; the settings area&rsquo;s own pending frame,
+        composed rather than redrawn
+      </div>
+      <p class="panel-note">
+        While the room&rsquo;s read is in flight the pane shows the shipped in-page pending frame
+        (<code class="k">design/settings/arrival.mock.html</code>, Panel B): header identical, one
+        bordered block of muted bars, mounted after the page&rsquo;s own gate. The rail is not part
+        of it. Nothing here is new.
+      </p>
       <div class="panel">
         <div class="settings">
-          <div class="set-rail"><div class="grp"><div class="h">General</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring</div></div><div class="grp"><div class="h">Access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp; permissions</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access</div></div><div class="grp"><div class="h">Work</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs</div></div><div class="grp"><div class="h">Automation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent</div><div class="rail-row active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules</div></div></div>
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp;
+                permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
           <div class="set-pane">
             <div class="pane-head">
               <div class="eyebrow">Project settings</div>
               <h3>Translation</h3>
-              <p>How members who read in different languages see this project&rsquo;s work content.</p>
+              <p>
+                How members who read in different languages see this project&rsquo;s work content.
+              </p>
             </div>
             <div class="frame-pending" aria-busy="true">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <div class="bar" style="height:16px;width:8rem"></div>
-                <div class="btn-sk" style="height:28px;width:6rem"></div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 16px;
+                "
+              >
+                <div class="bar" style="height: 16px; width: 8rem"></div>
+                <div class="btn-sk" style="height: 28px; width: 6rem"></div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:12px">
-                <div style="display:flex;gap:12px;align-items:center"><div class="bar" style="height:32px;width:32px"></div><div class="bar" style="height:14px;width:40%"></div></div>
-                <div style="display:flex;gap:12px;align-items:center"><div class="bar" style="height:32px;width:32px"></div><div class="bar" style="height:14px;width:48%"></div></div>
-                <div style="display:flex;gap:12px;align-items:center"><div class="bar" style="height:32px;width:32px"></div><div class="bar" style="height:14px;width:56%"></div></div>
+              <div style="display: flex; flex-direction: column; gap: 12px">
+                <div style="display: flex; gap: 12px; align-items: center">
+                  <div class="bar" style="height: 32px; width: 32px"></div>
+                  <div class="bar" style="height: 14px; width: 40%"></div>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center">
+                  <div class="bar" style="height: 32px; width: 32px"></div>
+                  <div class="bar" style="height: 14px; width: 48%"></div>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center">
+                  <div class="bar" style="height: 32px; width: 32px"></div>
+                  <div class="bar" style="height: 14px; width: 56%"></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-<div class="panel-label">Panel 1 &middot; <b>Off &mdash; the default</b> &mdash; as every existing and every new project first finds it</div><p class="panel-note">One card, one switch. There is <b>no save footer</b>: the switch commits the moment it is pressed, because a save bar would show the setting on while nothing had been recorded. Off, the hint says where the per-work-item <b>Translate</b> button returns, and the cost line is already there &mdash; it is the consent wording, read before the press. The read-back below is empty for a project that has never been changed.</p>
+      <div class="panel-label">
+        Panel 1 &middot; <b>Off &mdash; the default</b> &mdash; as every existing and every new
+        project first finds it
+      </div>
+      <p class="panel-note">
+        One card, one switch. There is <b>no save footer</b>: the switch commits the moment it is
+        pressed, because a save bar would show the setting on while nothing had been recorded. Off,
+        the hint says where the per-work-item <b>Translate</b> button returns, and the cost line is
+        already there &mdash; it is the consent wording, read before the press. The read-back below
+        is empty for a project that has never been changed.
+      </p>
       <div class="panel">
         <div class="settings">
-          <div class="set-rail"><div class="grp"><div class="h">General</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring</div></div><div class="grp"><div class="h">Access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp; permissions</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access</div></div><div class="grp"><div class="h">Work</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs</div></div><div class="grp"><div class="h">Automation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent</div><div class="rail-row active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules</div></div></div>
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp;
+                permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
           <div class="set-pane">
             <div class="pane-head">
               <div class="eyebrow">Project settings</div>
               <h3>Translation</h3>
-              <p>How members who read in different languages see this project&rsquo;s work content.</p>
+              <p>
+                How members who read in different languages see this project&rsquo;s work content.
+              </p>
             </div>
             <section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                <div class="grow">
+                  <h4>Auto-translate</h4>
+                  <p>
+                    Let every member read this project&rsquo;s work in their own language, and still
+                    see the original.
+                  </p>
+                </div>
               </div>
-              
-            </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="sw-lab"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">Off. Work content shows as written, and a <b>Translate</b> button on each work item page translates that one work item when a member asks.</p></span>
+              <div class="scard-body">
+                <div class="sw-row">
+                  <span class="sw"
+                    ><button
+                      class="switch"
+                      type="button"
+                      role="switch"
+                      aria-checked="false"
+                      aria-labelledby="sw-lab"
+                    >
+                      <span class="knob"></span></button
+                  ></span>
+                  <span class="txt"
+                    ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                    <p class="hint">
+                      Off. Work content shows as written, and a <b>Translate</b> button on each work
+                      item page translates that one work item when a member asks.
+                    </p></span
+                  >
+                </div>
+                <hr class="rule" />
+                <p class="cost">
+                  Each field is translated once per language and kept, so a later reader of the same
+                  text pays nothing, and text already in the reader&rsquo;s language is never sent.
+                  Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost
+                  plus 50%. <a href="#" onclick="return false;">Usage &amp; cost</a>
+                </p>
               </div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
-            </div>
-          </section><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+            </section>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                <div class="grow">
+                  <h4>Change history</h4>
+                  <p>Who turned auto-translate on or off, and when.</p>
+                </div>
               </div>
-            </div>
-            <div class="scard-body">
-              <p class="hist-empty">No changes yet. Auto-translate has never been changed on this project.</p>
-            </div>
-          </section>
+              <div class="scard-body">
+                <p class="hist-empty">
+                  No changes yet. Auto-translate has never been changed on this project.
+                </p>
+              </div>
+            </section>
           </div>
         </div>
       </div>
-<div class="panel-label">Panel 2 &middot; <b>On</b> &mdash; the effect on readers is stated, and the cost line links to Usage &amp; cost</div><p class="panel-note">On, the card gains <b>What readers get</b> &mdash; three sentences, one for each place the setting reaches &mdash; and the hint changes to the on wording. The switch stays where it was. The read-back now holds the change that turned it on, newest first.</p>
+      <div class="panel-label">
+        Panel 2 &middot; <b>On</b> &mdash; the effect on readers is stated, and the cost line links
+        to Usage &amp; cost
+      </div>
+      <p class="panel-note">
+        On, the card gains <b>What readers get</b> &mdash; three sentences, one for each place the
+        setting reaches &mdash; and the hint changes to the on wording. The switch stays where it
+        was. The read-back now holds the change that turned it on, newest first.
+      </p>
       <div class="panel">
         <div class="settings">
-          <div class="set-rail"><div class="grp"><div class="h">General</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring</div></div><div class="grp"><div class="h">Access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp; permissions</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access</div></div><div class="grp"><div class="h">Work</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs</div></div><div class="grp"><div class="h">Automation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent</div><div class="rail-row active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules</div></div></div>
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp;
+                permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
           <div class="set-pane">
             <div class="pane-head">
               <div class="eyebrow">Project settings</div>
               <h3>Translation</h3>
-              <p>How members who read in different languages see this project&rsquo;s work content.</p>
+              <p>
+                How members who read in different languages see this project&rsquo;s work content.
+              </p>
             </div>
             <section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                <div class="grow">
+                  <h4>Auto-translate</h4>
+                  <p>
+                    Let every member read this project&rsquo;s work in their own language, and still
+                    see the original.
+                  </p>
+                </div>
               </div>
-              
-            </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch on" type="button" role="switch" aria-checked="true" aria-labelledby="sw-lab"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away.</p></span>
+              <div class="scard-body">
+                <div class="sw-row">
+                  <span class="sw"
+                    ><button
+                      class="switch on"
+                      type="button"
+                      role="switch"
+                      aria-checked="true"
+                      aria-labelledby="sw-lab"
+                    >
+                      <span class="knob"></span></button
+                  ></span>
+                  <span class="txt"
+                    ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                    <p class="hint">
+                      On. Every member reads work content in their own interface language without
+                      pressing anything, and <b>Show original</b> is always one press away.
+                    </p></span
+                  >
+                </div>
+                <hr class="rule" />
+                <div>
+                  <div class="eyebrow effects-h">What readers get</div>
+                  <ul class="effects">
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Work item pages and quick views show every field in the reader&rsquo;s
+                        language: the title, description, explanation and each to-do.</span
+                      >
+                    </li>
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Lists, boards, the backlog, sprints, the roadmap, ready and triage show
+                        titles in the reader&rsquo;s language, with a <b>Show original</b> switch on
+                        each view.</span
+                      >
+                    </li>
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Agents, the API and emails always receive the original text, and editing
+                        always opens the original.</span
+                      >
+                    </li>
+                  </ul>
+                </div>
+                <hr class="rule" />
+                <p class="cost">
+                  Each field is translated once per language and kept, so a later reader of the same
+                  text pays nothing, and text already in the reader&rsquo;s language is never sent.
+                  Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost
+                  plus 50%. <a href="#" onclick="return false;">Usage &amp; cost</a>
+                </p>
               </div>
-              <hr class="rule" />
-              <div>
-                <div class="eyebrow effects-h">What readers get</div>
-                <ul class="effects">
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Work item pages and quick views show every field in the reader&rsquo;s language: the title, description, explanation and each to-do.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader&rsquo;s language, with a <b>Show original</b> switch on each view.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Agents, the API and emails always receive the original text, and editing always opens the original.</span></li>
-                </ul>
+            </section>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                <div class="grow">
+                  <h4>Change history</h4>
+                  <p>Who turned auto-translate on or off, and when.</p>
+                </div>
               </div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
-            </div>
-          </section><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+              <div class="scard-body">
+                <div class="hist">
+                  <div class="hist-cols" aria-hidden="true">
+                    <span>Who</span><span>Change</span><span>When</span>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Mina Park</span
+                    ><span class="chg" aria-label="from Off to On"
+                      ><span class="pill pill-neutral">Off</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-done">On</span></span
+                    ><time>16 Oct 2026, 14:05</time>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Jonas Weber</span
+                    ><span class="chg" aria-label="from On to Off"
+                      ><span class="pill pill-done">On</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-neutral">Off</span></span
+                    ><time>9 Oct 2026, 09:41</time>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Mina Park</span
+                    ><span class="chg" aria-label="from Off to On"
+                      ><span class="pill pill-neutral">Off</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-done">On</span></span
+                    ><time>2 Oct 2026, 17:12</time>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="scard-body">
-              <div class="hist"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>16 Oct 2026, 14:05</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>9 Oct 2026, 09:41</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>2 Oct 2026, 17:12</time></div></div>
-            </div>
-          </section>
+            </section>
           </div>
         </div>
       </div>
-<div class="panel-label">Panel 3 &middot; <b>In flight, and a flip that failed</b> &mdash; the switch is never left lying about the saved value</div><p class="panel-note"><b>3a In flight.</b> The switch shows the value being recorded, dimmed, with <code class="k">aria-busy</code>; <b>Saving&hellip;</b> sits under the hint; the row is not interactive and the rest of the card stays readable. <b>3b Failed.</b> The switch returns to the value it held <i>before</i> the attempt, an inline error names what happened and offers <b>Try again</b>, and the read-back is unchanged because nothing was recorded.</p>
+      <div class="panel-label">
+        Panel 3 &middot; <b>In flight, and a flip that failed</b> &mdash; the switch is never left
+        lying about the saved value
+      </div>
+      <p class="panel-note">
+        <b>3a In flight.</b> The switch shows the value being recorded, dimmed, with
+        <code class="k">aria-busy</code>; <b>Saving&hellip;</b> sits under the hint; the row is not
+        interactive and the rest of the card stays readable. <b>3b Failed.</b> The switch returns to
+        the value it held <i>before</i> the attempt, an inline error names what happened and offers
+        <b>Try again</b>, and the read-back is unchanged because nothing was recorded.
+      </p>
       <div class="panel">
         <div class="pair">
-          <div><p class="sub-cap">3a &middot; turning it on &mdash; in flight</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
+          <div>
+            <p class="sub-cap">3a &middot; turning it on &mdash; in flight</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                    <div class="grow">
+                      <h4>Auto-translate</h4>
+                      <p>
+                        Let every member read this project&rsquo;s work in their own language, and
+                        still see the original.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="sw-row">
+                      <span class="sw"
+                        ><button
+                          class="switch on"
+                          type="button"
+                          role="switch"
+                          aria-checked="true"
+                          aria-labelledby="sw-lab"
+                          aria-busy="true"
+                        >
+                          <span class="knob"></span></button
+                      ></span>
+                      <span class="txt"
+                        ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                        <p class="hint">
+                          On. Every member reads work content in their own interface language
+                          without pressing anything, and <b>Show original</b> is always one press
+                          away.
+                        </p>
+                        <span class="state" role="status"
+                          ><span class="spin"></span>Saving&hellip;</span
+                        ></span
+                      >
+                    </div>
+                    <hr class="rule" />
+                    <div>
+                      <div class="eyebrow effects-h">What readers get</div>
+                      <ul class="effects">
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Work item pages and quick views show every field in the reader&rsquo;s
+                            language: the title, description, explanation and each to-do.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Lists, boards, the backlog, sprints, the roadmap, ready and triage show
+                            titles in the reader&rsquo;s language, with a
+                            <b>Show original</b> switch on each view.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Agents, the API and emails always receive the original text, and
+                            editing always opens the original.</span
+                          >
+                        </li>
+                      </ul>
+                    </div>
+                    <hr class="rule" />
+                    <p class="cost">
+                      Each field is translated once per language and kept, so a later reader of the
+                      same text pays nothing, and text already in the reader&rsquo;s language is
+                      never sent. Translation spends your organization&rsquo;s AI credits at the
+                      model&rsquo;s cost plus 50%.
+                      <a href="#" onclick="return false;">Usage &amp; cost</a>
+                    </p>
+                  </div>
+                </section>
               </div>
-              
             </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch on" type="button" role="switch" aria-checked="true" aria-labelledby="sw-lab" aria-busy="true"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away.</p><span class="state" role="status"><span class="spin"></span>Saving&hellip;</span></span>
+          </div>
+          <div>
+            <p class="sub-cap">3b &middot; the flip failed &mdash; switch back to Off</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                    <div class="grow">
+                      <h4>Auto-translate</h4>
+                      <p>
+                        Let every member read this project&rsquo;s work in their own language, and
+                        still see the original.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="sw-row">
+                      <span class="sw"
+                        ><button
+                          class="switch"
+                          type="button"
+                          role="switch"
+                          aria-checked="false"
+                          aria-labelledby="sw-lab"
+                        >
+                          <span class="knob"></span></button
+                      ></span>
+                      <span class="txt"
+                        ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                        <p class="hint">
+                          Off. Work content shows as written, and a <b>Translate</b> button on each
+                          work item page translates that one work item when a member asks.
+                        </p></span
+                      >
+                    </div>
+                    <div class="inline-err" role="alert">
+                      <svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg
+                      ><span>Couldn&rsquo;t turn auto-translate on. Nothing was changed.</span>
+                      <button class="btn btn-secondary btn-sm" type="button">
+                        <svg class="i sm" aria-hidden="true"><use href="#i-refresh-cw" /></svg>Try
+                        again
+                      </button>
+                    </div>
+                    <hr class="rule" />
+                    <p class="cost">
+                      Each field is translated once per language and kept, so a later reader of the
+                      same text pays nothing, and text already in the reader&rsquo;s language is
+                      never sent. Translation spends your organization&rsquo;s AI credits at the
+                      model&rsquo;s cost plus 50%.
+                      <a href="#" onclick="return false;">Usage &amp; cost</a>
+                    </p>
+                  </div>
+                </section>
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <p class="hist-empty">
+                      No changes yet. Auto-translate has never been changed on this project.
+                    </p>
+                  </div>
+                </section>
               </div>
-              <hr class="rule" />
-              <div>
-                <div class="eyebrow effects-h">What readers get</div>
-                <ul class="effects">
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Work item pages and quick views show every field in the reader&rsquo;s language: the title, description, explanation and each to-do.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader&rsquo;s language, with a <b>Show original</b> switch on each view.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Agents, the API and emails always receive the original text, and editing always opens the original.</span></li>
-                </ul>
-              </div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
             </div>
-          </section></div></div></div>
-          <div><p class="sub-cap">3b &middot; the flip failed &mdash; switch back to Off</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
-              </div>
-              
-            </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="sw-lab"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">Off. Work content shows as written, and a <b>Translate</b> button on each work item page translates that one work item when a member asks.</p></span>
-              </div>
-              <div class="inline-err" role="alert"><svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg><span>Couldn&rsquo;t turn auto-translate on. Nothing was changed.</span>
-                <button class="btn btn-secondary btn-sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh-cw" /></svg>Try again</button></div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
-            </div>
-          </section><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
-              </div>
-            </div>
-            <div class="scard-body">
-              <p class="hist-empty">No changes yet. Auto-translate has never been changed on this project.</p>
-            </div>
-          </section></div></div></div>
+          </div>
         </div>
       </div>
-<div class="panel-label">Panel 4 &middot; <b>No AI credit</b> &mdash; the setting is on, or is being turned on, in an organization with no translation credit</div><p class="panel-note">Turning it on is allowed: the setting is consent to spend, and the credit balance changes without the setting changing. A peach callout says translation needs AI credits, that work content shows as written, and that nothing is billed. <b>4a</b> an organization owner or admin gets <b>Add credits</b> (to billing); <b>4b</b> a project admin who is neither is told who can. The wording is the consent; the money itself is another page&rsquo;s, linked and never rendered here.</p>
+      <div class="panel-label">
+        Panel 4 &middot; <b>No AI credit</b> &mdash; the setting is on, or is being turned on, in an
+        organization with no translation credit
+      </div>
+      <p class="panel-note">
+        Turning it on is allowed: the setting is consent to spend, and the credit balance changes
+        without the setting changing. A peach callout says translation needs AI credits, that work
+        content shows as written, and that nothing is billed. <b>4a</b> an organization owner or
+        admin gets <b>Add credits</b> (to billing); <b>4b</b> a project admin who is neither is told
+        who can. The wording is the consent; the money itself is another page&rsquo;s, linked and
+        never rendered here.
+      </p>
       <div class="panel">
         <div class="pair">
-          <div><p class="sub-cap">4a &middot; owner or admin of the organization</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
+          <div>
+            <p class="sub-cap">4a &middot; owner or admin of the organization</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                    <div class="grow">
+                      <h4>Auto-translate</h4>
+                      <p>
+                        Let every member read this project&rsquo;s work in their own language, and
+                        still see the original.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="sw-row">
+                      <span class="sw"
+                        ><button
+                          class="switch on"
+                          type="button"
+                          role="switch"
+                          aria-checked="true"
+                          aria-labelledby="sw-lab"
+                        >
+                          <span class="knob"></span></button
+                      ></span>
+                      <span class="txt"
+                        ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                        <p class="hint">
+                          On. Every member reads work content in their own interface language
+                          without pressing anything, and <b>Show original</b> is always one press
+                          away.
+                        </p></span
+                      >
+                    </div>
+                    <div class="co peach" role="status">
+                      <svg class="i sm" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+                      <div>
+                        <b>Translation needs AI credits.</b> Work content shows as written until
+                        credit is added. Nothing is billed.
+                        <div class="co-act">
+                          <a href="#" onclick="return false;"
+                            >Add credits
+                            <svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ></a>
+                        </div>
+                      </div>
+                    </div>
+                    <hr class="rule" />
+                    <div>
+                      <div class="eyebrow effects-h">What readers get</div>
+                      <ul class="effects">
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Work item pages and quick views show every field in the reader&rsquo;s
+                            language: the title, description, explanation and each to-do.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Lists, boards, the backlog, sprints, the roadmap, ready and triage show
+                            titles in the reader&rsquo;s language, with a
+                            <b>Show original</b> switch on each view.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Agents, the API and emails always receive the original text, and
+                            editing always opens the original.</span
+                          >
+                        </li>
+                      </ul>
+                    </div>
+                    <hr class="rule" />
+                    <p class="cost">
+                      Each field is translated once per language and kept, so a later reader of the
+                      same text pays nothing, and text already in the reader&rsquo;s language is
+                      never sent. Translation spends your organization&rsquo;s AI credits at the
+                      model&rsquo;s cost plus 50%.
+                      <a href="#" onclick="return false;">Usage &amp; cost</a>
+                    </p>
+                  </div>
+                </section>
               </div>
-              
             </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch on" type="button" role="switch" aria-checked="true" aria-labelledby="sw-lab"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away.</p></span>
+          </div>
+          <div>
+            <p class="sub-cap">4b &middot; project admin, not an organization admin</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                    <div class="grow">
+                      <h4>Auto-translate</h4>
+                      <p>
+                        Let every member read this project&rsquo;s work in their own language, and
+                        still see the original.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="sw-row">
+                      <span class="sw"
+                        ><button
+                          class="switch on"
+                          type="button"
+                          role="switch"
+                          aria-checked="true"
+                          aria-labelledby="sw-lab"
+                        >
+                          <span class="knob"></span></button
+                      ></span>
+                      <span class="txt"
+                        ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                        <p class="hint">
+                          On. Every member reads work content in their own interface language
+                          without pressing anything, and <b>Show original</b> is always one press
+                          away.
+                        </p></span
+                      >
+                    </div>
+                    <div class="co peach" role="status">
+                      <svg class="i sm" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+                      <div>
+                        <b>Translation needs AI credits.</b> Work content shows as written until
+                        credit is added. Nothing is billed. An organization owner or admin can add
+                        them.
+                      </div>
+                    </div>
+                    <hr class="rule" />
+                    <div>
+                      <div class="eyebrow effects-h">What readers get</div>
+                      <ul class="effects">
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Work item pages and quick views show every field in the reader&rsquo;s
+                            language: the title, description, explanation and each to-do.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Lists, boards, the backlog, sprints, the roadmap, ready and triage show
+                            titles in the reader&rsquo;s language, with a
+                            <b>Show original</b> switch on each view.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Agents, the API and emails always receive the original text, and
+                            editing always opens the original.</span
+                          >
+                        </li>
+                      </ul>
+                    </div>
+                    <hr class="rule" />
+                    <p class="cost">
+                      Each field is translated once per language and kept, so a later reader of the
+                      same text pays nothing, and text already in the reader&rsquo;s language is
+                      never sent. Translation spends your organization&rsquo;s AI credits at the
+                      model&rsquo;s cost plus 50%.
+                      <a href="#" onclick="return false;">Usage &amp; cost</a>
+                    </p>
+                  </div>
+                </section>
               </div>
-              <div class="co peach" role="status">
-                <svg class="i sm" aria-hidden="true"><use href="#i-circle-alert" /></svg>
-                <div><b>Translation needs AI credits.</b> Work content shows as written until credit is added. Nothing is billed.
-                  <div class="co-act"><a href="#" onclick="return false">Add credits <svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg></a></div></div>
-              </div>
-              <hr class="rule" />
-              <div>
-                <div class="eyebrow effects-h">What readers get</div>
-                <ul class="effects">
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Work item pages and quick views show every field in the reader&rsquo;s language: the title, description, explanation and each to-do.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader&rsquo;s language, with a <b>Show original</b> switch on each view.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Agents, the API and emails always receive the original text, and editing always opens the original.</span></li>
-                </ul>
-              </div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
             </div>
-          </section></div></div></div>
-          <div><p class="sub-cap">4b &middot; project admin, not an organization admin</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
-              </div>
-              
-            </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch on" type="button" role="switch" aria-checked="true" aria-labelledby="sw-lab"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away.</p></span>
-              </div>
-              <div class="co peach" role="status">
-                <svg class="i sm" aria-hidden="true"><use href="#i-circle-alert" /></svg>
-                <div><b>Translation needs AI credits.</b> Work content shows as written until credit is added. Nothing is billed. An organization owner or admin can add them.</div>
-              </div>
-              <hr class="rule" />
-              <div>
-                <div class="eyebrow effects-h">What readers get</div>
-                <ul class="effects">
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Work item pages and quick views show every field in the reader&rsquo;s language: the title, description, explanation and each to-do.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader&rsquo;s language, with a <b>Show original</b> switch on each view.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Agents, the API and emails always receive the original text, and editing always opens the original.</span></li>
-                </ul>
-              </div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
-            </div>
-          </section></div></div></div>
+          </div>
         </div>
       </div>
-<div class="panel-label">Panel 5 &middot; <b>Read-only</b> &mdash; <code class="k">project:browse</code> without <code class="k">project:administer</code></div><p class="panel-note">The setting&rsquo;s <b>value</b> renders in place of the control &mdash; the switch is <b>absent rather than disabled</b>, because a disabled switch reads as a state to be unlocked. The shipped <b>Read-only</b> pill sits in the card head, one line says who may change it, and the read-back stays readable. Drawn in both values.</p>
+      <div class="panel-label">
+        Panel 5 &middot; <b>Read-only</b> &mdash; <code class="k">project:browse</code> without
+        <code class="k">project:administer</code>
+      </div>
+      <p class="panel-note">
+        The setting&rsquo;s <b>value</b> renders in place of the control &mdash; the switch is
+        <b>absent rather than disabled</b>, because a disabled switch reads as a state to be
+        unlocked. The shipped <b>Read-only</b> pill sits in the card head, one line says who may
+        change it, and the read-back stays readable. Drawn in both values.
+      </p>
       <div class="panel">
         <div class="pair">
-          <div><p class="sub-cap">5a &middot; read-only, off</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
+          <div>
+            <p class="sub-cap">5a &middot; read-only, off</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                    <div class="grow">
+                      <h4>Auto-translate</h4>
+                      <p>
+                        Let every member read this project&rsquo;s work in their own language, and
+                        still see the original.
+                      </p>
+                    </div>
+                    <div class="act"><span class="pill pill-neutral">Read-only</span></div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="val-line">
+                      <span class="lab">Auto-translate work content</span
+                      ><span class="pill pill-neutral">Off</span>
+                    </div>
+                    <p class="hint rd-note">
+                      Auto-translate is off for this project. Work content shows as written.
+                    </p>
+                    <p class="rd-note">Only a project admin can change auto-translate.</p>
+                  </div>
+                </section>
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="hist">
+                      <div class="hist-cols" aria-hidden="true">
+                        <span>Who</span><span>Change</span><span>When</span>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>16 Oct 2026, 14:05</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Jonas Weber</span
+                        ><span class="chg" aria-label="from On to Off"
+                          ><span class="pill pill-done">On</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-neutral">Off</span></span
+                        ><time>9 Oct 2026, 09:41</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>2 Oct 2026, 17:12</time>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
-              <div class="act"><span class="pill pill-neutral">Read-only</span></div>
             </div>
-            <div class="scard-body">
-              <div class="val-line"><span class="lab">Auto-translate work content</span><span class="pill pill-neutral">Off</span></div>
-              <p class="hint rd-note">Auto-translate is off for this project. Work content shows as written.</p>
-              <p class="rd-note">Only a project admin can change auto-translate.</p>
-            </div>
-          </section><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+          </div>
+          <div>
+            <p class="sub-cap">5b &middot; read-only, on</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                    <div class="grow">
+                      <h4>Auto-translate</h4>
+                      <p>
+                        Let every member read this project&rsquo;s work in their own language, and
+                        still see the original.
+                      </p>
+                    </div>
+                    <div class="act"><span class="pill pill-neutral">Read-only</span></div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="val-line">
+                      <span class="lab">Auto-translate work content</span
+                      ><span class="pill pill-done">On</span>
+                    </div>
+                    <p class="hint rd-note">
+                      Auto-translate is on for this project. Work content shows in each
+                      member&rsquo;s own language.
+                    </p>
+                    <p class="rd-note">Only a project admin can change auto-translate.</p>
+                    <hr class="rule" />
+                    <div>
+                      <div class="eyebrow effects-h">What readers get</div>
+                      <ul class="effects">
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Work item pages and quick views show every field in the reader&rsquo;s
+                            language: the title, description, explanation and each to-do.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Lists, boards, the backlog, sprints, the roadmap, ready and triage show
+                            titles in the reader&rsquo;s language, with a
+                            <b>Show original</b> switch on each view.</span
+                          >
+                        </li>
+                        <li>
+                          <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                          ><span
+                            >Agents, the API and emails always receive the original text, and
+                            editing always opens the original.</span
+                          >
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="hist">
+                      <div class="hist-cols" aria-hidden="true">
+                        <span>Who</span><span>Change</span><span>When</span>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>16 Oct 2026, 14:05</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Jonas Weber</span
+                        ><span class="chg" aria-label="from On to Off"
+                          ><span class="pill pill-done">On</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-neutral">Off</span></span
+                        ><time>9 Oct 2026, 09:41</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>2 Oct 2026, 17:12</time>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
-            <div class="scard-body">
-              <div class="hist"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>16 Oct 2026, 14:05</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>9 Oct 2026, 09:41</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>2 Oct 2026, 17:12</time></div></div>
-            </div>
-          </section></div></div></div>
-          <div><p class="sub-cap">5b &middot; read-only, on</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
-              </div>
-              <div class="act"><span class="pill pill-neutral">Read-only</span></div>
-            </div>
-            <div class="scard-body">
-              <div class="val-line"><span class="lab">Auto-translate work content</span><span class="pill pill-done">On</span></div>
-              <p class="hint rd-note">Auto-translate is on for this project. Work content shows in each member&rsquo;s own language.</p>
-              <p class="rd-note">Only a project admin can change auto-translate.</p>
-              <hr class="rule" />
-              <div>
-                <div class="eyebrow effects-h">What readers get</div>
-                <ul class="effects">
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Work item pages and quick views show every field in the reader&rsquo;s language: the title, description, explanation and each to-do.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader&rsquo;s language, with a <b>Show original</b> switch on each view.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Agents, the API and emails always receive the original text, and editing always opens the original.</span></li>
-                </ul>
-              </div>
-            </div>
-          </section><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
-              </div>
-            </div>
-            <div class="scard-body">
-              <div class="hist"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>16 Oct 2026, 14:05</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>9 Oct 2026, 09:41</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>2 Oct 2026, 17:12</time></div></div>
-            </div>
-          </section></div></div></div>
+          </div>
         </div>
       </div>
-<div class="panel-label">Panel 6 &middot; <b>The door to the refused state</b> &mdash; drawn for the record; no actor reaches it</div><p class="panel-note">A room whose view key an actor does not hold renders the area&rsquo;s shipped <code class="k">NoAccessState</code> inside the chrome, with its own section sentence (<code class="k">settings.noAccess.section.translation</code>). With <code class="k">project:browse</code> as the view key it is <b>unreachable</b>: an actor who cannot browse never reaches the area (the project&rsquo;s not-found), and every built-in role that holds the write key holds the view key (the closure check, in the notes). A custom role built without browse is the one way here.</p>
+      <div class="panel-label">
+        Panel 6 &middot; <b>The door to the refused state</b> &mdash; drawn for the record; no actor
+        reaches it
+      </div>
+      <p class="panel-note">
+        A room whose view key an actor does not hold renders the area&rsquo;s shipped
+        <code class="k">NoAccessState</code> inside the chrome, with its own section sentence (<code
+          class="k"
+          >settings.noAccess.section.translation</code
+        >). With <code class="k">project:browse</code> as the view key it is <b>unreachable</b>: an
+        actor who cannot browse never reaches the area (the project&rsquo;s not-found), and every
+        built-in role that holds the write key holds the view key (the closure check, in the notes).
+        A custom role built without browse is the one way here.
+      </p>
       <div class="panel">
         <div class="settings">
-          <div class="set-rail"><div class="grp"><div class="h">General</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring</div></div><div class="grp"><div class="h">Access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp; permissions</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access</div></div><div class="grp"><div class="h">Work</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs</div></div><div class="grp"><div class="h">Automation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent</div><div class="rail-row active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules</div></div></div>
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp;
+                permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
           <div class="set-pane">
             <div class="refused">
               <svg class="i lg" aria-hidden="true"><use href="#i-lock" /></svg>
               <h4>Admins only</h4>
-              <p>Whether this project&rsquo;s work content is translated for each reader is shown to people who can read the project&rsquo;s work items. Ask a project admin if you need to see it.</p>
+              <p>
+                Whether this project&rsquo;s work content is translated for each reader is shown to
+                people who can read the project&rsquo;s work items. Ask a project admin if you need
+                to see it.
+              </p>
               <button class="btn btn-primary" type="button">Back to Details</button>
             </div>
           </div>
         </div>
       </div>
-<div class="panel-label">Panel 7 &middot; <b>The change history</b> &mdash; empty, populated in both directions, capped, loading and failed</div><p class="panel-note">Four fields per change and no fifth &mdash; <b>who</b>, the value <b>from</b>, the value <b>to</b> (drawn as one Change cell, <i>from &rarr; to</i>) and <b>when</b> &mdash; newest first. The first populated row is off&rarr;on, the second on&rarr;off. When the read returned fewer rows than the total it reports, the section says so: a truncated list that does not say it is truncated is the defect the capped state exists to prevent. The setting above stays readable in loading and failed.</p>
+      <div class="panel-label">
+        Panel 7 &middot; <b>The change history</b> &mdash; empty, populated in both directions,
+        capped, loading and failed
+      </div>
+      <p class="panel-note">
+        Four fields per change and no fifth &mdash; <b>who</b>, the value <b>from</b>, the value
+        <b>to</b> (drawn as one Change cell, <i>from &rarr; to</i>) and <b>when</b> &mdash; newest
+        first. The first populated row is off&rarr;on, the second on&rarr;off. When the read
+        returned fewer rows than the total it reports, the section says so: a truncated list that
+        does not say it is truncated is the defect the capped state exists to prevent. The setting
+        above stays readable in loading and failed.
+      </p>
       <div class="panel">
         <div class="pair">
-          <div><p class="sub-cap">7a &middot; empty</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+          <div>
+            <p class="sub-cap">7a &middot; empty</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <p class="hist-empty">
+                      No changes yet. Auto-translate has never been changed on this project.
+                    </p>
+                  </div>
+                </section>
               </div>
             </div>
-            <div class="scard-body">
-              <p class="hist-empty">No changes yet. Auto-translate has never been changed on this project.</p>
-            </div>
-          </section></div></div></div>
-          <div><p class="sub-cap">7b &middot; populated &mdash; off&rarr;on and on&rarr;off</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+          </div>
+          <div>
+            <p class="sub-cap">7b &middot; populated &mdash; off&rarr;on and on&rarr;off</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="hist">
+                      <div class="hist-cols" aria-hidden="true">
+                        <span>Who</span><span>Change</span><span>When</span>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>16 Oct 2026, 14:05</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Jonas Weber</span
+                        ><span class="chg" aria-label="from On to Off"
+                          ><span class="pill pill-done">On</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-neutral">Off</span></span
+                        ><time>9 Oct 2026, 09:41</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>2 Oct 2026, 17:12</time>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
-            <div class="scard-body">
-              <div class="hist"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>16 Oct 2026, 14:05</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>9 Oct 2026, 09:41</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>2 Oct 2026, 17:12</time></div></div>
-            </div>
-          </section></div></div></div>
-          <div><p class="sub-cap">7c &middot; capped &mdash; the total is stated</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+          </div>
+          <div>
+            <p class="sub-cap">7c &middot; capped &mdash; the total is stated</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="hist">
+                      <div class="hist-cols" aria-hidden="true">
+                        <span>Who</span><span>Change</span><span>When</span>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>16 Oct 2026, 14:05</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Jonas Weber</span
+                        ><span class="chg" aria-label="from On to Off"
+                          ><span class="pill pill-done">On</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-neutral">Off</span></span
+                        ><time>9 Oct 2026, 09:41</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>2 Oct 2026, 17:12</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Jonas Weber</span
+                        ><span class="chg" aria-label="from On to Off"
+                          ><span class="pill pill-done">On</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-neutral">Off</span></span
+                        ><time>25 Sep 2026, 11:30</time>
+                      </div>
+                      <div class="hist-row">
+                        <span class="who">Mina Park</span
+                        ><span class="chg" aria-label="from Off to On"
+                          ><span class="pill pill-neutral">Off</span
+                          ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                          ><span class="pill pill-done">On</span></span
+                        ><time>24 Sep 2026, 16:02</time>
+                      </div>
+                    </div>
+                    <p class="hist-cap">Showing the 20 most recent of 47 changes.</p>
+                  </div>
+                </section>
               </div>
             </div>
-            <div class="scard-body">
-              <div class="hist"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>16 Oct 2026, 14:05</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>9 Oct 2026, 09:41</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>2 Oct 2026, 17:12</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>25 Sep 2026, 11:30</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>24 Sep 2026, 16:02</time></div></div><p class="hist-cap">Showing the 20 most recent of 47 changes.</p>
-            </div>
-          </section></div></div></div>
-          <div><p class="sub-cap">7d &middot; loading &mdash; three skeleton rows</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+          </div>
+          <div>
+            <p class="sub-cap">7d &middot; loading &mdash; three skeleton rows</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="hist" aria-busy="true">
+                      <div class="hist-cols" aria-hidden="true">
+                        <span>Who</span><span>Change</span><span>When</span>
+                      </div>
+                      <div class="hist-row">
+                        <span class="sk" style="width: 9rem"></span
+                        ><span class="sk pill-sk" style="width: 7rem"></span
+                        ><span class="sk" style="width: 8rem"></span>
+                      </div>
+                      <div class="hist-row">
+                        <span class="sk" style="width: 9rem"></span
+                        ><span class="sk pill-sk" style="width: 7rem"></span
+                        ><span class="sk" style="width: 8rem"></span>
+                      </div>
+                      <div class="hist-row">
+                        <span class="sk" style="width: 9rem"></span
+                        ><span class="sk pill-sk" style="width: 7rem"></span
+                        ><span class="sk" style="width: 8rem"></span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
-            <div class="scard-body">
-              <div class="hist" aria-busy="true"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="sk" style="width:9rem"></span><span class="sk pill-sk" style="width:7rem"></span><span class="sk" style="width:8rem"></span></div><div class="hist-row"><span class="sk" style="width:9rem"></span><span class="sk pill-sk" style="width:7rem"></span><span class="sk" style="width:8rem"></span></div><div class="hist-row"><span class="sk" style="width:9rem"></span><span class="sk pill-sk" style="width:7rem"></span><span class="sk" style="width:8rem"></span></div></div>
-            </div>
-          </section></div></div></div>
-          <div><p class="sub-cap">7e &middot; failed &mdash; with a retry</p><div class="bare"><div class="stack"><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+          </div>
+          <div>
+            <p class="sub-cap">7e &middot; failed &mdash; with a retry</p>
+            <div class="bare">
+              <div class="stack">
+                <section class="scard" data-surface="card">
+                  <div class="scard-head">
+                    <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                    <div class="grow">
+                      <h4>Change history</h4>
+                      <p>Who turned auto-translate on or off, and when.</p>
+                    </div>
+                  </div>
+                  <div class="scard-body">
+                    <div class="co peach" role="status">
+                      <svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg>
+                      <div>
+                        <b>Couldn&rsquo;t load the change history.</b> The setting above is
+                        unchanged.
+                        <div class="co-act">
+                          <button class="btn btn-secondary btn-sm" type="button">
+                            <svg class="i sm" aria-hidden="true"><use href="#i-refresh-cw" /></svg
+                            >Try again
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
-            <div class="scard-body">
-              <div class="co peach" role="status"><svg class="i sm" aria-hidden="true"><use href="#i-triangle-alert" /></svg>
-                <div><b>Couldn&rsquo;t load the change history.</b> The setting above is unchanged.
-                  <div class="co-act"><button class="btn btn-secondary btn-sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh-cw" /></svg>Try again</button></div></div></div>
-            </div>
-          </section></div></div></div>
+          </div>
         </div>
       </div>
-<div class="panel-label">Panel 8 &middot; <b>Dark</b> &mdash; token parity &mdash; the on state with its read-back and the no-credit callout</div><p class="panel-note">Nothing is redrawn: the same markup under the shipped dark colour block. Every ink is a <code class="k">--el-*</code> token, so the contrast pairs hold without a dark-only rule.</p>
+      <div class="panel-label">
+        Panel 8 &middot; <b>Dark</b> &mdash; token parity &mdash; the on state with its read-back
+        and the no-credit callout
+      </div>
+      <p class="panel-note">
+        Nothing is redrawn: the same markup under the shipped dark colour block. Every ink is a
+        <code class="k">--el-*</code> token, so the contrast pairs hold without a dark-only rule.
+      </p>
       <div class="panel">
         <div class="settings" data-theme="dark" data-appearance-scope>
-          <div class="set-rail"><div class="grp"><div class="h">General</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring</div></div><div class="grp"><div class="h">Access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp; permissions</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access</div></div><div class="grp"><div class="h">Work</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs</div></div><div class="grp"><div class="h">Automation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent</div><div class="rail-row active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation</div><div class="rail-row"><svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules</div></div></div>
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-activity" /></svg>Monitoring
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-globe" /></svg>Public page
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-link-2" /></svg>Public address
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield" /></svg>Roles &amp;
+                permissions
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-key-round" /></svg>Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-workflow" /></svg>Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-shield-check" /></svg>Approvals
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-gauge" /></svg>Estimation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-tag" /></svg>Fields
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-box" /></svg>Components
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Bugs
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Automation</div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-cloud" /></svg>Hosted agent
+              </div>
+              <div class="rail-row active" aria-current="page">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>Translation
+              </div>
+              <div class="rail-row">
+                <svg class="i" aria-hidden="true"><use href="#i-bot" /></svg>Rules
+              </div>
+            </div>
+          </div>
           <div class="set-pane">
             <div class="pane-head">
               <div class="eyebrow">Project settings</div>
               <h3>Translation</h3>
-              <p>How members who read in different languages see this project&rsquo;s work content.</p>
+              <p>
+                How members who read in different languages see this project&rsquo;s work content.
+              </p>
             </div>
             <section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                <div class="grow">
+                  <h4>Auto-translate</h4>
+                  <p>
+                    Let every member read this project&rsquo;s work in their own language, and still
+                    see the original.
+                  </p>
+                </div>
               </div>
-              
-            </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch on" type="button" role="switch" aria-checked="true" aria-labelledby="sw-lab"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away.</p></span>
+              <div class="scard-body">
+                <div class="sw-row">
+                  <span class="sw"
+                    ><button
+                      class="switch on"
+                      type="button"
+                      role="switch"
+                      aria-checked="true"
+                      aria-labelledby="sw-lab"
+                    >
+                      <span class="knob"></span></button
+                  ></span>
+                  <span class="txt"
+                    ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                    <p class="hint">
+                      On. Every member reads work content in their own interface language without
+                      pressing anything, and <b>Show original</b> is always one press away.
+                    </p></span
+                  >
+                </div>
+                <div class="co peach" role="status">
+                  <svg class="i sm" aria-hidden="true"><use href="#i-circle-alert" /></svg>
+                  <div>
+                    <b>Translation needs AI credits.</b> Work content shows as written until credit
+                    is added. Nothing is billed.
+                    <div class="co-act">
+                      <a href="#" onclick="return false;"
+                        >Add credits
+                        <svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ></a>
+                    </div>
+                  </div>
+                </div>
+                <hr class="rule" />
+                <div>
+                  <div class="eyebrow effects-h">What readers get</div>
+                  <ul class="effects">
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Work item pages and quick views show every field in the reader&rsquo;s
+                        language: the title, description, explanation and each to-do.</span
+                      >
+                    </li>
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Lists, boards, the backlog, sprints, the roadmap, ready and triage show
+                        titles in the reader&rsquo;s language, with a <b>Show original</b> switch on
+                        each view.</span
+                      >
+                    </li>
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Agents, the API and emails always receive the original text, and editing
+                        always opens the original.</span
+                      >
+                    </li>
+                  </ul>
+                </div>
+                <hr class="rule" />
+                <p class="cost">
+                  Each field is translated once per language and kept, so a later reader of the same
+                  text pays nothing, and text already in the reader&rsquo;s language is never sent.
+                  Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost
+                  plus 50%. <a href="#" onclick="return false;">Usage &amp; cost</a>
+                </p>
               </div>
-              <div class="co peach" role="status">
-                <svg class="i sm" aria-hidden="true"><use href="#i-circle-alert" /></svg>
-                <div><b>Translation needs AI credits.</b> Work content shows as written until credit is added. Nothing is billed.
-                  <div class="co-act"><a href="#" onclick="return false">Add credits <svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg></a></div></div>
+            </section>
+            <section class="scard" data-surface="card">
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                <div class="grow">
+                  <h4>Change history</h4>
+                  <p>Who turned auto-translate on or off, and when.</p>
+                </div>
               </div>
-              <hr class="rule" />
-              <div>
-                <div class="eyebrow effects-h">What readers get</div>
-                <ul class="effects">
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Work item pages and quick views show every field in the reader&rsquo;s language: the title, description, explanation and each to-do.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader&rsquo;s language, with a <b>Show original</b> switch on each view.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Agents, the API and emails always receive the original text, and editing always opens the original.</span></li>
-                </ul>
+              <div class="scard-body">
+                <div class="hist">
+                  <div class="hist-cols" aria-hidden="true">
+                    <span>Who</span><span>Change</span><span>When</span>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Mina Park</span
+                    ><span class="chg" aria-label="from Off to On"
+                      ><span class="pill pill-neutral">Off</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-done">On</span></span
+                    ><time>16 Oct 2026, 14:05</time>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Jonas Weber</span
+                    ><span class="chg" aria-label="from On to Off"
+                      ><span class="pill pill-done">On</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-neutral">Off</span></span
+                    ><time>9 Oct 2026, 09:41</time>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Mina Park</span
+                    ><span class="chg" aria-label="from Off to On"
+                      ><span class="pill pill-neutral">Off</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-done">On</span></span
+                    ><time>2 Oct 2026, 17:12</time>
+                  </div>
+                </div>
               </div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
-            </div>
-          </section><section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
-              </div>
-            </div>
-            <div class="scard-body">
-              <div class="hist"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>16 Oct 2026, 14:05</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>9 Oct 2026, 09:41</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>2 Oct 2026, 17:12</time></div></div>
-            </div>
-          </section>
+            </section>
           </div>
         </div>
       </div>
-<div class="panel-label">Panel 9 &middot; <b>At ~400px</b> &mdash; the rail collapses into the area&rsquo;s drawer, the card stacks, nothing resizes when the flip lands</div><p class="panel-note">The switch row is already a single column, so the card narrows without a layout change. The read-back drops its column heads and each change becomes three lines: who, from&rarr;to, when. The switch&rsquo;s position and the row&rsquo;s height are the same before and after a flip, so the landing moves nothing.</p>
+      <div class="panel-label">
+        Panel 9 &middot; <b>At ~400px</b> &mdash; the rail collapses into the area&rsquo;s drawer,
+        the card stacks, nothing resizes when the flip lands
+      </div>
+      <p class="panel-note">
+        The switch row is already a single column, so the card narrows without a layout change. The
+        read-back drops its column heads and each change becomes three lines: who, from&rarr;to,
+        when. The switch&rsquo;s position and the row&rsquo;s height are the same before and after a
+        flip, so the landing moves nothing.
+      </p>
       <div class="panel">
         <div class="pair">
           <div class="narrow">
-            <div class="pane-head"><div class="eyebrow">Project settings</div><h3>Translation</h3>
-              <p>How members who read in different languages see this project&rsquo;s work content.</p></div>
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Translation</h3>
+              <p>
+                How members who read in different languages see this project&rsquo;s work content.
+              </p>
+            </div>
             <section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
-              <div class="grow">
-                <h4>Auto-translate</h4>
-                <p>Let every member read this project&rsquo;s work in their own language, and still see the original.</p>
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-languages" /></svg>
+                <div class="grow">
+                  <h4>Auto-translate</h4>
+                  <p>
+                    Let every member read this project&rsquo;s work in their own language, and still
+                    see the original.
+                  </p>
+                </div>
               </div>
-              
-            </div>
-            <div class="scard-body">
-              <div class="sw-row">
-                <span class="sw"><button class="switch on" type="button" role="switch" aria-checked="true" aria-labelledby="sw-lab"><span class="knob"></span></button></span>
-                <span class="txt"><span class="lab" id="sw-lab">Auto-translate work content</span>
-                  <p class="hint">On. Every member reads work content in their own interface language without pressing anything, and <b>Show original</b> is always one press away.</p></span>
+              <div class="scard-body">
+                <div class="sw-row">
+                  <span class="sw"
+                    ><button
+                      class="switch on"
+                      type="button"
+                      role="switch"
+                      aria-checked="true"
+                      aria-labelledby="sw-lab"
+                    >
+                      <span class="knob"></span></button
+                  ></span>
+                  <span class="txt"
+                    ><span class="lab" id="sw-lab">Auto-translate work content</span>
+                    <p class="hint">
+                      On. Every member reads work content in their own interface language without
+                      pressing anything, and <b>Show original</b> is always one press away.
+                    </p></span
+                  >
+                </div>
+                <hr class="rule" />
+                <div>
+                  <div class="eyebrow effects-h">What readers get</div>
+                  <ul class="effects">
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Work item pages and quick views show every field in the reader&rsquo;s
+                        language: the title, description, explanation and each to-do.</span
+                      >
+                    </li>
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Lists, boards, the backlog, sprints, the roadmap, ready and triage show
+                        titles in the reader&rsquo;s language, with a <b>Show original</b> switch on
+                        each view.</span
+                      >
+                    </li>
+                    <li>
+                      <svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg
+                      ><span
+                        >Agents, the API and emails always receive the original text, and editing
+                        always opens the original.</span
+                      >
+                    </li>
+                  </ul>
+                </div>
+                <hr class="rule" />
+                <p class="cost">
+                  Each field is translated once per language and kept, so a later reader of the same
+                  text pays nothing, and text already in the reader&rsquo;s language is never sent.
+                  Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost
+                  plus 50%. <a href="#" onclick="return false;">Usage &amp; cost</a>
+                </p>
               </div>
-              <hr class="rule" />
-              <div>
-                <div class="eyebrow effects-h">What readers get</div>
-                <ul class="effects">
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Work item pages and quick views show every field in the reader&rsquo;s language: the title, description, explanation and each to-do.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Lists, boards, the backlog, sprints, the roadmap, ready and triage show titles in the reader&rsquo;s language, with a <b>Show original</b> switch on each view.</span></li>
-                  <li><svg class="i sm" aria-hidden="true"><use href="#i-check" /></svg><span>Agents, the API and emails always receive the original text, and editing always opens the original.</span></li>
-                </ul>
-              </div>
-              <hr class="rule" />
-              <p class="cost">Each field is translated once per language and kept, so a later reader of the same text pays nothing, and text already in the reader&rsquo;s language is never sent. Translation spends your organization&rsquo;s AI credits at the model&rsquo;s cost plus 50%. <a href="#" onclick="return false">Usage &amp; cost</a></p>
-            </div>
-          </section>
+            </section>
             <section class="scard" data-surface="card">
-            <div class="scard-head">
-              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
-              <div class="grow">
-                <h4>Change history</h4>
-                <p>Who turned auto-translate on or off, and when.</p>
+              <div class="scard-head">
+                <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+                <div class="grow">
+                  <h4>Change history</h4>
+                  <p>Who turned auto-translate on or off, and when.</p>
+                </div>
               </div>
-            </div>
-            <div class="scard-body">
-              <div class="hist"><div class="hist-cols" aria-hidden="true"><span>Who</span><span>Change</span><span>When</span></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>16 Oct 2026, 14:05</time></div><div class="hist-row"><span class="who">Jonas Weber</span><span class="chg" aria-label="from On to Off"><span class="pill pill-done">On</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-neutral">Off</span></span><time>9 Oct 2026, 09:41</time></div><div class="hist-row"><span class="who">Mina Park</span><span class="chg" aria-label="from Off to On"><span class="pill pill-neutral">Off</span><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg><span class="pill pill-done">On</span></span><time>2 Oct 2026, 17:12</time></div></div>
-            </div>
-          </section>
+              <div class="scard-body">
+                <div class="hist">
+                  <div class="hist-cols" aria-hidden="true">
+                    <span>Who</span><span>Change</span><span>When</span>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Mina Park</span
+                    ><span class="chg" aria-label="from Off to On"
+                      ><span class="pill pill-neutral">Off</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-done">On</span></span
+                    ><time>16 Oct 2026, 14:05</time>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Jonas Weber</span
+                    ><span class="chg" aria-label="from On to Off"
+                      ><span class="pill pill-done">On</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-neutral">Off</span></span
+                    ><time>9 Oct 2026, 09:41</time>
+                  </div>
+                  <div class="hist-row">
+                    <span class="who">Mina Park</span
+                    ><span class="chg" aria-label="from Off to On"
+                      ><span class="pill pill-neutral">Off</span
+                      ><svg class="i sm" aria-hidden="true"><use href="#i-arrow-right" /></svg
+                      ><span class="pill pill-done">On</span></span
+                    ><time>2 Oct 2026, 17:12</time>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>
