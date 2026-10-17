@@ -221,6 +221,18 @@ async function submitAt(ordinal: number) {
   return { target: sent.targetLanguage, refs: sent.fields.map((f) => f.fieldRef) };
 }
 
+/**
+ * The submits that are a whole job's worth of work. An item page also submits the
+ * one related title its description's work item chip shows (a single `title:<id>`
+ * field), which is not one of the story's jobs and is never scripted to succeed.
+ */
+function jobSubmits() {
+  return translateSubmits().filter(
+    (s) =>
+      !(s.translate?.fields.length === 1 && s.translate.fields[0]!.fieldRef.startsWith('title:')),
+  );
+}
+
 /** Open a browsing surface and wait for its batch request to answer 200. */
 async function openSurface(page: Page, path: string) {
   const answered = page.waitForResponse(isTitlesPost);
@@ -319,7 +331,7 @@ async function step3(page: Page, baseURL: string, beat: Beat) {
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.lead);
   await expectTranslatedMarks(page);
   await expectLinkAndChip(page, 'ko', '내보내기 안내');
-  expect(translateSubmits()).toHaveLength(ordinal + 1);
+  expect(jobSubmits()).toHaveLength(ordinal + 1);
   await beat();
 }
 
@@ -330,7 +342,7 @@ async function step4(page: Page, beat: Beat) {
   await beat();
   await control(page, 'ko', 'showTranslation').click();
   await expectFields(page, seed.text.ko);
-  expect(translateSubmits()).toHaveLength(1);
+  expect(jobSubmits()).toHaveLength(1);
   await beat();
 }
 
@@ -375,18 +387,18 @@ async function step5Board(page: Page, beat: Beat) {
 }
 
 async function step5Surfaces(page: Page, beat: Beat) {
-  const before = translateSubmits().length;
+  const before = jobSubmits().length;
   for (const path of ['/backlog', '/items']) {
     await openSurface(page, path);
     await expect(main(page).getByText(KO_TITLES[0]!).first()).toBeVisible();
-    expect(translateSubmits()).toHaveLength(before);
+    expect(jobSubmits()).toHaveLength(before);
     await beat();
   }
   const original = msg('ko', 'titleTranslation.showOriginal');
   await main(page).getByRole('button', { name: original, exact: true }).click();
   await expect(main(page).getByText(EN_TITLES[0]!).first()).toBeVisible();
   await expect(main(page).getByText(KO_TITLES[0]!)).toHaveCount(0);
-  expect(translateSubmits()).toHaveLength(before);
+  expect(jobSubmits()).toHaveLength(before);
   await beat();
 }
 
@@ -418,7 +430,7 @@ async function step6(page: Page, browser: Browser, baseURL: string, beat: Beat) 
   }
   await expect(titleOf(page)).toHaveText(seed.text.ko.title);
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.lead);
-  expect(translateSubmits()).toHaveLength(ordinal + 1);
+  expect(jobSubmits()).toHaveLength(ordinal + 1);
   await beat();
 }
 
@@ -450,12 +462,12 @@ async function step8(page: Page, baseURL: string, beat: Beat) {
   expect((await kept).status()).toBe(200);
   await expect(titleOf(page)).toHaveText(seed.text.ko.title, { timeout: FIRST_PAINT_MS });
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.lead);
-  expect(translateSubmits()).toHaveLength(3);
+  expect(jobSubmits()).toHaveLength(3);
   await beat();
 
   await openSurface(page, '/boards');
   await expect(card(page, seed.others[0]!.key).getByText(KO_TITLES[0]!)).toBeVisible();
-  expect(translateSubmits()).toHaveLength(3);
+  expect(jobSubmits()).toHaveLength(3);
   expect(reportedTranslation(seed.org.orgId)).toEqual(spend(K * 3));
   await beat();
 }
@@ -472,7 +484,7 @@ async function step9(page: Page, baseURL: string, beat: Beat) {
     timeout: FIRST_PAINT_MS,
   });
   await expect(page.locator('[data-title-mark]')).toHaveCount(0);
-  expect(translateSubmits()).toHaveLength(3);
+  expect(jobSubmits()).toHaveLength(3);
   expect(reportedTranslation(seed.org.orgId)).toEqual(spend(K * 3));
   await beat();
 }
@@ -519,7 +531,7 @@ async function retranslateEdit(page: Page, beat: Beat) {
   setTranslateOutcome(ordinal, { status: 'succeeded', translations: edited });
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.added);
   await expect(titleOf(page)).toHaveText(seed.text.ko.title);
-  expect(translateSubmits()).toHaveLength(ordinal + 1);
+  expect(jobSubmits()).toHaveLength(ordinal + 1);
   expect(reportedTranslation(seed.org.orgId)).toEqual(spend(K * 4));
   await beat();
 }
@@ -567,7 +579,7 @@ async function noCreditBoard(page: Page, owner: boolean) {
 }
 
 async function step12(page: Page, baseURL: string, beat: Beat) {
-  const before = translateSubmits().length;
+  const before = jobSubmits().length;
   await signInAs(page, baseURL, seed.people.zara);
   await noCreditItem(page, true);
   await beat();
@@ -576,7 +588,7 @@ async function step12(page: Page, baseURL: string, beat: Beat) {
   await signInAs(page, baseURL, seed.people.zeno);
   await noCreditItem(page, false);
   await noCreditBoard(page, false);
-  expect(translateSubmits()).toHaveLength(before);
+  expect(jobSubmits()).toHaveLength(before);
   expect(reportedTranslation(seed.dry.orgId)).toEqual(spend(0));
   expect(reportedTranslation(seed.org.orgId)).toEqual(spend(K * 4));
   await beat();
@@ -622,7 +634,7 @@ async function readEnglishAgain(page: Page, baseURL: string, beat: Beat) {
   expect((await answered).status()).toBe(200);
   await expectFields(page, seed.text.ko);
   await expect(descriptionOf(page, 'ko')).toContainText(seed.text.ko.added);
-  expect(translateSubmits()).toHaveLength(4);
+  expect(jobSubmits()).toHaveLength(4);
   expect(reportedTranslation(seed.org.orgId)).toEqual(spend(K * 4));
   await beat();
 }
