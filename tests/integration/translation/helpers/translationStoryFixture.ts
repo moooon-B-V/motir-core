@@ -48,7 +48,16 @@ export interface MotirAiSeam {
   /** The `tenant.organizationId` of every `translate` submit, in order. */
   submittedOrgs: string[];
   usageMode: UsageMode;
+  /** The balance the `/v1/usage` reply reports (the auto-translate story's credit knob). */
+  balance: number;
+  /** The status the subscription read answers — `null` is a free organisation. */
+  subscriptionStatus: string | null;
+  /** How many `/v1/usage` reads were served since the last {@link resetJobs}. */
+  usageReads: number;
 }
+
+/** What the usage reply reports unless a case sets {@link MotirAiSeam.balance}. */
+export const DEFAULT_BALANCE = 12_480;
 
 /** Point the app at a mocked motir-ai and install the in-repo jobs mock on it. */
 export async function installMotirAi(): Promise<MotirAiSeam> {
@@ -61,7 +70,15 @@ export async function installMotirAi(): Promise<MotirAiSeam> {
   agent.disableNetConnect();
   agent.enableNetConnect(/localhost|127\.0\.0\.1/);
   setGlobalDispatcher(agent);
-  const seam: MotirAiSeam = { agent, fixturePath, submittedOrgs: [], usageMode: 'reported' };
+  const seam: MotirAiSeam = {
+    agent,
+    fixturePath,
+    submittedOrgs: [],
+    usageMode: 'reported',
+    balance: DEFAULT_BALANCE,
+    subscriptionStatus: null,
+    usageReads: 0,
+  };
   const { installAiJobsBoundaryMock, observeAiJobSubmit } = await import('@/lib/test-ai-jobs-mock');
   observeAiJobSubmit((raw) => {
     const body = JSON.parse(raw) as { jobKind?: string; tenant?: { organizationId?: string } };
@@ -69,6 +86,7 @@ export async function installMotirAi(): Promise<MotirAiSeam> {
   });
   installAiJobsBoundaryMock(agent);
   installUsageReply(seam);
+  installSubscriptionReply(seam);
   return seam;
 }
 
@@ -81,6 +99,9 @@ export function resetJobs(seam: MotirAiSeam): void {
   writeFileSync(seam.fixturePath, '{}');
   seam.submittedOrgs.length = 0;
   seam.usageMode = 'reported';
+  seam.balance = DEFAULT_BALANCE;
+  seam.subscriptionStatus = null;
+  seam.usageReads = 0;
 }
 
 /** Declare the `translate` outcomes, one per submit attempt, KEEPING the record. */
@@ -128,7 +149,7 @@ function usageBody(seam: MotirAiSeam, coreOrganizationId: string): RawUsageRespo
     coreOrganizationId,
     coreWorkspaceId: null,
     coreProjectId: null,
-    balance: 12_480,
+    balance: seam.balance,
     tier: { key: 'basic', name: 'Basic', monthlyCreditAllotment: 20_000 },
     totalSpend: AI_TOTAL_SPEND,
     monthSpend: 7_520,
@@ -148,6 +169,7 @@ function installUsageReply(seam: MotirAiSeam): void {
     .get(ORIGIN)
     .intercept({ path: (p) => p.startsWith('/v1/usage'), method: 'GET' })
     .reply((req) => {
+      seam.usageReads += 1;
       const org = new URL(`${ORIGIN}${req.path}`).searchParams.get('coreOrganizationId') ?? '';
       return {
         statusCode: 200,
@@ -155,6 +177,28 @@ function installUsageReply(seam: MotirAiSeam): void {
         responseOptions: { headers: { 'content-type': 'application/json' } },
       };
     })
+    .persist();
+}
+
+/**
+ * `GET /v1/stripe/subscription`, which `getOrgSubscription` makes beside the usage
+ * read when an organisation's AI access is resolved (cloud billing on). Added for
+ * the auto-translate story's credit verdict; a self-host build never asks.
+ */
+function installSubscriptionReply(seam: MotirAiSeam): void {
+  seam.agent
+    .get(ORIGIN)
+    .intercept({ path: (p) => p.startsWith('/v1/stripe/subscription'), method: 'GET' })
+    .reply(() => ({
+      statusCode: 200,
+      data: {
+        status: seam.subscriptionStatus,
+        currentPeriodEnd: null,
+        priceId: null,
+        planTier: null,
+      },
+      responseOptions: { headers: { 'content-type': 'application/json' } },
+    }))
     .persist();
 }
 

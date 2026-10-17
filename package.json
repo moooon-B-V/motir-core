@@ -51,6 +51,7 @@
     "db:stamp:onboarding": "tsx --tsconfig tsconfig.node.json scripts/stamp-onboarding-ran.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "coverage:auto-translate": "vitest run --config vitest.coverage.auto-translate.config.ts --coverage",
     "coverage:onboarding-routing": "vitest run --config vitest.coverage.onboarding-routing.config.ts --coverage",
     "coverage:approved-status": "vitest run --config vitest.coverage.approved-status.config.ts --coverage",
     "coverage:in-flight-code": "vitest run --config vitest.coverage.in-flight-code.config.ts --coverage",
