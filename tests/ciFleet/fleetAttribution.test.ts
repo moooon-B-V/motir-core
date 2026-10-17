@@ -659,8 +659,13 @@ describe('the orphaned Docker volume sweep (MOTIR-8839)', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', '');
     try {
-      const result = await fleetAttributionService.reconcile({ now: pastGrace });
-      expect(result).toMatchObject({ orphanedVolumesDestroyed: 0 });
+      // The inventory is handed in: with no orchestrator configured the default
+      // one is absent too, and the pass would answer `disabled` before the sweep.
+      const result = await fleetAttributionService.reconcile({
+        now: pastGrace,
+        inventory: fakeFleetInventory,
+      });
+      expect(result).toMatchObject({ outcome: 'reconciled', orphanedVolumesDestroyed: 0 });
     } finally {
       vi.unstubAllEnvs();
     }
