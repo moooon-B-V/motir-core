@@ -254,13 +254,19 @@ describe('start — a ready leaf in a running, signed-in agent', () => {
     expect(minted[0]).toMatchObject({ dispatchRunId: run.id, userId: fx.ownerId });
 
     const [exec] = launches();
-    expect(exec!.command).toEqual([
+    // The agent-config environment is sourced before `motir` runs (MOTIR-8869).
+    expect(exec!.command.slice(0, 7)).toEqual([
       'runuser',
       '-u',
       'node',
       '--',
       'env',
       'HOME=/home/node',
+      'sh',
+    ]);
+    expect(exec!.command[8]).toContain('agent-config/env.sh');
+    expect(exec!.command.slice(-7)).toEqual([
+      'sh',
       'motir',
       'agent-terminal',
       'run',
@@ -747,6 +753,16 @@ describe('the card’s agent picker', () => {
     const { agents } = await runs.listAgentsForCard(item.identifier, fx.ctx);
     expect(agents).toMatchObject([
       { id, signInCheckedAt: null, refusal: 'agent_instance_state_conflict' },
+    ]);
+  });
+
+  it('a running agent recorded signed out is still offered — the start asks live (MOTIR-8869)', async () => {
+    const id = await agent();
+    await adminDb.agentInstance.update({ where: { id }, data: { signInState: 'signed_out' } });
+    const item = await card();
+    const { agents } = await runs.listAgentsForCard(item.identifier, fx.ctx);
+    expect(agents).toMatchObject([
+      { id, state: 'running', signInState: 'signed_out', refusal: null },
     ]);
   });
 

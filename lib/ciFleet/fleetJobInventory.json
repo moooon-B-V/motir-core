@@ -683,9 +683,9 @@
     "moooon-B-V/motir-ai": {
       "repoRef": "moooon-B-V/motir-ai",
       "ref": "main",
-      "sha": "966ab405b635be9c03acf7bd8a7912223ee7521a",
+      "sha": "35d359a22f15719eb3c0e9569a9adbe2049f4ce2",
       "visibility": "private",
-      "measuredAt": "2026-10-16T15:00:35Z",
+      "measuredAt": "2026-10-17T19:12:40Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
       "workflows": [
         {
@@ -769,7 +769,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:537"
+              "evidence": ".github/workflows/ci.yml:545"
             },
             {
               "jobId": "coverage-db-c",
@@ -777,7 +777,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:604"
+              "evidence": ".github/workflows/ci.yml:612"
             },
             {
               "jobId": "coverage-db-d",
@@ -785,7 +785,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:673"
+              "evidence": ".github/workflows/ci.yml:681"
             },
             {
               "jobId": "indexer-image",
@@ -793,7 +793,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:741",
+              "evidence": ".github/workflows/ci.yml:749",
               "calls": "./.github/workflows/indexer-image.yml"
             },
             {
@@ -802,7 +802,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:753"
+              "evidence": ".github/workflows/ci.yml:761"
             },
             {
               "jobId": "deploy-codegraph",
@@ -810,7 +810,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:848"
+              "evidence": ".github/workflows/ci.yml:859"
             },
             {
               "jobId": "ci-complete",
@@ -818,7 +818,7 @@
               "triggers": ["pull_request", "merge_group", "push"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/ci.yml:928"
+              "evidence": ".github/workflows/ci.yml:956"
             }
           ]
         },

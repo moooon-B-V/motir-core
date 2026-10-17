@@ -230,6 +230,18 @@ describe('the derived toolchain — every entry traces to a starter workflow', (
     expect(dockerfile).toContain('nextjs-prisma-vercel-starter');
   });
 
+  it('bakes pipx with venv support and puts its install dir on PATH (MOTIR-8884)', () => {
+    // motir-ai's Vitest shards run `pipx install lizard` with no setup step; the
+    // fleet died there with `pipx: command not found`.
+    const run = code(dockerfile);
+    expect(run).toMatch(/^\s+pipx \\$/m);
+    expect(run).toMatch(/^\s+python3-venv \\$/m);
+    expect(run).toContain('ENV PATH="/home/runner/.local/bin:${PATH}"');
+    expect(readFileSync(join(IMAGE_DIR, 'smoke/assert-image.sh'), 'utf8')).toContain(
+      "'pipx --version'",
+    );
+  });
+
   it('does NOT bake a chromium binary — it is version-coupled to the repo', () => {
     expect(code(dockerfile)).not.toMatch(/playwright.*install chromium|PLAYWRIGHT_BROWSERS_PATH/);
   });

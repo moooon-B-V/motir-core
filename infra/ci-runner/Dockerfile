@@ -81,6 +81,10 @@
 #   |                    | time; `linux-release` links `-extldflags '-static'`.    |
 #   | python3            | M guards.yml:35,223 — `shell: python3 {0}` steps with   |
 #   |                    | no `actions/setup-python` before them.                  |
+#   | pipx               | A ci.yml:242 — `pipx install lizard` in the three       |
+#   |                    | Vitest shards, with no setup step before it;            |
+#   |                    | `ubuntu-latest` preinstalls pipx (MOTIR-8884). Its      |
+#   |                    | installs land in ~/.local/bin, put on PATH below.       |
 #
 # NOT installed, and the reason stated rather than left silent:
 #   - The chromium BINARY. `playwright install --with-deps` downloads a build
@@ -195,7 +199,9 @@ RUN apt-get update \
         jq \
         locales \
         openssh-client \
+        pipx \
         python3 \
+        python3-venv \
         sudo \
         tar \
         unzip \
@@ -315,6 +321,10 @@ RUN set -eux; \
     chmod 0440 /etc/sudoers.d/runner; \
     mkdir -p /home/runner/actions-runner/_work; \
     chown -R runner:runner /home/runner /opt/hostedtoolcache
+
+# `pipx install <tool>` puts its command in ~/.local/bin, which a GitHub-hosted
+# runner has on PATH and a bare Ubuntu user does not (MOTIR-8884).
+ENV PATH="/home/runner/.local/bin:${PATH}"
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/motir-ci-runner-entrypoint
 # dockerd start + the whiteout-unpack proof the entrypoint runs (MOTIR-8821), and

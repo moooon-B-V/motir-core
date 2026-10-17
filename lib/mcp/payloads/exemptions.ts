@@ -297,6 +297,9 @@ export const EXEMPT_TOOLS = {
   update_page:
     'Returns the saved PAGE exactly as `get_page` reads it, at its new `revision` (MOTIR-7411). ' +
     'No `/api/v1` operation returns a page, so there is no shared shape to derive from.',
+  rename_page:
+    'Returns the renamed page’s summary — `{ id, projectId, title, position, revision, updatedAt }` ' +
+    '(MOTIR-8841). No `/api/v1` operation returns a page, so there is no shared shape to derive from.',
   publish_decision_page:
     'Returns the PUBLICATION — which version of which page is the card’s decision, and the gate ' +
     'it raised (MOTIR-7434). No `/api/v1` operation returns a publication, so there is no shared ' +

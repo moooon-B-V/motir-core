@@ -21,7 +21,7 @@ import { pageIdField, pageProjectKeyField, resolvePageProject } from './pageRef'
 // edit on what it returns, send the new revision. The replaced body is not lost
 // either way: it stays a restorable version in the page's history.
 //
-// No title edit here: renaming stays the editor's rename route.
+// No title edit here: renaming is `rename_page` (MOTIR-8841), which takes no revision.
 //
 // EXEMPT from payload derivation (`payloads/exemptions.ts`): no `/api/v1`
 // operation returns a page.
@@ -85,7 +85,7 @@ export function registerUpdatePage(server: McpServer, resolveContext: McpContext
         'refused PAGE_REVISION_CONFLICT and nothing is written — a whole-body write would erase ' +
         'their change — so call `get_page` again, redo your edit on what it returns, and send its ' +
         'revision. The previous body stays restorable in the page’s history. Does not rename the ' +
-        'page. Honors the same access checks as the UI.',
+        'page — `rename_page` does. Honors the same access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runUpdatePage(args, resolveContext(extra)),

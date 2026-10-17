@@ -211,6 +211,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // only; their real gate is `page:edit`.
   create_page: 'work_items:write',
   update_page: 'work_items:write',
+  rename_page: 'work_items:write',
   // A WRITE: it seals a page version, records the publication and may raise a gate.
   publish_decision_page: 'work_items:write',
   // The SEMANTIC search (MOTIR-3101). A read at the gate — `assertCanBrowse` and

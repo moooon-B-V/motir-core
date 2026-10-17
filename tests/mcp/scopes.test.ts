@@ -289,6 +289,7 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // the six strings, so a stale `write` row cannot start rewriting pages.
       create_page: true,
       update_page: true,
+      rename_page: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {

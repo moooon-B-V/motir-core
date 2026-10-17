@@ -2388,6 +2388,28 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  rename_page: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'The project key the page belongs to (e.g. "ACME").',
+      },
+      pageId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The page id — the `<id>` in the page’s address `/pages/<id>`.',
+      },
+      title: {
+        type: 'string',
+        description: 'The page’s new title. An empty string makes it untitled.',
+      },
+    },
+    required: ['projectKey', 'pageId', 'title'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   report_action: {
     type: 'object',
     properties: {
@@ -4006,6 +4028,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   record_plan_revision_reason: 'Record WHY a plan had to change',
   record_run_discrepancy: 'Record what you built differently from the plan',
   reinforce_lesson: 'Reinforce a lesson',
+  rename_page: 'Rename page',
   report_action: 'Report your next step',
   report_plan_step: 'Report the step a planner session is on',
   report_unbuildable_target: 'Report a card you cannot build',
@@ -4389,6 +4412,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   reinforce_lesson: {
     title: 'Reinforce a lesson',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  rename_page: {
+    title: 'Rename page',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
