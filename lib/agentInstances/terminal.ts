@@ -116,7 +116,7 @@ export function agentTerminalMachineConfig(instanceId: string): PersistentTermin
  * (MOTIR-8869). Best-effort like the profile script: a missing file is no error.
  */
 const SOURCE_AGENT_CONFIG_ENV =
-  'f="$HOME/.motir-sandbox/agent-config/env.sh"; [ -r "$f" ] && . "$f"; exec motir agent-terminal "$@"';
+  'f="$HOME/.motir-sandbox/agent-config/env.sh"; [ -r "$f" ] && . "$f"; exec "$@"';
 
 /** Run a `motir agent-terminal …` subcommand as `node`, with node's home and agent-config environment. */
 const AS_NODE: readonly string[] = [
@@ -129,7 +129,9 @@ const AS_NODE: readonly string[] = [
   'sh',
   '-c',
   SOURCE_AGENT_CONFIG_ENV,
-  'motir-agent-terminal',
+  'sh',
+  'motir',
+  'agent-terminal',
 ];
 
 /** §4: the image-capability probe — `run --help` exiting 0 means the launcher is there. */
