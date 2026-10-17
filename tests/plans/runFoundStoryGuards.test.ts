@@ -76,6 +76,10 @@ const NEVER_A_REVISION_KEY: Record<string, string> = {
   titleLanguage: 'recorded with the title by its writer, never a revision (MOTIR-8096)',
   descriptionLanguage: 'recorded with the description by its writer, never a revision (MOTIR-8096)',
   explanationLanguage: 'recorded with the explanation by its writer, never a revision (MOTIR-8096)',
+  embeddingFailedHash:
+    'the embedding sweep’s poison-item bookkeeping, written by raw SQL, never a revision (MOTIR-8227)',
+  embeddingFailedAttempts:
+    'written with embeddingFailedHash by the same sweep, never a revision (MOTIR-8227)',
 };
 
 type Disposition = 'shape' | 'ignored' | 'unclassified' | 'both';
