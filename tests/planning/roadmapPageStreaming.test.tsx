@@ -93,6 +93,14 @@ const PROJECT = {
   },
 };
 
+/**
+ * The page returns the title-translation provider (Story MOTIR-7738 · MOTIR-8833)
+ * with the roadmap view as its one child; the props this file asserts are the view's.
+ */
+function viewProps(element: { props: { children: { props: Record<string, unknown> } } }) {
+  return element.props.children.props;
+}
+
 /** A promise the test releases by hand — a read still in flight. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
@@ -125,8 +133,8 @@ describe('the roadmap paints WITHOUT the pre-plan read (MOTIR-2205 / MOTIR-2069)
     expect(fetchPreplanState).not.toHaveBeenCalled();
     // The marker gate is untouched (MOTIR-1264's contract): it still decides WHETHER
     // the card renders. What it ASSERTS is the client's, resolved late.
-    expect(element.props.showPlanningOrigin).toBe(true);
-    expect(element.props).not.toHaveProperty('producedTiers');
+    expect(viewProps(element).showPlanningOrigin).toBe(true);
+    expect(viewProps(element)).not.toHaveProperty('producedTiers');
   });
 
   it('the page’s existing reads are not serialized behind it', async () => {
@@ -138,7 +146,7 @@ describe('the roadmap paints WITHOUT the pre-plan read (MOTIR-2205 / MOTIR-2069)
 
     const element = await RoadmapPage();
 
-    expect(element.props.projectKey).toBe('ACME');
+    expect(viewProps(element).projectKey).toBe('ACME');
     expect(getProjectRoadmap).toHaveBeenCalledTimes(1);
     expect(getActiveSprint).toHaveBeenCalledTimes(1);
     expect(getPreplanState).not.toHaveBeenCalled();
@@ -191,7 +199,7 @@ describe('the roadmap paints WITHOUT the pre-plan read (MOTIR-2205 / MOTIR-2069)
 
     const element = await RoadmapPage();
 
-    expect(element.props.showPlanningOrigin).toBe(false);
+    expect(viewProps(element).showPlanningOrigin).toBe(false);
     expect(getPreplanState).not.toHaveBeenCalled();
     expect(fetchPreplanState).not.toHaveBeenCalled();
   });
