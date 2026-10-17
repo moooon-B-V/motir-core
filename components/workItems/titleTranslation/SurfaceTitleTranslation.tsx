@@ -361,7 +361,11 @@ export function SurfaceTitle({
           lang={shown.lang}
         >
           {shown.text}{' '}
-          <span className="inline-block align-[-2px]">
+          {/* `-my-1`: the wrapper is a line tall (its own strut) and sits 2px low, so
+              the line it ends grew by 2px and the card with it, the moment a mark
+              appeared on a two-line English title. The negative margin takes it out
+              of the line box; the mark does not move. */}
+          <span className="-my-1 inline-block align-[-2px]">
             <TitleMark value={value} />
           </span>
         </span>
