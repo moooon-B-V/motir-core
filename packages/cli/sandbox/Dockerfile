@@ -180,6 +180,12 @@ if (maj < 24 || (maj === 24 && min < 15)) { \
 # makes a future narrowing of this package fail the BUILD instead of somebody's
 # sweep.
 ARG PYTHON_VERSION=3.11.2-1+b1
+# `procps` is `ps`, which Codex's background app-server shells out to when it
+# records its pid-managed startup (MOTIR-8868). `node:*-slim` ships none, and
+# without it every `codex` after a successful sign-in dies with "failed to
+# invoke ps for pid-managed app server". Pinned like python3: bookworm's own
+# version, identical on amd64 and arm64.
+ARG PROCPS_VERSION=2:4.0.2-3
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -188,6 +194,7 @@ RUN apt-get update \
         gnupg \
         less \
         openssh-client \
+        "procps=${PROCPS_VERSION}" \
         "python3=${PYTHON_VERSION}" \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -198,6 +205,7 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/* \
+    && ps --version \
     && python3 --version \
     && python3 -c 'import json, shutil, difflib, re, collections, importlib, argparse'
 
