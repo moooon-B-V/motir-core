@@ -10,4 +10,8 @@
 
 cat /run/motir-ci-runner-docker-storage 2>/dev/null \
   || echo "dockerd storage: not started (MOTIR_RUNNER_SKIP_DOCKER or a pre-start boot)"
+# The disk a job starts with (MOTIR-8839): the rootfs and Docker's data root,
+# which is its own volume when the orchestrator mounted one. A job that later
+# dies of ENOSPC is diagnosable from these two lines.
+df -h / /var/lib/docker 2>/dev/null | sed 's/^/runner disk: /' || true
 exit 0

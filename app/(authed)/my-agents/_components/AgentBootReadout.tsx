@@ -132,6 +132,12 @@ function useNow(on: boolean): number {
 const ROW =
   'grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-x-2.5 rounded-(--radius-control) border px-(--spacing-control-x) py-(--spacing-control-y) text-[0.8125rem]';
 const GLYPH = 'mt-0.5 size-4';
+/**
+ * The read-out sits above the tab strip in a panel of fixed height, so a tall one
+ * (a clone row per repository) must scroll inside its own box rather than push the
+ * terminal area under it down to nothing (MOTIR-8845).
+ */
+const BOUNDED = 'max-h-[45%] shrink-0 overflow-y-auto';
 
 function StepRow({ step, now, t }: { step: AgentInstanceBootStepDto; now: number; t: Translate }) {
   const label = bootStepLabel(step, t);
@@ -299,7 +305,7 @@ export function AgentBootReadout({
         aria-label={t('label')}
         data-testid="agent-boot"
         data-outcome="running"
-        className="border-b border-(--el-border-soft)"
+        className={`${BOUNDED} border-b border-(--el-border-soft)`}
       >
         <div className="flex items-center gap-2 px-(--spacing-card-padding) py-(--spacing-control-y) text-[0.8125rem] text-(--el-text-secondary)">
           <CircleCheck className="size-4 flex-none text-(--el-success)" aria-hidden="true" />
@@ -343,7 +349,7 @@ export function AgentBootReadout({
       aria-label={t('label')}
       data-testid="agent-boot"
       data-outcome={boot.outcome ?? 'booting'}
-      className="flex flex-col gap-2 border-b border-(--el-border-soft) bg-(--el-card) p-(--spacing-card-padding)"
+      className={`${BOUNDED} flex flex-col gap-2 border-b border-(--el-border-soft) bg-(--el-card) p-(--spacing-card-padding)`}
     >
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="m-0 text-[0.8125rem] font-semibold text-(--el-text)">{title}</h3>

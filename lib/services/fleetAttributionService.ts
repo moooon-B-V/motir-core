@@ -3,7 +3,7 @@ import {
   type FleetInventory,
   type InventoryMachine,
 } from '@motir/orchestrator';
-import { getFleetInventory } from '@/lib/orchestrator';
+import { getFleetInventory, getOrchestrator, isOrchestratorConfigured } from '@/lib/orchestrator';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
   ciRunnerProvisioningIntentRepository as intents,
@@ -154,7 +154,24 @@ export type FleetAttributionResult =
       /** Kills the provider refused, and machines the matcher could not judge —
        *  each alerted or logged, retried next pass. */
       failures: number;
+      /** CI Docker volumes attached to nothing and past the grace, destroyed
+       *  (MOTIR-8839) — each one a teardown that could not delete its own. */
+      orphanedVolumesDestroyed: number;
     };
+
+/**
+ * The volume backstop (MOTIR-8839): CI Docker volumes their teardown could not
+ * delete, or that a dead process created for a machine it never booted. Past
+ * the same grace a machine gets, so a volume whose machine is still being
+ * created is never taken from under it. Never throws — the adapter's sweep
+ * logs and counts, and an orchestrator without one has nothing to sweep.
+ */
+async function sweepOrphanedVolumes(now: () => Date): Promise<number> {
+  if (!isOrchestratorConfigured()) return 0;
+  const orchestrator = getOrchestrator();
+  if (!orchestrator.sweepOrphanedVolumes) return 0;
+  return orchestrator.sweepOrphanedVolumes(new Date(now().getTime() - FLEET_ATTRIBUTION_GRACE_MS));
+}
 
 function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : 'unknown';
@@ -215,6 +232,7 @@ export const fleetAttributionService = {
       killed: [] as FleetKill[],
       unavailableApps: [] as string[],
       failures: 0,
+      orphanedVolumesDestroyed: 0,
     };
 
     for (const app of apps) {
@@ -282,6 +300,7 @@ export const fleetAttributionService = {
         }
       }
     }
+    result.orphanedVolumesDestroyed = await sweepOrphanedVolumes(now);
     return result;
   },
 

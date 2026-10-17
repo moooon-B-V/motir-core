@@ -941,7 +941,10 @@ export const agentInstanceRunService = {
                     workItemTitle: target?.title ?? null,
                   }
                 : null,
-              agentRefusal(row, run),
+              // A RUNNING agent's recorded sign-in is a boot-time snapshot the
+              // start re-asks live (below), so the picker must not refuse on it:
+              // a row it offers is a row the start accepts (MOTIR-8869).
+              agentRefusal(row, run, row.state === 'running' ? 'unknown' : row.signInState),
             );
           }),
         };

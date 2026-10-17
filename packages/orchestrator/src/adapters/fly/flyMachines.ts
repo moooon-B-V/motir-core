@@ -126,6 +126,10 @@ export interface FlyMachine {
   /** The image the machine's config names (`config.image`); undefined when the
    *  body carried none. Read by the image update's settle (MOTIR-6950). */
   readonly image?: string;
+  /** The volume ids the machine's config mounts (`config.mounts[].volume`);
+   *  undefined when it mounts none. Read by teardown to delete a CI container's
+   *  Docker volume when its handle does not carry the id (MOTIR-8839). */
+  readonly mountedVolumeIds?: readonly string[];
   /** Fly's `events` array — "provide[s] log of what's happened with this
    *  Machine", each entry timestamped. The source of PROVIDER-ATTESTED start and
    *  stop instants (§5), which is what makes the monthly reconciliation an audit
@@ -151,6 +155,18 @@ export interface CreateMachineInput {
   readonly memoryMb: number;
   readonly env: Readonly<Record<string, string>>;
   readonly metadata: Readonly<Record<string, string>>;
+  /** Volumes to mount (MOTIR-8839). Omitted ⇒ the machine mounts nothing. */
+  readonly mounts?: ReadonlyArray<{ readonly volume: string; readonly path: string }>;
+}
+
+/** One Fly volume, narrowed to what the adapter reads (MOTIR-8839). */
+export interface FlyVolume {
+  readonly id: string;
+  readonly name: string;
+  readonly region: string;
+  readonly createdAt: Date | null;
+  /** Null when the volume is attached to no machine — the state an orphan is in. */
+  readonly attachedMachineId: string | null;
 }
 
 // ── Plumbing ────────────────────────────────────────────────────────────────
@@ -313,7 +329,32 @@ export function toFlyMachine(body: unknown): FlyMachine | null {
     ...(typeof asRecord(record?.['config'])?.['image'] === 'string'
       ? { image: asRecord(record?.['config'])?.['image'] as string }
       : {}),
+    ...mountedVolumeIdsOf(asRecord(record?.['config'])?.['mounts']),
     events,
+  };
+}
+
+function mountedVolumeIdsOf(raw: unknown): { mountedVolumeIds?: string[] } {
+  if (!Array.isArray(raw)) return {};
+  const ids = raw.flatMap((entry) => {
+    const volume = asRecord(entry)?.['volume'];
+    return typeof volume === 'string' && volume.length > 0 ? [volume] : [];
+  });
+  return ids.length > 0 ? { mountedVolumeIds: ids } : {};
+}
+
+/** Fly's volume JSON → the shape above, or null when it is not a volume. */
+export function toFlyVolume(body: unknown): FlyVolume | null {
+  const record = asRecord(body);
+  const id = record?.['id'];
+  if (typeof id !== 'string' || id.length === 0) return null;
+  const attached = record?.['attached_machine_id'];
+  return {
+    id,
+    name: typeof record?.['name'] === 'string' ? record['name'] : '',
+    region: typeof record?.['region'] === 'string' ? record['region'] : '',
+    createdAt: parseFlyDate(record?.['created_at']),
+    attachedMachineId: typeof attached === 'string' && attached.length > 0 ? attached : null,
   };
 }
 
@@ -484,6 +525,9 @@ export const flyMachinesClient = {
           },
           env: { ...input.env },
           metadata: { ...input.metadata },
+          ...(input.mounts && input.mounts.length > 0
+            ? { mounts: input.mounts.map((m) => ({ volume: m.volume, path: m.path })) }
+            : {}),
           auto_destroy: true,
           restart: { policy: 'no' },
         },
@@ -567,6 +611,59 @@ export const flyMachinesClient = {
     return entries.flatMap((entry) => {
       const machine = toFlyMachine(entry);
       return machine ? [machine] : [];
+    });
+  },
+
+  /** Create ONE volume in the fleet app (MOTIR-8839). The machine that mounts
+   *  it must be created in the same region. */
+  async createVolume(input: { name: string; region: string; sizeGb: number }): Promise<FlyVolume> {
+    const { token, app } = flyFleetConfig();
+    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/volumes`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ name: input.name, region: input.region, size_gb: input.sizeGb }),
+    });
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+    const volume = toFlyVolume(body);
+    if (!volume) {
+      throw new OrchestratorApiError(
+        'fly',
+        res.status,
+        'volume create returned an unexpected shape',
+      );
+    }
+    return volume;
+  },
+
+  /**
+   * Destroy a volume. IDEMPOTENT against one already gone (404). Fly refuses to
+   * delete a volume still attached to a machine, and a machine destroy releases
+   * its volume a moment later, so the caller retries — this call does not.
+   */
+  async destroyVolume(id: string): Promise<void> {
+    const { token, app } = flyFleetConfig();
+    const res = await flyRequest(
+      `/apps/${encodeURIComponent(app)}/volumes/${encodeURIComponent(id)}`,
+      { method: 'DELETE', token },
+    );
+    if (res.ok || res.status === 404) return;
+    throw new OrchestratorApiError('fly', res.status, flyErrorDetail(await readFlyJson(res)));
+  },
+
+  /** Every volume in the fleet app — the orphan sweep's read (MOTIR-8839). */
+  async listVolumes(): Promise<FlyVolume[]> {
+    const { token, app } = flyFleetConfig();
+    const res = await flyRequest(`/apps/${encodeURIComponent(app)}/volumes`, {
+      method: 'GET',
+      token,
+    });
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+    const entries = Array.isArray(body) ? body : [];
+    return entries.flatMap((entry) => {
+      const volume = toFlyVolume(entry);
+      return volume ? [volume] : [];
     });
   },
 };

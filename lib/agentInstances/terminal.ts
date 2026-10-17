@@ -107,7 +107,18 @@ export function agentTerminalMachineConfig(instanceId: string): PersistentTermin
 // own user with its home, exactly as the clone does (`cloneCommand.ts`), so the
 // credential paths `checkSignIn` stats and the run's state directory are node's.
 
-/** Run a `motir agent-terminal …` subcommand as `node`, with node's home. */
+/**
+ * The agent-config environment (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, …) is written
+ * to `env.sh` by the image's agent-config setup and reaches a process only by a
+ * shell SOURCING it (`agent-config-profile.sh`) — it is not a Docker `ENV`. A
+ * bare `exec` sources nothing, so without this the sign-in query stats
+ * `~/.claude` and `~/.codex` and reads every signed-in agent as `signed_out`
+ * (MOTIR-8869). Best-effort like the profile script: a missing file is no error.
+ */
+const SOURCE_AGENT_CONFIG_ENV =
+  'f="$HOME/.motir-sandbox/agent-config/env.sh"; [ -r "$f" ] && . "$f"; exec "$@"';
+
+/** Run a `motir agent-terminal …` subcommand as `node`, with node's home and agent-config environment. */
 const AS_NODE: readonly string[] = [
   'runuser',
   '-u',
@@ -115,6 +126,10 @@ const AS_NODE: readonly string[] = [
   '--',
   'env',
   'HOME=/home/node',
+  'sh',
+  '-c',
+  SOURCE_AGENT_CONFIG_ENV,
+  'sh',
   'motir',
   'agent-terminal',
 ];
