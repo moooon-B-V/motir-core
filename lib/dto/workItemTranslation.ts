@@ -75,7 +75,7 @@ export type TitleTranslationResultDTO =
     }
   | { workItemId: string; fieldRef: string; status: 'failed' | 'no_credit' | 'timeout' };
 
-/** `POST /api/projects/[key]/titles/translate` → 200 (MOTIR-8829). */
+/** `POST /api/projects/[key]/translate-titles` → 200 (MOTIR-8829). */
 export interface TitlesTranslateResponseDTO {
   targetLanguage: Locale;
   /** False when the project's auto-translate switch is off: nothing was read or spent. */

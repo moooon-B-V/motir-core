@@ -3,9 +3,15 @@ import { batchTranslateFields, type TranslatedField } from '@/lib/ai/translate';
 import { requestTranslation, type TranslateTenant } from '@/lib/ai/translateClient';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
-import type { TranslateResponseDTO } from '@/lib/dto/workItemTranslation';
+import type {
+  TitlesTranslateResponseDTO,
+  TranslateResponseDTO,
+} from '@/lib/dto/workItemTranslation';
 import type { Locale } from '@/lib/i18n/locales';
-import { toTranslateResponseDTO } from '@/lib/mappers/workItemTranslationMappers';
+import {
+  toTitlesTranslateResponseDTO,
+  toTranslateResponseDTO,
+} from '@/lib/mappers/workItemTranslationMappers';
 import { FieldLockTimeoutError } from '@/lib/translation/errors';
 import { hashFieldText, type TranslatableField } from '@/lib/translation/fieldRevision';
 import { assembleFields, type DoorField } from '@/lib/translation/itemFields';
@@ -226,8 +232,15 @@ async function translateMissing(
 
 export const workItemTranslationService = {
   /** The many-titles door (MOTIR-8829), beside {@link translateWorkItem}. */
-  translateTitlesForReader: (input: TranslateTitlesInput, deps?: TitleDoorDeps) =>
-    translateTitlesForReader(input, deps),
+  async translateTitlesForReader(
+    input: TranslateTitlesInput,
+    deps?: TitleDoorDeps,
+  ): Promise<TitlesTranslateResponseDTO> {
+    return toTitlesTranslateResponseDTO(
+      input.targetLanguage,
+      await translateTitlesForReader(input, deps),
+    );
+  },
 
   /**
    * Translate a work item into `targetLanguage` for its reader. Returns one
