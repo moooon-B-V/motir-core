@@ -63,6 +63,14 @@ into every job log by the runner's job-started hook.
 To measure a Machine, boot the image with `MOTIR_RUNNER_DOCKER_STORAGE=<candidate>`
 to force one candidate; the boot log shows which are refused and why.
 
+On a Fly Machine's root filesystem both overlay candidates are refused and only
+`vfs` works, which copies every layer and fills the disk (MOTIR-8821, MOTIR-8839).
+So the orchestrator gives each CI runner its own Fly volume at `/var/lib/docker`
+(`MOTIR_CI_DOCKER_VOLUME_GB`, default 20, `0` to turn it off), where `overlay2`
+works. The Fly adapter creates it with the machine, deletes it at teardown, and
+the fleet reconciler sweeps any left behind. The job-started hook prints
+`runner disk:` lines (`df -h / /var/lib/docker`) into every job log.
+
 ## What is not proven in CI
 
 `smoke/prove-boot.sh` proves the entrypoint's dockerd path, that `run.sh` is

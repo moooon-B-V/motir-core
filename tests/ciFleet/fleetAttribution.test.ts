@@ -633,3 +633,41 @@ describe('the edges', () => {
     expect(result).toMatchObject({ killed: [{ machineId: 'm-1' }] });
   });
 });
+
+describe('the orphaned Docker volume sweep (MOTIR-8839)', () => {
+  type Sweepable = { sweepOrphanedVolumes?: (olderThan: Date) => Promise<number> };
+
+  it('runs after the machine pass, one grace back, and counts what it destroyed', async () => {
+    const sweep = vi.fn(async () => 2);
+    (fakeOrchestrator as Sweepable).sweepOrphanedVolumes = sweep;
+    try {
+      const now = pastGrace();
+      const result = await fleetAttributionService.reconcile({ now: () => now });
+      expect(result).toMatchObject({ outcome: 'reconciled', orphanedVolumesDestroyed: 2 });
+      expect(sweep).toHaveBeenCalledWith(new Date(now.getTime() - FLEET_ATTRIBUTION_GRACE_MS));
+    } finally {
+      delete (fakeOrchestrator as Sweepable).sweepOrphanedVolumes;
+    }
+  });
+
+  it('an orchestrator with no volumes to sweep reports none', async () => {
+    const result = await fleetAttributionService.reconcile({ now: pastGrace });
+    expect(result).toMatchObject({ orphanedVolumesDestroyed: 0 });
+  });
+
+  it('a deployment with no orchestrator sweeps nothing', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', '');
+    try {
+      // The inventory is handed in: with no orchestrator configured the default
+      // one is absent too, and the pass would answer `disabled` before the sweep.
+      const result = await fleetAttributionService.reconcile({
+        now: pastGrace,
+        inventory: fakeFleetInventory,
+      });
+      expect(result).toMatchObject({ outcome: 'reconciled', orphanedVolumesDestroyed: 0 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ciDockerVolumeGb,
+  DEFAULT_CI_DOCKER_VOLUME_GB,
   DEFAULT_FLEET_SLOT_TTL_SECONDS,
   DEFAULT_INDEX_IN_FLIGHT_CAP,
   DEFAULT_ORG_POOL_CAP,
@@ -118,6 +120,28 @@ describe('the fleet-slot TTL is per ENVIRONMENT', () => {
     vi.stubEnv('MOTIR_FLEET_SLOT_TTL_SECONDS', 'six hours');
     // A typo must not silently disable the safety net.
     expect(fleetSlotTtlSeconds()).toBe(DEFAULT_FLEET_SLOT_TTL_SECONDS);
+    expect(warn).toHaveBeenCalled();
+  });
+});
+
+describe('the CI Docker volume size is per ENVIRONMENT (MOTIR-8839)', () => {
+  it('defaults to 20 GB when unset', () => {
+    vi.stubEnv('MOTIR_CI_DOCKER_VOLUME_GB', '');
+    expect(DEFAULT_CI_DOCKER_VOLUME_GB).toBe(20);
+    expect(ciDockerVolumeGb()).toBe(20);
+  });
+
+  it('a set value wins, and 0 turns the volume off', () => {
+    vi.stubEnv('MOTIR_CI_DOCKER_VOLUME_GB', '40');
+    expect(ciDockerVolumeGb()).toBe(40);
+    vi.stubEnv('MOTIR_CI_DOCKER_VOLUME_GB', '0');
+    expect(ciDockerVolumeGb()).toBe(0);
+  });
+
+  it('a malformed value falls back to the default, with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubEnv('MOTIR_CI_DOCKER_VOLUME_GB', 'twenty');
+    expect(ciDockerVolumeGb()).toBe(20);
     expect(warn).toHaveBeenCalled();
   });
 });
