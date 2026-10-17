@@ -624,6 +624,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ accessTokens: number; authorizationCodes: number; clients: number; refreshTokens: number }',
   },
+  'embed-stale-work-items': {
+    file: 'lib/jobs/definitions/workItemEmbeddingSweep.ts',
+    shape:
+      '{ configured: boolean; embedded: number; failed: number; failedIds: Array<string>; givenUp: number; givenUpIds: Array<string>; projectsVisited: number; scanned: number; truncated: boolean }',
+  },
   'sweep-standing-dead-letters': {
     file: 'lib/jobs/definitions/dlqStandingDepthSweep.ts',
     shape:

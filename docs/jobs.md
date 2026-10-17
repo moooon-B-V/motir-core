@@ -1224,6 +1224,7 @@ cluster bought nothing. The why is
 | `system.organization-erasure-sweep` | `0 * * * *`  |
 | `system.auto-plan-cadence-tick`     | `30 * * * *` |
 | `system.ci-actions-gate-sweep`      | `30 * * * *` |
+| `system.work-item-embedding-sweep`  | `17 * * * *` |
 
 **Daily (UTC)**
 
