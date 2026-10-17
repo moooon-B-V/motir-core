@@ -229,14 +229,18 @@ function jobIndexFrom(ordinal: number) {
   return translateSubmits().findIndex((s, i) => i >= ordinal && !isChipTitle(s));
 }
 
+/** How many submits after `ordinal` a step scripts: its own job and the chip title jobs around it. */
+const HELD_WINDOW = 6;
+
 /**
- * Hold the next story job `running` and return the ordinal it was scripted from.
- * The ordinal AFTER it is held too, because it is the chip's own title job and may
- * come first (`release` settles both once the order is known); the one after that
- * is `failed`, which every later unscripted submit repeats, so a chip job neither
- * bills nor stores nor changes what a step reads. The submit count is read only
- * once it has stopped moving, so a chip job still in flight from the page before
- * cannot take the ordinal this step scripted.
+ * Hold the next story job `running` and return the ordinal the window starts at.
+ * The whole window is held, because the related chip's title job (and any retry
+ * of one) shares the page with the story's own job and may come before it —
+ * `release` settles each submit once it is known which one is the story's. The
+ * ordinal after the window is `failed`, which every later unscripted submit then
+ * repeats, so a chip job neither bills nor stores nor changes what a step reads.
+ * The submit count is read only once it has stopped moving, so a chip job still in
+ * flight from the page before cannot take the ordinal this step scripted.
  */
 async function holdNextJob(): Promise<number> {
   let last = -1;
@@ -253,8 +257,8 @@ async function holdNextJob(): Promise<number> {
     )
     .toBe(true);
   const ordinal = setNextTranslateOutcome({ status: 'running' });
-  setTranslateOutcome(ordinal + 1, { status: 'running' });
-  setTranslateOutcome(ordinal + 2, { status: 'failed' });
+  for (let i = 1; i < HELD_WINDOW; i++) setTranslateOutcome(ordinal + i, { status: 'running' });
+  setTranslateOutcome(ordinal + HELD_WINDOW, { status: 'failed' });
   return ordinal;
 }
 
@@ -265,12 +269,11 @@ async function submitAt(ordinal: number) {
   return { target: sent.targetLanguage, refs: sent.fields.map((f) => f.fieldRef) };
 }
 
-/** Settle the story job scripted from `ordinal` as `outcome`, and the chip's title job as failed. */
+/** Settle the story job scripted from `ordinal` as `outcome`, and every chip title job around it as failed. */
 function release(ordinal: number, outcome: Parameters<typeof setTranslateOutcome>[1]) {
   const job = jobIndexFrom(ordinal);
-  setTranslateOutcome(job, outcome);
-  for (const other of [ordinal, ordinal + 1]) {
-    if (other !== job) setTranslateOutcome(other, { status: 'failed' });
+  for (let i = ordinal; i < ordinal + HELD_WINDOW; i++) {
+    setTranslateOutcome(i, i === job ? outcome : { status: 'failed' });
   }
 }
 
