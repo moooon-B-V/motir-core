@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { apiTokenRepository } from '@/lib/repositories/apiTokenRepository';
@@ -438,6 +438,31 @@ describe('verify', () => {
     await apiTokensService.verify(token);
     const afterSecond = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(afterSecond.lastUsedAt!.getTime()).toBe(afterFirst.lastUsedAt!.getTime());
+  });
+
+  // MOTIR-8885: a revoke DELETES the row. One that commits between verify's lookup
+  // and its `lastUsedAt` touch used to make the touch throw Prisma's P2025 — an
+  // unmapped 500 on the run-token routes (the CLI's close racing a Cancel) instead
+  // of the 401 a token revoked a moment earlier gets.
+  it('rejects as INVALID a token revoked between the lookup and the lastUsedAt touch', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { token, dto } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'claude-code',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
+    });
+    const find = apiTokenRepository.findByTokenHash;
+    const spy = vi
+      .spyOn(apiTokenRepository, 'findByTokenHash')
+      .mockImplementationOnce(async (...args) => {
+        const row = await find(...args);
+        await adminDb.apiToken.delete({ where: { id: dto.id } });
+        return row;
+      });
+    try {
+      await expect(apiTokensService.verify(token)).rejects.toBeInstanceOf(InvalidApiTokenError);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('re-touches lastUsedAt once the throttle window has passed', async () => {
