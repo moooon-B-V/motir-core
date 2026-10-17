@@ -438,6 +438,7 @@ model User {
   // (a closing org's Owner may themselves be erased first — DECISION §5).
   requestedOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionRequestedBy")
   contentLanguageChanges           OrganizationContentLanguageChange[] @relation("OrganizationContentLanguageChangedBy")
+  autoTranslateChanges             ProjectAutoTranslateChange[]        @relation("ProjectAutoTranslateChangedBy")
   cancelledOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionCancelledBy")
   // Enterprise requests this person sent from Billing & plans (MOTIR-7605). SetNull:
   // the request is the ORG's sales record and outlives the account that sent it.
@@ -1772,6 +1773,7 @@ model Workspace {
   folders                     Folder[]
   pages                       Page[]
   pageVersions                PageVersion[]
+  projectAutoTranslateChanges ProjectAutoTranslateChange[]
   decisionPagePublications    DecisionPagePublication[]
   pageWorkItemLinks           PageWorkItemLink[]
   /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
@@ -1869,6 +1871,17 @@ model Project {
   /// `decisionSource = system`, `decidedUnderAuthority = project_setting`. Read at
   /// RAISE time only, so flipping it never decides a gate already waiting.
   designApprovalGate               Boolean               @default(true) @map("design_approval_gate")
+  /// Whether this project reads its WORK CONTENT in each member's own language
+  /// without pressing anything (Story MOTIR-7738 · MOTIR-8825). `false` — the
+  /// default, and every existing project's value — keeps today's behaviour:
+  /// content shows as stored and a Translate button offers one work item at a
+  /// time. Named for WHAT it translates: work content only, never the product's
+  /// interface strings, which stay on the reader's locale path and off the
+  /// translation lane. Default `false` needs no copy-forward, unlike the
+  /// acceptance-video switch above, whose `DEFAULT true` would have flipped a
+  /// deliberately-off setting back on: `NOT NULL DEFAULT false` is the whole
+  /// data step. Every flip is recorded in `autoTranslateChanges`.
+  autoTranslateWorkContent         Boolean               @default(false) @map("auto_translate_work_content")
   /// How this project's pull requests are merged (MOTIR-4880 ·
   /// `docs/decisions/approval-gates.md` §7). PROJECT-scoped because a merge
   /// policy is a property of a codebase and its team, and the merge gate that
@@ -2261,9 +2274,9 @@ model Project {
   /// `SetNull` on the primary, `Cascade` on the list: removing the address a
   /// project is canonical at must NOT delete the project, it must fall back to
   /// the default; deleting the project takes its addresses with it.
-  primaryAddressId              String?                   @map("primary_address_id")
-  primaryAddress                PublicAddress?            @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
-  publicAddresses               PublicAddress[]           @relation("ProjectPublicAddresses")
+  primaryAddressId              String?                      @map("primary_address_id")
+  primaryAddress                PublicAddress?               @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
+  publicAddresses               PublicAddress[]              @relation("ProjectPublicAddresses")
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
   approvalGates                 ApprovalGate[]
@@ -2272,6 +2285,7 @@ model Project {
   folders                       Folder[]
   pages                         Page[]
   pageVersions                  PageVersion[]
+  autoTranslateChanges          ProjectAutoTranslateChange[]
   decisionPagePublications      DecisionPagePublication[]
   pageWorkItemLinks             PageWorkItemLink[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
@@ -2281,8 +2295,8 @@ model Project {
   /// the destination to the folder's parent first (MOTIR-5537); `SetNull` would
   /// turn a deleted nested folder into a root nobody chose. Same-project is
   /// enforced by `trg_project_bug_destination_folder_tenancy`.
-  bugDestinationFolderId        String?                   @map("bug_destination_folder_id")
-  bugDestinationFolder          Folder?                   @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
+  bugDestinationFolderId        String?                      @map("bug_destination_folder_id")
+  bugDestinationFolder          Folder?                      @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
   /// The folder this project's PLANNER bugs are filed into (Story MOTIR-5818 ·
   /// MOTIR-5820) — the `@planner-bug-home` marker's destination. A SECOND
   /// pointer, mirroring `bugDestinationFolderId` field for field, because the two
@@ -2292,8 +2306,8 @@ model Project {
   /// deliberately set it. `NoAction` for the same reason as the product pointer:
   /// `foldersService.deleteFolder` carries it up first (MOTIR-5821). Same-project
   /// is enforced by `trg_project_planner_bug_destination_folder_tenancy`.
-  plannerBugDestinationFolderId String?                   @map("planner_bug_destination_folder_id")
-  plannerBugDestinationFolder   Folder?                   @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
+  plannerBugDestinationFolderId String?                      @map("planner_bug_destination_folder_id")
+  plannerBugDestinationFolder   Folder?                      @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -11926,6 +11940,33 @@ model OrganizationContentLanguageChange {
   @@index([organizationId, changedAt])
   @@index([changedByUserId])
   @@map("organization_content_language_change")
+}
+
+/// One flip of a project's auto-translate switch (Story MOTIR-7738 ·
+/// MOTIR-8825) — the "who / from / to / when" record, the project-tier twin of
+/// {@link OrganizationContentLanguageChange}. Written only by the service that
+/// flips `Project.autoTranslateWorkContent`, in the same transaction as that
+/// write. No CHECK forbids `fromEnabled = toEnabled`: whether a no-op flip
+/// writes a row is the service's call. RLS is the project-scoped pair
+/// (`page_version`): workspace-keyed, with a project-narrowing SELECT arm.
+model ProjectAutoTranslateChange {
+  id              String   @id @default(cuid())
+  workspaceId     String   @map("workspace_id")
+  projectId       String   @map("project_id")
+  /// Who flipped it. SetNull: the record of the change outlives the account.
+  changedByUserId String?  @map("changed_by_user_id")
+  fromEnabled     Boolean  @map("from_enabled")
+  toEnabled       Boolean  @map("to_enabled")
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  changedBy User?     @relation("ProjectAutoTranslateChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  /// The history read, newest first.
+  @@index([projectId, changedAt])
+  @@map("project_auto_translate_change")
 }
 
 /// One email notice sent about an {@link OrganizationDeletionRequest} (Story
