@@ -1,3 +1,9 @@
+import { resolveSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitleTranslationProvider,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { getTranslations } from 'next-intl/server';
 import { pageMembers, pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
 import {
@@ -137,7 +143,7 @@ export default async function BoardView({
   // Visitor's (MOTIR-6648): the component list takes `read`, so a Visitor gets its
   // default assignees by name only; the members are name-only for a Visitor too.
   const wsCtx = ctx.service;
-  const [members, workflow, sprints, customFields, components, referencedLabels] =
+  const [members, workflow, sprints, customFields, components, referencedLabels, titleTranslation] =
     await Promise.all([
       pageMembers(ctx),
       workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
@@ -149,6 +155,8 @@ export default async function BoardView({
       }),
       componentsService.listComponents(ctx.project.identifier, ctx.read),
       labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
+      // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
+      resolveSurfaceTranslation(ctx.project, ctx.read),
     ]);
 
   // The saved-filter tier (Subtask 6.2.3) — { canBrowse, canShare, canManageAny },
@@ -167,88 +175,96 @@ export default async function BoardView({
     <AdvancedFilterProvider>
       <SavedFilterSessionProvider>
         <BoardFilterUiProvider>
-          <div className="flex flex-col gap-6">
-            <header className="flex flex-wrap items-end justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-                  {t('heading')}
-                </h1>
-                <p className="text-sm text-(--el-text-muted)">
-                  {t('subtitle', { project: ctx.project.name })}
-                </p>
-              </div>
-              {/* `flex-wrap`: the toolbar is wider than the header in a long or CJK
+          <SurfaceTitleTranslationProvider
+            projectKey={ctx.project.identifier}
+            context={titleTranslation}
+          >
+            <div className="flex flex-col gap-6">
+              <header className="flex flex-wrap items-end justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+                    {t('heading')}
+                  </h1>
+                  <p className="text-sm text-(--el-text-muted)">
+                    {t('subtitle', { project: ctx.project.name })}
+                  </p>
+                </div>
+                {/* `flex-wrap`: the toolbar is wider than the header in a long or CJK
                   language (fr "Changer de Tableau", ja デフォルト / グループ化),
                   and a squeezed control clipped its label or broke it across
                   lines. The cluster wraps onto a second row instead, so every
                   control keeps its own width (MOTIR-7761's walk; remedy 2). */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* The board switcher (Subtask 3.7.4) — left of the filter
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* The board switcher (Subtask 3.7.4) — left of the filter
                     affordances + [+ New issue]. Owns its own board-list fetch +
                     the `?board=` selection, so it stays present across the
                     board's loading / error / empty states. */}
-                <BoardSwitcher />
-                {/* Group-by slot — BoardContainer portals its GroupByControl here
+                  <BoardSwitcher />
+                  {/* Group-by slot — BoardContainer portals its GroupByControl here
                     so the control sits in this header row, while its state stays
                     with the board projection. `display:contents` so the portaled
                     control is a direct flex child. */}
-                <div id="board-toolbar-groupby-slot" className="contents" />
-                {/* The board filter (Subtask 6.15.3) — the SAME shipped /items
+                  <div id="board-toolbar-groupby-slot" className="contents" />
+                  {/* The board filter (Subtask 6.15.3) — the SAME shipped /items
                     [Filter] · [Advanced] · [Saved] primitives, re-pointed at the
                     board via a board-scoped buildHref. Replaces the old disabled
                     [Filter] seam. */}
-                <BoardFilterControls
-                  selectedBoardId={selectedBoardId}
-                  filter={filter}
-                  ast={ast}
-                  statuses={workflow.statuses}
-                  members={members}
-                  sprints={sprints}
-                  customFields={customFields}
-                  components={components}
-                  referencedLabels={referencedLabels}
-                  projectKey={ctx.project.identifier}
-                  viewer={viewer}
-                />
-                <NewIssueButton />
-              </div>
-            </header>
+                  <BoardFilterControls
+                    selectedBoardId={selectedBoardId}
+                    filter={filter}
+                    ast={ast}
+                    statuses={workflow.statuses}
+                    members={members}
+                    sprints={sprints}
+                    customFields={customFields}
+                    components={components}
+                    referencedLabels={referencedLabels}
+                    projectKey={ctx.project.identifier}
+                    viewer={viewer}
+                  />
+                  <SurfaceShowOriginalSwitch />
+                  <NewIssueButton />
+                </div>
+              </header>
 
-            {/* The applied-filter summary row (Subtask 6.15.3) — the saved-filter
+              <SurfaceTitlesNotice />
+
+              {/* The applied-filter summary row (Subtask 6.15.3) — the saved-filter
                 name chip + the condition chips + Clear, between the toolbar and
                 the board. Renders nothing when no filter is applied. */}
-            <BoardAppliedFilterBar
-              selectedBoardId={selectedBoardId}
-              projectKey={ctx.project.identifier}
-              viewer={viewer}
-              filter={filter}
-              ast={ast}
-              statuses={workflow.statuses}
-              members={members}
-              sprints={sprints}
-              customFields={customFields}
-              components={components}
-              referencedLabels={referencedLabels}
-            />
+              <BoardAppliedFilterBar
+                selectedBoardId={selectedBoardId}
+                projectKey={ctx.project.identifier}
+                viewer={viewer}
+                filter={filter}
+                ast={ast}
+                statuses={workflow.statuses}
+                members={members}
+                sprints={sprints}
+                customFields={customFields}
+                components={components}
+                referencedLabels={referencedLabels}
+              />
 
-            <BoardContainer
-              members={members}
-              activeProjectId={ctx.projectId}
-              selectedBoardId={selectedBoardId}
-              canEdit={caps.canEdit}
-              projectName={ctx.project.name}
-              workflow={workflow}
-              filterParam={filterParam}
-              filterActive={filterActive}
-            />
+              <BoardContainer
+                members={members}
+                activeProjectId={ctx.projectId}
+                selectedBoardId={selectedBoardId}
+                canEdit={caps.canEdit}
+                projectName={ctx.project.name}
+                workflow={workflow}
+                filterParam={filterParam}
+                filterActive={filterActive}
+              />
 
-            {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
+              {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
                 watches `?peek` and renders the modal frame + skeleton instantly,
                 then client-fetches the item from /api/work-items/peek. Decoupled from
                 this page's server render, so opening/closing is a pure shallow URL
                 change with no board refetch. */}
-            <IssueQuickViewController />
-          </div>
+              <IssueQuickViewController />
+            </div>
+          </SurfaceTitleTranslationProvider>
         </BoardFilterUiProvider>
       </SavedFilterSessionProvider>
     </AdvancedFilterProvider>

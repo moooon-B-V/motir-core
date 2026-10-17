@@ -14677,5 +14677,18 @@
     "liveFailedCount": "{n, plural, one {# pola nie udało się przetłumaczyć.} few {# pól nie udało się przetłumaczyć.} many {# pól nie udało się przetłumaczyć.} other {# pola nie udało się przetłumaczyć.}}",
     "liveNoCredits": "Tłumaczenie wymaga kredytów AI.",
     "liveEdited": "Pole {field} zostało edytowane i przetłumaczone ponownie."
+  },
+  "titleTranslation": {
+    "addCredit": "Dodaj kredyty",
+    "liveDone": "Tytuły przetłumaczone",
+    "liveFailed": "Nie udało się przetłumaczyć niektórych tytułów",
+    "liveNoCredit": "Tytuły są wyświetlane w języku oryginału: brak kredytów",
+    "livePending": "Tłumaczenie tytułów…",
+    "marked": "Przetłumaczono",
+    "markedFrom": "Przetłumaczono z języka: {language}",
+    "noCredit": "Tytuły pozostają w języku oryginału, ponieważ Twoja organizacja nie ma już kredytów.",
+    "pendingMark": "Tłumaczenie",
+    "showOriginal": "Pokaż oryginał",
+    "showTranslation": "Pokaż tłumaczenie"
   }
 }

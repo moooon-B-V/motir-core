@@ -1,5 +1,6 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { type CSSProperties, type ReactNode } from 'react';
 import { Check, GripVertical, MoreHorizontal } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -179,7 +180,11 @@ export function BacklogRowBody({
       <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
         {item.identifier}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
+      <SurfaceTitle
+        id={item.id}
+        title={item.title}
+        className="min-w-0 flex-1 truncate text-sm text-(--el-text)"
+      />
       {trailing}
       {/* The estimate seam the 4.2 row reserved is FILLED (Subtask 4.3.4) by the
           inline `EstimateBadge` — same fixed slot, no relayout. A flex sibling of

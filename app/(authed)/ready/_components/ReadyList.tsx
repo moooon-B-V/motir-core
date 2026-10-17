@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  SurfaceTitle,
+  useSurfaceTitleName,
+  useSurfaceTitleText,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronRight, Copy, FileX, ScrollText } from 'lucide-react';
@@ -224,6 +229,7 @@ export function ReadyList({ initialItems, initialCursor, lane = 'leaf' }: ReadyL
 /** One dispatch card — a flat arrangement of the shipped issue primitives. */
 function ReadyRow({ item, child = false }: { item: ReadyItemDto; child?: boolean }) {
   const openPeek = usePeekOpen();
+  const shownTitleName = useSurfaceTitleName(item.id, item.title);
   // A MANUAL row (human work) carries no `motir run` command (8.8.5/8.8.10):
   // its action slot is the always-visible *Show instruction* button + modal
   // instead of the hover-revealed agent copy button. ONE predicate with the
@@ -249,10 +255,10 @@ function ReadyRow({ item, child = false }: { item: ReadyItemDto; child?: boolean
       <button
         type="button"
         onClick={() => openPeek(item.key)}
-        aria-label={`${item.key} ${item.title}`}
+        aria-label={`${item.key} ${shownTitleName}`}
         className="min-w-0 flex-1 truncate rounded-(--radius-control) text-left text-sm text-(--el-text) after:absolute after:inset-0 after:content-[''] group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
       >
-        {item.title}
+        <SurfaceTitle id={item.id} title={item.title} />
       </button>
       {/* Meta cluster — `[type chip] · [priority] · [assignee] · [action]`. The
           chip + priority + avatar are non-interactive, so a click falls through
@@ -369,8 +375,9 @@ function InstructionModal({
   const t = useTranslations('ready');
   const tc = useTranslations('common');
   const body = item.descriptionMd?.trim() ? item.descriptionMd : null;
+  const shownTitle = useSurfaceTitleText(item.id, item.title);
   return (
-    <Modal open={open} onOpenChange={onOpenChange} size="lg" title={item.title}>
+    <Modal open={open} onOpenChange={onOpenChange} size="lg" title={shownTitle}>
       {/* Subhead: key · Manual chip · "Human task · assigned to {name}". */}
       <div className="-mt-1 mb-(--spacing-md) flex shrink-0 flex-wrap items-center gap-2">
         <span className="font-mono text-xs text-(--el-text-muted)">{item.key}</span>
@@ -442,6 +449,7 @@ function ReadyContainerRow({
 }) {
   const t = useTranslations('ready');
   const openPeek = usePeekOpen();
+  const shownTitleName = useSurfaceTitleName(container.id, container.title);
   return (
     <div
       data-surface="card"
@@ -472,10 +480,10 @@ function ReadyContainerRow({
       <button
         type="button"
         onClick={() => openPeek(container.key)}
-        aria-label={`${container.key} ${container.title}`}
+        aria-label={`${container.key} ${shownTitleName}`}
         className="min-w-0 flex-1 truncate rounded-(--radius-control) text-left text-sm text-(--el-text) after:absolute after:inset-0 after:content-[''] group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
       >
-        {container.title}
+        <SurfaceTitle id={container.id} title={container.title} />
       </button>
       <div className="flex shrink-0 items-center gap-3">
         <span className="text-xs text-(--el-text-secondary)">

@@ -14677,5 +14677,18 @@
     "liveFailedCount": "{n, plural, one {# campo non è stato tradotto.} other {# campi non sono stati tradotti.}}",
     "liveNoCredits": "La traduzione richiede crediti AI.",
     "liveEdited": "{field} è stato modificato e tradotto di nuovo."
+  },
+  "titleTranslation": {
+    "addCredit": "Aggiungi crediti",
+    "liveDone": "Titoli tradotti",
+    "liveFailed": "Alcuni titoli non sono stati tradotti",
+    "liveNoCredit": "I titoli sono mostrati nella lingua originale: crediti esauriti",
+    "livePending": "Traduzione dei titoli in corso…",
+    "marked": "Tradotto",
+    "markedFrom": "Tradotto da {language}",
+    "noCredit": "I titoli restano nella lingua originale perché la tua organizzazione non ha più crediti.",
+    "pendingMark": "Traduzione in corso",
+    "showOriginal": "Mostra originale",
+    "showTranslation": "Mostra traduzione"
   }
 }

@@ -14677,5 +14677,18 @@
     "liveFailedCount": "{n, plural, one {# field couldn’t be translated.} other {# fields couldn’t be translated.}}",
     "liveNoCredits": "Translation needs AI credits.",
     "liveEdited": "{field} was edited and translated again."
+  },
+  "titleTranslation": {
+    "addCredit": "Add credit",
+    "liveDone": "Titles translated",
+    "liveFailed": "Some titles could not be translated",
+    "liveNoCredit": "Titles are shown in their original language: no credit left",
+    "livePending": "Translating titles…",
+    "marked": "Translated",
+    "markedFrom": "Translated from {language}",
+    "noCredit": "Titles stay in their original language because your organization has no credit left.",
+    "pendingMark": "Translating",
+    "showOriginal": "Show original",
+    "showTranslation": "Show translation"
   }
 }

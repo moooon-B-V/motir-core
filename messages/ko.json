@@ -14671,5 +14671,18 @@
     "liveFailedCount": "{n, plural, other {필드 #개를 번역하지 못했습니다.}}",
     "liveNoCredits": "번역하려면 AI 크레딧이 필요합니다.",
     "liveEdited": "{field} 항목이 편집되어 다시 번역되었습니다."
+  },
+  "titleTranslation": {
+    "addCredit": "크레딧 추가",
+    "liveDone": "제목이 번역되었습니다",
+    "liveFailed": "번역하지 못한 제목이 있습니다",
+    "liveNoCredit": "제목을 원래 언어로 표시합니다. 남은 크레딧이 없습니다",
+    "livePending": "제목을 번역하는 중…",
+    "marked": "번역됨",
+    "markedFrom": "{language}에서 번역됨",
+    "noCredit": "조직에 남은 크레딧이 없어 제목이 원래 언어로 유지됩니다.",
+    "pendingMark": "번역 중",
+    "showOriginal": "원문 보기",
+    "showTranslation": "번역 보기"
   }
 }

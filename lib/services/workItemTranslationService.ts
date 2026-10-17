@@ -27,6 +27,7 @@ import { workItemTodosService } from './workItemTodosService';
 import { workItemTranslationStoreService } from './workItemTranslationStoreService';
 import { projectAccessService } from './projectAccessService';
 import { workItemsService } from './workItemsService';
+import { TITLE_TRANSLATION_MAX_ITEMS } from '@/lib/translation/titleBound';
 
 // The field assembly is pure and lives in `lib/translation/itemFields.ts`, so the
 // page-read offer can use it without importing this door (MOTIR-8122).
@@ -315,7 +316,7 @@ export const workItemTranslationService = {
 // press's, so a batch and a press for one title cannot both call motir-ai.
 
 /** The most titles one request translates; the excess is `truncated`, not refused. */
-export const TITLE_TRANSLATION_MAX_ITEMS = 100;
+export { TITLE_TRANSLATION_MAX_ITEMS };
 
 /** One title the door may translate: the item, its stored title and its recorded language. */
 export interface TitleSubject {

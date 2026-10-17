@@ -11339,5 +11339,16 @@
   "itemTranslation.liveShowingOriginal": "Showing the original.",
   "itemTranslation.liveFailedCount": "{n, plural, one {# field couldn’t be translated.} other {# fields couldn’t be translated.}}",
   "itemTranslation.liveNoCredits": "Translation needs AI credits.",
-  "itemTranslation.liveEdited": "{field} was edited and translated again."
+  "itemTranslation.liveEdited": "{field} was edited and translated again.",
+  "titleTranslation.addCredit": "Add credit",
+  "titleTranslation.liveDone": "Titles translated",
+  "titleTranslation.liveFailed": "Some titles could not be translated",
+  "titleTranslation.liveNoCredit": "Titles are shown in their original language: no credit left",
+  "titleTranslation.livePending": "Translating titles…",
+  "titleTranslation.marked": "Translated",
+  "titleTranslation.markedFrom": "Translated from {language}",
+  "titleTranslation.noCredit": "Titles stay in their original language because your organization has no credit left.",
+  "titleTranslation.pendingMark": "Translating",
+  "titleTranslation.showOriginal": "Show original",
+  "titleTranslation.showTranslation": "Show translation"
 }

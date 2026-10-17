@@ -14671,5 +14671,18 @@
     "liveFailedCount": "{n, plural, other {# 个字段无法翻译。}}",
     "liveNoCredits": "翻译需要AI额度。",
     "liveEdited": "{field}已编辑并重新翻译。"
+  },
+  "titleTranslation": {
+    "addCredit": "补充额度",
+    "liveDone": "标题已翻译",
+    "liveFailed": "部分标题无法翻译",
+    "liveNoCredit": "标题以原文语言显示：额度已用完",
+    "livePending": "正在翻译标题…",
+    "marked": "已翻译",
+    "markedFrom": "译自{language}",
+    "noCredit": "你的组织额度已用完，标题将保持原文语言。",
+    "pendingMark": "正在翻译",
+    "showOriginal": "显示原文",
+    "showTranslation": "显示译文"
   }
 }

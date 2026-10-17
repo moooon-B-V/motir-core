@@ -14677,5 +14677,18 @@
     "liveFailedCount": "{n, plural, one {# veld kon niet worden vertaald.} other {# velden konden niet worden vertaald.}}",
     "liveNoCredits": "Vertalen vereist AI-tegoed.",
     "liveEdited": "{field} is bewerkt en opnieuw vertaald."
+  },
+  "titleTranslation": {
+    "addCredit": "Tegoed toevoegen",
+    "liveDone": "Titels vertaald",
+    "liveFailed": "Sommige titels konden niet worden vertaald",
+    "liveNoCredit": "Titels worden in de oorspronkelijke taal getoond: geen tegoed meer",
+    "livePending": "Titels worden vertaald…",
+    "marked": "Vertaald",
+    "markedFrom": "Vertaald uit het {language}",
+    "noCredit": "Titels blijven in de oorspronkelijke taal omdat je organisatie geen tegoed meer heeft.",
+    "pendingMark": "Bezig met vertalen",
+    "showOriginal": "Origineel tonen",
+    "showTranslation": "Vertaling tonen"
   }
 }

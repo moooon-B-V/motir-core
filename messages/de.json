@@ -14677,5 +14677,18 @@
     "liveFailedCount": "{n, plural, one {# Feld konnte nicht übersetzt werden.} other {# Felder konnten nicht übersetzt werden.}}",
     "liveNoCredits": "Für die Übersetzung sind KI-Credits nötig.",
     "liveEdited": "{field} wurde bearbeitet und erneut übersetzt."
+  },
+  "titleTranslation": {
+    "addCredit": "Credits hinzufügen",
+    "liveDone": "Titel übersetzt",
+    "liveFailed": "Einige Titel konnten nicht übersetzt werden",
+    "liveNoCredit": "Titel werden in der Originalsprache angezeigt: keine Credits mehr",
+    "livePending": "Titel werden übersetzt…",
+    "marked": "Übersetzt",
+    "markedFrom": "Übersetzt aus {language}",
+    "noCredit": "Titel bleiben in der Originalsprache, weil Ihre Organisation keine Credits mehr hat.",
+    "pendingMark": "Wird übersetzt",
+    "showOriginal": "Original anzeigen",
+    "showTranslation": "Übersetzung anzeigen"
   }
 }
