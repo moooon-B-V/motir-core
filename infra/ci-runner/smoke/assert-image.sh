@@ -215,7 +215,7 @@ else
 fi
 
 # The derived toolchain, checked as present rather than assumed.
-for bin in node npm npx corepack git jq curl unzip zip tar docker dockerd containerd runc setpriv sudo gh gcc make python3; do
+for bin in node npm npx corepack git jq curl unzip zip tar docker dockerd containerd runc setpriv sudo gh gcc make python3 pipx; do
   if inspect "command -v ${bin} >/dev/null"; then ok "${bin} on PATH"
   else fail "${bin} is missing from the image"; fi
 done
@@ -223,7 +223,7 @@ done
 # The tools baked for Motir's own private repositories (MOTIR-8710): each must
 # RUN in the built image, not merely sit on PATH — a broken package link or a
 # missing shared library is exactly what `command -v` cannot see.
-for check in 'gh --version' 'gcc --version' 'make --version' 'python3 --version'; do
+for check in 'gh --version' 'gcc --version' 'make --version' 'python3 --version' 'pipx --version'; do
   if inspect "${check} >/dev/null"; then ok "\`${check}\` exits 0"
   else fail "\`${check}\` fails in the built image"; fi
 done
