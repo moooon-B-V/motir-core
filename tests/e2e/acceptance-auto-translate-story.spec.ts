@@ -595,7 +595,22 @@ async function retranslateEdit(page: Page, beat: Beat) {
   await item(page, seed.story.key);
   await expect(titleOf(page)).toHaveText(seed.text.ko.title, { timeout: FIRST_PAINT_MS });
   expect(await submitAt(ordinal)).toEqual({ target: 'ko', refs: ['description'] });
-  await expect(mark(page, 'ko', 'fieldDescription', 'markTranslating')).toBeVisible();
+  try {
+    await expect(mark(page, 'ko', 'fieldDescription', 'markTranslating')).toBeVisible();
+  } catch (err) {
+    const seen = await page
+      .locator('[data-translation-mark]')
+      .evaluateAll((els) =>
+        els.map((e) => `${e.getAttribute('data-translation-mark')}:${e.textContent}`),
+      );
+    const sent = translateSubmits().map((s, i) => {
+      const fields = s.translate?.fields.map((f) => f.fieldRef).join(',');
+      return `${i}:${s.translate?.targetLanguage}:${fields}:${s.refused ? 'refused' : 'ok'}`;
+    });
+    throw new Error(
+      `description mark missing; ordinal=${ordinal} marks=${JSON.stringify(seen)} submits=${JSON.stringify(sent)}\n${String(err)}`,
+    );
+  }
   await beat();
 
   const edited = [{ fieldRef: 'description', text: seed.text.ko.edited }];
