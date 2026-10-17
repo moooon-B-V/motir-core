@@ -983,6 +983,14 @@ describe('the boot’s defensive paths', () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
     jitHandler = (call) => {
+      // The runner's Docker volume (MOTIR-8839) is created FIRST and must succeed,
+      // so the image pull is what fails — and, once it has, the volume it would
+      // have mounted is deleted.
+      if (call.url.includes('api.machines.dev') && call.url.includes('/volumes')) {
+        return call.method === 'POST'
+          ? json(200, { id: 'vol_boot', name: 'motir_ci_docker', region: 'iad' })
+          : json(200, {});
+      }
       if (call.url.includes('api.machines.dev')) {
         return json(400, {
           error:
@@ -1007,6 +1015,9 @@ describe('the boot’s defensive paths', () => {
     expect(outcome).toMatchObject({
       detail: expect.stringContaining('the runner image could not be pulled'),
     });
+    expect(
+      githubCalls.some((c) => c.method === 'DELETE' && c.url.includes('/volumes/vol_boot')),
+    ).toBe(true);
 
     // The intent tells the truth about WHICH image and WHAT the registry said —
     // this is the row the operator surface renders, so the diagnosis has to
