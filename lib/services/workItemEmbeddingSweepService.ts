@@ -72,10 +72,11 @@ function warnOnIsolated(summary: WorkItemEmbeddingSweepSummary): void {
 
 export const workItemEmbeddingSweepService = {
   async sweep(
-    caps: { maxEmbeds?: number; maxPages?: number } = {},
+    caps: { maxEmbeds?: number; maxPages?: number; projectPage?: number } = {},
   ): Promise<WorkItemEmbeddingSweepSummary> {
     const maxEmbeds = caps.maxEmbeds ?? EMBEDDING_SWEEP_MAX_EMBEDS_PER_RUN;
     const maxPages = caps.maxPages ?? EMBEDDING_SWEEP_MAX_PAGES_PER_RUN;
+    const projectPage = caps.projectPage ?? EMBEDDING_SWEEP_PROJECT_PAGE;
     const summary: WorkItemEmbeddingSweepSummary = {
       configured: motirAiConfigured(),
       projectsVisited: 0,
@@ -131,7 +132,7 @@ export const workItemEmbeddingSweepService = {
         } while (afterId !== null);
       }
 
-      if (projects.length < EMBEDDING_SWEEP_PROJECT_PAGE) break;
+      if (projects.length < projectPage) break;
       projectCursor = projects[projects.length - 1]!.id;
     }
     warnOnIsolated(summary);

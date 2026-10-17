@@ -269,6 +269,28 @@ describe('workItemEmbeddingSweepService', () => {
     expect(none.embedded).toBe(0);
   });
 
+  it('pages through projects past the discovery page size', async () => {
+    const a = await makeWorkItemFixture({ name: 'First', identifier: 'FST' });
+    const b = await makeWorkItemFixture({ name: 'Second', identifier: 'SND' });
+    const c = await makeWorkItemFixture({ name: 'Third', identifier: 'TRD' });
+    for (const fx of [a, b, c]) await createTestWorkItem(fx, { kind: 'task', title: 'Item' });
+
+    const summary = await workItemEmbeddingSweepService.sweep({ projectPage: 1 });
+
+    expect(summary.projectsVisited).toBe(3);
+    expect(summary.embedded).toBe(3);
+  });
+
+  it('warns about an item once it has been given up on', async () => {
+    const { bad } = await scenario();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    for (let i = 0; i < EMBEDDING_MAX_ATTEMPTS; i += 1) await workItemEmbeddingSweepService.sweep();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`gave up.*${bad.id}`)));
+    warn.mockRestore();
+  });
+
   it('stops at the page cap and says so', async () => {
     await scenario();
 
