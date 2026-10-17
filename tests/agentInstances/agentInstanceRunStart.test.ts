@@ -617,6 +617,25 @@ describe('after the open — every failure ends the run and leaves nothing live'
     expect(await runLaunchJob(dispatchRunId)).toBe('noop');
   });
 
+  it('a launch that answers no JSON line fails loudly, with its exit code and stderr (MOTIR-8872)', async () => {
+    const id = await agent();
+    const item = await card();
+    const { dispatchRunId } = await start(item.identifier, id);
+    agentSide.launch = {
+      exitCode: 1,
+      stdout: '',
+      stderr: 'Error: The run’s credentials are read on stdin as JSON.',
+    };
+    expect(await runLaunchJob(dispatchRunId)).toBe('failed');
+    const lines = await adminDb.dispatchRunEvent.findMany({
+      where: { dispatchRunId, kind: 'log' },
+    });
+    const body = lines.at(-1)!.body;
+    expect(body).toContain('refused it (launch_failed)');
+    expect(body).toContain('exit 1');
+    expect(body).toContain('credentials are read on stdin');
+  });
+
   it('an exec that cannot reach the machine ends the run failed', async () => {
     const id = await agent();
     const item = await card();
