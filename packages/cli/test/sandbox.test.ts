@@ -204,6 +204,19 @@ describe('sandbox Dockerfile', () => {
     expect(directives).toMatch(/python3 -c 'import [^']*\bdifflib\b/);
   });
 
+  it('installs procps and smoke-tests `ps` — Codex fails to start without it (MOTIR-8868)', () => {
+    const directives = directivesOf(dockerfile);
+    const runtime = directives.slice(directives.indexOf(' AS base'));
+    const aptPackages = runtime.slice(
+      runtime.indexOf('apt-get install'),
+      runtime.indexOf('rm -rf /var/lib/apt/lists'),
+    );
+    expect(aptPackages).toMatch(/^\s+"procps=\$\{PROCPS_VERSION\}" \\$/m);
+    expect(directives).toMatch(/^ARG PROCPS_VERSION=\d+:\d+\.\d+\.\d+-\d+(\+b\d+)?$/m);
+    // A base without `ps` must fail the BUILD, not the first `codex` in an agent.
+    expect(directives).toMatch(/&& ps --version/);
+  });
+
   it('installs the motir binary and smoke-tests it in the same layer', () => {
     expect(dockerfile).toContain('npm install -g /tmp/motir-cli.tgz');
     // A base that cannot run `motir --version` must fail the BUILD.
