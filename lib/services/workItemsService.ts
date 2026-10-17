@@ -9585,7 +9585,10 @@ async function computeSubtreeTitleCoverageAdvisories(
 async function computeSubtreeProseAdvisories(
   root: WorkItemDto,
   notDone: Array<{ id: string; identifier: string; parentId: string | null }>,
-  membersById: Map<string, { id: string; identifier: string; parentId: string | null }>,
+  membersById: Map<
+    string,
+    { id: string; identifier: string; parentId: string | null; kind: string }
+  >,
   edges: Array<{ fromId: string; blockerId: string }>,
   ctx: ServiceContext,
 ): Promise<{ advisories: WorkItemProseAdvisoryDto[]; subjects: ProseAdvisorySubject[] }> {

@@ -960,7 +960,14 @@ describe('workItemsService.validateWorkItem — the ORDERING advisory', () => {
 
     const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
     expect(result.valid).toBe(true);
-    expect(result.advisories).toEqual([]);
+    // The ORDERING check stays quiet on the cut leg (its remedy read back). The
+    // leg's PLACEMENT is the POST-MERGE-CHILD check's question (MOTIR-8863): a
+    // card that needs the merge cannot be a child of the story that ships it, so
+    // that one advisory — and only that one — names it.
+    expect(result.advisories.filter((a) => a.severity === 'likely-ordering-violation')).toEqual([]);
+    expect(result.advisories.map((a) => a.severity)).toEqual([
+      'likely-post-merge-child-under-container',
+    ]);
   });
 
   it('a DONE member is not scanned for it either — its prose is history', async () => {
