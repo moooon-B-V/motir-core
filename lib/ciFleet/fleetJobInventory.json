@@ -683,9 +683,9 @@
     "moooon-B-V/motir-ai": {
       "repoRef": "moooon-B-V/motir-ai",
       "ref": "main",
-      "sha": "966ab405b635be9c03acf7bd8a7912223ee7521a",
+      "sha": "d9ad3124db6ff051288ead230f86faf5798907a5",
       "visibility": "private",
-      "measuredAt": "2026-10-16T15:00:35Z",
+      "measuredAt": "2026-10-17T14:14:49Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
       "workflows": [
         {
