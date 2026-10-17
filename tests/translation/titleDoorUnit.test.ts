@@ -198,7 +198,7 @@ describe('translateTitlesForReader', () => {
   it('serves kept titles from one lookup and calls nothing else when all are kept', async () => {
     const { d, calls } = build([german('a'), german('b')], echo, { a: 'A!', b: 'B!' });
     const r = await run(d, ['a', 'b']);
-    expect(r.titles.map((t) => t.text)).toEqual(['A!', 'B!']);
+    expect(r.titles.map((t) => ('text' in t ? t.text : null))).toEqual(['A!', 'B!']);
     expect(calls.kept).toHaveLength(1);
     expect(calls.tenant).toEqual([]);
     expect(calls.locks).toEqual([]);
@@ -210,13 +210,13 @@ describe('translateTitlesForReader', () => {
     const r = await run(d, ['a', 'b']);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.fields.map((f) => f.fieldRef)).toEqual([fieldRef.titleForItem('b')]);
-    expect(r.titles.map((t) => t.text)).toEqual(['A!', 'EN Titel b']);
+    expect(r.titles.map((t) => ('text' in t ? t.text : null))).toEqual(['A!', 'EN Titel b']);
   });
 
   it("takes the press's lock key for each missing title", async () => {
     const { d, calls } = build([german('a')]);
     await run(d, ['a']);
-    expect(calls.locks[0]).toEqual([
+    expect(calls.locks![0]).toEqual([
       fieldLockKey({
         organizationId: 'org-1',
         workItemId: 'a',
@@ -276,7 +276,7 @@ describe('translateTitlesForReader', () => {
     expect(r.truncated).toBe(true);
     expect(r.titles).toHaveLength(TITLE_TRANSLATION_MAX_ITEMS);
     expect(r.titles[0]!.workItemId).toBe('i0');
-    expect((calls.subjects[0] as string[]).length).toBe(TITLE_TRANSLATION_MAX_ITEMS);
+    expect((calls.subjects![0] as string[]).length).toBe(TITLE_TRANSLATION_MAX_ITEMS);
   });
 
   it('omits an id the reader may not answer', async () => {

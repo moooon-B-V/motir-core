@@ -79,6 +79,15 @@ export interface ProjectDTO {
    */
   prMergeMode: PrMergeModeValue;
   /**
+   * The reader-facing auto-translate switch (Story MOTIR-7738). When true, each
+   * member reads this project's work content in their own interface language
+   * across the covered surfaces. Rides the BASE DTO (a single project-row column,
+   * exactly as `aiGenerateExplanations` and `prMergeMode` do) so a covered
+   * surface reads it off the project it already holds, with no second round trip.
+   * The settings read/flip is a different, gated read (`projectAutoTranslateSettingsService`).
+   */
+  autoTranslateWorkContent: boolean;
+  /**
    * ISO timestamp the project was created — the Details surface's "Created" row
    * (Story 6.5.3). OPTIONAL and loaded ONLY on the details-surface read path
    * (alongside `previousKeys`), so the hot reads (switcher list, active-project
