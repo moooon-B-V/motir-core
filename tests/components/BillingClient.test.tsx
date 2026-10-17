@@ -25,6 +25,7 @@ const hrefSetter = vi.fn();
 function ciState(over: Partial<CiEntitlementStateDTO> = {}): CiEntitlementStateDTO {
   return {
     applicable: true,
+    internal: false,
     organizationId: 'org1',
     periodStart: '2026-07-01T00:00:00.000Z',
     periodEnd: '2026-08-01T00:00:00.000Z',
@@ -809,6 +810,34 @@ describe('BillingClient — the Motir CI line', () => {
     // The two shipped lines are untouched.
     expect(screen.getByRole('heading', { name: 'Motir', level: 2 })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Motir AI', level: 2 })).toBeTruthy();
+  });
+
+  // MOTIR-8886: the fixture above hands a META org a `within_allowance` state it
+  // never gets in production, so it proved a line that moooon's page did not
+  // draw. The state `ciAllowanceService` really returns for it is `bypassed` +
+  // `internal`, and that must still draw a minutes-only line.
+  it("draws the minutes-only CI line for the META org's real bypassed+internal state", async () => {
+    renderWithBody({
+      ...withCi({
+        applicable: false,
+        internal: true,
+        state: 'bypassed',
+        poolMinutes: 0,
+        consumedMinutes: 412,
+        remainingMinutes: 0,
+        memberCount: 3,
+        balance: null,
+      }),
+      internalBilling: true,
+    });
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Motir CI' })).toBeTruthy());
+
+    expect(screen.getByText('Internal')).toBeTruthy();
+    expect(screen.getByText('412 minutes')).toBeTruthy();
+    // No allowance, no charge, no buy control.
+    expect(screen.queryByText(/of 0 minutes/)).toBeNull();
+    expect(screen.queryByText('CI paused')).toBeNull();
+    expect(screen.queryByText('Add credits')).toBeNull();
   });
 
   // ⚠️ INVERTED (MOTIR-4572), and this one carries the story's own amendment.
