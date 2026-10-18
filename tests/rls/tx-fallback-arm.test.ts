@@ -712,6 +712,7 @@ describe('workItemRepository — all 67 fallback arms have a caller', () => {
         r.aggregateDistribution(pid, ws, { kind: 'column', column: 'kind' }),
       ],
       ['aggregateWorkloadByAssignee', r.aggregateWorkloadByAssignee(pid, ws)],
+      ['aggregateWorkloadByPersonInWindow', r.aggregateWorkloadByPersonInWindow(pid, ws, win)],
       ['findEpicAncestors', r.findEpicAncestors([itemId], ws)],
       ['findBacklogRankByIds', r.findBacklogRankByIds([itemId], ws)],
       ['findBoundaryBacklogRank', r.findBoundaryBacklogRank(pid, ws, null, 'max')],

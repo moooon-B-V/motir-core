@@ -321,17 +321,26 @@ export interface ResolutionTimeDto {
 export type WorkloadMeasureDto = 'story_points' | 'issue_count';
 
 /**
- * One assignee row of the workload report — a horizontal bar. `assigneeId`/
- * `name` are `null` for the unassigned ("None") bucket (the UI labels it). Both
- * the `points` (summed `storyPoints`, unestimated counting 0) and `count`
+ * One person row of the workload report — a horizontal bar. `assigneeId`/
+ * `name` are the bar's PERSON: the assignee, or — for the windowed read, where an
+ * unassigned item goes on its reporter — the reporter. They are `null` only for
+ * the neutral "Unassigned" bar (no assignee and no reporter; the UI labels it).
+ * Both the `points` (summed `storyPoints`, unestimated counting 0) and `count`
  * (number of open issues) are carried so the Measure toggle is a client-side
- * re-rank with no refetch.
+ * re-rank with no refetch; they are the bar's TOTALS. The four segment fields
+ * split those totals: `assigned*` is work the person is assigned, `unassigned*`
+ * is unassigned work they reported (snapshot rows: `assigned* = total`,
+ * `unassigned* = 0`; the person-less bar carries only totals).
  */
 export interface WorkloadAssigneeDto {
   assigneeId: string | null;
   name: string | null;
   points: number;
   count: number;
+  assignedPoints: number;
+  assignedCount: number;
+  unassignedPoints: number;
+  unassignedCount: number;
 }
 
 /**
@@ -347,4 +356,11 @@ export interface WorkloadDto {
   assignees: WorkloadAssigneeDto[];
   totalPoints: number;
   totalCount: number;
+  /** The window a windowed read covered (ISO strings); `null` for the open-now snapshot. */
+  window: {
+    period: ReportPeriodDto;
+    daysBack: number;
+    windowStart: string;
+    windowEnd: string;
+  } | null;
 }

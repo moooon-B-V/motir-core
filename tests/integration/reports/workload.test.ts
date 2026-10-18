@@ -7,7 +7,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
-import type { WorkItem } from '@/generated/prisma/client';
+import type { Prisma, WorkItem } from '@/generated/prisma/client';
 
 const HIGH_AST: FilterAst = {
   combinator: 'and',
@@ -186,5 +186,280 @@ describe('getWorkload — the ranked open-work matrix', () => {
       fx.ctx,
     );
     expect(result.state).toBe('stale');
+  });
+});
+
+// ── Story MOTIR-8919 — the WINDOWED read ─────────────────────────────────────
+// Work open at any point in the last `daysBack` days, one bar per person (the
+// assignee, else the reporter as a separate "unassigned" segment). Keyed on the
+// LAST move into a done category, so resolve → reopen → resolve still counts.
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
+const WINDOW = { period: 'day' as const, daysBack: 30 };
+
+async function addRevision(
+  workItemId: string,
+  changedById: string,
+  changedAt: Date,
+  diff: Prisma.InputJsonValue,
+): Promise<void> {
+  await adminDb.workItemRevision.create({
+    data: { workItemId, changedById, changeKind: 'updated', changedAt, diff },
+  });
+}
+const toDone = { status: { from: 'todo', to: 'done' } };
+const reopen = { status: { from: 'done', to: 'todo' } };
+
+describe('getWorkload — over a window', () => {
+  async function seed(
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    o: {
+      assigneeId: string | null;
+      reporterId: string;
+      points: number;
+      status?: string;
+      createdDaysAgo?: number;
+    },
+  ): Promise<WorkItem> {
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'w' });
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: {
+        assigneeId: o.assigneeId,
+        reporterId: o.reporterId,
+        storyPoints: o.points,
+        status: o.status ?? 'todo',
+        createdAt: daysAgo(o.createdDaysAgo ?? 5),
+      },
+    });
+    return item;
+  }
+
+  it('(a) puts an assigned open item on its assignee bar in assigned*', async () => {
+    const fx = await makeWorkItemFixture();
+    const bo = await createTestUser({ name: 'Bo' });
+    await seed(fx, { assigneeId: bo.id, reporterId: fx.ownerId, points: 5 });
+
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { projectId: fx.projectId },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.window?.period).toBe('day');
+    expect(data.window?.daysBack).toBe(30);
+    expect(data.assignees).toEqual([
+      {
+        assigneeId: bo.id,
+        name: 'Bo',
+        points: 5,
+        count: 1,
+        assignedPoints: 5,
+        assignedCount: 1,
+        unassignedPoints: 0,
+        unassignedCount: 0,
+      },
+    ]);
+  });
+
+  it("(b) puts an unassigned item on its reporter's bar, merged with their assigned work", async () => {
+    const fx = await makeWorkItemFixture();
+    const r = await createTestUser({ name: 'Rae' });
+    await seed(fx, { assigneeId: r.id, reporterId: fx.ownerId, points: 3 });
+    await seed(fx, { assigneeId: null, reporterId: r.id, points: 8 });
+
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { projectId: fx.projectId },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.assignees).toHaveLength(1);
+    expect(data.assignees[0]).toMatchObject({
+      assigneeId: r.id,
+      points: 11,
+      count: 2,
+      assignedPoints: 3,
+      assignedCount: 1,
+      unassignedPoints: 8,
+      unassignedCount: 1,
+    });
+    const a = data.assignees[0]!;
+    expect(a.points).toBe(a.assignedPoints + a.unassignedPoints);
+  });
+
+  it('(c) the schema requires a reporter, so the repository never emits a person-less row here', async () => {
+    // `work_item.reporterId` is NOT NULL: the neutral Unassigned bar is a
+    // mapper-level shape (covered in tests/reports/workload-mapper.test.ts); a
+    // real seed always resolves an unassigned item to its reporter.
+    const fx = await makeWorkItemFixture();
+    await seed(fx, { assigneeId: null, reporterId: fx.ownerId, points: 2 });
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { projectId: fx.projectId },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.assignees.every((x) => x.assigneeId !== null)).toBe(true);
+    expect(data.assignees[0]).toMatchObject({ unassignedPoints: 2, assignedPoints: 0 });
+  });
+
+  it('(d) counts an item resolved inside the window; not one resolved before it and still done', async () => {
+    const fx = await makeWorkItemFixture();
+    const bo = await createTestUser({ name: 'Bo' });
+    const inside = await seed(fx, {
+      assigneeId: bo.id,
+      reporterId: fx.ownerId,
+      points: 4,
+      status: 'done',
+      createdDaysAgo: 40,
+    });
+    await addRevision(inside.id, fx.ownerId, daysAgo(10), toDone);
+    const before = await seed(fx, {
+      assigneeId: bo.id,
+      reporterId: fx.ownerId,
+      points: 100,
+      status: 'done',
+      createdDaysAgo: 80,
+    });
+    await addRevision(before.id, fx.ownerId, daysAgo(50), toDone);
+
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { projectId: fx.projectId },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.totalPoints).toBe(4);
+    expect(data.totalCount).toBe(1);
+  });
+
+  it('(e) counts resolved-before, reopened, resolved-again inside the window (the LAST done-entry)', async () => {
+    const fx = await makeWorkItemFixture();
+    const bo = await createTestUser({ name: 'Bo' });
+    const item = await seed(fx, {
+      assigneeId: bo.id,
+      reporterId: fx.ownerId,
+      points: 6,
+      status: 'done',
+      createdDaysAgo: 90,
+    });
+    await addRevision(item.id, fx.ownerId, daysAgo(60), toDone);
+    await addRevision(item.id, fx.ownerId, daysAgo(45), reopen);
+    await addRevision(item.id, fx.ownerId, daysAgo(7), toDone);
+
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { projectId: fx.projectId },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.totalPoints).toBe(6);
+    expect(data.totalCount).toBe(1);
+  });
+
+  it('(f) excludes an item created and resolved before the window starts; and one done with no done-entry', async () => {
+    const fx = await makeWorkItemFixture();
+    const bo = await createTestUser({ name: 'Bo' });
+    const old = await seed(fx, {
+      assigneeId: bo.id,
+      reporterId: fx.ownerId,
+      points: 9,
+      status: 'done',
+      createdDaysAgo: 70,
+    });
+    await addRevision(old.id, fx.ownerId, daysAgo(65), toDone);
+    await seed(fx, {
+      assigneeId: bo.id,
+      reporterId: fx.ownerId,
+      points: 9,
+      status: 'done',
+      createdDaysAgo: 3,
+    }); // created straight into done: no recorded open time
+
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { projectId: fx.projectId },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.assignees).toEqual([]);
+  });
+
+  it('(g) an empty window returns the empty envelope, never NaN', async () => {
+    const fx = await makeWorkItemFixture();
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { projectId: fx.projectId },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.assignees).toEqual([]);
+    expect(data.totalPoints).toBe(0);
+    expect(data.totalCount).toBe(0);
+    expect(data.window).not.toBeNull();
+  });
+
+  it('(h) with no window it is exactly the snapshot: window null, all-assigned, unassigned 0', async () => {
+    const fx = await makeWorkItemFixture();
+    const bo = await createTestUser({ name: 'Bo' });
+    await seed(fx, { assigneeId: bo.id, reporterId: fx.ownerId, points: 5 });
+    await seed(fx, { assigneeId: null, reporterId: fx.ownerId, points: 2 });
+
+    const data = await expectOk(
+      reportsService.getWorkload({ projectId: fx.projectId }, { measure: 'story_points' }, fx.ctx),
+    );
+    expect(data.window).toBeNull();
+    expect(data.assignees.map((a) => [a.name, a.points, a.count])).toEqual([
+      ['Bo', 5, 1],
+      [null, 2, 1],
+    ]);
+    expect(data.assignees.every((a) => a.unassignedPoints === 0 && a.unassignedCount === 0)).toBe(
+      true,
+    );
+    expect(data.assignees[0]).toMatchObject({ assignedPoints: 5, assignedCount: 1 });
+  });
+
+  it('(i) a saved-filter scope narrows the windowed read', async () => {
+    const fx = await makeWorkItemFixture();
+    const u = await createTestUser({ name: 'U' });
+    const hi = await seed(fx, { assigneeId: u.id, reporterId: fx.ownerId, points: 8 });
+    const lo = await seed(fx, { assigneeId: u.id, reporterId: fx.ownerId, points: 3 });
+    await adminDb.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
+    await adminDb.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'High only', visibility: 'project', filterParam: encodeFilterParam(HIGH_AST) },
+      fx.ctx,
+    );
+
+    const data = await expectOk(
+      reportsService.getWorkload(
+        { savedFilterId: filter.id },
+        { measure: 'story_points', window: WINDOW },
+        fx.ctx,
+      ),
+    );
+    expect(data.totalCount).toBe(1);
+    expect(data.totalPoints).toBe(8);
+  });
+
+  it('rejects a window outside the allowed set with the typed 422, before scope resolution', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      reportsService.getWorkload(
+        { savedFilterId: 'nonexistent' },
+        { measure: 'story_points', window: { period: 'day', daysBack: 9999 } },
+        fx.ctx,
+      ),
+    ).rejects.toThrow();
   });
 });

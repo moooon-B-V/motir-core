@@ -503,23 +503,56 @@ export const reportsService = {
   },
 
   /**
-   * The WORKLOAD read (Story 8.8 · Subtask 8.8.13) — the horizontal ranked-bar
-   * report behind `/reports/workload` (and the `workload` gadget). Open
-   * (non-done-category, non-archived) work per assignee, ranked by the `measure`
-   * (story points or issue count). No time window — it is a snapshot of the
-   * CURRENT `work_item` rows (one bounded grouped query, no revision trail), so
-   * the only config is the measure. Same scope / typed-state contract as the
-   * other reads (`no_access` / `stale` on a degraded scope); no window to 422.
+   * The WORKLOAD read (Story 8.8 · Subtask 8.8.13; windowed by Story MOTIR-8919)
+   * — the horizontal ranked-bar report behind `/reports/workload` (and the
+   * `workload` gadget), ranked by the `measure` (story points or issue count).
+   *
+   * Without `config.window` it is the open-now SNAPSHOT of current `work_item`
+   * rows, per assignee — exactly the gadget's contract. With a `window` it is the
+   * work that was open at any point in the last `daysBack` days (read from the
+   * revision trail), one bar per person: the assignee, else the reporter, as a
+   * separate "unassigned" segment, else the neutral Unassigned bar. A window
+   * outside the allowed set is the typed 422, raised before scope resolution as
+   * in `getAverageAge`. Same scope / typed-state contract as the other reads
+   * (`no_access` / `stale` on a degraded scope).
    */
   async getWorkload(
     scope: ReportScopeDto,
-    config: { measure: WorkloadMeasureDto },
+    config: {
+      measure: WorkloadMeasureDto;
+      window?: { period: ReportPeriod; daysBack: number };
+    },
     ctx: ServiceContext,
   ): Promise<ReportWidgetResultDto<WorkloadDto>> {
+    if (config.window) validateReportWindow(config.window.period, config.window.daysBack);
+
     const resolved = await resolveReportScope(scope, ctx);
     if (resolved.state !== 'ok') return resolved;
 
     const filter = await scopeAstFilter(resolved, ctx);
+    if (config.window) {
+      const { period, daysBack } = config.window;
+      const { start, end } = reportWindow(new Date(), daysBack);
+      const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.aggregateWorkloadByPersonInWindow(
+          resolved.projectId,
+          ctx.workspaceId,
+          { start, end },
+          filter,
+          tx,
+        ),
+      );
+      return {
+        state: 'ok',
+        data: toWorkloadDto(config.measure, rows, {
+          period,
+          daysBack,
+          windowStart: start,
+          windowEnd: end,
+        }),
+      };
+    }
+
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.aggregateWorkloadByAssignee(
         resolved.projectId,
