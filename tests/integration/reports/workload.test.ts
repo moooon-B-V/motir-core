@@ -120,7 +120,18 @@ describe('getWorkload — the ranked open-work matrix', () => {
     const data = await expectOk(
       reportsService.getWorkload({ projectId: fx.projectId }, { measure: 'story_points' }, fx.ctx),
     );
-    expect(data.assignees).toEqual([{ assigneeId: u.id, name: 'U', points: 0, count: 1 }]);
+    expect(data.assignees).toEqual([
+      {
+        assigneeId: u.id,
+        name: 'U',
+        points: 0,
+        count: 1,
+        assignedPoints: 0,
+        assignedCount: 1,
+        unassignedPoints: 0,
+        unassignedCount: 0,
+      },
+    ]);
   });
 
   it('returns an empty ranking + zero totals when there is no open work', async () => {
