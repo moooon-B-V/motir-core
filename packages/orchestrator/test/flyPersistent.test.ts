@@ -693,9 +693,20 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
       stderr: '',
     });
     expect(calls[0]!.body).toEqual({ command: ['true'], timeout: 120 });
-    // stdin rides in the body only when given (MOTIR-7026) — never in argv.
+    // The exec API drops a `stdin` field (MOTIR-8872), so given stdin is piped in
+    // by a wrapper and no `stdin` field is sent.
     await flyPersistentOrchestrator.exec(HANDLE, ['cat'], { stdin: '{"token":"t"}' });
-    expect(calls[1]!.body).toEqual({ command: ['cat'], timeout: 120, stdin: '{"token":"t"}' });
+    expect(calls[1]!.body).toEqual({
+      command: [
+        'sh',
+        '-c',
+        'p=$1; shift; printf %s "$p" | exec "$@"',
+        'sh',
+        '{"token":"t"}',
+        'cat',
+      ],
+      timeout: 120,
+    });
     handler = () => json(200, null);
     expect((await flyPersistentOrchestrator.exec(HANDLE, ['true'])).exitCode).toBe(-1);
     handler = () => json(412, { error: 'machine not started' });
@@ -717,7 +728,10 @@ describe('exec — one command inside a running machine (MOTIR-6872)', () => {
     await flyPersistentOrchestrator.checkLiveness(HANDLE, ['claude', '--version']);
     expect(calls.map((c) => c.body)).toEqual([
       { command: ['git', 'clone', 'x'], timeout: 120 },
-      { command: ['cat'], timeout: 120, stdin: 'secret' },
+      {
+        command: ['sh', '-c', 'p=$1; shift; printf %s "$p" | exec "$@"', 'sh', 'secret', 'cat'],
+        timeout: 120,
+      },
       { command: ['claude', '--version'], timeout: 60 },
     ]);
     for (const call of calls) {

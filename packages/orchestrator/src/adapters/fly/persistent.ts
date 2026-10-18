@@ -586,13 +586,14 @@ const flyInstancesClient = {
       // field: an array there is refused 400 "body is missing command: json:
       // cannot unmarshal array into … machineExecRequestRaw.cmd of type string"
       // (MOTIR-7347). It is not `init.cmd` on a machine config, which IS an
-      // array. `stdin` is the Machines API's `MachineExecRequest.Stdin`
-      // (fly-go): the one field a secret may ride in, because it is neither
-      // argv nor env.
+      // array. The API takes NO stdin: a `stdin` field is accepted and never
+      // delivered (the command reads zero bytes — MOTIR-8872), so a caller's
+      // `stdin` is piped in by a wrapper instead. Its value rides in the wrapper's
+      // argv for the life of the one exec — as the clone's token already does —
+      // and in no environment variable.
       body: JSON.stringify({
-        command: [...command],
+        command: stdin !== undefined ? withStdin(command, stdin) : [...command],
         timeout: timeoutSeconds,
-        ...(stdin !== undefined ? { stdin } : {}),
       }),
     });
     const body = await readFlyJson(res);
@@ -662,6 +663,15 @@ async function actIdempotently(
   const state: PersistentContainerState = machine ? toPersistentState(machine.state) : 'gone';
   if (settled.includes(state)) return;
   throw new OrchestratorApiError('fly', res.status, detail);
+}
+
+/**
+ * `command` with `stdin` fed to its standard input: `printf %s "$1" | exec "$@"`
+ * under a root `sh`, the payload a positional so no quoting can reach the shell.
+ * The Machines exec API silently drops a `stdin` field (MOTIR-8872).
+ */
+function withStdin(command: readonly string[], stdin: string): string[] {
+  return ['sh', '-c', 'p=$1; shift; printf %s "$p" | exec "$@"', 'sh', stdin, ...command];
 }
 
 export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
