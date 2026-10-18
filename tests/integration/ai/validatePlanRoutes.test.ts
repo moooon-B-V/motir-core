@@ -48,7 +48,18 @@ const mk = (
   title: string,
   kind: 'story' | 'task' | 'subtask',
   parentId?: string,
-) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
+) =>
+  workItemsService.createWorkItem(
+    {
+      projectId: fx.projectId,
+      kind,
+      title,
+      parentId,
+      // Typed so a leaf is not UNDER-AUTHORED (MOTIR-5427); containers cannot carry one.
+      ...(kind === 'task' || kind === 'subtask' ? { type: 'code' as const } : {}),
+    },
+    fx.ctx,
+  );
 
 /** A `planned` plan whose single `modify` makes `targetId` blocked_by `blockerId`. */
 async function planBlocking(

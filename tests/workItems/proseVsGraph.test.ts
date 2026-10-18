@@ -18,6 +18,7 @@ import {
   isSubsumptionCheckExempt,
   overGateSizing,
   resolvePathRepo,
+  underAuthored,
   selfBlockingDesignCriteria,
   namesDesignAsset,
   namesDesignDocumentAmendment,
@@ -1319,5 +1320,64 @@ describe('isSelfBlockingDesignCheckExempt — the TYPE scope test (MOTIR-6245)',
       designCriterionIndex: 1,
       surfaceCriterionIndex: 2,
     });
+  });
+});
+
+describe('underAuthored — a childless leaf carrying nothing, as a NULL CHECK (MOTIR-5427)', () => {
+  /** The MOTIR-4956 shape: prose only, no heading, every column null. */
+  const bare = {
+    descriptionMd: 'A careful diagnosis, reproduced both ways, with the root cause named.',
+    hasChildren: false,
+    storyPoints: null,
+    estimateMinutes: null,
+    type: null,
+    executor: null,
+  } as const;
+
+  it('fires on the MOTIR-4956 shape: prose, no heading, every column null', () => {
+    expect(underAuthored(bare)).toEqual({ criteria: 'no-heading' });
+  });
+
+  it('fires on an empty or absent body too', () => {
+    expect(underAuthored({ ...bare, descriptionMd: null })).toEqual({ criteria: 'no-heading' });
+    expect(underAuthored({ ...bare, descriptionMd: '' })).toEqual({ criteria: 'no-heading' });
+  });
+
+  it('names a heading with nothing enumerated under it as `no-criterion`', () => {
+    const md = 'Why.\n\n## Acceptance criteria\n\nIt should work well.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toEqual({ criteria: 'no-criterion' });
+  });
+
+  it('is silent once the body enumerates ONE criterion', () => {
+    const md = 'Why.\n\n## Acceptance criteria\n\n1. The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toBeNull();
+    const bullet = 'Why.\n\n## Acceptance criteria\n\n- The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: bullet })).toBeNull();
+  });
+
+  it.each([
+    ['storyPoints', { storyPoints: 3 }],
+    ['estimateMinutes', { estimateMinutes: 30 }],
+    ['type', { type: 'code' }],
+    ['executor', { executor: 'coding_agent' }],
+  ])('is silent when %s alone is set — the conjunction is deliberate', (_name, patch) => {
+    expect(underAuthored({ ...bare, ...patch })).toBeNull();
+  });
+
+  it('treats a zero as a value, never as absent', () => {
+    expect(underAuthored({ ...bare, storyPoints: 0 })).toBeNull();
+  });
+
+  it('EXEMPTS a container KIND even while childless — it can never carry a type or executor', () => {
+    expect(underAuthored({ ...bare, kind: 'story' })).toBeNull();
+    expect(underAuthored({ ...bare, kind: 'epic' })).toBeNull();
+    expect(underAuthored({ ...bare, kind: 'task' })).toEqual({ criteria: 'no-heading' });
+    expect(underAuthored({ ...bare, kind: 'bug' })).toEqual({ criteria: 'no-heading' });
+    expect(underAuthored({ ...bare, kind: 'subtask' })).toEqual({ criteria: 'no-heading' });
+  });
+
+  it('EXEMPTS A CONTAINER by construction — gate 20 is a leaf bar', () => {
+    expect(underAuthored({ ...bare, hasChildren: true })).toBeNull();
+    expect(underAuthored({ ...bare, hasChildren: true, descriptionMd: null })).toBeNull();
   });
 });

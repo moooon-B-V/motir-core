@@ -248,6 +248,7 @@ async function projectedProseAdvisories(
     const stored = storedRows.get(node.id);
     return {
       item: node.identifier,
+      kind: node.kind,
       descriptionMd: proj.projectedDescription.has(node.id)
         ? (proj.projectedDescription.get(node.id) ?? null)
         : (stored?.descriptionMd ?? null),

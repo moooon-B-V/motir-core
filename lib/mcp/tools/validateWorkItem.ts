@@ -15,6 +15,7 @@ import {
   isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
+  isUnderAuthoredAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import {
@@ -95,11 +96,22 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = result.advisories.filter(isUnderAuthoredAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
   const unnamedTitles = result.advisories.filter(isTitleCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
+  for (const a of underAuthored) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): ${a.item} is UNDER-AUTHORED — ${
+        a.criteria === 'no-heading'
+          ? 'no `## Acceptance criteria` heading'
+          : 'an `## Acceptance criteria` heading with no criterion under it'
+      }, and null storyPoints, estimateMinutes, type and executor. Author it before sealing; every other check reads an empty list as clean.`,
+    );
+  }
   for (const a of blockerCounts) {
     lines.push(
       '',
@@ -551,7 +563,10 @@ export function registerValidateWorkItem(
         'trail), or ' +
         "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
         'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
-        '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
+        '`claim`, `claimedCount`, and `blockerCount`), or `under-authored` when a CHILDLESS card ' +
+        'has no enumerated acceptance criterion AND null `storyPoints`, `estimateMinutes`, `type` ' +
+        'and `executor` (with `criteria`: `no-heading` or `no-criterion` — a pure null check, ' +
+        'never a gate, because a card is routinely saved mid-authoring). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +

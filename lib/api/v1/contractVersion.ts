@@ -1046,5 +1046,16 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.70.0` after MOTIR-8722's
  *   `1.69.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   PARAMETER.
+ *
+ * - `1.71.0` — MOTIR-5427 adds the `under-authored` dispatch advisory shape: a childless
+ *   card with no enumerated acceptance criterion and null `storyPoints`,
+ *   `estimateMinutes`, `type` and `executor`, carrying `criteria` (`no-heading` or
+ *   `no-criterion`). Never a gate.
+ *
+ *   Additive: one new member of an advisory union whose severity is explicitly
+ *   open-ended (§8's allowed list); no existing shape changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.71.0` after MOTIR-8810's
+ *   `1.70.0`. If a sibling has taken it since, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.70.0';
+export const V1_CONTRACT_VERSION = '1.71.0';

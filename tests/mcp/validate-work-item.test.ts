@@ -1,3 +1,4 @@
+import { isTypeableKind } from '@/lib/issues/executorDefaults';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -57,12 +58,24 @@ async function connectClient(ctx: ServiceContext): Promise<Client> {
   return client;
 }
 
+// Typed so the fixture is not UNDER-AUTHORED (MOTIR-5427): a bare leaf carries that
+// advisory, and these suites assert on the OTHER families.
 const mk = (
   fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
   title: string,
   kind: IssueType,
   parentId?: string,
-) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
+) =>
+  workItemsService.createWorkItem(
+    {
+      projectId: fx.projectId,
+      kind,
+      title,
+      parentId,
+      ...(isTypeableKind(kind) ? { type: 'code' as const } : {}),
+    },
+    fx.ctx,
+  );
 
 // Written BELOW the link door: this file tests the VALIDATOR over whatever edges
 // the tree carries, and most of its "outside the subtree" blockers are ROOT
@@ -469,7 +482,14 @@ const mkBody = (
   parentId?: string,
 ) =>
   workItemsService.createWorkItem(
-    { projectId: fx.projectId, kind, title, descriptionMd, parentId },
+    {
+      projectId: fx.projectId,
+      kind,
+      title,
+      descriptionMd,
+      parentId,
+      ...(isTypeableKind(kind) ? { type: 'code' as const } : {}),
+    },
     fx.ctx,
   );
 

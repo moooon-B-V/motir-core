@@ -791,7 +791,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // same; which edges a PLAN answers for is the description's to say.
     // Re-pinned for MOTIR-8647, summary UNCHANGED: the new `title-coverage` advisory
     // never touches the finishability verdict this line describes.
-    descriptionFingerprint: '6ce0de00f466',
+    // Re-pinned for MOTIR-5427, summary UNCHANGED: the new `under-authored` advisory
+    // is another severity on the channel, not part of the verdict this line names.
+    descriptionFingerprint: 'c17bdac70969',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

@@ -21,6 +21,7 @@ import {
   isSelfBlockingDesignCheckExempt,
   isSubsumptionCheckExempt,
   overGateSizing,
+  underAuthored,
   selfBlockingDesignCriteria,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
@@ -68,6 +69,12 @@ export interface ProseAdvisorySubject {
   item: string;
   /** Its body. `null` / empty simply yields no references. */
   descriptionMd: string | null;
+  /**
+   * Its kind — read ONLY by the UNDER-AUTHORED check (MOTIR-5427), which exempts a
+   * container kind because it cannot carry a `type` or `executor`. Optional: a
+   * caller that does not know is not exempt.
+   */
+  kind?: string | null;
   /**
    * References that are legitimately edge-free: the card ITSELF, its ANCESTORS,
    * and everything already in its `blocked_by` set. Keyed the same way
@@ -308,6 +315,8 @@ export async function buildProseVsGraphAdvisories(
     if (straddle) advisories.push(straddle);
     const sizing = sizingAdvisory(s.subject);
     if (sizing) advisories.push(sizing);
+    const underAuthoredFound = underAuthoredAdvisory(s.subject);
+    if (underAuthoredFound) advisories.push(underAuthoredFound);
     const selfBlocking = selfBlockingDesignAdvisory(s.subject);
     if (selfBlocking) advisories.push(selfBlocking);
     const postMergeChild = postMergeChildAdvisory(s.subject);
@@ -474,6 +483,34 @@ function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto
     threshold: found.threshold,
     storyPoints: found.storyPoints,
     estimateMinutes: found.estimateMinutes,
+  };
+}
+
+/**
+ * THE UNDER-AUTHORED advisory for ONE subject (MOTIR-5427) — a childless card
+ * with no enumerated acceptance criterion and null sizing, type and executor.
+ *
+ * A pure null check over columns the subject already carries; like
+ * {@link sizingAdvisory} it fires on a card that names nothing and has no edges,
+ * which is the MOTIR-4956 fixture. ADVISORY ONLY, never a readiness change: a card
+ * is routinely saved mid-authoring (`docs/decisions/under-authored-shape-family.md`).
+ */
+function underAuthoredAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
+  const found = underAuthored({
+    kind: subject.kind,
+    descriptionMd: subject.descriptionMd,
+    hasChildren: subject.hasChildren,
+    storyPoints: subject.storyPoints,
+    estimateMinutes: subject.estimateMinutes,
+    type: subject.type,
+    executor: subject.executor,
+  });
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'under-authored',
+    criteria: found.criteria,
   };
 }
 
@@ -891,6 +928,7 @@ export async function buildDispatchProseAdvisories(
     id: string;
     identifier: string;
     descriptionMd: string | null;
+    kind?: string | null;
     type?: string | null;
     executor?: string | null;
     targetRepo?: string | null;
@@ -977,6 +1015,20 @@ export async function buildDispatchProseAdvisories(
   // The counted-own-blockers check's clear-ness (MOTIR-5428) — the SEVENTH pure
   // scan. A hit needs the edge read below even when every older family is clear.
   const blockerCountCandidate = firstBlockerCountClaim(item.descriptionMd) !== null;
+  // The UNDER-AUTHORED check's clear-ness (MOTIR-5427) — the EIGHTH scan, and the
+  // only one that fires on an ABSENCE. Children are ignored for the usual reason
+  // (they only SUPPRESS the finding); `undefined` sizing means the caller's row
+  // shape does not carry it, so the row is read below rather than assumed empty.
+  const underAuthoredCandidate =
+    underAuthored({
+      kind: item.kind,
+      descriptionMd: item.descriptionMd,
+      hasChildren: false,
+      storyPoints: item.storyPoints ?? null,
+      estimateMinutes: item.estimateMinutes ?? null,
+      type,
+      executor,
+    }) !== null;
   if (
     namesNothing &&
     wellOrdered &&
@@ -984,7 +1036,8 @@ export async function buildDispatchProseAdvisories(
     namesNoFile &&
     !sizingCandidate &&
     !selfBlockingCandidate &&
-    !blockerCountCandidate
+    !blockerCountCandidate &&
+    !underAuthoredCandidate
   ) {
     // The BODY-EDIT-ABOVE-FIELD-MOVE check (MOTIR-5399) is the one member no scan
     // above can clear: it reads the card's HISTORY, not its body or its columns, so
@@ -1019,7 +1072,10 @@ export async function buildDispatchProseAdvisories(
         ancestors,
         blockerLinks,
         rows:
-          (suppliedCreatedAt === null && !namesNoFile) || sizingCandidate || selfBlockingCandidate
+          (suppliedCreatedAt === null && !namesNoFile) ||
+          sizingCandidate ||
+          selfBlockingCandidate ||
+          underAuthoredCandidate
             ? await workItemRepository.findDescriptionsByIds([item.id], ctx.workspaceId, tx)
             : [],
         // The SELF-BLOCKING-DESIGN check's edge half (MOTIR-3625): the TYPES
@@ -1063,6 +1119,7 @@ export async function buildDispatchProseAdvisories(
       {
         item: item.identifier,
         descriptionMd: item.descriptionMd,
+        kind: item.kind,
         exemptIds,
         blockerCount: blockerLinks.length,
         type,
