@@ -10786,6 +10786,13 @@ model CiRunnerProvisioningIntent {
   /// A short, non-secret failure detail. Never a provider body.
   failureDetail  String?   @map("failure_detail")
 
+  /// How many boots of this intent failed TRANSIENTLY and put it back in the
+  /// pending pool (MOTIR-8941). A fleet runner is interchangeable, so a boot that
+  /// is lost for good leaves one queued GitHub job with no runner; a transient
+  /// failure is re-queued instead, up to a bound after which it settles
+  /// `provision_failed`.
+  bootAttempts Int @default(0) @map("boot_attempts")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

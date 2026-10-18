@@ -243,6 +243,15 @@ const MAX_CONSECUTIVE_READ_FAILURES = 3;
  *  slow-but-live provision is never swept out from under itself. */
 const STALE_CLAIM_MS = 15 * 60_000;
 
+/**
+ * How many times one intent's boot may be attempted before a transient provider
+ * failure settles it `provision_failed` (MOTIR-8941). A fleet runner is
+ * interchangeable, so an intent lost for good takes one runner away from the
+ * jobs queued at GitHub and one of them waits for ever; a re-queued intent boots
+ * on the next sweep instead.
+ */
+export const MAX_BOOT_ATTEMPTS = 3;
+
 /** A CI intent's OWN end: boot + the job timeout + 10 minutes. It used to be an
  *  age cutoff on the machine (the reaper's); since MOTIR-6925 it is a property of
  *  the RECORD, read by the attribution reconciler (`fleet-per-org-pool.md` §6).
@@ -490,7 +499,9 @@ export type RunIntentOutcome =
    * GitHub could not be asked to register a runner right now. RETRYABLE — the
    * claim is released and the intent stays pending for the next sweep.
    *
-   * TWO causes, deliberately one outcome (MOTIR-2011): the registration ceiling
+   * THREE causes, deliberately one outcome (MOTIR-2011, MOTIR-8941): a boot that
+   * failed transiently and has attempts left re-queues the same way.
+   * The first two: the registration ceiling
    * is exhausted (`retryAfterSeconds` set, when GitHub said when), or the mint
    * did not answer inside its deadline (`retryAfterSeconds: null`). They differ
    * in what caused the wait and not at all in what the fleet should DO — the job
@@ -1289,6 +1300,19 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
     }
 
     const detail = `could not boot a container: ${detailOf(err)}`;
+    // A provider refusal or a blown deadline is transient until it repeats: the
+    // intent goes back to the pool rather than taking a runner away from the jobs
+    // queued at GitHub (MOTIR-8941).
+    const attempt = intent.bootAttempts + 1;
+    if (attempt < MAX_BOOT_ATTEMPTS) {
+      await ciRunnerAdmissionService.releaseClaimForRetry(intentId);
+      console.warn('[ciRunnerBootService] the boot failed — claim released for another attempt', {
+        intentId,
+        attempt,
+        detail,
+      });
+      return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
+    }
     await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'provision_failed', detail });
   }

@@ -7,6 +7,7 @@ import {
   stoppedAtOf,
   type FlyMachine,
 } from './flyMachines';
+import { OrchestratorApiError } from '../../errors';
 import { buildContainerUsage } from '../../usage';
 import { sparedByCaller } from '../../reap';
 import type { FleetWorkloadKind } from '../../types';
@@ -81,6 +82,12 @@ export const CI_DOCKER_VOLUME_PATH = '/var/lib/docker';
  *  the last ask is the orphan sweep's. */
 export const VOLUME_DESTROY_ATTEMPTS = 10;
 export const VOLUME_DESTROY_INTERVAL_MS = 1000;
+
+/** How many times `provision` asks Fly to create the machine when Fly answers
+ *  `volume not found` for the volume it created a moment earlier, and the pause
+ *  (multiplied by the attempt number) between asks (MOTIR-8941). */
+export const MACHINE_CREATE_VOLUME_ATTEMPTS = 4;
+export const MACHINE_CREATE_VOLUME_RETRY_MS = 500;
 
 /** Machine metadata naming the intent a container serves, so the reaper can
  *  resolve attribution from the PROVIDER's own record rather than from a Motir
@@ -254,6 +261,30 @@ function createFleetMachine(
   });
 }
 
+/** Fly answers a machine create with 400 `volume not found` for a volume it
+ *  created a moment earlier: the volume is not visible yet. Retried a few times
+ *  with a growing pause before the failure is given up on (MOTIR-8941); any other
+ *  failure is thrown at once. */
+async function createFleetMachineAwaitingVolume(
+  spec: ContainerSpec,
+  region: string,
+  volumeId: string | null,
+): Promise<FlyMachine> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await createFleetMachine(spec, region, volumeId);
+    } catch (err) {
+      const volumeNotVisibleYet =
+        volumeId !== null &&
+        err instanceof OrchestratorApiError &&
+        err.status === 400 &&
+        /volume.*not found/i.test(err.message);
+      if (!volumeNotVisibleYet || attempt >= MACHINE_CREATE_VOLUME_ATTEMPTS) throw err;
+      await new Promise((resolve) => setTimeout(resolve, MACHINE_CREATE_VOLUME_RETRY_MS * attempt));
+    }
+  }
+}
+
 export const flyOrchestrator: ContainerOrchestrator = {
   provider: 'fly',
 
@@ -284,7 +315,7 @@ export const flyOrchestrator: ContainerOrchestrator = {
         : null;
     let machine: FlyMachine;
     try {
-      machine = await createFleetMachine(spec, region, volume?.id ?? null);
+      machine = await createFleetMachineAwaitingVolume(spec, region, volume?.id ?? null);
     } catch (err) {
       // No machine, so no handle and no teardown: the volume is deleted here or
       // it is an orphan from its first moment.

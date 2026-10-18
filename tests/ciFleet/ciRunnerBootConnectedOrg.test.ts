@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
+import { ciRunnerBootService, MAX_BOOT_ATTEMPTS } from '@/lib/services/ciRunnerBootService';
 import { fleetStopService } from '@/lib/services/fleetStopService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
@@ -154,7 +154,12 @@ let jobSeq = 0;
 
 async function seedIntent(
   fx: Fixture,
-  data: { status?: string; githubRunnerId?: number | null; updatedAt?: Date } = {},
+  data: {
+    status?: string;
+    githubRunnerId?: number | null;
+    updatedAt?: Date;
+    bootAttempts?: number;
+  } = {},
 ) {
   jobSeq += 1;
   return adminDb.ciRunnerProvisioningIntent.create({
@@ -174,6 +179,7 @@ async function seedIntent(
       queuedAt: QUEUED_AT,
       status: data.status ?? 'pending',
       githubRunnerId: data.githubRunnerId ?? null,
+      bootAttempts: data.bootAttempts ?? 0,
       ...(data.updatedAt ? { updatedAt: data.updatedAt } : {}),
     },
   });
@@ -281,7 +287,8 @@ describe("a connected-org intent's runner is minted and removed in THAT org", ()
 
   it('the provision-failure de-register acts in the connected org', async () => {
     const fx = await seedTenant();
-    const intent = await seedIntent(fx);
+    // The LAST attempt: an earlier one would be re-queued (MOTIR-8941).
+    const intent = await seedIntent(fx, { bootAttempts: MAX_BOOT_ATTEMPTS - 1 });
     fakeOrchestrator.failNextProvision();
 
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
