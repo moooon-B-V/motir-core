@@ -187,6 +187,9 @@ export const STRUCTURAL_GUARD_SPECS = [
   // and nothing reaches past a package barrel. No database, no render, and it
   // imports only `node:fs` / `node:path`.
   'tests/packages/importDirection.test.ts',
+  // MOTIR-8887 — a whole-tree import scan (`readdirSync` over six roots) that timed out at
+  // 60 s inside the sharded, coverage-instrumented job with zero assertion failures.
+  'tests/passkeyBoundaryContract.test.ts',
   // ── tests/ciFleet/ — the fleet PORT BOUNDARY (MOTIR-4299) ─────────────────
   // ⚠️ IT WAS ALREADY A WHOLE-TREE SCANNER AND WAS ALREADY IN THE SHARDED JOB,
   // and the reason it moves NOW is that MOTIR-4299 made it bigger: the fly
