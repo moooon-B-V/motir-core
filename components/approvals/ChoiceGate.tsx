@@ -74,7 +74,7 @@ function WhyBlock({ why }: { why: ChoiceWhy }) {
   const t = useTranslations('approvalGate.choice');
   const situationLabel = useSituationLabel();
   return (
-    <div className="rounded-(--radius-card) border border-(--el-border-soft) px-3 py-2.5">
+    <div className="rounded-(--radius-card) border border-(--el-border-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)">
       <div className="flex flex-wrap items-center gap-2">
         <Eyebrow>{t('why')}</Eyebrow>
         <Chip tint="lavender">{situationLabel(why.situation)}</Chip>
@@ -168,7 +168,7 @@ export function ChoicePortBody({
         ))}
       </div>
       {body.followUpMd ? (
-        <div className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2.5">
+        <div className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)">
           <Eyebrow>{t('gates')}</Eyebrow>
           <MarkdownView
             value={body.followUpMd}
@@ -221,7 +221,7 @@ function OptionRow({
   if (mode === 'pick') {
     return (
       <label
-        className={`flex cursor-pointer gap-3 rounded-(--radius-card) border px-3 py-2.5 hover:bg-(--el-surface) ${
+        className={`flex cursor-pointer gap-3 rounded-(--radius-card) border px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) hover:bg-(--el-surface) ${
           selected
             ? 'border-(--el-accent) bg-(--el-surface-soft)'
             : 'border-(--el-border) bg-(--el-page-bg)'
@@ -251,7 +251,7 @@ function OptionRow({
 
   return (
     <div
-      className="flex gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-3 py-2.5"
+      className="flex gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
       data-option-id={option.id}
     >
       {chosen ? (
@@ -460,7 +460,7 @@ export function ChoiceDefectBody({
     <div>
       <div
         role="status"
-        className="mb-3 flex gap-2.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-peach) px-3 py-2.5"
+        className="mb-3 flex gap-2.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-peach) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
       >
         <CircleAlert
           className="mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"

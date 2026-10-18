@@ -103,7 +103,7 @@ export function PlanningOriginCluster({ produced = null }: PlanningOriginCluster
       // The same raised-tile language as the work-item card (crisp border +
       // card shadow on the recessed canvas board, MOTIR-1362) so the origin reads
       // as a node on the same surface.
-      className="flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3.5 shadow-(--shadow-card)"
+      className="flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding-12) shadow-(--shadow-card)"
     >
       {/* HEADER — labels the cluster + reports what the journey actually produced.
           The chip is omitted entirely until the produced set resolves, so the card

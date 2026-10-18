@@ -231,7 +231,7 @@ export function PausedRunIndicator({
     <div
       data-testid="plan-change-running-bar"
       data-paused="true"
-      className="mb-2 flex items-center gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) px-3 py-2"
+      className="mb-2 flex items-center gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <Pause className="size-4 shrink-0 text-(--el-text-secondary)" aria-hidden="true" />
       <div className="min-w-0 flex-1">

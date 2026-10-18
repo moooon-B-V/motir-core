@@ -303,6 +303,10 @@ const OWN_BOX_ENFORCED_PREFIXES: string[] = [
   'packages/design-system/src/',
   'components/ui/',
   'components/workItems/',
+  'components/planning/',
+  'components/ai/',
+  'components/approvals/',
+  'components/acceptance/',
 ];
 
 /**
@@ -316,6 +320,16 @@ const OWN_BOX_ALLOWED: Record<string, string> = {
     'Nested inset: the segment radius is derived from the track radius minus this 3px inset, and --radius-btn has no padding steps.',
   'packages/design-system/src/components/ui/Segmented.tsx → p-0.5':
     'Nested inset: the segment radius is derived from the track radius minus this 2px inset (see the comment in the file), and --radius-btn has no padding steps.',
+  'components/planning/GuideRail.tsx → px-1':
+    'Inline diff-highlight span that borrows --radius-kbd; the kbd padding token is 6px against this 4px span and kbd has no steps.',
+  'components/planning/GuideReplanOffer.tsx → py-2':
+    'Compact textarea: 8px vertical padding against --spacing-input-y at 12px, and the input role has no steps.',
+  'components/planning/PlanningWorkspaceSkeleton.tsx → h-16':
+    'Skeleton placeholder block sized to mimic the content it stands in for; a layout constant, not a control height, so no height step fits.',
+  'components/planning/PlanningWorkspaceSkeleton.tsx → h-20':
+    'Skeleton placeholder block sized to mimic the content it stands in for; a layout constant, not a control height, so no height step fits.',
+  'components/planning/PlanningWorkspaceSkeleton.tsx → h-32':
+    'Skeleton placeholder block sized to mimic the content it stands in for; a layout constant, not a control height, so no height step fits.',
 };
 
 /**

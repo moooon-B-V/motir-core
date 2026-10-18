@@ -374,7 +374,7 @@ function GuideTodoRow({
       data-todo-done={row.done ? 'true' : 'false'}
       data-current={current ? 'true' : undefined}
       data-motion={motionClass || undefined}
-      className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2.5 border-t border-(--el-border) px-2 py-2.5 first:border-t-0 ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2.5 border-t border-(--el-border) px-(--spacing-control-x-8) py-(--spacing-control-y-8) first:border-t-0 ${
         current
           ? 'rounded-(--radius-control) bg-(--el-surface-soft) shadow-[inset_3px_0_0_var(--el-accent)]'
           : ''

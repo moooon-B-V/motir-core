@@ -162,7 +162,7 @@ export function PlanActRecord({
       {drawn.length > 0 || autoResume ? (
         <ol
           data-testid="plan-change-acts"
-          className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+          className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
         >
           {autoResume ? <ResumedRow second={autoResume.count === 2} tc={tc} /> : null}
           {drawn.map(({ act, index }) => {

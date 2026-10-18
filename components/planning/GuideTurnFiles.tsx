@@ -54,7 +54,7 @@ function Thumb({ src }: { src: string }) {
       src={src}
       alt=""
       aria-hidden="true"
-      className="h-[38px] w-[52px] flex-none rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-page-bg) object-cover"
+      className="h-(--height-control) w-[52px] flex-none rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-page-bg) object-cover"
     />
   );
 }
@@ -153,7 +153,7 @@ export function GuideFileTray({
                 type="button"
                 onClick={() => onRemove(file.key)}
                 aria-label={tf('removeAria', { name: file.name })}
-                className="inline-flex flex-none rounded-(--radius-control) p-0.5 text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                className="inline-flex flex-none rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
                 <X className="size-3" aria-hidden="true" />
               </button>
@@ -202,7 +202,7 @@ export function GuideFileRefusals({
             type="button"
             onClick={() => onDismiss(refusal.key)}
             aria-label={ta('dismissErrorAria', { name: refusal.name })}
-            className="ml-auto shrink-0 rounded-(--radius-control) p-0.5 text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="ml-auto shrink-0 rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <X className="size-3" aria-hidden />
           </button>
@@ -220,7 +220,7 @@ export function GuideFilesNotSent({ cardKey }: { cardKey: string }) {
     <p
       role="status"
       data-testid="guide-files-not-sent"
-      className="mb-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2 text-xs text-(--el-warning-text)"
+      className="mb-2 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs text-(--el-warning-text)"
     >
       {tf.rich('notSent', {
         key: cardKey,
@@ -305,7 +305,7 @@ export function GuideDropOverlay({ cardKey }: { cardKey: string }) {
     <div
       aria-hidden="true"
       data-testid="guide-drop-overlay"
-      className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-1.5 rounded-(--radius-card) border-2 border-dashed border-(--el-accent) bg-(--el-droptarget-bg) px-6 text-center"
+      className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-1.5 rounded-(--radius-card) border-2 border-dashed border-(--el-accent) bg-(--el-droptarget-bg) px-(--spacing-card-padding) text-center"
     >
       <FileUp className="size-6 text-(--el-accent-on-surface)" aria-hidden="true" />
       <p className="text-sm font-semibold text-(--el-text-strong)">{tf('dropTitle')}</p>

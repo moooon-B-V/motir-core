@@ -138,7 +138,7 @@ export function WorkItemStatusPill({
   return (
     <span
       data-status={status}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-1.5 py-0.5 text-[11px] font-medium ${meta.tint} ${meta.text}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium ${meta.tint} ${meta.text}`}
     >
       <Icon className="size-3" aria-hidden="true" />
       {canvasStatusLabel(status, label, tStatus)}
@@ -423,7 +423,7 @@ export function WorkItemNode({
  * (`PlanItemNode`). It owns everything the two must agree on: the fixed
  * `NODE_W × NODE_H` footprint (the deterministic layout spaces rows by NODE_H, so
  * a long title can never grow the card into the row below), the `--radius-card`
- * radius, the 1px border weight, the `p-3.5` padding, the status row, the kind
+ * radius, the 1px border weight, the `--spacing-card-padding-12` padding, the status row, the kind
  * tile (through the one {@link KIND_TINT}), the identifier line and the title.
  *
  * A caller contributes only what its STATE means: `frameClassName` (border
@@ -477,7 +477,7 @@ export function WorkItemCardShell({
       // by NODE_H, so the card must honour it exactly. Compact: tight padding + a
       // small status chip, no wasted space (MOTIR-1194 review).
       style={{ width: NODE_W, height: NODE_H }}
-      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${frameClassName}`}
+      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-(--spacing-card-padding-12) ${frameClassName}`}
     >
       <div className="flex shrink-0 items-center gap-2">{statusRow}</div>
 
@@ -528,7 +528,7 @@ export function WorkItemCardShell({
 function HerePill() {
   const t = useTranslations('roadmap.canvas.node');
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-accent) px-1.5 py-0.5 text-[11px] font-medium text-(--el-accent-text)">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-accent-text)">
       <MapPin className="size-3" aria-hidden="true" />
       {t('here')}
     </span>
@@ -545,7 +545,7 @@ function ReadyPill() {
       data-testid="ready-pill"
       // A white chip on the mint card wash (MOTIR-1422) — the success icon carries
       // the "go" hue; the chip surface lifts off the tint for contrast.
-      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-strong)"
+      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-text-strong)"
     >
       <CirclePlay className="size-3 text-(--el-success)" aria-hidden="true" />
       {t('ready')}
@@ -563,7 +563,7 @@ function DonePill() {
   return (
     <span
       data-testid="done-pill"
-      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-text-secondary) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-inverted)"
+      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-text-secondary) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-text-inverted)"
     >
       <CheckCircle2 className="size-3 text-(--el-text-inverted)" aria-hidden="true" />
       {tStatus('done')}
@@ -720,7 +720,7 @@ export function LevelGroupNode({ count }: { count: number }) {
       data-node-state="group"
       data-testid="level-group-node"
       aria-label={t('aria', { count })}
-      className="relative flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3.5 shadow-(--shadow-card)"
+      className="relative flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding-12) shadow-(--shadow-card)"
     >
       {/* TOP ROW — no status pill (the group has none); the drill chevron alone,
           in the slot every other node puts it in. */}
@@ -827,7 +827,7 @@ export function FolderNode({
       data-node-state="folder"
       data-testid="folder-node"
       aria-label={`${t('aria', { name, contents })}${changesAria ? ` ${changesAria}` : ''}`}
-      className="relative flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3.5 shadow-(--shadow-card)"
+      className="relative flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding-12) shadow-(--shadow-card)"
     >
       {/* TOP ROW — no status pill (a folder has none); the drill chevron, and on a
           planning canvas the changes badge (the shipped `add` badge's pair). */}
@@ -835,7 +835,7 @@ export function FolderNode({
         {changes > 0 ? (
           <span
             data-testid="folder-changes"
-            className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-surface) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-accent-on-surface)"
+            className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-semibold text-(--el-accent-on-surface)"
           >
             <FolderPen className="size-3" aria-hidden="true" />
             {changes === 1 ? t('changesOne') : t('changes', { count: changes })}
@@ -914,7 +914,7 @@ export function LevelTruncationTile({ shown, total }: { shown: number; total: nu
       data-node-state="truncated"
       data-testid="level-truncation-tile"
       aria-label={t('aria', { shown, total })}
-      className="relative flex flex-col items-center justify-center gap-1.5 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-3.5"
+      className="relative flex flex-col items-center justify-center gap-1.5 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding-12)"
     >
       <span className="text-sm font-semibold text-(--el-text-strong)">
         {t('label', { count: remaining })}
@@ -925,7 +925,7 @@ export function LevelTruncationTile({ shown, total }: { shown: number; total: nu
       {/* A LABEL, not a nested button. A control drawn inside a canvas card has to
           fight the wrapper's keydown/drag handlers (notes.html #139); the canvas's
           own activation is the affordance, exactly as it is for every other node. */}
-      <span className="mt-0.5 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-3 py-0.5 text-xs font-medium text-(--el-text-strong)">
+      <span className="mt-0.5 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong)">
         {t('showAll')}
       </span>
     </div>

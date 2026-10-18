@@ -317,7 +317,7 @@ export function GuideRail({
             the shipped act rail's shape with its one live line. */}
         <div aria-live="polite" data-testid="guide-progress-line">
           {running ? (
-            <ol className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2">
+            <ol className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)">
               <li className="flex items-start gap-2 text-xs text-(--el-text)">
                 <Spinner size="sm" aria-hidden="true" />
                 <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
@@ -338,7 +338,7 @@ export function GuideRail({
             <p
               role="alert"
               data-testid="guide-error"
-              className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+              className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
             >
               {tg(errorKey(errorCode))}
             </p>

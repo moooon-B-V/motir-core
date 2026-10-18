@@ -1497,11 +1497,11 @@ export function ApprovalGateControl({
               exists to prevent. */}
             {gate.state === 'approved' && filesKept !== null ? (
               filesKept ? (
-                <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-2 py-0.5 font-semibold text-(--el-text-strong)">
+                <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-(--spacing-chip-x-8) py-(--spacing-chip-y) font-semibold text-(--el-text-strong)">
                   {t('record.filesKept')}
                 </span>
               ) : (
-                <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-2 py-0.5 font-semibold text-(--el-text-secondary)">
+                <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x-8) py-(--spacing-chip-y) font-semibold text-(--el-text-secondary)">
                   {t('record.filesNotKept')}
                 </span>
               )

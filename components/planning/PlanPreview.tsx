@@ -40,7 +40,7 @@ export function PlanPreview({ epics }: { epics: RoadmapLevelItem[] }) {
         {shown.map((e) => (
           <div
             key={e.id}
-            className="rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-2.5 py-2"
+            className="rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y-8)"
           >
             <div className="flex items-center gap-1.5">
               <span
@@ -57,7 +57,7 @@ export function PlanPreview({ epics }: { epics: RoadmapLevelItem[] }) {
           </div>
         ))}
         {more > 0 && (
-          <div className="flex items-center justify-center rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-2.5 py-2 text-xs font-semibold text-(--el-accent-on-surface)">
+          <div className="flex items-center justify-center rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y-8) text-xs font-semibold text-(--el-accent-on-surface)">
             + {more} more {more === 1 ? 'epic' : 'epics'}
           </div>
         )}

@@ -290,7 +290,7 @@ export function PlanReviewRail({
             width: a flex COLUMN child would otherwise stretch to the full rail. */}
           <span
             data-testid="plan-status-pill"
-            className={`inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[review.status]}`}
+            className={`inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-(--spacing-chip-x-8) py-(--spacing-chip-y) text-xs font-semibold ${STATUS_TINT[review.status]}`}
           >
             {t(`status_${review.status}`)}
           </span>
@@ -357,7 +357,7 @@ export function PlanReviewRail({
         {review.stale || folderMissingCount > 0 ? (
           <section
             data-testid="stale-summary"
-            className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-yellow)/40 p-3"
+            className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-yellow)/40 p-(--spacing-card-padding-12)"
           >
             <p className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)">
               <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
@@ -818,7 +818,7 @@ function DecidedOutcome({
   const tRepo = useTranslations('repositorySet');
   const approved = review.status === 'approved';
   return (
-    <div className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-3">
+    <div className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-card-padding-12)">
       <p className="flex items-center gap-1.5 text-sm font-semibold text-(--el-text)">
         {approved ? (
           <Sparkles className="size-4 shrink-0 text-(--el-success)" aria-hidden="true" />
