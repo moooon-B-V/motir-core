@@ -5136,7 +5136,18 @@
       "noSprintsBody": "Start a sprint from the backlog to see its sprint graph."
     },
     "velocity": {
-      "title": "Velocity chart"
+      "title": "Velocity chart",
+      "endingAtLabel": "Ending at",
+      "endingAtHint": "A completed sprint. Blank = the latest.",
+      "latest": "Latest completed",
+      "latestNamed": "Latest completed — {name}",
+      "endingAtSearch": "Search sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Fewer sprints",
+      "countMore": "More sprints",
+      "countHint": "3 to 52 · default 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Loading the velocity chart"
     },
     "controls": {
       "periodLabel": "Period",

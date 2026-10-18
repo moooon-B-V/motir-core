@@ -5,6 +5,7 @@ import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { toVelocityDto } from '@/lib/mappers/reportsMappers';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
@@ -278,6 +279,179 @@ describe('reportsService.getVelocity', () => {
     await expect(
       reportsService.getVelocity({ projectId: other.projectId }, fx.ctx),
     ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
+  });
+});
+
+async function seedTen(fx: WorkItemFixture): Promise<string[]> {
+  const ids: string[] = [];
+  for (let i = 1; i <= 10; i++) {
+    ids.push(
+      await seedCompletedSprint(fx, {
+        name: `S${i}`,
+        sequence: i,
+        completedAt: D(`2026-02-${String(i).padStart(2, '0')}T00:00:00Z`),
+        committedPoints: i,
+        committedIssueCount: 1,
+        issues: [{ points: i, done: true }],
+      }),
+    );
+  }
+  return ids;
+}
+
+describe('reportsService.getVelocity — a range ending at a chosen completed sprint', () => {
+  it('returns the `lastN` completed sprints at or before the end sprint, oldest→newest', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await seedTen(fx);
+    const dto = await reportsService.getVelocity(
+      { projectId: fx.projectId, lastN: 3, endSprintId: ids[5] },
+      fx.ctx,
+    );
+    expect(dto.sprints.map((s) => s.name)).toEqual(['S4', 'S5', 'S6']);
+    // The end sprint is the right-most bar.
+    expect(dto.sprints[dto.sprints.length - 1]!.sprintId).toBe(ids[5]);
+  });
+
+  it('returns fewer than the count when history runs out', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await seedTen(fx);
+    const dto = await reportsService.getVelocity(
+      { projectId: fx.projectId, lastN: 5, endSprintId: ids[1] },
+      fx.ctx,
+    );
+    expect(dto.sprints.map((s) => s.name)).toEqual(['S1', 'S2']);
+  });
+
+  it('with no end sprint returns exactly the default window (the last 7)', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedTen(fx);
+    const dto = await reportsService.getVelocity({ projectId: fx.projectId }, fx.ctx);
+    expect(dto.sprints.map((s) => s.name)).toEqual(['S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10']);
+  });
+
+  it('breaks a tie on completedAt by sequence, as the unbounded read does', async () => {
+    const fx = await makeWorkItemFixture();
+    const same = D('2026-03-01T00:00:00Z');
+    const a = await seedCompletedSprint(fx, {
+      name: 'Tie-A',
+      sequence: 1,
+      completedAt: same,
+      committedPoints: 1,
+      committedIssueCount: 1,
+      issues: [],
+    });
+    await seedCompletedSprint(fx, {
+      name: 'Tie-B',
+      sequence: 2,
+      completedAt: same,
+      committedPoints: 1,
+      committedIssueCount: 1,
+      issues: [],
+    });
+    // Ending at the LOWER sequence excludes the higher one with the same timestamp.
+    const dto = await reportsService.getVelocity(
+      { projectId: fx.projectId, lastN: 5, endSprintId: a },
+      fx.ctx,
+    );
+    expect(dto.sprints.map((s) => s.name)).toEqual(['Tie-A']);
+  });
+
+  it('falls back to the default window for an id that is not a completed sprint of this project', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedTen(fx);
+    const active = await adminDb.sprint.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'Active',
+        state: 'active',
+        sequence: 11,
+      },
+    });
+    const planned = await adminDb.sprint.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'Planned',
+        state: 'planned',
+        sequence: 12,
+      },
+    });
+    // Another project in the SAME workspace, with its own completed sprint.
+    const sibling = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'SIBL',
+    });
+    const foreign = await adminDb.sprint.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: sibling.id,
+        name: 'Foreign',
+        state: 'complete',
+        completedAt: D('2026-02-05T12:00:00Z'),
+        sequence: 1,
+      },
+    });
+    const expected = ['S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'];
+    for (const endSprintId of [active.id, planned.id, foreign.id, 'no-such-sprint']) {
+      const dto = await reportsService.getVelocity(
+        { projectId: fx.projectId, endSprintId },
+        fx.ctx,
+      );
+      expect(dto.sprints.map((s) => s.name)).toEqual(expected);
+    }
+  });
+
+  it("never returns another workspace's sprint, even when its id is the end sprint", async () => {
+    const fx = await makeWorkItemFixture();
+    await seedTen(fx);
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    const theirs = await seedCompletedSprint(other, {
+      name: 'Theirs',
+      sequence: 1,
+      completedAt: D('2026-02-09T00:00:00Z'),
+      committedPoints: 1,
+      committedIssueCount: 1,
+      issues: [],
+    });
+    const dto = await reportsService.getVelocity(
+      { projectId: fx.projectId, endSprintId: theirs },
+      fx.ctx,
+    );
+    expect(dto.sprints.map((s) => s.name)).not.toContain('Theirs');
+    expect(dto.sprints).toHaveLength(7);
+  });
+});
+
+describe('sprintRepository.listCompletedByProjectEndingAt', () => {
+  it('issues one bounded read (take = limit) newest first, and is workspace-scoped', async () => {
+    const fx = await makeWorkItemFixture();
+    const ids = await seedTen(fx);
+    const end = await adminDb.sprint.findUniqueOrThrow({ where: { id: ids[7]! } });
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      sprintRepository.listCompletedByProjectEndingAt(
+        fx.projectId,
+        fx.workspaceId,
+        { completedAt: end.completedAt!, sequence: end.sequence },
+        4,
+        tx,
+      ),
+    );
+    expect(rows.map((r) => r.name)).toEqual(['S8', 'S7', 'S6', 'S5']);
+
+    // The same query run for a different workspace returns nothing of this one's.
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    const leaked = await withWorkspaceServiceContext(other.workspaceId, (tx) =>
+      sprintRepository.listCompletedByProjectEndingAt(
+        fx.projectId,
+        other.workspaceId,
+        { completedAt: end.completedAt!, sequence: end.sequence },
+        4,
+        tx,
+      ),
+    );
+    expect(leaked).toEqual([]);
   });
 });
 

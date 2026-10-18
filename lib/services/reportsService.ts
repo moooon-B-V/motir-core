@@ -115,6 +115,13 @@ export const reportsService = {
    * header + sprint report show, so the bars match those surfaces), plus the
    * average completed across the window.
    *
+   * With `endSprintId` the window is the `lastN` completed sprints AT OR BEFORE
+   * that sprint (Story MOTIR-8919), in the same `completedAt desc, sequence desc`
+   * order, still drawn oldest→newest with the end sprint right-most. An id that is
+   * not a completed sprint of THIS project (unknown, another project's, active,
+   * planned) falls back to the default window — never an error and never another
+   * project's data.
+   *
    * Bounded (finding #57): a `LIMIT N` sprint query + N (≤ {@link MAX_LAST_N})
    * bounded roll-ups — never every sprint, never every issue. Low-history is a
    * first-class state: 0 completed sprints → `{ sprints: [], averageCompleted:
@@ -124,7 +131,7 @@ export const reportsService = {
    * Throws: `ProjectNotFoundError` (404 — unknown / cross-workspace project).
    */
   async getVelocity(
-    input: { projectId: string; lastN?: number },
+    input: { projectId: string; lastN?: number; endSprintId?: string },
     ctx: ServiceContext,
   ): Promise<VelocityDto> {
     // `report:view` (MOTIR-2351), which SUBSUMES the hand-rolled tenancy gate that
@@ -142,15 +149,32 @@ export const reportsService = {
     // call-into-another-service clause in the transaction-shape ADR.
     const { statistic, sprints } = await withWorkspaceServiceContext(
       ctx.workspaceId,
-      async (tx) => ({
-        statistic: await resolveStatistic(input.projectId, tx),
-        sprints: await sprintRepository.listCompletedByProject(
-          input.projectId,
-          ctx.workspaceId,
-          limit,
-          tx,
-        ),
-      }),
+      async (tx) => {
+        const end = input.endSprintId
+          ? await sprintRepository.findById(input.endSprintId, ctx.workspaceId, tx)
+          : null;
+        const endsAt =
+          end && end.projectId === input.projectId && end.state === 'complete' && end.completedAt
+            ? { completedAt: end.completedAt, sequence: end.sequence }
+            : null;
+        return {
+          statistic: await resolveStatistic(input.projectId, tx),
+          sprints: endsAt
+            ? await sprintRepository.listCompletedByProjectEndingAt(
+                input.projectId,
+                ctx.workspaceId,
+                endsAt,
+                limit,
+                tx,
+              )
+            : await sprintRepository.listCompletedByProject(
+                input.projectId,
+                ctx.workspaceId,
+                limit,
+                tx,
+              ),
+        };
+      },
     );
 
     // Per sprint: committed = the O(1) stored baseline; completed = the bounded

@@ -440,6 +440,14 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
     expectFallbackAnswer(
       await sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 10),
     );
+    expectFallbackAnswer(
+      await sprintRepository.listCompletedByProjectEndingAt(
+        fx.projectId,
+        fx.workspaceId,
+        { completedAt: new Date(), sequence: 1 },
+        10,
+      ),
+    );
     expectFallbackCount(
       await sprintRepository.countByProjectAndState(fx.projectId, fx.workspaceId, 'planned'),
     );

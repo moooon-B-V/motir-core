@@ -9,6 +9,9 @@ import {
   coercePeriod,
   coerceDaysBack,
   buildReportHref,
+  coerceVelocityCount,
+  stepVelocityCount,
+  VELOCITY_COUNT_LADDER,
   PERIOD_LABEL_KEY,
   PERIOD_AXIS_KEY,
 } from '@/lib/reports/reportPageView';
@@ -171,5 +174,37 @@ describe('pickTickIndices — bounded X-axis labels', () => {
     expect(ticks[ticks.length - 1]).toBe(89);
     expect(ticks.length).toBeLessThanOrEqual(7);
     expect([...ticks].sort((a, b) => a - b)).toEqual(ticks); // ascending, deduped
+  });
+});
+
+describe('Velocity range (Story MOTIR-8919)', () => {
+  it('coerces ?count to a whole number in 1..52, defaulting on anything else', () => {
+    expect(coerceVelocityCount(undefined)).toBe(7);
+    expect(coerceVelocityCount(null)).toBe(7);
+    expect(coerceVelocityCount('abc')).toBe(7);
+    expect(coerceVelocityCount('0')).toBe(7);
+    expect(coerceVelocityCount('-3')).toBe(7);
+    expect(coerceVelocityCount('2.5')).toBe(7);
+    expect(coerceVelocityCount('10')).toBe(10);
+    expect(coerceVelocityCount('999')).toBe(52);
+  });
+
+  it('steps along 3·5·7·10·15·26·52 and snaps an off-ladder value first', () => {
+    expect([...VELOCITY_COUNT_LADDER]).toEqual([3, 5, 7, 10, 15, 26, 52]);
+    expect(stepVelocityCount(7, -1)).toBe(5);
+    expect(stepVelocityCount(7, 1)).toBe(10);
+    expect(stepVelocityCount(3, -1)).toBe(3);
+    expect(stepVelocityCount(52, 1)).toBe(52);
+    expect(stepVelocityCount(12, 1)).toBe(15); // snaps to 10, then up one rung
+  });
+
+  it('builds canonical hrefs and omits the defaults', () => {
+    const base = '/reports/velocity';
+    expect(buildReportHref(base, {})).toBe(base);
+    expect(buildReportHref(base, { endingAt: null, count: 7 })).toBe(base);
+    expect(buildReportHref(base, { endingAt: 'spr_1', count: 3 })).toBe(
+      `${base}?endingAt=spr_1&count=3`,
+    );
+    expect(buildReportHref(base, { count: 10 })).toBe(`${base}?count=10`);
   });
 });
