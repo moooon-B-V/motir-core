@@ -11398,5 +11398,14 @@
   "reports.workload.tableUnassigned": "",
   "reports.workload.tableTotal": "",
   "reports.workload.subWindow": "",
-  "reports.workload.chartDescPerson": ""
+  "reports.workload.chartDescPerson": "",
+  "reports.cvr.chartFormLabel": "",
+  "reports.cvr.formLine": "",
+  "reports.cvr.formBars": "",
+  "reports.cvr.seriesLabel": "",
+  "reports.cvr.seriesLocked": "",
+  "reports.cvr.subCreatedOnly": "",
+  "reports.cvr.subResolvedOnly": "",
+  "reports.cvr.chartDescBars": "",
+  "reports.cvr.chartDescSingle": ""
 }

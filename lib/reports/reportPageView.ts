@@ -30,7 +30,25 @@ export const REPORT_DEFAULTS = {
   /** Velocity's default window — the last 7 completed sprints (mirrors the
    * service's `DEFAULT_LAST_N`). */
   velocityCount: 7,
+  /** Created vs Resolved: the difference-area LINE form. */
+  form: 'line' as CvrChartForm,
 } as const;
+
+/** Created vs Resolved's chart form: the difference-area line, or grouped bars. */
+export type CvrChartForm = 'line' | 'bars';
+/** Which Created vs Resolved series are drawn — never "none". */
+export type CvrSeries = 'both' | 'created' | 'resolved';
+
+/** Coerce a raw `?form` to a chart form; anything but `bars` is the line. */
+export function coerceChartForm(raw: string | null | undefined): CvrChartForm {
+  return raw === 'bars' ? 'bars' : REPORT_DEFAULTS.form;
+}
+
+/** Coerce a raw `?series` to a series choice. Missing, unknown, empty and `none`
+ * all mean both — a URL can never express zero series. */
+export function coerceCvrSeries(raw: string | null | undefined): CvrSeries {
+  return raw === 'created' || raw === 'resolved' ? raw : 'both';
+}
 
 /**
  * The sprint counts Velocity's "Sprints" stepper moves through (design notes,
@@ -153,6 +171,10 @@ export interface ReportPageParams {
   endingAt?: string | null;
   /** Velocity: how many completed sprints the window covers (omitted at 7). */
   count?: number;
+  /** Created vs Resolved: the chart form (omitted for the line). */
+  form?: CvrChartForm;
+  /** Created vs Resolved: the visible series (omitted when both). */
+  series?: CvrSeries;
 }
 
 /**
@@ -178,6 +200,10 @@ export function buildReportHref(pathname: string, params: ReportPageParams): str
   if (params.endingAt) sp.set('endingAt', params.endingAt);
   if (params.count !== undefined && params.count !== REPORT_DEFAULTS.velocityCount) {
     sp.set('count', String(params.count));
+  }
+  if (params.form === 'bars') sp.set('form', 'bars');
+  if (params.series === 'created' || params.series === 'resolved') {
+    sp.set('series', params.series);
   }
   const qs = sp.toString();
   return qs ? `${pathname}?${qs}` : pathname;

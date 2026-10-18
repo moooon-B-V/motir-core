@@ -5118,7 +5118,16 @@
       "chartDesc": "Éléments créés et résolus par {period} sur les {count} dernières périodes. {created} créés au total contre {resolved} résolus au total ; l’écart est ombré en rouge quand le Backlog augmente et en vert quand l’équipe rattrape son retard.",
       "tableCaption": "Éléments créés et résolus par période (nombres par période).",
       "tableCaptionCumulative": "Éléments créés et résolus par période (totaux cumulés).",
-      "subWindow": "{days} derniers jours"
+      "subWindow": "{days} derniers jours",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "Répartition par statut",

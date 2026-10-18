@@ -5118,7 +5118,16 @@
       "chartDesc": "Aangemaakt tegenover opgelost per {period} over de laatste {count} perioden. In totaal {created} aangemaakt tegenover {resolved} opgelost; het verschil is rood gearceerd waar de backlog groeit en groen waar het team inhaalt.",
       "tableCaption": "Aangemaakt tegenover opgelost per periode (aantallen per periode).",
       "tableCaptionCumulative": "Aangemaakt tegenover opgelost per periode (cumulatieve totalen).",
-      "subWindow": "afgelopen {days} dagen"
+      "subWindow": "afgelopen {days} dagen",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "Statusverdeling",

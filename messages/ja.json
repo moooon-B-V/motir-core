@@ -5118,7 +5118,16 @@
       "chartDesc": "直近 {count} 区間における {period} ごとの作成数と解決数。作成は合計 {created}、解決は合計 {resolved} です。差分は、バックログが増加している箇所が赤、チームが追いついている箇所が緑で表示されます。",
       "tableCaption": "期間ごとの作成数と解決数（期間ごとの件数）。",
       "tableCaptionCumulative": "期間ごとの作成数と解決数（累計）。",
-      "subWindow": "過去 {days} 日間"
+      "subWindow": "過去 {days} 日間",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "ステータス分布",

@@ -83,3 +83,35 @@ export function pickTickIndices(n: number, target = 6): number[] {
   set.add(n - 1);
   return [...set].sort((a, b) => a - b);
 }
+
+/** Which of the two Created vs Resolved series are drawn. */
+export interface CvrVisible {
+  created: boolean;
+  resolved: boolean;
+}
+
+/**
+ * Map a `differenceSeries` result onto the grouped `BarChart`'s `series` /
+ * `groups`: one group per period bucket (labelled by `labelForDate`), one bar per
+ * VISIBLE series, in Created-then-Resolved order. Pure, so the mapping is
+ * unit-testable; cumulative values arrive already summed in the series.
+ */
+export function cvrBarGroups(
+  series: DifferenceSeries,
+  visible: CvrVisible,
+  labelForDate: (iso: string) => string,
+  labels: { created: string; resolved: string },
+  colors: { created: string; resolved: string },
+): { series: { label: string; color: string }[]; groups: { label: string; values: number[] }[] } {
+  const bars: { label: string; color: string }[] = [];
+  if (visible.created) bars.push({ label: labels.created, color: colors.created });
+  if (visible.resolved) bars.push({ label: labels.resolved, color: colors.resolved });
+  const groups = series.bucketDates.map((iso, i) => ({
+    label: labelForDate(iso),
+    values: [
+      ...(visible.created ? [series.created[i]!.y] : []),
+      ...(visible.resolved ? [series.resolved[i]!.y] : []),
+    ],
+  }));
+  return { series: bars, groups };
+}

@@ -5118,7 +5118,16 @@
       "chartDesc": "Created vs resolved per {period} over the last {count} buckets. Created {created} total versus resolved {resolved} total; the difference is shaded red where the backlog grows and green where the team catches up.",
       "tableCaption": "Created vs resolved per period (per-period counts).",
       "tableCaptionCumulative": "Created vs resolved per period (cumulative running totals).",
-      "subWindow": "last {days} days"
+      "subWindow": "last {days} days",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "Status distribution",

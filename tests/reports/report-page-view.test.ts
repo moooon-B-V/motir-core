@@ -10,12 +10,14 @@ import {
   coerceDaysBack,
   buildReportHref,
   coerceVelocityCount,
+  coerceChartForm,
+  coerceCvrSeries,
   stepVelocityCount,
   VELOCITY_COUNT_LADDER,
   PERIOD_LABEL_KEY,
   PERIOD_AXIS_KEY,
 } from '@/lib/reports/reportPageView';
-import { differenceSeries, pickTickIndices } from '@/lib/reports/reportChartData';
+import { cvrBarGroups, differenceSeries, pickTickIndices } from '@/lib/reports/reportChartData';
 import { MAX_REPORT_BUCKETS } from '@/lib/reports/buckets';
 import type { CreatedVsResolvedDto } from '@/lib/dto/reports';
 
@@ -206,5 +208,65 @@ describe('Velocity range (Story MOTIR-8919)', () => {
       `${base}?endingAt=spr_1&count=3`,
     );
     expect(buildReportHref(base, { count: 10 })).toBe(`${base}?count=10`);
+  });
+});
+
+describe('Created vs Resolved form and series (Story MOTIR-8919)', () => {
+  it('buildReportHref omits the defaults and writes anything else', () => {
+    expect(buildReportHref('/reports/created-vs-resolved', { form: 'line', series: 'both' })).toBe(
+      '/reports/created-vs-resolved',
+    );
+    expect(buildReportHref('/reports/created-vs-resolved', { form: 'bars' })).toBe(
+      '/reports/created-vs-resolved?form=bars',
+    );
+    expect(
+      buildReportHref('/reports/created-vs-resolved', {
+        period: 'week',
+        daysBack: 90,
+        cumulative: true,
+        form: 'bars',
+        series: 'resolved',
+      }),
+    ).toBe(
+      '/reports/created-vs-resolved?period=week&daysBack=90&cumulative=true&form=bars&series=resolved',
+    );
+  });
+
+  it('the coerce helpers turn junk, empty and none into the defaults — never zero series', () => {
+    for (const raw of [null, undefined, '', 'none', 'neither', 'BARS', 'Created']) {
+      expect(coerceCvrSeries(raw)).toBe('both');
+    }
+    expect(coerceCvrSeries('created')).toBe('created');
+    expect(coerceCvrSeries('resolved')).toBe('resolved');
+    for (const raw of [null, undefined, '', 'pie', 'line']) {
+      expect(coerceChartForm(raw)).toBe('line');
+    }
+    expect(coerceChartForm('bars')).toBe('bars');
+  });
+
+  it('cvrBarGroups keeps one bar per visible series, in Created-then-Resolved order', () => {
+    const s = differenceSeries(
+      cvrDto({ cumulative: true }, [
+        { date: '2026-01-05', created: 8, resolved: 5 },
+        { date: '2026-01-12', created: 12, resolved: 14 },
+      ]),
+    );
+    const labels = { created: 'Created', resolved: 'Resolved' };
+    const colors = { created: 'c', resolved: 'r' };
+    const label = (iso: string) => iso.slice(5);
+    const both = cvrBarGroups(s, { created: true, resolved: true }, label, labels, colors);
+    expect(both.series).toEqual([
+      { label: 'Created', color: 'c' },
+      { label: 'Resolved', color: 'r' },
+    ]);
+    expect(both.groups).toEqual([
+      { label: '01-05', values: [8, 5] },
+      { label: '01-12', values: [12, 14] },
+    ]);
+    const resolvedOnly = cvrBarGroups(s, { created: false, resolved: true }, label, labels, colors);
+    expect(resolvedOnly.series).toEqual([{ label: 'Resolved', color: 'r' }]);
+    expect(resolvedOnly.groups.map((g) => g.values)).toEqual([[5], [14]]);
+    const createdOnly = cvrBarGroups(s, { created: true, resolved: false }, label, labels, colors);
+    expect(createdOnly.groups.map((g) => g.values)).toEqual([[8], [12]]);
   });
 });

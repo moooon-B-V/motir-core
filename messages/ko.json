@@ -5118,7 +5118,16 @@
       "chartDesc": "최근 {count}개 구간 동안 {period}별 생성 대비 해결입니다. 총 생성 {created}, 총 해결 {resolved}이며, 백로그가 늘어나는 구간은 빨간색, 팀이 따라잡는 구간은 녹색으로 차이를 음영 처리합니다.",
       "tableCaption": "기간별 생성 대비 해결(기간별 개수).",
       "tableCaptionCumulative": "기간별 생성 대비 해결(누적 합계).",
-      "subWindow": "최근 {days}일"
+      "subWindow": "최근 {days}일",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "상태 분포",

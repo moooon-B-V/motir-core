@@ -5118,7 +5118,16 @@
       "chartDesc": "Creati e risolti per {period} negli ultimi {count} intervalli. {created} creati in totale contro {resolved} risolti in totale; la differenza è ombreggiata in rosso dove il backlog cresce e in verde dove il team recupera.",
       "tableCaption": "Creati e risolti per periodo (conteggi per periodo).",
       "tableCaptionCumulative": "Creati e risolti per periodo (totali cumulativi).",
-      "subWindow": "ultimi {days} giorni"
+      "subWindow": "ultimi {days} giorni",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "Distribuzione per stato",

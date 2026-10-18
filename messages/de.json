@@ -5118,7 +5118,16 @@
       "chartDesc": "Erstellt vs. gelöst pro {period} über die letzten {count} Intervalle. Insgesamt {created} erstellt gegenüber {resolved} gelöst; die Differenz ist rot schattiert, wo das Backlog wächst, und grün, wo das Team aufholt.",
       "tableCaption": "Erstellt vs. gelöst pro Zeitraum (Anzahl pro Zeitraum).",
       "tableCaptionCumulative": "Erstellt vs. gelöst pro Zeitraum (kumulierte laufende Summen).",
-      "subWindow": "letzte {days} Tage"
+      "subWindow": "letzte {days} Tage",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "Statusverteilung",

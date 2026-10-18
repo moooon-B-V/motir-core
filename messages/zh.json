@@ -5118,7 +5118,16 @@
       "chartDesc": "最近 {count} 个区间内每{period}的新建与解决对比。新建共 {created}，已解决共 {resolved}；积压增加处填充红色，团队追赶处填充绿色。",
       "tableCaption": "每个周期的新建与解决（各周期计数）。",
       "tableCaptionCumulative": "每个周期的新建与解决（累计总数）。",
-      "subWindow": "最近 {days} 天"
+      "subWindow": "最近 {days} 天",
+      "chartFormLabel": "Chart",
+      "formLine": "Line",
+      "formBars": "Bars",
+      "seriesLabel": "Series",
+      "seriesLocked": "At least one series stays on.",
+      "subCreatedOnly": "Created only",
+      "subResolvedOnly": "Resolved only",
+      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
+      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
     },
     "distribution": {
       "title": "状态分布",
