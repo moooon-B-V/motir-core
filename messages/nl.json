@@ -4751,11 +4751,11 @@
       "notFound": "Dit sprintrapport is niet beschikbaar.",
       "backToBacklog": "Terug naar backlog",
       "sprintLabel": "Sprint",
-      "activeGroup": "Active",
-      "completedGroup": "Completed",
-      "sprintSearch": "Search sprints…",
-      "noSprintsTitle": "No sprints to report on yet",
-      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
+      "activeGroup": "Actief",
+      "completedGroup": "Afgerond",
+      "sprintSearch": "Sprints zoeken…",
+      "noSprintsTitle": "Nog geen Sprints om over te rapporteren",
+      "noSprintsBody": "Start een Sprint vanuit de backlog en het rapport ervan verschijnt hier."
     },
     "aiPlan": {
       "cta": "Sprints plannen met Motir",
@@ -5119,15 +5119,15 @@
       "tableCaption": "Aangemaakt tegenover opgelost per periode (aantallen per periode).",
       "tableCaptionCumulative": "Aangemaakt tegenover opgelost per periode (cumulatieve totalen).",
       "subWindow": "afgelopen {days} dagen",
-      "chartFormLabel": "Chart",
-      "formLine": "Line",
-      "formBars": "Bars",
-      "seriesLabel": "Series",
-      "seriesLocked": "At least one series stays on.",
-      "subCreatedOnly": "Created only",
-      "subResolvedOnly": "Resolved only",
-      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
-      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
+      "chartFormLabel": "Grafiek",
+      "formLine": "Lijn",
+      "formBars": "Balken",
+      "seriesLabel": "Reeksen",
+      "seriesLocked": "Minstens één reeks blijft aan.",
+      "subCreatedOnly": "Alleen aangemaakt",
+      "subResolvedOnly": "Alleen opgelost",
+      "chartDescBars": "Aangemaakt en opgelost per {period} over de laatste {count} perioden, als balken. In totaal {created} aangemaakt tegenover {resolved} opgelost.",
+      "chartDescSingle": "{series} per {period} over de laatste {count} perioden, {total} in totaal."
     },
     "distribution": {
       "title": "Statusverdeling",
@@ -5152,17 +5152,17 @@
     },
     "velocity": {
       "title": "Velocitygrafiek",
-      "endingAtLabel": "Ending at",
-      "endingAtHint": "A completed sprint. Blank = the latest.",
-      "latest": "Latest completed",
-      "latestNamed": "Latest completed — {name}",
-      "endingAtSearch": "Search sprints…",
+      "endingAtLabel": "Eindigend bij",
+      "endingAtHint": "Een afgeronde Sprint. Leeg = de laatste.",
+      "latest": "Laatst afgerond",
+      "latestNamed": "Laatst afgerond — {name}",
+      "endingAtSearch": "Sprints zoeken…",
       "countLabel": "Sprints",
-      "countFewer": "Fewer sprints",
-      "countMore": "More sprints",
-      "countHint": "3 to 52 · default 7.",
+      "countFewer": "Minder Sprints",
+      "countMore": "Meer Sprints",
+      "countHint": "3 tot 52 · standaard 7.",
       "rangeSubLine": "{project} · {from} – {to}",
-      "chartLoading": "Loading the velocity chart"
+      "chartLoading": "Velocitygrafiek laden"
     },
     "controls": {
       "periodLabel": "Periode",
@@ -5219,20 +5219,20 @@
       "xPoints": "Storypoints (open)",
       "xCount": "Werkitems (open)",
       "unassigned": "Niet toegewezen",
-      "chartDesc": "Open {measure} per verantwoordelijke, gerangschikt: {breakdown}. Totaal {total} verdeeld over {count} onopgeloste werkitems.",
-      "tableCaption": "Open (onopgelost) werk per verantwoordelijke — storypoints en aantal werkitems.",
+      "chartDesc": "Open {measure}, gerangschikt per persoon over de gekozen periode: {breakdown}. Totaal {total} verdeeld over {count} werkitems.",
+      "tableCaption": "Open werk per persoon over de gekozen periode — toegewezen, niet toegewezen en door hen gemaakt, en het totaal, voor de actieve maat.",
       "tableAssignee": "Verantwoordelijke",
       "tablePoints": "Storypoints",
       "tableIssues": "Werkitems",
       "emptyTitle": "Nog geen open werk toegewezen",
       "emptyBody": "Elk onopgelost werkitem is niet toegewezen, of er is geen open werk. Kies een ander bereik.",
-      "legendAssigned": "Assigned",
-      "legendUnassigned": "Unassigned — reported by",
-      "tableAssigned": "Assigned",
-      "tableUnassigned": "Unassigned (reported)",
-      "tableTotal": "Total",
-      "subWindow": "last {days} days",
-      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
+      "legendAssigned": "Toegewezen",
+      "legendUnassigned": "Niet toegewezen — gemaakt door",
+      "tableAssigned": "Toegewezen",
+      "tableUnassigned": "Niet toegewezen (gemaakt)",
+      "tableTotal": "Totaal",
+      "subWindow": "afgelopen {days} dagen",
+      "chartDescPerson": "{name} {total} ({assigned} toegewezen, {unassigned} niet toegewezen en gemaakt)"
     },
     "statistic": {
       "kind": "Type",
@@ -5245,42 +5245,42 @@
       "component": "Component"
     },
     "help": {
-      "hide": "Hide help text",
-      "show": "Show help text",
-      "regionLabel": "About this report",
-      "whatLabel": "What it shows.",
-      "howLabel": "How to read it.",
+      "hide": "Hulptekst verbergen",
+      "show": "Hulptekst tonen",
+      "regionLabel": "Over dit rapport",
+      "whatLabel": "Wat het toont.",
+      "howLabel": "Hoe je het leest.",
       "burndown": {
-        "what": "How the sprint's scope, completed and started work move from its start to its end, with a target line and a Today marker.",
-        "how": "Completed rising toward Scope means the sprint is on track. A Scope line that climbs after the start is scope creep; a Completed line that lags the Target is behind."
+        "what": "Hoe de scope, het afgeronde en het gestarte werk van de Sprint zich ontwikkelen van begin tot eind, met een doellijn en een markering voor Vandaag.",
+        "how": "Als Afgerond naar Scope toe stijgt, ligt de Sprint op schema. Een Scope-lijn die na de start stijgt is scope creep; een Afgerond-lijn die achterblijft bij het Doel loopt achter."
       },
       "velocity": {
-        "what": "The story points a team committed to against the points it completed, sprint by sprint.",
-        "how": "Compare the two bars in each sprint. Steady completed bars show a reliable pace you can plan the next sprint against; pick an earlier sprint to look back from there."
+        "what": "De storypoints die een team heeft toegezegd tegenover de punten die het heeft afgerond, Sprint voor Sprint.",
+        "how": "Vergelijk de twee balken in elke Sprint. Gelijkmatige balken voor afgerond werk tonen een betrouwbaar tempo waarop je de volgende Sprint kunt plannen; kies een eerdere Sprint om vanaf daar terug te kijken."
       },
       "sprintReport": {
-        "what": "A finished or running sprint on one page: what was completed, what was not, what was added after it started, and its sprint graph.",
-        "how": "Start with completed against not completed, then read the work added mid-sprint. Use the picker under the title to switch sprint."
+        "what": "Een afgeronde of lopende Sprint op één pagina: wat is afgerond, wat niet, wat na de start is toegevoegd en de bijbehorende sprintgrafiek.",
+        "how": "Begin met afgerond tegenover niet afgerond en lees dan het werk dat midden in de Sprint is toegevoegd. Gebruik de kiezer onder de titel om van Sprint te wisselen."
       },
       "createdVsResolved": {
-        "what": "How many work items were created and how many were resolved in each period.",
-        "how": "When the created bar is taller than the resolved bar the backlog is growing; when it is shorter the team is catching up. Use the series switches to look at one of them alone."
+        "what": "Hoeveel werkitems er per periode zijn aangemaakt en hoeveel er zijn opgelost.",
+        "how": "Als de balk voor aangemaakt hoger is dan die voor opgelost, groeit de backlog; als hij lager is, haalt het team in. Gebruik de reeksschakelaars om er één afzonderlijk te bekijken."
       },
       "distribution": {
-        "what": "How the project's work items split across the values of one field, such as status, type or assignee.",
-        "how": "The wider a slice, the more work items carry that value. Change the statistic to cut the same work another way."
+        "what": "Hoe de werkitems van het project zich verdelen over de waarden van één veld, zoals status, type of verantwoordelijke.",
+        "how": "Hoe breder een segment, hoe meer werkitems die waarde hebben. Wijzig de statistiek om hetzelfde werk anders op te delen."
       },
       "averageAge": {
-        "what": "The average number of days the unresolved work items had been open at the end of each period.",
-        "how": "A line that keeps rising means work is being left open. Compare it with the window average to see whether the latest period is unusual."
+        "what": "Het gemiddelde aantal dagen dat de onopgeloste werkitems aan het einde van elke periode openstonden.",
+        "how": "Een lijn die blijft stijgen betekent dat werk open blijft staan. Vergelijk hem met het gemiddelde van het venster om te zien of de laatste periode ongewoon is."
       },
       "resolutionTime": {
-        "what": "The average number of days it took to resolve the work items resolved in each period.",
-        "how": "A falling line means work is being finished faster. Periods are counted by resolution date, so an old item resolved today raises today's period."
+        "what": "Het gemiddelde aantal dagen dat het kostte om de werkitems op te lossen die in elke periode zijn opgelost.",
+        "how": "Een dalende lijn betekent dat werk sneller wordt afgerond. Periodes worden geteld op oplosdatum, dus een oud item dat vandaag is opgelost verhoogt de periode van vandaag."
       },
       "workload": {
-        "what": "The open work each person holds over a chosen period, counted in story points or work items. Work with no assignee is counted under its reporter.",
-        "how": "The longest bars are the people carrying the most open work. Look for a very uneven spread before assigning more."
+        "what": "Het open werk dat elke persoon over een gekozen periode heeft, geteld in storypoints of werkitems. Werk zonder verantwoordelijke wordt geteld onder de maker.",
+        "how": "De langste balken zijn de mensen met het meeste open werk. Let op een zeer ongelijke verdeling voordat je meer toewijst."
       }
     }
   },

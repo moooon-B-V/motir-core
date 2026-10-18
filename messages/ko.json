@@ -4751,11 +4751,11 @@
       "notFound": "이 Sprint 보고서를 사용할 수 없습니다.",
       "backToBacklog": "백로그로 돌아가기",
       "sprintLabel": "Sprint",
-      "activeGroup": "Active",
-      "completedGroup": "Completed",
-      "sprintSearch": "Search sprints…",
-      "noSprintsTitle": "No sprints to report on yet",
-      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
+      "activeGroup": "활성",
+      "completedGroup": "완료됨",
+      "sprintSearch": "Sprint 검색…",
+      "noSprintsTitle": "아직 보고할 Sprint가 없습니다",
+      "noSprintsBody": "백로그에서 Sprint를 시작하면 보고서가 여기에 표시됩니다."
     },
     "aiPlan": {
       "cta": "Motir로 Sprint 계획하기",
@@ -5119,15 +5119,15 @@
       "tableCaption": "기간별 생성 대비 해결(기간별 개수).",
       "tableCaptionCumulative": "기간별 생성 대비 해결(누적 합계).",
       "subWindow": "최근 {days}일",
-      "chartFormLabel": "Chart",
-      "formLine": "Line",
-      "formBars": "Bars",
-      "seriesLabel": "Series",
-      "seriesLocked": "At least one series stays on.",
-      "subCreatedOnly": "Created only",
-      "subResolvedOnly": "Resolved only",
-      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
-      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
+      "chartFormLabel": "차트",
+      "formLine": "선",
+      "formBars": "막대",
+      "seriesLabel": "계열",
+      "seriesLocked": "계열 하나 이상은 켜져 있어야 합니다.",
+      "subCreatedOnly": "생성됨만",
+      "subResolvedOnly": "해결됨만",
+      "chartDescBars": "최근 {count}개 구간 동안 {period}별 생성됨과 해결됨을 막대로 나타낸 차트입니다. 총 생성 {created}, 총 해결 {resolved}입니다.",
+      "chartDescSingle": "최근 {count}개 구간 동안 {period}별 {series}입니다. 총 {total}입니다."
     },
     "distribution": {
       "title": "상태 분포",
@@ -5152,17 +5152,17 @@
     },
     "velocity": {
       "title": "속도 차트",
-      "endingAtLabel": "Ending at",
-      "endingAtHint": "A completed sprint. Blank = the latest.",
-      "latest": "Latest completed",
-      "latestNamed": "Latest completed — {name}",
-      "endingAtSearch": "Search sprints…",
-      "countLabel": "Sprints",
-      "countFewer": "Fewer sprints",
-      "countMore": "More sprints",
-      "countHint": "3 to 52 · default 7.",
+      "endingAtLabel": "종료 Sprint",
+      "endingAtHint": "완료된 Sprint를 선택하세요. 비워 두면 가장 최근 Sprint입니다.",
+      "latest": "가장 최근 완료",
+      "latestNamed": "가장 최근 완료 — {name}",
+      "endingAtSearch": "Sprint 검색…",
+      "countLabel": "Sprint 수",
+      "countFewer": "Sprint 줄이기",
+      "countMore": "Sprint 늘리기",
+      "countHint": "3~52개 · 기본값 7개.",
       "rangeSubLine": "{project} · {from} – {to}",
-      "chartLoading": "Loading the velocity chart"
+      "chartLoading": "속도 차트를 불러오는 중"
     },
     "controls": {
       "periodLabel": "기간 단위",
@@ -5219,20 +5219,20 @@
       "xPoints": "스토리 포인트(미완료)",
       "xCount": "작업 항목(미완료)",
       "unassigned": "미배정",
-      "chartDesc": "담당자별 미완료 {measure} 순위: {breakdown}. 미해결 작업 항목 {count}개에 걸쳐 총 {total}.",
-      "tableCaption": "담당자별 미완료(미해결) 작업 — 스토리 포인트와 작업 항목 수.",
+      "chartDesc": "선택한 기간 동안 사람별 미완료 {measure} 순위: {breakdown}. 작업 항목 {count}개에 걸쳐 총 {total}.",
+      "tableCaption": "선택한 기간 동안 사람별 미완료 작업 — 현재 측정 기준에 따른 배정됨, 미배정(보고자 기준), 합계.",
       "tableAssignee": "담당자",
       "tablePoints": "스토리 포인트",
       "tableIssues": "작업 항목",
       "emptyTitle": "아직 배정된 미완료 작업이 없습니다",
       "emptyBody": "모든 미해결 작업 항목이 미배정 상태이거나 미완료 작업이 없습니다. 다른 범위를 선택하세요.",
-      "legendAssigned": "Assigned",
-      "legendUnassigned": "Unassigned — reported by",
-      "tableAssigned": "Assigned",
-      "tableUnassigned": "Unassigned (reported)",
-      "tableTotal": "Total",
-      "subWindow": "last {days} days",
-      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
+      "legendAssigned": "배정됨",
+      "legendUnassigned": "미배정 — 보고자 기준",
+      "tableAssigned": "배정됨",
+      "tableUnassigned": "미배정(보고자 기준)",
+      "tableTotal": "합계",
+      "subWindow": "최근 {days}일",
+      "chartDescPerson": "{name} {total}(배정됨 {assigned}, 미배정 보고자 기준 {unassigned})"
     },
     "statistic": {
       "kind": "유형",
@@ -5245,42 +5245,42 @@
       "component": "구성 요소"
     },
     "help": {
-      "hide": "Hide help text",
-      "show": "Show help text",
-      "regionLabel": "About this report",
-      "whatLabel": "What it shows.",
-      "howLabel": "How to read it.",
+      "hide": "도움말 숨기기",
+      "show": "도움말 표시",
+      "regionLabel": "이 보고서 소개",
+      "whatLabel": "표시 내용.",
+      "howLabel": "보는 방법.",
       "burndown": {
-        "what": "How the sprint's scope, completed and started work move from its start to its end, with a target line and a Today marker.",
-        "how": "Completed rising toward Scope means the sprint is on track. A Scope line that climbs after the start is scope creep; a Completed line that lags the Target is behind."
+        "what": "Sprint의 범위, 완료된 작업, 시작된 작업이 시작부터 종료까지 어떻게 변하는지를 목표선과 오늘 표시와 함께 보여줍니다.",
+        "how": "완료가 범위에 가까워지면 Sprint가 계획대로 진행되고 있다는 뜻입니다. 시작 이후 범위 선이 올라가면 범위 증가이며, 완료 선이 목표보다 낮으면 뒤처진 것입니다."
       },
       "velocity": {
-        "what": "The story points a team committed to against the points it completed, sprint by sprint.",
-        "how": "Compare the two bars in each sprint. Steady completed bars show a reliable pace you can plan the next sprint against; pick an earlier sprint to look back from there."
+        "what": "팀이 약정한 스토리 포인트와 실제로 완료한 포인트를 Sprint별로 보여줍니다.",
+        "how": "각 Sprint의 두 막대를 비교하세요. 완료 막대가 꾸준하면 다음 Sprint를 계획할 수 있는 안정적인 속도입니다. 이전 Sprint를 선택하면 그 시점부터 되돌아볼 수 있습니다."
       },
       "sprintReport": {
-        "what": "A finished or running sprint on one page: what was completed, what was not, what was added after it started, and its sprint graph.",
-        "how": "Start with completed against not completed, then read the work added mid-sprint. Use the picker under the title to switch sprint."
+        "what": "종료되었거나 진행 중인 Sprint를 한 페이지에 보여줍니다. 완료된 작업, 완료되지 않은 작업, 시작 후 추가된 작업, Sprint 그래프가 포함됩니다.",
+        "how": "먼저 완료와 미완료를 비교한 다음 Sprint 도중 추가된 작업을 확인하세요. 제목 아래의 선택기로 Sprint를 전환할 수 있습니다."
       },
       "createdVsResolved": {
-        "what": "How many work items were created and how many were resolved in each period.",
-        "how": "When the created bar is taller than the resolved bar the backlog is growing; when it is shorter the team is catching up. Use the series switches to look at one of them alone."
+        "what": "기간별로 생성된 작업 항목 수와 해결된 작업 항목 수를 보여줍니다.",
+        "how": "생성됨 막대가 해결됨 막대보다 길면 백로그가 늘어나는 것이고, 짧으면 팀이 따라잡고 있는 것입니다. 계열 스위치로 하나만 따로 볼 수 있습니다."
       },
       "distribution": {
-        "what": "How the project's work items split across the values of one field, such as status, type or assignee.",
-        "how": "The wider a slice, the more work items carry that value. Change the statistic to cut the same work another way."
+        "what": "프로젝트의 작업 항목이 상태, 유형, 담당자 등 하나의 필드 값에 따라 어떻게 나뉘는지 보여줍니다.",
+        "how": "조각이 넓을수록 그 값을 가진 작업 항목이 많습니다. 통계 유형을 바꾸면 같은 작업을 다른 기준으로 나누어 볼 수 있습니다."
       },
       "averageAge": {
-        "what": "The average number of days the unresolved work items had been open at the end of each period.",
-        "how": "A line that keeps rising means work is being left open. Compare it with the window average to see whether the latest period is unusual."
+        "what": "각 기간 종료 시점에 미해결 작업 항목이 열려 있던 평균 일수를 보여줍니다.",
+        "how": "선이 계속 올라가면 작업이 열린 채 방치되고 있다는 뜻입니다. 기간 평균과 비교해 최근 기간이 평소와 다른지 확인하세요."
       },
       "resolutionTime": {
-        "what": "The average number of days it took to resolve the work items resolved in each period.",
-        "how": "A falling line means work is being finished faster. Periods are counted by resolution date, so an old item resolved today raises today's period."
+        "what": "각 기간에 해결된 작업 항목을 해결하는 데 걸린 평균 일수를 보여줍니다.",
+        "how": "선이 내려가면 작업이 더 빨리 끝나고 있다는 뜻입니다. 기간은 해결일 기준으로 계산하므로, 오래된 항목을 오늘 해결하면 오늘 기간의 값이 올라갑니다."
       },
       "workload": {
-        "what": "The open work each person holds over a chosen period, counted in story points or work items. Work with no assignee is counted under its reporter.",
-        "how": "The longest bars are the people carrying the most open work. Look for a very uneven spread before assigning more."
+        "what": "선택한 기간 동안 각 사람이 맡고 있는 미완료 작업을 스토리 포인트 또는 작업 항목 수로 보여줍니다. 담당자가 없는 작업은 보고자 기준으로 집계됩니다.",
+        "how": "막대가 가장 긴 사람이 미완료 작업을 가장 많이 맡고 있습니다. 작업을 더 배정하기 전에 분포가 매우 고르지 않은지 확인하세요."
       }
     }
   },

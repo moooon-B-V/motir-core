@@ -4751,11 +4751,11 @@
       "notFound": "Este informe del Sprint no está disponible.",
       "backToBacklog": "Volver al Backlog",
       "sprintLabel": "Sprint",
-      "activeGroup": "Active",
-      "completedGroup": "Completed",
-      "sprintSearch": "Search sprints…",
-      "noSprintsTitle": "No sprints to report on yet",
-      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
+      "activeGroup": "Activos",
+      "completedGroup": "Completados",
+      "sprintSearch": "Buscar Sprints…",
+      "noSprintsTitle": "Aún no hay Sprints sobre los que informar",
+      "noSprintsBody": "Inicia un Sprint desde el Backlog y su informe aparecerá aquí."
     },
     "aiPlan": {
       "cta": "Planificar Sprints con Motir",
@@ -5119,15 +5119,15 @@
       "tableCaption": "Creados frente a resueltos por periodo (recuentos por periodo).",
       "tableCaptionCumulative": "Creados frente a resueltos por periodo (totales acumulados).",
       "subWindow": "últimos {days} días",
-      "chartFormLabel": "Chart",
-      "formLine": "Line",
-      "formBars": "Bars",
+      "chartFormLabel": "Gráfico",
+      "formLine": "Línea",
+      "formBars": "Barras",
       "seriesLabel": "Series",
-      "seriesLocked": "At least one series stays on.",
-      "subCreatedOnly": "Created only",
-      "subResolvedOnly": "Resolved only",
-      "chartDescBars": "Created and resolved per {period} over the last {count} buckets, as bars. Created {created} total versus resolved {resolved} total.",
-      "chartDescSingle": "{series} per {period} over the last {count} buckets, {total} in total."
+      "seriesLocked": "Al menos una serie debe permanecer activa.",
+      "subCreatedOnly": "Solo creados",
+      "subResolvedOnly": "Solo resueltos",
+      "chartDescBars": "Creados y resueltos por {period} en los últimos {count} intervalos, en barras. {created} creados en total frente a {resolved} resueltos en total.",
+      "chartDescSingle": "{series} por {period} en los últimos {count} intervalos, {total} en total."
     },
     "distribution": {
       "title": "Distribución por estado",
@@ -5152,17 +5152,17 @@
     },
     "velocity": {
       "title": "Gráfico de velocidad",
-      "endingAtLabel": "Ending at",
-      "endingAtHint": "A completed sprint. Blank = the latest.",
-      "latest": "Latest completed",
-      "latestNamed": "Latest completed — {name}",
-      "endingAtSearch": "Search sprints…",
+      "endingAtLabel": "Hasta",
+      "endingAtHint": "Un Sprint completado. En blanco = el último.",
+      "latest": "Último completado",
+      "latestNamed": "Último completado — {name}",
+      "endingAtSearch": "Buscar Sprints…",
       "countLabel": "Sprints",
-      "countFewer": "Fewer sprints",
-      "countMore": "More sprints",
-      "countHint": "3 to 52 · default 7.",
+      "countFewer": "Menos Sprints",
+      "countMore": "Más Sprints",
+      "countHint": "De 3 a 52 · por defecto 7.",
       "rangeSubLine": "{project} · {from} – {to}",
-      "chartLoading": "Loading the velocity chart"
+      "chartLoading": "Cargando el gráfico de velocidad"
     },
     "controls": {
       "periodLabel": "Periodo",
@@ -5219,20 +5219,20 @@
       "xPoints": "Puntos de historia (abiertos)",
       "xCount": "Elementos de trabajo (abiertos)",
       "unassigned": "Sin asignar",
-      "chartDesc": "{measure} abiertos por responsable, ordenados: {breakdown}. Total de {total} en {count} elementos de trabajo sin resolver.",
-      "tableCaption": "Trabajo abierto (sin resolver) por responsable: puntos de historia y número de elementos de trabajo.",
+      "chartDesc": "{measure} abiertos, ordenados por persona en el periodo elegido: {breakdown}. Total de {total} en {count} elementos de trabajo.",
+      "tableCaption": "Trabajo abierto por persona en el periodo elegido: asignado, sin asignar y creado por esa persona, y el total, para la medida activa.",
       "tableAssignee": "Responsable",
       "tablePoints": "Puntos de historia",
       "tableIssues": "Elementos de trabajo",
       "emptyTitle": "Aún no hay trabajo abierto asignado",
       "emptyBody": "Todos los elementos de trabajo sin resolver están sin asignar, o no hay trabajo abierto. Elige otro ámbito.",
-      "legendAssigned": "Assigned",
-      "legendUnassigned": "Unassigned — reported by",
-      "tableAssigned": "Assigned",
-      "tableUnassigned": "Unassigned (reported)",
+      "legendAssigned": "Asignado",
+      "legendUnassigned": "Sin asignar — creado por",
+      "tableAssigned": "Asignado",
+      "tableUnassigned": "Sin asignar (creado)",
       "tableTotal": "Total",
-      "subWindow": "last {days} days",
-      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
+      "subWindow": "últimos {days} días",
+      "chartDescPerson": "{name} {total} ({assigned} asignados, {unassigned} sin asignar y creados por esa persona)"
     },
     "statistic": {
       "kind": "Tipo",
@@ -5245,42 +5245,42 @@
       "component": "Componente"
     },
     "help": {
-      "hide": "Hide help text",
-      "show": "Show help text",
-      "regionLabel": "About this report",
-      "whatLabel": "What it shows.",
-      "howLabel": "How to read it.",
+      "hide": "Ocultar texto de ayuda",
+      "show": "Mostrar texto de ayuda",
+      "regionLabel": "Acerca de este informe",
+      "whatLabel": "Qué muestra.",
+      "howLabel": "Cómo leerlo.",
       "burndown": {
-        "what": "How the sprint's scope, completed and started work move from its start to its end, with a target line and a Today marker.",
-        "how": "Completed rising toward Scope means the sprint is on track. A Scope line that climbs after the start is scope creep; a Completed line that lags the Target is behind."
+        "what": "Cómo evolucionan el alcance del Sprint y el trabajo completado y empezado, desde su inicio hasta su fin, con una línea de objetivo y un marcador de Hoy.",
+        "how": "Que Completado suba hacia Alcance significa que el Sprint va según lo previsto. Una línea de Alcance que sube tras el inicio es un aumento del alcance; una línea de Completado que queda por debajo del Objetivo va con retraso."
       },
       "velocity": {
-        "what": "The story points a team committed to against the points it completed, sprint by sprint.",
-        "how": "Compare the two bars in each sprint. Steady completed bars show a reliable pace you can plan the next sprint against; pick an earlier sprint to look back from there."
+        "what": "Los Puntos de historia a los que se comprometió un equipo frente a los puntos que completó, Sprint a Sprint.",
+        "how": "Compara las dos barras de cada Sprint. Unas barras de completado estables indican un ritmo fiable con el que planificar el siguiente Sprint; elige un Sprint anterior para mirar atrás desde ahí."
       },
       "sprintReport": {
-        "what": "A finished or running sprint on one page: what was completed, what was not, what was added after it started, and its sprint graph.",
-        "how": "Start with completed against not completed, then read the work added mid-sprint. Use the picker under the title to switch sprint."
+        "what": "Un Sprint terminado o en curso en una sola página: qué se completó, qué no, qué se añadió después de iniciarse y su gráfico del Sprint.",
+        "how": "Empieza por lo completado frente a lo no completado y luego revisa el trabajo añadido a mitad del Sprint. Usa el selector bajo el título para cambiar de Sprint."
       },
       "createdVsResolved": {
-        "what": "How many work items were created and how many were resolved in each period.",
-        "how": "When the created bar is taller than the resolved bar the backlog is growing; when it is shorter the team is catching up. Use the series switches to look at one of them alone."
+        "what": "Cuántos elementos de trabajo se crearon y cuántos se resolvieron en cada periodo.",
+        "how": "Cuando la barra de creados es más alta que la de resueltos, el Backlog crece; cuando es más baja, el equipo recupera terreno. Usa los interruptores de series para ver una de ellas por separado."
       },
       "distribution": {
-        "what": "How the project's work items split across the values of one field, such as status, type or assignee.",
-        "how": "The wider a slice, the more work items carry that value. Change the statistic to cut the same work another way."
+        "what": "Cómo se reparten los elementos de trabajo del Proyecto entre los valores de un campo, como el estado, el tipo o el Responsable.",
+        "how": "Cuanto más ancha es una porción, más elementos de trabajo tienen ese valor. Cambia la estadística para ver el mismo trabajo desde otro ángulo."
       },
       "averageAge": {
-        "what": "The average number of days the unresolved work items had been open at the end of each period.",
-        "how": "A line that keeps rising means work is being left open. Compare it with the window average to see whether the latest period is unusual."
+        "what": "El número medio de días que los elementos de trabajo sin resolver llevaban abiertos al final de cada periodo.",
+        "how": "Una línea que sigue subiendo indica que el trabajo se está dejando abierto. Compárala con la media del periodo para ver si el último periodo es inusual."
       },
       "resolutionTime": {
-        "what": "The average number of days it took to resolve the work items resolved in each period.",
-        "how": "A falling line means work is being finished faster. Periods are counted by resolution date, so an old item resolved today raises today's period."
+        "what": "El número medio de días que se tardó en resolver los elementos de trabajo resueltos en cada periodo.",
+        "how": "Una línea descendente indica que el trabajo se termina más rápido. Los periodos se cuentan por fecha de resolución, así que un elemento antiguo resuelto hoy eleva el periodo de hoy."
       },
       "workload": {
-        "what": "The open work each person holds over a chosen period, counted in story points or work items. Work with no assignee is counted under its reporter.",
-        "how": "The longest bars are the people carrying the most open work. Look for a very uneven spread before assigning more."
+        "what": "El trabajo abierto que tiene cada persona en un periodo elegido, contado en Puntos de historia o en elementos de trabajo. El trabajo sin Responsable se cuenta a nombre de su Creador.",
+        "how": "Las barras más largas son las personas con más trabajo abierto. Busca un reparto muy desigual antes de asignar más."
       }
     }
   },
