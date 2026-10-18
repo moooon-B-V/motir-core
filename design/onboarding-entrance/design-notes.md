@@ -843,3 +843,85 @@ the control.
 | **MOTIR-8286** | **GIVES:** mount `AuthLanguageControl` (the same component; import it or lift it) at the trailing end of the brand bar on `/onboarding` and `/onboarding/how-it-works`. Keep its `setLocale` → `router.refresh()` behaviour, and assert in a test that an idea typed in the box survives a switch. It needs no new keys, and it does not need to collapse at 390 px. |
 | **MOTIR-8251** | **GIVES additionally:** the same control at the same trailing end of `OnboardingTopBar`, for the migrate wizard and the importer                                                                                                                                                                                                                                     |
 | MOTIR-8252     | unchanged. The brand bar's second slot is a plain child of `OnboardingHero`'s header, not a new primitive.                                                                                                                                                                                                                                                           |
+
+## 2026-10-18 — onboarding refinements: Import project button, no idea-box highlight, a coloured "Start from an idea instead" (MOTIR-8934)
+
+**Amends:** § _2026-10-11 — the vibe layout_ (MOTIR-8250) above, and
+`design/onboarding-migrate/design-notes.md` § _2026-10-12 — the vibe layout on the migrate wizard_
+(MOTIR-8251). **Delta mock:**
+[`onboarding-entrance--refinements.mock.html`](./onboarding-entrance--refinements.mock.html) — only the
+changed panels; both older mocks are records and are not edited. Parent: MOTIR-8933. Build card: MOTIR-8935.
+
+**Design system — files read:** root `package.json` (line 124, `"@motir/design-system": "workspace:*"`),
+`app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`), `app/layout.tsx` (stamps
+`data-style` / `data-palette` / `data-type`), `packages/design-system/package.json` (version 0.15.1).
+**Verdict: ON MOTIR DESIGN — branch (a).** Axes: `warm-editorial` · `motir` · `motir` (the defaults; no
+per-user override drawn). Every panel is drawn light and dark. The theme.css of this checkout is inlined
+verbatim. **Method note:** the delta is hand-composed from the package's real token layer and the shipped
+`Button` / brand-bar markup rather than through `renderMock`, because it changes three controls, not a
+screen; the heroes are drawn without the wave field (unchanged, and irrelevant to these changes). No part
+is proposed for `@motir/design-system`; nothing new is product-local.
+
+**Shipped reality read:** `components/onboarding/OnboardingEntrance.tsx` (the import `OnboardingSection`,
+the form's `focus-within:ring-2` and the textarea's `autoFocus`),
+`components/onboarding/layout/OnboardingBrandBar.tsx` (the trailing slot),
+`app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx` (the `buttonVariants({variant:
+'secondary', size:'sm'})` link with `brandBar.planAi`), and `messages/en.json` keys
+`onboarding.entrance.import{Title,Desc,Cta}` and `onboardingMigrate.brandBar.planAi`.
+
+### Change 1 — `/onboarding`: the "Already have a project?" band becomes an "Import project" button
+
+- **Removed:** the whole import `OnboardingSection` (head "Already have a project?", its lede, and the
+  "We can vibe it too" button). The page now ends with the hero. Keys `importTitle`, `importDesc`,
+  `importCta` go unused.
+- **Added:** one `Import project` link-button → `/onboarding/migrate`, in the **lockup bar's trailing
+  slot, before the language control** — the same slot and size the migrate bar uses for its own exit
+  ("Start from an idea instead"), so the two screens' doors to each other mirror one another. This is the
+  access path: the reader sees the door in the bar, on the first screen.
+- **Look:** `buttonVariants` secondary, `sm`, `ArrowRight` size-3.5, label `Import project` (new key
+  `onboarding.entrance.importProject`). Fill `--el-card`, border `--el-border-strong`, ink `--el-text`;
+  hover fill `--el-surface` + border `--el-text-strong`; focus ring `--focus-ring-color`. Shape:
+  `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm`. Plain (not coloured) — it is the secondary door
+  and the idea box stays the page's one primary action.
+- **Carried-idea panel (Panel 2): no Import project.** The MOTIR-4370 ruling holds — a reader who
+  arrived with an idea answered the fork at the door. The bar shows the language control only.
+- **Narrow:** the bar's trailing group already wraps under the lockup; the button wraps with it.
+
+### Change 2 — `/onboarding`: the idea input loses its highlight
+
+The "highlight" is the `ring-2` the card shows because the textarea `autoFocus`es on load (and again on
+every focus). It reads as the page shouting at the box.
+
+- **No ring at rest, none on load:** drop `autoFocus` and the card's `focus-within:ring-2 ring-offset-2`.
+  The box is `--el-card` on `--el-border` with `--shadow-elevated`, as before.
+- **Focused = a quiet border shift, not a ring:** the card border moves `--el-border` → `--el-border-strong`
+  (`focus-within`), and the caret shows. Panel 4 draws before (ring) → after (rest) → after (focused).
+- **Flagged for the reviewer:** WCAG 2.4.7 wants a visible focus indicator. `--el-border-strong` is a
+  visible change but a subtle one; if the reviewer wants a stronger floor, the answer is to keep this
+  border shift and add no ring — not to restore the ring. Removing `autoFocus` also means a keyboard user
+  tabs once to reach the box; ⌘/Ctrl+Enter still submits from it.
+
+### Change 3 — `/onboarding/migrate`: "Start from an idea instead" gets a colour
+
+Today it is a plain secondary button (`--el-card`, `--el-border`) beside the ghost "Save & exit", so it
+disappears into the bar. It is the page's way out of the wizard and should be findable.
+
+- **Look:** same `secondary` `sm` button, but filled with the **lavender tint** — fill `--el-tint-lavender`,
+  ink `--el-text-strong` (AA on the tint, per the colour rule), border `--el-border-strong`; hover border
+  `--el-text-strong`; focus ring `--focus-ring-color`. A tint, not a new hue and not the accent fill:
+  the primary-accent fill is reserved for the wizard's own continue actions, and in the monochrome `motir`
+  palette it would be a black block in the bar.
+- Copy unchanged (`onboardingMigrate.brandBar.planAi`). Position unchanged: before "Save & exit".
+
+### Per-element tokens (changed elements only)
+
+| Element                       | Colour (`--el-*`)                                                                  | Shape                                                   |
+| ----------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Import project                | fill `--el-card`; border `--el-border-strong`; ink `--el-text`; hover `--el-surface` | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm` |
+| Idea card, rest / focused     | `--el-card`; border `--el-border` → `--el-border-strong`; **no ring**              | `--radius-card`, `--shadow-elevated`                    |
+| Start from an idea instead    | fill `--el-tint-lavender`; ink `--el-text-strong`; border `--el-border-strong`     | `--radius-btn`, `--height-btn-sm`                       |
+
+### Panels (light AND dark)
+
+1 `/onboarding` default · 2 `/onboarding` carried idea · 3 `/onboarding/migrate` bar · 4 close-ups
+(Import project rest/hover/focus, Start-from-an-idea before → after states, idea input before → after).
