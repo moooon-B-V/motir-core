@@ -915,11 +915,11 @@ disappears into the bar. It is the page's way out of the wizard and should be fi
 
 ### Per-element tokens (changed elements only)
 
-| Element                       | Colour (`--el-*`)                                                                  | Shape                                                   |
-| ----------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Import project                | fill `--el-card`; border `--el-border-strong`; ink `--el-text`; hover `--el-surface` | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm` |
-| Idea card, rest / focused     | `--el-card`; border `--el-border` → `--el-border-strong`; **no ring**              | `--radius-card`, `--shadow-elevated`                    |
-| Start from an idea instead    | fill `--el-tint-lavender`; ink `--el-text-strong`; border `--el-border-strong`     | `--radius-btn`, `--height-btn-sm`                       |
+| Element                    | Colour (`--el-*`)                                                                    | Shape                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Import project             | fill `--el-card`; border `--el-border-strong`; ink `--el-text`; hover `--el-surface` | `--radius-btn`, `--height-btn-sm`, `--spacing-btn-x-sm` |
+| Idea card, rest / focused  | `--el-card`; border `--el-border` → `--el-border-strong`; **no ring**                | `--radius-card`, `--shadow-elevated`                    |
+| Start from an idea instead | fill `--el-tint-lavender`; ink `--el-text-strong`; border `--el-border-strong`       | `--radius-btn`, `--height-btn-sm`                       |
 
 ### Panels (light AND dark)
 
