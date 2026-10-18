@@ -216,8 +216,10 @@ const showHelp = (page: Page): Locator => page.getByRole('button', { name: 'Show
 const cvrChart = (page: Page): Locator => page.getByRole('img', { name: 'Created vs Resolved' });
 
 async function openDataTable(scope: Page | Locator): Promise<Locator> {
-  await scope.getByText('View data table').click();
   const table = scope.getByRole('table');
+  // A disclosure toggles: clicking an open one would close it, so a poll that calls this
+  // again must leave an already-open table alone.
+  if (!(await table.isVisible())) await scope.getByText('View data table').click();
   await expect(table).toBeVisible();
   return table;
 }
