@@ -1,6 +1,11 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { RawSubscriptionResponse, RawUsageResponse } from '@/lib/ai/types';
+import type {
+  CalculatorCategoriesDTO,
+  CalculatorEmptyCategoryDTO,
+  CalculatorEstimateDTO,
+} from '@/lib/dto/billing';
 import { adminDb } from './helpers/adminDb';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,7 +45,11 @@ import { adminDb } from './helpers/adminDb';
 
 const getOrgUsageMock = vi.fn<(q: unknown) => Promise<RawUsageResponse>>();
 const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResponse>>();
-vi.mock('@/lib/ai/motirAiClient', () => ({
+// The REAL client underneath (MOTIR-8637): the calculator reads below go through
+// its shape validation with `fetch` stubbed, so the seam guarded there is the one
+// that ships. Only the reads this file fakes at the module level are replaced.
+vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
   getOrgUsage: (q: unknown) => getOrgUsageMock(q),
   getOrgSubscription: (q: unknown) => getOrgSubscriptionMock(q),
   getPendingPlanChange: async () => ({ pendingDowngrade: null }),
@@ -312,5 +321,217 @@ describe('billing boundary contract — getAiAccess folds usage tier/balance + s
 
     // The consumer reads subscription.currentPeriodEnd; under the rename it is undefined.
     expect(access.renewsAt).toBeUndefined();
+  });
+});
+
+// ── The public calculator (MOTIR-8637) ───────────────────────────────────────
+//
+// motir-ai's PRODUCER DTOs, copied field for field from
+// motir-ai/src/services/calculatorService.ts (CalculatorEstimateDto,
+// CalculatorEmptyCategoryDto, CalculatorCategoriesDto) and
+// src/billing/calculatorTypes.ts (CalculatorTopUpAmount, CalculatorCeiling). The
+// two-way assignability below makes a rename on motir-core's side a compile
+// error; a rename on motir-ai's side is a review-forcing edit of this mirror.
+
+type EngineLane = 'planning' | 'running';
+type EngineCadence = 'annual' | 'monthly';
+interface EngineTopUpAmount {
+  units: number;
+  credits: number;
+  priceUsd: number;
+}
+interface EngineEstimateDto {
+  version: number;
+  kind: 'estimate';
+  profilesVersion: string;
+  categoryRuleVersion: string;
+  cadence: EngineCadence;
+  credits: { low: number; high: number };
+  perItemCredits: Record<EngineLane, number>;
+  models: Record<EngineLane, string[]>;
+  droppedModelIds: Record<EngineLane, string[]>;
+  recommendation: { planKey: string | null; planName: string | null; monthlyPriceUsd: number };
+  topUp: { low: EngineTopUpAmount; high: EngineTopUpAmount };
+  ceiling: { credits: number | null; exceeded: boolean; excessCredits: number };
+}
+interface EngineEmptyCategoryDto {
+  version: number;
+  kind: 'empty_category';
+  categoryRuleVersion: string;
+  lanes: EngineLane[];
+  droppedModelIds: Record<EngineLane, string[]>;
+}
+interface EngineCategoriesDto {
+  version: number;
+  categoryRuleVersion: string;
+  modelsReadAt: string;
+  cadences: EngineCadence[];
+  defaultCadence: EngineCadence;
+  categories: { key: string; models: { id: string; provider: string }[] }[];
+}
+
+// Exact, both ways: an extra, missing or renamed key on either side fails tsc.
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const ESTIMATE_MIRROR: Exact<EngineEstimateDto, CalculatorEstimateDTO> = true;
+const EMPTY_MIRROR: Exact<EngineEmptyCategoryDto, CalculatorEmptyCategoryDTO> = true;
+const CATEGORIES_MIRROR: Exact<EngineCategoriesDto, CalculatorCategoriesDTO> = true;
+
+const ESTIMATE_CONTRACT: EngineEstimateDto = {
+  version: 1,
+  kind: 'estimate',
+  profilesVersion: 'profiles-contract',
+  categoryRuleVersion: 'rule-contract',
+  cadence: 'annual',
+  credits: { low: 300, high: 2400 },
+  perItemCredits: { planning: 10, running: 20 },
+  models: { planning: ['p-1'], running: ['r-1', 'r-2'] },
+  droppedModelIds: { planning: [], running: [] },
+  recommendation: { planKey: 'key-contract', planName: 'Name Contract', monthlyPriceUsd: 7 },
+  topUp: {
+    low: { units: 0, credits: 0, priceUsd: 0 },
+    high: { units: 1, credits: 1000, priceUsd: 5 },
+  },
+  ceiling: { credits: 4000, exceeded: false, excessCredits: 0 },
+};
+
+const EMPTY_CONTRACT: EngineEmptyCategoryDto = {
+  version: 1,
+  kind: 'empty_category',
+  categoryRuleVersion: 'rule-contract',
+  lanes: ['planning'],
+  droppedModelIds: { planning: ['p-1'], running: [] },
+};
+
+const CATEGORIES_CONTRACT: EngineCategoriesDto = {
+  version: 1,
+  categoryRuleVersion: 'rule-contract',
+  modelsReadAt: '2026-10-15T00:00:00.000Z',
+  cadences: ['annual', 'monthly'],
+  defaultCadence: 'annual',
+  categories: [
+    { key: 'band-1', models: [{ id: 'p-1', provider: 'prov' }] },
+    { key: 'band-2', models: [] },
+  ],
+};
+
+const CALCULATOR_REQUEST = {
+  itemsPerMonth: { low: 10, high: 40 },
+  planning: { category: 'band-1', modelIds: ['p-1'] },
+  running: { category: 'band-1', modelIds: ['p-1'] },
+  cadence: 'annual' as const,
+};
+
+describe('billing boundary contract — the public calculator through the real client', () => {
+  const fetchMock = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>();
+  function answer(status: number, body: unknown): void {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+    process.env['MOTIR_AI_URL'] = 'http://motir-ai.contract';
+    process.env['MOTIR_AI_SERVICE_TOKEN'] = 'svc';
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env['MOTIR_AI_URL'];
+    delete process.env['MOTIR_AI_SERVICE_TOKEN'];
+  });
+
+  it('the producer DTOs and motir-core’s consumer DTOs are the same shape', () => {
+    expect([ESTIMATE_MIRROR, EMPTY_MIRROR, CATEGORIES_MIRROR]).toEqual([true, true, true]);
+  });
+
+  it('round-trips an estimate, an empty_category and the categories key for key', async () => {
+    const { organizationId, owner } = await makeOrg();
+    const actor = { organizationId, actorUserId: owner.id };
+
+    answer(200, ESTIMATE_CONTRACT);
+    await expect(
+      billingService.estimateCalculator({ ...actor, body: CALCULATOR_REQUEST }),
+    ).resolves.toStrictEqual(ESTIMATE_CONTRACT);
+    answer(200, EMPTY_CONTRACT);
+    await expect(
+      billingService.estimateCalculator({ ...actor, body: CALCULATOR_REQUEST }),
+    ).resolves.toStrictEqual(EMPTY_CONTRACT);
+    answer(200, CATEGORIES_CONTRACT);
+    await expect(billingService.getCalculatorCategories(actor)).resolves.toStrictEqual(
+      CATEGORIES_CONTRACT,
+    );
+  });
+
+  it('the request is the engine’s four keys and nothing else', async () => {
+    const { organizationId, owner } = await makeOrg();
+    answer(200, ESTIMATE_CONTRACT);
+    await billingService.estimateCalculator({
+      organizationId,
+      actorUserId: owner.id,
+      body: CALCULATOR_REQUEST,
+    });
+    const sent = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)) as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual(['cadence', 'itemsPerMonth', 'planning', 'running']);
+  });
+
+  it('the strict-key refusal: an unknown key is refused by name and never sent', async () => {
+    const { organizationId, owner } = await makeOrg();
+    await expect(
+      billingService.estimateCalculator({
+        organizationId,
+        actorUserId: owner.id,
+        body: { ...CALCULATOR_REQUEST, quantity: 2 },
+      }),
+    ).rejects.toMatchObject({ code: 'CALCULATOR_REQUEST_INVALID', field: 'quantity' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('the `calculator_unavailable:` detail is recognised as the engine’s own answer', async () => {
+    const { organizationId, owner } = await makeOrg();
+    answer(500, {
+      type: 'about:blank',
+      title: 'Internal error',
+      status: 500,
+      code: 'internal_error',
+      detail: 'calculator_unavailable: catalog',
+    });
+    await expect(
+      billingService.estimateCalculator({
+        organizationId,
+        actorUserId: owner.id,
+        body: CALCULATOR_REQUEST,
+      }),
+    ).rejects.toMatchObject({ code: 'CALCULATOR_UNAVAILABLE' });
+  });
+
+  it('the guard bites — a `ceiling.excessCredits` rename is refused, never half-read', async () => {
+    const { organizationId, owner } = await makeOrg();
+    // motir-ai renames ceiling.excessCredits → ceiling.excess.
+    answer(200, {
+      ...ESTIMATE_CONTRACT,
+      ceiling: { credits: 4000, exceeded: false, excess: 0 },
+    });
+    await expect(
+      billingService.estimateCalculator({
+        organizationId,
+        actorUserId: owner.id,
+        body: CALCULATOR_REQUEST,
+      }),
+    ).rejects.toMatchObject({ code: 'MOTIR_AI_UNAVAILABLE' });
+  });
+
+  it('the guard bites — a categories `models[].provider` rename is refused', async () => {
+    const { organizationId, owner } = await makeOrg();
+    answer(200, {
+      ...CATEGORIES_CONTRACT,
+      categories: [{ key: 'band-1', models: [{ id: 'p-1', vendor: 'prov' }] }],
+    });
+    await expect(
+      billingService.getCalculatorCategories({ organizationId, actorUserId: owner.id }),
+    ).rejects.toMatchObject({ code: 'MOTIR_AI_UNAVAILABLE' });
   });
 });

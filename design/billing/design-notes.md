@@ -41,12 +41,13 @@ the same primitives — no design→code gap.
 > Code follow-ups blocked on this asset: **8.1.16 / MOTIR-1303** (seat toggle +
 > drop the note) and **8.1.17 / MOTIR-1304** (pricing blocks).
 
-| Surface                                                     | Asset                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing settings · pricing storefront · AI paywall**      | **`billing.mock.html`** (HTML mockup)                | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                        |
-| **Motir CI — the third billed line** (AMENDMENT)            | **`ci-line.mock.html`** (HTML mockup)                | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file. |
-| **Motir Search — the FOURTH billed line** (AMENDMENT)       | **`search-line.mock.html`** (HTML mockup)            | The web-search line the grounding channel adds to the settings panel, 6 panels: the line in place at real width beside ①②③ · its states (spend · nothing billed · the ABSENCE of a paused state, drawn) · the META org, which renders no line · loading / figures-UNAVAILABLE / page error · role gating · the access path, reproduced. Amends the two rows above; redraws neither. `search-line.png` beside it. See § "Amendment 2026-09-05 — the Motir Search line" at the end of this file.                                                                 |
-| **Contact sales — the Enterprise request form** (AMENDMENT) | **`billing--contact-sales.mock.html`** (HTML mockup) | What the Enterprise card's Contact sales opens, 10 panels: access path · the control closed (manager / member disabled / Request sent) · the form empty and filled · validation · sending · sent · the open request read-only · refused (409 / 403) and network error · `zh` · narrow. Amends panel 5's Enterprise CTA only. See § "Amendment 2026-10-05 — Contact sales opens a request form" at the end of this file.                                                                                                                                        |
+| Surface                                                     | Asset                                                | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing settings · pricing storefront · AI paywall**      | **`billing.mock.html`** (HTML mockup)                | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Motir CI — the third billed line** (AMENDMENT)            | **`ci-line.mock.html`** (HTML mockup)                | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file.                                                                                                                                                                                                                                                                                                                  |
+| **Motir Search — the FOURTH billed line** (AMENDMENT)       | **`search-line.mock.html`** (HTML mockup)            | The web-search line the grounding channel adds to the settings panel, 6 panels: the line in place at real width beside ①②③ · its states (spend · nothing billed · the ABSENCE of a paused state, drawn) · the META org, which renders no line · loading / figures-UNAVAILABLE / page error · role gating · the access path, reproduced. Amends the two rows above; redraws neither. `search-line.png` beside it. See § "Amendment 2026-09-05 — the Motir Search line" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Contact sales — the Enterprise request form** (AMENDMENT) | **`billing--contact-sales.mock.html`** (HTML mockup) | What the Enterprise card's Contact sales opens, 10 panels: access path · the control closed (manager / member disabled / Request sent) · the form empty and filled · validation · sending · sent · the open request read-only · refused (409 / 403) and network error · `zh` · narrow. Amends panel 5's Enterprise CTA only. See § "Amendment 2026-10-05 — Contact sales opens a request form" at the end of this file.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **The Calculator view** (AMENDMENT)                         | **`billing--calculator.mock.html`** (HTML mockup)    | The fourth view of Billing & plans and the one link that opens it, 18 panels: S1 the link in the plans view's intro block · S2 initial · S3 ready · S4 asking · S5 categories loading · S6 categories unavailable · S7 a category with no live model · S8 populated (with Max ×2 on both cadences) · S9 above the largest pool · S10 top-up only · S11 the upgrade line and its two neighbours · S12 a retired model · S13 four inline refusals · S14 estimate unavailable · S15 request failed · S16 roles · `zh` · narrow. Amends panel 5's intro only (the link); a fourth view. **Dated note (2026-10-14, MOTIR-8636):** the AI ladder, its pools, the Enterprise card and the top-up rate are read from `lib/billing/catalog.ts` and supersede this file's figures. See § "Amendment 2026-10-14 — the Calculator view and the link that opens it" at the end of this file. |
 
 ## What this area is
 
@@ -58,6 +59,14 @@ billing panel cross-links to Usage & cost (panel 2) rather than re-drawing the
 balance dashboard.
 
 ### The locked model this draws (read at run time — do NOT invent)
+
+> **Superseded figures (2026-10-14, MOTIR-8636):** the ladder figures below are NOT current and
+> must not be built from. Superseded: **Standard 2,000 credits / mo** and **Pro 8,000 credits /
+> mo**, the **Enterprise (custom)** card, and the **$10 / 1,000** credit top-up. The source is
+> `lib/billing/catalog.ts` — pools **5,000 / 15,000 / 30,000**, **Max ×2** at **60,000** as a
+> plan of its own on both cadences, **no Enterprise entry**, and a top-up of **$5 per 1,000** —
+> and it wins wherever this file disagrees. See § "Amendment 2026-10-14 — the Calculator view and
+> the link that opens it" at the end of this file.
 
 Everything here is grounded in **`docs/decisions/billing-tiering.md`** (8.1.1 /
 MOTIR-1138, **Accepted 2026-06-21**). The load-bearing facts:
@@ -1504,3 +1513,191 @@ no key.
   delta is redrawn, not reinterpreted.
 - **Out of scope:** the staff side (the /admin Enterprise requests page — [the console
   design](motir:cmuuwiekk00jihwoikmmc2wqk)), the card's content (MOTIR-7596), and any price.
+
+# Amendment 2026-10-14 — the Calculator view and the link that opens it (MOTIR-8636)
+
+**Asset:** `billing--calculator.mock.html` (HTML mock, a DELTA, 18 panels) · **Card:** MOTIR-8636
+(design, Story MOTIR-8381). No `.png` is exported: the two-file rule (`CLAUDE.md`,
+`docs/decisions/design-result.md` AMENDMENT 4) retired exports for new mocks, so the card's own
+mention of `billing--calculator.png` is not followed. **Contract drawn:** motir-ai's calculator
+engine — `src/services/calculatorService.ts` (`CalculatorEstimateDto`,
+`CalculatorEmptyCategoryDto`, `CalculatorCategoriesDto`, the `calculator_unavailable:` answer) and
+`src/calculatorRequest.ts` (the request bounds) — and `lib/billing/catalog.ts`.
+
+## Scope
+
+**Amends** § _Panels_ panel 5 of `billing.mock.html` in ONE place — the plans view's intro block
+(`plans.chooseTitle` / `plans.chooseSub`) gains one link — and adds a **fourth view**, the
+Calculator. Nothing else on the page changes; `billing.mock.html`, `ci-line.mock.html`,
+`search-line.mock.html` and `billing--contact-sales.mock.html` are records and are not edited.
+The file's own ladder figures are corrected by the dated note at the head of § _The locked model
+this draws_ and in the surface-table row.
+
+## The page grammar
+
+- **A fourth view, not a new navigation.** `BillingClient` switches `home` / `plans` / `seats`
+  from client state (`useState<View>`). The Calculator joins as `'calculator'`, with the same
+  header every view carries: the `--el-link` back-to-home control (`ArrowLeft`), the muted
+  breadcrumb `Organization · {org} · Billing & plans · Calculator`, the serif title and a subtitle.
+- **One door.** The only way in is the plans view's link (S1), placed in the intro block **above**
+  the cadence control and the plan-card row, so it is read before the ladder and sits above the
+  fold at 1280×800. No second door on the home view.
+- **No tab strip, no URL state.** The view and its inputs are client state, like the other three
+  views; the page's only URL handling stays the one-time `?checkout=` marker it strips.
+- **Inputs are never preselected**, and changing any input clears the shown estimate back to the
+  not-yet-asked state (S2/S3) — no stale, labelled answer is kept.
+
+## The shared cadence
+
+`PlansView` owns `useState<BillingCadence>('annual')` today. It is **lifted to the page**
+(`BillingClient`) and passed to both the plans view and the Calculator, so the two views can never
+show different billing periods. The Calculator renders the same `Segmented` + `Save ~33%` pill in
+its header row; it is the page's ONE value, drawn where the reader is, not a second control.
+The estimate request carries it as `cadence`.
+
+## The controls' composition
+
+| Control              | Shipped primitive it reuses                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The link (S1)        | an inline `--el-link` button with a `Calculator` glyph — the back-link grammar of the views' headers                                                      |
+| Cadence              | `Segmented` (the plans view's own control, `plans.cadenceLabel`) + the mint `Pill`                                                                        |
+| Range (low, high)    | two `Input`s in a `FormField`, `--height-input` / `--radius-input` / `--spacing-input-x`; error border `--el-danger`, error line `--el-danger-on-surface` |
+| Category (per lane)  | `Segmented`, single choice, options in the order `GET categories` returns them; an option whose `models` is empty is `disabled` with its reason           |
+| Models (per lane)    | `TopupCard`'s `role="group"` of `aria-pressed` buttons — multi-select; `--radius-control`, selected = `--el-accent` border + `--el-surface` fill          |
+| Ask / next step      | `Button` `primary` (`loading` while asking); next step leads to the plans view                                                                            |
+| Loading              | skeleton bars (`--el-muted`, no text) — the area's loading grammar                                                                                        |
+| Request failed (S15) | `ErrorState`                                                                                                                                              |
+| Member gate (S16)    | the page's shipped `EmptyState` gate, unchanged                                                                                                           |
+
+Two lanes, **planning** and **running**, each a `{ category, modelIds }` selection. The tab
+computes no share between models — the engine performs the split.
+
+## States
+
+| Panel  | State                                                                                                                                   |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| S1     | The link in the plans view, the page around it at real width                                                                            |
+| S2     | Initial — range empty, no category, no model, ask disabled with a stated reason, a placeholder that promises no number                  |
+| S3     | Ready — whole-number range, `low <= high`, ≥ 1 model per lane, ask enabled, no result                                                   |
+| S4     | Asking — ask busy, inputs readable, result in its loading treatment with no prior answer                                                |
+| S5     | Categories loading — both pickers skeleton, ask impossible                                                                              |
+| S6     | Categories unavailable / failed — one dashed notice in the form + retry; the ask states why it cannot run                               |
+| S7     | No live model in a category — (a) from `GET categories`, (b) from `kind: 'empty_category'` — one treatment, no number                   |
+| S8     | Populated — credit range, recommended plan, top-up, seat line, next step; Max ×2 on annual and on monthly                               |
+| S9     | `ceiling.exceeded` — the excess is met by top-up only; both cadences                                                                    |
+| S10    | Top-up only (`planKey: null`) — plan block and seat line variants                                                                       |
+| S11    | Upgrade line (above) · equal-or-lower (no line, no downgrade control) · no plan held (nothing)                                          |
+| S12    | `droppedModelIds` — the model leaves the selection with a note; the range is the engine's for the models kept                           |
+| S13    | Four inline refusals: range end missing / non-whole / negative · `low > high` · empty lane · over the per-lane cap (no count printed)   |
+| S14    | `calculator_unavailable:` — "we can't estimate right now" + retry; peach notice; no number; the previous answer explicitly not retained |
+| S15    | Transport failure / other non-2xx — `ErrorState`, worded apart from S14, retry                                                          |
+| S16    | Roles — owner and admin: link, view, enabled next step; member: the shipped gate                                                        |
+| `zh`   | S8 in Chinese                                                                                                                           |
+| narrow | S8 at 375px, one column                                                                                                                 |
+
+S6, S14 and S15 are three visibly different treatments (a dashed notice in the FORM; a peach notice
+in the RESULT; an `ErrorState` card replacing the result) and none carries a number.
+
+## The state → field map
+
+| Panel / slot                    | Fed by                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Category options, model buttons | `GET categories` → `categories[].key`, `categories[].models[].id` / `.provider`; empty `models` → S7a                                                         |
+| S5 / S6                         | that read in flight / answered `calculator_unavailable:` or failed                                                                                            |
+| S13 refusals                    | `src/calculatorRequest.ts` bounds, checked client-side: whole numbers 0..1,000,000, `low <= high`, non-empty `modelIds`, at most `MAX_MODELS_PER_LANE` unique |
+| Credit range                    | `credits.low` / `credits.high`                                                                                                                                |
+| Per-item line                   | `perItemCredits.planning` / `.running`                                                                                                                        |
+| Plan name + price               | `recommendation.planKey` → catalog entry `name` + `prices[cadence]` (key→catalog resolution, MOTIR-8640)                                                      |
+| Top-up row                      | `topUp.low` / `topUp.high` → `units`, `credits`, `priceUsd`                                                                                                   |
+| Seat line                       | catalog `includedTrackerSeats` + `seatPlan.prices[cadence]` — never × member count, never added to the plan price                                             |
+| S9 ceiling statement            | `ceiling.exceeded`, `ceiling.credits`, `ceiling.excessCredits`                                                                                                |
+| S10                             | `recommendation.planKey: null`                                                                                                                                |
+| S11 line                        | recommended entry's pool > current plan's pool (catalog order — `PlansView`'s `currentPool` rule)                                                             |
+| S12 note                        | `droppedModelIds[lane]`; the kept set is `models[lane]`                                                                                                       |
+| S7b                             | `kind: 'empty_category'`, `lanes`                                                                                                                             |
+| S14                             | `internal_error` whose detail starts `calculator_unavailable:`                                                                                                |
+| S15                             | network error, or any non-2xx that is not S14                                                                                                                 |
+
+## The roles fact
+
+Owner and admin both hold `manageBilling` (`lib/organizations/capabilities.ts`), so both see the
+link, the view and an enabled next step. A plain member is refused (403) by
+`billingService.getBillingStatus` before any view renders, and `BillingClient` shows its shipped
+gate (`member.gateTitle` / `member.gateDescription` / `member.contactOwner`). **There is no member
+variant of the Calculator and no disabled-button variant of its next step** — no role can reach
+one, and S16 draws that absence on purpose.
+
+## Who builds what
+
+| Card           | Builds                                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-8637** | the motir-core server routes for `categories` and `estimate`, the engine's answers mapped (S6, S7b, S14, S15), and the client seam |
+| **MOTIR-8638** | every word: the link, the view, its states, the seat rule — en and every locale the `billing` catalogue keeps                      |
+| **MOTIR-8639** | the view itself, the link (S1), the lifted cadence, the controls, and every state panel's rendering                                |
+| **MOTIR-8640** | integration: key→catalog resolution, the plan block (incl. Max ×2) and the seat line (S8–S11)                                      |
+| **MOTIR-8641** | E2E: link → Calculator → an estimate and the seat rule → every refusal, with the paced acceptance video                            |
+| **MOTIR-8643** | the pinned-vector rendering — the recorded range, plan and top-up rendered field for field                                         |
+
+## Colour + shape roles (additions only — the base tables above still govern)
+
+| Element                    | Colour                                                                                                   | Shape                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Calculator link            | `--el-link`                                                                                              | inline, no box                              |
+| Lane box                   | `--el-page-bg`, `--el-border`; name `--el-text`, help `--el-text-secondary`                              | `--radius-card`                             |
+| Model button               | `--el-border`; on: `--el-accent` border + `--el-surface`; id `--el-text`, provider `--el-text-secondary` | `--radius-control`, `--spacing-control-x/y` |
+| Disabled category          | `--el-text-secondary` at 50% opacity, struck through, `disabled`                                         | inherits `Segmented`                        |
+| Result placeholder         | dashed `--el-border`; text `--el-text-secondary`; glyph `--el-text-faint` (`aria-hidden`)                | `--radius-card`                             |
+| Credit range figure        | `--el-text` (serif); unit `--el-text-secondary`                                                          | —                                           |
+| Recommended plan block     | `--el-accent` border, `--el-page-bg`; tier `Pill` lavender                                               | `--radius-card`                             |
+| Top-up-only pill           | `--el-tint-sky` + `--el-text-strong`                                                                     | `--radius-badge`                            |
+| Ceiling statement (S9)     | `--el-tint-yellow` + `--el-text-strong`, glyph `--el-warning`                                            | `--radius-card`                             |
+| Upgrade line (S11)         | `--el-tint-sky` + `--el-text-strong`                                                                     | `--radius-card`                             |
+| Retired-model note (S12)   | `--el-tint-sky` + `--el-text-strong`                                                                     | `--radius-control`                          |
+| Categories failed (S6)     | `--el-surface-soft`, dashed `--el-border-strong`; text `--el-text` / `--el-text-secondary`               | `--radius-card`                             |
+| Estimate unavailable (S14) | `--el-tint-peach` + `--el-text-strong`                                                                   | `--radius-card`                             |
+| Request failed (S15)       | `ErrorState`; glyph `--el-danger-on-surface`, description `--el-text-secondary`                          | `--radius-card`                             |
+| Field error                | border `--el-danger`, line `--el-danger-on-surface`                                                      | —                                           |
+| Source labels (board only) | `--el-text-secondary`, mono                                                                              | —                                           |
+
+No `--el-text-faint` carries text; `--el-text-muted` appears only on the white page/card (the
+breadcrumb, a card's sub-heading, the input placeholder). `--el-danger-text` is not used. Nothing
+names a hue.
+
+## Primitives composed
+
+- **Package (`@motir/design-system`):** `Card`, `Segmented`, `Button` (`primary`, `secondary`,
+  `loading`), `Pill`, `Input`, `FormField`, `ErrorState`, `EmptyState`. Nothing is proposed to the
+  package.
+- **Product-local, shipped:** `TopupCard`'s `aria-pressed` group grammar (reused, not imported —
+  the view builds its own group the same way), the views' header grammar, the member gate.
+- **Icons (lucide):** `ArrowLeft`, `ArrowRight`, `Calculator`, `Coins`, `Users`, `Sparkles`,
+  `TrendingUp`, `CircleAlert`, `TriangleAlert`, `Clock`, `RotateCw`, `WifiOff`, `CircleMinus`,
+  `Info`, `Lock`, `X`.
+
+## Copy strings (representative — the final en and zh, and every other locale, are MOTIR-8638's)
+
+| intent            | en                                                                             | zh                                                           |
+| ----------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| link              | Not sure which plan fits? Estimate it with the calculator                      | 不确定哪个套餐合适？用计算器估算一下                         |
+| title             | Calculator                                                                     | 计算器                                                       |
+| breadcrumb        | Organization · {org} · Billing & plans · Calculator                            | 组织 · {org} · 账单与套餐 · 计算器                           |
+| range             | Items finished per month — From / To                                           | 每月完成的事项数 —— 从 / 到                                  |
+| lanes             | Planning model · Running model                                                 | 规划模型 · 执行模型                                          |
+| ask               | Estimate                                                                       | 估算                                                         |
+| credits           | Your organization's credits per month                                          | 你的组织每月的额度                                           |
+| one plan          | One plan for the whole organization — not per member.                          | 整个组织一个套餐 —— 不按成员计。                             |
+| seat              | 1 Motir seat included with an AI plan · each further member {price}            | AI 套餐包含 1 个 Motir 席位 · 每增加一名成员 {price}         |
+| seat, top-up only | No Motir seat is included without an AI plan — every seat is per user, {price} | 没有 AI 套餐时不含 Motir 席位 —— 每个席位按用户计费，{price} |
+| upgrade           | A mid-period upgrade is priced for the days left in the period.                | 期中升级按本期剩余天数计价。                                 |
+| ceiling           | The {excess} credits beyond it are met by top-up only.                         | 超出的 {excess} 额度仅能通过充值补足。                       |
+| unavailable (S14) | We can't estimate right now                                                    | 暂时无法估算                                                 |
+| failed (S15)      | Couldn't reach the calculator                                                  | 无法连接计算器                                               |
+| cap refusal       | That's more models than one lane can take. Remove one to ask.                  | 一个通道无法容纳这么多模型。请移除一个再估算。               |
+
+## The numbers are illustrative
+
+Every figure in the mock — ranges, pools, prices, top-ups, the ceiling, model ids — is
+illustrative and carries its source on the panel. The design fixes where each figure comes from,
+never its value.
+
+**Dated note (2026-10-15, MOTIR-8636):** this design was republished unchanged for a fresh review after the re-plan its first review asked for was declined.

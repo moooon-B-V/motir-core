@@ -401,3 +401,104 @@ export interface EnterpriseRequestFormContextDTO {
   /** The org's connected repositories — `project_repository` rows across its workspaces. */
   repositoryCount: number;
 }
+
+// ── The Calculator (Story MOTIR-8381 · MOTIR-8637) ───────────────────────────
+//
+// The engine's public calculator (motir-ai `src/services/calculatorService.ts`,
+// MOTIR-8627) answered through motir-core's own door. Every figure below is the
+// engine's: motir-core composes no pool, price, plan name or model name, and the
+// route answers these bodies unaltered. ONE declaration, read by the client's
+// return types, the service and the HTTP boundary.
+
+/** The bounds the engine's request parser enforces (`src/calculatorRequest.ts`). */
+export const CALCULATOR_REQUEST_LIMITS = {
+  maxItemsPerMonth: 1_000_000,
+  maxModelsPerLane: 10,
+} as const;
+
+export const CALCULATOR_CADENCES = ['annual', 'monthly'] as const;
+export type CalculatorCadence = (typeof CALCULATOR_CADENCES)[number];
+
+export type CalculatorLane = 'planning' | 'running';
+
+const calculatorCount = z.number().int().min(0).max(CALCULATOR_REQUEST_LIMITS.maxItemsPerMonth);
+
+const calculatorLaneSchema = z
+  .object({
+    category: z.string().trim().min(1),
+    modelIds: z
+      .array(z.string().trim().min(1))
+      .min(1)
+      .max(CALCULATOR_REQUEST_LIMITS.maxModelsPerLane)
+      .refine((ids) => new Set(ids).size === ids.length, { message: 'model ids must be unique' }),
+  })
+  .strict();
+
+/**
+ * The estimate request — STRICT, as the engine's parser is: an unknown key (a
+ * `quantity`, a `seats`, an organization id) is refused by name rather than
+ * forwarded or dropped. `cadence` defaults to the engine's own default.
+ */
+export const calculatorEstimateRequestSchema = z
+  .object({
+    itemsPerMonth: z
+      .object({ low: calculatorCount, high: calculatorCount })
+      .strict()
+      .refine((r) => r.low <= r.high, {
+        message: 'itemsPerMonth.low must not exceed itemsPerMonth.high',
+        path: ['low'],
+      }),
+    planning: calculatorLaneSchema,
+    running: calculatorLaneSchema,
+    cadence: z.enum(CALCULATOR_CADENCES).default('annual'),
+  })
+  .strict();
+
+/** What the browser may send (cadence optional). */
+export type CalculatorEstimateRequestInput = z.input<typeof calculatorEstimateRequestSchema>;
+/** What motir-core forwards to the engine — exactly these four keys. */
+export type CalculatorEstimateRequestDTO = z.output<typeof calculatorEstimateRequestSchema>;
+
+/** The categories the pickers offer — a band with an EMPTY `models` is listed on purpose. */
+export interface CalculatorCategoriesDTO {
+  version: number;
+  categoryRuleVersion: string;
+  modelsReadAt: string;
+  cadences: CalculatorCadence[];
+  defaultCadence: CalculatorCadence;
+  categories: { key: string; models: { id: string; provider: string }[] }[];
+}
+
+/** A top-up in whole purchase units, at the catalog rate. */
+export interface CalculatorTopUpAmountDTO {
+  units: number;
+  credits: number;
+  priceUsd: number;
+}
+
+export interface CalculatorEstimateDTO {
+  version: number;
+  kind: 'estimate';
+  profilesVersion: string;
+  categoryRuleVersion: string;
+  cadence: CalculatorCadence;
+  credits: { low: number; high: number };
+  perItemCredits: Record<CalculatorLane, number>;
+  models: Record<CalculatorLane, string[]>;
+  droppedModelIds: Record<CalculatorLane, string[]>;
+  recommendation: { planKey: string | null; planName: string | null; monthlyPriceUsd: number };
+  topUp: { low: CalculatorTopUpAmountDTO; high: CalculatorTopUpAmountDTO };
+  /** The largest pool on this cadence; `credits` null when none is offered. */
+  ceiling: { credits: number | null; exceeded: boolean; excessCredits: number };
+}
+
+/** A lane whose selection has no live model left — the engine gives no number. */
+export interface CalculatorEmptyCategoryDTO {
+  version: number;
+  kind: 'empty_category';
+  categoryRuleVersion: string;
+  lanes: CalculatorLane[];
+  droppedModelIds: Record<CalculatorLane, string[]>;
+}
+
+export type CalculatorAnswerDTO = CalculatorEstimateDTO | CalculatorEmptyCategoryDTO;
