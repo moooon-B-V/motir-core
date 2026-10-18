@@ -70,6 +70,8 @@ describe('no colour moves — resolved --el-* tokens against the pre-rename shee
   // button, MOTIR-8254), the same way: new tokens only.
   // And for the `--el-drafting` pair (the drafted card's at-work cue, MOTIR-8416),
   // the same way: new tokens only.
+  // And for the `--el-chart-workload-*` pair (the Workload report's Assigned /
+  // Unassigned segment hues, MOTIR-8919), the same way: new tokens only.
   const before = JSON.parse(
     readFileSync(join(process.cwd(), 'tests/fixtures/paletteRename6471.before.json'), 'utf8'),
   ) as Record<string, Record<string, string>>;
