@@ -310,6 +310,13 @@ async function projectedProseAdvisories(
         Object.keys(proj.patchByWorkItemId.get(node.id) ?? {}),
       ),
       blockerCount: proj.blockedBy.get(node.id)?.size ?? 0,
+      // The POST-MERGE-CHILD check (MOTIR-8863), off the PROJECTED parent — so a
+      // plan that lays a production-verify card under a story is told at
+      // authoring time, before approval.
+      parent: (() => {
+        const p = node.parentId ? proj.nodes.get(node.parentId) : undefined;
+        return p ? { identifier: p.identifier, kind: p.kind } : null;
+      })(),
     };
   });
 

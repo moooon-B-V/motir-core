@@ -11,10 +11,13 @@ import {
   bodyFilePaths,
   bodyReferenceSeverities,
   firstBlockerCountClaim,
+  firstPostMergeChildTell,
   firstPostMergeCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
   isOrderingCheckExempt,
+  isPostMergeChildCandidate,
+  isPostMergeChildCheckExemptContainer,
   isSelfBlockingDesignCheckExempt,
   isSubsumptionCheckExempt,
   overGateSizing,
@@ -169,6 +172,13 @@ export interface ProseAdvisorySubject {
    * caller reads the committed tree, where the stored trail IS the answer.
    */
   trailSuperseded?: boolean;
+  /**
+   * The card's PARENT — read ONLY by the POST-MERGE-CHILD check (MOTIR-8863),
+   * which asks whether a card that waits on the deployment sits inside the
+   * runnable container whose merge it waits on. `null` / absent is a root, which
+   * has no container to be inside.
+   */
+  parent?: { identifier: string; kind: string } | null;
 }
 
 /**
@@ -300,6 +310,8 @@ export async function buildProseVsGraphAdvisories(
     if (sizing) advisories.push(sizing);
     const selfBlocking = selfBlockingDesignAdvisory(s.subject);
     if (selfBlocking) advisories.push(selfBlocking);
+    const postMergeChild = postMergeChildAdvisory(s.subject);
+    if (postMergeChild) advisories.push(postMergeChild);
     const bodyAbove = bodyAboveFieldMoveAdvisory(
       s.item,
       s.subject.id == null ? undefined : trails.get(s.subject.id),
@@ -522,6 +534,29 @@ function selfBlockingDesignAdvisory(
     severity: 'likely-self-blocking-design',
     designCriterionIndex: found.designCriterionIndex,
     surfaceCriterionIndex: found.surfaceCriterionIndex,
+  };
+}
+
+/**
+ * THE POST-MERGE-CHILD advisory for ONE subject (MOTIR-8863) — a card that waits
+ * on the deployment, laid inside the runnable container whose merge it waits on.
+ *
+ * Pure: type, executor, body and the parent's kind. Scope is the child's
+ * type/executor ({@link isPostMergeChildCandidate}) and the container's kind
+ * (an epic's children are siblings of a story, which is the remedy's own shape).
+ */
+function postMergeChildAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
+  const parent = subject.parent;
+  if (!parent || isPostMergeChildCheckExemptContainer(parent.kind)) return null;
+  if (!isPostMergeChildCandidate(subject.type, subject.executor)) return null;
+  const phrase = firstPostMergeChildTell(subject.descriptionMd);
+  if (!phrase) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'likely-post-merge-child-under-container',
+    phrase,
+    container: parent.identifier,
   };
 }
 
