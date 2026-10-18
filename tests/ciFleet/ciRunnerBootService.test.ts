@@ -999,7 +999,8 @@ describe('the boot’s defensive paths', () => {
 
   it('reports a NON-ERROR provider rejection as `unknown` rather than losing it', async () => {
     const fx = await seedTenant();
-    const intent = await seedIntent(fx);
+    // The LAST attempt: an earlier one would be re-queued (MOTIR-8941).
+    const intent = await seedIntent(fx, { bootAttempts: MAX_BOOT_ATTEMPTS - 1 });
     vi.spyOn(fakeOrchestrator, 'provision').mockRejectedValue('the provider hung up');
 
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
