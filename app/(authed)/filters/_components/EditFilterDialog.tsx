@@ -126,7 +126,7 @@ export function EditFilterDialog({
             legend={t('edit.visibilityLegend')}
           />
           {goingPrivate ? (
-            <p className="rounded-(--radius-card) bg-(--el-tint-peach) px-3 py-2 text-xs text-(--el-text-strong)">
+            <p className="rounded-(--radius-card) bg-(--el-tint-peach) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs text-(--el-text-strong)">
               {t('edit.goPrivateNote')}
             </p>
           ) : null}

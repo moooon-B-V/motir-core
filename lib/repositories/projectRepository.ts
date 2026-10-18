@@ -1197,6 +1197,27 @@ export const projectRepository = {
   },
 
   /**
+   * Every live (non-archived) project across ALL workspaces, keyset-paged by id —
+   * the discovery read of the work-item embedding sweep (Story MOTIR-8226 ·
+   * MOTIR-8227). Same cross-tenant shape as {@link listAutoPlanEnabled}: the caller
+   * runs it under `withSystemContext`, whose system_admin read branch on the
+   * project policy is what lets it see every tenant's rows, and everything the
+   * sweep does afterwards runs per project inside that project's own workspace.
+   */
+  async listLiveAcrossWorkspaces(
+    opts: { take: number; cursor?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string }>> {
+    return tx.project.findMany({
+      where: { archivedAt: null },
+      select: { id: true, workspaceId: true },
+      orderBy: { id: 'asc' },
+      take: opts.take,
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /**
    * Update a project's AI-settings columns (any subset). `tx` REQUIRED; the
    * caller (`projectAiSettingsService`) has already resolved + admin-gated the
    * project and validated every value, so this is a plain id-keyed update.

@@ -225,7 +225,7 @@ export function TargetRefusal({ held }: { held: PlanTargetHeldByDto }) {
     <div
       role="status"
       data-testid="planning-target-refused"
-      className="flex items-start gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-3 py-2.5"
+      className="flex items-start gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <Users className="mt-0.5 size-4 flex-none text-(--el-text-secondary)" aria-hidden />
       <div className="flex min-w-0 flex-col gap-1">
@@ -409,7 +409,7 @@ export function CarryDecidedNotice({ text }: { text: string }) {
       </p>
       <div
         data-testid="planning-carry-unsent"
-        className="flex flex-col gap-1 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+        className="flex flex-col gap-1 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
       >
         <span className="font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {ts('carry.decided.unsent')}

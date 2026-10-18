@@ -22,6 +22,17 @@ in project MOTIR's private repositories is now `runnable`.
 motir-meta is re-measured in the same pass at `c569dd54a`: #632 added one script to
 `guards.yml`'s matrix arguments, with no job, runner or tool change.
 
+**Staleness check (MOTIR-8870):** a newer workflow commit used to make a repository's
+entry stale on its own, so motir-ai#768 and #776 each blocked the switch until the
+entry was re-measured by hand, though neither added a job, runner or tool. Each
+private repository's entry now records `structureFingerprint`, the digest of the
+inputs the verdicts depend on (`lib/ciFleet/workflowFingerprint.ts`: every job's
+`runs-on` and reusable call, plus the repository-wide sets of actions, `run:`
+executables and shells). Readiness recomputes it at the new head and calls the entry
+stale only if it differs. Any read that fails, or an entry with no fingerprint,
+stays stale. To record it after a re-measure:
+`pnpm exec tsx scripts/ci-fleet/fingerprint-workflows.ts <checkout> <sha>`.
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the

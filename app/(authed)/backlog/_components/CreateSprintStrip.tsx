@@ -79,7 +79,7 @@ export function CreateSprintStrip({
       </div>
 
       {aiAvailable && !aiEnabled ? (
-        <div className="mt-2 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2.5 text-xs leading-relaxed text-(--el-warning-text)">
+        <div className="mt-2 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs leading-relaxed text-(--el-warning-text)">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>
             <b className="font-semibold">{t('aiPlan.offTitle')}</b> {t('aiPlan.offBody')}{' '}

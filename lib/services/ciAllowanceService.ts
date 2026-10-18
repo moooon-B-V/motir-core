@@ -110,6 +110,7 @@ export const ciAllowanceService = {
       return {
         ...base,
         applicable: false,
+        internal: false,
         memberCount: 0,
         poolMinutes: 0,
         floorApplied: false,
@@ -138,16 +139,22 @@ export const ciAllowanceService = {
       return { isMeta: organization?.isMeta ?? false, memberCount, charge };
     });
 
-    // §4.4 — the META org is bypassed entirely. moooon B.V. pays its own GitHub
-    // bill directly; metering it would bill the house to itself.
+    // §4.4 — the META org is bypassed entirely: no pool, no overage, no charge,
+    // no refusal. moooon B.V. pays its own bill directly; metering the ALLOWANCE
+    // would bill the house to itself. The MEASUREMENT is still recorded for it
+    // (MOTIR-5283), and Billing & plans shows that figure on an internal CI line
+    // so the team can see what its own fleet runner costs — read here, never
+    // turned into a pool or a charge.
     if (org.isMeta) {
+      const consumption = await ciMinutesMeterService.getOrgPeriodConsumption(organizationId, at);
       return {
         ...base,
         applicable: false,
+        internal: true,
         memberCount: org.memberCount,
         poolMinutes: 0,
         floorApplied: false,
-        consumedMinutes: 0,
+        consumedMinutes: consumption.linearEquivalentMinutes,
         remainingMinutes: 0,
         overageMinutes: 0,
         chargedCredits: 0,
@@ -164,6 +171,7 @@ export const ciAllowanceService = {
     return {
       ...base,
       applicable: true,
+      internal: false,
       memberCount: pool.memberCount,
       poolMinutes: pool.poolMinutes,
       floorApplied: pool.floorApplied,

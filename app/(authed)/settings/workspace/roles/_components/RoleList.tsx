@@ -108,7 +108,7 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
     >
       <span
         aria-hidden="true"
-        className={`${roleTileTint(role)} flex h-9 w-9 items-center justify-center rounded-(--radius-control)`}
+        className={`${roleTileTint(role)} flex h-(--height-control) w-9 items-center justify-center rounded-(--radius-control)`}
       >
         <RoleGlyph role={role} className="h-[17px] w-[17px]" />
       </span>

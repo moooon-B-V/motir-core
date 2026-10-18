@@ -789,7 +789,7 @@ function SegButton({
 }) {
   if (active || !onClick) {
     return (
-      <span className="rounded-(--radius-control) bg-(--el-tint-lavender) px-2 py-0.5 font-medium text-(--el-text-strong)">
+      <span className="rounded-(--radius-control) bg-(--el-tint-lavender) px-(--spacing-control-x-8) py-(--spacing-control-y-2) font-medium text-(--el-text-strong)">
         {label}
       </span>
     );
@@ -798,7 +798,7 @@ function SegButton({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-(--radius-control) px-2 py-0.5 text-(--el-link) hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+      className="rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-2) text-(--el-link) hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
     >
       {label}
     </button>

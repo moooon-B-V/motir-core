@@ -550,6 +550,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/supervisionSweep.ts',
     shape: '{ scanned: number; settled: number; skipped: number }',
   },
+  'repair-stranded-index-usage': {
+    file: 'lib/jobs/definitions/supervisionSweep.ts',
+    shape: '{ scanned: number; settled: number }',
+  },
   'sweep-auto-plan-projects': {
     file: 'lib/jobs/definitions/autoPlanCadenceTick.ts',
     shape:
@@ -623,6 +627,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/oauthSweep.ts',
     shape:
       '{ accessTokens: number; authorizationCodes: number; clients: number; refreshTokens: number }',
+  },
+  'embed-stale-work-items': {
+    file: 'lib/jobs/definitions/workItemEmbeddingSweep.ts',
+    shape:
+      '{ configured: boolean; embedded: number; failed: number; failedIds: Array<string>; givenUp: number; givenUpIds: Array<string>; projectsVisited: number; scanned: number; truncated: boolean }',
   },
   'sweep-standing-dead-letters': {
     file: 'lib/jobs/definitions/dlqStandingDepthSweep.ts',

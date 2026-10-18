@@ -265,7 +265,7 @@ export function TodoListSection({
         <div
           role="alert"
           data-testid="todo-error"
-          className="mb-3 flex items-center gap-3 rounded-(--radius-control) border border-(--el-border) bg-(--el-tint-peach) px-3 py-2 text-[12.5px] text-(--el-text-strong)"
+          className="mb-3 flex items-center gap-3 rounded-(--radius-control) border border-(--el-border) bg-(--el-tint-peach) px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-[12.5px] text-(--el-text-strong)"
         >
           <span className="min-w-0 flex-1">{error}</span>
           <Button type="button" variant="secondary" size="sm" onClick={retry} className="shrink-0">
@@ -723,7 +723,7 @@ function ExecutorMark({ executor }: { executor: ExecutorDto | null }) {
     return (
       <span
         data-testid="todo-executor-agent"
-        className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-lavender) px-2 py-0.5 text-[11px] text-(--el-text-strong)"
+        className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x-8) py-(--spacing-chip-y) text-[11px] text-(--el-text-strong)"
       >
         <Bot className="h-3 w-3" aria-hidden />
         {t('agentStep')}
@@ -731,7 +731,7 @@ function ExecutorMark({ executor }: { executor: ExecutorDto | null }) {
     );
   }
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-border) px-2 py-0.5 text-[11px] text-(--el-text-secondary)">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-border) px-(--spacing-chip-x-8) py-(--spacing-chip-y) text-[11px] text-(--el-text-secondary)">
       <User className="h-3 w-3" aria-hidden />
       {t('humanStep')}
     </span>
@@ -756,7 +756,7 @@ function CommandRow({ command }: { command: string }) {
       <pre
         data-testid="todo-command"
         tabIndex={0}
-        className="m-0 min-w-0 flex-1 overflow-x-auto rounded-(--radius-control) border border-(--el-border) bg-(--el-code-bg) px-2 py-1 font-mono text-[12px] whitespace-pre text-(--el-code-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="m-0 min-w-0 flex-1 overflow-x-auto rounded-(--radius-control) border border-(--el-border) bg-(--el-code-bg) px-(--spacing-control-x-8) py-(--spacing-control-y-4) font-mono text-[12px] whitespace-pre text-(--el-code-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         {command}
       </pre>

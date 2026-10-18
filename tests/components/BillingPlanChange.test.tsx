@@ -21,6 +21,7 @@ import { BillingClient } from '@/app/(authed)/settings/organization/billing/_com
 
 const CI: CiEntitlementStateDTO = {
   applicable: true,
+  internal: false,
   organizationId: 'org1',
   periodStart: '2026-07-01T00:00:00.000Z',
   periodEnd: '2026-08-01T00:00:00.000Z',

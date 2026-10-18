@@ -264,7 +264,7 @@ export function SprintContainer({
             // sprint has issues, none match (the design's dashed placeholder).
             createRowOnEmpty={!filterActive}
             emptyState={
-              <p className="my-1 rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-4 text-center text-xs text-(--el-text-secondary)">
+              <p className="my-1 rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-(--spacing-card-padding-16) text-center text-xs text-(--el-text-secondary)">
                 {filterActive ? t('sprintFilterEmpty') : t('sprintEmpty')}
               </p>
             }

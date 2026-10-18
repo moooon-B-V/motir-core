@@ -91,7 +91,7 @@ export function CancelOrganizationDeletionControl({
           {error ? (
             <div
               role="alert"
-              className="mt-(--spacing-md) flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) p-3 font-sans text-sm text-(--el-text-strong)"
+              className="mt-(--spacing-md) flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding-12) font-sans text-sm text-(--el-text-strong)"
             >
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger)" aria-hidden />
               <span>{t('cancel.error')}</span>

@@ -231,7 +231,7 @@ function SignInLine({
         data-state="signed_in"
         className={`${line} ${
           justTurned
-            ? '-mx-2 -my-1 rounded-(--radius-control) bg-(--el-tint-mint) px-2 py-1 text-(--el-text-strong)'
+            ? '-mx-2 -my-1 rounded-(--radius-control) bg-(--el-tint-mint) px-(--spacing-control-x-8) py-(--spacing-control-y-4) text-(--el-text-strong)'
             : 'text-(--el-text)'
         }`}
       >

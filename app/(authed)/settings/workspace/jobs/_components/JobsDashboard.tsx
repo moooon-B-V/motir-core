@@ -221,7 +221,7 @@ function StatusFilter({
             href={buildHref(basePath, { tab: activeTab, status: value })}
             aria-current={active ? 'true' : undefined}
             className={cn(
-              'rounded-(--radius-badge) border px-2.5 py-0.5 font-sans text-xs font-medium transition-colors',
+              'rounded-(--radius-badge) border px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
               active
                 ? 'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-text-strong)'
@@ -239,7 +239,7 @@ function StatusFilter({
 // ── Detail dialog ───────────────────────────────────────────────────────────
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-[40vh] overflow-auto rounded-(--radius-control) bg-(--el-surface) p-3 font-mono text-xs text-(--el-text)">
+    <pre className="max-h-[40vh] overflow-auto rounded-(--radius-control) bg-(--el-surface) p-(--spacing-control-x-12) font-mono text-xs text-(--el-text)">
       {JSON.stringify(value, null, 2)}
     </pre>
   );

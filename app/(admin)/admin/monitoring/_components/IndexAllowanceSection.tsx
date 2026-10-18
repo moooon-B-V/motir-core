@@ -71,7 +71,7 @@ async function TierCard({
           <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
+              className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
             >
               <Flame className="h-4 w-4" />
             </span>
@@ -253,7 +253,7 @@ async function StoppedCard({ stopped }: { stopped: StoppedOrgsDTO }) {
           <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
+              className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
             >
               <Ban className="h-4 w-4" />
             </span>
@@ -426,7 +426,7 @@ function stoppedFor(
 
 function MiniStat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) p-3">
+    <div className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) p-(--spacing-card-padding-12)">
       <span className="font-serif text-xl text-(--el-text)">{value}</span>
       <span className="font-sans text-xs text-(--el-text-secondary)">{label}</span>
     </div>
@@ -446,7 +446,7 @@ function NothingState({
     <div className="flex flex-col items-center gap-2 py-6 text-center">
       <span
         aria-hidden
-        className="inline-flex h-10 w-10 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-secondary)"
+        className="inline-flex h-(--height-control-40) w-10 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-secondary)"
       >
         {icon}
       </span>

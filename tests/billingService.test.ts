@@ -424,13 +424,15 @@ describe('billingService.getBillingStatus — the CI entitlement (③ Motir CI)'
     expect(dto.ci.state).toBe('ci_credits_exhausted');
   });
 
-  it('bypasses the META org — no CI accounting, so the panel shows no CI line', async () => {
+  it('bypasses the META org — no allowance or charge, and the panel draws a minutes-only internal line', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
     await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 
     const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
     expect(dto.ci.applicable).toBe(false);
     expect(dto.ci.state).toBe('bypassed');
+    // MOTIR-8886: bypassed, but flagged internal so the panel draws a minutes-only line.
+    expect(dto.ci.internal).toBe(true);
   });
 
   it('bypasses an install with no provisioning org — nothing can be Motir-owned', async () => {

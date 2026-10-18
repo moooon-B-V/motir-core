@@ -392,7 +392,7 @@ export function MigrateWizard({
           <section className="min-w-0 flex-1">
             {error ? (
               <p
-                className="mb-4 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-3 text-sm text-(--el-text-strong)"
+                className="mb-4 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-(--spacing-card-padding-12) text-sm text-(--el-text-strong)"
                 role="alert"
               >
                 <AlertCircle className="size-4 flex-none" aria-hidden />
@@ -493,7 +493,7 @@ function Rail({
           <ul className="m-0 mt-2 list-none p-0">
             <li
               data-testid="migrate-rail-collapsed"
-              className="flex items-start gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-2 text-sm text-(--el-text-secondary)"
+              className="flex items-start gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y-8) text-sm text-(--el-text-secondary)"
             >
               {/* Panel 5's SATISFIED marker, verbatim: sky tint and a READ glyph,
                   because what happened is that something was read. Never the DONE
@@ -545,7 +545,7 @@ function Rail({
         <>
           <p className={RAIL_GROUP}>
             {t('rail.import')}
-            <span className="rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-0.5 text-[0.65rem] font-semibold text-(--el-text-strong) normal-case">
+            <span className="rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[0.65rem] font-semibold text-(--el-text-strong) normal-case">
               {t('rail.importOptional')}
             </span>
           </p>
@@ -581,7 +581,7 @@ function RailStep({
   return (
     <li
       className={cn(
-        'flex items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-2 text-sm',
+        'flex items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y-8) text-sm',
         state === 'current' &&
           'bg-(--el-surface) text-(--el-text) ring-1 ring-(--el-accent-on-surface)',
         // Every non-current step takes the same ink: the CURRENT step is the
@@ -715,7 +715,7 @@ function StartPanel({
             <label
               key={p.id || i}
               className={cn(
-                'flex cursor-pointer items-center gap-3 rounded-(--radius-card) border px-(--spacing-card-padding) py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--focus-ring-color)',
+                'flex cursor-pointer items-center gap-3 rounded-(--radius-card) border px-(--spacing-card-padding) py-(--spacing-card-padding-12) has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--focus-ring-color)',
                 selected
                   ? 'border-(--el-accent-on-surface) bg-(--el-surface) ring-1 ring-(--el-accent-on-surface)'
                   : 'border-(--el-border) bg-(--el-page-bg) hover:border-(--el-border-strong)',
@@ -842,7 +842,7 @@ function IndexPanel({
                 return (
                   <li
                     key={repo.repoRef}
-                    className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
+                    className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y-8)"
                   >
                     <GitBranch
                       className="size-4 flex-none text-(--el-text-secondary)"
@@ -950,7 +950,7 @@ function ImportPanel({
             <div
               role="status"
               data-testid="migrate-import-running"
-              className="flex items-start gap-2.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-tint-sky) px-(--spacing-control-x) py-2"
+              className="flex items-start gap-2.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-tint-sky) px-(--spacing-control-x) py-(--spacing-control-y-8)"
             >
               <span className="mt-1.5">
                 <Dots pulsing />
@@ -1202,7 +1202,7 @@ function Conversation({
           </p>
         ) : null}
         {error ? (
-          <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)">
+          <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)">
             <p className="m-0">{chatT('errorBody')}</p>
             <button
               type="button"
@@ -1299,7 +1299,7 @@ function DraftingCard({
     return (
       <p
         role="alert"
-        className="m-0 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-3 text-sm text-(--el-text-strong)"
+        className="m-0 flex items-center gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding) py-(--spacing-card-padding-12) text-sm text-(--el-text-strong)"
       >
         <AlertCircle className="size-4 flex-none" aria-hidden />
         {t('common.error')}

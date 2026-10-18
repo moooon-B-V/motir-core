@@ -226,7 +226,7 @@ export function BugDestinationRoom({
           onSelect={() => choose('another')}
         >
           {pickerOpen ? (
-            <div className="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-1 shadow-(--shadow-elevated)">
+            <div className="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding-4) shadow-(--shadow-elevated)">
               <FolderPickerPanel
                 mode="move"
                 title={t('cardTitle')}

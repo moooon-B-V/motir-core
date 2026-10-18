@@ -219,7 +219,7 @@ export function MonitoringRoom({
         {degraded ? (
           <div
             role="status"
-            className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-warning-surface) px-3.5 py-3 font-sans text-sm text-(--el-warning-text)"
+            className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12) font-sans text-sm text-(--el-warning-text)"
           >
             <TriangleAlert
               className="mt-0.5 size-4 flex-none text-(--el-warning)"
@@ -431,7 +431,7 @@ function ConnectionRow({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-3.5 py-3">
+    <li className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)">
       <div className="flex flex-wrap items-center gap-3">
         <Bug className="size-[18px] flex-none text-(--el-icon-muted)" aria-hidden="true" />
         <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
@@ -471,7 +471,7 @@ function ConnectionRow({
       {refused ? (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2 font-sans text-xs text-(--el-warning-text)"
+          className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) font-sans text-xs text-(--el-warning-text)"
         >
           <TriangleAlert
             className="mt-px size-3.5 flex-none text-(--el-warning)"
@@ -620,7 +620,7 @@ function SyncBand({
               {key === 'resolveOnDone' && connection.lastSyncError !== null ? (
                 <span
                   data-testid="monitor-sync-failure"
-                  className="mt-1 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-2.5 py-1.5 font-sans text-xs text-(--el-warning-text)"
+                  className="mt-1 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-8) py-(--spacing-card-padding-4) font-sans text-xs text-(--el-warning-text)"
                 >
                   <TriangleAlert
                     className="mt-px size-3.5 flex-none text-(--el-warning)"
@@ -656,7 +656,7 @@ function SyncBand({
       {refused ? (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2 font-sans text-xs text-(--el-warning-text)"
+          className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) font-sans text-xs text-(--el-warning-text)"
         >
           <TriangleAlert
             className="mt-px size-3.5 flex-none text-(--el-warning)"
@@ -695,7 +695,7 @@ function PollLine({ line }: { line: PollLineView }) {
   return (
     <span
       data-poll-state={line.kind}
-      className="mt-1 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-2.5 py-1.5 font-sans text-xs text-(--el-warning-text)"
+      className="mt-1 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-(--spacing-card-padding-8) py-(--spacing-card-padding-4) font-sans text-xs text-(--el-warning-text)"
     >
       <TriangleAlert className="mt-px size-3.5 flex-none text-(--el-warning)" aria-hidden="true" />
       <span>
@@ -748,7 +748,7 @@ function ReturnBanner({
   return (
     <div
       role={banner.tone === 'danger' ? 'alert' : 'status'}
-      className={`flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3 font-sans text-sm ${BANNER_CLASS[banner.tone]}`}
+      className={`flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12) font-sans text-sm ${BANNER_CLASS[banner.tone]}`}
     >
       <Icon
         className={`mt-0.5 size-4 flex-none ${BANNER_ICON_CLASS[banner.tone]}`}

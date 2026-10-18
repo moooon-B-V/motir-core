@@ -22,7 +22,7 @@ export function GuideOriginCard({ guide }: { guide: PlanningSeedGuideDTO }) {
   return (
     <div
       data-testid="guide-origin-card"
-      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <p className="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
         {t('card')}

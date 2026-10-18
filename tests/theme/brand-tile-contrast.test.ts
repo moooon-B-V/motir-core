@@ -132,7 +132,7 @@ describe('the shell brand tile (MOTIR-2557)', () => {
     expect(classes).toContain('border');
     expect(classes).toContain('border-(--el-border)');
     // the geometry is untouched — this card paints, it does not resize
-    expect(classes).toContain('h-8');
+    expect(classes).toContain('h-(--height-control-32)');
     expect(classes).toContain('w-8');
     expect(classes).toContain('rounded-(--radius-control)');
     expect(classes).toContain('md:flex');

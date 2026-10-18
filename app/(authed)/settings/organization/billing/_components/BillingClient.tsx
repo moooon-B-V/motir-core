@@ -542,7 +542,7 @@ function MotirLine({
       header={
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-mint) text-(--el-text-strong)">
+            <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-mint) text-(--el-text-strong)">
               <Layers className="h-4 w-4" aria-hidden />
             </span>
             <div>
@@ -641,7 +641,7 @@ function MotirLine({
 
 function CapCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-(--radius-control) border border-(--el-border-soft) p-3">
+    <div className="flex flex-col gap-1 rounded-(--radius-control) border border-(--el-border-soft) p-(--spacing-control-x-12)">
       <span className="font-sans text-xs text-(--el-text-muted)">{label}</span>
       <span className="font-sans text-sm font-medium text-(--el-text)">{value}</span>
       <div
@@ -703,7 +703,7 @@ function MotirAiLine({
       header={
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
+            <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
               <Sparkles className="h-4 w-4" aria-hidden />
             </span>
             <div>
@@ -870,6 +870,42 @@ function MotirCiLine({
   // META org) — no line at all, which is what §7.3.7 asks for.
   if (!ci) return null;
 
+  // The META org (§4.4, MOTIR-8886): bypassed, so no pool, meter, credits or buy
+  // control — only the minutes its own fleet runner has used, so the house can
+  // see what its CI costs on the one page every other org reads it on.
+  if (ci.variant === 'internal') {
+    return (
+      <Card
+        header={
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) text-(--el-text-strong)">
+                <Zap className="h-4 w-4" aria-hidden />
+              </span>
+              <div>
+                <h2 className="font-sans text-base font-semibold text-(--el-text)">
+                  {t('ci.name')}
+                </h2>
+                <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.tagline')}</p>
+              </div>
+            </div>
+            <CiStatePill variant={ci.variant} t={t} />
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="font-sans text-xs text-(--el-text-muted)">{t('ci.usedLabel')}</span>
+            <span className="font-sans text-sm font-medium text-(--el-text-strong)">
+              {t('ci.internalUsed', { used: fmt(ci.usedMinutes, locale) })}
+            </span>
+          </div>
+          <p className="font-sans text-xs text-(--el-text-secondary)">{t('ci.internalNote')}</p>
+        </div>
+      </Card>
+    );
+  }
+
   const paused = ci.variant === 'paused';
   const resets = fmtDate(ci.resetsAt, locale);
   const derivation = ci.floorApplied
@@ -881,7 +917,7 @@ function MotirCiLine({
       header={
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) text-(--el-text-strong)">
+            <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) text-(--el-text-strong)">
               <Zap className="h-4 w-4" aria-hidden />
             </span>
             <div>
@@ -1039,6 +1075,7 @@ function MotirCiLine({
 
 function CiStatePill({ variant, t }: { variant: CiLineVariant; t: T }) {
   if (variant === 'nothing_to_bill') return <Pill tone="neutral">{t('ci.stateNothing')}</Pill>;
+  if (variant === 'internal') return <Pill tone="neutral">{t('ci.stateInternal')}</Pill>;
   if (variant === 'within_allowance') {
     return (
       <Pill className="bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">
@@ -1171,7 +1208,7 @@ function AgentsLine({
           <div className="flex items-center gap-2">
             {/* mint, lavender, peach and sky are ①–④; rose and yellow are
                 states. Sage is the one shipped tint left (MOTIR-5140). */}
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sage) text-(--el-text-strong)">
+            <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sage) text-(--el-text-strong)">
               <Bot className="h-4 w-4" aria-hidden />
             </span>
             <div>
@@ -1272,7 +1309,7 @@ function MotirSearchLine({ data, t }: { data: BillingStatusDTO; t: T }) {
                 inventing one — and sky is the only remaining slot not already
                 spent on a STATE (rose is danger, yellow warning; either would
                 read as an alarm on a line that never alarms). */}
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-text-strong)">
+            <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-text-strong)">
               <Search className="h-4 w-4" aria-hidden />
             </span>
             <div>
@@ -2008,7 +2045,7 @@ function TopupCard({
                 disabled={!enabled}
                 onClick={() => setUnits(u)}
                 aria-pressed={selected}
-                className="flex flex-col items-start gap-0.5 rounded-(--radius-control) border px-3 py-2 text-left disabled:opacity-50"
+                className="flex flex-col items-start gap-0.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-left disabled:opacity-50"
                 style={{
                   borderColor: selected ? 'var(--el-accent)' : 'var(--el-border)',
                   backgroundColor: selected ? 'var(--el-surface)' : 'transparent',
@@ -2113,7 +2150,7 @@ function SeatsView({
           header={
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-mint) text-(--el-text-strong)">
+                <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-mint) text-(--el-text-strong)">
                   <Layers className="h-4 w-4" aria-hidden />
                 </span>
                 <div>
@@ -2349,7 +2386,7 @@ function ReturnBanner({
 function BillingSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-busy="true">
-      <span className="block h-7 w-1/3 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
+      <span className="block h-(--height-control-28) w-1/3 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
       {[0, 1, 2].map((i) => (
         <Card key={i}>
           <span className="block h-4 w-1/4 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />

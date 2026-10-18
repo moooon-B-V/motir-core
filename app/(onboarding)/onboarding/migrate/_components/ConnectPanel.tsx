@@ -1022,7 +1022,7 @@ function RepoList({ repos }: { repos: MigrateConnectStateDto['repositories'] }) 
         return (
           <li
             key={`${repo.provider}:${repo.repoRef}`}
-            className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
+            className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y-8)"
           >
             <span className="flex flex-none items-center text-(--el-text-secondary)">
               {repo.provider === 'github' ? (

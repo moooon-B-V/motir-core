@@ -431,7 +431,7 @@ export function MultiSelectPicker({
                     }
               }
               className={cn(
-                'w-max max-w-72 min-w-60 overflow-y-auto rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1 shadow-(--shadow-elevated)',
+                'w-max max-w-72 min-w-60 overflow-y-auto rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding-4) shadow-(--shadow-elevated)',
                 inModal ? 'absolute top-full left-0 z-10 mt-1 max-h-64' : 'z-50',
               )}
             >

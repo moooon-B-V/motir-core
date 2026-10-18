@@ -305,7 +305,7 @@ export function PassedBand({
             type="button"
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
-            className="flex items-center gap-1.5 rounded-(--radius-control) p-1 text-left text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="flex items-center gap-1.5 rounded-(--radius-control) p-(--spacing-control-x-4) text-left text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <Chevron className="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" aria-hidden />
             {t(open ? 'findings.hide' : 'findings.show')}

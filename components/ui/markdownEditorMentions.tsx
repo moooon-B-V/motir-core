@@ -465,7 +465,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
       }
       aria-activedescendant={options.length > 0 ? `mention-option-${active}` : undefined}
       className={cn(
-        'border-(--el-border) bg-(--el-page-bg) shadow-(--shadow-elevated) z-50 w-max rounded-(--radius-card) border p-1',
+        'border-(--el-border) bg-(--el-page-bg) shadow-(--shadow-elevated) z-50 w-max rounded-(--radius-card) border p-(--spacing-card-padding-4)',
         unified ? 'max-w-[22rem]' : 'max-w-[18rem]',
       )}
     >

@@ -257,7 +257,7 @@ function LiveLog({ log, label }: { log: RunProgress[]; label: string }) {
   return (
     <div
       aria-hidden
-      className="max-h-40 overflow-y-auto rounded-(--radius-card) border border-(--el-border) p-3"
+      className="max-h-40 overflow-y-auto rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding-12)"
     >
       <span className="sr-only">{label}</span>
       <ul className="flex flex-col gap-0.5 font-mono text-xs">

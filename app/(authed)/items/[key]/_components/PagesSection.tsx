@@ -349,7 +349,7 @@ export function PagesSection({ workItemId, identifier, headerAction }: PagesSect
             <li
               key={row.pageId}
               className={cn(
-                'flex items-center gap-1 rounded-(--radius-control) pr-1 hover:bg-(--el-surface)',
+                'flex items-center gap-1 rounded-(--radius-control) pr-(--spacing-control-x-4) hover:bg-(--el-surface)',
                 index > 0 && 'border-t border-(--el-border-soft)',
               )}
             >

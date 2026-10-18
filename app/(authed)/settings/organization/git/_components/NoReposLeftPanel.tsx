@@ -39,11 +39,11 @@ export function NoReposLeftPanel({
         {t('body', { account: accountLogin })}
       </p>
       <div className="flex flex-wrap justify-center gap-3">
-        <div className="flex min-w-[9rem] flex-col items-center gap-0.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) px-(--spacing-card-padding) py-3">
+        <div className="flex min-w-[9rem] flex-col items-center gap-0.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) px-(--spacing-card-padding) py-(--spacing-card-padding-12)">
           <span className="font-sans text-xl font-semibold text-(--el-text)">{connectedHere}</span>
           <span className="font-sans text-xs text-(--el-text-secondary)">{t('connectedHere')}</span>
         </div>
-        <div className="flex min-w-[9rem] flex-col items-center gap-0.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) px-(--spacing-card-padding) py-3">
+        <div className="flex min-w-[9rem] flex-col items-center gap-0.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) px-(--spacing-card-padding) py-(--spacing-card-padding-12)">
           <span className="font-sans text-xl font-semibold text-(--el-text)">
             {connectedElsewhere}
           </span>

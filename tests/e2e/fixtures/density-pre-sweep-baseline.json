@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "commit": "8690b3020bdf04568048f3a4a390d7aa1106c3e3",
+    "command": "DENSITY_CAPTURE=1 pnpm exec playwright test tests/e2e/density-style-swap.spec.ts",
+    "capturedOn": "2026-10-18",
+    "style": "warm-editorial",
+    "method": "DERIVED, not browser-captured: the authoring sandbox could not start the app (no Postgres; Google Fonts fetches through the proxy reset, so `next dev` returned 500). Each value is the warm-editorial base read off the class strings at this commit, where no sweep had merged (px-3 py-2 = 12/8; p-3 = 12; px-2 py-[3px] = 8/3; --spacing-chip-x/-y = 10/2; --spacing-control-x/-y/--height-control = 10/6/36). Re-capture with the command above in a worktree of this commit to replace it."
+  },
+  "values": {
+    "modalPanel.paddingLeft": "12px",
+    "modalPanel.paddingTop": "12px",
+    "navRow.paddingLeft": "12px",
+    "navRow.paddingTop": "8px",
+    "accentChip.paddingLeft": "8px",
+    "accentChip.paddingTop": "3px",
+    "listChip.paddingLeft": "10px",
+    "listChip.paddingTop": "2px",
+    "sidebarItem.paddingLeft": "10px",
+    "sidebarItem.paddingTop": "6px",
+    "sidebarItem.minHeight": "36px"
+  }
+}

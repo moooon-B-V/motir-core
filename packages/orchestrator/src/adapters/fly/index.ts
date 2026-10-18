@@ -455,6 +455,7 @@ export const flyOrchestrator: ContainerOrchestrator = {
 
 /**
  * Build the §5 record from whatever the provider was still able to tell us.
+ * Call it only once the machine has been destroyed: the row says so.
  *
  * The precedence is deliberate and stated once here rather than at three call
  * sites: Fly's own event timestamps WIN (they are provider-attested and measure
@@ -478,7 +479,11 @@ function usageFor(
       createdAt: machine?.createdAt ?? handle.createdAt,
       startedAt: providerStartedAt ?? context.observedStartedAt,
       stoppedAt: providerStoppedAt ?? new Date(),
-      terminalState: machine?.state ?? 'destroyed',
+      // Every caller reaches here only AFTER `destroyMachine` returned, so the
+      // settled row is `destroyed` whatever Fly reported at the pre-destroy read
+      // (`stopped`, `destroying`) — that read exists for the timestamps, not for
+      // the terminal state (MOTIR-8912).
+      terminalState: 'destroyed',
     },
   });
 }

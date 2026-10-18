@@ -63,7 +63,7 @@ export function ReportButton({ display = 'shell' }: { display?: 'shell' | 'inbox
             aria-disabled
             aria-label={label}
             className={cn(
-              'inline-flex h-(--height-btn-sm) cursor-not-allowed items-center gap-2 rounded-(--radius-btn) bg-(--el-accent) px-3 text-xs font-medium text-(--el-accent-text) opacity-50',
+              'inline-flex h-(--height-btn-sm) cursor-not-allowed items-center gap-2 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-control-x-12) text-xs font-medium text-(--el-accent-text) opacity-50',
             )}
           >
             <Bug className="h-4 w-4" aria-hidden />

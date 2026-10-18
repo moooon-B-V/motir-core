@@ -18,7 +18,7 @@ export function RolesDoorCard({ customRoleCount }: { customRoleCount: number }) 
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden
-            className="bg-(--el-role-admin) text-(--el-text-strong) flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control)"
+            className="bg-(--el-role-admin) text-(--el-text-strong) flex h-(--height-control) w-9 shrink-0 items-center justify-center rounded-(--radius-control)"
           >
             <Shield className="h-4 w-4" />
           </span>

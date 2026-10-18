@@ -103,7 +103,7 @@ export function RemoveLinkButton({
             {t('removeConfirmAfter', { relationship: relationshipLabel.toLowerCase() })}
           </p>
           {error ? (
-            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-2.5 py-1.5 font-sans text-xs">
+            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs">
               {error}
             </p>
           ) : null}

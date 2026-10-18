@@ -64,7 +64,7 @@ export function FailedWaitingNotice({
       aria-label={tw('failedHead')}
       data-testid="planning-failed-waiting"
       data-state={resuming ? 'resuming' : failedAgain ? 'failed-again' : 'waiting'}
-      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-3 py-2.5"
+      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Hourglass className="size-4 flex-none text-(--el-icon-muted)" aria-hidden />
@@ -145,7 +145,7 @@ export function WaitingPlanFailureLine({
       role="status"
       data-testid="planning-failure-line"
       data-again={again ? 'true' : undefined}
-      className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+      className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
     >
       <TriangleAlert className="mt-0.5 size-4 flex-none text-(--el-icon-muted)" aria-hidden />
       <span>{again ? tw('failureLineAgain', { when }) : tw('failureLine', { when })}</span>

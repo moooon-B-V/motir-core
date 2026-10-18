@@ -870,9 +870,12 @@ This is the non-duplication rule `design/billing/design-notes.md` already sets b
 6. **The zero-consumption case is not an empty state** — an org whose repos are all
    user-owned (§Context) has a pool it will never draw on. The line says so plainly rather
    than showing "0 of 1,000" as if something were wrong.
-7. **META and self-host** — the meta org shows the "Internal plan" treatment the panel
-   already renders and no CI line; off-cloud the page does not render at all
-   (`isCloudBilling()` → `notFound()`).
+7. **META and self-host** — the meta org stays bypassed (§4.4: no pool, no charge, no
+   refusal) but draws a minutes-only **internal** CI line beside the "Internal billing"
+   treatment: the measured minutes its own fleet runner used this month (MOTIR-8886),
+   with no allowance, meter, credits or buy control. Before MOTIR-8886 this item said "no
+   CI line", which hid real fleet cost from the one org that pays it. Off-cloud the page
+   does not render at all (`isCloudBilling()` → `notFound()`).
 
 ### §8 — `motir-core` owns the meter AND the entitlement; `motir-ai` gains exactly one debit kind
 

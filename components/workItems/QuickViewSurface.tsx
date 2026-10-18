@@ -121,7 +121,7 @@ export function QuickViewReadOnlyChevron({ label, reason }: { label: string; rea
         aria-label={`${label} — ${reason}`}
         data-read-only-field=""
         onClick={(e) => e.preventDefault()}
-        className="ml-auto inline-flex cursor-not-allowed rounded-(--radius-control) p-0.5 text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="ml-auto inline-flex cursor-not-allowed rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <ChevronDown className="h-3.5 w-3.5" aria-hidden />
       </button>

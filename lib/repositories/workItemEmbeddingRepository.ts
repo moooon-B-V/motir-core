@@ -68,6 +68,17 @@ export interface UpsertEmbeddingInput {
   embedding: number[];
 }
 
+/** One row of the backfill scan. The two failure columns are present only when
+ *  the scan was asked for them (`withFailureState`). */
+export interface BackfillScanRow {
+  id: string;
+  title: string;
+  descriptionMd: string | null;
+  contentHash: string | null;
+  embeddingFailedHash?: string | null;
+  embeddingFailedAttempts?: number | null;
+}
+
 /** One ranked row — the item's identity plus its cosine DISTANCE to the query. */
 export interface WorkItemEmbeddingRankRow {
   workItemId: string;
@@ -172,37 +183,90 @@ export const workItemEmbeddingRepository = {
    * computes (the composed document is a pure function this layer has no
    * business knowing). So the SQL supplies the facts — the two source fields and
    * the stored `content_hash`, null when there is no row — and the service
-   * decides. That keeps the repository a single Prisma op with no business logic
-   * (the 4-layer rule) and keeps ONE definition of the document in
+   * decides. That keeps the repository a single Prisma op with no business
+   * logic (the 4-layer rule) and keeps ONE definition of the document in
    * `lib/workItems/embeddingDocument.ts`.
    *
-   * Archived items are INCLUDED: their embeddings are kept (ADR §5) so
+   * Archived items are INCLUDED by default: their embeddings are kept (ADR §5) so
    * un-archiving restores candidacy without a re-embed, and an archived item
    * that was never embedded would otherwise be a permanent hole that
    * un-archiving could not fill. The ranking read is where archived items are
-   * excluded, not here.
+   * excluded, not here. The operator backfill keeps that behaviour; the
+   * scheduled sweep passes `excludeArchived` because it spends a metered call
+   * per item and an archived item never ranks.
+   *
+   * `withFailureState` adds the two poison-item columns (`embeddingFailedHash`,
+   * `embeddingFailedAttempts`) so the sweep can skip an item it has given up on.
+   * Off by default, which keeps every existing caller's rows exactly as they were.
    *
    * Keyset-paged on `id` (`afterId` exclusive, ordered ascending) rather than
    * OFFSET: the backfill WRITES as it goes, and an offset page over a set the
    * writer is changing skips rows.
    */
   async listForBackfill(
-    input: { projectId: string; afterId: string | null; limit: number },
+    input: {
+      projectId: string;
+      afterId: string | null;
+      limit: number;
+      excludeArchived?: boolean;
+      withFailureState?: boolean;
+    },
     tx: Prisma.TransactionClient,
-  ): Promise<
-    Array<{ id: string; title: string; descriptionMd: string | null; contentHash: string | null }>
-  > {
+  ): Promise<BackfillScanRow[]> {
     const after = input.afterId === null ? Prisma.empty : Prisma.sql`AND w."id" > ${input.afterId}`;
-    return tx.$queryRaw<
-      Array<{ id: string; title: string; descriptionMd: string | null; contentHash: string | null }>
-    >(Prisma.sql`
-      SELECT w."id", w."title", w."descriptionMd", e."content_hash" AS "contentHash"
+    const live = input.excludeArchived ? Prisma.sql`AND w."archivedAt" IS NULL` : Prisma.empty;
+    const failure = input.withFailureState
+      ? Prisma.sql`, w."embedding_failed_hash" AS "embeddingFailedHash", w."embedding_failed_attempts" AS "embeddingFailedAttempts"`
+      : Prisma.empty;
+    return tx.$queryRaw<BackfillScanRow[]>(Prisma.sql`
+      SELECT w."id", w."title", w."descriptionMd", e."content_hash" AS "contentHash"${failure}
       FROM "work_item" w
       LEFT JOIN "work_item_embedding" e ON e."work_item_id" = w."id"
       WHERE w."projectId" = ${input.projectId}
+        ${live}
         ${after}
       ORDER BY w."id" ASC
       LIMIT ${input.limit}`);
+  },
+
+  /**
+   * Record that the provider refused this item's document: remember WHICH
+   * document (`hash`) and how many runs have refused it. The count is
+   * incremented when the stored failed hash is the same document and restarts at
+   * 1 for any other — so an edited item is a fresh item with no cleanup. Raw SQL
+   * on purpose: it bumps no `updatedAt` and goes through no work-item event.
+   */
+  async recordEmbeddingFailure(
+    input: { workItemId: string; hash: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.$executeRaw`
+      UPDATE "work_item" SET
+        "embedding_failed_attempts" = CASE
+          WHEN "embedding_failed_hash" = ${input.hash}
+          THEN COALESCE("embedding_failed_attempts", 0) + 1
+          ELSE 1
+        END,
+        "embedding_failed_hash" = ${input.hash}
+      WHERE "id" = ${input.workItemId}`;
+  },
+
+  /**
+   * Forget the poison-item bookkeeping of items that have now embedded. The
+   * `IS NOT NULL` guard makes the common case — an item that never failed — write
+   * nothing at all, rather than rewriting NULL over NULL for every embed.
+   */
+  async clearEmbeddingFailures(
+    workItemIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (workItemIds.length === 0) return 0;
+    return tx.$executeRaw(Prisma.sql`
+      UPDATE "work_item" SET
+        "embedding_failed_hash" = NULL,
+        "embedding_failed_attempts" = NULL
+      WHERE "id" IN (${Prisma.join(workItemIds)})
+        AND ("embedding_failed_hash" IS NOT NULL OR "embedding_failed_attempts" IS NOT NULL)`);
   },
 
   /**

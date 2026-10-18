@@ -232,10 +232,15 @@ describe('a throttled `motir run` is refused, waits, carries on, and claims noth
     const freeStatuses = new Set(freeRequests.map((r) => r.status));
     expect(requests.filter((r) => r.status !== 429 && !freeStatuses.has(r.status))).toEqual([]);
 
-    // No request after a refusal was sent sooner than that refusal's Retry-After.
+    // The re-send of each refused request went out no sooner than its Retry-After.
+    // The retry is matched by method and path, from the moment the 429 was answered:
+    // `auto` can have an unrelated request already in flight when the 429 returns,
+    // and that one started after the refusal STARTED but is not the retry.
     for (const r of refusals) {
-      const next = requests.find((n) => n.startedAt > r.startedAt && n !== r);
-      expect(next, `nothing followed the 429 on ${r.path}`).toBeDefined();
+      const next = requests.find(
+        (n) => n !== r && n.method === r.method && n.path === r.path && n.startedAt >= r.at,
+      );
+      expect(next, `nothing re-sent the 429 on ${r.path}`).toBeDefined();
       expect(next!.startedAt - r.at).toBeGreaterThanOrEqual(Number(r.retryAfter) * 1000 - 25);
     }
 

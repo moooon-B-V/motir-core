@@ -124,7 +124,7 @@ export function PageArchivedBanner({ page, subPageCount, parentTitle }: PageArch
         role="status"
         aria-labelledby={headingId}
         data-testid="page-archived-banner"
-        className="flex flex-wrap items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-3.5 py-3"
+        className="flex flex-wrap items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)"
       >
         <Archive
           className="mt-0.5 h-[18px] w-[18px] shrink-0 text-(--el-text-secondary)"

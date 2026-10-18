@@ -397,7 +397,7 @@ function GrantColumns({ connection: c }: { connection: OAuthConnectionDto }) {
                   key={meta.key}
                   data-permission={meta.key}
                   data-granted={granted ? 'true' : 'false'}
-                  className={`flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-1 ${danger ? 'bg-(--el-tint-rose)' : ''}`}
+                  className={`flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y-4) ${danger ? 'bg-(--el-tint-rose)' : ''}`}
                 >
                   <Icon
                     aria-hidden

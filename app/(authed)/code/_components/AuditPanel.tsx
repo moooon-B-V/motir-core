@@ -279,7 +279,7 @@ function PreAuditEmptyState({
       {repoRefs.map((repoRef) => (
         <code
           key={repoRef}
-          className="bg-(--el-code-bg) px-1.5 py-0.5 text-xs text-(--el-text-identifier) rounded-(--radius-control)"
+          className="bg-(--el-code-bg) px-(--spacing-control-x-6) py-(--spacing-control-y-2) text-xs text-(--el-text-identifier) rounded-(--radius-control)"
         >
           {repoRef}
         </code>
@@ -555,17 +555,17 @@ function FindingRow({ finding }: { finding: CodeAuditFindingDTO }) {
       {finding.why ? <p className="text-sm text-(--el-text-secondary)">{finding.why}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
         {finding.fileRef ? (
-          <code className="bg-(--el-code-bg) px-1.5 py-0.5 text-xs text-(--el-text-identifier) rounded-(--radius-control)">
+          <code className="bg-(--el-code-bg) px-(--spacing-control-x-6) py-(--spacing-control-y-2) text-xs text-(--el-text-identifier) rounded-(--radius-control)">
             {finding.fileRef}
             {finding.symbolRef ? ` · ${finding.symbolRef}` : ''}
           </code>
         ) : null}
         {finding.conventionRuleRef ? (
-          <span className="bg-(--el-callout-bg) px-1.5 py-0.5 text-xs text-(--el-callout-text) rounded-(--radius-control)">
+          <span className="bg-(--el-callout-bg) px-(--spacing-control-x-6) py-(--spacing-control-y-2) text-xs text-(--el-callout-text) rounded-(--radius-control)">
             {t('audit.conventionRuleRef', { rule: finding.conventionRuleRef })}
           </span>
         ) : (
-          <span className="bg-(--el-chip-bg) px-1.5 py-0.5 text-xs text-(--el-text-secondary) rounded-(--radius-control)">
+          <span className="bg-(--el-chip-bg) px-(--spacing-control-x-6) py-(--spacing-control-y-2) text-xs text-(--el-text-secondary) rounded-(--radius-control)">
             {t('audit.cleanCodeBaseline')}
           </span>
         )}

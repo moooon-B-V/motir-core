@@ -528,6 +528,8 @@ export interface JobEventDataMap {
   'system.rate-limit-sweep': SystemScheduledData;
   /** MOTIR-6984 — the daily OAuth sweep. Identity-scoped tables, cron-only. */
   'system.oauth-sweep': SystemScheduledData;
+  /** MOTIR-8227 — the hourly work-item embedding sweep. Cross-tenant, cron-only. */
+  'system.work-item-embedding-sweep': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
   'system.public-follow-digest-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;

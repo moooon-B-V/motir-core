@@ -250,7 +250,7 @@ function PaywallShell({
     <Card role="status" className={cn('flex flex-col items-center text-center', className)}>
       <span
         className={cn(
-          'mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center rounded-(--radius-control)',
+          'mb-(--spacing-md) inline-flex h-(--height-control-48) w-12 items-center justify-center rounded-(--radius-control)',
           ICON_TINT[iconTint],
         )}
       >

@@ -76,7 +76,7 @@ export function QuickViewFolderControl({
           {t('removesFromParent', { key: parent.identifier, title: parentTitle })}
         </p>
       ) : null}
-      <div className="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1">
+      <div className="rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding-4)">
         <FolderPickerPanel
           mode="file"
           title={t('fieldLabel')}

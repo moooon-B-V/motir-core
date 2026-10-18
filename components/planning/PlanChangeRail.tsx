@@ -1246,7 +1246,7 @@ export function PlanChangeRail({
             ) : (
               <div
                 data-testid="plan-change-review"
-                className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+                className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
               >
                 <span className="text-xs font-semibold text-(--el-text-strong)">
                   {tc('nothingSavedYet')}
@@ -1345,7 +1345,7 @@ export function PlanChangeRail({
           <p
             role="alert"
             data-testid="planning-failed-closed"
-            className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+            className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
           >
             {tc('error.failedClosed')}
           </p>
@@ -1367,7 +1367,7 @@ export function PlanChangeRail({
             <ol
               aria-live="polite"
               data-testid="planning-carry-moving"
-              className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+              className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
             >
               <li className="flex items-start gap-2 text-xs text-(--el-text)">
                 <Spinner size="sm" aria-hidden="true" />
@@ -1407,7 +1407,7 @@ export function PlanChangeRail({
           // fit): said in place, nothing retried, and no Try again to press (MOTIR-8693).
           <p
             role="alert"
-            className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+            className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
           >
             {t('guideSeed.offerClosed')}
           </p>
@@ -1422,7 +1422,7 @@ export function PlanChangeRail({
           <div className="flex flex-col items-start gap-2">
             <p
               role="alert"
-              className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+              className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
             >
               {tc(errorKey(state.errorCode))}
             </p>
@@ -2251,8 +2251,8 @@ export function Bubble({
       <div
         className={
           isUser
-            ? 'min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm whitespace-pre-wrap text-(--el-accent-text) wrap-anywhere'
-            : `min-w-0 rounded-(--radius-card) px-3 py-2 text-sm wrap-anywhere ${BUBBLE_FILL[tone]}`
+            ? 'min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm whitespace-pre-wrap text-(--el-accent-text) wrap-anywhere'
+            : `min-w-0 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm wrap-anywhere ${BUBBLE_FILL[tone]}`
         }
       >
         {label ? (
@@ -2367,7 +2367,7 @@ function GatedReviewBlock({
     return (
       <div
         data-testid="plan-change-review"
-        className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) px-3 py-2"
+        className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
       >
         <p role="alert" className="text-xs font-medium text-(--el-text)">
           {decidedFirstLines.title}
@@ -2401,7 +2401,7 @@ function GatedReviewBlock({
   return (
     <div
       data-testid="plan-change-review"
-      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <span className="text-xs font-semibold text-(--el-text-strong)">{tc('nothingSavedYet')}</span>
       {view.kind === 'seeOnly' ? (
@@ -2474,7 +2474,7 @@ function FollowUpCard({ pick }: { pick: PlanningSeedPickDTO }) {
   return (
     <div
       data-testid="pick-followup-card"
-      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
     >
       <p className="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
         {t('followUpCard.label')}

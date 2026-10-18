@@ -16,7 +16,7 @@ const DRAWER_ICON_BTN =
   'items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)';
 
 const ROW_CLASS =
-  'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none';
+  'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-8) text-left font-sans text-sm text-(--el-text) focus-visible:outline-none';
 
 export interface HelpMenuProps {
   /**

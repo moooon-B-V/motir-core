@@ -2147,6 +2147,7 @@ export default defineConfig({
         'lib/workItems/embeddingDocument.ts',
         'lib/repositories/workItemEmbeddingRepository.ts',
         'lib/services/workItemEmbeddingsService.ts',
+        'lib/services/workItemEmbeddingSweepService.ts',
         'lib/jobs/definitions/workItemEmbedding.ts',
 
         // Story MOTIR-2694 · Subtask MOTIR-2697 — the semantic candidate-finder
@@ -5713,6 +5714,7 @@ export default defineConfig({
           lines: 90,
         },
         'lib/services/workItemEmbeddingsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/workItemEmbeddingSweepService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/workItemEmbedding.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2694 · Subtask MOTIR-2697 (see the `include` note above).
         'app/api/internal/ai/similar-work-items/route.ts': {

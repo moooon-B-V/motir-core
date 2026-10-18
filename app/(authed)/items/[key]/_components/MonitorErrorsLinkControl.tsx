@@ -227,7 +227,7 @@ export function LinkErrorDoor() {
     <button
       type="button"
       onClick={openForm}
-      className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-1.5 py-1 font-sans text-sm font-semibold text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-4) font-sans text-sm font-semibold text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       <Plus className="h-4 w-4" aria-hidden />
       {t('link')}
@@ -321,7 +321,7 @@ function OpenLinkErrorForm() {
           <span
             key={f.connectionId}
             role="note"
-            className="flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-warning-surface) px-2.5 py-1.5 font-sans text-xs text-(--el-warning-text)"
+            className="flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-warning-surface) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs text-(--el-warning-text)"
             data-testid="search-failure"
           >
             <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0 text-(--el-warning)" aria-hidden />
@@ -338,7 +338,7 @@ function OpenLinkErrorForm() {
     ) : undefined;
 
   return (
-    <div className="mb-3 flex flex-col gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-3">
+    <div className="mb-3 flex flex-col gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-card-padding-12)">
       <div className="flex flex-col gap-1.5">
         {/* `--el-text-secondary`, not the shipped form's `--el-text-eyebrow`, which
             is under AA on `--el-surface-soft` (§14 Tokens). */}
@@ -434,7 +434,7 @@ function OpenLinkErrorForm() {
       </div>
       {(error ?? search.error) ? (
         <div
-          className="flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-rose) px-3 py-2"
+          className="flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-rose) px-(--spacing-control-x-12) py-(--spacing-control-y-8)"
           role="alert"
         >
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger)" aria-hidden />
