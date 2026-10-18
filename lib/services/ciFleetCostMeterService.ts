@@ -435,7 +435,72 @@ export const ciFleetCostMeterService = {
       costPerLinearEquivalentMinute,
     };
   },
+
+  /**
+   * REPAIR the index rows a lost settle write left unsettled (MOTIR-8913).
+   *
+   * ⚠️ WHY THIS EXISTS. `settleIndexContainer` destroys the container and THEN
+   * records its usage through the sink, whose contract is to never throw — so a
+   * failed or lost write leaves the supervision `settled` and the usage row a
+   * checkpoint with NULL `terminal_state` forever. Nothing else re-reads that row:
+   * the reaper only sees machines that still exist, and a settled supervision stops
+   * matching the abandoned-supervision sweep. Production held four such rows, the
+   * oldest from August, and each is a container the margin readout counts as
+   * running and the platform meter backfill (`container_stopped_at IS NOT NULL`)
+   * never reports.
+   *
+   * ⚠️ AGE IS THE EVIDENCE THE CONTAINER IS GONE. A row older than the fleet reaper's
+   * window belongs to a machine the reaper has destroyed whatever this row says,
+   * so settling it claims nothing the provider does not already hold. The stop
+   * instant is derived from the row's own figures — the last checkpoint's billable
+   * seconds past the observed start — rather than invented, and the figures are
+   * left alone: the rollup already holds them, which is why the repair writes no
+   * rollup delta.
+   *
+   * IDEMPOTENT: `settleStranded` only writes a row whose `container_stopped_at` is
+   * still NULL, so a tick that races the real settle, or a replay, changes nothing.
+   */
+  async settleStrandedIndexUsage(
+    options: { now?: () => Date; strandedAfterMs?: number; batch?: number } = {},
+  ): Promise<{ scanned: number; settled: number }> {
+    const now = (options.now ?? ((): Date => new Date()))();
+    const createdBefore = new Date(now.getTime() - (options.strandedAfterMs ?? STRANDED_AFTER_MS));
+
+    return withSystemContext(async (tx) => {
+      const stranded = await ciContainerUsageRepository.listStrandedIndexUsage(
+        createdBefore,
+        options.batch ?? STRANDED_BATCH,
+        tx,
+      );
+      let settled = 0;
+      for (const row of stranded) {
+        const from = row.containerStartedAt ?? row.containerCreatedAt;
+        const stoppedAt = new Date(from.getTime() + row.billableSeconds * 1000);
+        const count = await ciContainerUsageRepository.settleStranded(
+          row.id,
+          { stoppedAt, terminalState: 'repaired', teardownReason: 'reaped' },
+          tx,
+        );
+        if (count === 0) continue;
+        settled += 1;
+        // The one trace of the swallowed write: the sink logged (or lost) the failure
+        // without ever reaching a row, so the handle id is named here, where the
+        // repair is the only thing that knows the record was missing.
+        console.warn('[containerUsage] settled an index usage row its teardown never closed', {
+          handleId: row.handleId,
+          provider: row.containerProvider,
+        });
+      }
+      return { scanned: stranded.length, settled };
+    });
+  },
 };
+
+/** The reaper's window (70 min) with generous margin: older than this, an index
+ *  container is destroyed whatever its usage row says (MOTIR-8913). */
+const STRANDED_AFTER_MS = 2 * 60 * 60_000;
+/** Rows one repair tick settles; a backlog drains over several ticks. */
+const STRANDED_BATCH = 50;
 
 /**
  * THE ONE WRITE PATH (MOTIR-1995) — the shared body of both the checkpoint and the

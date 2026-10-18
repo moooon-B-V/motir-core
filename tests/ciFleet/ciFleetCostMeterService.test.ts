@@ -1447,3 +1447,88 @@ describe('ATTRIBUTION when ONE handle serves MANY repos (MOTIR-3255)', () => {
     expect(await adminDb.ciPeriodUsage.count()).toBe(usageBefore);
   });
 });
+
+describe('repairing an index row its settle never closed (MOTIR-8913)', () => {
+  const NOW = new Date('2026-08-20T12:00:00.000Z');
+
+  /** A checkpoint row for an index container created `ageMs` before NOW — the
+   *  state a lost settle write leaves behind. */
+  async function seedCheckpoint(fx: Fixture, ageMs: number, accruedSeconds = 90) {
+    const observedAt = new Date(NOW.getTime() - ageMs + accruedSeconds * 1000);
+    const accrual = accrualFor(fx, { accruedSeconds, observedAt });
+    await ciFleetCostMeterService.recordContainerAccrual(accrual);
+    // `created_at` is the row's own default (now), so age it the way production did.
+    await adminDb.ciContainerUsage.update({
+      where: {
+        containerProvider_handleId: { containerProvider: 'fake', handleId: accrual.handleId },
+      },
+      data: { createdAt: new Date(NOW.getTime() - ageMs) },
+    });
+    return accrual;
+  }
+
+  const rowFor = (handleId: string) =>
+    adminDb.ciContainerUsage.findUniqueOrThrow({
+      where: { containerProvider_handleId: { containerProvider: 'fake', handleId } },
+    });
+
+  it('settles an old unsettled index row from its own figures and leaves the rollup alone', async () => {
+    const fx = await seedTenant();
+    const accrual = await seedCheckpoint(fx, 3 * 60 * 60_000);
+    const before = await ciFleetCostMeterService.getOrgPeriodCost(
+      fx.organizationId,
+      accrual.observedAt,
+      'index',
+    );
+
+    const result = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
+
+    expect(result).toEqual({ scanned: 1, settled: 1 });
+    const row = await rowFor(accrual.handleId);
+    expect(row.terminalState).toBe('repaired');
+    expect(row.teardownReason).toBe('reaped');
+    expect(row.containerStoppedAt).toEqual(
+      new Date(accrual.startedAt.getTime() + accrual.accruedSeconds * 1000),
+    );
+    expect(row.billableSeconds).toBe(accrual.accruedSeconds);
+    const after = await ciFleetCostMeterService.getOrgPeriodCost(
+      fx.organizationId,
+      accrual.observedAt,
+      'index',
+    );
+    expect(after).toEqual(before);
+  });
+
+  it('leaves a young row alone — its container may still be running', async () => {
+    const fx = await seedTenant();
+    const accrual = await seedCheckpoint(fx, 10 * 60_000);
+
+    const result = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
+
+    expect(result).toEqual({ scanned: 0, settled: 0 });
+    expect((await rowFor(accrual.handleId)).containerStoppedAt).toBeNull();
+  });
+
+  it('is idempotent, and never touches a row that settled for real', async () => {
+    const fx = await seedTenant();
+    const stranded = await seedCheckpoint(fx, 3 * 60 * 60_000);
+    const real = await seedCheckpoint(fx, 3 * 60 * 60_000);
+    await ciFleetCostMeterService.recordContainerUsage(
+      usageFor(fx, {
+        handleId: real.handleId,
+        workload: 'code_graph_index',
+        billableSeconds: real.accruedSeconds,
+        startedAt: real.startedAt,
+        createdAt: real.createdAt,
+      }),
+    );
+
+    const first = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
+    const second = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
+
+    expect(first).toEqual({ scanned: 1, settled: 1 });
+    expect(second).toEqual({ scanned: 0, settled: 0 });
+    expect((await rowFor(stranded.handleId)).terminalState).toBe('repaired');
+    expect((await rowFor(real.handleId)).terminalState).toBe('destroyed');
+  });
+});

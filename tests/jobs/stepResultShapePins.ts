@@ -550,6 +550,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/supervisionSweep.ts',
     shape: '{ scanned: number; settled: number; skipped: number }',
   },
+  'repair-stranded-index-usage': {
+    file: 'lib/jobs/definitions/supervisionSweep.ts',
+    shape: '{ scanned: number; settled: number }',
+  },
   'sweep-auto-plan-projects': {
     file: 'lib/jobs/definitions/autoPlanCadenceTick.ts',
     shape:
