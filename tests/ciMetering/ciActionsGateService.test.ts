@@ -144,6 +144,7 @@ function stateOf(state: CiEntitlementStateDTO['state']): CiEntitlementStateDTO {
     periodStart: '2026-07-01T00:00:00.000Z',
     periodEnd: '2026-08-01T00:00:00.000Z',
     applicable: state !== 'bypassed',
+    internal: false,
     memberCount: 3,
     poolMinutes: 1000,
     floorApplied: true,

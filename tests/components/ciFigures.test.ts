@@ -16,6 +16,7 @@ import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 function state(over: Partial<CiEntitlementStateDTO> = {}): CiEntitlementStateDTO {
   return {
     applicable: true,
+    internal: false,
     organizationId: 'org1',
     periodStart: '2026-07-01T00:00:00.000Z',
     periodEnd: '2026-08-01T00:00:00.000Z',
@@ -48,6 +49,28 @@ describe('ciLineFigures', () => {
         }),
       ),
     ).toBeNull();
+  });
+
+  it('draws a minutes-only INTERNAL line for the META org: measured minutes, no pool, no charge (MOTIR-8886)', () => {
+    const f = ciLineFigures(
+      state({
+        applicable: false,
+        internal: true,
+        state: 'bypassed',
+        poolMinutes: 0,
+        consumedMinutes: 412,
+        remainingMinutes: 0,
+        balance: null,
+      }),
+    );
+    expect(f).not.toBeNull();
+    expect(f!.variant).toBe<CiLineVariant>('internal');
+    expect(f!.usedMinutes).toBe(412);
+    expect(f!.poolMinutes).toBe(0);
+    expect(f!.overageMinutes).toBe(0);
+    expect(f!.chargedCredits).toBe(0);
+    expect(f!.over).toBe(false);
+    expect(f!.balanceUnavailable).toBe(false);
   });
 
   it('carries the within-allowance figures verbatim and fills the meter proportionally', () => {
