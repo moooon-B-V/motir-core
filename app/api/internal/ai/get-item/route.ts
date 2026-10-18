@@ -8,7 +8,8 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 // GET /api/internal/ai/get-item?key=MOTIR-7[&withComments=1][&withHistory=1]
 //   [&commentsCursor=…][&historyCursor=…]  (Subtask 7.5.1)
 //
-// One work item by key, plus (on request) the DEPTH context 7.1.6 deferred: the
+// One work item by key — or by its work-item id, the form a plan stores for a
+// committed card (MOTIR-8940) — plus (on request) the DEPTH context 7.1.6 deferred: the
 // cursor-paginated comment thread and the cursor-paginated change log — the
 // signal a planner uses to understand WHY an item is shaped the way it is.
 // Service-to-service ONLY (the §4a service bearer + §4b job token via

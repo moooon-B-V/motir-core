@@ -16,6 +16,7 @@ import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import { obsolescenceLines } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { getWorkItemPayload, presentMcpWorkItemChild } from '../payloads/workItems';
+import { isTempRef } from '@/lib/plans/refs';
 import { TEMP_REF_HELP, normalizeProjectedTarget, planIdField } from './planRef';
 import { renderFolderPath } from './placement';
 import {
@@ -60,11 +61,26 @@ const inputSchema = {
     .min(1)
     .describe(
       'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"), ' +
-        'case-insensitive. With `planId`, this may instead be a `planItem:<id>` temp-ref ' +
+        "case-insensitive — or the work item's internal id, the form a plan names a " +
+        'committed card by (`parentRef`, `blockedByRefs`, `workItemId`). With `planId`, this may instead be a `planItem:<id>` temp-ref ' +
         'naming an `add` in that plan (case-SENSITIVE, as `add_plan_items` returned it).',
     ),
   planId: planIdField,
 };
+
+/**
+ * Turn a work-item ID into its key (MOTIR-8940). A plan names committed cards by
+ * id, and this door read every argument as `<KEY>-<n>`, so a bare id was taken
+ * whole as a project key and refused `PROJECT_NOT_FOUND`. A key always carries a
+ * dash, a cuid never does, and a `planItem:` temp-ref is left to the projection;
+ * `getWorkItem` is the same workspace + browse gate the key path passes, so an
+ * unknown or foreign id is the ordinary not-found.
+ */
+async function keyOfRef(raw: string, ctx: ServiceContext): Promise<string> {
+  const ref = raw.trim();
+  if (ref.includes('-') || isTempRef(ref)) return raw;
+  return (await workItemsService.getWorkItem(ref, ctx)).identifier;
+}
 
 /** Derive the owning project key from an `ACME-7`-style identifier. */
 function projectKeyOf(identifier: string): string {
@@ -164,11 +180,12 @@ export async function runGetWorkItem(
   args: { key: string; planId?: string },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
+  const key = await keyOfRef(args.key, ctx);
   if (args.planId !== undefined) {
     // PROJECTED. No project lookup: `buildProjection` resolves the project FROM
     // the plan and asserts browse on it, and a `planItem:<id>` target has no
     // project-key prefix to derive one from anyway.
-    const projected = await projectedWorkItem(args.planId, normalizeProjectedTarget(args.key), ctx);
+    const projected = await projectedWorkItem(args.planId, normalizeProjectedTarget(key), ctx);
     // ⚠️ The whole projected answer rides ONE clearly-named key, and `children`
     // — the committed aggregate's array, which the payload seam derives from the
     // shared v1 child schema — is EMPTY. That is not a gap: a keyless proposal
@@ -184,7 +201,7 @@ export async function runGetWorkItem(
       }),
     );
   }
-  const identifier = args.key.trim().toUpperCase();
+  const identifier = key.trim().toUpperCase();
   const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
   const detail = await workItemsService.getIssueDetail(project.id, identifier, ctx);
   // The children's dependency edges in TWO batched queries (MOTIR-1842's reader),
@@ -272,7 +289,7 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
     {
       title: 'Get work item',
       description:
-        'Read a single work item by its identifier (e.g. "ACME-7"): full detail including ' +
+        'Read a single work item by its identifier (e.g. "ACME-7") or its internal id: full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
         'readiness verdict. The link groups include `supersedes` (the older items this one ' +
         'replaces) and `supersededBy` (the newer items that replace it), beside `blockedBy` / ' +

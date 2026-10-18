@@ -6474,6 +6474,38 @@ export const workItemsService = {
   },
 
   /**
+   * Resolve a work item within ONE project by EITHER of the two forms a planner
+   * holds (MOTIR-8940): its `<KEY>-<n>` identifier, or its internal id.
+   *
+   * ⚠️ WHY BOTH. A plan names committed cards by id — `parentRef`,
+   * `blockedByRefs`, `workItemId` — while this read took a key only, so a
+   * planning session that followed the ref its own plan stores was refused and
+   * had to search by title to find the card. The two forms cannot collide: a key
+   * always carries a dash and a work-item id (a cuid) never does.
+   *
+   * The id arm keeps every gate the key arm has — workspace binding, browse,
+   * the run-token scope — and holds the row to `projectId`, so an id from
+   * another project is the same not-found an unknown key is.
+   */
+  async getWorkItemByRef(
+    projectId: string,
+    ref: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    const trimmed = ref.trim();
+    if (trimmed.includes('-')) {
+      return workItemsService.getWorkItemByIdentifier(projectId, trimmed, ctx);
+    }
+    const row = await readWorkItem(trimmed, ctx);
+    if (!row || row.workspaceId !== ctx.workspaceId || row.projectId !== projectId) {
+      throw new WorkItemNotFoundError(trimmed);
+    }
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    await runTokenScopeService.assertReachesWorkItems([row.id], ctx);
+    return toWorkItemDto(row);
+  },
+
+  /**
    * ALL SEVEN relationship groups of one item (MOTIR-4063) — the SAME assembly
    * `getIssueDetail` renders, without the twelve other reads a detail page buys.
    *

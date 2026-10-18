@@ -536,7 +536,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-8098, summary UNCHANGED: the item carries `languages`, each
     // text field's recorded content language — a field of the item, which "one item
     // in full" already covers.
-    descriptionFingerprint: '729b47f94961',
+    // Re-pinned for MOTIR-8940, summary UNCHANGED: the item may be addressed by its
+    // internal id as well as its key — how a card is NAMED, which a summary of what
+    // the read returns does not describe.
+    descriptionFingerprint: 'e36551ac6537',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
