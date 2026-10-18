@@ -93,7 +93,7 @@ export interface TitlesTranslationContext {
  * is an inert sentinel for a self-host build and for a `meta` organisation, and
  * reading `hasPaidAiPlan` / `balance` off it would answer a question never asked.
  */
-function creditOf(access: AiAccessDTO): AutoTranslateCreditState {
+export function creditOf(access: AiAccessDTO): AutoTranslateCreditState {
   return isAiPaywallApplicable(access) && (!access.hasPaidAiPlan || access.balance <= 0)
     ? 'no_credit'
     : 'ok';

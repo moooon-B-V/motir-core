@@ -26,6 +26,8 @@ import { fieldLockKey, withFieldLocks } from './translationSingleFlight';
 import { workItemTodosService } from './workItemTodosService';
 import { workItemTranslationStoreService } from './workItemTranslationStoreService';
 import { projectAccessService } from './projectAccessService';
+import { billingService } from './billingService';
+import { creditOf } from './readerTranslationContextService';
 import { workItemsService } from './workItemsService';
 import { TITLE_TRANSLATION_MAX_ITEMS } from '@/lib/translation/titleBound';
 
@@ -363,6 +365,8 @@ export interface TitleDoorDeps {
   requestTranslation: typeof requestTranslation;
   withFieldLocks: typeof withFieldLocks;
   resolveTenant: (ctx: ServiceContext, projectId: string) => Promise<TranslateTenant>;
+  /** Whether the organisation can pay for a translation — asked only when a title would be sent. */
+  hasCredit: (ctx: ServiceContext) => Promise<boolean>;
 }
 
 /** The ONE definition of "the project's auto-translate switch is on". */
@@ -391,6 +395,13 @@ export const defaultTitleDoorDeps: TitleDoorDeps = {
   requestTranslation,
   withFieldLocks,
   resolveTenant,
+  hasCredit: async (ctx) =>
+    creditOf(
+      await billingService.getAiAccessForContext({
+        actorUserId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
+    ) === 'ok',
 };
 
 interface TitleScope {
@@ -472,6 +483,8 @@ async function sendTitlesUnderLock(
     }));
   const toSend = missing.filter((t) => kept[t.workItemId] === undefined);
   if (toSend.length === 0) return ready;
+  // An organisation that cannot pay sends nothing: the surface says so once.
+  if (!(await deps.hasCredit(ctx))) return [...ready, ...titleFail(toSend, 'no_credit')];
   const byRef = new Map(toSend.map((t) => [fieldRef.titleForItem(t.workItemId), t]));
   const { batches, oversized } = batchTranslateFields(
     toSend.map((t) => ({ fieldRef: fieldRef.titleForItem(t.workItemId), text: t.text })),

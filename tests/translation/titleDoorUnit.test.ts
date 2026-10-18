@@ -94,6 +94,7 @@ function build(
       calls.tenant!.push(1);
       return tenant;
     },
+    hasCredit: async () => true,
     ...overrides,
   };
   return { d, calls, sent };
@@ -248,6 +249,18 @@ describe('translateTitlesForReader', () => {
       expect(calls.keep).toEqual([]);
     },
   );
+
+  it('answers no_credit and sends nothing when the organisation cannot pay, but still serves kept titles', async () => {
+    const { d, calls } = build(
+      [german('a'), german('b')],
+      echo,
+      { a: 'kept a' },
+      { hasCredit: async () => false },
+    );
+    const r = await run(d, ['a', 'b']);
+    expect(r.titles.map((t) => t.status)).toEqual(['ready', 'no_credit']);
+    expect(calls.send).toEqual([]);
+  });
 
   it('answers timeout for every title and sends nothing when the lock wait times out', async () => {
     const { d, calls } = build(
