@@ -307,6 +307,12 @@ const OWN_BOX_ENFORCED_PREFIXES: string[] = [
   'components/ai/',
   'components/approvals/',
   'components/acceptance/',
+  'components/settings/',
+  'components/projects/',
+  'components/onboarding/',
+  'components/hosted/',
+  'components/github/',
+  'components/howToTest/',
 ];
 
 /**
@@ -330,6 +336,18 @@ const OWN_BOX_ALLOWED: Record<string, string> = {
     'Skeleton placeholder block sized to mimic the content it stands in for; a layout constant, not a control height, so no height step fits.',
   'components/planning/PlanningWorkspaceSkeleton.tsx → h-32':
     'Skeleton placeholder block sized to mimic the content it stands in for; a layout constant, not a control height, so no height step fits.',
+  'components/onboarding/howItWorks/HowItWorksArt.tsx → h-14':
+    'Illustration frame sized to its artwork; a layout constant, not a control or card height, so no height step fits.',
+  'components/onboarding/howItWorks/HowItWorksArt.tsx → h-16':
+    'Illustration frame sized to its artwork; a layout constant, not a control or card height, so no height step fits.',
+  'components/onboarding/layout/SectionArt.tsx → h-[208px]':
+    'Illustration frame sized to its artwork; a layout constant, not a control or card height, so no height step fits.',
+  'components/onboarding/layout/SectionArt.tsx → h-[248px]':
+    'Illustration frame sized to its artwork; a layout constant, not a control or card height, so no height step fits.',
+  'components/onboarding/howItWorks/HowItWorksArt.tsx → h-7':
+    'Illustration of a button drawn at 28px; the button role has no height steps and the art is a fixed-size picture, not a control.',
+  'components/settings/SettingsPaneFrame.tsx → h-7':
+    'Skeleton stand-in for an action button at 28px; the button role has no height steps and the placeholder mimics content, not a control.',
 };
 
 /**

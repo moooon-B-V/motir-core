@@ -124,7 +124,7 @@ function MissingPart({ owedBy }: { owedBy: HowToTestRunDto | null }) {
       <PartHead />
       <div
         role="status"
-        className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-callout-bg) px-3 py-2.5 text-[13px] leading-normal text-(--el-callout-text)"
+        className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-callout-bg) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-[13px] leading-normal text-(--el-callout-text)"
       >
         <FileQuestionMark className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         <span>
@@ -251,7 +251,7 @@ function EarlierVersions({ history }: { history: HowToTestDto['history'] }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 rounded-(--radius-control) p-1 text-left text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="flex w-full items-center gap-1.5 rounded-(--radius-control) p-(--spacing-control-x-4) text-left text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <Chevron className="h-3.5 w-3.5 shrink-0 text-(--el-icon-muted)" aria-hidden />
         {t('earlier.versions', { count: history.length })}

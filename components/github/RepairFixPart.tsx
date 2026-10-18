@@ -430,7 +430,7 @@ export function RepairFixPart({
           {repair.lastGaveUp ? (
             <div
               role="status"
-              className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-danger-surface) px-3 py-2.5 text-[13px] leading-normal text-(--el-danger-surface-text)"
+              className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-danger-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-[13px] leading-normal text-(--el-danger-surface-text)"
             >
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <div>

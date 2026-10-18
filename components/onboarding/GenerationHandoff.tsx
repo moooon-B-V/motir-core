@@ -98,7 +98,7 @@ export function GenerationHandoff({
 
           {/* The frozen baseline — what generation runs against (a revisable
               snapshot, captured at tiers-complete). */}
-          <div className="mt-6 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-5">
+          <div className="mt-6 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-card-padding-16)">
             <p className="text-xs font-medium tracking-wide text-(--el-text-secondary) uppercase">
               {t('baselineTitle')}
             </p>
