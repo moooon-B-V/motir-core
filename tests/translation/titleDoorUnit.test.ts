@@ -95,6 +95,7 @@ function build(
       return tenant;
     },
     hasCredit: async () => true,
+    canAddCredit: async () => false,
     ...overrides,
   };
   return { d, calls, sent };
@@ -255,10 +256,11 @@ describe('translateTitlesForReader', () => {
       [german('a'), german('b')],
       echo,
       { a: 'kept a' },
-      { hasCredit: async () => false },
+      { hasCredit: async () => false, canAddCredit: async () => true },
     );
     const r = await run(d, ['a', 'b']);
     expect(r.titles.map((t) => t.status)).toEqual(['ready', 'no_credit']);
+    expect(r.canAddCredit).toBe(true);
     expect(calls.send).toEqual([]);
   });
 

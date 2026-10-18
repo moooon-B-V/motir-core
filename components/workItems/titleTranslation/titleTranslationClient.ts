@@ -45,17 +45,19 @@ export async function requestTitleTranslations(
   let remaining = [...new Set(workItemIds)];
   const titles: TitleTranslationResultDTO[] = [];
   let merged: TitlesTranslateResponseDTO | null = null;
+  let canAddCredit = false;
   while (remaining.length > 0) {
     const answer = await ask(projectKey, remaining, fetchImpl);
     merged = merged ?? { ...answer, truncated: false, titles: [] };
     if (!answer.enabled) return { ...merged, enabled: false, truncated: false, titles: [] };
     titles.push(...answer.titles);
+    canAddCredit ||= answer.canAddCredit === true;
     // Nothing is left to ask once an answer is not truncated, or when an
     // `no_credit` entry says every further request would be refused alike.
     if (!answer.truncated || answer.titles.some((t) => t.status === 'no_credit')) break;
     remaining = remaining.slice(TITLE_TRANSLATION_MAX_ITEMS);
   }
   return merged
-    ? { ...merged, truncated: false, titles }
+    ? { ...merged, truncated: false, ...(canAddCredit ? { canAddCredit } : {}), titles }
     : { targetLanguage: 'en', enabled: true, truncated: false, titles: [] };
 }

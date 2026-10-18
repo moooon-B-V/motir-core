@@ -90,5 +90,7 @@ export interface TitlesTranslateResponseDTO {
   enabled: boolean;
   /** True when more titles were asked for than one request answers; the first ones were. */
   truncated: boolean;
+  /** With a `no_credit` entry: whether the reader may add credit (the surface links the billing page). */
+  canAddCredit?: boolean;
   titles: TitleTranslationResultDTO[];
 }

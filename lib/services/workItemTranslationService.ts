@@ -27,6 +27,7 @@ import { workItemTodosService } from './workItemTodosService';
 import { workItemTranslationStoreService } from './workItemTranslationStoreService';
 import { projectAccessService } from './projectAccessService';
 import { billingService } from './billingService';
+import { orgCanForWorkspace } from './organizationAccessService';
 import { creditOf } from './readerTranslationContextService';
 import { workItemsService } from './workItemsService';
 import { TITLE_TRANSLATION_MAX_ITEMS } from '@/lib/translation/titleBound';
@@ -348,6 +349,8 @@ export type TitleTranslationResult =
 export interface TitleTranslationAnswer {
   enabled: boolean;
   truncated: boolean;
+  /** Set only when a title answered `no_credit`: the reader may add credit. */
+  canAddCredit?: boolean;
   titles: TitleTranslationResult[];
 }
 
@@ -367,6 +370,8 @@ export interface TitleDoorDeps {
   resolveTenant: (ctx: ServiceContext, projectId: string) => Promise<TranslateTenant>;
   /** Whether the organisation can pay for a translation — asked only when a title would be sent. */
   hasCredit: (ctx: ServiceContext) => Promise<boolean>;
+  /** Whether the reader may manage billing — asked only when a title answered `no_credit`. */
+  canAddCredit: (ctx: ServiceContext) => Promise<boolean>;
 }
 
 /** The ONE definition of "the project's auto-translate switch is on". */
@@ -402,6 +407,7 @@ export const defaultTitleDoorDeps: TitleDoorDeps = {
         workspaceId: ctx.workspaceId,
       }),
     ) === 'ok',
+  canAddCredit: (ctx) => orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageBilling'),
 };
 
 interface TitleScope {
@@ -594,5 +600,11 @@ export async function translateTitlesForReader(
           }
         : fresh.get(t.workItemId)!,
   );
-  return { enabled: true, truncated, titles };
+  const noCredit = titles.some((t) => t.status === 'no_credit');
+  return {
+    enabled: true,
+    truncated,
+    titles,
+    ...(noCredit && (await deps.canAddCredit(ctx)) ? { canAddCredit: true } : {}),
+  };
 }

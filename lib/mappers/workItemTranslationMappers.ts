@@ -37,6 +37,7 @@ export function toTitlesTranslateResponseDTO(
     targetLanguage,
     enabled: answer.enabled,
     truncated: answer.truncated,
+    ...(answer.canAddCredit ? { canAddCredit: true } : {}),
     titles: answer.titles.map((t) =>
       t.status === 'ready'
         ? {

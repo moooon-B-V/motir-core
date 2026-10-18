@@ -187,7 +187,7 @@ function ActiveProvider({
       projectKey,
       state: effective,
       items,
-      canAddCredit: context.canAddCredit,
+      canAddCredit: context.canAddCredit || effective.canAddCredit,
       uiLocale,
       targetLanguage: context.targetLanguage,
       register,

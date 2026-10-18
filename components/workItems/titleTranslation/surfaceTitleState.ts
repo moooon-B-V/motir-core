@@ -48,11 +48,13 @@ export interface SurfaceTitleState {
   showOriginal: boolean;
   /** The context or an answer said the organisation cannot pay. */
   noCredit: boolean;
+  /** An answer said the reader may add credit (the context cannot know it up front). */
+  canAddCredit: boolean;
   entries: Readonly<Record<string, TitleEntry>>;
 }
 
 export function initialSurfaceTitleState(enabled: boolean, noCredit = false): SurfaceTitleState {
-  return { enabled, showOriginal: false, noCredit, entries: {} };
+  return { enabled, showOriginal: false, noCredit, canAddCredit: false, entries: {} };
 }
 
 /**
@@ -102,7 +104,7 @@ export function markPending(
 export function foldAnswer(
   state: SurfaceTitleState,
   asked: readonly SurfaceTitleItem[],
-  answer: Pick<TitlesTranslateResponseDTO, 'enabled' | 'titles'>,
+  answer: Pick<TitlesTranslateResponseDTO, 'enabled' | 'titles' | 'canAddCredit'>,
 ): SurfaceTitleState {
   if (!answer.enabled) return { ...state, enabled: false, showOriginal: false, entries: {} };
   const byId = new Map<string, TitleTranslationResultDTO>();
@@ -131,7 +133,12 @@ export function foldAnswer(
       entries[id] = { kind: 'failed', forTitle: title };
     }
   }
-  return { ...state, noCredit, entries };
+  return {
+    ...state,
+    noCredit,
+    canAddCredit: state.canAddCredit || answer.canAddCredit === true,
+    entries,
+  };
 }
 
 /** A request that could not be made at all: the asked titles read as failed. */
