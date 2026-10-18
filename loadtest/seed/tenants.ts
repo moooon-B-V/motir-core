@@ -77,13 +77,29 @@ export function workspacesOfUser(shape: SeedShape, u: number): number[] {
 
 // ── Small helpers ───────────────────────────────────────────────────────────
 
-async function mapLimit<T, R>(items: readonly T[], fn: (item: T, i: number) => Promise<R>) {
+/**
+ * Run `fn` over `items` with at most CONCURRENCY in flight. When one rejects, no
+ * further item is started, the ones already running are AWAITED, and then the
+ * first error is thrown — so a failed seed hands control back only once its own
+ * database reads have finished (MOTIR-8900). A bare `Promise.all` over the
+ * workers rejected at the first failure and left the other workers' reads
+ * running on the pool behind the caller.
+ */
+export async function mapLimit<T, R>(items: readonly T[], fn: (item: T, i: number) => Promise<R>) {
   const out = new Array<R>(items.length);
   let next = 0;
+  let failure: { error: unknown } | undefined;
   const worker = async () => {
-    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i]!, i);
+    for (let i = next++; i < items.length && !failure; i = next++) {
+      try {
+        out[i] = await fn(items[i]!, i);
+      } catch (error) {
+        failure ??= { error };
+      }
+    }
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
+  if (failure) throw failure.error;
   return out;
 }
 

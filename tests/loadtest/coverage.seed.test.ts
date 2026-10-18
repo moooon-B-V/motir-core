@@ -651,6 +651,29 @@ describe('seedTenants and resetPools past one page', () => {
     expect(reset.projects[1]!.scratchPlanIds).toEqual(first.projects[1]!.scratchPlanIds);
   }, 300_000);
 
+  it('a failing step hands control back only after the steps already running have finished, and starts no more', async () => {
+    // MOTIR-8900: the workers used to be joined with a bare Promise.all, so the first
+    // rejection returned while the other workers' reads were still on the pool.
+    const started: number[] = [];
+    const finished: number[] = [];
+    const boom = new Error('first step failed');
+    await expect(
+      tenants.mapLimit(
+        Array.from({ length: 20 }, (_, i) => i),
+        async (i) => {
+          started.push(i);
+          if (i === 0) throw boom;
+          await new Promise((r) => setTimeout(r, 25));
+          finished.push(i);
+        },
+      ),
+    ).rejects.toBe(boom);
+    // Everything that was started has finished by the time the rejection arrives...
+    expect(finished.sort()).toEqual(started.filter((i) => i !== 0).sort());
+    // ...and the rest of the list was never started.
+    expect(started.length).toBeLessThan(20);
+  });
+
   it('a custom shape with no --out is announced as custom, and a failed seed writes no manifest', async () => {
     const { usersService } = await import('@/lib/services/usersService');
     const { endpointHost } = await import('@/loadtest/lib/endpointHost');
