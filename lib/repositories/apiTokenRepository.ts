@@ -270,13 +270,18 @@ export const apiTokenRepository = {
     });
   },
 
-  /** Stamp `lastUsedAt` — the throttled verify touch. Required `tx`. */
+  /**
+   * Stamp `lastUsedAt` — the throttled verify touch. Required `tx`. Returns how
+   * many rows it touched: 0 means a revoke deleted the token since the caller read
+   * it, which `update` would have raised as P2025 (MOTIR-8885).
+   */
   async touchLastUsed(
     tokenId: string,
     lastUsedAt: Date,
     tx: Prisma.TransactionClient,
-  ): Promise<ApiToken> {
-    return tx.apiToken.update({ where: { id: tokenId }, data: { lastUsedAt } });
+  ): Promise<number> {
+    const r = await tx.apiToken.updateMany({ where: { id: tokenId }, data: { lastUsedAt } });
+    return r.count;
   },
 
   /**

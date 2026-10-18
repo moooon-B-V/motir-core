@@ -13,10 +13,12 @@ import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import {
   isBodyAboveFieldMoveAdvisory,
+  isPostMergeChildAdvisory,
   isBlockerCountAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
 } from '@/lib/dto/workItems';
+import type { WorkItemProsePostMergeChildAdvisoryDto } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
 import type { CurrentTestInstructionsDTO } from '@/lib/dto/testInstructions';
@@ -435,87 +437,97 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     sessionBranch: dto.sessionBranch,
     workBranch: dto.workBranch,
     branch: dto.branch,
-    advisories: dto.advisories.map((advisory) => {
-      if (isBlockerCountAdvisory(advisory)) {
+    // The POST-MERGE-CHILD member (MOTIR-8863) is a VALIDATE-time finding about a
+    // child's PLACEMENT in its container. The dispatch builder hands the prose
+    // check no parent, so it never emits one here; the filter keeps the wire
+    // contract unchanged (no new variant, no contract-version move) and makes the
+    // mapper total over the DTO union.
+    advisories: dto.advisories
+      .filter(
+        (advisory): advisory is Exclude<typeof advisory, WorkItemProsePostMergeChildAdvisoryDto> =>
+          !isPostMergeChildAdvisory(advisory),
+      )
+      .map((advisory) => {
+        if (isBlockerCountAdvisory(advisory)) {
+          return {
+            kind: 'shape' as const,
+            item: advisory.item,
+            severity: advisory.severity,
+            claim: advisory.claim,
+            claimedCount: advisory.claimedCount,
+            blockerCount: advisory.blockerCount,
+          };
+        }
+        // The SELF-BLOCKING-DESIGN member (MOTIR-3178) — narrowed out here for the
+        // same reason the SIZING member below is: it carries no `criterionIndex`,
+        // and the generic `shape` branch further down reads one.
+        if (isSelfBlockingDesignAdvisory(advisory)) {
+          return {
+            kind: 'shape' as const,
+            item: advisory.item,
+            severity: advisory.severity,
+            designCriterionIndex: advisory.designCriterionIndex,
+            surfaceCriterionIndex: advisory.surfaceCriterionIndex,
+          };
+        }
+        // The BODY-EDIT-ABOVE-FIELD-MOVE member (MOTIR-5399) — the third `shape`
+        // variant with no `criterionIndex`, narrowed out for the same reason.
+        if (isBodyAboveFieldMoveAdvisory(advisory)) {
+          return {
+            kind: 'shape' as const,
+            item: advisory.item,
+            severity: advisory.severity,
+            bodyEdit: { at: advisory.bodyEdit.at, fields: [...advisory.bodyEdit.fields] },
+            fieldMove: { at: advisory.fieldMove.at, fields: [...advisory.fieldMove.fields] },
+          };
+        }
+        // The SIZING member next, because it is the other `shape` variant with no
+        // `criterionIndex` — narrowing both out is what lets the branch below read
+        // the index off the two members that have one (MOTIR-3110).
+        if (isSizingAdvisory(advisory)) {
+          return {
+            kind: 'shape' as const,
+            item: advisory.item,
+            severity: advisory.severity,
+            threshold: advisory.threshold,
+            storyPoints: advisory.storyPoints,
+            estimateMinutes: advisory.estimateMinutes,
+          };
+        }
+        if (advisory.kind === 'shape') {
+          return {
+            kind: 'shape' as const,
+            item: advisory.item,
+            severity: advisory.severity,
+            criterionIndex: advisory.criterionIndex,
+            ...(advisory.severity === 'likely-ordering-violation'
+              ? { phrase: advisory.phrase }
+              : { path: advisory.path, repo: advisory.repo, reason: advisory.reason }),
+          };
+        }
+        if (advisory.kind === 'subsumption') {
+          const base = {
+            kind: 'subsumption' as const,
+            item: advisory.item,
+            severity: advisory.severity,
+            path: advisory.path,
+            pullRequest: advisory.pullRequest,
+            pullRequestTitle: advisory.pullRequestTitle,
+          };
+          // Branched on `state` rather than on `mergedAt`, so the two wire variants
+          // are produced by the same discriminant a consumer reads them by, and a
+          // merged entry can never be emitted carrying a null instant.
+          return advisory.state === 'open'
+            ? { ...base, state: 'open' as const, mergedAt: null }
+            : { ...base, state: 'merged' as const, mergedAt: advisory.mergedAt };
+        }
         return {
-          kind: 'shape' as const,
           item: advisory.item,
+          referenced: advisory.referenced,
+          referencedStatus: advisory.referencedStatus,
           severity: advisory.severity,
-          claim: advisory.claim,
-          claimedCount: advisory.claimedCount,
-          blockerCount: advisory.blockerCount,
         };
-      }
-      // The SELF-BLOCKING-DESIGN member (MOTIR-3178) — narrowed out here for the
-      // same reason the SIZING member below is: it carries no `criterionIndex`,
-      // and the generic `shape` branch further down reads one.
-      if (isSelfBlockingDesignAdvisory(advisory)) {
-        return {
-          kind: 'shape' as const,
-          item: advisory.item,
-          severity: advisory.severity,
-          designCriterionIndex: advisory.designCriterionIndex,
-          surfaceCriterionIndex: advisory.surfaceCriterionIndex,
-        };
-      }
-      // The BODY-EDIT-ABOVE-FIELD-MOVE member (MOTIR-5399) — the third `shape`
-      // variant with no `criterionIndex`, narrowed out for the same reason.
-      if (isBodyAboveFieldMoveAdvisory(advisory)) {
-        return {
-          kind: 'shape' as const,
-          item: advisory.item,
-          severity: advisory.severity,
-          bodyEdit: { at: advisory.bodyEdit.at, fields: [...advisory.bodyEdit.fields] },
-          fieldMove: { at: advisory.fieldMove.at, fields: [...advisory.fieldMove.fields] },
-        };
-      }
-      // The SIZING member next, because it is the other `shape` variant with no
-      // `criterionIndex` — narrowing both out is what lets the branch below read
-      // the index off the two members that have one (MOTIR-3110).
-      if (isSizingAdvisory(advisory)) {
-        return {
-          kind: 'shape' as const,
-          item: advisory.item,
-          severity: advisory.severity,
-          threshold: advisory.threshold,
-          storyPoints: advisory.storyPoints,
-          estimateMinutes: advisory.estimateMinutes,
-        };
-      }
-      if (advisory.kind === 'shape') {
-        return {
-          kind: 'shape' as const,
-          item: advisory.item,
-          severity: advisory.severity,
-          criterionIndex: advisory.criterionIndex,
-          ...(advisory.severity === 'likely-ordering-violation'
-            ? { phrase: advisory.phrase }
-            : { path: advisory.path, repo: advisory.repo, reason: advisory.reason }),
-        };
-      }
-      if (advisory.kind === 'subsumption') {
-        const base = {
-          kind: 'subsumption' as const,
-          item: advisory.item,
-          severity: advisory.severity,
-          path: advisory.path,
-          pullRequest: advisory.pullRequest,
-          pullRequestTitle: advisory.pullRequestTitle,
-        };
-        // Branched on `state` rather than on `mergedAt`, so the two wire variants
-        // are produced by the same discriminant a consumer reads them by, and a
-        // merged entry can never be emitted carrying a null instant.
-        return advisory.state === 'open'
-          ? { ...base, state: 'open' as const, mergedAt: null }
-          : { ...base, state: 'merged' as const, mergedAt: advisory.mergedAt };
-      }
-      return {
-        item: advisory.item,
-        referenced: advisory.referenced,
-        referencedStatus: advisory.referencedStatus,
-        severity: advisory.severity,
-      };
-    }),
+      }),
   };
 }
 

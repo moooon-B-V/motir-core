@@ -1854,6 +1854,7 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-repo-straddle'
   | 'likely-over-gate-sizing'
   | 'likely-self-blocking-design'
+  | 'likely-post-merge-child-under-container'
   | 'body-edit-above-field-move'
   | 'likely-blocker-count-mismatch';
 
@@ -2116,6 +2117,27 @@ export interface WorkItemProseSelfBlockingDesignAdvisoryDto extends WorkItemPros
   surfaceCriterionIndex: number;
 }
 
+/**
+ * A CHILD that can only start after the deployment, laid INSIDE the runnable
+ * container whose merge it waits on (MOTIR-8863). The advisory is emitted on the
+ * CHILD (`item`), naming the container.
+ *
+ * ⚠️ A runnable container is ONE deliverable that ends at its pull request; a
+ * production check in the middle means TWO containers, the second `blocked_by`
+ * the first — not a child of the first. The remedy is placement: lay the child as
+ * a sibling the container `blocks`, or split the container. Advisory like its
+ * siblings, never a gate; `validate_plan` reports it on the projected tree so a
+ * plan can be repaired before approval. A container of kind `epic` is out of
+ * scope: a card beside a story is where the remedy puts it.
+ */
+export interface WorkItemProsePostMergeChildAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-post-merge-child-under-container';
+  /** The deployment-reading phrase the child's body carries. */
+  phrase: string;
+  /** The container (the child's parent) whose merge the child waits on. */
+  container: string;
+}
+
 /** One end of a {@link WorkItemProseBodyAboveFieldMoveAdvisoryDto}: one revision of the card. */
 export interface WorkItemRevisionEndDto {
   /** When the revision was written (ISO-8601). */
@@ -2187,6 +2209,7 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseRepoStraddleAdvisoryDto
   | WorkItemProseSizingAdvisoryDto
   | WorkItemProseSelfBlockingDesignAdvisoryDto
+  | WorkItemProsePostMergeChildAdvisoryDto
   | WorkItemProseBodyAboveFieldMoveAdvisoryDto
   | WorkItemProseBlockerCountAdvisoryDto;
 
@@ -2524,6 +2547,15 @@ export function isSelfBlockingDesignAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseSelfBlockingDesignAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-self-blocking-design';
+}
+
+/**
+ * Narrow an advisory to the POST-MERGE-CHILD shape (MOTIR-8863).
+ */
+export function isPostMergeChildAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProsePostMergeChildAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-post-merge-child-under-container';
 }
 
 /**

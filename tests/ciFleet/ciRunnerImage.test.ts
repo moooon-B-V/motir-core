@@ -204,6 +204,19 @@ describe('dockerd must be able to unpack a layer, not merely answer (MOTIR-8821)
   });
 });
 
+describe('containers dockerd starts can resolve names (MOTIR-8899)', () => {
+  it('passes explicit resolvers to dockerd, since the Machine resolver is unreachable from the bridge', () => {
+    const body = code(startDockerd);
+    expect(body).toContain('DOCKER_DNS="${MOTIR_RUNNER_DOCKER_DNS-1.1.1.1 8.8.8.8}"');
+    expect(body).toMatch(/dockerd --host=unix:\/\/\$\{SOCK\} \$\(dns_args\)/);
+    expect(body).toContain('--dns=');
+  });
+
+  it('reports the resolvers in the storage line the job log prints', () => {
+    expect(code(startDockerd)).toContain('container dns:');
+  });
+});
+
 describe('the derived toolchain — every entry traces to a starter workflow', () => {
   // The card's rule: the toolchain is the UNION of what the two starters'
   // workflows actually install, and "a toolchain entry with no evidence line is

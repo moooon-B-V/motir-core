@@ -71,6 +71,15 @@ works. The Fly adapter creates it with the machine, deletes it at teardown, and
 the fleet reconciler sweeps any left behind. The job-started hook prints
 `runner disk:` lines (`df -h / /var/lib/docker`) into every job log.
 
+## Container DNS (MOTIR-8899)
+
+`start-dockerd.sh` starts dockerd with `--dns=1.1.1.1 --dns=8.8.8.8`. Without it
+a container (and each `RUN` step of the daemon's own builder, which is what
+`flyctl deploy --local-only` uses) inherits the Machine's Fly resolver, an IPv6
+address the IPv4 bridge cannot reach, and `apt-get` fails with
+`Temporary failure resolving`. Set `MOTIR_RUNNER_DOCKER_DNS="<ip> <ip>"` on a
+Machine to try other resolvers; the job log's storage line names the ones in use.
+
 ## What is not proven in CI
 
 `smoke/prove-boot.sh` proves the entrypoint's dockerd path, that `run.sh` is
