@@ -34,6 +34,25 @@
 # others. It is the measurement lever for MOTIR-8821 ("repeat with each candidate
 # setting"), not a production setting; the orchestrator never sets it.
 #
+# ── Container DNS (MOTIR-8899) ───────────────────────────────────────────────
+# dockerd copies the Machine's /etc/resolv.conf into every container and every
+# build step. A Fly Machine's resolver is Fly's internal one (an fdaa:: IPv6
+# address), which dockerd drops for a container on its IPv4-only bridge, so the
+# containers `flyctl deploy --local-only` builds in were left with no nameserver
+# they could reach: `apt-get` in the Dockerfile died on
+# "Temporary failure resolving 'deb.debian.org'" (motir-ai run 39078660841).
+# `--dns` hands every container, and so every `RUN` step of the daemon's own
+# builder, public resolvers the Machine can reach outbound. The host's own
+# resolver is untouched. MOTIR_RUNNER_DOCKER_DNS="<ip> <ip>" overrides the list
+# (an empty value keeps dockerd's default); the orchestrator never sets it.
+DOCKER_DNS="${MOTIR_RUNNER_DOCKER_DNS-1.1.1.1 8.8.8.8}"
+
+dns_args() {
+  local ip out=""
+  for ip in ${DOCKER_DNS}; do out="${out} --dns=${ip}"; done
+  echo "${out# }"
+}
+
 # The outcome is written to /run/motir-ci-runner-docker-storage, which the runner's
 # job-started hook prints into the JOB LOG, so a failure of this kind is readable
 # from GitHub and not only from the Machine console.
@@ -64,8 +83,8 @@ start_dockerd() {
   local name="$1" args
   args="$(candidate_args "${name}")"
   log "starting dockerd (storage candidate: ${name})"
-  # shellcheck disable=SC2086 # the candidate's flags are word-split on purpose
-  dockerd --host=unix://${SOCK} ${args} >/var/log/dockerd.log 2>&1 &
+  # shellcheck disable=SC2086 # the candidate's and the dns flags are word-split on purpose
+  dockerd --host=unix://${SOCK} $(dns_args) ${args} >/var/log/dockerd.log 2>&1 &
   DOCKERD_PID=$!
   local started_at="${SECONDS}" deadline=$((SECONDS + READY_TIMEOUT))
   until docker version >/dev/null 2>&1; do
@@ -150,7 +169,7 @@ for name in "${candidates[@]}"; do
   if start_dockerd "${name}"; then
     if probe_out="$(probe_unpack)"; then
       driver="$(docker info --format '{{.Driver}}' 2>/dev/null || echo unknown)"
-      summary="dockerd storage: candidate=${name} driver=${driver} (layer whiteout unpack verified)"
+      summary="dockerd storage: candidate=${name} driver=${driver} (layer whiteout unpack verified); container dns: ${DOCKER_DNS:-<dockerd default>}"
       [ -z "${failed}" ] || summary="${summary}; refused earlier: ${failed# }"
       log "${summary}"
       printf '%s\n' "${summary}" >"${STATE_FILE}"
