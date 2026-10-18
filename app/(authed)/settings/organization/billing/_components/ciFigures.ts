@@ -30,7 +30,14 @@ export type CiLineVariant =
    * empty state and not a "0 of 1,800" meter: an org whose repositories are all
    * its own has a pool it will simply never draw on, and the line says so.
    */
-  | 'nothing_to_bill';
+  | 'nothing_to_bill'
+  /**
+   * The META org (§4.4): bypassed — no allowance, no charge, no refusal — but the
+   * meter still records its fleet runner's minutes, and this line shows them so
+   * the house can see what its own CI costs (MOTIR-8886). Minutes only: there is
+   * no pool, no meter, no credits and no buy control to draw.
+   */
+  | 'internal';
 
 export interface CiLineFigures {
   variant: CiLineVariant;
@@ -73,15 +80,34 @@ function pct(part: number, whole: number): number {
 /**
  * The view model for the CI line, or `null` when there is NO line to render.
  *
- * `null` covers exactly the ADR's not-applicable cases, which the DTO already
- * carries as `applicable: false` / `state: 'bypassed'`: a self-hosted build
- * (§8.5 — and that page 404s before this anyway), no provisioning org configured
- * (nothing can be Motir-owned), and the META org (§4.4), which renders the
- * shipped "Internal plan" treatment and no CI line. An org with NO seat
+ * `null` covers the ADR's not-applicable cases, which the DTO already carries as
+ * `applicable: false` / `state: 'bypassed'`: a self-hosted build (§8.5 — and
+ * that page 404s before this anyway) and no provisioning org configured (nothing
+ * can be Motir-owned). The META org (§4.4) is bypassed too but is `internal`: it
+ * draws a minutes-only line (variant `internal`), since its fleet runner incurs
+ * real CI cost the team needs to see. An org with NO seat
  * subscription is NOT one of them — §4.3 gives it the same pool as any other
  * cloud org, so it takes a normal line.
  */
 export function ciLineFigures(ci: CiEntitlementStateDTO): CiLineFigures | null {
+  if (ci.internal && ci.state === 'bypassed') {
+    return {
+      variant: 'internal',
+      usedMinutes: ci.consumedMinutes,
+      poolMinutes: 0,
+      remainingMinutes: 0,
+      overageMinutes: 0,
+      chargedCredits: 0,
+      memberCount: ci.memberCount,
+      floorApplied: false,
+      perSeatMinutes: INCLUDED_MINUTES_PER_SEAT,
+      resetsAt: ci.periodEnd,
+      meterPct: 0,
+      tickPct: null,
+      over: false,
+      balanceUnavailable: false,
+    };
+  }
   if (!ci.applicable || ci.state === 'bypassed') return null;
 
   const over = ci.overageMinutes > 0;

@@ -26,10 +26,19 @@ export interface CiEntitlementStateDTO {
    * repos), with no provisioning org configured (nothing can be Motir-owned), and
    * for the META org (§4.4 — moooon B.V. pays its own GitHub bill; metering it
    * would bill the house to itself). When false, `state` is `'bypassed'`, nothing
-   * is ever charged, no dispatch is ever refused, and §7.3.7 says the panel shows
-   * the internal-plan treatment rather than a CI line.
+   * is ever charged and no dispatch is ever refused. Off-cloud and with no
+   * provisioning org the panel draws no CI line; for the META org (`internal`) it
+   * draws a minutes-only line.
    */
   applicable: boolean;
+  /**
+   * True ONLY for the META org (§4.4): `applicable` is false and `state` is
+   * `'bypassed'`, but `consumedMinutes` carries the measured figure so Billing &
+   * plans can draw an internal CI line (minutes used, no allowance, no charge,
+   * no buy control). False for every other bypass (off-cloud, no provisioning
+   * org), which still draw no line at all.
+   */
+  internal: boolean;
   organizationId: string;
   /** Midnight UTC on the 1st of the calendar month (§4.5). */
   periodStart: string;
