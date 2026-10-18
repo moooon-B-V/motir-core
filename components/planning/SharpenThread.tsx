@@ -60,7 +60,7 @@ function AssumptionCard({ assumption }: { assumption: SharpenAssumption }) {
   return (
     <div
       data-testid="sharpen-assumption"
-      className="ml-9 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-3 py-2 text-sm"
+      className="ml-9 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm"
     >
       <p className="flex items-center gap-1 text-xs font-semibold text-(--el-text-strong)">
         <Bot className="size-3.5" aria-hidden />
@@ -188,7 +188,7 @@ export function SharpenThread({
         <div className="flex flex-col items-start gap-2 pl-9" data-testid="sharpen-error">
           <p
             role="alert"
-            className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)"
+            className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
           >
             {t('error')}
           </p>

@@ -190,7 +190,7 @@ export async function CodeRepositories({ repos }: { repos: CodeContextRepoDTO[] 
           return (
             <li
               key={repo.repoRef}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-(--spacing-card-padding) py-3"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) px-(--spacing-card-padding) py-(--spacing-card-padding-12)"
             >
               <span className="flex min-w-0 items-center gap-2">
                 <FolderGit2 className="h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />

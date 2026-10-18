@@ -178,7 +178,7 @@ export function IssueAdvancedFilter({
           type="button"
           aria-label={active ? t('advancedActiveAria', { count: appliedCount }) : t('advanced')}
           className={cn(
-            'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+            'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-(--spacing-control-x-12) font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
             active ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)',
           )}
         >
@@ -193,7 +193,7 @@ export function IssueAdvancedFilter({
           {active ? (
             <span
               aria-hidden
-              className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1.5 text-[11px] font-semibold text-(--el-accent-text) tabular-nums"
+              className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) text-[11px] font-semibold text-(--el-accent-text) tabular-nums"
             >
               {appliedCount}
             </span>
@@ -227,7 +227,7 @@ export function IssueAdvancedFilter({
             disabled={working.rows.length === 0}
             onClick={() => apply({ combinator: 'and', rows: [] })}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+              'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               // Asked the same way `disabled` above is, so the faint ink is
               // visibly the inactive state rather than a second, independent
               // statement of it (MOTIR-2489).

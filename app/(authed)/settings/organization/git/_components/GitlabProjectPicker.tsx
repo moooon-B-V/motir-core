@@ -90,7 +90,7 @@ export function GitlabProjectPicker() {
       <button
         type="button"
         onClick={openPicker}
-        className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-1.5 py-1 font-sans text-sm font-semibold text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-4) font-sans text-sm font-semibold text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <Plus className="h-4 w-4" aria-hidden />
         {t('projects.connectProject')}
@@ -99,7 +99,7 @@ export function GitlabProjectPicker() {
   }
 
   return (
-    <div className="mb-1 flex w-full flex-col gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-3">
+    <div className="mb-1 flex w-full flex-col gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-card-padding-12)">
       <div className="flex flex-col gap-1.5">
         <span className="font-mono text-[11px] font-semibold tracking-wider text-(--el-text-eyebrow) uppercase">
           {t('projects.pickerLabel')}
@@ -126,7 +126,7 @@ export function GitlabProjectPicker() {
         </Button>
       </div>
       {error ? (
-        <div className="flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-rose) px-3 py-2">
+        <div className="flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-rose) px-(--spacing-control-x-12) py-(--spacing-control-y-8)">
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger)" aria-hidden />
           <span className="font-sans text-[13px] text-(--el-text-strong)">
             {t(`projects.error.${error}`)}

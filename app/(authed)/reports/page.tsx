@@ -187,7 +187,7 @@ function HubCard({
           takes a dedicated `--el-card-icon-*` pair so a palette can tint the
           tile + glyph (the accent on muted) rather than a flat grey-on-surface
           square (finding #54). */}
-      <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg)">
+      <span className="mt-0.5 inline-flex h-(--height-control) w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg)">
         {icon}
       </span>
       <span className="flex flex-col gap-1">

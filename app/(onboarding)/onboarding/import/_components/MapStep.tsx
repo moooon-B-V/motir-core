@@ -282,7 +282,7 @@ export function MapStep({
       {unresolved > 0 ? (
         <p
           role="status"
-          className="rounded-(--radius-card) bg-(--el-tint-peach) p-3 text-sm text-(--el-text-strong)"
+          className="rounded-(--radius-card) bg-(--el-tint-peach) p-(--spacing-card-padding-12) text-sm text-(--el-text-strong)"
         >
           {t('map.unresolved', { count: unresolved })}
         </p>
@@ -290,7 +290,7 @@ export function MapStep({
       {error ? (
         <p
           role="alert"
-          className="rounded-(--radius-card) bg-(--el-tint-rose) p-3 text-sm text-(--el-text-strong)"
+          className="rounded-(--radius-card) bg-(--el-tint-rose) p-(--spacing-card-padding-12) text-sm text-(--el-text-strong)"
         >
           {t('errors.generic')}
         </p>

@@ -34,7 +34,7 @@ export function CreateIssueButton() {
   if (!canCreate) return null;
 
   const base =
-    'inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5';
+    'inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-(--spacing-control-x)';
 
   // Read-only (a viewer, or a member on a limited project): keep the affordance
   // VISIBLE but disabled with an explanatory tooltip, rather than hiding it —
@@ -64,7 +64,7 @@ export function CreateIssueButton() {
     >
       <Plus className="h-4 w-4" aria-hidden />
       <span className="hidden lg:inline">{t('createIssue.create')}</span>
-      <kbd className="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline">
+      <kbd className="hidden rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-control-x-4) py-(--spacing-control-y-2) font-mono text-[10px] lg:inline">
         {displayKey('C')}
       </kbd>
     </button>

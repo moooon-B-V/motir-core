@@ -62,7 +62,7 @@ export function ReadinessBadge({
     return (
       <div
         className={cn(
-          'bg-(--el-tint-mint) flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
+          'bg-(--el-tint-mint) flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)',
           className,
         )}
       >
@@ -94,7 +94,7 @@ export function ReadinessBadge({
       data-readiness={soft ? 'soft' : 'hard'}
       className={cn(
         soft ? 'bg-(--el-tint-yellow)' : 'bg-(--el-tint-peach)',
-        'flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
+        'flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)',
         className,
       )}
     >

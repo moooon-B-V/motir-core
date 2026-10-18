@@ -80,7 +80,7 @@ export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps
         <button
           type="button"
           aria-label={t('viewLabel', { view: activeLabel })}
-          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-control-x-12) font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <ActiveIcon className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
           {activeLabel}

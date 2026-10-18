@@ -189,7 +189,7 @@ export function DecisionPortBody({
         </div>
       ) : null}
       {view.changes.length > 0 || view.whatChangedMd ? (
-        <div className="rounded-(--radius-card) border border-(--el-border-soft) px-3 py-2.5">
+        <div className="rounded-(--radius-card) border border-(--el-border-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)">
           <div className="flex flex-wrap items-center gap-2">
             <Eyebrow>{t('whatChanged')}</Eyebrow>
             {view.changes.map((change) => (
@@ -215,7 +215,7 @@ export function DecisionPortBody({
         </div>
       ) : null}
       {view.resultingDirectionMd ? (
-        <div className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2.5">
+        <div className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)">
           <Eyebrow>{t('resultingDirection')}</Eyebrow>
           <MarkdownView
             value={view.resultingDirectionMd}
@@ -515,7 +515,7 @@ export function DecisionConfirmDefectBody({
     <div>
       <div
         role="status"
-        className="mb-3 flex gap-2.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-peach) px-3 py-2.5"
+        className="mb-3 flex gap-2.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-peach) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
       >
         <CircleAlert
           className="mt-0.5 h-4 w-4 flex-none text-(--el-danger-on-surface)"

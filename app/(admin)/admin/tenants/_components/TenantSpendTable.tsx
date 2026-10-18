@@ -171,7 +171,7 @@ export function TenantSpendTable({
           type="button"
           onClick={more}
           disabled={pending}
-          className="self-start rounded-(--radius-input) px-3 py-1 font-sans text-sm text-(--el-accent-on-surface) hover:underline disabled:opacity-60"
+          className="self-start rounded-(--radius-input) px-(--spacing-control-x-12) py-(--spacing-control-y-4) font-sans text-sm text-(--el-accent-on-surface) hover:underline disabled:opacity-60"
         >
           {pending ? t('loading') : t('showMore')}
         </button>

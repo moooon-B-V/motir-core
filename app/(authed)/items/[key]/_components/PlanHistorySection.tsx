@@ -216,7 +216,7 @@ function PlanHistoryRow({ entry }: { entry: WorkItemPlanHistoryEntryDto }) {
     >
       <span
         className={cn(
-          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control)',
+          'inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control)',
           STATUS_TINT[entry.planStatus],
         )}
         aria-hidden
@@ -255,7 +255,7 @@ function PlanHistorySkeleton() {
     <div aria-busy className="mt-3 flex animate-pulse flex-col gap-3.5">
       {[58, 46].map((width) => (
         <div key={width} className="flex items-center gap-3">
-          <span className="h-8 w-8 shrink-0 rounded-(--radius-control) bg-(--el-muted)" />
+          <span className="h-(--height-control-32) w-8 shrink-0 rounded-(--radius-control) bg-(--el-muted)" />
           <span className="flex flex-1 flex-col gap-1.5">
             <span
               className="h-2.5 rounded-(--radius-control) bg-(--el-muted)"

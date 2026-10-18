@@ -306,7 +306,7 @@ export function OrgMembersClient({
       {seat && seat.status === 'active' ? (
         // The no-pay-wall reassurance (design panel 1) — inviting always works;
         // the notes only disclose the cost. Sky info tint, --el-text-strong (AA).
-        <div className="bg-(--el-tint-sky) text-(--el-text-strong) flex items-start gap-2 rounded-(--radius-card) px-3.5 py-3 font-sans text-xs leading-relaxed">
+        <div className="bg-(--el-tint-sky) text-(--el-text-strong) flex items-start gap-2 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12) font-sans text-xs leading-relaxed">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>
             <span className="font-semibold">{t('seat.noPayWallTitle')}</span> {t('seat.noPayWall')}
@@ -335,12 +335,12 @@ function SeatSummaryBand({ seat, seats }: { seat: SeatSummaryDTO; seats: number 
 
   return (
     <div
-      className={`border-(--el-border-soft) mb-3 flex flex-wrap items-center gap-3.5 rounded-(--radius-card) border px-3.5 py-3 ${
+      className={`border-(--el-border-soft) mb-3 flex flex-wrap items-center gap-3.5 rounded-(--radius-card) border px-(--spacing-card-padding-12) py-(--spacing-card-padding-12) ${
         pastDue ? 'bg-(--el-tint-yellow) border-transparent' : 'bg-(--el-surface-soft)'
       }`}
     >
       <span
-        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) ${
+        className={`inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) ${
           pastDue
             ? 'bg-(--el-page-bg) text-(--el-warning)'
             : 'bg-(--el-tint-lavender) text-(--el-text-strong)'
@@ -757,8 +757,8 @@ function InviteModal({
           // The prorated-charge cost note (scaled org only, design panel 2).
           // "Charged now" reflects 8.1.12's Stripe `always_invoice`. No pay-wall —
           // Send always works; this only discloses the cost.
-          <div className="bg-(--el-tint-mint) flex items-start gap-3 rounded-(--radius-card) px-3.5 py-3">
-            <span className="bg-(--el-page-bg) text-(--el-accent) inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control)">
+          <div className="bg-(--el-tint-mint) flex items-start gap-3 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)">
+            <span className="bg-(--el-page-bg) text-(--el-accent) inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control)">
               <UserPlus className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0">

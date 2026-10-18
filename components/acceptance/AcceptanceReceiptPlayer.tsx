@@ -79,7 +79,7 @@ export function AcceptanceReceiptPlayer({
             }}
             aria-pressed={playbackRate === rate}
             aria-label={`${rate}×`}
-            className={`rounded-(--radius-control) px-1.5 py-0.5 text-[11px] font-semibold leading-tight transition-colors ${playbackRate === rate ? 'bg-(--el-accent) text-(--el-accent-text)' : 'text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)'}`}
+            className={`rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-2) text-[11px] font-semibold leading-tight transition-colors ${playbackRate === rate ? 'bg-(--el-accent) text-(--el-accent-text)' : 'text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)'}`}
           >
             {rate}×
           </button>
@@ -94,7 +94,7 @@ export function AcceptanceReceiptPlayer({
                 onClick={() => {
                   if (videoRef.current) videoRef.current.currentTime = c.tSeconds;
                 }}
-                className="flex w-full items-center gap-2.5 rounded-(--radius-control) px-2 py-1.5 text-left text-[13px] text-(--el-text) hover:bg-(--el-surface)"
+                className="flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y) text-left text-[13px] text-(--el-text) hover:bg-(--el-surface)"
               >
                 <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-(--el-tint-lavender) text-[10px] font-bold text-(--el-text-strong)">
                   {i + 1}
@@ -125,7 +125,7 @@ export function AcceptanceReceiptProvenance({
   return (
     <div className={`flex flex-wrap gap-2 ${className ?? ''}`}>
       {evidence.commitSha ? (
-        <span className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-text-secondary)">
+        <span className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-(--spacing-control-x-8) py-(--spacing-control-y-2) font-mono text-[11px] text-(--el-text-secondary)">
           <GitCommitHorizontal className="h-3 w-3 text-(--el-text-faint)" aria-hidden />
           {evidence.commitSha.slice(0, 7)}
         </span>
@@ -135,7 +135,7 @@ export function AcceptanceReceiptProvenance({
           href={evidence.ciRunUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-link)"
+          className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-(--spacing-control-x-8) py-(--spacing-control-y-2) font-mono text-[11px] text-(--el-link)"
         >
           <ExternalLink className="h-3 w-3" aria-hidden />
           {t('provenance.ciRun')}
@@ -144,14 +144,14 @@ export function AcceptanceReceiptProvenance({
       {evidence.traceUrl ? (
         <a
           href={evidence.traceUrl}
-          className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-link)"
+          className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-(--spacing-control-x-8) py-(--spacing-control-y-2) font-mono text-[11px] text-(--el-link)"
         >
           <ExternalLink className="h-3 w-3" aria-hidden />
           {t('provenance.trace')}
         </a>
       ) : null}
       {evidence.producedByKey ? (
-        <span className="inline-flex items-center rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-text-secondary)">
+        <span className="inline-flex items-center rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-(--spacing-control-x-8) py-(--spacing-control-y-2) font-mono text-[11px] text-(--el-text-secondary)">
           {evidence.producedByKey}
         </span>
       ) : null}

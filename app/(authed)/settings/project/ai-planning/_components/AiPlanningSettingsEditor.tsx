@@ -776,7 +776,7 @@ function Callout({
     <div
       data-testid={testId}
       {...(role ? { role } : {})}
-      className={`flex gap-2.5 rounded-(--radius-card) border px-3.5 py-2.5 text-xs leading-relaxed ${surface}`}
+      className={`flex gap-2.5 rounded-(--radius-card) border px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs leading-relaxed ${surface}`}
     >
       <span className={`mt-px shrink-0 ${iconTone}`}>{icon}</span>
       <span>{children}</span>

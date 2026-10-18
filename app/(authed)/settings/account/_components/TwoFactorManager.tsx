@@ -549,7 +549,7 @@ export function TwoFactorManager({
                 {t('enrol.cantScanHelp')}
               </span>
             </div>
-            <div className="flex items-center gap-2 rounded-(--radius-input) border border-(--el-border) px-3 py-2">
+            <div className="flex items-center gap-2 rounded-(--radius-input) border border-(--el-border) px-(--spacing-control-x-12) py-(--spacing-control-y-8)">
               <code className="min-w-0 flex-1 font-mono text-xs break-all text-(--el-text)">
                 {secretFromUri(totpUri)}
               </code>
@@ -557,7 +557,7 @@ export function TwoFactorManager({
                 type="button"
                 aria-label={t('enrol.copyKey')}
                 onClick={() => void navigator.clipboard?.writeText(secretFromUri(totpUri))}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                className="inline-flex h-(--height-control-28) w-7 shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
               >
                 <Copy className="h-4 w-4" aria-hidden />
               </button>
@@ -608,7 +608,7 @@ export function TwoFactorManager({
       >
         <Modal.Body>
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 rounded-(--radius-input) border border-(--el-border) px-4 py-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 rounded-(--radius-input) border border-(--el-border) px-(--spacing-control-x-16) py-(--spacing-card-padding-16)">
               {(shownCodes ?? []).map((code) => (
                 <code key={code} className="font-mono text-sm text-(--el-text)">
                   {code}
@@ -791,7 +791,7 @@ function MethodRow({
   return (
     <div className="flex items-center gap-3.5 border-b border-(--el-border-soft) py-4 last:border-b-0">
       <span
-        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) ${
+        className={`inline-flex h-(--height-control) w-9 shrink-0 items-center justify-center rounded-(--radius-control) ${
           active
             ? 'bg-(--el-tint-mint) text-(--el-success)'
             : 'bg-(--el-muted) text-(--el-text-secondary)'
@@ -862,7 +862,9 @@ function Callout({
         : 'text-(--el-danger)';
   const Icon = tone === 'info' ? Info : AlertTriangle;
   return (
-    <div className={`flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3 ${bg}`}>
+    <div
+      className={`flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12) ${bg}`}
+    >
       <Icon className={`mt-px h-[18px] w-[18px] shrink-0 ${ink}`} aria-hidden />
       <p className="font-sans text-sm leading-relaxed text-(--el-text-strong)">{children}</p>
     </div>

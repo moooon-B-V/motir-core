@@ -127,7 +127,7 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
                 data-testid="guide-crumb-title"
                 className={`truncate font-semibold text-(--el-text) ${
                   view.titleEditedNow
-                    ? 'guide-title--edited rounded-(--radius-kbd) bg-(--el-diff-added) px-1'
+                    ? 'guide-title--edited rounded-(--radius-kbd) bg-(--el-diff-added) px-(--spacing-control-x-4)'
                     : ''
                 }`}
               >

@@ -55,7 +55,7 @@ export function BoardSkeleton() {
         {COLUMNS.map((col) => (
           <div
             key={col}
-            className="flex w-72 shrink-0 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3"
+            className="flex w-72 shrink-0 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding-12)"
           >
             <div className="flex items-center gap-2">
               <Bar w={84} />

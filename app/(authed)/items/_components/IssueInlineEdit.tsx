@@ -320,7 +320,7 @@ function EditTrigger({
         onOpen();
       }}
       className={cn(
-        'relative z-10 -mx-1 inline-flex max-w-full items-center rounded-(--radius-control) px-1 py-0.5 text-left hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60',
+        'relative z-10 -mx-1 inline-flex max-w-full items-center rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) text-left hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60',
         className,
       )}
     >

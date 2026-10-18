@@ -265,7 +265,7 @@ function PullRequestRow({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={t('development.openOnGithub')}
-        className="shrink-0 rounded-(--radius-control) p-1 text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
+        className="shrink-0 rounded-(--radius-control) p-(--spacing-control-x-4) text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
       >
         <ExternalLink className="h-4 w-4" aria-hidden />
       </a>

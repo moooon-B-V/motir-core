@@ -1951,7 +1951,7 @@ export function ProjectRoadmapCanvas({
             // With a LEVEL CHANGE BAND (MOTIR-6223) the bar STACKS: `breadcrumbRow`
             // becomes its first row, unchanged, and the band the second, inside the
             // same card. Without one it is the single-row bar, byte for byte.
-            className={`@container/canvas-bar pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 ${band ? 'flex-col items-stretch' : 'items-center gap-1'} rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)`}
+            className={`@container/canvas-bar pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 ${band ? 'flex-col items-stretch' : 'items-center gap-1'} rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding-8) py-(--spacing-card-padding-4) shadow-(--shadow-card)`}
           >
             {band ? (
               <>
@@ -2117,7 +2117,7 @@ export function ProjectRoadmapCanvas({
           {cyclingHint && (
             <span
               data-testid="locate-hint"
-              className="inline-flex h-9 items-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-3 font-mono text-xs font-semibold text-(--el-text-secondary) shadow-(--shadow-card)"
+              className="inline-flex h-(--height-control) items-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-(--spacing-chip-x) font-mono text-xs font-semibold text-(--el-text-secondary) shadow-(--shadow-card)"
             >
               {cyclingHint}
             </span>
@@ -2207,7 +2207,7 @@ export function ProjectRoadmapCanvas({
             drilled || searchable || fullScreenable || emphasis
               ? 'top-[calc(var(--height-control)+1.75rem)]'
               : 'top-3',
-            'rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)',
+            'rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) shadow-(--shadow-card)',
           ].join(' ')}
         >
           <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
@@ -2224,7 +2224,7 @@ export function ProjectRoadmapCanvas({
         <div
           data-testid="edge-legend"
           data-collapsed={legendCollapsed || undefined}
-          className="absolute bottom-[calc(4.25rem+var(--canvas-foot-inset,0px))] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
+          className="absolute bottom-[calc(4.25rem+var(--canvas-foot-inset,0px))] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) shadow-(--shadow-card)"
         >
           {/* COLLAPSE (MOTIR-3838). The chevron rides the panel's OWN heading row
               rather than being a bare pill beside it: the heading is the one thing
@@ -2409,7 +2409,7 @@ function Crumb({
       // Overflow stays the shipped answer: `truncate` + the native `title` tooltip — a
       // long chain ellipsises the last crumb BY DESIGN (not a second line, not a
       // smaller font).
-      className={`min-w-0 max-w-[18rem] truncate rounded-(--radius-control) px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
+      className={`min-w-0 max-w-[18rem] truncate rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-2) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
         active
           ? 'font-semibold text-(--el-text)'
           : 'text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)'

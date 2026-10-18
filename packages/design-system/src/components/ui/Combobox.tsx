@@ -791,7 +791,7 @@ export function Combobox<T extends string>({
       data-menu-surface=""
       style={inlineFixed ?? undefined}
       className={cn(
-        'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
+        'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-(--spacing-card-padding-4)',
         'shadow-(--shadow-elevated) border border-(--el-border)',
         // Lifted out of a scrolling clip (MOTIR-7655): positioned by
         // `inlineFixed`. Otherwise an absolute child of the trigger that flips
@@ -817,7 +817,7 @@ export function Combobox<T extends string>({
       // off-screen. Hidden until positioned to avoid a first-paint flash at 0,0.
       style={menuStyle ?? { position: 'fixed', visibility: 'hidden' }}
       className={cn(
-        'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
+        'z-50 w-max max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-(--spacing-card-padding-4)',
         'shadow-(--shadow-elevated) border border-(--el-border)',
       )}
     >

@@ -41,7 +41,9 @@ describe('ReadinessBadge — SOFT vs HARD (MOTIR-6377)', () => {
     expect(root.className).toContain('bg-(--el-tint-yellow)');
     expect(root.className).not.toContain('--el-tint-peach');
     // Same shape as the HARD shell — only the surface changes.
-    expect(root.className).toContain('rounded-(--radius-card) px-3.5 py-3');
+    expect(root.className).toContain(
+      'rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)',
+    );
     expect(glyph(container).getAttribute('class')).toContain('text-(--el-text-strong)');
     expect(glyph(container).getAttribute('class')).not.toContain('--el-warning');
 

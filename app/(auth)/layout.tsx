@@ -118,7 +118,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
             `has-…:[&_…]` pair so what it compiles to is not in doubt. */}
         <div
           id="auth-card"
-          className="flex flex-col gap-8 rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) [&:has([data-auth-wide])_[data-brand-lockup]]:hidden sm:px-10 has-[[data-auth-wide]]:py-5 sm:has-[[data-auth-wide]]:px-8 has-[[data-auth-wide=consent]]:px-4 has-[[data-auth-wide=consent]]:pb-0!"
+          className="flex flex-col gap-8 rounded-(--radius-card) bg-(--el-page-bg) px-(--spacing-card-padding) py-10 shadow-(--shadow-elevated) [&:has([data-auth-wide])_[data-brand-lockup]]:hidden sm:px-10 has-[[data-auth-wide]]:py-(--spacing-card-padding-16) sm:has-[[data-auth-wide]]:px-8 has-[[data-auth-wide=consent]]:px-(--spacing-card-padding-16) has-[[data-auth-wide=consent]]:pb-0!"
         >
           {/* Decorative glyph + visible wordmark, so the link takes its name
               from the text and carries NO `aria-label` — §8's "never both". */}

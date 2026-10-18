@@ -34,7 +34,7 @@ export function AccessCards({
             aria-checked={selected}
             data-testid={`access-card-${card.value}`}
             onClick={() => onChange(card.value)}
-            className={`flex items-start gap-2.5 rounded-(--radius-card) border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
+            className={`flex items-start gap-2.5 rounded-(--radius-card) border p-(--spacing-card-padding-12) text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
               selected
                 ? 'border-(--el-accent) bg-(--el-surface-soft)'
                 : 'border-(--el-border) hover:border-(--el-border-strong)'

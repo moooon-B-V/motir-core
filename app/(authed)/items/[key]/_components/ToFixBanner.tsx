@@ -63,7 +63,7 @@ const QUEUE_REASONS = new Set([
 ]);
 
 const code = (chunks: ReactNode) => (
-  <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1 font-mono text-xs font-semibold text-(--el-code-text)">
+  <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-control-x-4) font-mono text-xs font-semibold text-(--el-code-text)">
     {chunks}
   </code>
 );
@@ -225,7 +225,7 @@ export function ToFixBanner({
       role="status"
       data-testid="to-fix-banner"
       data-to-fix={reason}
-      className="flex items-start gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-danger-surface) px-3.5 py-3"
+      className="flex items-start gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-danger-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)"
     >
       {/* The tag's own disc — the banner and the tag are recognisably one signal. */}
       <span

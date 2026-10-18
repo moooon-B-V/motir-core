@@ -379,7 +379,7 @@ export function DashboardGrid({
       </header>
 
       {mode === 'edit' ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)">
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold text-(--el-text-strong)">
               {t('grid.layoutLabel')}
@@ -438,7 +438,7 @@ export function DashboardGrid({
           </Grid>
           <DragOverlay>
             {activeDrag ? (
-              <div className="rounded-(--radius-card) border border-(--el-accent) bg-(--el-page-bg) px-3 py-2 text-sm font-semibold text-(--el-text-secondary) shadow-(--shadow-elevated)">
+              <div className="rounded-(--radius-card) border border-(--el-accent) bg-(--el-page-bg) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm font-semibold text-(--el-text-secondary) shadow-(--shadow-elevated)">
                 {widgets.find((w) => w.id === activeDrag)
                   ? deriveTitleSafe(widgets.find((w) => w.id === activeDrag)!, t)
                   : null}
@@ -535,14 +535,14 @@ function EditColumn({ column, children }: { column: number; children: React.Reac
       role="group"
       aria-label={t('grid.columnAria', { n: column + 1 })}
       data-testid={`dashboard-column-${column}`}
-      className={`flex min-h-32 flex-col gap-4 rounded-(--radius-card) p-1 ${
+      className={`flex min-h-32 flex-col gap-4 rounded-(--radius-card) p-(--spacing-card-padding-4) ${
         isOver
           ? 'bg-(--el-droptarget-bg) outline-2 -outline-offset-2 outline-dashed outline-(--el-board-column-accent)'
           : ''
       }`}
     >
       {children}
-      <div className="rounded-(--radius-control) border border-dashed border-(--el-border-strong) px-3 py-3 text-center text-xs text-(--el-text-muted)">
+      <div className="rounded-(--radius-control) border border-dashed border-(--el-border-strong) px-(--spacing-control-x-12) py-(--spacing-card-padding-12) text-center text-xs text-(--el-text-muted)">
         {t('grid.dropHere')}
       </div>
     </div>
@@ -588,7 +588,7 @@ function EmptyGrid({
 }) {
   const t = useTranslations('dashboards');
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-(--radius-card) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-6 py-14 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-(--radius-card) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding) py-14 text-center">
       <LayoutDashboard className="size-7 text-(--el-text-faint)" aria-hidden />
       <h3 className="font-serif text-base font-semibold text-(--el-text-strong)">
         {owner ? t('grid.emptyTitle') : t('grid.emptyViewerTitle')}
@@ -637,7 +637,7 @@ function LayoutPicker({
             aria-pressed={selected}
             data-testid={`layout-${l}`}
             onClick={() => onChange(l)}
-            className={`inline-flex h-7 items-center gap-0.5 rounded-(--radius-control) px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
+            className={`inline-flex h-(--height-control-28) items-center gap-0.5 rounded-(--radius-control) px-(--spacing-control-x-8) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
               selected ? 'bg-(--el-accent)' : 'hover:bg-(--el-muted)'
             }`}
           >

@@ -161,7 +161,7 @@ export function ColumnActionsMenu({
                   <p
                     role="alert"
                     data-testid={`board-wip-error-${columnId}`}
-                    className="mt-1.5 rounded-(--radius-control) bg-(--el-tint-rose) px-2 py-1 text-[11.5px] text-(--el-text-strong)"
+                    className="mt-1.5 rounded-(--radius-control) bg-(--el-tint-rose) px-(--spacing-control-x-8) py-(--spacing-control-y-4) text-[11.5px] text-(--el-text-strong)"
                   >
                     {error}
                   </p>

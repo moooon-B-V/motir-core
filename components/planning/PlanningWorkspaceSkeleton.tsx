@@ -64,7 +64,7 @@ export function PlanningCanvasSkeleton() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="flex h-32 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
+              className="flex h-32 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding-16)"
             >
               <Block className="h-4 w-16" />
               <Block className="h-4 w-full" />
@@ -95,7 +95,7 @@ function PlanningRailSkeleton() {
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4">
         <Block className="h-16 w-full rounded-(--radius-card)" />
-        <Block className="h-9 w-3/4 rounded-(--radius-card)" />
+        <Block className="h-(--height-control) w-3/4 rounded-(--radius-card)" />
       </div>
       <div className="border-t border-(--el-border-soft) px-4 py-4">
         <Block className="h-20 w-full rounded-(--radius-card)" />

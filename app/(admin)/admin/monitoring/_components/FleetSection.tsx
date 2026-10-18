@@ -652,7 +652,7 @@ function CardHead({
       <div className="flex min-w-0 items-center gap-2">
         <span
           aria-hidden
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
+          className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
         >
           {icon}
         </span>
@@ -790,7 +790,7 @@ function Avatar({ name }: { name: string }) {
 
 function MiniStat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) p-3">
+    <div className="flex flex-col gap-1 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-page-bg) p-(--spacing-card-padding-12)">
       <span className="font-serif text-xl text-(--el-text)">{value}</span>
       <span className="font-sans text-xs text-(--el-text-secondary)">{label}</span>
     </div>

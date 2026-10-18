@@ -54,7 +54,7 @@ export function ErrorReference({ digest, label, copyLabel, copiedLabel }: ErrorR
           type="button"
           onClick={copy}
           aria-label={copyLabel}
-          className="text-(--el-text-secondary) hover:bg-(--el-surface) inline-flex h-7 min-w-7 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="text-(--el-text-secondary) hover:bg-(--el-surface) inline-flex h-(--height-control-28) min-w-7 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <Copy className="h-3 w-3" aria-hidden />
         </button>

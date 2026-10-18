@@ -54,7 +54,7 @@ export function LegalDocumentRow({
   return (
     <li className="flex items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding)">
       <span
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg)"
+        className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg)"
         aria-hidden
       >
         <FileText className="h-4 w-4" />
@@ -62,7 +62,7 @@ export function LegalDocumentRow({
       <span className="flex min-w-0 flex-col gap-1">
         <span className="flex flex-wrap items-center gap-2 font-sans text-sm font-medium text-(--el-text)">
           {title}
-          <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1.5 py-0.5 font-mono text-xs whitespace-nowrap text-(--el-code-text)">
+          <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-control-x-6) py-(--spacing-control-y-2) font-mono text-xs whitespace-nowrap text-(--el-code-text)">
             {versionLabel}
           </code>
         </span>

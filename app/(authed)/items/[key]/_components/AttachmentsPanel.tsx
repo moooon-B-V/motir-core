@@ -350,7 +350,7 @@ export function AttachmentsPanel({
                       setUploadErrors((current) => current.filter((item) => item.key !== error.key))
                     }
                     aria-label={t('dismissErrorAria', { name: error.filename })}
-                    className="text-(--el-text-secondary) hover:text-(--el-text) ml-auto shrink-0 rounded-(--radius-control) p-0.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    className="text-(--el-text-secondary) hover:text-(--el-text) ml-auto shrink-0 rounded-(--radius-control) p-(--spacing-control-x-2) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                   >
                     <X className="h-3 w-3" aria-hidden />
                   </button>
@@ -749,7 +749,7 @@ function DeleteControl({
             {t('deleteConfirm', { name: attachment.filename })}
           </p>
           {error ? (
-            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-2.5 py-1.5 font-sans text-xs">
+            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs">
               {error}
             </p>
           ) : null}

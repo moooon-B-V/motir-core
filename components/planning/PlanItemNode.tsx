@@ -274,7 +274,7 @@ export const PlanItemNode = memo(function PlanItemNode({
               <span
                 data-testid="stale-badge"
                 title={staleReasons.join(' · ')}
-                className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-yellow) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-text-strong)"
+                className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-semibold text-(--el-text-strong)"
               >
                 <AlertTriangle className="size-3" aria-hidden="true" />
                 {t('staleBadge')}

@@ -770,7 +770,7 @@ function Callout({
   return (
     <div
       className={cn(
-        'flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-2.5 font-sans text-sm leading-normal',
+        'flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) font-sans text-sm leading-normal',
         surface,
       )}
     >

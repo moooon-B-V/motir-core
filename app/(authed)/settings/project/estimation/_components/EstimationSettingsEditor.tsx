@@ -169,7 +169,7 @@ export function EstimationSettingsEditor({
       <div className="flex flex-col gap-5 px-(--spacing-card-padding) py-5">
         {!isAdmin ? (
           <div
-            className="bg-(--el-surface) border-(--el-border) flex items-center gap-2.5 rounded-(--radius-control) border px-3 py-2 text-xs text-(--el-text-secondary)"
+            className="bg-(--el-surface) border-(--el-border) flex items-center gap-2.5 rounded-(--radius-control) border px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-xs text-(--el-text-secondary)"
             data-testid="estimation-readonly-banner"
           >
             <Lock className="text-(--el-text-faint) size-3.5 shrink-0" aria-hidden />
@@ -253,7 +253,7 @@ function DeckPreview({ values }: { values: number[] }) {
       {values.map((v, i) => (
         <span
           key={`${v}-${i}`}
-          className="bg-(--el-surface) border-(--el-border) inline-flex h-7 min-w-[30px] items-center justify-center rounded-(--radius-control) border px-2 font-mono text-xs font-semibold text-(--el-text)"
+          className="bg-(--el-surface) border-(--el-border) inline-flex h-(--height-control-28) min-w-[30px] items-center justify-center rounded-(--radius-control) border px-(--spacing-control-x-8) font-mono text-xs font-semibold text-(--el-text)"
         >
           {v}
         </span>
@@ -309,7 +309,7 @@ function CustomScaleEditor({
         {values.map((v, i) => (
           <span
             key={`${v}-${i}`}
-            className="bg-(--el-surface) border-(--el-border) inline-flex h-7 items-center gap-1 rounded-(--radius-control) border pr-1 pl-2 font-mono text-xs font-semibold text-(--el-text)"
+            className="bg-(--el-surface) border-(--el-border) inline-flex h-(--height-control-28) items-center gap-1 rounded-(--radius-control) border pr-(--spacing-control-x-4) pl-(--spacing-control-x-8) font-mono text-xs font-semibold text-(--el-text)"
           >
             {v}
             {isAdmin ? (
@@ -360,7 +360,7 @@ function CustomScaleEditor({
                   setInvalid(false);
                 }
               }}
-              className="border-(--el-accent) bg-(--el-page-bg) h-7 w-16 rounded-(--radius-control) border px-2 font-mono text-xs text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              className="border-(--el-accent) bg-(--el-page-bg) h-(--height-control-28) w-16 rounded-(--radius-control) border px-(--spacing-control-x-8) font-mono text-xs text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             />
           </span>
         ) : isAdmin ? (
@@ -369,7 +369,7 @@ function CustomScaleEditor({
             onClick={() => setAdding(true)}
             aria-label={t('estimation.addValueAria')}
             data-testid="estimation-add"
-            className="border-(--el-border) text-(--el-text-muted) hover:bg-(--el-muted) hover:text-(--el-text) inline-flex h-7 items-center justify-center rounded-(--radius-control) border border-dashed px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+            className="border-(--el-border) text-(--el-text-muted) hover:bg-(--el-muted) hover:text-(--el-text) inline-flex h-(--height-control-28) items-center justify-center rounded-(--radius-control) border border-dashed px-(--spacing-control-x-8) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
           >
             <Plus className="size-3.5" aria-hidden />
           </button>

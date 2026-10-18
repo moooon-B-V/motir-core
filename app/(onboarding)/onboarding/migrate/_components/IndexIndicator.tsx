@@ -207,7 +207,7 @@ export function IndexIndicator({ runId, status, latestImport, onRetried }: Index
             </p>
             <div
               data-testid="migrate-index-detail-import"
-              className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-2.5"
+              className="flex items-center gap-3 rounded-(--radius-control) border border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y-8)"
             >
               <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">
                 {IMPORT_SOURCE_NAME[latestImport.source] ?? latestImport.source}
@@ -334,7 +334,7 @@ function RepoRow({
       data-repo-ref={repo.repoRef}
       data-status={repo.status}
       className={cn(
-        'rounded-(--radius-control) border px-(--spacing-control-x) py-2.5',
+        'rounded-(--radius-control) border px-(--spacing-control-x) py-(--spacing-control-y-8)',
         failed ? 'border-(--el-danger-on-surface)' : 'border-(--el-border-soft)',
       )}
     >

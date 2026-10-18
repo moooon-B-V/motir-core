@@ -175,7 +175,7 @@ export function PlanNarration({
       ) : null}
       <ol
         data-testid="plan-narration-groups"
-        className="flex flex-col gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+        className="flex flex-col gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
       >
         {groups.map((group, i) => (
           <NarrationGroupRow

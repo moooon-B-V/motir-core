@@ -327,7 +327,7 @@ export function EditableRailField({
                 : t('quickViewEditField', { field: label })
             }
             aria-expanded={isEditing}
-            className="ml-auto inline-flex rounded-(--radius-control) p-0.5 text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="ml-auto inline-flex rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <ChevronDown
               className={`h-3.5 w-3.5 transition-transform ${isEditing ? 'rotate-180' : ''}`}
@@ -376,7 +376,7 @@ export function EditableRailField({
 export function RailStaleNotice() {
   const t = useTranslations('issueViews');
   return (
-    <div className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2.5 py-2 text-[11.5px] leading-relaxed text-(--el-text-secondary)">
+    <div className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding-8) py-(--spacing-card-padding-8) text-[11.5px] leading-relaxed text-(--el-text-secondary)">
       <CircleAlert className="mt-px h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
       <span>{t('quickViewStaleReloaded')}</span>
     </div>

@@ -214,7 +214,7 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
 
   return (
     <>
-      <div className="flex items-center gap-2 rounded-t-(--radius-input) border border-b-0 border-(--el-border) bg-(--el-surface-soft) px-2.5 py-1.5 text-xs text-(--el-text-secondary)">
+      <div className="flex items-center gap-2 rounded-t-(--radius-input) border border-b-0 border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary)">
         <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
         <span className="truncate font-mono">{asset.sourcePath}</span>
         <a
@@ -229,8 +229,8 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
       </div>
 
       {state === 'failed' ? (
-        <div className="flex gap-3.5 rounded-b-(--radius-input) bg-(--el-tint-peach) p-4">
-          <span className="flex h-9 w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-page-bg)">
+        <div className="flex gap-3.5 rounded-b-(--radius-input) bg-(--el-tint-peach) p-(--spacing-control-x-16)">
+          <span className="flex h-(--height-control) w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-page-bg)">
             <FileWarning className="h-[18px] w-[18px] text-(--el-text-strong)" aria-hidden />
           </span>
           <div className="min-w-0">
@@ -352,8 +352,8 @@ export function DesignResultPanel({
   // design, so an empty panel is often CORRECT; the design-card copy says so.
   if (!evidence) {
     return (
-      <div className="flex gap-3.5 rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) p-4">
-        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-page-bg)">
+      <div className="flex gap-3.5 rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-control-x-16)">
+        <span className="flex h-(--height-control) w-9 flex-none items-center justify-center rounded-(--radius-control) bg-(--el-page-bg)">
           <ImageOff className="h-[18px] w-[18px] text-(--el-text-muted)" aria-hidden />
         </span>
         <div className="min-w-0">

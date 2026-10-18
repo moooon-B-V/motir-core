@@ -39,7 +39,7 @@ export async function VisitorTopNav({
           <a
             href={landingHref}
             aria-label={tv('brandLabel', { project: projectName })}
-            className="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) md:flex"
+            className="hidden h-(--height-control-32) w-8 flex-none items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) md:flex"
           >
             <BrandMark variant="mark" size={24} />
           </a>

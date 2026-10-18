@@ -264,7 +264,7 @@ export function RefusalVerdictGroup({
           return (
             <label
               key={option.value}
-              className={`flex cursor-pointer gap-3 rounded-(--radius-card) border px-3 py-2.5 hover:bg-(--el-surface) ${
+              className={`flex cursor-pointer gap-3 rounded-(--radius-card) border px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) hover:bg-(--el-surface) ${
                 selected
                   ? 'border-(--el-accent) bg-(--el-surface-soft)'
                   : refused
@@ -363,7 +363,7 @@ export function RefusalVerdictChip({
   if (!key) return null;
   return (
     <span
-      className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-2 py-0.5 font-semibold text-(--el-text-strong)"
+      className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x-8) py-(--spacing-chip-y) font-semibold text-(--el-text-strong)"
       data-testid="refusal-verdict"
     >
       {t(key)}

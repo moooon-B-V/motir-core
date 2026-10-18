@@ -21,7 +21,7 @@ export async function ConnectAiGate() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-(--el-page-bg) px-6 text-(--el-text)">
       <Link href="/" className="mb-8 flex items-center gap-2 font-sans text-base font-semibold">
-        <span className="flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
+        <span className="flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
           <Sparkles className="h-4 w-4" aria-hidden />
         </span>
         Motir
@@ -31,7 +31,7 @@ export async function ConnectAiGate() {
         className="flex max-w-[28rem] items-start gap-3 shadow-(--shadow-card)"
         role="status"
       >
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-warning)">
+        <span className="mt-0.5 flex h-(--height-control) w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-warning)">
           <Plug className="h-5 w-5" aria-hidden />
         </span>
         <div>

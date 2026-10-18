@@ -227,7 +227,7 @@ export function EditHowToTestDoor() {
     <button
       type="button"
       onClick={() => write.openForm('edit')}
-      className="ml-auto inline-flex items-center gap-1.5 rounded-(--radius-control) px-1.5 py-1 font-sans text-xs font-semibold text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      className="ml-auto inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-4) font-sans text-xs font-semibold text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       <Pencil className="h-3.5 w-3.5" aria-hidden />
       {t('edit')}

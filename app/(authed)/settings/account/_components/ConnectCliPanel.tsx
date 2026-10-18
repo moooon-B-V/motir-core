@@ -149,7 +149,7 @@ function Step({
       <span className="mb-1.5 block font-sans text-xs font-semibold tracking-wide text-(--el-text-muted) uppercase">
         {caption}
       </span>
-      <div className="flex h-(--height-input) items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-2 pl-(--spacing-input-x)">
+      <div className="flex h-(--height-input) items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-control-x-8) pl-(--spacing-input-x)">
         <code className="min-w-0 flex-1 truncate font-mono text-sm text-(--el-code-text)">
           {command}
         </code>

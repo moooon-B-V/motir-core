@@ -251,7 +251,7 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
     <div data-app-shell="" className="relative flex h-dvh overflow-hidden bg-(--el-page-bg)">
       <a
         href="#admin-main"
-        className="sr-only z-[100] focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:text-(--el-text) focus:shadow-(--shadow-elevated) focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color)"
+        className="sr-only z-[100] focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-(--spacing-control-x-16) focus:py-(--spacing-control-y-8) focus:font-sans focus:text-sm focus:text-(--el-text) focus:shadow-(--shadow-elevated) focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color)"
       >
         Skip to content
       </a>
@@ -297,7 +297,7 @@ function AdminBrand({ brand, area }: { brand: string; area: string }) {
     <div className="flex items-center gap-2 px-(--spacing-control-x) py-(--spacing-control-y)">
       <span
         aria-hidden
-        className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-text) font-sans text-sm font-semibold text-(--el-text-inverted)"
+        className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-text) font-sans text-sm font-semibold text-(--el-text-inverted)"
       >
         M
       </span>
@@ -385,7 +385,7 @@ function AdminTopBar({
       <span className="flex items-center gap-2">
         <span
           aria-hidden
-          className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-page-bg) text-(--el-info)"
+          className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-page-bg) text-(--el-info)"
         >
           <Shield className="h-4 w-4" />
         </span>

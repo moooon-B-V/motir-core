@@ -452,7 +452,7 @@ export function ConsentScreen({
                           more convincing lie. The tile is the name's first letter. */}
                       <span
                         aria-hidden
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) font-sans text-sm font-semibold text-(--el-card-icon-fg)"
+                        className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) font-sans text-sm font-semibold text-(--el-card-icon-fg)"
                       >
                         {app.trim().charAt(0).toUpperCase() || '?'}
                       </span>
@@ -711,7 +711,7 @@ function ConsentActionBar({ decision, children }: { decision: ReactNode; childre
     <div
       ref={ref}
       data-consent-bar
-      className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2.5 rounded-b-(--radius-card) border-t border-(--el-border) bg-(--el-page-bg) px-4 pt-3 pb-4 sm:-mx-8 sm:px-8 sm:pb-5 lg:flex-row lg:items-center lg:gap-5"
+      className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2.5 rounded-b-(--radius-card) border-t border-(--el-border) bg-(--el-page-bg) px-(--spacing-card-padding-16) pt-(--spacing-card-padding-12) pb-(--spacing-card-padding-16) sm:-mx-8 sm:px-8 sm:pb-(--spacing-card-padding-16) lg:flex-row lg:items-center lg:gap-5"
     >
       <div className="min-w-0 lg:flex-1">{decision}</div>
       {children}

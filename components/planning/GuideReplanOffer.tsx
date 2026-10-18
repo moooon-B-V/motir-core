@@ -93,7 +93,7 @@ export function GuideReplanOffer({
   if (state === 'superseded') {
     return (
       <p
-        className="rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-xs text-(--el-text-secondary)"
+        className="rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs text-(--el-text-secondary)"
         data-testid="guide-offer"
         data-offer-state="superseded"
       >
@@ -119,7 +119,7 @@ export function GuideReplanOffer({
       <p className="text-xs font-semibold text-(--el-text-secondary)">{t('label')}</p>
 
       <div
-        className={`rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-input-x) py-2 text-sm text-(--el-text) ${
+        className={`rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-input-x) py-(--spacing-control-y-8) text-sm text-(--el-text) ${
           long && !expanded ? 'max-h-32 overflow-hidden' : ''
         }`}
         data-testid="guide-offer-request"
@@ -131,7 +131,7 @@ export function GuideReplanOffer({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="self-start rounded-(--radius-control) px-1 text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          className="self-start rounded-(--radius-control) px-(--spacing-control-x-4) text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
           data-testid="guide-offer-show-all"
         >
           {expanded ? t('showLess') : t('showAll')}

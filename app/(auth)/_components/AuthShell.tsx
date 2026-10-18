@@ -77,7 +77,7 @@ export function AuthShell({
  */
 export function CodeChip({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1.5 py-0.5 font-mono text-[0.92em] whitespace-nowrap text-(--el-code-text)">
+    <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-control-x-6) py-(--spacing-control-y-2) font-mono text-[0.92em] whitespace-nowrap text-(--el-code-text)">
       {children}
     </code>
   );

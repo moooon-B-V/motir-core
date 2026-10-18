@@ -96,7 +96,7 @@ export function DiscoveryChatRail({
         {working && (
           <div className="flex items-start gap-2">
             <Avatar role="assistant" />
-            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-secondary)">
+            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-secondary)">
               <Spinner size="sm" aria-hidden="true" />
               {working.phase === 'drafting' ? t('drafting') : t('working')}
             </div>
@@ -106,7 +106,7 @@ export function DiscoveryChatRail({
         {/* A non-paywall stream error keeps the generic banner; an out-of-credits
             refusal becomes the paywall below instead. */}
         {error && !reactiveOutOfCredits && (
-          <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)">
+          <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)">
             <p>{t('errorBody')}</p>
             <button
               type="button"
@@ -204,8 +204,8 @@ function Bubble({ turn }: { turn: ChatTurn }) {
       <div
         className={
           isUser
-            ? 'rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)'
-            : 'rounded-(--radius-card) bg-(--el-chat-bubble-ai) px-3 py-2 text-sm text-(--el-text)'
+            ? 'rounded-(--radius-card) bg-(--el-chat-bubble-user) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-accent-text)'
+            : 'rounded-(--radius-card) bg-(--el-chat-bubble-ai) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text)'
         }
       >
         {turn.text}

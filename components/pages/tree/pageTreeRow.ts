@@ -76,7 +76,7 @@ export const TREE_ROW_CLASS =
  * transparent border the SELECTED row fills, and the smaller sidebar type.
  */
 export const TREE_ROW_COMPACT_CLASS =
-  'relative flex items-center gap-1.5 pr-2 text-[13.5px] text-(--el-text) rounded-(--radius-control) border border-transparent hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-inset';
+  'relative flex items-center gap-1.5 pr-(--spacing-control-x-8) text-[13.5px] text-(--el-text) rounded-(--radius-control) border border-transparent hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-inset';
 
 /**
  * The SELECTED page row — `Sidebar`'s active-row treatment (the rail's
