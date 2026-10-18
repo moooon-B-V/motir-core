@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "속도 — Sprint별 약정 대비 완료 {statistic}. 평균 완료: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "이 Sprint 보고서를 사용할 수 없습니다.",
-      "backToBacklog": "백로그로 돌아가기"
+      "backToBacklog": "백로그로 돌아가기",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "sprintSearch": "Search sprints…",
+      "noSprintsTitle": "No sprints to report on yet",
+      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
     },
     "aiPlan": {
       "cta": "Motir로 Sprint 계획하기",
@@ -5136,7 +5142,18 @@
       "noSprintsBody": "백로그에서 Sprint를 시작하면 Sprint 그래프를 볼 수 있습니다."
     },
     "velocity": {
-      "title": "속도 차트"
+      "title": "속도 차트",
+      "endingAtLabel": "Ending at",
+      "endingAtHint": "A completed sprint. Blank = the latest.",
+      "latest": "Latest completed",
+      "latestNamed": "Latest completed — {name}",
+      "endingAtSearch": "Search sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Fewer sprints",
+      "countMore": "More sprints",
+      "countHint": "3 to 52 · default 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Loading the velocity chart"
     },
     "controls": {
       "periodLabel": "기간 단위",

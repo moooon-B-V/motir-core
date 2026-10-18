@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "速率 — 每个Sprint的承诺与已完成{statistic}。平均完成：{average}。",
       "velocityTableSprint": "Sprint",
       "notFound": "此 Sprint 报告不可用。",
-      "backToBacklog": "返回待办列表"
+      "backToBacklog": "返回待办列表",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "sprintSearch": "Search sprints…",
+      "noSprintsTitle": "No sprints to report on yet",
+      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
     },
     "aiPlan": {
       "cta": "用Motir规划Sprint",
@@ -5136,7 +5142,18 @@
       "noSprintsBody": "从待办开始一个 Sprint 即可查看其 Sprint 图表。"
     },
     "velocity": {
-      "title": "速度图"
+      "title": "速度图",
+      "endingAtLabel": "Ending at",
+      "endingAtHint": "A completed sprint. Blank = the latest.",
+      "latest": "Latest completed",
+      "latestNamed": "Latest completed — {name}",
+      "endingAtSearch": "Search sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Fewer sprints",
+      "countMore": "More sprints",
+      "countHint": "3 to 52 · default 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Loading the velocity chart"
     },
     "controls": {
       "periodLabel": "周期",

@@ -8,7 +8,8 @@ import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { CycleGraphDto } from '@/lib/dto/reports';
 import { ReportPageChrome } from '../_components/ReportPageChrome';
-import { BurndownReport, type BurndownPickerSprint } from '../_components/BurndownReport';
+import { BurndownReport } from '../_components/BurndownReport';
+import { pickReportSprints } from '@/lib/reports/sprintPicker';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The standalone Burndown report page (bug-reports-hub-agile-cards-collapse) —
@@ -43,11 +44,9 @@ export default async function BurndownReportPage({
 
   // A burndown needs a STARTED sprint (a planned sprint has no window — the
   // service 409s). The picker offers active + completed only; the default is the
-  // active sprint, else the most recently completed (the list is oldest→newest,
-  // so `.at(-1)` of the completes is the most recent — the hub's `agileHref` logic).
-  const active = sprints.find((s) => s.state === 'active') ?? null;
-  const completed = sprints.filter((s) => s.state === 'complete');
-  const defaultSprint = active ?? completed.at(-1) ?? null;
+  // active sprint, else the most recently completed (`pickReportSprints` — the
+  // same rule the Sprint report page uses).
+  const { pickerSprints, defaultSprint } = pickReportSprints(sprints);
 
   if (!defaultSprint) {
     return (
@@ -64,12 +63,6 @@ export default async function BurndownReportPage({
       </ReportPageChrome>
     );
   }
-
-  // The picker list: active first, then completed newest→oldest.
-  const pickerSprints: BurndownPickerSprint[] = [
-    ...(active ? [active] : []),
-    ...[...completed].reverse(),
-  ].map((s) => ({ id: s.id, name: s.name, state: s.state }));
 
   const requested = searchParams ? (await searchParams).sprint : undefined;
   const selected = pickerSprints.find((s) => s.id === requested) ?? defaultSprint;

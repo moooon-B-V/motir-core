@@ -11353,5 +11353,22 @@
   "titleTranslation.noCredit": "Titles stay in their original language because your organization has no credit left.",
   "titleTranslation.pendingMark": "Translating",
   "titleTranslation.showOriginal": "Show original",
-  "titleTranslation.showTranslation": "Show translation"
+  "titleTranslation.showTranslation": "Show translation",
+  "backlog.sprintReport.sprintLabel": "",
+  "backlog.sprintReport.activeGroup": "",
+  "backlog.sprintReport.completedGroup": "",
+  "backlog.sprintReport.sprintSearch": "",
+  "backlog.sprintReport.noSprintsTitle": "",
+  "backlog.sprintReport.noSprintsBody": "",
+  "reports.velocity.endingAtLabel": "",
+  "reports.velocity.endingAtHint": "",
+  "reports.velocity.latest": "",
+  "reports.velocity.latestNamed": "",
+  "reports.velocity.endingAtSearch": "",
+  "reports.velocity.countLabel": "",
+  "reports.velocity.countFewer": "",
+  "reports.velocity.countMore": "",
+  "reports.velocity.countHint": "",
+  "reports.velocity.rangeSubLine": "",
+  "reports.velocity.chartLoading": ""
 }

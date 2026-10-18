@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "Prędkość — zobowiązanie a ukończone ({statistic}) dla każdego Sprintu. Średnio ukończono: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "Ten raport Sprintu jest niedostępny.",
-      "backToBacklog": "Wróć do Backlogu"
+      "backToBacklog": "Wróć do Backlogu",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "sprintSearch": "Search sprints…",
+      "noSprintsTitle": "No sprints to report on yet",
+      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
     },
     "aiPlan": {
       "cta": "Zaplanuj Sprinty z Motir",
@@ -5136,7 +5142,18 @@
       "noSprintsBody": "Rozpocznij Sprint z Backlogu, aby zobaczyć jego wykres."
     },
     "velocity": {
-      "title": "Wykres prędkości"
+      "title": "Wykres prędkości",
+      "endingAtLabel": "Ending at",
+      "endingAtHint": "A completed sprint. Blank = the latest.",
+      "latest": "Latest completed",
+      "latestNamed": "Latest completed — {name}",
+      "endingAtSearch": "Search sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Fewer sprints",
+      "countMore": "More sprints",
+      "countHint": "3 to 52 · default 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Loading the velocity chart"
     },
     "controls": {
       "periodLabel": "Okres",

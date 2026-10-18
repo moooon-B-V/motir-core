@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "ベロシティ — Sprint ごとのコミットと完了の{statistic}。平均完了: {average}。",
       "velocityTableSprint": "Sprint",
       "notFound": "この Sprint レポートは利用できません。",
-      "backToBacklog": "バックログに戻る"
+      "backToBacklog": "バックログに戻る",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "sprintSearch": "Search sprints…",
+      "noSprintsTitle": "No sprints to report on yet",
+      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
     },
     "aiPlan": {
       "cta": "Motir で Sprint を計画",
@@ -5136,7 +5142,18 @@
       "noSprintsBody": "バックログから Sprint を開始すると、その Sprint グラフが表示されます。"
     },
     "velocity": {
-      "title": "ベロシティチャート"
+      "title": "ベロシティチャート",
+      "endingAtLabel": "Ending at",
+      "endingAtHint": "A completed sprint. Blank = the latest.",
+      "latest": "Latest completed",
+      "latestNamed": "Latest completed — {name}",
+      "endingAtSearch": "Search sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Fewer sprints",
+      "countMore": "More sprints",
+      "countHint": "3 to 52 · default 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Loading the velocity chart"
     },
     "controls": {
       "periodLabel": "期間の単位",

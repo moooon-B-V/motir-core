@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "Velocity — toegezegde tegenover afgeronde {statistic} per Sprint. Gemiddeld afgerond: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "Dit sprintrapport is niet beschikbaar.",
-      "backToBacklog": "Terug naar backlog"
+      "backToBacklog": "Terug naar backlog",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "sprintSearch": "Search sprints…",
+      "noSprintsTitle": "No sprints to report on yet",
+      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
     },
     "aiPlan": {
       "cta": "Sprints plannen met Motir",
@@ -5136,7 +5142,18 @@
       "noSprintsBody": "Start een Sprint vanuit de backlog om de sprintgrafiek ervan te zien."
     },
     "velocity": {
-      "title": "Velocitygrafiek"
+      "title": "Velocitygrafiek",
+      "endingAtLabel": "Ending at",
+      "endingAtHint": "A completed sprint. Blank = the latest.",
+      "latest": "Latest completed",
+      "latestNamed": "Latest completed — {name}",
+      "endingAtSearch": "Search sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Fewer sprints",
+      "countMore": "More sprints",
+      "countHint": "3 to 52 · default 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Loading the velocity chart"
     },
     "controls": {
       "periodLabel": "Periode",

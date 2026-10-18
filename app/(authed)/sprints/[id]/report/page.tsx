@@ -16,6 +16,9 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
 import { buildStatusByKey } from '@/app/(authed)/backlog/_components/backlogShared';
 import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { pickReportSprints } from '@/lib/reports/sprintPicker';
+import { SprintReportSprintPicker } from './_components/SprintReportSprintPicker';
 
 // The standalone sprint-report page (Story 4.4 · Subtask 4.4.6) — the report
 // reachable for a CLOSED sprint after the complete-modal success state has gone
@@ -46,11 +49,38 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
   // Title translation (Story MOTIR-7738 · MOTIR-8834), started beside the page's reads.
   const titleContext = startSurfaceTranslation(ctx.project, ctx);
 
-  // The sprint must belong to the active project — keeps the status-pill workflow
-  // correct and tenant-gates the lookup (a foreign sprint 404s).
+  // The picker offers the project's STARTED sprints (active, then completed newest
+  // first — Burndown's list, `pickReportSprints`). A path id that is not one of
+  // them (another project's sprint, a made-up id, a planned sprint that never
+  // started) opens the default sprint instead of a 404 — and says nothing about
+  // the id it was given (no existence leak). The redirect keeps the address bar
+  // naming the sprint actually shown.
   const sprints = await sprintsService.listByProject(ctx.projectId, accessCtx);
-  const sprint = sprints.find((s) => s.id === id);
-  if (!sprint) notFound();
+  const { pickerSprints, defaultSprint } = pickReportSprints(sprints);
+  if (!defaultSprint) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Link
+          href="/backlog"
+          className="inline-flex w-fit items-center gap-1 text-sm text-(--el-text-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          {t('sprintReport.backToBacklog')}
+        </Link>
+        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+          {t('sprintReport.heading')}
+        </h1>
+        <EmptyState
+          title={t('sprintReport.noSprintsTitle')}
+          description={t('sprintReport.noSprintsBody')}
+        />
+      </div>
+    );
+  }
+  const sprint = pickerSprints.some((p) => p.id === id)
+    ? sprints.find((s) => s.id === id)
+    : undefined;
+  if (!sprint) redirect(`/sprints/${defaultSprint.id}/report`);
 
   // The report's analytics reads, fetched server-side (loading/error ride the
   // page scaffold — Server Component): the velocity (4.6.4) and the sprint CYCLE
@@ -70,7 +100,13 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
       throw err;
     }),
   ]);
-  if (!report) notFound();
+  // The membership check above already vouched for the sprint, so a vanished
+  // report is a race; fall back to the default sprint (unless it IS the default —
+  // redirecting to itself would loop).
+  if (!report) {
+    if (id !== defaultSprint.id) redirect(`/sprints/${defaultSprint.id}/report`);
+    notFound();
+  }
 
   const statusByKey = buildStatusByKey(workflow.statuses);
 
@@ -89,6 +125,7 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
             <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
               {t('sprintReport.title', { name: sprint.name })}
             </h1>
+            <SprintReportSprintPicker sprints={pickerSprints} selectedSprintId={sprint.id} />
           </div>
           <SurfaceShowOriginalSwitch />
         </div>

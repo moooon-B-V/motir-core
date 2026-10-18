@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "Velocity — committed vs completed {statistic} per sprint. Average completed: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "This sprint report isn't available.",
-      "backToBacklog": "Back to backlog"
+      "backToBacklog": "Back to backlog",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Active",
+      "completedGroup": "Completed",
+      "sprintSearch": "Search sprints…",
+      "noSprintsTitle": "No sprints to report on yet",
+      "noSprintsBody": "Start a sprint from the backlog and its report shows here."
     },
     "aiPlan": {
       "cta": "Plan sprints with Motir",
