@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "速率 — 每个Sprint的承诺与已完成{statistic}。平均完成：{average}。",
       "velocityTableSprint": "Sprint",
       "notFound": "此 Sprint 报告不可用。",
-      "backToBacklog": "返回待办列表"
+      "backToBacklog": "返回待办列表",
+      "sprintLabel": "Sprint",
+      "activeGroup": "进行中",
+      "completedGroup": "已完成",
+      "sprintSearch": "搜索 Sprint…",
+      "noSprintsTitle": "尚无可报告的 Sprint",
+      "noSprintsBody": "从待办列表开始一个 Sprint，其报告将显示在这里。"
     },
     "aiPlan": {
       "cta": "用Motir规划Sprint",
@@ -5112,7 +5118,16 @@
       "chartDesc": "最近 {count} 个区间内每{period}的新建与解决对比。新建共 {created}，已解决共 {resolved}；积压增加处填充红色，团队追赶处填充绿色。",
       "tableCaption": "每个周期的新建与解决（各周期计数）。",
       "tableCaptionCumulative": "每个周期的新建与解决（累计总数）。",
-      "subWindow": "最近 {days} 天"
+      "subWindow": "最近 {days} 天",
+      "chartFormLabel": "图表",
+      "formLine": "折线",
+      "formBars": "柱状",
+      "seriesLabel": "数据系列",
+      "seriesLocked": "至少保留一个数据系列。",
+      "subCreatedOnly": "仅新建",
+      "subResolvedOnly": "仅已解决",
+      "chartDescBars": "最近 {count} 个区间内每{period}的新建与解决，以柱状图显示。新建共 {created}，已解决共 {resolved}。",
+      "chartDescSingle": "最近 {count} 个区间内每{period}的{series}，共 {total}。"
     },
     "distribution": {
       "title": "状态分布",
@@ -5136,7 +5151,18 @@
       "noSprintsBody": "从待办开始一个 Sprint 即可查看其 Sprint 图表。"
     },
     "velocity": {
-      "title": "速度图"
+      "title": "速度图",
+      "endingAtLabel": "截止于",
+      "endingAtHint": "选择一个已完成的 Sprint。留空则为最近一个。",
+      "latest": "最近已完成",
+      "latestNamed": "最近已完成 — {name}",
+      "endingAtSearch": "搜索 Sprint…",
+      "countLabel": "Sprint 数",
+      "countFewer": "减少 Sprint",
+      "countMore": "增加 Sprint",
+      "countHint": "3 至 52 · 默认 7。",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "正在加载速度图"
     },
     "controls": {
       "periodLabel": "周期",
@@ -5193,13 +5219,20 @@
       "xPoints": "故事点（未完成）",
       "xCount": "工作项（未完成）",
       "unassigned": "未分配",
-      "chartDesc": "按负责人排名的未完成{measure}：{breakdown}。共 {total}，分布于 {count} 个未解决工作项。",
-      "tableCaption": "按负责人统计的未完成（未解决）工作——故事点与工作项数。",
+      "chartDesc": "所选时间段内按人员排名的未完成{measure}：{breakdown}。共 {total}，分布于 {count} 个工作项。",
+      "tableCaption": "所选时间段内每人的未完成工作——已分配、未分配但由其创建的数量，以及当前度量下的合计。",
       "tableAssignee": "负责人",
       "tablePoints": "故事点",
       "tableIssues": "工作项",
       "emptyTitle": "尚无已分配的未完成工作",
-      "emptyBody": "每个未解决工作项均未分配，或没有未完成工作。请选择其他范围。"
+      "emptyBody": "每个未解决工作项均未分配，或没有未完成工作。请选择其他范围。",
+      "legendAssigned": "已分配",
+      "legendUnassigned": "未分配 — 按创建人",
+      "tableAssigned": "已分配",
+      "tableUnassigned": "未分配（创建人）",
+      "tableTotal": "合计",
+      "subWindow": "最近 {days} 天",
+      "chartDescPerson": "{name} {total}（已分配 {assigned}，未分配但由其创建 {unassigned}）"
     },
     "statistic": {
       "kind": "类型",
@@ -5210,6 +5243,45 @@
       "sprint": "Sprint",
       "label": "标签",
       "component": "模块"
+    },
+    "help": {
+      "hide": "隐藏帮助文字",
+      "show": "显示帮助文字",
+      "regionLabel": "关于此报告",
+      "whatLabel": "展示内容。",
+      "howLabel": "阅读方法。",
+      "burndown": {
+        "what": "Sprint 的范围、已完成和已开始的工作从开始到结束如何变化，并带有目标线和今天标记。",
+        "how": "已完成逐步接近范围，说明 Sprint 进展正常。范围线在开始后上升即为范围蔓延；已完成线落后于目标线则说明进度滞后。"
+      },
+      "velocity": {
+        "what": "团队逐个 Sprint 承诺的故事点与实际完成的故事点对比。",
+        "how": "对比每个 Sprint 中的两根柱子。已完成的柱子高度稳定，说明节奏可靠，可据此规划下一个 Sprint；选择更早的 Sprint 即可从那里向前回顾。"
+      },
+      "sprintReport": {
+        "what": "一页展示已结束或进行中的 Sprint：已完成什么、未完成什么、开始后加入了什么，以及它的 Sprint 图表。",
+        "how": "先看已完成与未完成的对比，再查看 Sprint 中途加入的工作。使用标题下方的选择器切换 Sprint。"
+      },
+      "createdVsResolved": {
+        "what": "每个周期内新建了多少工作项、解决了多少工作项。",
+        "how": "新建柱高于已解决柱时，待办列表在增长；低于时，团队正在追赶。使用数据系列开关可单独查看其中一项。"
+      },
+      "distribution": {
+        "what": "项目的工作项按某一字段的取值（如状态、类型或负责人）如何分布。",
+        "how": "扇区越宽，具有该取值的工作项越多。更改统计方式，即可从另一个角度划分同样的工作。"
+      },
+      "averageAge": {
+        "what": "每个周期结束时，未解决工作项已开放的平均天数。",
+        "how": "折线持续上升说明工作被一直搁置。将其与时间窗平均值对比，可判断最近一个周期是否异常。"
+      },
+      "resolutionTime": {
+        "what": "每个周期内已解决的工作项平均耗时多少天才得以解决。",
+        "how": "折线下降说明工作完成得更快。周期按解决日期计算，因此今天解决的旧工作项会拉高今天所在周期。"
+      },
+      "workload": {
+        "what": "所选时间段内每个人手中的未完成工作，以故事点或工作项数计算。没有负责人的工作计入其创建人名下。",
+        "how": "最长的柱子代表承担未完成工作最多的人。分配更多工作前，先留意分布是否极不均衡。"
+      }
     }
   },
   "dashboards": {

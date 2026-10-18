@@ -56,6 +56,12 @@ export interface BarChartProps {
   legend?: ChartLegendItem[];
   dataTable?: Omit<ChartDataTableProps, 'className'>;
   hideLegend?: boolean;
+  /**
+   * `'page'` (Story MOTIR-8919): full-width, viewport-height frame whose x labels
+   * are thinned by `fitXTicks` (value labels follow the labelled bars) and whose
+   * every bucket carries a hover title. Omitted = unchanged.
+   */
+  fit?: 'page';
   className?: string;
 }
 
@@ -87,6 +93,7 @@ export function BarChart({
   legend,
   dataTable,
   hideLegend = false,
+  fit,
   className,
 }: BarChartProps) {
   const yMax = yTicks.length > 0 ? Math.max(...yTicks.map((t) => t.value)) : 1;
@@ -94,12 +101,14 @@ export function BarChart({
   // Which group indices get an X-axis label: every group by default (velocity),
   // or an evenly-spread subset (first + last always) when `maxXTicks` caps a
   // many-bucket report axis so the date labels don't overlap.
-  const labelledIdx = pickLabelIndices(n, maxXTicks);
+  const labelledIdx = fit === 'page' ? allIndices(n) : pickLabelIndices(n, maxXTicks);
   const xAxis = {
     domain: [0, Math.max(1, n)] as [number, number],
     ticks: [...labelledIdx].map((i) => ({ value: i + 0.5, label: groups[i]!.label })),
     title: xTitle,
   };
+  const valueText = (value: number, gi: number, si: number): string =>
+    valueFormat ? valueFormat(value, gi, si) : String(value);
   const legendItems = legend ?? deriveLegend(series, referenceLine);
   const table = dataTable ?? deriveTable(series, groups);
 
@@ -116,8 +125,23 @@ export function BarChart({
         y={{ domain: [0, yMax], ticks: yTicks, title: yTitle }}
         description={description}
         ariaLabel={ariaLabel}
+        fit={fit}
+        hitBands={
+          fit === 'page'
+            ? groups.map((g, gi) => ({
+                x: gi + 0.5,
+                title: [
+                  g.label,
+                  ...series.map((s, si) => `${s.label}: ${valueText(g.values[si] ?? 0, gi, si)}`),
+                ].join('\n'),
+              }))
+            : undefined
+        }
       >
-        {({ yScale, plot }) => {
+        {({ yScale, plot, xTicks }) => {
+          // Page mode: only the bars whose x label survived the fit get a value label.
+          const shown =
+            fit === 'page' ? new Set(xTicks.map((t) => Math.round(t.value - 0.5))) : labelledIdx;
           const bandWidth = plot.width / Math.max(1, n);
           const groupInner = bandWidth * 0.62;
           const gap = 4;
@@ -146,7 +170,7 @@ export function BarChart({
                             rx={2}
                             fill={s.color}
                           />
-                          {valueLabels && labelledIdx.has(gi) && (
+                          {valueLabels && shown.has(gi) && (
                             <text
                               className="text-[11px] font-semibold"
                               x={barX + barWidth / 2}
@@ -204,6 +228,10 @@ export function BarChart({
  * 30–120 buckets) shows a readable handful of date labels instead of an
  * overlapping smear. Returns a Set for O(1) membership (the value-label gate).
  */
+function allIndices(n: number): Set<number> {
+  return new Set(Array.from({ length: Math.max(0, n) }, (_, i) => i));
+}
+
 function pickLabelIndices(n: number, max?: number): Set<number> {
   if (n <= 0) return new Set();
   if (!max || n <= max) return new Set(Array.from({ length: n }, (_, i) => i));

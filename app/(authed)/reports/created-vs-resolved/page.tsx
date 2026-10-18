@@ -5,7 +5,13 @@ import { getActiveProject } from '@/lib/projects';
 import { reportsService } from '@/lib/services/reportsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import type { ReportScopeDto } from '@/lib/dto/reports';
-import { coercePeriod, coerceDaysBack, PERIOD_LABEL_KEY } from '@/lib/reports/reportPageView';
+import {
+  coercePeriod,
+  coerceDaysBack,
+  coerceChartForm,
+  coerceCvrSeries,
+  PERIOD_LABEL_KEY,
+} from '@/lib/reports/reportPageView';
 import { ReportPageChrome } from '../_components/ReportPageChrome';
 import {
   CreatedVsResolvedReport,
@@ -29,6 +35,8 @@ export default async function CreatedVsResolvedPage({
     period?: string;
     daysBack?: string;
     cumulative?: string;
+    form?: string;
+    series?: string;
   }>;
 }) {
   const session = await getSession();
@@ -46,6 +54,9 @@ export default async function CreatedVsResolvedPage({
   const period = coercePeriod(sp.period ?? null);
   const daysBack = coerceDaysBack(period, sp.daysBack ?? null);
   const cumulative = sp.cumulative === 'true';
+  // Forgiving, like the rest: a hand-edited link degrades to line + both series.
+  const form = coerceChartForm(sp.form ?? null);
+  const series = coerceCvrSeries(sp.series ?? null);
 
   const accessCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const scope: ReportScopeDto = savedFilterId ? { savedFilterId } : { projectId: ctx.projectId };
@@ -67,6 +78,9 @@ export default async function CreatedVsResolvedPage({
     t(PERIOD_LABEL_KEY[period]),
     t('cvr.subWindow', { days: daysBack }),
     cumulative ? t('cvr.cumulative') : t('cvr.perPeriod'),
+    ...(form === 'bars' ? [t('cvr.formBars')] : []),
+    ...(series === 'created' ? [t('cvr.subCreatedOnly')] : []),
+    ...(series === 'resolved' ? [t('cvr.subResolvedOnly')] : []),
   ].join(' · ');
 
   return (
@@ -75,12 +89,15 @@ export default async function CreatedVsResolvedPage({
       crumb={t('hub.title')}
       title={t('cvr.title')}
       subLine={subLine}
+      help="createdVsResolved"
     >
       <CreatedVsResolvedReport
         result={clientResult}
         period={period}
         daysBack={daysBack}
         cumulative={cumulative}
+        form={form}
+        series={series}
         savedFilterId={savedFilterId}
         projectName={ctx.project.name}
         savedFilters={filtersPage.items.map((f) => ({ id: f.id, name: f.name }))}

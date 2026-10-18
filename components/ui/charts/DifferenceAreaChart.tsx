@@ -29,6 +29,8 @@ export interface DifferenceAreaChartProps {
   /** Override the derived a11y data table. */
   dataTable?: Omit<ChartDataTableProps, 'className'>;
   hideLegend?: boolean;
+  /** `'page'` (Story MOTIR-8919): full-width, thinned x labels, per-bucket hover titles. Omitted = unchanged. */
+  fit?: 'page';
   className?: string;
 }
 
@@ -61,6 +63,7 @@ export function DifferenceAreaChart({
   legend,
   dataTable,
   hideLegend = false,
+  fit,
   className,
 }: DifferenceAreaChartProps) {
   const legendItems = legend ?? [
@@ -84,6 +87,21 @@ export function DifferenceAreaChart({
         y={y}
         description={description}
         ariaLabel={ariaLabel}
+        fit={fit}
+        hitBands={
+          fit === 'page'
+            ? Array.from(new Set([...created.map((p) => p.x), ...resolved.map((p) => p.x)]))
+                .sort((a, b) => a - b)
+                .map((xv) => ({
+                  x: xv,
+                  title: [
+                    x.ticks.find((t) => t.value === xv)?.label ?? String(xv),
+                    `${createdLabel}: ${created.find((p) => p.x === xv)?.y ?? '—'}`,
+                    `${resolvedLabel}: ${resolved.find((p) => p.x === xv)?.y ?? '—'}`,
+                  ].join('\n'),
+                }))
+            : undefined
+        }
       >
         {({ xScale, yScale }) => {
           const toPixels = (pts: DiffSeriesPoint[]): PixelPoint[] =>

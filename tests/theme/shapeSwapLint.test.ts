@@ -366,8 +366,12 @@ const OWN_BOX_ALLOWED: Record<string, string> = {
     'Nested inset: the 2px inset inside a segmented track is concentric with the track radius, and the button/input role has no padding steps.',
   'app/(authed)/reports/_components/CreatedVsResolvedReport.tsx → p-0.5':
     'Nested inset: the 2px inset inside a segmented track is concentric with the track radius, and the button/input role has no padding steps.',
+  'app/(authed)/reports/_components/ReportWindowControls.tsx → p-0.5':
+    'Nested inset: the 2px inset inside the Period / Days back segmented track is concentric with the track radius, and the button/input role has no padding steps.',
   'app/(authed)/reports/_components/ResolutionTimeReport.tsx → p-0.5':
     'Nested inset: the 2px inset inside a segmented track is concentric with the track radius, and the button/input role has no padding steps.',
+  'app/(authed)/reports/_components/VelocityRangeControls.tsx → p-0.5':
+    'Nested inset: the 2px inset inside the sprint-count stepper track is concentric with the track radius, and the button/input role has no padding steps.',
   'app/(authed)/settings/project/_components/ProjectDetailsCard.tsx → h-[52px]':
     'Fixed-size tile, skeleton placeholder or layout block (not a control height), so no height step fits.',
   'app/(authed)/settings/project/members/page.tsx → h-12':

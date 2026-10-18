@@ -9,10 +9,15 @@ import {
   coercePeriod,
   coerceDaysBack,
   buildReportHref,
+  coerceVelocityCount,
+  coerceChartForm,
+  coerceCvrSeries,
+  stepVelocityCount,
+  VELOCITY_COUNT_LADDER,
   PERIOD_LABEL_KEY,
   PERIOD_AXIS_KEY,
 } from '@/lib/reports/reportPageView';
-import { differenceSeries, pickTickIndices } from '@/lib/reports/reportChartData';
+import { cvrBarGroups, differenceSeries, pickTickIndices } from '@/lib/reports/reportChartData';
 import { MAX_REPORT_BUCKETS } from '@/lib/reports/buckets';
 import type { CreatedVsResolvedDto } from '@/lib/dto/reports';
 
@@ -171,5 +176,97 @@ describe('pickTickIndices — bounded X-axis labels', () => {
     expect(ticks[ticks.length - 1]).toBe(89);
     expect(ticks.length).toBeLessThanOrEqual(7);
     expect([...ticks].sort((a, b) => a - b)).toEqual(ticks); // ascending, deduped
+  });
+});
+
+describe('Velocity range (Story MOTIR-8919)', () => {
+  it('coerces ?count to a whole number in 1..52, defaulting on anything else', () => {
+    expect(coerceVelocityCount(undefined)).toBe(7);
+    expect(coerceVelocityCount(null)).toBe(7);
+    expect(coerceVelocityCount('abc')).toBe(7);
+    expect(coerceVelocityCount('0')).toBe(7);
+    expect(coerceVelocityCount('-3')).toBe(7);
+    expect(coerceVelocityCount('2.5')).toBe(7);
+    expect(coerceVelocityCount('10')).toBe(10);
+    expect(coerceVelocityCount('999')).toBe(52);
+  });
+
+  it('steps along 3·5·7·10·15·26·52 and snaps an off-ladder value first', () => {
+    expect([...VELOCITY_COUNT_LADDER]).toEqual([3, 5, 7, 10, 15, 26, 52]);
+    expect(stepVelocityCount(7, -1)).toBe(5);
+    expect(stepVelocityCount(7, 1)).toBe(10);
+    expect(stepVelocityCount(3, -1)).toBe(3);
+    expect(stepVelocityCount(52, 1)).toBe(52);
+    expect(stepVelocityCount(12, 1)).toBe(15); // snaps to 10, then up one rung
+  });
+
+  it('builds canonical hrefs and omits the defaults', () => {
+    const base = '/reports/velocity';
+    expect(buildReportHref(base, {})).toBe(base);
+    expect(buildReportHref(base, { endingAt: null, count: 7 })).toBe(base);
+    expect(buildReportHref(base, { endingAt: 'spr_1', count: 3 })).toBe(
+      `${base}?endingAt=spr_1&count=3`,
+    );
+    expect(buildReportHref(base, { count: 10 })).toBe(`${base}?count=10`);
+  });
+});
+
+describe('Created vs Resolved form and series (Story MOTIR-8919)', () => {
+  it('buildReportHref omits the defaults and writes anything else', () => {
+    expect(buildReportHref('/reports/created-vs-resolved', { form: 'line', series: 'both' })).toBe(
+      '/reports/created-vs-resolved',
+    );
+    expect(buildReportHref('/reports/created-vs-resolved', { form: 'bars' })).toBe(
+      '/reports/created-vs-resolved?form=bars',
+    );
+    expect(
+      buildReportHref('/reports/created-vs-resolved', {
+        period: 'week',
+        daysBack: 90,
+        cumulative: true,
+        form: 'bars',
+        series: 'resolved',
+      }),
+    ).toBe(
+      '/reports/created-vs-resolved?period=week&daysBack=90&cumulative=true&form=bars&series=resolved',
+    );
+  });
+
+  it('the coerce helpers turn junk, empty and none into the defaults — never zero series', () => {
+    for (const raw of [null, undefined, '', 'none', 'neither', 'BARS', 'Created']) {
+      expect(coerceCvrSeries(raw)).toBe('both');
+    }
+    expect(coerceCvrSeries('created')).toBe('created');
+    expect(coerceCvrSeries('resolved')).toBe('resolved');
+    for (const raw of [null, undefined, '', 'pie', 'line']) {
+      expect(coerceChartForm(raw)).toBe('line');
+    }
+    expect(coerceChartForm('bars')).toBe('bars');
+  });
+
+  it('cvrBarGroups keeps one bar per visible series, in Created-then-Resolved order', () => {
+    const s = differenceSeries(
+      cvrDto({ cumulative: true }, [
+        { date: '2026-01-05', created: 8, resolved: 5 },
+        { date: '2026-01-12', created: 12, resolved: 14 },
+      ]),
+    );
+    const labels = { created: 'Created', resolved: 'Resolved' };
+    const colors = { created: 'c', resolved: 'r' };
+    const label = (iso: string) => iso.slice(5);
+    const both = cvrBarGroups(s, { created: true, resolved: true }, label, labels, colors);
+    expect(both.series).toEqual([
+      { label: 'Created', color: 'c' },
+      { label: 'Resolved', color: 'r' },
+    ]);
+    expect(both.groups).toEqual([
+      { label: '01-05', values: [8, 5] },
+      { label: '01-12', values: [12, 14] },
+    ]);
+    const resolvedOnly = cvrBarGroups(s, { created: false, resolved: true }, label, labels, colors);
+    expect(resolvedOnly.series).toEqual([{ label: 'Resolved', color: 'r' }]);
+    expect(resolvedOnly.groups.map((g) => g.values)).toEqual([[5], [14]]);
+    const createdOnly = cvrBarGroups(s, { created: true, resolved: false }, label, labels, colors);
+    expect(createdOnly.groups.map((g) => g.values)).toEqual([[8], [12]]);
   });
 });

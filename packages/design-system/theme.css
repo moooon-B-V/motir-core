@@ -3907,6 +3907,10 @@
   --el-chart-surplus: var(--color-success); /* fill where resolved > created */
   --el-chart-age: var(--color-warning); /* average-age bar (8.8.13 — aging backlog) */
   --el-chart-resolution: var(--color-info); /* resolution-time bar (8.8.13 — throughput) */
+  --el-chart-workload-assigned: var(--color-primary); /* workload: assigned segment (MOTIR-8925) */
+  --el-chart-workload-unassigned: var(
+    --color-accent-teal
+  ); /* workload: unassigned-by-reporter segment */
   /* Sprint CYCLE GRAPH series (Story 8.14 — Linear scope-vs-completed). A
      collision-free --el-chart-cycle-* family: the bare --el-chart-completed /
      -started / -target names are taken (velocity / old burndown), so reusing

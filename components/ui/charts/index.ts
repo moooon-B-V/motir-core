@@ -18,7 +18,11 @@ export { HBarChart } from './HBarChart';
 export type { HBarChartProps, HBarDatum } from './HBarChart';
 
 export { ChartFrame } from './ChartFrame';
-export type { ChartFrameProps, ChartFrameScales, PlotBox } from './ChartFrame';
+export type { ChartFrameProps, ChartFrameScales, PlotBox, HitBand } from './ChartFrame';
+
+export { fitXTicks } from './fitXTicks';
+export type { FitXTicksInput, FitXTicksResult } from './fitXTicks';
+export { useChartWidth, pageChartHeight } from './useChartWidth';
 
 export { ChartLegend } from './ChartLegend';
 export type { ChartLegendProps } from './ChartLegend';
@@ -33,7 +37,7 @@ export type { DonutChartProps, DonutDatum } from './DonutChart';
 export { DifferenceAreaChart } from './DifferenceAreaChart';
 export type { DifferenceAreaChartProps, DiffSeriesPoint } from './DifferenceAreaChart';
 
-export { chartColor, chartCategorical } from './tokens';
+export { chartColor, chartCategorical, pageChart } from './tokens';
 export type { ChartColor, ChartAxis, AxisTick, ChartMargin, ChartLegendItem } from './tokens';
 
 export {

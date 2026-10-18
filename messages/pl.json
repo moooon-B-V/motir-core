@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "Prędkość — zobowiązanie a ukończone ({statistic}) dla każdego Sprintu. Średnio ukończono: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "Ten raport Sprintu jest niedostępny.",
-      "backToBacklog": "Wróć do Backlogu"
+      "backToBacklog": "Wróć do Backlogu",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Aktywne",
+      "completedGroup": "Zakończone",
+      "sprintSearch": "Szukaj Sprintów…",
+      "noSprintsTitle": "Brak Sprintów do raportowania",
+      "noSprintsBody": "Rozpocznij Sprint z Backlogu, aby zobaczyć tutaj jego raport."
     },
     "aiPlan": {
       "cta": "Zaplanuj Sprinty z Motir",
@@ -5112,7 +5118,16 @@
       "chartDesc": "Utworzone a rozwiązane w podziale na okres ({period}) w ostatnich przedziałach ({count}). Łącznie utworzono {created}, rozwiązano {resolved}; różnica jest zacieniowana na czerwono tam, gdzie Backlog rośnie, i na zielono tam, gdzie zespół nadrabia.",
       "tableCaption": "Utworzone a rozwiązane w każdym okresie (liczby na okres).",
       "tableCaptionCumulative": "Utworzone a rozwiązane w każdym okresie (sumy skumulowane).",
-      "subWindow": "ostatnie {days} dni"
+      "subWindow": "ostatnie {days} dni",
+      "chartFormLabel": "Wykres",
+      "formLine": "Linia",
+      "formBars": "Słupki",
+      "seriesLabel": "Serie",
+      "seriesLocked": "Przynajmniej jedna seria musi pozostać włączona.",
+      "subCreatedOnly": "Tylko utworzone",
+      "subResolvedOnly": "Tylko rozwiązane",
+      "chartDescBars": "Utworzone i rozwiązane w podziale na okres ({period}) w ostatnich przedziałach ({count}), jako słupki. Łącznie utworzono {created}, rozwiązano {resolved}.",
+      "chartDescSingle": "{series} w podziale na okres ({period}) w ostatnich przedziałach ({count}), łącznie {total}."
     },
     "distribution": {
       "title": "Rozkład statusów",
@@ -5136,7 +5151,18 @@
       "noSprintsBody": "Rozpocznij Sprint z Backlogu, aby zobaczyć jego wykres."
     },
     "velocity": {
-      "title": "Wykres prędkości"
+      "title": "Wykres prędkości",
+      "endingAtLabel": "Kończy się na",
+      "endingAtHint": "Zakończony Sprint. Puste = najnowszy.",
+      "latest": "Ostatnio zakończony",
+      "latestNamed": "Ostatnio zakończony — {name}",
+      "endingAtSearch": "Szukaj Sprintów…",
+      "countLabel": "Sprinty",
+      "countFewer": "Mniej Sprintów",
+      "countMore": "Więcej Sprintów",
+      "countHint": "od 3 do 52 · domyślnie 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Ładowanie wykresu prędkości"
     },
     "controls": {
       "periodLabel": "Okres",
@@ -5193,13 +5219,20 @@
       "xPoints": "Punkty historii (otwarte)",
       "xCount": "Elementy robocze (otwarte)",
       "unassigned": "Nieprzypisane",
-      "chartDesc": "Otwarte ({measure}) na osobę odpowiedzialną, w kolejności: {breakdown}. Łącznie {total} w nierozwiązanych elementach roboczych ({count}).",
-      "tableCaption": "Otwarta (nierozwiązana) praca na osobę odpowiedzialną — punkty historii i liczba elementów roboczych.",
+      "chartDesc": "Otwarte ({measure}) według osoby w wybranym okresie: {breakdown}. Łącznie {total} w elementach roboczych ({count}).",
+      "tableCaption": "Otwarta praca według osoby w wybranym okresie — przypisana, nieprzypisana i zgłoszona przez daną osobę oraz suma dla aktywnej miary.",
       "tableAssignee": "Osoba odpowiedzialna",
       "tablePoints": "Punkty historii",
       "tableIssues": "Elementy robocze",
       "emptyTitle": "Brak przypisanej otwartej pracy",
-      "emptyBody": "Każdy nierozwiązany element roboczy jest nieprzypisany albo nie ma otwartej pracy. Wybierz inny zakres."
+      "emptyBody": "Każdy nierozwiązany element roboczy jest nieprzypisany albo nie ma otwartej pracy. Wybierz inny zakres.",
+      "legendAssigned": "Przypisane",
+      "legendUnassigned": "Nieprzypisane — zgłoszone przez",
+      "tableAssigned": "Przypisane",
+      "tableUnassigned": "Nieprzypisane (zgłoszone)",
+      "tableTotal": "Suma",
+      "subWindow": "ostatnie {days} dni",
+      "chartDescPerson": "{name} {total} (przypisane: {assigned}, nieprzypisane i zgłoszone: {unassigned})"
     },
     "statistic": {
       "kind": "Typ",
@@ -5210,6 +5243,45 @@
       "sprint": "Sprint",
       "label": "Etykieta",
       "component": "Komponent"
+    },
+    "help": {
+      "hide": "Ukryj tekst pomocy",
+      "show": "Pokaż tekst pomocy",
+      "regionLabel": "O tym raporcie",
+      "whatLabel": "Co pokazuje.",
+      "howLabel": "Jak go czytać.",
+      "burndown": {
+        "what": "Jak zakres Sprintu, ukończona i rozpoczęta praca zmieniają się od jego początku do końca, wraz z linią celu i znacznikiem Dzisiaj.",
+        "how": "Ukończone rosnące w stronę Zakresu oznacza, że Sprint idzie zgodnie z planem. Linia Zakresu, która rośnie po rozpoczęciu, to rozrost zakresu; linia Ukończone, która pozostaje w tyle za linią Cel, oznacza opóźnienie."
+      },
+      "velocity": {
+        "what": "Punkty historii, do których zespół się zobowiązał, w porównaniu z punktami, które ukończył, Sprint po Sprincie.",
+        "how": "Porównaj dwa słupki w każdym Sprincie. Stabilne słupki ukończonych punktów pokazują wiarygodne tempo, według którego możesz zaplanować kolejny Sprint; wybierz wcześniejszy Sprint, aby spojrzeć wstecz od tego miejsca."
+      },
+      "sprintReport": {
+        "what": "Zakończony lub trwający Sprint na jednej stronie: co ukończono, czego nie ukończono, co dodano po rozpoczęciu oraz jego wykres Sprintu.",
+        "how": "Zacznij od porównania ukończonych z nieukończonymi, a potem sprawdź pracę dodaną w trakcie Sprintu. Użyj selektora pod tytułem, aby zmienić Sprint."
+      },
+      "createdVsResolved": {
+        "what": "Ile elementów roboczych utworzono, a ile rozwiązano w każdym okresie.",
+        "how": "Gdy słupek utworzonych jest wyższy niż słupek rozwiązanych, Backlog rośnie; gdy jest niższy, zespół nadrabia zaległości. Użyj przełączników serii, aby zobaczyć tylko jedną z nich."
+      },
+      "distribution": {
+        "what": "Jak elementy robocze projektu rozkładają się według wartości jednego pola, takiego jak status, typ czy osoba odpowiedzialna.",
+        "how": "Im szerszy wycinek, tym więcej elementów roboczych ma daną wartość. Zmień statystykę, aby podzielić tę samą pracę w inny sposób."
+      },
+      "averageAge": {
+        "what": "Średnia liczba dni, przez które nierozwiązane elementy robocze były otwarte na koniec każdego okresu.",
+        "how": "Linia, która stale rośnie, oznacza, że praca zostaje otwarta. Porównaj ją ze średnią z okresu, aby sprawdzić, czy ostatni okres odbiega od normy."
+      },
+      "resolutionTime": {
+        "what": "Średnia liczba dni potrzebnych na rozwiązanie elementów roboczych rozwiązanych w każdym okresie.",
+        "how": "Spadająca linia oznacza, że praca jest kończona szybciej. Okresy są liczone według daty rozwiązania, więc stary element rozwiązany dzisiaj podnosi wartość dzisiejszego okresu."
+      },
+      "workload": {
+        "what": "Otwarta praca, którą ma każda osoba w wybranym okresie, liczona w punktach historii lub elementach roboczych. Praca bez osoby odpowiedzialnej jest liczona przy jej autorze.",
+        "how": "Najdłuższe słupki to osoby z największą ilością otwartej pracy. Zanim przypiszesz więcej, sprawdź, czy rozkład nie jest bardzo nierówny."
+      }
     }
   },
   "dashboards": {

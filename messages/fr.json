@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "Vélocité — {statistic} engagés et terminés par Sprint. Moyenne terminée : {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "Ce rapport de Sprint n’est pas disponible.",
-      "backToBacklog": "Retour au Backlog"
+      "backToBacklog": "Retour au Backlog",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Actifs",
+      "completedGroup": "Terminés",
+      "sprintSearch": "Rechercher des Sprints…",
+      "noSprintsTitle": "Aucun Sprint à reporter pour l’instant",
+      "noSprintsBody": "Démarrez un Sprint depuis le Backlog pour voir son rapport ici."
     },
     "aiPlan": {
       "cta": "Planifier les Sprints avec Motir",
@@ -5112,7 +5118,16 @@
       "chartDesc": "Éléments créés et résolus par {period} sur les {count} dernières périodes. {created} créés au total contre {resolved} résolus au total ; l’écart est ombré en rouge quand le Backlog augmente et en vert quand l’équipe rattrape son retard.",
       "tableCaption": "Éléments créés et résolus par période (nombres par période).",
       "tableCaptionCumulative": "Éléments créés et résolus par période (totaux cumulés).",
-      "subWindow": "{days} derniers jours"
+      "subWindow": "{days} derniers jours",
+      "chartFormLabel": "Graphique",
+      "formLine": "Courbe",
+      "formBars": "Barres",
+      "seriesLabel": "Séries",
+      "seriesLocked": "Au moins une série reste activée.",
+      "subCreatedOnly": "Créés uniquement",
+      "subResolvedOnly": "Résolus uniquement",
+      "chartDescBars": "Éléments créés et résolus par {period} sur les {count} dernières périodes, en barres. {created} créés au total contre {resolved} résolus au total.",
+      "chartDescSingle": "{series} par {period} sur les {count} dernières périodes, {total} au total."
     },
     "distribution": {
       "title": "Répartition par statut",
@@ -5136,7 +5151,18 @@
       "noSprintsBody": "Démarrez un Sprint depuis le Backlog pour voir son graphique."
     },
     "velocity": {
-      "title": "Graphique de vélocité"
+      "title": "Graphique de vélocité",
+      "endingAtLabel": "Se terminant par",
+      "endingAtHint": "Un Sprint terminé. Vide = le plus récent.",
+      "latest": "Dernier terminé",
+      "latestNamed": "Dernier terminé — {name}",
+      "endingAtSearch": "Rechercher des Sprints…",
+      "countLabel": "Sprints",
+      "countFewer": "Moins de Sprints",
+      "countMore": "Plus de Sprints",
+      "countHint": "De 3 à 52 · 7 par défaut.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Chargement du graphique de vélocité"
     },
     "controls": {
       "periodLabel": "Période",
@@ -5193,13 +5219,20 @@
       "xPoints": "Story points (ouverts)",
       "xCount": "Éléments de travail (ouverts)",
       "unassigned": "Non attribué",
-      "chartDesc": "{measure} ouverts par responsable, classés : {breakdown}. Total de {total} sur {count} éléments de travail non résolus.",
-      "tableCaption": "Travail ouvert (non résolu) par responsable — story points et nombre d’éléments de travail.",
+      "chartDesc": "{measure} ouverts, classés par personne sur la période choisie : {breakdown}. Total de {total} sur {count} éléments de travail.",
+      "tableCaption": "Travail ouvert par personne sur la période choisie — attribué, non attribué et créé par la personne, puis le total, pour la mesure active.",
       "tableAssignee": "Responsable",
       "tablePoints": "Story points",
       "tableIssues": "Éléments de travail",
       "emptyTitle": "Aucun travail ouvert attribué pour l’instant",
-      "emptyBody": "Tous les éléments de travail non résolus sont non attribués, ou il n’y a aucun travail ouvert. Choisissez une autre portée."
+      "emptyBody": "Tous les éléments de travail non résolus sont non attribués, ou il n’y a aucun travail ouvert. Choisissez une autre portée.",
+      "legendAssigned": "Attribués",
+      "legendUnassigned": "Non attribués — créés par",
+      "tableAssigned": "Attribués",
+      "tableUnassigned": "Non attribués (créés)",
+      "tableTotal": "Total",
+      "subWindow": "{days} derniers jours",
+      "chartDescPerson": "{name} {total} ({assigned} attribués, {unassigned} non attribués et créés par la personne)"
     },
     "statistic": {
       "kind": "Type",
@@ -5210,6 +5243,45 @@
       "sprint": "Sprint",
       "label": "Étiquette",
       "component": "Composant"
+    },
+    "help": {
+      "hide": "Masquer l’aide",
+      "show": "Afficher l’aide",
+      "regionLabel": "À propos de ce rapport",
+      "whatLabel": "Ce qu’il affiche.",
+      "howLabel": "Comment le lire.",
+      "burndown": {
+        "what": "L’évolution du périmètre du Sprint, du travail terminé et du travail commencé, de son début à sa fin, avec une ligne d’objectif et un repère Aujourd’hui.",
+        "how": "Une courbe Terminés qui se rapproche du Périmètre signifie que le Sprint est en bonne voie. Un Périmètre qui grimpe après le démarrage indique une dérive du périmètre ; des Terminés en retard sur l’Objectif signalent un retard."
+      },
+      "velocity": {
+        "what": "Les story points auxquels une équipe s’est engagée par rapport aux points terminés, Sprint après Sprint.",
+        "how": "Comparez les deux barres de chaque Sprint. Des barres de points terminés stables indiquent un rythme fiable sur lequel planifier le prochain Sprint ; choisissez un Sprint antérieur pour regarder en arrière à partir de là."
+      },
+      "sprintReport": {
+        "what": "Un Sprint terminé ou en cours sur une seule page : ce qui a été terminé, ce qui ne l’a pas été, ce qui a été ajouté après le démarrage, et son graphique du Sprint.",
+        "how": "Commencez par les éléments terminés et non terminés, puis lisez le travail ajouté en cours de Sprint. Utilisez le sélecteur sous le titre pour changer de Sprint."
+      },
+      "createdVsResolved": {
+        "what": "Le nombre d’éléments de travail créés et le nombre d’éléments résolus à chaque période.",
+        "how": "Quand la barre des créés est plus haute que celle des résolus, le Backlog augmente ; quand elle est plus basse, l’équipe rattrape son retard. Utilisez les commutateurs de séries pour n’afficher qu’une seule des deux."
+      },
+      "distribution": {
+        "what": "La répartition des éléments de travail du projet selon les valeurs d’un champ, comme le statut, le type ou le responsable.",
+        "how": "Plus une part est large, plus il y a d’éléments de travail avec cette valeur. Changez la statistique pour découper le même travail autrement."
+      },
+      "averageAge": {
+        "what": "Le nombre moyen de jours pendant lesquels les éléments de travail non résolus étaient restés ouverts à la fin de chaque période.",
+        "how": "Une courbe qui monte sans cesse signifie que du travail reste ouvert. Comparez-la à la moyenne de la fenêtre pour voir si la dernière période est inhabituelle."
+      },
+      "resolutionTime": {
+        "what": "Le nombre moyen de jours nécessaires pour résoudre les éléments de travail résolus à chaque période.",
+        "how": "Une courbe qui descend signifie que le travail est terminé plus vite. Les périodes sont comptées selon la date de résolution : un ancien élément résolu aujourd’hui fait monter la période d’aujourd’hui."
+      },
+      "workload": {
+        "what": "Le travail ouvert détenu par chaque personne sur une période choisie, compté en story points ou en éléments de travail. Le travail sans responsable est compté chez son créateur.",
+        "how": "Les barres les plus longues désignent les personnes qui portent le plus de travail ouvert. Repérez une répartition très inégale avant d’attribuer davantage de travail."
+      }
     }
   },
   "dashboards": {

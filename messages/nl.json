@@ -4749,7 +4749,13 @@
       "velocityTableCaption": "Velocity — toegezegde tegenover afgeronde {statistic} per Sprint. Gemiddeld afgerond: {average}.",
       "velocityTableSprint": "Sprint",
       "notFound": "Dit sprintrapport is niet beschikbaar.",
-      "backToBacklog": "Terug naar backlog"
+      "backToBacklog": "Terug naar backlog",
+      "sprintLabel": "Sprint",
+      "activeGroup": "Actief",
+      "completedGroup": "Afgerond",
+      "sprintSearch": "Sprints zoeken…",
+      "noSprintsTitle": "Nog geen Sprints om over te rapporteren",
+      "noSprintsBody": "Start een Sprint vanuit de backlog en het rapport ervan verschijnt hier."
     },
     "aiPlan": {
       "cta": "Sprints plannen met Motir",
@@ -5112,7 +5118,16 @@
       "chartDesc": "Aangemaakt tegenover opgelost per {period} over de laatste {count} perioden. In totaal {created} aangemaakt tegenover {resolved} opgelost; het verschil is rood gearceerd waar de backlog groeit en groen waar het team inhaalt.",
       "tableCaption": "Aangemaakt tegenover opgelost per periode (aantallen per periode).",
       "tableCaptionCumulative": "Aangemaakt tegenover opgelost per periode (cumulatieve totalen).",
-      "subWindow": "afgelopen {days} dagen"
+      "subWindow": "afgelopen {days} dagen",
+      "chartFormLabel": "Grafiek",
+      "formLine": "Lijn",
+      "formBars": "Balken",
+      "seriesLabel": "Reeksen",
+      "seriesLocked": "Minstens één reeks blijft aan.",
+      "subCreatedOnly": "Alleen aangemaakt",
+      "subResolvedOnly": "Alleen opgelost",
+      "chartDescBars": "Aangemaakt en opgelost per {period} over de laatste {count} perioden, als balken. In totaal {created} aangemaakt tegenover {resolved} opgelost.",
+      "chartDescSingle": "{series} per {period} over de laatste {count} perioden, {total} in totaal."
     },
     "distribution": {
       "title": "Statusverdeling",
@@ -5136,7 +5151,18 @@
       "noSprintsBody": "Start een Sprint vanuit de backlog om de sprintgrafiek ervan te zien."
     },
     "velocity": {
-      "title": "Velocitygrafiek"
+      "title": "Velocitygrafiek",
+      "endingAtLabel": "Eindigend bij",
+      "endingAtHint": "Een afgeronde Sprint. Leeg = de laatste.",
+      "latest": "Laatst afgerond",
+      "latestNamed": "Laatst afgerond — {name}",
+      "endingAtSearch": "Sprints zoeken…",
+      "countLabel": "Sprints",
+      "countFewer": "Minder Sprints",
+      "countMore": "Meer Sprints",
+      "countHint": "3 tot 52 · standaard 7.",
+      "rangeSubLine": "{project} · {from} – {to}",
+      "chartLoading": "Velocitygrafiek laden"
     },
     "controls": {
       "periodLabel": "Periode",
@@ -5193,13 +5219,20 @@
       "xPoints": "Storypoints (open)",
       "xCount": "Werkitems (open)",
       "unassigned": "Niet toegewezen",
-      "chartDesc": "Open {measure} per verantwoordelijke, gerangschikt: {breakdown}. Totaal {total} verdeeld over {count} onopgeloste werkitems.",
-      "tableCaption": "Open (onopgelost) werk per verantwoordelijke — storypoints en aantal werkitems.",
+      "chartDesc": "Open {measure}, gerangschikt per persoon over de gekozen periode: {breakdown}. Totaal {total} verdeeld over {count} werkitems.",
+      "tableCaption": "Open werk per persoon over de gekozen periode — toegewezen, niet toegewezen en door hen gemaakt, en het totaal, voor de actieve maat.",
       "tableAssignee": "Verantwoordelijke",
       "tablePoints": "Storypoints",
       "tableIssues": "Werkitems",
       "emptyTitle": "Nog geen open werk toegewezen",
-      "emptyBody": "Elk onopgelost werkitem is niet toegewezen, of er is geen open werk. Kies een ander bereik."
+      "emptyBody": "Elk onopgelost werkitem is niet toegewezen, of er is geen open werk. Kies een ander bereik.",
+      "legendAssigned": "Toegewezen",
+      "legendUnassigned": "Niet toegewezen — gemaakt door",
+      "tableAssigned": "Toegewezen",
+      "tableUnassigned": "Niet toegewezen (gemaakt)",
+      "tableTotal": "Totaal",
+      "subWindow": "afgelopen {days} dagen",
+      "chartDescPerson": "{name} {total} ({assigned} toegewezen, {unassigned} niet toegewezen en gemaakt)"
     },
     "statistic": {
       "kind": "Type",
@@ -5210,6 +5243,45 @@
       "sprint": "Sprint",
       "label": "Label",
       "component": "Component"
+    },
+    "help": {
+      "hide": "Hulptekst verbergen",
+      "show": "Hulptekst tonen",
+      "regionLabel": "Over dit rapport",
+      "whatLabel": "Wat het toont.",
+      "howLabel": "Hoe je het leest.",
+      "burndown": {
+        "what": "Hoe de scope, het afgeronde en het gestarte werk van de Sprint zich ontwikkelen van begin tot eind, met een doellijn en een markering voor Vandaag.",
+        "how": "Als Afgerond naar Scope toe stijgt, ligt de Sprint op schema. Een Scope-lijn die na de start stijgt is scope creep; een Afgerond-lijn die achterblijft bij het Doel loopt achter."
+      },
+      "velocity": {
+        "what": "De storypoints die een team heeft toegezegd tegenover de punten die het heeft afgerond, Sprint voor Sprint.",
+        "how": "Vergelijk de twee balken in elke Sprint. Gelijkmatige balken voor afgerond werk tonen een betrouwbaar tempo waarop je de volgende Sprint kunt plannen; kies een eerdere Sprint om vanaf daar terug te kijken."
+      },
+      "sprintReport": {
+        "what": "Een afgeronde of lopende Sprint op één pagina: wat is afgerond, wat niet, wat na de start is toegevoegd en de bijbehorende sprintgrafiek.",
+        "how": "Begin met afgerond tegenover niet afgerond en lees dan het werk dat midden in de Sprint is toegevoegd. Gebruik de kiezer onder de titel om van Sprint te wisselen."
+      },
+      "createdVsResolved": {
+        "what": "Hoeveel werkitems er per periode zijn aangemaakt en hoeveel er zijn opgelost.",
+        "how": "Als de balk voor aangemaakt hoger is dan die voor opgelost, groeit de backlog; als hij lager is, haalt het team in. Gebruik de reeksschakelaars om er één afzonderlijk te bekijken."
+      },
+      "distribution": {
+        "what": "Hoe de werkitems van het project zich verdelen over de waarden van één veld, zoals status, type of verantwoordelijke.",
+        "how": "Hoe breder een segment, hoe meer werkitems die waarde hebben. Wijzig de statistiek om hetzelfde werk anders op te delen."
+      },
+      "averageAge": {
+        "what": "Het gemiddelde aantal dagen dat de onopgeloste werkitems aan het einde van elke periode openstonden.",
+        "how": "Een lijn die blijft stijgen betekent dat werk open blijft staan. Vergelijk hem met het gemiddelde van het venster om te zien of de laatste periode ongewoon is."
+      },
+      "resolutionTime": {
+        "what": "Het gemiddelde aantal dagen dat het kostte om de werkitems op te lossen die in elke periode zijn opgelost.",
+        "how": "Een dalende lijn betekent dat werk sneller wordt afgerond. Periodes worden geteld op oplosdatum, dus een oud item dat vandaag is opgelost verhoogt de periode van vandaag."
+      },
+      "workload": {
+        "what": "Het open werk dat elke persoon over een gekozen periode heeft, geteld in storypoints of werkitems. Werk zonder verantwoordelijke wordt geteld onder de maker.",
+        "how": "De langste balken zijn de mensen met het meeste open werk. Let op een zeer ongelijke verdeling voordat je meer toewijst."
+      }
     }
   },
   "dashboards": {

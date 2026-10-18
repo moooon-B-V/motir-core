@@ -922,6 +922,25 @@ export default defineConfig({
         'components/ui/charts/ChartFrame.tsx',
         'components/ui/charts/ChartLegend.tsx',
         'components/ui/charts/ChartDataTable.tsx',
+        // Story MOTIR-8919 · MOTIR-8930 — the refined reports' new modules (the help
+        // text and its hide preference, the Workload and Velocity range controls, the
+        // Sprint report picker, the page-mode chart frame and its label fitting).
+        // MEASURED on this branch against the story's own specs plus
+        // `reportsRefinedBranches.test.tsx`, then pinned at the project floor in
+        // `thresholds` below. Route-group and dynamic-segment files are spelled the
+        // MOTIR-2449 way (`app/**/…`, brackets escaped).
+        'app/**/reports/_components/ReportHelp.tsx',
+        'app/**/reports/_components/ReportWindowControls.tsx',
+        'app/**/reports/_components/VelocityRangeControls.tsx',
+        'app/**/sprints/\\[id\\]/report/_components/SprintReportSprintPicker.tsx',
+        'components/ui/charts/ChartFrameSvg.tsx',
+        'components/ui/charts/PageChartFrame.tsx',
+        'components/ui/charts/HBarChartPage.tsx',
+        'components/ui/charts/HBarChartView.tsx',
+        'components/ui/charts/fitXTicks.ts',
+        'components/ui/charts/useChartWidth.ts',
+        'lib/hooks/useReportHelpHidden.ts',
+        'lib/reports/sprintPicker.ts',
         // Story MOTIR-2542 · Subtask MOTIR-2550 — the AI entitlement predicates.
         // Two one-line pure functions, and the reason they are gated is that the
         // defect they fix was a surface reading a raw DTO field instead of
@@ -5759,6 +5778,30 @@ export default defineConfig({
         'components/ui/charts/ChartFrame.tsx': { branches: 90, functions: 90, lines: 90 },
         'components/ui/charts/ChartLegend.tsx': { branches: 90, functions: 90, lines: 90 },
         'components/ui/charts/ChartDataTable.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/reports/_components/ReportHelp.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/reports/_components/ReportWindowControls.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/reports/_components/VelocityRangeControls.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/sprints/\\[id\\]/report/_components/SprintReportSprintPicker.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'components/ui/charts/ChartFrameSvg.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/PageChartFrame.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/HBarChartPage.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/HBarChartView.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/fitXTicks.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/ui/charts/useChartWidth.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/hooks/useReportHelpHidden.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/reports/sprintPicker.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/billing/aiEntitlement.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 5.1 (comments): the repo leaves land gated from day one
         // (Subtask 5.1.1); commentsService joins the list with 5.1.2.

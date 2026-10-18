@@ -19,7 +19,9 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // Likewise the `--el-live-*` family (motir.co's live header link), merged in
 // additively at its resolved values. And the `--el-cta-warm` pair (the onboarding
 // screens' warm primary button, MOTIR-8254), the same way. And the `--el-drafting`
-// pair (the drafted card's at-work cue, MOTIR-8416), the same way.
+// pair (the drafted card's at-work cue, MOTIR-8416), the same way. And the
+// `--el-chart-workload-*` pair (the Workload report's Assigned / Unassigned segment
+// hues, MOTIR-8919), the same way.
 
 const REPO = process.cwd();
 const THEMES = ['light', 'dark'] as const;

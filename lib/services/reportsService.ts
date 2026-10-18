@@ -115,6 +115,13 @@ export const reportsService = {
    * header + sprint report show, so the bars match those surfaces), plus the
    * average completed across the window.
    *
+   * With `endSprintId` the window is the `lastN` completed sprints AT OR BEFORE
+   * that sprint (Story MOTIR-8919), in the same `completedAt desc, sequence desc`
+   * order, still drawn oldest→newest with the end sprint right-most. An id that is
+   * not a completed sprint of THIS project (unknown, another project's, active,
+   * planned) falls back to the default window — never an error and never another
+   * project's data.
+   *
    * Bounded (finding #57): a `LIMIT N` sprint query + N (≤ {@link MAX_LAST_N})
    * bounded roll-ups — never every sprint, never every issue. Low-history is a
    * first-class state: 0 completed sprints → `{ sprints: [], averageCompleted:
@@ -124,7 +131,7 @@ export const reportsService = {
    * Throws: `ProjectNotFoundError` (404 — unknown / cross-workspace project).
    */
   async getVelocity(
-    input: { projectId: string; lastN?: number },
+    input: { projectId: string; lastN?: number; endSprintId?: string },
     ctx: ServiceContext,
   ): Promise<VelocityDto> {
     // `report:view` (MOTIR-2351), which SUBSUMES the hand-rolled tenancy gate that
@@ -142,15 +149,32 @@ export const reportsService = {
     // call-into-another-service clause in the transaction-shape ADR.
     const { statistic, sprints } = await withWorkspaceServiceContext(
       ctx.workspaceId,
-      async (tx) => ({
-        statistic: await resolveStatistic(input.projectId, tx),
-        sprints: await sprintRepository.listCompletedByProject(
-          input.projectId,
-          ctx.workspaceId,
-          limit,
-          tx,
-        ),
-      }),
+      async (tx) => {
+        const end = input.endSprintId
+          ? await sprintRepository.findById(input.endSprintId, ctx.workspaceId, tx)
+          : null;
+        const endsAt =
+          end && end.projectId === input.projectId && end.state === 'complete' && end.completedAt
+            ? { completedAt: end.completedAt, sequence: end.sequence }
+            : null;
+        return {
+          statistic: await resolveStatistic(input.projectId, tx),
+          sprints: endsAt
+            ? await sprintRepository.listCompletedByProjectEndingAt(
+                input.projectId,
+                ctx.workspaceId,
+                endsAt,
+                limit,
+                tx,
+              )
+            : await sprintRepository.listCompletedByProject(
+                input.projectId,
+                ctx.workspaceId,
+                limit,
+                tx,
+              ),
+        };
+      },
     );
 
     // Per sprint: committed = the O(1) stored baseline; completed = the bounded
@@ -503,23 +527,56 @@ export const reportsService = {
   },
 
   /**
-   * The WORKLOAD read (Story 8.8 · Subtask 8.8.13) — the horizontal ranked-bar
-   * report behind `/reports/workload` (and the `workload` gadget). Open
-   * (non-done-category, non-archived) work per assignee, ranked by the `measure`
-   * (story points or issue count). No time window — it is a snapshot of the
-   * CURRENT `work_item` rows (one bounded grouped query, no revision trail), so
-   * the only config is the measure. Same scope / typed-state contract as the
-   * other reads (`no_access` / `stale` on a degraded scope); no window to 422.
+   * The WORKLOAD read (Story 8.8 · Subtask 8.8.13; windowed by Story MOTIR-8919)
+   * — the horizontal ranked-bar report behind `/reports/workload` (and the
+   * `workload` gadget), ranked by the `measure` (story points or issue count).
+   *
+   * Without `config.window` it is the open-now SNAPSHOT of current `work_item`
+   * rows, per assignee — exactly the gadget's contract. With a `window` it is the
+   * work that was open at any point in the last `daysBack` days (read from the
+   * revision trail), one bar per person: the assignee, else the reporter, as a
+   * separate "unassigned" segment, else the neutral Unassigned bar. A window
+   * outside the allowed set is the typed 422, raised before scope resolution as
+   * in `getAverageAge`. Same scope / typed-state contract as the other reads
+   * (`no_access` / `stale` on a degraded scope).
    */
   async getWorkload(
     scope: ReportScopeDto,
-    config: { measure: WorkloadMeasureDto },
+    config: {
+      measure: WorkloadMeasureDto;
+      window?: { period: ReportPeriod; daysBack: number };
+    },
     ctx: ServiceContext,
   ): Promise<ReportWidgetResultDto<WorkloadDto>> {
+    if (config.window) validateReportWindow(config.window.period, config.window.daysBack);
+
     const resolved = await resolveReportScope(scope, ctx);
     if (resolved.state !== 'ok') return resolved;
 
     const filter = await scopeAstFilter(resolved, ctx);
+    if (config.window) {
+      const { period, daysBack } = config.window;
+      const { start, end } = reportWindow(new Date(), daysBack);
+      const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.aggregateWorkloadByPersonInWindow(
+          resolved.projectId,
+          ctx.workspaceId,
+          { start, end },
+          filter,
+          tx,
+        ),
+      );
+      return {
+        state: 'ok',
+        data: toWorkloadDto(config.measure, rows, {
+          period,
+          daysBack,
+          windowStart: start,
+          windowEnd: end,
+        }),
+      };
+    }
+
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.aggregateWorkloadByAssignee(
         resolved.projectId,

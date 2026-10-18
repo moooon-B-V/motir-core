@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import { pageChartHeight } from '@/components/ui/charts';
 import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
 import type { StatusByKey } from '@/app/(authed)/backlog/_components/backlogShared';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
@@ -292,5 +293,35 @@ describe('SprintReport cycle graph (8.14.6)', () => {
     expect(screen.queryByText('NaN')).toBeNull();
     // Server-fed: no client fetch, so no loading skeleton.
     expect(screen.queryByRole('status', { name: /Loading the sprint graph/ })).toBeNull();
+  });
+});
+
+describe('SprintReport page mode (Story MOTIR-8919)', () => {
+  const renderIt = (fit?: 'page') =>
+    render(
+      <SprintReport
+        report={report()}
+        sprint={sprint()}
+        statusByKey={statusByKey}
+        velocity={velocity()}
+        fit={fit}
+      />,
+    );
+
+  it('without fit (the complete-modal path) both charts keep their default viewBox', () => {
+    const { container } = renderIt();
+    const boxes = Array.from(container.querySelectorAll('svg[viewBox]')).map((s) =>
+      s.getAttribute('viewBox'),
+    );
+    expect(boxes.length).toBeGreaterThan(0);
+    expect(boxes.every((b) => !b!.endsWith(` ${pageChartHeight(window.innerHeight)}`))).toBe(true);
+  });
+
+  it('with fit="page" the charts take the bounded page height', () => {
+    const { container } = renderIt('page');
+    const boxes = Array.from(container.querySelectorAll('svg[viewBox]')).map((s) =>
+      s.getAttribute('viewBox'),
+    );
+    expect(boxes.some((b) => b!.endsWith(` ${pageChartHeight(window.innerHeight)}`))).toBe(true);
   });
 });

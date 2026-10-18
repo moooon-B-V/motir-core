@@ -31,7 +31,7 @@ const STATISTIC_LABEL_KEY: Record<EstimationStatisticDto, string> = {
   issue_count: 'statisticIssueCount',
 };
 
-export function VelocityChart({ velocity }: { velocity: VelocityDto }) {
+export function VelocityChart({ velocity, fit }: { velocity: VelocityDto; fit?: 'page' }) {
   const t = useTranslations('backlog');
   const tStat = useTranslations('settings.estimation');
 
@@ -76,6 +76,7 @@ export function VelocityChart({ velocity }: { velocity: VelocityDto }) {
         {t('sprintReport.velocityAverage', { average })}
       </span>
       <BarChart
+        fit={fit}
         series={[
           { label: committedLabel, color: chartColor.committed },
           { label: completedLabel, color: chartColor.completed },

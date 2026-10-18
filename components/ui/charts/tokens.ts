@@ -30,6 +30,10 @@ export const chartColor = {
   axis: 'var(--el-chart-axis)',
   /** Distribution donut — the "None"/unset segment (always neutral grey, never a ramp slot). */
   categoricalNone: 'var(--el-chart-cat-none)',
+  /** Workload — the assigned segment of a person's bar. */
+  workloadAssigned: 'var(--el-chart-workload-assigned)',
+  /** Workload — the unassigned-work-they-reported segment. */
+  workloadUnassigned: 'var(--el-chart-workload-unassigned)',
   /** Created-vs-resolved — the created series line. */
   created: 'var(--el-chart-created)',
   /** Created-vs-resolved — the resolved series line. */
@@ -101,3 +105,30 @@ export interface ChartLegendItem {
   /** Bold the label (the primary series) vs. a secondary/reference entry. */
   emphasis?: boolean;
 }
+
+/**
+ * The page-mode numbers (Story MOTIR-8919). Every one is the value stated in
+ * `design/reports/design-notes.md` § "Reports refined — full width, readable
+ * axes, help text, workload period, CvR bars, sprint pickers" (panels 1–2); keep
+ * the two in step.
+ */
+export const pageChart = {
+  /** Page chart height is `clamp(280px, 44vh, 420px)`; 396 px at a 900 px viewport. */
+  minHeight: 280,
+  maxHeight: 420,
+  viewportRatio: 0.44,
+  /** The server / first-paint height (the 900 px value of the clamp). */
+  defaultHeight: 396,
+  /** Bottom margin: 46 flat, 64 when the x labels are angled. */
+  bottomFlat: 46,
+  bottomAngled: 64,
+  /** Estimated advance of one 11 px sans character, and the clear space between flat labels. */
+  labelCharWidth: 6.3,
+  labelGap: 12,
+  /** Minimum spacing along the axis between angled labels (line height 14 + 2). */
+  angledSpacing: 16,
+  /** Fewer labels than this after thinning → angle them. */
+  minLabels: 8,
+  /** Rotation of an angled label (text-anchor end, pivot under the tick). */
+  angle: -45,
+} as const;
