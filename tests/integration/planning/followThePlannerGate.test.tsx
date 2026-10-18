@@ -241,8 +241,19 @@ const body = { running: null as Promise<unknown> | null, ended: false };
 function alive(): void {
   if (body.ended) throw new Error('this helper outlived its test, which has already ended');
 }
+/**
+ * ⚠️ THE TEST'S BUDGET IS LARGER THAN ANY ONE WAIT'S (MOTIR-8887). `until` gives
+ * each condition its own 15 s, and a case chains several of them after a DB-backed
+ * `drivenToS()` and a real-clock typewriter — so with the suite's 15 s
+ * `testTimeout` the TEST expired together with its FIRST slow wait, on a loaded
+ * shard, as a bare `Test timed out in 15000ms` that named no condition. A wait
+ * that really never resolves still throws its own assertion at 15 s, naming what
+ * it was waiting for; this budget only keeps a merely slow case from being
+ * misreported as a hang. (Vitest 4 takes the options object as the SECOND argument.)
+ */
+const CASE_BUDGET = { timeout: 45_000 };
 function it(name: string, fn: () => Promise<void>): void {
-  vitestIt(name, () => {
+  vitestIt(name, CASE_BUDGET, () => {
     const run = fn();
     body.running = run;
     return run;
