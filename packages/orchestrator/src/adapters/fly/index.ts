@@ -278,7 +278,8 @@ async function createFleetMachineAwaitingVolume(
         volumeId !== null &&
         err instanceof OrchestratorApiError &&
         err.status === 400 &&
-        /volume.*not found/i.test(err.message);
+        /volume/i.test(err.message) &&
+        /not found/i.test(err.message);
       if (!volumeNotVisibleYet || attempt >= MACHINE_CREATE_VOLUME_ATTEMPTS) throw err;
       await new Promise((resolve) => setTimeout(resolve, MACHINE_CREATE_VOLUME_RETRY_MS * attempt));
     }
