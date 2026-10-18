@@ -137,12 +137,17 @@ test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page 
 // MOTIR-5278 had inverted this to "offered ONE settings room — Approvals, read-only".
 // The Approvals refusal below is new with the revert: it is the room this member could
 // once read.
-test('a MEMBER is offered no settings area — and the room is still shut', async ({ page }) => {
+// ⚠️ RE-STATED BY MOTIR-8830. The Translation room opens on `project:browse` (the
+// owner's 2026-10-17 decision, design MOTIR-8822), which a member holds — so the
+// door is there, and it opens onto that ONE read-only room. Every other room is
+// still shut, which is what the rest of this test pins.
+test('a MEMBER is offered one read-only settings room — Translation — and every other room is still shut', async ({
+  page,
+}) => {
   await enterShellAs(page, seed.memberEmail);
 
-  // PANEL 1. The door is not there, and nothing marks the gap: no disabled row,
-  // no tooltip, no "ask an admin" line. The rows below simply close up.
-  await expect(settingsDoor(page)).toHaveCount(0);
+  // PANEL 1. The door opens straight onto the one room this member may read.
+  await expect(settingsDoor(page)).toHaveAttribute('href', '/settings/project/translation');
   // ⚠️ BOTH ROWS LEFT THIS SECTION, so for a member it is EMPTY and `SidebarNav`
   // renders no section at all. `Job runs` went with MOTIR-4843/4847 — a
   // workspace-tier pane that had been a loose row in the PROJECT's rail, now a
@@ -191,10 +196,11 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had sent this back to Approvals.
-  // The back action leaves the area entirely — this actor has no room in it.
-  await expect(page.getByRole('link', { name: 'Back to projects' })).toHaveAttribute(
+  // MOTIR-8830: the back action stays INSIDE the area — this actor holds exactly
+  // one room in it, Translation.
+  await expect(page.getByRole('link', { name: 'Translation' }).last()).toHaveAttribute(
     'href',
-    '/dashboard',
+    '/settings/project/translation',
   );
   // …and no editable form leaked in behind the refusal.
   await expect(page.getByRole('button', { name: /add a member/i })).toHaveCount(0);
@@ -214,7 +220,9 @@ test('a VIEWER loses the destinations that refuse them, and keeps every read', a
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had given a viewer the door and a disabled Approvals switch.
-  await expect(settingsDoor(page)).toHaveCount(0);
+  // MOTIR-8830: a viewer holds `project:browse`, the Translation room's view key,
+  // so the door is back — onto that one read-only room and nothing else.
+  await expect(settingsDoor(page)).toHaveAttribute('href', '/settings/project/translation');
 
   // PANEL 4. The rows whose destinations refuse a viewer outright are gone.
   // ⚠️ AMENDED 2026-09-25 (Story MOTIR-6179 · MOTIR-6332): `Plans` LEFT this list

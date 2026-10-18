@@ -1,5 +1,6 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { CheckCheck, CircleX } from 'lucide-react';
@@ -85,7 +86,9 @@ export function TriageDetail({ detail, busy, handlers }: TriageDetailProps) {
         </div>
 
         {/* Title */}
-        <h2 className="font-serif text-xl text-(--el-text)">{detail.title}</h2>
+        <h2 className="font-serif text-xl text-(--el-text)">
+          <SurfaceTitle id={detail.id} title={detail.title} layout="clamp" />
+        </h2>
 
         {/* Attribution card */}
         <div className="flex items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-card-padding)">

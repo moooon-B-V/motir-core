@@ -1016,6 +1016,39 @@ export const projectRepository = {
     return tx.project.update({ where: { id }, data });
   },
 
+  /**
+   * Read just a project's auto-translate switch (Story MOTIR-7738 · MOTIR-8826) —
+   * the stored value, never a computed default. Null when the id doesn't exist.
+   * Optional `tx` — same contract as `findStatusAutomation`.
+   */
+  async findAutoTranslateWorkContent(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ autoTranslateWorkContent: boolean } | null> {
+    const client = tx ?? dbRead;
+    return client.project.findUnique({
+      where: { id },
+      select: { autoTranslateWorkContent: true },
+    });
+  },
+
+  /**
+   * Write a project's auto-translate switch. `tx` REQUIRED; the caller
+   * (`projectAutoTranslateSettingsService`) has asserted `project:administer`,
+   * holds the row lock and appends the trail row in the same transaction.
+   */
+  async updateAutoTranslateWorkContent(
+    id: string,
+    autoTranslateWorkContent: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ autoTranslateWorkContent: boolean }> {
+    return tx.project.update({
+      where: { id },
+      data: { autoTranslateWorkContent },
+      select: { autoTranslateWorkContent: true },
+    });
+  },
+
   // --- Merge mode (Story MOTIR-4880 · Subtask MOTIR-5177) -------------------
   // `prMergeMode` + its `prMergeModeDecidedAt` stamp (`approval-gates.md` §7 and
   // its 2026-09-13 amendment). The stamp is what separates the column's FLOOR

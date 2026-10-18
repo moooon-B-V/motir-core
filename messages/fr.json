@@ -1973,6 +1973,7 @@
       "components": "Composants",
       "aiPlanning": "Planification IA",
       "hostedAgent": "Agent hébergé",
+      "translation": "Traduction",
       "rules": "Règles",
       "repositories": "Dépôts",
       "monitoring": "Surveillance",
@@ -3874,6 +3875,61 @@
         "factKeptBy": "Conservée"
       }
     },
+    "translation": {
+      "title": "Traduction",
+      "pageDescription": "Comment les membres qui lisent dans des langues différentes voient le contenu de travail de ce projet.",
+      "card": {
+        "title": "Traduction automatique",
+        "subtitle": "Permet à chaque membre de lire le travail de ce projet dans sa propre langue, tout en voyant l’original."
+      },
+      "switch": {
+        "label": "Traduire automatiquement le contenu de travail"
+      },
+      "hint": {
+        "off": "Désactivée. Le contenu de travail s’affiche tel qu’il a été écrit, et un bouton <b>Traduire</b> sur chaque page d’élément de travail traduit cet élément sur sollicitation d’un membre.",
+        "on": "Activée. Chaque membre lit le contenu de travail dans la langue de son interface sans rien faire, et <b>Afficher l’original</b> est toujours à un clic."
+      },
+      "saving": "Enregistrement…",
+      "flipError": "Impossible {to, select, on {d’activer} other {de désactiver}} la traduction automatique. Rien n’a été modifié.",
+      "retry": "Réessayer",
+      "loadFailed": "Impossible de charger ce paramètre.",
+      "effects": {
+        "title": "Ce que les lecteurs obtiennent",
+        "page": "Les pages d’élément de travail et les aperçus rapides affichent chaque champ dans la langue du lecteur : le titre, la description, l’explication et chaque tâche à faire.",
+        "lists": "Les listes, tableaux, le backlog, les sprints, la feuille de route, « prêt » et le triage affichent les titres dans la langue du lecteur, avec un commutateur <b>Afficher l’original</b> sur chaque vue.",
+        "original": "Les agents, l’API et les e-mails reçoivent toujours le texte original, et la modification ouvre toujours l’original."
+      },
+      "cost": "Chaque champ est traduit une seule fois par langue et conservé : un lecteur suivant du même texte ne paie rien, et un texte déjà dans la langue du lecteur n’est jamais envoyé. La traduction consomme les crédits IA de votre organisation au coût du modèle plus 50 %. <link>Utilisation et coûts</link>",
+      "noCredit": {
+        "body": "<b>La traduction nécessite des crédits IA.</b> Le contenu de travail s’affiche tel qu’il a été écrit tant que des crédits n’ont pas été ajoutés. Rien n’est facturé.",
+        "add": "Ajouter des crédits",
+        "askAdmin": "Un propriétaire ou un administrateur de l’organisation peut en ajouter."
+      },
+      "readOnly": "Lecture seule",
+      "readOnlyNote": "Seul un administrateur du projet peut modifier la traduction automatique.",
+      "readOnlyValue": {
+        "on": "La traduction automatique est activée pour ce projet. Le contenu de travail s’affiche dans la langue de chaque membre.",
+        "off": "La traduction automatique est désactivée pour ce projet. Le contenu de travail s’affiche tel qu’il a été écrit."
+      },
+      "value": {
+        "on": "Activée",
+        "off": "Désactivée"
+      },
+      "history": {
+        "title": "Historique des modifications",
+        "subtitle": "Qui a activé ou désactivé la traduction automatique, et quand.",
+        "col": {
+          "who": "Qui",
+          "change": "Modification",
+          "when": "Quand"
+        },
+        "row": "{who} a changé la traduction automatique de {from} à {to} le {when}.",
+        "unknownActor": "Un ancien membre",
+        "empty": "Aucune modification pour l’instant. La traduction automatique n’a jamais été modifiée sur ce projet.",
+        "capped": "Affichage des {shown} modifications les plus récentes sur {total}.",
+        "failed": "<b>Impossible de charger l’historique des modifications.</b> Le paramètre ci-dessus est inchangé."
+      }
+    },
     "hostedAgent": {
       "title": "Agent hébergé",
       "pageDescription": "Le modèle qu’utilise une exécution hébergée. Exécuter en mode hébergé le présélectionne d’après la difficulté de l’élément de travail ; la personne qui lance l’exécution peut toujours en choisir un autre.",
@@ -4159,6 +4215,7 @@
         "bugs": "L’endroit où sont classés les Bugs de ce projet est géré par les administrateurs du projet. Adressez-vous à un administrateur si la destination doit être modifiée.",
         "ai-planning": "La planification IA de ce projet (sa cadence) est configurée par les administrateurs du projet. Adressez-vous à un administrateur si elle doit être modifiée.",
         "hosted-agent": "Le modèle qu’utilise une exécution hébergée est affiché aux personnes qui peuvent lancer une exécution hébergée sur ce projet. Adressez-vous à un administrateur du projet si vous avez besoin de le voir.",
+        "translation": "Le fait que le contenu de travail de ce projet soit traduit pour chaque lecteur est visible par les personnes qui peuvent lire les éléments de travail du projet. Contactez un administrateur du projet si vous avez besoin de le voir.",
         "automation": "L’automatisation du projet est gérée par les administrateurs du projet. Adressez-vous à un administrateur si une règle doit être modifiée.",
         "monitoring": "La connexion de ce projet à un outil de surveillance des erreurs est gérée par les personnes qui peuvent gérer les intégrations. Adressez-vous à un administrateur du projet si Sentry doit être connecté ou reconnecté."
       }
@@ -14586,6 +14643,8 @@
     "translate": "Traduire",
     "translating": "Traduction en cours…",
     "showOriginal": "Afficher l’original",
+    "originalIn": "Original en {language}",
+    "originalNotRecorded": "Langue d’origine non enregistrée",
     "showTranslation": "Afficher la traduction",
     "retry": "Réessayer",
     "hintInto": "vers {language}",
@@ -14618,5 +14677,18 @@
     "liveFailedCount": "{n, plural, one {# champ n’a pas pu être traduit.} other {# champs n’ont pas pu être traduits.}}",
     "liveNoCredits": "La traduction nécessite des crédits IA.",
     "liveEdited": "{field} a été modifié et traduit de nouveau."
+  },
+  "titleTranslation": {
+    "addCredit": "Ajouter des crédits",
+    "liveDone": "Titres traduits",
+    "liveFailed": "Certains titres n’ont pas pu être traduits",
+    "liveNoCredit": "Les titres s’affichent dans leur langue d’origine : plus de crédits",
+    "livePending": "Traduction des titres en cours…",
+    "marked": "Traduit",
+    "markedFrom": "Traduit depuis {language}",
+    "noCredit": "Les titres restent dans leur langue d’origine car votre organisation n’a plus de crédits.",
+    "pendingMark": "Traduction en cours",
+    "showOriginal": "Afficher l’original",
+    "showTranslation": "Afficher la traduction"
   }
 }

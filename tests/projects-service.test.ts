@@ -91,6 +91,7 @@ describe('createProject — happy path', () => {
       'accessMode',
       'aiGenerateExplanations',
       'archivedAt',
+      'autoTranslateWorkContent',
       'id',
       'identifier',
       'image',
@@ -103,6 +104,7 @@ describe('createProject — happy path', () => {
     expect(project.image).toBeNull();
     // A freshly created project defaults to explanations OFF (Story 7.4 / MOTIR-850).
     expect(project.aiGenerateExplanations).toBe(false);
+    expect(project.autoTranslateWorkContent).toBe(false);
     // A freshly created project has never onboarded — the marker is null until
     // its first plan is approved + materialized (Subtask 7.4 / MOTIR-1264).
     expect(project.onboardingRanAt).toBeNull();

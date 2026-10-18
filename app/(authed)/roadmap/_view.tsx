@@ -1,3 +1,5 @@
+import { resolveSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import { SurfaceTitleTranslationProvider } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { getTranslations } from 'next-intl/server';
 import { Map } from 'lucide-react';
 import { pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
@@ -209,26 +211,30 @@ export default async function RoadmapPageView({
   // a sprint read it never uses. Both reads here sit AFTER that branch, so nobody
   // pays for one they do not need, and the `?item=` path costs one round trip
   // rather than two.
-  const [activeSprint, initialTrail] = await Promise.all([
+  const [activeSprint, initialTrail, titleTranslation] = await Promise.all([
     sprintsService.getActiveSprint(ctx.projectId, wsCtx),
     resolveArrivalTrail(ctx.projectId, searchParams, wsCtx, ctx.visitor?.hiddenIds),
+    // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
+    resolveSurfaceTranslation(ctx.project, ctx.read),
   ]);
 
   return (
-    <RoadmapView
-      initialTrail={initialTrail}
-      projectKey={ctx.project.identifier}
-      projectName={ctx.project.name}
-      ariaLabel={t('canvasAria', { project: ctx.project.name })}
-      hasActiveSprint={activeSprint !== null}
-      sprintName={activeSprint?.name ?? null}
-      sprintGoal={activeSprint?.goal ?? null}
-      // Gate the planning-origin cluster (MOTIR-1013) on the SAME immutable
-      // onboarding-ran marker the /onboarding redirect reads (Subtask 7.4 /
-      // MOTIR-1264): the collapsed "Idea → Discover · Shape · Validate → Plan"
-      // milestones assert a planning journey only a truly-onboarded project has,
-      // so a never-onboarded project (null marker) omits them.
-      showPlanningOrigin={ctx.project.onboardingRanAt != null}
-    />
+    <SurfaceTitleTranslationProvider projectKey={ctx.project.identifier} context={titleTranslation}>
+      <RoadmapView
+        initialTrail={initialTrail}
+        projectKey={ctx.project.identifier}
+        projectName={ctx.project.name}
+        ariaLabel={t('canvasAria', { project: ctx.project.name })}
+        hasActiveSprint={activeSprint !== null}
+        sprintName={activeSprint?.name ?? null}
+        sprintGoal={activeSprint?.goal ?? null}
+        // Gate the planning-origin cluster (MOTIR-1013) on the SAME immutable
+        // onboarding-ran marker the /onboarding redirect reads (Subtask 7.4 /
+        // MOTIR-1264): the collapsed "Idea → Discover · Shape · Validate → Plan"
+        // milestones assert a planning journey only a truly-onboarded project has,
+        // so a never-onboarded project (null marker) omits them.
+        showPlanningOrigin={ctx.project.onboardingRanAt != null}
+      />
+    </SurfaceTitleTranslationProvider>
   );
 }

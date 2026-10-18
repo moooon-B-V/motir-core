@@ -1,5 +1,6 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import {
   ArrowUpRight,
@@ -371,6 +372,7 @@ export function WorkItemNode({
         ) : null
       }
       title={item.title}
+      titleItemId={item.id}
       titleStruck={showDone}
       // PROGRESS METER (Subtask 7.20.6 / MOTIR-1013) — a thin done/total bar on a
       // container node: `--el-success` fill over the `--el-muted` track, with the
@@ -444,6 +446,7 @@ export function WorkItemCardShell({
   identifier,
   identifierTrailing = null,
   title,
+  titleItemId,
   titleStruck = false,
   titleSingleLine = false,
   footer = null,
@@ -460,6 +463,10 @@ export function WorkItemCardShell({
   /** Right of the identifier on its line (the Manual chip). */
   identifierTrailing?: ReactNode;
   title: string;
+  /** The work item behind the title, when it is a REAL one: a surface that has
+   *  mounted a title-translation provider then shows the reader's language (Story
+   *  MOTIR-7738 · MOTIR-8833). Absent for a draft or a preview. */
+  titleItemId?: string;
   /** The struck, secondary-ink title — a done card, a proposed removal. */
   titleStruck?: boolean;
   /** One clean ellipsis instead of the two-line clamp, for a card whose footer
@@ -469,6 +476,23 @@ export function WorkItemCardShell({
   /** Absolutely-positioned decoration over the card (spine, hatch). */
   overlay?: ReactNode;
 } & Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'style' | 'title' | 'children'>) {
+  // Tagged so a decorator that WRAPS this node (the plan-change diff frame's
+  // `remove` state) can strike the title without redrawing the card — the same
+  // struck-title language `titleStruck` uses below.
+  const titleElementProps = {
+    'data-node-title': '',
+    title: titleSingleLine ? title : undefined,
+  };
+  // MOTIR-5459 — `block` rides WITH `truncate`, never beside `line-clamp-2`:
+  // `truncate` needs a block box for its ellipsis, while `.block` is emitted
+  // after `.line-clamp-2` and would take `display` back from its
+  // `-webkit-box`, leaving the two-line clamp inert.
+  const titleClassName = `mt-0.5 ${titleSingleLine ? 'block truncate' : 'line-clamp-2'} text-sm leading-snug font-semibold ${
+    // `--el-text-secondary`, never `--el-text-muted`, for the struck title
+    // (MOTIR-4260): a proposed removal paints `bg-(--el-muted)`, where the muted
+    // ink is 4.12:1 and secondary 6.18:1.
+    titleStruck ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
+  }`;
   return (
     <div
       {...rootProps}
@@ -494,25 +518,22 @@ export function WorkItemCardShell({
             <span className="font-mono text-xs text-(--el-text-secondary)">{identifier}</span>
             {identifierTrailing}
           </div>
-          <span
-            // Tagged so a decorator that WRAPS this node (the plan-change diff
-            // frame's `remove` state) can strike the title without redrawing the
-            // card — the same struck-title language `titleStruck` uses below.
-            data-node-title
-            // MOTIR-5459 — `block` rides WITH `truncate`, never beside `line-clamp-2`:
-            // `truncate` needs a block box for its ellipsis, while `.block` is emitted
-            // after `.line-clamp-2` and would take `display` back from its
-            // `-webkit-box`, leaving the two-line clamp inert.
-            title={titleSingleLine ? title : undefined}
-            className={`mt-0.5 ${titleSingleLine ? 'block truncate' : 'line-clamp-2'} text-sm leading-snug font-semibold ${
-              // `--el-text-secondary`, never `--el-text-muted`, for the struck
-              // title (MOTIR-4260): a proposed removal paints `bg-(--el-muted)`,
-              // where the muted ink is 4.12:1 and secondary 6.18:1.
-              titleStruck ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
-            }`}
-          >
-            {title}
-          </span>
+          {titleItemId ? (
+            // The same span, drawn by the title-translation kit so a surface that
+            // mounted its provider shows the reader's language (MOTIR-8833); the
+            // class string and the tag are the ones below.
+            <SurfaceTitle
+              id={titleItemId}
+              title={title}
+              layout="clamp"
+              className={titleClassName}
+              elementProps={titleElementProps}
+            />
+          ) : (
+            <span {...titleElementProps} className={titleClassName}>
+              {title}
+            </span>
+          )}
         </div>
       </div>
 

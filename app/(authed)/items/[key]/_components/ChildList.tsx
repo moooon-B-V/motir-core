@@ -1,3 +1,4 @@
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { personDisplayName } from '@/lib/people/personLabel';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -86,7 +87,7 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
                 {child.identifier}
               </span>
               <span className="text-(--el-text) min-w-0 flex-1 truncate font-sans text-sm group-hover:underline">
-                {child.title}
+                <SurfaceTitle id={child.id} title={child.title} />
               </span>
               {statusMeta ? (
                 <StatusPill

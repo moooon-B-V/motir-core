@@ -99,7 +99,10 @@ describe('⌘K settings deep links follow the registry (MOTIR-2468)', () => {
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
   // MOTIR-5278 had inverted this to "exactly ONE settings deep link — Approvals".
-  it('a MEMBER is offered NO settings deep link', () => {
+  // MOTIR-8830 — re-stated: a member is offered exactly ONE settings deep link,
+  // Translation, whose view key is `project:browse`. Every administrative one is
+  // still absent.
+  it('a MEMBER is offered only the Translation settings deep link', () => {
     renderPalette([...BUILTIN_ROLE_PERMISSIONS.member]);
     const labels = offered();
     for (const name of ['Details', 'Members & access', 'Boards', 'Rules', 'Roles & permissions']) {
@@ -108,6 +111,7 @@ describe('⌘K settings deep links follow the registry (MOTIR-2468)', () => {
         `${name} leaked into the palette`,
       ).toBe(false);
     }
+    expect(labels.some((l) => l.includes('Translation'))).toBe(true);
   });
 
   it('a PARTIAL role is offered exactly the sections it holds', () => {

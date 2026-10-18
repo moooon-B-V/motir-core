@@ -567,3 +567,7 @@ Banner: `--el-tint-lavender` · `--el-border-soft` · `--el-accent-on-surface` (
 `--el-warning-text` (awaiting) · `--el-tint-rose` / `--el-text-strong` (error) ·
 `--el-chip-bg` / `--el-chip-border` (chip) · `--el-input-border` / `--radius-input` /
 `--height-input` (composer).
+
+## Auto-translate: titles on this surface (Story MOTIR-7738 · MOTIR-8824, DATED 2026-10-17)
+
+Amends the Ready list header and rows by delta mock `design/work-items/translation--titles.mock.html` (panel 8), decisions in the `⭐ The title surfaces under auto-translate` section of `design/work-items/design-notes.md`. Changes here: the one **Show original / Show translation** switch in the page header; the per-title mark on a differing title; the row's accessible name stays `${key} ${title}` with the displayed title. Rows stay `min-h-(--height-control)` and single-line truncated, so nothing is reserved. Because the list is virtualized, translation state is **keyed by work item, not by row index**.

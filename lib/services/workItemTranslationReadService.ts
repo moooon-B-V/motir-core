@@ -5,10 +5,13 @@ import type {
   TranslationOfferDTO,
   TranslationOfferFieldDTO,
 } from '@/lib/dto/workItemTranslation';
-import { isLocale, type Locale } from '@/lib/i18n/locales';
-import { detectLocale } from '@/lib/translation/detectLanguage';
+import type { Locale } from '@/lib/i18n/locales';
 import { hashFieldText } from '@/lib/translation/fieldRevision';
-import { classifyFields, type FieldClassification } from '@/lib/translation/needsTranslation';
+import {
+  classifyFields,
+  sourceLanguageOf,
+  type FieldClassification,
+} from '@/lib/translation/needsTranslation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { assembleFields, type DoorField } from '@/lib/translation/itemFields';
 import { orgCanForWorkspace } from './organizationAccessService';
@@ -38,15 +41,6 @@ const defaultDeps: TranslationOfferDeps = {
   getKept: (...args) => workItemTranslationStoreService.getKept(...args),
   canManageBilling: (ctx) => orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageBilling'),
 };
-
-/** The language a differing field is in: recorded, else detected, else unknown. */
-function sourceLanguageOf(field: DoorField, verdict: FieldClassification): Locale | null {
-  if (verdict.basis === 'recorded') {
-    const primary = field.language!.trim().split(/[-_]/)[0]!.toLowerCase();
-    return isLocale(primary) ? primary : null;
-  }
-  return verdict.basis === 'detected' ? detectLocale(field.text) : null;
-}
 
 /** One entry per field, keyed by fieldRef, with `kept` from the store's answer. */
 function toOfferFields(

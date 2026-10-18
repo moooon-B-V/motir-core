@@ -87,6 +87,13 @@ const GUARD_FIXTURE = 'tests/rls/singleton-read-guard.fixture.ts';
  * VERDICTS map: the machine enumerates, a human adjudicates.
  */
 export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
+  // ── MOTIR-8835: a test whose SUBJECT is the unbound read ──────────────────
+  // The auto-translate story's "is invisible to a read outside any tenant context"
+  // case asserts that the change-trail repository, read with no bound tx, returns
+  // nothing under motir_app. Binding the read would delete the claim.
+  'tests/integration/translation/autoTranslateStory.test.ts':
+    'MOTIR-8835: the case asserts the change trail is invisible to an unbound read.',
+
   // ── MOTIR-2751: the repository-CONTRACT + migration-CONSTRAINT suites ──────
   // Four files, one header, one argument: their subject is the repository contract
   // and the migration-built constraints, with RLS deliberately inert. Bound, a

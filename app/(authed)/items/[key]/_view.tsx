@@ -1,3 +1,4 @@
+import { RelatedTitles } from './_components/translation/RelatedTitles';
 import { Suspense } from 'react';
 import { personDisplayName } from '@/lib/people/personLabel';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -66,10 +67,10 @@ import {
   TranslatableTitle,
 } from './_components/translation/TranslatableFields';
 import { fieldRef } from '@/lib/translation/fieldRefs';
-import {
-  workItemTranslationReadService,
-  type TranslationOfferInput,
-} from '@/lib/services/workItemTranslationReadService';
+import type { TranslationOfferInput } from '@/lib/services/workItemTranslationReadService';
+import { readerTranslationContextService } from '@/lib/services/readerTranslationContextService';
+import type { ReaderTranslationDTO } from '@/lib/dto/workItemTranslation';
+import type { ProjectDTO } from '@/lib/dto/projects';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
 import { EpicNotPublicBlock, EpicNotPublicPill } from './_components/EpicNotPublic';
@@ -106,15 +107,25 @@ function translationReadFor(
   localeRead: Promise<Locale>,
   todoListRead: ReturnType<typeof workItemTodosService.listTodos>,
   ctx: TranslationOfferInput['ctx'],
-) {
+  project: ProjectDTO,
+): Promise<ReaderTranslationDTO | null> {
+  // The reader's translation context (Story MOTIR-7738 · MOTIR-8832) layers the
+  // project's switch and the can-pay verdict over the shipped offer, so the host
+  // can start on mount. The project is already on the page context: no extra read.
   return Promise.all([localeRead, todoListRead])
     .then(([readerLocale, todos]) =>
-      workItemTranslationReadService.getReaderTranslation({
+      readerTranslationContextService.resolveForItem({
+        project,
+        reader: ctx,
+        readerLocale,
         workItem,
         todos: todos.items,
-        readerLocale,
-        ctx,
       }),
+    )
+    .then((resolved) =>
+      resolved
+        ? { offer: resolved.offer, canAddCredits: resolved.canAddCredits, auto: resolved.context }
+        : null,
     )
     .catch(() => null);
 }
@@ -302,7 +313,7 @@ export default async function ItemView({
   // the group; the page then renders exactly as it did before the feature.
   const translationRead = isVisitor
     ? null
-    : translationReadFor(item, localeRead, todoListRead, svc);
+    : translationReadFor(item, localeRead, todoListRead, svc, ctx.project);
   const [
     members,
     sprints,
@@ -946,7 +957,7 @@ export default async function ItemView({
   // wrap does not re-indent four hundred lines.
   return readerTranslation ? (
     <TranslationProvider itemId={item.id} translation={readerTranslation} liveRefresh>
-      {page}
+      <RelatedTitles projectKey={ctx.project.identifier}>{page}</RelatedTitles>
     </TranslationProvider>
   ) : (
     page

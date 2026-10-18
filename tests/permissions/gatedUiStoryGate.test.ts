@@ -95,6 +95,10 @@ const SERVICE_OF: Record<string, string> = {
   // its READ asserts the entry's distinct VIEW key, `work_item:edit`, which
   // `tests/settings/projectSettingsNav.test.ts`'s VIEW_KEY_EVIDENCE pins.
   'hosted-agent': 'lib/services/projectHostedAgentSettingsService.ts',
+  // MOTIR-8830 — the Translation room: `updateSettings` asserts `project:administer`
+  // (the rail's write key); `getSettings` asserts the entry's VIEW key,
+  // `project:browse`, which VIEW_KEY_EVIDENCE pins.
+  translation: 'lib/services/projectAutoTranslateSettingsService.ts',
   automation: 'lib/services/automationRulesService.ts',
 };
 

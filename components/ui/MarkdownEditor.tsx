@@ -420,7 +420,7 @@ export function MarkdownEditor({
     // client — an intentional, sanctioned attribute mismatch, not a bug.
     <div className="flex flex-col gap-1" data-color-mode={colorMode} suppressHydrationWarning>
       {labelHidden ? null : (
-        <span className="text-(--el-text) flex items-center gap-2 font-sans text-sm font-medium">
+        <span className="text-(--el-text) flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm font-medium">
           {label}
           {labelAccessory}
         </span>

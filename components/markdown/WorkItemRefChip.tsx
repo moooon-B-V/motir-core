@@ -1,5 +1,7 @@
 'use client';
 
+import { useChipTitleScope } from '@/components/workItems/titleTranslation/ChipTitleScope';
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import type { ReactNode } from 'react';
 import { Archive } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -48,6 +50,7 @@ export function WorkItemRefChip({
   fallbackLabel: ReactNode;
 }) {
   const t = useTranslations('issueViews');
+  const followsSurface = useChipTitleScope();
 
   // Deleted / cross-workspace — the id resolved to nothing.
   if (!summary) {
@@ -78,7 +81,9 @@ export function WorkItemRefChip({
           <Archive />
         </span>
         <span className="wi-key">{identifier}</span>
-        <span className="wi-title min-w-0 truncate">{title}</span>
+        <span className="wi-title min-w-0 truncate">
+          {followsSurface ? <SurfaceTitle id={summary.id} title={title} /> : title}
+        </span>
       </RelationshipPeekLink>
     );
   }
@@ -88,7 +93,9 @@ export function WorkItemRefChip({
     <RelationshipPeekLink identifier={identifier} className="wi-chip max-w-full">
       <IssueTypeIcon type={kind as IssueType} className="wi-type-icon shrink-0" />
       <span className="wi-key">{identifier}</span>
-      <span className="wi-title min-w-0 truncate">{title}</span>
+      <span className="wi-title min-w-0 truncate">
+        {followsSurface ? <SurfaceTitle id={summary.id} title={title} /> : title}
+      </span>
       {status ? <span className={DOT_CLASS[status.category]} aria-hidden /> : null}
     </RelationshipPeekLink>
   );

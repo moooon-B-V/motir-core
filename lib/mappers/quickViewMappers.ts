@@ -112,6 +112,7 @@ export function toQuickViewData(
       blockers: detail.readiness.openBlockers.map((b) => b.identifier),
       blockedByAncestor: detail.readiness.blockedByAncestor
         ? {
+            id: detail.readiness.blockedByAncestor.id,
             identifier: detail.readiness.blockedByAncestor.identifier,
             title: detail.readiness.blockedByAncestor.title,
           }

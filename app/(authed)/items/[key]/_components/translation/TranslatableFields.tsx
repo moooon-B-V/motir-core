@@ -1,5 +1,6 @@
 'use client';
 
+import { ChipTitleScope } from '@/components/workItems/titleTranslation/ChipTitleScope';
 import { MarkdownView, type MarkdownViewProps } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
@@ -21,7 +22,11 @@ export function TranslatableMarkdown({
   ...rest
 }: MarkdownViewProps & { fieldRef: string }) {
   const { text } = useFieldTranslation(fieldRef);
-  return <MarkdownView {...rest} value={text ?? value} data-translated={text ? '' : undefined} />;
+  return (
+    <ChipTitleScope>
+      <MarkdownView {...rest} value={text ?? value} data-translated={text ? '' : undefined} />
+    </ChipTitleScope>
+  );
 }
 
 /** The title — `WorkItemTitle`, wrapped (its bare-key links resolve as before). */

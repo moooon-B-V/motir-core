@@ -9554,3 +9554,293 @@ in a row or chip.
 Panels 2, 5, 6 and 7 redrawn on a nested `data-theme="dark"` board. The mock re-emits its Tier-3 block on
 `[data-theme]`, so the board recomputes against the dark Tier-0 values. Every ink above clears AA on every dark
 surface; the sky chip reads `--el-text-strong` on the dimmed sky tint.
+
+## Work content editors name their original language (Story MOTIR-7738 · MOTIR-8837 — `editors-original-language.mock.html`, DATED 2026-10-17)
+
+**Design system, first.** Read `package.json` (root): it depends on `@motir/design-system` (`workspace:*`, version 0.15.1), and `app/globals.css` imports `@motir/design-system/theme.css` (line 13). Both checks hold, so this is **branch (a), on Motir Design**. The project's own axes are the package defaults, `warm-editorial` / `motir` / `motir` (`app/layout.tsx` writes `data-style` / `data-palette` / `data-type` from the applied appearance; the default ids are `DEFAULT_STYLE_ID` / `DEFAULT_PALETTE_ID` in the package's theme registries). 0.15.1 exports `@motir/design-system/mock`, so the mock is built with `renderMock` from the package's parts at those axes.
+
+**It amends** § "Translate a work item on demand" in this file and its `translation.mock.html` (MOTIR-8112, published in Motir's design store, read with `get_design MOTIR-8112`; it is not a file in this repository). That asset drew the reading side: the machine-translation mark, the translation bar, Show original. **This asset draws the writing side**, which it never reached: the editors. It edits no existing mock and redraws nothing the predecessor drew.
+
+### What this decides, and what it only composes
+
+| Decided here                                                            | Composed, never redrawn (cited by path)                                                                        |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Where the original-language note sits in each of the five editor fields | `app/(authed)/items/[key]/edit/_components/EditIssueForm.tsx` — the edit form, unchanged around the new line   |
+| Its English copy in four cases                                          | `app/(authed)/items/[key]/_components/TodoListSection.tsx` — the to-do row editor                              |
+| What a title error does to the note                                     | `packages/design-system/src/components/ui/Input.tsx` and `FormField.tsx` — `helperText` and its error override |
+| The one class the shared label row needs at narrow width                | `components/ui/MarkdownEditor.tsx` — `labelAccessory`, and the label row that carries it                       |
+
+**Out of scope, owned elsewhere.** The reading marks, the translation bar, the machine-translation mark and Show original (MOTIR-8823's reading design and the build it blocks); which language a field records and what a field with none means (the content-language story); whether a translation shows at all (the reading work). No behaviour is decided here.
+
+### Substrate check (the advisory on MOTIR-8832)
+
+This card's acceptance criteria name MOTIR-8832 (the item page and quick view build), and no `blocked_by` edge says so. **This asset consumes nothing from it.** What it needs is already on `origin/main`: `item.languages.{title,description,explanation}` and a to-do's `textLanguage` / `notesLanguage` on the DTOs (read in `lib/translation/itemFields.ts`, `assembleFields`), and the platform's display-name lookup `languageDisplayName(code, uiLocale)` — `new Intl.DisplayNames([uiLocale], { type: 'language' }).of(code) ?? code`, exported from `app/(authed)/items/[key]/_components/translation/TranslationProvider.tsx`. MOTIR-8832 is the card this asset _blocks_, not one it waits on.
+
+### The note, per editor
+
+One line, **"Original in {language}"**, in the existing affordance of each field. No new primitive.
+
+| Element                                     | Affordance                          | Placement                                                                                                                                                                                         | Ink                                                                                          |
+| ------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Edit form · **Title**                       | `Input`'s `helperText`              | the helper line under the field                                                                                                                                                                   | the helper's own `--el-text-helper`                                                          |
+| Edit form · **Description**                 | `MarkdownEditor`'s `labelAccessory` | after the "Description" label, introduced by an em dash exactly as the Explanation's gloss is                                                                                                     | `--el-text-secondary`, `font-normal` (the gloss's ink — AA on the surface the label sits on) |
+| Edit form · **Explanation**                 | `labelAccessory`                    | after the existing gloss ("— why it matters") and before the AI-drafted pill and the Draft with AI button, so the two statements about the text stay together and the two actions stay at the end | `--el-text-secondary`, `font-normal`                                                         |
+| To-do row editor · **Step** (text)          | `Input`'s `helperText`              | the helper line under the step field (this input carries only an `aria-label` today; `helperText` needs no visible label)                                                                         | `--el-text-helper`                                                                           |
+| To-do row editor · **Instructions** (notes) | `labelAccessory`                    | after the "Instructions" label                                                                                                                                                                    | `--el-text-secondary`, `font-normal`                                                         |
+
+The to-do **Command** field is not in scope: `assembleFields` translates a to-do's `text` and `notesMd` only, a command is not prose in a language, and the DTO records no language for it.
+
+### The four cases, and their copy
+
+`{language}` is the language's name in the **reader's interface language**, from `languageDisplayName(code, uiLocale)` — the platform's lookup, the one the predecessor already uses for "Translated from {language}". No hand-written list of names exists anywhere in this design. When the lookup cannot name a code it returns the code itself, as the predecessor's does; the note then reads "Original in xx" and that is accepted.
+
+| Case                                               | Stored value                                       | Copy                                              | Drawn in            |
+| -------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- | ------------------- |
+| **Recorded in a language**                         | a code, e.g. `ko`                                  | `Original in Korean`                              | P1, P5, P6, P7, P8  |
+| **Recorded in the reader's own language**          | a code equal to the reader's                       | `Original in English` — the same copy             | P2                  |
+| **No language recorded** (older and imported text) | `NULL`                                             | `Original language not recorded`                  | P3, P6, P7          |
+| **No text at all**                                 | an empty field, whatever its language column holds | **no note** — nothing to edit, so nothing to name | P4, P6 (second row) |
+
+Decisions behind that table:
+
+- **The reader's-own case does not change the copy.** The note states a fact about the stored text, and it is true whoever reads it. What differs between a Korean-original and an English-original field for an English reader is on the reading side (a translation exists or does not), and that is the reading design's. Suppressing the note when it matches would also make a field that records English look identical to one that records nothing, which is the confusion this note exists to remove.
+- **`NULL` is never shown as English or as the organisation's language.** It says what is true: the language was not recorded. The note names no guess and offers no control to set one — recording a language is the content-language story's.
+- **An empty field shows no note.** A note with nothing under it names the language of nothing.
+- **A title error replaces the note** (P5). `FormField` shows the error in the helper line and the helper otherwise, never both (`FormField.tsx`: `error ? … : helperText ? …`). The note returns the moment the error clears. This is the shipped behaviour of the primitive, kept rather than worked around: the note is informational, the error blocks the save.
+- **Copy follows the reader's locale like every other interface string.** It is an interface string in the catalogues, never sent through the translation lane and never billed.
+
+### Copy catalogue (English)
+
+Proposed keys under the existing `itemTranslation` namespace in `messages/en.json`; the build card carries the other ten catalogues through the `pnpm i18n:extract` / `pnpm i18n:merge` loop.
+
+| Key                                   | English                          |
+| ------------------------------------- | -------------------------------- |
+| `itemTranslation.originalIn`          | `Original in {language}`         |
+| `itemTranslation.originalNotRecorded` | `Original language not recorded` |
+
+"Original" is the predecessor's own word (`hintShowingOriginal`: "Showing the original", `showOriginal`: "Show original"); "language" is the product's word in `markTranslatedFrom`. The work item is called a **work item** throughout; the fixture's field names are the shipped labels (Title, Description, Explanation, Step, Instructions).
+
+### Narrow width
+
+At ~400px the label row (`flex items-center gap-2`, no wrap, in `MarkdownEditor`) cannot hold label + gloss + note + pill + button on one line. The mock draws the row **wrapping**, which needs **one class on the shared label row: `flex-wrap`** (with `gap-x-2 gap-y-1`). That is the only change to a shipped component this design asks for, and it lands in the build card (MOTIR-8832's editor work), not here. Without it the row squeezes the note into a vertical sliver; the existing Explanation row already comes close with the gloss, the pill and the button alone. Single-line fields need nothing: the helper line wraps like any paragraph.
+
+### Panels
+
+`P0` access path — the item page's **Edit** button into the edit form, and a to-do row's **Edit step** into the row editor · `P1` recorded in another language · `P2` recorded in the reader's own language (with the AI-drafted pill beside the note) · `P3` no language recorded · `P4` mixed: a recorded title with empty description and explanation · `P5` title in error · `P6` the to-do row editor, step recorded and instructions unrecorded, then a row with empty instructions · `P7` dark · `P8` ~400px.
+
+### Parts inventory
+
+From the package: `Input`, `Pill`, `Button`. **Product-local:** the `MarkdownEditor` shell (label row, toolbar, surface), drawn as markup copied class for class from `components/ui/MarkdownEditor.tsx` because the editor is a product component, not a package part, with an abbreviated toolbar; and the note itself, a plain `<span>`. **Proposed additions to `@motir/design-system`: none.**
+
+### Colour, shape and ink
+
+Every product element carries `--el-*` and the element-semantic shape tokens (`--radius-input`, `--radius-card`, `--radius-control`, `--spacing-card-padding`); no Tier-0 colour, no raw hue. The note's inks are the two the shipped neighbours already use (`--el-text-helper` on the helper line, `--el-text-secondary` on the label row), neither of which is `--el-text-muted` or `--el-text-faint`. The dark panel's `[data-dark-panel]` block copies token values resolved from a `renderMock({ theme: 'dark' })` render at the same axes, because the package's dark tokens resolve at `:root` and do not re-resolve under a nested wrapper.
+
+### Reference check
+
+No external reference was reached: the placement follows the shipped patterns in this repository — `FormField`'s helper line for single-line fields, and the Explanation label's gloss (`EditIssueForm.tsx`, the `labelAccessory` block) for bodies — and the vocabulary follows `itemTranslation` in `messages/en.json`.
+
+## ⭐ Auto-translate — the work item page and quick view read in the reader's language unpressed, with the machine-translation mark and Show original (Story MOTIR-7738 · MOTIR-8823 — `translation--auto.mock.html`, DATED 2026-10-17)
+
+**Design-system verdict (read first).** Files read: `package.json` (depends on `@motir/design-system` as `workspace:*`, installed `0.15.1` per `node_modules/@motir/design-system/package.json`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`). **Both checks hold → ON MOTIR DESIGN, branch (a).** The project's own axes are applied per reader in `app/layout.tsx` (`data-style` / `data-palette` / `data-type` from `applied.styleId` / `paletteId` / `typeId`); the mock draws at `warm-editorial` / `motir` / `motir`, the axes the base was drawn at. The package exports `@motir/design-system/mock`. **How this mock was built:** it is a DELTA over the base, so it copies the base's compiled stylesheet and the base's own markup class for class (the base was rendered with `renderMock` from `0.13.0`), rather than re-rendering with `0.15.1`; every class it uses appears in the base's output and no class was added. Parts used: the package's own `Button`, `Pill` and `Spinner` (as rendered in the base) and the item page's own markup. **Parts the package lacks: none; proposed additions to `@motir/design-system`: none.** Nothing is migrated.
+
+**What this asset DECIDES.** What a reader sees from the _first paint_ of an opened work item when the project's auto-translate switch is on, in fifteen states, under decisions A1–A6; and that the base's decision **D2 is superseded, only while the switch is on**.
+
+**What it only COMPOSES, by path.** The base design **[MOTIR-8112](motir:cmv2c8zb9002lhwshknnp6j3z)** (source path `translation.mock.html (the design store, get_design MOTIR-8112)`, with its `## ⭐ Translate a work item on demand …` section of this file's published copy) — **neither is in the repository tree at `origin/main`**; both are fetched with `get_design MOTIR-8112`, and this section cites them by that card. Also composed, none redrawn: `design/work-items/detail-arrival.mock.html` (the page header the bar sits in) · `design/work-items/quick-view.mock.html` (the overlay frame) · `design/work-items/todo-list.mock.html` (the to-do rows whose marks sit beside the executor mark and the instructions disclosure) · the shipped `components/ui` `Button`, `Pill`, `Spinner`. **It edits no existing mock**, and the base mock is a record.
+
+**Shipped reality it was drawn against** (`app/(authed)/items/[key]/_components/translation/`): `TranslationProvider.tsx` (the offer, the reducer, the view mode; the only caller of `POST /api/work-items/[id]/translate`; its header and `translationReducer.ts`'s say _"a reload opens on the original (D2)"_), `TranslateControl.tsx` (the bar's faces), `FieldTranslationMark.tsx` (the marks), `lib/dto/workItemTranslation.ts`, `app/(authed)/items/[key]/_view.tsx`, `IssueQuickViewPanel.tsx` (`QUICK_VIEW_FIELDS = [title, description]`), and the `itemTranslation.*` family in `messages/en.json`.
+
+### The fixture
+
+Same as the base's shape: a reader with a **Korean** interface; a work item whose title, description and first to-do (text and instructions) record `en`; an explanation already Korean; a second to-do that records **no language**. The chrome is drawn with the shipped English `itemTranslation.*` values, because the Korean catalogue twin belongs to the locale lane; the work content is drawn in the languages the fixture names.
+
+### States
+
+`P<n>` is this asset's panel; "Base n" is MOTIR-8112's, composed and not redrawn.
+
+| #   | state                                                                                                        | the bar                                                                                                                                                          | each differing field                                                                                                              | request                              |
+| --- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| P1  | **first paint, page host** (also draws the door: a list row opens the page, or the quick view from `?peek=`) | busy: **Translating…** + spinner, `aria-busy`, `aria-disabled`, hint **into Korean**. **Translate is never drawn**                                               | stored text in its own box, mark **Translating…**                                                                                 | one, the item's, started by the host |
+| P2  | **landed**                                                                                                   | **Show original** (`aria-pressed="true"`), hint **Translated into Korean**                                                                                       | translated text + **Translated from English**; the Korean explanation unmarked; markdown, link, code and work item chip as Base 5 | none further                         |
+| P3  | **showing original**                                                                                         | **Show translation** (`aria-pressed="false"`), hint **Showing the original**                                                                                     | stored text, no mark                                                                                                              | none, either direction               |
+| P4  | **already in your language**                                                                                 | **nothing**: no bar, no disabled control                                                                                                                         | stored, no mark                                                                                                                   | none (Base 3)                        |
+| P5  | **no recorded language**                                                                                     | as P2                                                                                                                                                            | detected source: **Translated from English**; undecidable: **Translated**                                                         | as P1                                |
+| P6  | **failed, whole item**                                                                                       | **Retry** in the control's slot + **Couldn’t translate this work item. Nothing was charged.**                                                                    | stored, no mark                                                                                                                   | Retry re-sends the item's request    |
+| P7  | **failed, one field**                                                                                        | **Show original**, hint with _1 field couldn’t be translated_                                                                                                    | the failed field: stored + its own **Retry** (Base 8)                                                                             | that field's Retry                   |
+| P8  | **no credit, known before any request** — owner/admin and member                                             | no button; the shipped message, **Add credits →** for `canAddCredits`, the member's line otherwise; present from the first paint, never after a Translating face | stored, no mark                                                                                                                   | **none**                             |
+| P9  | **stale (a)**, page host only                                                                                | unchanged                                                                                                                                                        | the edited field: new stored text + **Edited · translating…**, then its new translation (Base 10); untouched fields do not change | one quiet re-request for that field  |
+| P10 | **stale (b), a later reader**                                                                                | as P1, then P2                                                                                                                                                   | unchanged fields pending, then land from kept copies; the edited field is the only one billed                                     | one, the item's                      |
+| P11 | **the quick view**: first paint, landed, showing original, failed, no credit; and the plan proposal peek     | as P1–P8 in the overlay's narrower column                                                                                                                        | the title and the description only                                                                                                | the item's (D3)                      |
+| P12 | **the quick view where only an undrawn field differs**                                                       | **nothing**                                                                                                                                                      | nothing marked                                                                                                                    | **none**                             |
+| P13 | **switch off**: the base's offered face returns                                                              | **Translate**, hint **into Korean** (Base 1, 2)                                                                                                                  | stored, no mark                                                                                                                   | none until pressed                   |
+| P14 | **keyboard and assistive technology**                                                                        | focus ring on the control; the live-region lines; the no-credit message on load drawn **without** focus                                                          | —                                                                                                                                 | —                                    |
+| P15 | **dark theme and ~390px**                                                                                    | token parity; the hint wraps under the control (base D1)                                                                                                         | marks wrap in their slots                                                                                                         | —                                    |
+
+**Not states of this surface:** a plan proposal in the quick view, the public project page and a Visitor get **no provider, no bar, no mark** (as shipped; `proposal ? null`). P11 draws the proposal peek once to show it is the stored text with nothing added.
+
+### The wrong first frames, named (and why each panel is drawn as a first frame)
+
+1. **A Translate button for one frame before the busy face** — the host mounted offering, then started. Under auto the host mounts busy (A1). P1 is the right frame.
+2. **A no-credit message that takes focus on load** — see A5. P8 and P14 are the right frames.
+3. **An announcement over the page's arrival** — "Translating into Korean…" read at load. See A5. P14 lists what is and is not announced.
+4. **A kept copy flashed as already translated before the answer** — rejected in A3.
+
+### Decisions
+
+- **A1 — The auto path is the press, entered at mount.** Every face, mark and message is the base's. Auto adds **no new element and no new string**; the off state is the base unchanged. The one visual difference is the face that can no longer appear: the **Translate** face is unreachable under auto because the host opens busy. It is drawn only in P13.
+- **A2 — D2 is reversed for an auto-translating project only.** Base D2: _"the view always opens on the original … nothing is shown translated without a press."_ **That sentence is superseded by this section from 2026-10-17, only while the project's switch is on.** Show original is still a choice for **this host view**; nothing is written, so a reload and every new open return to the reader's language. The page and the quick view hold **separate** view modes: _Open full page_ from a peek that shows the original opens the page translated. With the switch **off**, D2 holds exactly as the base wrote it (P13). **Show original writes nothing and does not carry between the page and the quick view.**
+- **A3 — A kept copy gets no special face.** The offer carries a `kept` flag, but drawing kept fields as already translated before the answer arrives would need a second rendering path for one frame of difference. A kept field goes through the same brief **Translating…** as one that is not. A later reader's frame of pending is the honest cost of one state machine. P10 draws it.
+- **A4 — No credit is a first-paint state, not an outcome.** When the reader's context says the organisation cannot pay, **the host makes no request**. The shipped message and its `canAddCredits` split render from the first paint; its copy _"Nothing was charged."_ stays true; nothing on the item is marked.
+- **A5 — A state reached on load takes no focus and makes no start announcement.** Two shipped behaviours are constrained:
+  - `TranslateControl.tsx`'s `NoCreditMessage` runs an effect that, when `document.activeElement` is `document.body` or `null`, calls `ref.current?.focus()`. That hand-off exists because the pressed button has just disappeared (control file header: _"Only no-credit removes it (D6), and then focus moves to the message"_). On a page load focus is also on the `body`, so the same effect would pull focus into the header before the reader has done anything. **Under auto the message is drawn and never focused** (it keeps `tabIndex={-1}` so a later press, or the off-state path, can still hand focus to it). The build must tell the two entries apart by how the face was reached, not by where focus is.
+  - `TranslationProvider.tsx`'s `useTranslationActions` calls `announce(lines.translating)` at the start of every non-`quiet` `run`. **Under auto the host's start must not announce** — and it must NOT be the reducer's `quiet` flag, which also skips `busy` / `pressed` (`translationReducer.ts` `start`) and would draw no busy face; the build needs the press-equivalent start (busy, pressed) with only the announcement suppressed. Nothing is said when the request starts (the page's own arrival is what the reader hears), and the settled line is announced **once** through `useSettledAnnouncement`, using the shipped lines (_Translated into Korean._, _1 field couldn’t be translated._, _Couldn’t translate this work item. Nothing was charged._). **No credit on load announces nothing**, because nothing changed. The stale line (_Description was edited and translated again._, D5) is unchanged. A pressed Show original / Show translation still announces its line.
+- **A6 — The quick view keeps D3 under auto.** It starts only when the title or the description differs, and then asks for the whole item, because that is the door's unit. It marks only what it draws. It has no live refresh (only the page passes `liveRefresh`), so **stale (a) does not occur in the quick view**: nothing updates an open overlay's fields, and a reader who edits elsewhere reopens it, which is a fresh first paint. When only the explanation or a to-do differs, the overlay draws nothing that needs it (P12).
+
+**Base decisions that still hold under auto:** D1 (one control for the item, under the title, the hint wraps under it on a narrow column), D3 (the quick view's unit and scope), D4–D7 as the base wrote them — D5 (the stale announcement) and D6 (no-credit removes the control) read exactly as before, A5 only constrains _when_ D6's focus hand-off runs.
+
+### The string map (no new keys)
+
+| what the reader sees        | shipped key (`itemTranslation.*`)                                                                                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the bar's group name        | `groupLabel`                                                                                                                                                                                     |
+| busy face, first paint      | `translating`, `hintInto`                                                                                                                                                                        |
+| landed / showing original   | `showOriginal`, `showTranslation`, `hintTranslated`, `hintShowingOriginal`, `hintPartial`                                                                                                        |
+| the offered face (P13 only) | `translate`, `hintInto`                                                                                                                                                                          |
+| marks                       | `markTranslating`, `markEdited`, `markTranslatedFrom`, `markTranslated`, `markFailed`, `markPrefix` + `fieldTitle` · `fieldDescription` · `fieldExplanation` · `fieldTodo` · `fieldInstructions` |
+| failed                      | `retry`, `failedItem`, `retryTitle` … `retryInstructions`                                                                                                                                        |
+| no credit                   | `noCredits`, `noCreditsMember`, `addCredits`                                                                                                                                                     |
+| live region                 | `liveTranslated`, `liveFailedCount`, `liveShowingOriginal`, `liveEdited` (and **not** `liveTranslating` on load)                                                                                 |
+
+Every visible string of the chrome in the mock is one of these values from `messages/en.json`, with `{language}` filled as _Korean_ (hint) or _English_ (mark). **The mock introduces no new key.** The strings that are not chrome are the fixture's work content and the panels' captions (which are annotations, not product copy). The ten non-English catalogues owe nothing: no string is new.
+
+### Parts inventory
+
+From the package: `Button`, `Pill`, `Spinner` (as the base composes them). **Product-local:** the item page's own markup (header, `Card`-styled sections, the to-do row), the overlay frame, the work item chip, copied class for class from the base. **Proposed additions to `@motir/design-system`: none.**
+
+### Colour, shape and ink
+
+Every product element carries `--el-*` and the element-semantic shape tokens only; no Tier-0 colour, no raw hue, no raw `rounded-*`. Marks and hints use `--el-text-secondary`, never `--el-text-muted`; the danger hue is on the failed mark's glyph alone (`--el-danger-on-surface`), its label on `--el-text`. The dark panels are a wrapper carrying `data-appearance-scope data-theme="dark" data-palette="motir"`, which re-resolves the `--el-*` layer inside the page without a second render. The only literal layout value is the 390px width on P15's narrow wrappers.
+
+### Reference check
+
+No external reference was reached: this surface adds no element and no string to the base, so the behaviour follows the story's own _With auto-translate ON_ and _states besides success_ and the shipped host (`TranslationProvider.tsx`, `TranslateControl.tsx`, `FieldTranslationMark.tsx`), and the base design MOTIR-8112.
+
+### GIVES / TAKES
+
+|                                                                                                                                                                                                                             |                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GIVES** to [Work item page and quick view — every field arrives in the reader's language on load](motir:cmvbkboyd001shqop781p415j) (MOTIR-8832) and to the coverage sweep ([MOTIR-8834](motir:cmvbkbp0j001whqopbmqpr47v)) | the fifteen states, A1–A6, the string map; A5 constrains the no-credit message's focus hand-off and the start announcement                                                       |
+| **TAKES** from the base (MOTIR-8112)                                                                                                                                                                                        | every face, mark, message and live line, composed unchanged                                                                                                                      |
+| **TAKES** from [the reader's translation context](motir:cmvbkbon6001khqop6yb6ad83)                                                                                                                                          | whether the switch is on, the reader's language, whether the organisation can pay (`canAddCredits`), each field's recorded language — as facts; none of their mechanics is drawn |
+
+### What this does NOT decide
+
+- **The editors' original-language note** (edit form's title, description and explanation, the to-do row editor): [the editors' design](motir:cmvbkbpaw0022hqopxorabzzp).
+- **The title surfaces** (list, tree, board, backlog, sprint, roadmap, ready, triage): their per-surface switch, per-title glyph and the one notice per surface belong to [the list and board design](motir:cmvbkbode0010hqopplj8p1be) and [their build](motir:cmvbkbozd001uhqopgfhggdrt). The peek's view mode is independent of a surface's switch, and this asset agrees.
+- **The setting and who may flip it**: [its design](motir:cmvbkbnwv000whqopmgfngvoj) and [its control](motir:cmvbkbovp001ohqop8zx43qox).
+- **Every other render site**: the coverage sweep.
+- **The story's proof**: integration and E2E with the acceptance video.
+- **The Korean twins of the strings**: the locale lane; nothing new is owed.
+
+## ⭐ The title surfaces under auto-translate — one Show original switch per surface, one no-credit notice, a mark on each differing title (Story MOTIR-7738 · MOTIR-8824 — `translation--titles.mock.html`, DATED 2026-10-17)
+
+**Design-system verdict (read first).** Files read: `package.json` (depends on `@motir/design-system` as `workspace:*`, installed `0.15.1`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`). **Both checks hold → ON MOTIR DESIGN.** Axes used for the mock: style `warm-editorial`, palette `motir`, type `motir`; the dark panel is a nested wrapper carrying `data-appearance-scope data-theme="dark"`. The mock is produced with `renderMock` from `@motir/design-system/mock`, so its markup is the package's and the product's own classes.
+
+**What this asset DECIDES.** What a reader sees on the **title surfaces** when the project's auto-translate switch is on: the per-surface switch, the per-title mark, the one notice when no credit is available, the live region, and how a title that differs keeps its row or card from moving. Eight surfaces, nine surface-level states, six per-title values.
+
+**What it only COMPOSES.** The item-scope switch shipped in `app/(authed)/items/[key]/_components/translation/` (a secondary small `Button` with the lucide `Languages` icon, `aria-pressed`) and the mark vocabulary of the work item page design ([MOTIR-8823](motir:cmvbkboyd001shqop781p415j)'s sibling design, `translation--auto.mock.html`). A list switch means the same thing as the item's: pressed shows the text as written.
+
+### The surfaces and their measurements (read from the shipped code)
+
+| surface            | where the switch lives                                            | the title's box today                                                                                                        | what the swap can change                       |
+| ------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `/items` list      | the toolbar's right end, beside the view controls                 | single line, truncate; row `height: 44`, title track `minmax(10rem,1fr)` (`IssueListTable.tsx:188`, `ISSUE_TITLE_MIN_TRACK`) | nothing: the row stays 44                      |
+| `/items` tree      | the same toolbar                                                  | single line; `ROW_PX=40`, `INDENT_PX=22` (`TreeTable.tsx`)                                                                   | nothing: the row stays 40                      |
+| Board              | the board header's controls slot, beside the group-by `Segmented` | card title `line-clamp-2 text-[13.5px] leading-snug` (`BoardCard.tsx:131`)                                                   | **yes** → the reserved two-line region (below) |
+| Backlog and sprint | the planning header                                               | single line, truncate in the shared `BacklogRow` (`BacklogRow.tsx:182`)                                                      | nothing                                        |
+| Ready              | the page header                                                   | single line, truncate; `ROW_ESTIMATE_PX=44`, `ROW_GAP_PX=8`, accessible name `${key} ${title}`                               | nothing                                        |
+| Triage             | the inbox header                                                  | `line-clamp-2` over a `line-clamp-1` snippet (`TriageRow.tsx`)                                                               | no: the clamp is the box                       |
+| Roadmap canvas     | the canvas toolbar                                                | node `NODE_W=280` × `NODE_H=124`, title `line-clamp-2` (`lib/planning/projectCanvasModel.ts:174-175`)                        | no: the node is fixed                          |
+
+**Deviation from the card's table.** The card says backlog, sprint and Ready follow "the same two-line region rule". The measured rows are single-line truncated, so a longer or shorter translated title cannot change their height; the rule is **vacuous there** and nothing is reserved. Only the board card, whose title is a clamp that can occupy one or two lines, owes a reservation.
+
+### The rule: a differing title takes the two-line region from the first frame
+
+On the board, a card whose title differs from the reader's language takes `line-clamp-2 min-h-[2lh]` **from the first frame** (mid-translation included), so the answer landing never moves the card below it. A card whose title does not differ keeps its ordinary box. P5 draws one card three times (reserved, landed, and the "not this" cases: a card that grows on arrival; a reservation on a card that does not differ).
+
+### Surface-level states (the switch and the notice)
+
+| #   | state                                                                     | switch                                       | notice                                                       | requests                                                   |
+| --- | ------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| S1  | **setting off**                                                           | absent                                       | absent                                                       | none                                                       |
+| S2  | **on, nothing differs** (every visible title is in the reader's language) | absent (not disabled)                        | absent                                                       | none                                                       |
+| S3  | **on, translating**                                                       | **Show original**, `aria-pressed="true"`     | absent                                                       | one per page of titles                                     |
+| S4  | **on, landed**                                                            | **Show original**, pressed                   | absent                                                       | none further                                               |
+| S5  | **showing original**                                                      | **Show translation**, `aria-pressed="false"` | absent                                                       | **none**, either direction; never persisted, bills nothing |
+| S6  | **partly failed**                                                         | as S4                                        | absent                                                       | the next load retries                                      |
+| S7  | **no credit, owner or admin**                                             | absent                                       | the notice + **Add credit** link (only when `canAddCredits`) | **none**                                                   |
+| S8  | **no credit, member**                                                     | absent                                       | the notice, no link                                          | none                                                       |
+| S9  | **stale after an edit**                                                   | unchanged                                    | unchanged                                                    | the edited title is re-requested quietly                   |
+
+The switch is **absent, not disabled** in S1, S2, S7 and S8: a disabled control would promise something the surface cannot do.
+
+### Per-title values
+
+| value         | what is drawn                                                | accessible name              |
+| ------------- | ------------------------------------------------------------ | ---------------------------- |
+| not differing | the stored title, no mark                                    | the title                    |
+| pending       | the stored title + a small spinner glyph (`aria-hidden`)     | title + "translating"        |
+| translated    | the translated title + the translation glyph (`aria-hidden`) | title + "machine-translated" |
+| original      | the stored title, no mark (the switch is the cue)            | the title                    |
+| failed        | the stored title only: **no mark, no Retry**                 | the title                    |
+| no credit     | the stored title only                                        | the title                    |
+
+The marks are **decorative glyphs (`aria-hidden`)**; the meaning travels in the title's accessible name, never in the glyph alone. A failed title is silent on purpose: the next load retries, and a per-row Retry on a list of hundreds is noise. State is **keyed by work item, not by row index** (P8): a virtualized list recycling a row cannot show one item's translation on another.
+
+### The notice and the live region
+
+- **One notice per surface**, not dismissible. It names the situation in the shipped no-credit words, carries **Add credit** only when `canAddCredits`, and is drawn where the switch would have been, so the header does not shift.
+- **One live region per surface**, polite. It says when the titles are being translated, when they landed, how many could not be, and when credit is missing. It does not announce per row.
+
+### The copy (11 new keys under `translation.titles.*`, English values)
+
+| key               | value                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `switchName`      | Translated titles                                                                    |
+| `showOriginal`    | Show original                                                                        |
+| `showTranslation` | Show translation                                                                     |
+| `pendingMark`     | Translating                                                                          |
+| `marked`          | Translated                                                                           |
+| `noCredit`        | Titles stay in their original language because your organization has no credit left. |
+| `addCredit`       | Add credit                                                                           |
+| `livePending`     | Translating titles…                                                                  |
+| `liveDone`        | Titles translated                                                                    |
+| `liveFailed`      | Some titles could not be translated                                                  |
+| `liveNoCredit`    | Titles are shown in their original language: no credit left                          |
+
+The ten non-English catalogues owe these keys in the locale lane.
+
+### Colour, shape and ink
+
+`--el-*` and the element-semantic shape tokens only. Marks, captions and the notice body use `--el-text-secondary`, never `--el-text-muted` or `--el-text-faint` (the faint ink is on `aria-hidden` glyphs only). Dashed outlines in the mock mark the reserved regions and are annotation, not product. **Proposed additions to `@motir/design-system`: none.**
+
+### Render sites judged
+
+Judged and drawn: list, tree, board (+ the independent peek, whose view mode is not this switch), backlog, sprint, Ready, triage, roadmap. Judged and **not** a title surface: a card title inside the work item page (MOTIR-8823), a breadcrumb, a notification row, and search results (the coverage sweep owns them).
+
+### GIVES / TAKES
+
+|                                                                                                 |                                                                                                  |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **GIVES** to [the surfaces' build](motir:cmvbkbozd001uhqopgfhggdrt) (MOTIR-8833)                | the eight surfaces, the nine states, the six values, the two-line rule, the copy                 |
+| **GIVES** to the coverage sweep ([MOTIR-8834](motir:cmvbkbp0j001whqopbmqpr47v))                 | the list of judged render sites                                                                  |
+| **TAKES** from [the reader's translation context](motir:cmvbkbon6001khqop6yb6ad83) (MOTIR-8828) | whether the switch is on, the reader's language, `canAddCredits`, each title's recorded language |
+| **TAKES** from the translation door and route (MOTIR-8829, MOTIR-8831)                          | the titles' batch translation and its answer                                                     |
+
+### What this does NOT decide
+
+- **The item page and quick view**: [MOTIR-8823](motir:cmvbkboyd001shqop781p415j)'s design.
+- **The setting and who may flip it**: [its design](motir:cmvbkbnwv000whqopmgfngvoj).
+- **The editors' original-language note**: [the editors' design](motir:cmvbkbpaw0022hqopxorabzzp).
+- **The batch request, its limits and its billing**: the door and route builds.
+- **Other render sites**: the coverage sweep (MOTIR-8834).
