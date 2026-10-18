@@ -60,6 +60,8 @@ function renderCvr(props: Partial<Parameters<typeof CreatedVsResolvedReport>[0]>
       period="day"
       daysBack={30}
       cumulative={false}
+      form="line"
+      series="both"
       savedFilterId={null}
       projectName="Motir"
       savedFilters={[]}

@@ -62,7 +62,9 @@ describe('ReportHelp', () => {
       'workload',
     ];
     for (const id of ids) {
-      const help = (messages.reports.help as Record<string, { what: string; how: string }>)[id];
+      const help = (
+        messages.reports.help as unknown as Record<string, { what: string; how: string }>
+      )[id];
       expect(help?.what, id).toBeTruthy();
       expect(help?.how, id).toBeTruthy();
     }
