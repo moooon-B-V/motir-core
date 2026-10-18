@@ -323,4 +323,17 @@ export const ciRunnerAdmissionService = {
       });
     }
   },
+
+  /** {@link releaseClaim} for a boot that failed transiently: counts the attempt
+   *  as it re-queues the intent (MOTIR-8941). Best-effort for the same reason. */
+  async releaseClaimForRetry(intentId: string): Promise<void> {
+    try {
+      await withSystemContext((tx) => intents.releaseClaimForRetry(intentId, tx));
+    } catch (err) {
+      console.error('[ciRunnerAdmissionService] could not release a claim for retry', {
+        intentId,
+        detail: detailOf(err),
+      });
+    }
+  },
 };

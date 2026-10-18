@@ -5,6 +5,7 @@ import {
   FLEET_CONTAINER_SIZE,
   FLEET_METADATA_KEY,
   FLEET_METADATA_VALUES,
+  MACHINE_CREATE_VOLUME_ATTEMPTS,
   OrchestratorApiError,
   VOLUME_DESTROY_ATTEMPTS,
   flyMachinesClient,
@@ -183,6 +184,50 @@ describe('provision — a spec that asks for a Docker volume gets one', () => {
     };
 
     await expect(flyOrchestrator.provision(SPEC)).rejects.toThrow(OrchestratorApiError);
+    expect(calls.some((c) => c.method === 'DELETE' && isVolume('vol_1')(c))).toBe(true);
+  });
+
+  it('a machine create refused with `volume not found` is asked again once the volume is visible (MOTIR-8941)', async () => {
+    vi.useFakeTimers();
+    let machineCreates = 0;
+    handler = (c) => {
+      if (c.method === 'POST' && isVolumes(c)) return json(200, volumeBody());
+      if (c.method === 'POST' && isMachines(c)) {
+        machineCreates += 1;
+        return machineCreates < 3
+          ? json(400, { error: 'volume vol_1 not found' })
+          : json(200, machineBody());
+      }
+      return json(200, {});
+    };
+
+    const provisioned = flyOrchestrator.provision(SPEC);
+    await vi.runAllTimersAsync();
+    const handle = await provisioned;
+
+    expect(machineCreates).toBe(3);
+    expect(handle.volumeId).toBe('vol_1');
+    expect(calls.some((c) => c.method === 'DELETE' && isVolume('vol_1')(c))).toBe(false);
+  });
+
+  it('a `volume not found` that never clears is thrown after the bounded asks, and the volume deleted', async () => {
+    vi.useFakeTimers();
+    let machineCreates = 0;
+    handler = (c) => {
+      if (c.method === 'POST' && isVolumes(c)) return json(200, volumeBody());
+      if (c.method === 'POST' && isMachines(c)) {
+        machineCreates += 1;
+        return json(400, { error: 'volume vol_1 not found' });
+      }
+      return json(200, {});
+    };
+
+    const provisioned = flyOrchestrator.provision(SPEC);
+    const settled = expect(provisioned).rejects.toThrow(OrchestratorApiError);
+    await vi.runAllTimersAsync();
+    await settled;
+
+    expect(machineCreates).toBe(MACHINE_CREATE_VOLUME_ATTEMPTS);
     expect(calls.some((c) => c.method === 'DELETE' && isVolume('vol_1')(c))).toBe(true);
   });
 

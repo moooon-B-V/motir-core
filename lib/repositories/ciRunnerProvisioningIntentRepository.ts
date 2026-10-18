@@ -213,6 +213,24 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
+   * {@link releaseClaim} for a boot that FAILED transiently (MOTIR-8941): the
+   * intent goes back to `pending` and the attempt is counted, so the bound on
+   * retries survives the process. Same `provisioning` guard as the plain release.
+   */
+  async releaseClaimForRetry(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const result = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, status: CI_RUNNER_INTENT_PROVISIONING },
+      data: {
+        status: CI_RUNNER_INTENT_PENDING,
+        settledAt: null,
+        teardownReason: null,
+        bootAttempts: { increment: 1 },
+      },
+    });
+    return result.count === 1;
+  },
+
+  /**
    * Record the GitHub runner a JIT mint just registered — BEFORE the container
    * exists.
    *
