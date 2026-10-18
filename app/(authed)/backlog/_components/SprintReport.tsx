@@ -85,6 +85,8 @@ export interface SprintReportProps {
    * just-completed sprint (see `ReportBurndownSection`).
    */
   cycle?: CycleGraphDto;
+  /** Page mode for the two charts — passed only by the report page (Story MOTIR-8919). */
+  fit?: 'page';
 }
 
 export function SprintReport({
@@ -94,6 +96,7 @@ export function SprintReport({
   carryOverLabel,
   velocity,
   cycle,
+  fit,
 }: SprintReportProps) {
   const t = useTranslations('backlog');
   const locale = useLocale();
@@ -185,7 +188,7 @@ export function SprintReport({
             <TrendingUp className="h-4 w-4 shrink-0 text-(--el-warning)" aria-hidden />
             {t('sprintReport.burndown')}
           </span>
-          <ReportBurndownSection sprintId={report.sprintId} cycle={cycle} />
+          <ReportBurndownSection sprintId={report.sprintId} cycle={cycle} fit={fit} />
         </section>
 
         {velocity ? (
@@ -194,7 +197,7 @@ export function SprintReport({
               <BarChart3 className="h-4 w-4 shrink-0 text-(--el-success)" aria-hidden />
               {t('sprintReport.velocity')}
             </span>
-            <VelocityChart velocity={velocity} />
+            <VelocityChart velocity={velocity} fit={fit} />
           </section>
         ) : null}
       </div>

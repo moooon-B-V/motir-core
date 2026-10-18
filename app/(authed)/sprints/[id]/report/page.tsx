@@ -4,10 +4,8 @@ import {
   SurfaceShowOriginalSwitch,
   SurfaceTitlesNotice,
 } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { reportsService } from '@/lib/services/reportsService';
@@ -19,7 +17,7 @@ import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { pickReportSprints } from '@/lib/reports/sprintPicker';
 import { SprintReportSprintPicker } from './_components/SprintReportSprintPicker';
-import { ReportHelp } from '@/app/(authed)/reports/_components/ReportHelp';
+import { ReportPageChrome } from '@/app/(authed)/reports/_components/ReportPageChrome';
 
 // The standalone sprint-report page (Story 4.4 · Subtask 4.4.6) — the report
 // reachable for a CLOSED sprint after the complete-modal success state has gone
@@ -60,22 +58,19 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
   const { pickerSprints, defaultSprint } = pickReportSprints(sprints);
   if (!defaultSprint) {
     return (
-      <div className="flex flex-col gap-6">
-        <Link
-          href="/backlog"
-          className="inline-flex w-fit items-center gap-1 text-sm text-(--el-text-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-          {t('sprintReport.backToBacklog')}
-        </Link>
-        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-          {t('sprintReport.heading')}
-        </h1>
+      <ReportPageChrome
+        backLabel={t('sprintReport.backToBacklog')}
+        backHref="/backlog"
+        crumb={t('heading')}
+        title={t('sprintReport.heading')}
+        subLine={ctx.project.name}
+        help="sprintReport"
+      >
         <EmptyState
           title={t('sprintReport.noSprintsTitle')}
           description={t('sprintReport.noSprintsBody')}
         />
-      </div>
+      </ReportPageChrome>
     );
   }
   const sprint = pickerSprints.some((p) => p.id === id)
@@ -113,36 +108,32 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
 
   return (
     <SurfaceTitleHost projectKey={ctx.project.identifier} contextRead={titleContext}>
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <Link
-              href="/backlog"
-              className="inline-flex w-fit items-center gap-1 text-sm text-(--el-text-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden />
-              {t('sprintReport.backToBacklog')}
-            </Link>
-            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-              {t('sprintReport.title', { name: sprint.name })}
-            </h1>
+      <ReportPageChrome
+        backLabel={t('sprintReport.backToBacklog')}
+        backHref="/backlog"
+        crumb={t('heading')}
+        title={t('sprintReport.title', { name: sprint.name })}
+        subLine={ctx.project.name}
+        help="sprintReport"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <SprintReportSprintPicker sprints={pickerSprints} selectedSprintId={sprint.id} />
+            <SurfaceShowOriginalSwitch />
           </div>
-          <SurfaceShowOriginalSwitch />
+
+          <SurfaceTitlesNotice />
+
+          <SprintReport
+            report={report}
+            sprint={sprint}
+            statusByKey={statusByKey}
+            velocity={velocity}
+            cycle={cycle}
+            fit="page"
+          />
         </div>
-
-        <ReportHelp report="sprintReport" />
-
-        <SurfaceTitlesNotice />
-
-        <SprintReport
-          report={report}
-          sprint={sprint}
-          statusByKey={statusByKey}
-          velocity={velocity}
-          cycle={cycle}
-        />
-      </div>
+      </ReportPageChrome>
     </SurfaceTitleHost>
   );
 }

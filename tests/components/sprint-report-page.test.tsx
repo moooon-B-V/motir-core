@@ -72,7 +72,10 @@ vi.mock('@/app/(authed)/sprints/[id]/report/_components/SprintReportSprintPicker
 }));
 
 vi.mock('@/app/(authed)/reports/_components/ReportHelp', () => ({
-  ReportHelp: ({ report }: { report: string }) => <div data-testid="help" data-report={report} />,
+  ReportHelpToggle: ({ report }: { report: string }) => (
+    <div data-testid="help" data-report={report} />
+  ),
+  ReportHelpRegion: () => null,
 }));
 
 const { default: SprintReportPage } = await import('@/app/(authed)/sprints/[id]/report/page');
@@ -104,8 +107,16 @@ describe('the Sprint report resolves its sprint from the path', () => {
     render(await open('done2'));
     expect(screen.getByTestId('sprint-report').getAttribute('data-sprint')).toBe('done2');
     expect(screen.getByTestId('picker').getAttribute('data-selected')).toBe('done2');
-    // The help text sits under the title, as on every other report.
+    // The help toggle is the chrome's, once; the picker sits in the chrome body
+    // before the report; the back link keeps going to the backlog.
+    expect(screen.getAllByTestId('help')).toHaveLength(1);
     expect(screen.getByTestId('help').getAttribute('data-report')).toBe('sprintReport');
+    const picker = screen.getByTestId('picker');
+    const body = screen.getByTestId('sprint-report');
+    expect(picker.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: /sprintReport\.backToBacklog/ }).getAttribute('href'),
+    ).toBe('/backlog');
     expect(redirected).not.toHaveBeenCalled();
   });
 

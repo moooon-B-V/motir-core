@@ -26,10 +26,13 @@ type LoadState = 'loading' | 'ready' | 'error';
 export function ReportBurndownSection({
   sprintId,
   cycle,
+  fit,
 }: {
   sprintId: string;
   /** The server-fetched cycle graph (the standalone page); omit to client-fetch. */
   cycle?: CycleGraphDto;
+  /** Page mode, passed only by the report pages (Story MOTIR-8919). */
+  fit?: 'page';
 }) {
   const t = useTranslations('backlog');
   const preloaded = cycle !== undefined;
@@ -57,7 +60,7 @@ export function ReportBurndownSection({
   }, [preloaded, sprintId, reloadKey]);
 
   const data = cycle ?? fetched;
-  if (data) return <CycleGraphChart cycle={data} variant="full" />;
+  if (data) return <CycleGraphChart cycle={data} variant="full" fit={fit} />;
 
   if (loadState === 'error') {
     return (

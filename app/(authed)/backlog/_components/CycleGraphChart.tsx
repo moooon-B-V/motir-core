@@ -64,9 +64,12 @@ function formatChartDay(iso: string, locale: string): string {
 export function CycleGraphChart({
   cycle,
   variant,
+  fit,
 }: {
   cycle: CycleGraphDto;
   variant: 'full' | 'compact';
+  /** Page mode (Story MOTIR-8919) — the `full` variant only; `compact` ignores it. */
+  fit?: 'page';
 }) {
   const t = useTranslations('backlog.sprintReport');
   const tStat = useTranslations('settings.estimation');
@@ -258,6 +261,7 @@ export function CycleGraphChart({
         </div>
       ) : null}
       <LineChart
+        fit={full ? fit : undefined}
         series={series}
         x={{
           domain: [0, lastDay],

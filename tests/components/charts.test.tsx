@@ -8,6 +8,7 @@ import {
   LineChart,
   DonutChart,
   DifferenceAreaChart,
+  HBarChart,
   chartColor,
   fitXTicks,
   pageChart,
@@ -825,5 +826,40 @@ describe('fit="page" charts', () => {
     expect(container.querySelector('svg')!.getAttribute('viewBox')).toBe('0 0 600 300');
     expect(container.querySelectorAll('svg rect > title')).toHaveLength(0);
     expect(container.innerHTML).not.toContain('rotate(-45');
+  });
+
+  const hbar = (fit?: 'page') => (
+    <HBarChart
+      bars={[
+        { label: 'Ada', value: 8, color: chartColor.created },
+        { label: 'Grace', value: 5, color: chartColor.resolved },
+        { label: 'Unassigned', value: 2, color: chartColor.categoricalNone },
+      ]}
+      description="Open work per assignee"
+      dataTable={{ caption: 'Open work', columns: ['Assignee', 'Points'], rows: [] }}
+      fit={fit}
+    />
+  );
+  // TOP_PAD 26 + 3 rows × ROW_HEIGHT 37 + BOTTOM_PAD 26
+  const HBAR_ROWS_HEIGHT = 26 + 3 * 37 + 26;
+
+  it.each([800, 1440, 1920])(
+    'HBarChart in page mode lays out at a %ipx measured width, at the row-formula height',
+    (w) => {
+      const { container } = render(hbar('page'));
+      act(() => fire?.(w));
+      const svg = container.querySelector('svg')!;
+      expect(svg.getAttribute('viewBox')).toBe(`0 0 ${w} ${HBAR_ROWS_HEIGHT}`);
+      expect(svg.getAttribute('height')).toBe(String(HBAR_ROWS_HEIGHT));
+    },
+  );
+
+  it('HBarChart without fit keeps its fixed 600-wide viewBox, whatever the container measures', () => {
+    const { container } = render(hbar());
+    act(() => fire?.(1920));
+    const svg = container.querySelector('svg')!;
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 600 ${HBAR_ROWS_HEIGHT}`);
+    expect(svg.getAttribute('height')).toBeNull();
+    expect(svg.getAttribute('class')).toContain('h-auto');
   });
 });

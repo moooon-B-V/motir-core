@@ -66,7 +66,7 @@ export function BurndownReport({
         </div>
       </div>
 
-      <ReportBurndownSection sprintId={selectedSprintId} cycle={cycle} />
+      <ReportBurndownSection sprintId={selectedSprintId} cycle={cycle} fit="page" />
     </div>
   );
 }

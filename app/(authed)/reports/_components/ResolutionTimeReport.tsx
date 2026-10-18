@@ -179,6 +179,7 @@ function ResolutionTimeBody({
 
   return (
     <BarChart
+      fit="page"
       series={[{ label: t('resolutionTime.legendLabel'), color: chartColor.resolution }]}
       groups={buckets.map((b) => ({
         label: bucketLabel(b.date, period, locale),

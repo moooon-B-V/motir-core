@@ -10,17 +10,18 @@ import { ReportHelpRegion, ReportHelpToggle, type ReportHelpId } from './ReportH
 // component (no state); the sub-line is rebuilt on every URL-driven re-render,
 // so it always tracks the active config.
 //
-// The page is bounded to `mx-auto max-w-[48rem]` and the body sits in the design's
-// `.report-card` (the `Card` primitive). This is load-bearing, not cosmetic:
-// the chart primitives render responsively to their container (the
-// ChartFrame bounded-container contract), so the authed shell's unbounded
-// full-width content region was painting the line chart past the fold and
-// leaving the donut adrift in whitespace — the bug-reports-chart-sizing fix.
-// The bounded card is what gives both page charts a page-level (not
-// widget-tile) size.
+// The page fills the content region and the body sits in the design's
+// `.report-card` (the `Card` primitive). The chart's HEIGHT is bounded by the
+// chart primitives' page mode (`fit="page"`, `clamp(280px, 44vh, 420px)`), not by
+// a width cap: the old `max-w-[48rem]` column (MOTIR-449) kept a responsive chart
+// from growing taller as it grew wider, and page mode now holds the height
+// itself, so the cap is gone. Never reach for a NAMED `max-w-*` utility here —
+// this project's Tailwind `@theme` clears the named container scale and
+// `max-w-3xl` collapses the page to a ~40px column.
 
 export function ReportPageChrome({
   backLabel,
+  backHref = '/reports',
   crumb,
   title,
   subLine,
@@ -28,6 +29,8 @@ export function ReportPageChrome({
   children,
 }: {
   backLabel: string;
+  /** Where the back link goes; the Reports hub unless a page says otherwise. */
+  backHref?: string;
   /** The breadcrumb trail's leading label (e.g. "Reports"). */
   crumb: string;
   title: string;
@@ -38,14 +41,10 @@ export function ReportPageChrome({
   help: ReportHelpId;
   children: ReactNode;
 }) {
-  // Arbitrary `max-w-[48rem]` (768px), NOT `max-w-3xl` — this project's Tailwind
-  // `@theme` clears the named container scale, so `max-w-3xl` collapses the page
-  // to a ~40px column (the same trap documented in
-  // app/tokens/markdown-editor/page.tsx). Use rem arbitrary values.
   return (
-    <div className="mx-auto flex max-w-[48rem] flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       <Link
-        href="/reports"
+        href={backHref}
         className="inline-flex w-fit items-center gap-1 text-sm text-(--el-text-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />

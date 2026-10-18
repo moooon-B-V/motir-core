@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/charts';
 import type { CreatedVsResolvedDto, ReportStaleReasonDto } from '@/lib/dto/reports';
 import type { ReportPeriod } from '@/lib/reports/buckets';
-import { differenceSeries, pickTickIndices } from '@/lib/reports/reportChartData';
+import { differenceSeries } from '@/lib/reports/reportChartData';
 import {
   buildReportHref,
   clampDaysBack,
@@ -194,7 +194,8 @@ function CreatedVsResolvedBody({
   const n = series.bucketDates.length;
   const x: ChartAxis = {
     domain: [0, Math.max(1, n - 1)],
-    ticks: pickTickIndices(n).map((i) => ({
+    // Page mode thins by fit, so every bucket is offered (Story MOTIR-8919).
+    ticks: Array.from({ length: n }, (_, i) => i).map((i) => ({
       value: i,
       label: labelForDate(series.bucketDates[i]!),
     })),
@@ -230,6 +231,7 @@ function CreatedVsResolvedBody({
 
   return (
     <DifferenceAreaChart
+      fit="page"
       created={series.created}
       resolved={series.resolved}
       x={x}

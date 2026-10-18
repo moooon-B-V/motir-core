@@ -131,5 +131,5 @@ async function VelocitySeries({
     { projectId, lastN: count, endSprintId },
     accessCtx,
   );
-  return <VelocityChart velocity={velocity} />;
+  return <VelocityChart velocity={velocity} fit="page" />;
 }

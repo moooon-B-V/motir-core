@@ -131,6 +131,7 @@ function WorkloadBody({
 
   return (
     <HBarChart
+      fit="page"
       bars={bars}
       xTitle={isCount ? t('workload.xCount') : t('workload.xPoints')}
       width={680}
