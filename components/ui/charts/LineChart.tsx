@@ -66,6 +66,8 @@ export interface LineChartProps {
   dataTable?: Omit<ChartDataTableProps, 'className'>;
   /** Hide the visible legend (the `<desc>` + table still convey the series). */
   hideLegend?: boolean;
+  /** `'page'` (Story MOTIR-8919): full-width, thinned x labels, per-x hover titles. Omitted = unchanged. */
+  fit?: 'page';
   className?: string;
 }
 
@@ -96,6 +98,7 @@ export function LineChart({
   legend,
   dataTable,
   hideLegend = false,
+  fit,
   className,
 }: LineChartProps) {
   const legendItems = legend ?? deriveLegend(series, referenceLines);
@@ -114,6 +117,8 @@ export function LineChart({
         y={y}
         description={description}
         ariaLabel={ariaLabel}
+        fit={fit}
+        hitBands={fit === 'page' ? lineHitBands(series, x) : undefined}
       >
         {({ xScale, yScale, plot }) => {
           const toPixels = (pts: DataPoint[]): PixelPoint[] =>
@@ -289,4 +294,21 @@ function deriveTable(series: LineSeries[], x: ChartAxis): Omit<ChartDataTablePro
     columns: [x.title ?? 'x', ...series.map((s) => s.label)],
     rows,
   };
+}
+
+/** One hover title per distinct x: the full x label, then each series' value there. */
+function lineHitBands(series: LineSeries[], x: ChartAxis) {
+  const xs = Array.from(new Set(series.flatMap((s) => s.points.map((p) => p.x)))).sort(
+    (a, b) => a - b,
+  );
+  return xs.map((xv) => ({
+    x: xv,
+    title: [
+      x.ticks.find((t) => t.value === xv)?.label ?? String(xv),
+      ...series.map((s) => {
+        const pt = s.points.find((p) => p.x === xv);
+        return `${s.label}: ${pt && pt.y !== null ? pt.y : '—'}`;
+      }),
+    ].join('\n'),
+  }));
 }
