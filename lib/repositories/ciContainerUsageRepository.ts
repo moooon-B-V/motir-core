@@ -436,6 +436,52 @@ export const ciContainerUsageRepository = {
   },
 
   /**
+   * INDEX rows created before `createdBefore` that never reached a terminal state
+   * (MOTIR-8913), oldest first — the candidates of the stranded-usage repair.
+   *
+   * Created-before rather than last-touched, because the row carries no
+   * `updated_at`: a container older than the fleet reaper's window is destroyed
+   * whatever this row says, so age alone is what makes a row repairable.
+   */
+  async listStrandedIndexUsage(createdBefore: Date, take: number, tx: Prisma.TransactionClient) {
+    return tx.ciContainerUsage.findMany({
+      where: { workload: 'index', containerStoppedAt: null, createdAt: { lt: createdBefore } },
+      orderBy: { createdAt: 'asc' },
+      take,
+      select: {
+        id: true,
+        containerProvider: true,
+        handleId: true,
+        containerCreatedAt: true,
+        containerStartedAt: true,
+        billableSeconds: true,
+      },
+    });
+  },
+
+  /**
+   * Write the terminal fields onto a row that never got them (MOTIR-8913). Only
+   * the first settle lands — the `container_stopped_at IS NULL` guard is what makes
+   * a repair that races the real settle a no-op instead of an overwrite — and the
+   * figures are left alone, because the rollup already holds them.
+   */
+  async settleStranded(
+    id: string,
+    settle: { stoppedAt: Date; terminalState: string; teardownReason: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.ciContainerUsage.updateMany({
+      where: { id, containerStoppedAt: null },
+      data: {
+        containerStoppedAt: settle.stoppedAt,
+        terminalState: settle.terminalState,
+        teardownReason: settle.teardownReason,
+      },
+    });
+    return result.count;
+  },
+
+  /**
    * ONE dispatch run's machine time (MOTIR-6448) — Σ `billable_seconds` and
    * Σ `cost_usd` over every row naming the run, and whether all of them are
    * settled. Live while the container runs (a checkpoint row's figure is its

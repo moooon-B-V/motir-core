@@ -62,8 +62,15 @@ export const supervisionSweep = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
-    return ctx.step.run('sweep-abandoned-supervisions', () =>
+    const swept = await ctx.step.run('sweep-abandoned-supervisions', () =>
       services.supervisionSweep.sweepAbandoned(),
     );
+    // MOTIR-8913 — a settled supervision whose usage row never closed is invisible
+    // to the sweep above, so the same tick closes it. Its own step, so a failure
+    // here retries without re-running the (memoized) teardown sweep.
+    const repaired = await ctx.step.run('repair-stranded-index-usage', () =>
+      services.supervisionSweep.repairStrandedUsage(),
+    );
+    return { ...swept, repairedUsage: repaired.settled };
   },
 );
