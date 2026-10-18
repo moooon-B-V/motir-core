@@ -1,7 +1,8 @@
 import type { Browser, Locator, Page } from '@playwright/test';
 import type { Prisma } from '@/generated/prisma/client';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase } from './_helpers/db-reset';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { signIn } from './_helpers/shell-session';
 import { fitsFold, overlappingPairs, type Quad } from './_helpers/report-geometry';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -69,7 +70,7 @@ async function recordTransition(
   to: string,
   ageDays: number,
 ): Promise<void> {
-  await db.workItemRevision.create({
+  await adminDb.workItemRevision.create({
     data: {
       workItemId,
       changedById: byId,
@@ -85,7 +86,7 @@ async function seed(): Promise<Seed> {
   const ada = await createTestUser({ name: ADA });
   await workspacesService.addMember({ userId: ada.id, workspaceId: fx.workspaceId });
   for (const userId of [fx.ownerId, ada.id]) {
-    await db.workspaceMembership.update({
+    await adminDb.workspaceMembership.update({
       where: { userId_workspaceId: { userId, workspaceId: fx.workspaceId } },
       data: { activeProjectId: fx.projectId },
     });
@@ -98,7 +99,7 @@ async function seed(): Promise<Seed> {
     state: 'planned' | 'active' | 'complete',
     completedAgo?: number,
   ) =>
-    db.sprint.create({
+    adminDb.sprint.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId,
@@ -141,7 +142,7 @@ async function seed(): Promise<Seed> {
     },
   ) => {
     const wi = await createTestWorkItem(fx, { kind: 'task', title });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: wi.id },
       data: {
         createdAt: daysAgo(over.createdAgo),
@@ -449,7 +450,7 @@ test('the refined reports fill the width, stay readable, and point where you ask
     await expect(resolvedSwitch).toBeDisabled();
     await resolvedSwitch.click({ force: true });
     await expect(page).toHaveURL(/series=resolved/);
-    await expect(page.getByText('At least one series stays on.')).toBeVisible();
+    await expect(page.getByRole('main').getByText('At least one series stays on.')).toBeVisible();
 
     const copied = page.url();
     const table = await openDataTable(page);
@@ -556,5 +557,5 @@ test('the refined reports fill the width, stay readable, and point where you ask
 });
 
 test.afterAll(async () => {
-  await db.$disconnect();
+  await adminDb.$disconnect();
 });
