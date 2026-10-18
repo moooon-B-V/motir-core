@@ -8,6 +8,7 @@ import {
   isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
+  isUnderAuthoredAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import { describeBodyAboveFieldMove } from '@/lib/workItems/bodyAboveFieldMove';
@@ -1119,7 +1120,18 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = advisories.filter(isUnderAuthoredAdvisory);
   const lines: string[] = [];
+
+  if (underAuthored.length > 0) {
+    lines.push(
+      '',
+      'THIS CARD IS UNDER-AUTHORED — no acceptance criteria and no sizing, type or executor:',
+      '  There is no list of criteria to build to. Work out what "done" means from the description',
+      '  and the repository, state your reading in the pull request, and proceed. This is not a',
+      '  reason to stop; the card needs authoring afterwards, not before you start.',
+    );
+  }
 
   if (blockerCounts.length > 0) {
     lines.push(

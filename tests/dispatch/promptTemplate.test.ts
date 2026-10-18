@@ -838,6 +838,18 @@ describe('assembleDispatchPrompt — the prose-vs-graph advisory block (MOTIR-20
     expect(prompt).toContain('graph holds 2 blocked_by edges');
   });
 
+  it('names an UNDER-AUTHORED card and tells the agent to proceed, not stop (MOTIR-5427)', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({
+        advisories: [
+          { kind: 'shape', item: 'PROD-7', severity: 'under-authored', criteria: 'no-heading' },
+        ],
+      }),
+    );
+    expect(prompt).toContain('THIS CARD IS UNDER-AUTHORED');
+    expect(prompt).toContain('This is not a');
+  });
+
   it('instructs the agent to VERIFY against origin/main and to STOP rather than rebuild', () => {
     const { prompt } = assembleDispatchPrompt(
       source({ advisories: [advisory('PROD-5', 'in_review')] }),

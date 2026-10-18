@@ -2163,6 +2163,12 @@ export interface components {
                 claim: string;
                 claimedCount: number;
                 blockerCount: number;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                criteria: string;
             } | ({
                 /** @constant */
                 kind: "subsumption";

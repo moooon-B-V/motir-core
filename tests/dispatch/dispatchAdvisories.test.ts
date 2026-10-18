@@ -95,6 +95,9 @@ async function makeItem(
     {
       projectId: fx.projectId,
       kind: 'task',
+      // Typed so the fixture is not UNDER-AUTHORED (MOTIR-5427): a bare card
+      // carries that advisory, and these suites assert on the OTHER families.
+      type: 'code',
       title,
       descriptionMd,
       ...(parentId ? { parentId } : {}),
@@ -446,7 +449,13 @@ describe('claim_next_ready — the advisories reach the PLANNER AGENT', () => {
       fx.ctx,
     );
     const clean = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Clean but low', priority: 'low' },
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        type: 'code',
+        title: 'Clean but low',
+        priority: 'low',
+      },
       fx.ctx,
     );
     await activeSprintWith(fx, [flagged.id, clean.id]);

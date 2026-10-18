@@ -9677,6 +9677,7 @@ async function computeSubtreeProseAdvisories(
     return {
       item: member.identifier,
       descriptionMd: row?.descriptionMd ?? null,
+      kind: membersById.get(member.id)?.kind,
       exemptIds,
       // The ORDERING exemption's inputs (MOTIR-2175) and the REPO-STRADDLE
       // check's repository SET (MOTIR-2177, widened in MOTIR-2728), from the same

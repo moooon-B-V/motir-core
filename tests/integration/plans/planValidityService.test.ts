@@ -60,7 +60,18 @@ const mk = (
   title: string,
   kind: 'epic' | 'story' | 'task' | 'subtask',
   parentId?: string,
-) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
+) =>
+  workItemsService.createWorkItem(
+    {
+      projectId: fx.projectId,
+      kind,
+      title,
+      parentId,
+      // Typed so a leaf is not UNDER-AUTHORED (MOTIR-5427); containers cannot carry one.
+      ...(kind === 'task' || kind === 'subtask' ? { type: 'code' as const } : {}),
+    },
+    fx.ctx,
+  );
 
 /**
  * A TASK one level below a root of its own ("Elsewhere"), in `projectId` (the
@@ -76,7 +87,7 @@ async function outsideTask(fx: WorkItemFixture, title: string, projectId = fx.pr
     fx.ctx,
   );
   const item = await workItemsService.createWorkItem(
-    { projectId, kind: 'task', title, parentId: elsewhere.id },
+    { projectId, kind: 'task', type: 'code', title, parentId: elsewhere.id },
     fx.ctx,
   );
   return Object.assign(item, { elsewhere });
@@ -956,7 +967,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     const planId = await freshPlan(fx);
     const withSibling = await addProposal(fx, planId, {
       op: 'add',
-      proposedFields: { title: 'Producer', kind: 'subtask' },
+      proposedFields: { title: 'Producer', kind: 'subtask', type: 'code' },
       parentRef: story.id,
     });
     const producerItemId = itemIdByTitle(withSibling, 'Producer');
@@ -994,7 +1005,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     const planId = await freshPlan(fx);
     const p = await addProposal(fx, planId, {
       op: 'add',
-      proposedFields: { title: 'Producer', kind: 'subtask' },
+      proposedFields: { title: 'Producer', kind: 'subtask', type: 'code' },
       parentRef: story.id,
     });
     const producerItemId = itemIdByTitle(p, 'Producer');
@@ -1063,6 +1074,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       proposedFields: {
         title: 'New child',
         kind: 'subtask',
+        type: 'code',
         descriptionMd: `Built on ${refToken('SHIPPED', shipped.id)}.`,
       },
       parentRef: story.id,

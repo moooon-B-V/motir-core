@@ -45,7 +45,8 @@ async function prompt(caller: V1ProjectCaller, key: string, query = ''): Promise
 
 async function makeItem(caller: V1ProjectCaller, title: string, kind: 'task' | 'subtask' = 'task') {
   return workItemsService.createWorkItem(
-    { projectId: caller.fixture.projectId, kind, title },
+    // Typed so the fixture is not UNDER-AUTHORED (MOTIR-5427).
+    { projectId: caller.fixture.projectId, kind, title, type: 'code' },
     caller.ctx,
   );
 }

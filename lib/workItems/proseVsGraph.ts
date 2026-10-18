@@ -27,6 +27,8 @@
 
 import { WORKITEM_TOKEN_RE, INTRA_PLAN_REF_TOKEN_RE } from '@/lib/mentions/workItemRefs';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import { isTypeableKind } from '@/lib/issues/executorDefaults';
+import type { WorkItemKindDto } from '@/lib/dto/workItems';
 
 /**
  * How strongly a body reference suggests a MISSING `blocked_by` edge. Two tiers,
@@ -1107,6 +1109,75 @@ export function overGateSizing(card: {
     storyPoints,
     estimateMinutes,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE UNDER-AUTHORED CHECK (MOTIR-5427) — a childless leaf that carries NOTHING a
+// run, a reviewer or a detector reads.
+//
+// Plan-rules gate 20 says a work item with no acceptance criteria is UNSEALABLE
+// because every criterion-level gate passes an empty list vacuously, and it says
+// its own mechanical gap out loud: the over-sizing detector returns at its
+// `executor` guard, `likely-repo-straddle` reads the criteria for foreign paths,
+// so a leaf with no executor, no numbers and no criteria is invisible to both.
+// MOTIR-4956 sealed `ready: true` / `valid: true` in exactly that state.
+//
+// This is a NULL CHECK, not the sizing advisory `CORPUS-MAINTENANCE.md` measured
+// and rejected: that rejection was about a plausible number sized for the wrong
+// half of a card (a judgement), while here every input is an ABSENT field. A leaf
+// either has an enumerated criterion under an `## Acceptance criteria` heading or
+// it does not; a column is either null or it is not. See
+// `docs/decisions/under-authored-shape-family.md`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * WHY a card has no criteria: `no-heading` (no `## Acceptance criteria` section at
+ * all) or `no-criterion` (the heading is there and nothing is enumerated under it).
+ */
+export type UnderAuthoredCriteria = 'no-heading' | 'no-criterion';
+
+/** The UNDER-AUTHORED finding. */
+export interface UnderAuthored {
+  criteria: UnderAuthoredCriteria;
+}
+
+/**
+ * The card read for under-authoring, or `null` when it is not.
+ *
+ * Fires only on a CHILDLESS card carrying ALL of: no enumerated acceptance
+ * criterion, `storyPoints` null, `estimateMinutes` null, `type` null and
+ * `executor` null. The conjunction is deliberate. A card missing only some of
+ * them is a card mid-authoring or a human card that legitimately carries no
+ * estimate; a card missing every one is not described by any other check.
+ *
+ * `hasChildren` is the gate's own scope, not a noise filter: gate 20 is a LEAF
+ * bar, and a container's body is its subtree's, so a parent is never reported
+ * whatever it carries.
+ */
+export function underAuthored(card: {
+  /**
+   * The card's kind, when the caller has it. A container KIND (epic / story) can
+   * never carry a `type` or `executor` — the service refuses one — so null columns
+   * are not a defect there, and a childless story awaiting its children is not an
+   * under-authored leaf. Absent means the caller does not know, and is not exempt.
+   */
+  kind?: string | null | undefined;
+  descriptionMd: string | null | undefined;
+  hasChildren: boolean;
+  storyPoints: number | null | undefined;
+  estimateMinutes: number | null | undefined;
+  type: string | null | undefined;
+  executor: string | null | undefined;
+}): UnderAuthored | null {
+  if (card.hasChildren) return null;
+  if (card.kind != null && !isTypeableKind(card.kind as WorkItemKindDto)) return null;
+  if (card.storyPoints != null || card.estimateMinutes != null) return null;
+  if (card.type != null || card.executor != null) return null;
+  if (acceptanceCriteriaTexts(card.descriptionMd).length > 0) return null;
+  const hasHeading = card.descriptionMd
+    ? acceptanceCriteriaSpan(card.descriptionMd) !== null
+    : false;
+  return { criteria: hasHeading ? 'no-criterion' : 'no-heading' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

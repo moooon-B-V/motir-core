@@ -17,6 +17,7 @@ import {
   isBlockerCountAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
+  isUnderAuthoredAdvisory,
 } from '@/lib/dto/workItems';
 import type { WorkItemProsePostMergeChildAdvisoryDto } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
@@ -245,6 +246,19 @@ const blockerCountShapeAdvisorySchema = z.object({
 });
 
 /**
+ * The UNDER-AUTHORED member (MOTIR-5427): a childless card with no enumerated
+ * acceptance criterion and null sizing, type and executor. `criteria` says whether
+ * the heading is missing or just empty. Additive under §8 on the same terms as the
+ * sizing member; never a gate.
+ */
+const underAuthoredShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  criteria: z.string(),
+});
+
+/**
  * A SUBSUMPTION advisory — a path the card's body names was touched by a merged
  * pull request that is not this card's own and that merged after the card was
  * filed, so its deliverable may already be in the repository (MOTIR-2903).
@@ -317,6 +331,7 @@ export const dispatchAdvisorySchema = z.union([
   selfBlockingDesignShapeAdvisorySchema,
   bodyAboveFieldMoveShapeAdvisorySchema,
   blockerCountShapeAdvisorySchema,
+  underAuthoredShapeAdvisorySchema,
   subsumptionAdvisorySchema,
   referenceAdvisorySchema,
 ]);
@@ -448,6 +463,14 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
           !isPostMergeChildAdvisory(advisory),
       )
       .map((advisory) => {
+        if (isUnderAuthoredAdvisory(advisory)) {
+          return {
+            kind: 'shape' as const,
+            item: advisory.item,
+            severity: advisory.severity,
+            criteria: advisory.criteria,
+          };
+        }
         if (isBlockerCountAdvisory(advisory)) {
           return {
             kind: 'shape' as const,

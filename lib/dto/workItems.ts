@@ -1856,7 +1856,8 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-self-blocking-design'
   | 'likely-post-merge-child-under-container'
   | 'body-edit-above-field-move'
-  | 'likely-blocker-count-mismatch';
+  | 'likely-blocker-count-mismatch'
+  | 'under-authored';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -2197,6 +2198,31 @@ export interface WorkItemProseBlockerCountAdvisoryDto extends WorkItemProseShape
 }
 
 /**
+ * A CHILDLESS card carrying nothing: no enumerated acceptance criterion and null
+ * `storyPoints`, `estimateMinutes`, `type` and `executor` (MOTIR-5427).
+ *
+ * Named as a FACT, not `likely-…`, like {@link WorkItemProseBodyAboveFieldMoveAdvisoryDto}:
+ * every input is an absent field, so there is no judgement in it and no
+ * false-positive space. What it cannot tell is WHY the fields are absent.
+ *
+ * ⚠️ **Never a gate, and the reason is the scratchpad.** Plan-rules gate 20 calls
+ * such a card UNSEALABLE, which argues for a refusal; a card is also routinely
+ * saved mid-authoring, and a refusal would make the tracker unusable as a
+ * scratchpad. The advisory channel is the decided answer for every shape family
+ * (see {@link WorkItemProseSizingAdvisoryDto}): visible at seal time and at claim
+ * time, never in readiness. `docs/decisions/under-authored-shape-family.md`.
+ *
+ * ⚠️ Childless is the scope, as for the sizing and self-blocking members: gate 20
+ * is a leaf bar, so a container is never reported. No criterion index, because
+ * the finding is about the ABSENCE of criteria.
+ */
+export interface WorkItemProseUnderAuthoredAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'under-authored';
+  /** Whether the `## Acceptance criteria` heading is missing or just empty. */
+  criteria: 'no-heading' | 'no-criterion';
+}
+
+/**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
  *
@@ -2211,7 +2237,8 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseSelfBlockingDesignAdvisoryDto
   | WorkItemProsePostMergeChildAdvisoryDto
   | WorkItemProseBodyAboveFieldMoveAdvisoryDto
-  | WorkItemProseBlockerCountAdvisoryDto;
+  | WorkItemProseBlockerCountAdvisoryDto
+  | WorkItemProseUnderAuthoredAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2569,6 +2596,13 @@ export function isBodyAboveFieldMoveAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseBodyAboveFieldMoveAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'body-edit-above-field-move';
+}
+
+/** Narrow an advisory to the UNDER-AUTHORED shape (MOTIR-5427). */
+export function isUnderAuthoredAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseUnderAuthoredAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'under-authored';
 }
 
 /** Narrow an advisory to the counted-own-blockers shape (MOTIR-5428). */
