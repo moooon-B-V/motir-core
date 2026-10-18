@@ -1583,7 +1583,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"), case-insensitive. With `planId`, this may instead be a `planItem:<id>` temp-ref naming an `add` in that plan (case-SENSITIVE, as `add_plan_items` returned it).',
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"), case-insensitive — or the work item\'s internal id, the form a plan names a committed card by (`parentRef`, `blockedByRefs`, `workItemId`). With `planId`, this may instead be a `planItem:<id>` temp-ref naming an `add` in that plan (case-SENSITIVE, as `add_plan_items` returned it).',
       },
       planId: {
         type: 'string',
