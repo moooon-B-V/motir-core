@@ -13,6 +13,8 @@ import {
   hashFieldText,
   type TranslatableField,
 } from '@/lib/translation/fieldRevision';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { fieldRef } from '@/lib/translation/fieldRefs';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { TenantReadContext } from '@/lib/workspaces/tenantRead';
@@ -111,6 +113,40 @@ export const workItemTranslationStoreService = {
       );
       const kept: Record<string, string> = {};
       for (const row of rows) kept[row.fieldRef] = row.translatedText;
+      return kept;
+    });
+  },
+
+  /**
+   * The kept TITLE translations for many of a project's work items in
+   * `targetLanguage`, as `{ workItemId → translatedText }`, from ONE query
+   * (MOTIR-8829). `titles` pairs each item with its CURRENT title; only a row of
+   * exactly that text is served. Tenancy is resolved from the project inside the
+   * caller's workspace, so a project in another workspace is simply not found.
+   */
+  async getKeptForTitles(
+    projectId: string,
+    titles: readonly { workItemId: string; text: string }[],
+    targetLanguage: string,
+    ctx: TenantReadContext,
+  ): Promise<Record<string, string>> {
+    assertTargetLanguage(targetLanguage);
+    const entries = titles
+      .filter((t) => hasTranslatableText(t.text))
+      .map((t) => ({ workItemId: t.workItemId, sourceHash: hashFieldText(t.text) }));
+    return withWorkspaceContext(ctx, async (tx) => {
+      const project = await projectRepository.findById(projectId, tx);
+      if (!project || project.workspaceId !== ctx.workspaceId) {
+        throw new ProjectNotFoundError(projectId);
+      }
+      const rows = await workItemTranslationRepository.findCurrentForItems(
+        entries,
+        fieldRef.title(),
+        targetLanguage,
+        tx,
+      );
+      const kept: Record<string, string> = {};
+      for (const row of rows) kept[row.workItemId] = row.translatedText;
       return kept;
     });
   },

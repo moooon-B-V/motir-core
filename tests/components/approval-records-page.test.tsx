@@ -52,11 +52,21 @@ vi.mock('next-intl/server', async () => {
   };
 });
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
+// An async Server Component cannot be rendered by RTL; the host only mounts the
+// title-translation provider around the room, which this file does not exercise.
+vi.mock('@/components/workItems/titleTranslation/SurfaceTitleHost', () => ({
+  SurfaceTitleHost: ({ children }: { children: ReactElement }) => children,
+}));
 vi.mock('@/lib/services/approvalGatesService', () => ({
   approvalGatesService: { listRecords, recordViews },
 }));
 
-const CTX = { userId: 'u1', workspaceId: 'ws1', projectId: 'p1' };
+const CTX = {
+  userId: 'u1',
+  workspaceId: 'ws1',
+  projectId: 'p1',
+  project: { id: 'p1', identifier: 'ACME', autoTranslateWorkContent: false },
+};
 
 function empty(fullView: boolean): ApprovalRecordsPageDto {
   return {

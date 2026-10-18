@@ -50,6 +50,7 @@ const projectDto = {
   onboardingRanAt: null,
   aiGenerateExplanations: false,
   prMergeMode: 'manual' as const,
+  autoTranslateWorkContent: false,
 };
 
 describe('the guard BITES — a one-sided field fails, in both directions', () => {

@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  SurfaceTitle,
+  useSurfaceTitleResolver,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import type { MouseEvent } from 'react';
 import Link from 'next/link';
@@ -128,9 +132,13 @@ export function BoardCardView({
         />
       </span>
 
-      <span className="line-clamp-2 text-[13.5px] leading-snug text-(--el-text) group-hover:underline">
-        {card.title}
-      </span>
+      <SurfaceTitle
+        id={card.id}
+        title={card.title}
+        layout="clamp"
+        reserveTwoLines
+        className="line-clamp-2 text-[13.5px] leading-snug text-(--el-text) group-hover:underline"
+      />
 
       {/* ⚠️ `flex-wrap` is REQUIRED by the CI badge (MOTIR-5474, design
           `board-card--ci-badge.mock.html` panel 4). This row had none, so a SECOND
@@ -377,6 +385,7 @@ export function BoardCard({
   onOpenQuickView: (identifier: string) => void;
 }) {
   const t = useTranslations('boards');
+  const shownTitle = useSurfaceTitleResolver()(card.id, card.title);
   // MOTIR-2473 — each key read off the write it guards: a board MOVE goes
   // through `boardsService`'s `assertCanEdit` (`work_item:edit`), and the ⋯
   // menu's Delete row through `workItemsService.deleteWorkItem`
@@ -416,7 +425,7 @@ export function BoardCard({
       ref={planHold ? setActivatorNodeRef : setNodeRef}
       type="button"
       onClick={() => onOpenQuickView(card.identifier)}
-      aria-label={t('openIssueAria', { key: card.identifier, title: card.title })}
+      aria-label={t('openIssueAria', { key: card.identifier, title: shownTitle.name })}
       data-testid={`board-card-${card.identifier}`}
       // `data-tilt` opts the kanban card into the 3D / Immersive pointer-tilt
       // (7.3.39). Inert for every other style + under reduced motion. While
@@ -502,7 +511,7 @@ export function BoardCard({
         <WorkItemActionsMenu
           itemId={card.id}
           identifier={card.identifier}
-          title={card.title}
+          title={shownTitle.text}
           canEdit={canEdit}
           canArchive={canArchive}
           canDelete={canDelete}

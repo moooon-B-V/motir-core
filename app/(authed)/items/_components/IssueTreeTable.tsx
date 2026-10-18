@@ -1,5 +1,6 @@
 'use client';
 
+import { useSurfaceTitleResolver } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import {
   useCallback,
   useEffect,
@@ -244,6 +245,7 @@ export function IssueTreeTable({
 }: IssueTreeTableProps) {
   const routes = useReaderRoutes();
   const t = useTranslations();
+  const resolveTitle = useSurfaceTitleResolver();
   const tv = useTranslations('issueViews');
   const { toast } = useToast();
   const locale = useLocale() as Locale;
@@ -1326,7 +1328,9 @@ export function IssueTreeTable({
           node.kind === 'issue' ? routes.item(node.row.identifier) : undefined
         }
         getRowLabel={(node) =>
-          node.kind === 'issue' ? `${node.row.identifier} ${node.row.title}` : ''
+          node.kind === 'issue'
+            ? `${node.row.identifier} ${resolveTitle(node.row.id, node.row.title).name}`
+            : ''
         }
         onRowLinkClick={(e, node) => {
           if (node.kind === 'issue') onPeekClick(e, node.row.identifier);

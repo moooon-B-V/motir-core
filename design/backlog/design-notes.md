@@ -527,3 +527,7 @@ aria-multiselectable="true"` with `role="option" aria-selected`; the filtered-
 - **next-intl en + zh** — every new string (the summary copy, the filtered-empty
   EmptyState, the match-count) is keyed; the `filterComingSoon` key is dropped
   when the seam is enabled (8.8.18).
+
+## Auto-translate: titles on this surface (Story MOTIR-7738 · MOTIR-8824, DATED 2026-10-17)
+
+Amends the backlog and sprint header and rows by delta mock `design/work-items/translation--titles.mock.html` (panel 7), decisions in the `⭐ The title surfaces under auto-translate` section of `design/work-items/design-notes.md`. Changes here: the one **Show original / Show translation** switch in the planning header, and the per-title mark (an `aria-hidden` glyph; the meaning rides the title's accessible name). The shared `BacklogRow` title stays single-line truncated, so a translated title cannot change a row's height and **no region is reserved** (the card's two-line rule is vacuous here). Sprint rows reuse `BacklogRows` unchanged.

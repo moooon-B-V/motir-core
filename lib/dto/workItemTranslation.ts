@@ -1,3 +1,4 @@
+import type { AutoTranslateContextDTO } from '@/lib/dto/autoTranslate';
 import type { Locale } from '@/lib/i18n/locales';
 
 // The translation DTOs the item page and the translate route share (Story
@@ -57,4 +58,39 @@ export interface TranslateResponseDTO {
 export interface ReaderTranslationDTO {
   offer: TranslationOfferDTO;
   canAddCredits: boolean;
+  /**
+   * The reader's auto-translate context (Story MOTIR-7738 · MOTIR-8832): whether
+   * the project's switch is on and whether the organisation can pay. When the
+   * switch is on the host starts the translation on mount instead of waiting for
+   * a press. Absent (or `null`) means "no auto" — the shipped on-demand host.
+   */
+  auto?: AutoTranslateContextDTO | null;
+}
+
+/**
+ * One work item's TITLE answer in the many-titles door (MOTIR-8829). Keyed by the
+ * item, with the per-item ref the title was sent under; an item whose title needs
+ * no translation is absent. Status, text and source language only.
+ */
+export type TitleTranslationResultDTO =
+  | {
+      workItemId: string;
+      fieldRef: string;
+      status: 'ready';
+      text: string;
+      /** The language the stored title is in, or `null` when it is not known. */
+      sourceLanguage: Locale | null;
+    }
+  | { workItemId: string; fieldRef: string; status: 'failed' | 'no_credit' | 'timeout' };
+
+/** `POST /api/projects/[key]/translate-titles` → 200 (MOTIR-8829). */
+export interface TitlesTranslateResponseDTO {
+  targetLanguage: Locale;
+  /** False when the project's auto-translate switch is off: nothing was read or spent. */
+  enabled: boolean;
+  /** True when more titles were asked for than one request answers; the first ones were. */
+  truncated: boolean;
+  /** With a `no_credit` entry: whether the reader may add credit (the surface links the billing page). */
+  canAddCredit?: boolean;
+  titles: TitleTranslationResultDTO[];
 }

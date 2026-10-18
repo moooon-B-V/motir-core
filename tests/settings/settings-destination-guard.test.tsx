@@ -169,7 +169,12 @@ describe('the back action never lands on a second refusal', () => {
   // MOTIR-5278 had moved this case off the built-in MEMBER, who held Approvals.
   it('an actor holding NOTHING in the area has no in-area destination to be sent to', () => {
     // …which is why the guard falls back out of the area entirely for them.
-    expect(visibleSettingsNav(BUILTIN_ROLE_PERMISSIONS.member)).toEqual([]);
+    // MOTIR-8830: the built-in MEMBER no longer qualifies — it holds `project:browse`,
+    // the Translation room's view key — so the case is an actor with no keys.
+    expect(visibleSettingsNav(toSettingsNavPermissions([]))).toEqual([]);
+    expect(visibleSettingsNav(BUILTIN_ROLE_PERMISSIONS.member).map((e) => e.id)).toEqual([
+      'translation',
+    ]);
   });
 
   it('an admin is sent to Details, the shipped behaviour', () => {
@@ -217,14 +222,20 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
   // MOTIR-5278 had inverted this to "refused everything but Approvals".
   // MOTIR-6995 — bar ONE room: Hosted agent opens on `work_item:edit`, which a
   // member holds, so a member stands in it read-only (design MOTIR-6991).
-  it('a MEMBER is refused everything but Hosted agent, each with its OWN copy key', () => {
-    const refused = PROJECT_SETTINGS_NAV.filter((entry) => entry.id !== 'hosted-agent');
+  // MOTIR-8830 — and bar Translation, whose view key is `project:browse`.
+  it('a MEMBER is refused everything but Hosted agent and Translation, each with its OWN copy key', () => {
+    const refused = PROJECT_SETTINGS_NAV.filter(
+      (entry) => entry.id !== 'hosted-agent' && entry.id !== 'translation',
+    );
     const keys = refused.map(
       (entry) => resolveSettingsRefusal(entry.id, BUILTIN_ROLE_PERMISSIONS.member)!.descriptionKey,
     );
     expect(keys.every(Boolean)).toBe(true);
     expect(new Set(keys).size, 'two destinations share a copy key').toBe(keys.length);
     expect(resolveSettingsRefusal('hosted-agent', BUILTIN_ROLE_PERMISSIONS.member)).toBeNull();
+    expect(resolveSettingsRefusal('translation', BUILTIN_ROLE_PERMISSIONS.member)).toBeNull();
+    // A VIEWER holds `project:browse` too, so it is admitted to Translation as well.
+    expect(resolveSettingsRefusal('translation', BUILTIN_ROLE_PERMISSIONS.viewer)).toBeNull();
     // Its refusal copy still exists, for the actor who lacks the view key.
     expect(
       resolveSettingsRefusal('hosted-agent', BUILTIN_ROLE_PERMISSIONS.viewer)!.descriptionKey,
@@ -248,9 +259,17 @@ describe('the refusal DECISION, over every destination × role (MOTIR-2469)', ()
   // MOTIR-5278 had sent a MEMBER back to Approvals and moved this case onto an empty
   // set.
   it('the back action leaves the AREA when the actor holds nothing in it', () => {
-    const refusal = resolveSettingsRefusal('members', BUILTIN_ROLE_PERMISSIONS.member)!;
+    const refusal = resolveSettingsRefusal('members', toSettingsNavPermissions([]))!;
     expect(refusal.backHref).toBe('/dashboard');
     expect(refusal.backLabelKey).toBeNull();
+  });
+
+  // MOTIR-8830 — a member DOES hold something in the area now (Translation), so
+  // the back action stays inside it, on a page that member can open.
+  it('a MEMBER refused a destination is sent back to Translation, not out of the area', () => {
+    const refusal = resolveSettingsRefusal('members', BUILTIN_ROLE_PERMISSIONS.member)!;
+    expect(refusal.backHref).toBe('/settings/project/translation');
+    expect(refusal.backLabelKey).not.toBeNull();
   });
 
   it('throws loudly on an id the registry does not carry', () => {

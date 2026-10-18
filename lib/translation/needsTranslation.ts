@@ -1,3 +1,4 @@
+import { isLocale, type Locale } from '@/lib/i18n/locales';
 import { detectLocale } from '@/lib/translation/detectLanguage';
 
 // The per-field needs-translation classifier (Story MOTIR-7735 · Subtask
@@ -64,4 +65,21 @@ export function classifyFields(
 /** Whether any field needs translating — i.e. whether to offer Translate at all. */
 export function anyNeedsTranslation(results: readonly FieldClassification[]): boolean {
   return results.some((r) => r.needsTranslation);
+}
+
+/**
+ * The language a field that DIFFERS from the reader's is in: the recorded one, else
+ * the local detector's reading, else `null` (unknown or not a supported locale).
+ * The one place a differing field's language is named, shared by the page offer and
+ * the many-titles door.
+ */
+export function sourceLanguageOf(
+  field: Pick<ClassifiableField, 'text' | 'language'>,
+  verdict: FieldClassification,
+): Locale | null {
+  if (verdict.basis === 'recorded') {
+    const primary = primarySubtag(field.language!);
+    return isLocale(primary) ? primary : null;
+  }
+  return verdict.basis === 'detected' ? detectLocale(field.text) : null;
 }

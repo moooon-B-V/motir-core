@@ -66,37 +66,27 @@ describe('the Project settings door (design panel 1)', () => {
     expect(settingsRow()?.getAttribute('href')).toBe('/settings/project');
   });
 
-  // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
-  // MOTIR-5394); MOTIR-5278's browse view is reverted.
-  // MOTIR-5278 had inverted this, the VIEWER case and the browse-alone case to "gets
-  // the door".
-  it('a MEMBER gets NO door — and nothing marks the gap', () => {
+  // ⚠️ AMENDED (Story MOTIR-7738 · MOTIR-8830). The Translation room is readable by
+  // every actor who can browse the project (the project owner's decision, recorded in
+  // `design/settings/design-notes.md` § Auto-translate room), so a MEMBER now has
+  // something behind the door and gets it, on its one room. The Approvals room is
+  // still manage-only; what changed is that the area is no longer empty for a reader.
+  it('a MEMBER gets the door, opening on the one room a reader may see', () => {
     renderRail(MEMBER);
-    expect(settingsRow()).toBeNull();
-    // The decided treatment: no disabled stand-in, no "ask an admin" row. The
-    // footer is simply one row shorter, so the rows below close up.
-    expect(screen.queryByText('Settings')).toBeNull();
-    // ⚠️ AMENDED TWICE, AND THE SECOND ONE EMPTIES THE SECTION (MOTIR-4847,
-    // then MOTIR-4643). This once asserted a `Job runs` row and a `Git` row
-    // survived beside the absent door. Both are gone now: the workspace rows
-    // left with MOTIR-4847 — the capability is a row in the workspace area's own
-    // rail above the reveal, and `JobRunsFoldInSection` on
-    // `/settings/organization` below it — and `Git` left with MOTIR-4643, its
-    // two actions carried to the org and the account tiers.
-    //
-    // So for a MEMBER the bottom section has no rows at all, and `SidebarNav`
-    // renders no section rather than an empty container. Every row is asserted
-    // ABSENT rather than the case being deleted, because the claim this test
-    // makes — *nothing marks the gap* — is now about the whole section.
+    const first = visibleSettingsNav(toSettingsNavPermissions(MEMBER))[0];
+    expect(first?.href).toBe('/settings/project/translation');
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project/translation');
+    // The workspace rows left the rail long ago (MOTIR-4847, MOTIR-4643).
     expect(screen.queryByRole('link', { name: 'Job runs' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Git' })).toBeNull();
   });
 
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
-  it('a VIEWER gets no door either', () => {
+  // ⚠️ AMENDED (MOTIR-7738 · MOTIR-8830): a viewer reads the Translation room.
+  it('a VIEWER gets the door too, onto the Translation room', () => {
     renderRail(VIEWER);
-    expect(settingsRow()).toBeNull();
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project/translation');
   });
 
   // ⚠️ AMENDED (MOTIR-5319). This asserted the door pointed at
@@ -148,9 +138,9 @@ describe('the Project settings door (design panel 1)', () => {
 
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
   // MOTIR-5394); MOTIR-5278's browse view is reverted.
-  it('`project:browse` alone earns NO door — every actor in this shell holds it', () => {
+  it('`project:browse` alone earns the door, because the Translation room is a read view (MOTIR-7738)', () => {
     renderRail(['project:browse']);
-    expect(settingsRow()).toBeNull();
+    expect(settingsRow()?.getAttribute('href')).toBe('/settings/project/translation');
   });
 
   it('an ABSENT prop defaults closed — a missing value never leaks a door', () => {
@@ -202,7 +192,10 @@ describe('the Project settings door (design panel 1)', () => {
     // MOTIR-5394); MOTIR-5278's browse view is reverted.
     // MOTIR-5278 had re-fixtured this onto the ABSENT prop, because a MEMBER held a
     // door.
-    const { container } = renderRail(MEMBER);
+    // ⚠️ RE-FIXTURED (MOTIR-7738 · MOTIR-8830): a MEMBER holds a door again, so the
+    // ABSENT prop (which defaults the door closed) is the actor with none, as it was
+    // before MOTIR-5278 and MOTIR-4880 moved it.
+    const { container } = renderRail(undefined);
     // `Sidebar` wraps each section in its own div inside the scroll container
     // and draws the separator INSIDE that wrapper, so an empty section is
     // exactly "a wrapper with no rows" — which is what this walks for.
@@ -252,9 +245,13 @@ describe('the settings rail inside the area (design panel 2)', () => {
     // The panel-2 failure this prevents: a heading above zero rows, which reads
     // as a loading error rather than as policy.
     expect(screen.getByText('Work')).toBeTruthy();
-    for (const emptied of ['General', 'Access', 'Automation']) {
+    for (const emptied of ['General', 'Access']) {
       expect(screen.queryByText(emptied), emptied).toBeNull();
     }
+    // Automation keeps its heading: the Translation room is readable by this role
+    // (MOTIR-7738 · MOTIR-8830), so the group did not empty.
+    expect(screen.getByText('Automation')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Translation' })).toBeTruthy();
   });
 });
 

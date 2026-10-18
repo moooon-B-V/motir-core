@@ -2269,3 +2269,7 @@ upload and import bars warm); avatars, labels, the Blocked pill and a warning ca
 peach; the planning-canvas glow and the donut ramp; the Appearance palette picker (unchanged); and
 the two intensities, subtle recommended. Revision 2 (2026-10-05) added the citrine Design hue
 after review asked for citrine too.
+
+## Auto-translate: titles on this surface (Story MOTIR-7738 · MOTIR-8824, DATED 2026-10-17)
+
+Amends the board header and the card in `board.mock.html` by delta mock `design/work-items/translation--titles.mock.html` (panels 4–6), whose decisions are in the `⭐ The title surfaces under auto-translate` section of `design/work-items/design-notes.md`. Changes here: the board header's controls slot gains the one **Show original / Show translation** switch beside the group-by `Segmented` (absent, not disabled, when off, nothing differs or no credit); and **a card whose title differs takes the reserved two-line region (`line-clamp-2 min-h-[2lh]`) from its first frame**, so the translation landing never moves the card below it. The no-credit state draws one non-dismissible notice in the header instead of the switch. Nothing else on the card changes.

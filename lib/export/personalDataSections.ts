@@ -96,6 +96,7 @@ export type PersonalDataDelegate =
   | 'organizationContentLanguageChange'
   | 'dataExportRequest'
   | 'projectMembership'
+  | 'projectAutoTranslateChange'
   | 'notification'
   | 'savedFilter'
   | 'savedFilterStar'
@@ -363,6 +364,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'tenant',
     basis: 'Explicit project memberships the reader holds.',
     where: byUserId,
+  },
+  {
+    table: 'project_auto_translate_change',
+    model: 'projectAutoTranslateChange',
+    tier: 'tenant',
+    // `changed_by_user_id` attributes a flip of a project's auto-translate switch to
+    // the person who made it (Story MOTIR-7738). The table's policy keys on
+    // `app.workspace_id` (the `page_version` pair), so it is read per workspace;
+    // there is no `app.user_id` arm. The row holds no credential, so nothing is
+    // redacted.
+    basis: "Flips of a project's auto-translate switch the reader made.",
+    where: (userId) => ({ changedByUserId: userId }),
   },
   {
     table: 'role_migration_report',

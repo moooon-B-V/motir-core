@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  SurfaceTitle,
+  useSurfaceTitleResolver,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
+
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -67,6 +72,7 @@ const COL_HEADER =
 
 export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedWorkItemsListProps) {
   const t = useTranslations('issueViews');
+  const resolveTitle = useSurfaceTitleResolver();
   const ta = useTranslations('workItemActions');
   const { toast } = useToast();
   const router = useRouter();
@@ -223,16 +229,18 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
                   <div role="cell" className="flex min-w-0 items-center gap-2">
                     <Link
                       href={`/items/${row.identifier}`}
-                      aria-label={`${row.identifier} ${row.title}`}
+                      aria-label={`${row.identifier} ${resolveTitle(row.id, row.title).name}`}
                       className="absolute inset-0 z-0 focus:outline-none"
                     />
                     <IssueTypeIcon type={row.kind} className="h-4 w-4 shrink-0" />
                     <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
                       {row.identifier}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
-                      {row.title}
-                    </span>
+                    <SurfaceTitle
+                      id={row.id}
+                      title={row.title}
+                      className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline"
+                    />
                   </div>
 
                   <div role="cell" className="flex min-w-0 items-center">
@@ -284,7 +292,7 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
                         <ArchivedRowDeleteMenu
                           itemId={row.id}
                           identifier={row.identifier}
-                          title={row.title}
+                          title={resolveTitle(row.id, row.title).text}
                           onDeleted={() => onDeleted(row.id)}
                         />
                       ) : null}

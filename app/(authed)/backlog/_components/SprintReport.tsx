@@ -1,5 +1,7 @@
 'use client';
 
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
+
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
@@ -318,7 +320,11 @@ function ReportIssueRow({
       <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
         {item.identifier}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
+      <SurfaceTitle
+        id={item.id}
+        title={item.title}
+        className="min-w-0 flex-1 truncate text-sm text-(--el-text)"
+      />
       <span className="shrink-0">
         {status ? (
           <StatusValue statusKey={status.key} category={status.category} label={status.label} />

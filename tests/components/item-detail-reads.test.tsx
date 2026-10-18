@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { ReaderTranslationDTO } from '@/lib/dto/workItemTranslation';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
@@ -943,7 +944,13 @@ describe('the translation offer reaches the view (MOTIR-8121 · MOTIR-8122)', ()
   it('hands a signed-in reader the offer built for their locale and the card’s to-dos', async () => {
     const providers = await renderOffer();
     expect(providers).toHaveLength(1);
-    expect(providers[0]!.translation).toEqual(READER_TRANSLATION);
+    // The shipped offer and credit link, plus (MOTIR-8832) the reader's auto-translate
+    // context layered over them: this project's switch is not on, so the host is the
+    // on-demand one.
+    expect(providers[0]!.translation).toMatchObject(READER_TRANSLATION);
+    const auto = (providers[0]!.translation as ReaderTranslationDTO).auto;
+    expect(auto).toMatchObject({ credit: 'ok', targetLanguage: 'en' });
+    expect(auto?.autoTranslateWorkContent).toBeFalsy();
     expect(providers[0]!.itemId).toBe('i1');
     expect(getReaderTranslation).toHaveBeenCalledTimes(1);
     const input = getReaderTranslation.mock.calls[0]![0] as {

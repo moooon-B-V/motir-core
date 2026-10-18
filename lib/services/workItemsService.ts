@@ -169,7 +169,7 @@ import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/compon
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
-import { workItemTranslationReadService } from '@/lib/services/workItemTranslationReadService';
+import { readerTranslationContextService } from '@/lib/services/readerTranslationContextService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   toWorkItemDto,
@@ -7077,8 +7077,31 @@ export const workItemsService = {
     // Built from the item's own fields — the peek shows no to-dos, and it offers
     // only for the title and description it draws (design D3). A failing read is
     // no offer, never a failed peek. A Visitor's peek carries none.
-    const translation = await workItemTranslationReadService
-      .getReaderTranslation({ workItem: detail.item, todos: [], readerLocale: locale, ctx })
+    // The project's auto-translate switch rides the same read (Story MOTIR-7738 ·
+    // MOTIR-8832): the reader's context layers it, and the credit verdict, over the
+    // offer, so the peek's host can start on mount. The switch is one primary-key
+    // read; the entitlement is asked only when it is on and something differs.
+    const translation = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepository.findAutoTranslateWorkContent(projectId, tx),
+    )
+      .then((project) =>
+        readerTranslationContextService.resolveForItem({
+          project: { autoTranslateWorkContent: project?.autoTranslateWorkContent ?? false },
+          reader: ctx,
+          readerLocale: locale,
+          workItem: detail.item,
+          todos: [],
+        }),
+      )
+      .then((resolved) =>
+        resolved
+          ? {
+              offer: resolved.offer,
+              canAddCredits: resolved.canAddCredits,
+              auto: resolved.context,
+            }
+          : null,
+      )
       .catch(() => null);
     return { ...view, pageRefs, heldTransitions, planHold, mergeMembers, translation };
   },

@@ -15,6 +15,10 @@ import { FieldTranslationMark } from './translation/FieldTranslationMark';
 import { TranslatableMarkdown } from './translation/TranslatableFields';
 import { useFieldTranslation } from './translation/TranslationProvider';
 import {
+  OriginalLanguageAccessory,
+  useOriginalLanguageNote,
+} from './translation/OriginalLanguageNote';
+import {
   addTodoAction,
   deleteTodoAction,
   moveTodoAction,
@@ -796,6 +800,10 @@ function TodoEditor({
   pending: boolean;
 }) {
   const t = useTranslations('workItemTodos');
+  // The languages the STORED text and instructions are recorded in (MOTIR-8832,
+  // design MOTIR-8837). The draft below seeds from the stored row, never from a
+  // translation.
+  const textNote = useOriginalLanguageNote(row.textLanguage, row.text.trim() !== '');
   const [draft, setDraft] = useState<Draft>({
     ...emptyDraft,
     text: row.text,
@@ -810,6 +818,7 @@ function TodoEditor({
         value={draft.text}
         onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
         aria-label={t('stepLabel')}
+        helperText={textNote ?? undefined}
         className="w-full"
       />
 
@@ -818,6 +827,12 @@ function TodoEditor({
           value={draft.notesMd}
           onChange={(next) => setDraft((d) => ({ ...d, notesMd: next }))}
           label={t('notesLabel')}
+          labelAccessory={
+            <OriginalLanguageAccessory
+              language={row.notesLanguage}
+              hasText={row.notesMd != null && row.notesMd.trim() !== ''}
+            />
+          }
           size="compact"
         />
       </div>

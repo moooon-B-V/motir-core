@@ -1,3 +1,4 @@
+import { SurfaceShowOriginalSwitch } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import type { IssueListView, IssueSort } from '@/lib/issues/issueListView';
 import type { IssueFilter } from '@/lib/issues/issueListFilter';
 import type { FilterAst } from '@/lib/filters/ast';
@@ -149,6 +150,7 @@ export async function IssueListToolbar({
           only: the List never shows folders, and a filtered Tree is the static
           context-preserving read with no folder levels to create into. */}
       {view === 'tree' && !isFilterActive(filter) && ast === null ? <NewFolderButton /> : null}
+      <SurfaceShowOriginalSwitch />
       <NewIssueButton />
     </div>
   );

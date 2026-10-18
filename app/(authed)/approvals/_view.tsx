@@ -9,6 +9,12 @@ import type { ApprovalRecordsPageDto } from '@/lib/dto/approvalGate';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
+import { startSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import { SurfaceTitleHost } from '@/components/workItems/titleTranslation/SurfaceTitleHost';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { ApprovalRecordsList } from './_components/ApprovalRecordsList';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 
@@ -40,6 +46,9 @@ export default async function ApprovalRecordsView({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const ctx = pageCtx.reader;
+  // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8834), started
+  // beside the page's own reads and awaited by the host that mounts it.
+  const titleContext = startSurfaceTranslation(pageCtx.project, ctx);
 
   const params = await searchParams;
   const t = await getTranslations('approvalRecords');
@@ -65,39 +74,44 @@ export default async function ApprovalRecordsView({
     records?.scope ?? (requested && views.includes(requested) ? requested : (views[0] ?? 'mine'));
 
   return (
-    <div data-testid="approval-records" className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-          <p className="text-sm text-(--el-text-secondary)">
-            {served === 'project' ? t('subtitle.full') : t('subtitle.own')}
-          </p>
-        </div>
-        {views.length > 1 ? (
-          // A switch drops `page`: each view has its own pager and clamp.
-          <RoomViewSwitch value={served} label={t('viewAria')} drop={['page']} />
-        ) : null}
-      </header>
+    <SurfaceTitleHost projectKey={pageCtx.project.identifier} contextRead={titleContext}>
+      <div data-testid="approval-records" className="flex flex-col gap-5">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+            <p className="text-sm text-(--el-text-secondary)">
+              {served === 'project' ? t('subtitle.full') : t('subtitle.own')}
+            </p>
+          </div>
+          <SurfaceShowOriginalSwitch />
+          {views.length > 1 ? (
+            // A switch drops `page`: each view has its own pager and clamp.
+            <RoomViewSwitch value={served} label={t('viewAria')} drop={['page']} />
+          ) : null}
+        </header>
 
-      {records === null ? (
-        <ErrorState title={t('readFailedTitle')} description={t('readFailedBody')} />
-      ) : records.total === 0 ? (
-        // NOTHING AT ALL — never a permission-shaped sentence: a reader with no
-        // records has simply not been asked anything yet (`design/approvals` §
-        // Empty states). No action, because nothing a reader presses creates one.
-        <EmptyState
-          icon={<Stamp className="h-12 w-12" aria-hidden />}
-          title={t('empty.title')}
-          description={records.fullView ? t('empty.bodyFull') : t('empty.bodyOwn')}
-        />
-      ) : (
-        <ApprovalRecordsList records={records} />
-      )}
-      {/* The quick-view island a row's TITLE opens (Story MOTIR-5996 · MOTIR-6001): the
+        <SurfaceTitlesNotice />
+
+        {records === null ? (
+          <ErrorState title={t('readFailedTitle')} description={t('readFailedBody')} />
+        ) : records.total === 0 ? (
+          // NOTHING AT ALL — never a permission-shaped sentence: a reader with no
+          // records has simply not been asked anything yet (`design/approvals` §
+          // Empty states). No action, because nothing a reader presses creates one.
+          <EmptyState
+            icon={<Stamp className="h-12 w-12" aria-hidden />}
+            title={t('empty.title')}
+            description={records.fullView ? t('empty.bodyFull') : t('empty.bodyOwn')}
+          />
+        ) : (
+          <ApprovalRecordsList records={records} />
+        )}
+        {/* The quick-view island a row's TITLE opens (Story MOTIR-5996 · MOTIR-6001): the
           same `?peek=` controller /workbench, /items, /ready and the board mount, so a
           title click here is the same interaction as everywhere else. Closing it keeps
           every other parameter — the room's own `?page=` and `?view=` included. */}
-      <IssueQuickViewController />
-    </div>
+        <IssueQuickViewController />
+      </div>
+    </SurfaceTitleHost>
   );
 }

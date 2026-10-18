@@ -1,3 +1,10 @@
+import type { ProjectDTO } from '@/lib/dto/projects';
+import { resolveSurfaceTranslation } from '@/lib/pages/surfaceTranslation';
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitleTranslationProvider,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -72,12 +79,7 @@ export default async function ReadyPage() {
           />
         }
       >
-        <ReadyBody
-          projectId={ctx.projectId}
-          svcCtx={svcCtx}
-          heading={heading}
-          subtitle={subtitle}
-        />
+        <ReadyBody project={ctx.project} svcCtx={svcCtx} heading={heading} subtitle={subtitle} />
       </Suspense>
 
       {/* Quick-view peek (notes.html #7; bug 8.8.2) — a client island that
@@ -93,21 +95,24 @@ export default async function ReadyPage() {
 /** The part of /ready that waits on the lanes' reads — the header's count chip,
  *  the nudge, and the lanes (or the EmptyState when both are empty). */
 async function ReadyBody({
-  projectId,
+  project,
   svcCtx,
   heading,
   subtitle,
 }: {
-  projectId: string;
+  project: ProjectDTO;
   svcCtx: { userId: string; workspaceId: string };
   heading: React.ReactNode;
   subtitle: React.ReactNode;
 }) {
   const t = await getTranslations('ready');
-  const [leaves, bugs, counts] = await Promise.all([
+  const projectId = project.id;
+  const [leaves, bugs, counts, titleTranslation] = await Promise.all([
     workItemsService.listReadyLeaves(projectId, {}, svcCtx),
     workItemsService.listReadyBugs(projectId, {}, svcCtx),
     workItemsService.countReadyLanes(projectId, svcCtx),
+    // The reader's title-translation context (Story MOTIR-7738 · MOTIR-8833).
+    resolveSurfaceTranslation(project, svcCtx),
   ]);
 
   const isEmpty = leaves.items.length === 0 && bugs.items.length === 0;
@@ -116,7 +121,7 @@ async function ReadyBody({
     : t('count', { count: counts.leaves });
 
   return (
-    <>
+    <SurfaceTitleTranslationProvider projectKey={project.identifier} context={titleTranslation}>
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2.5">
@@ -125,8 +130,13 @@ async function ReadyBody({
           </div>
           {subtitle}
         </div>
-        <ReadyHelpPopover />
+        <div className="flex flex-wrap items-center gap-2">
+          <SurfaceShowOriginalSwitch />
+          <ReadyHelpPopover />
+        </div>
       </header>
+
+      <SurfaceTitlesNotice />
 
       <ExpansionNudgeBanner />
 
@@ -148,7 +158,7 @@ async function ReadyBody({
           counts={{ leaves: counts.leaves, bugs: counts.bugs }}
         />
       )}
-    </>
+    </SurfaceTitleTranslationProvider>
   );
 }
 

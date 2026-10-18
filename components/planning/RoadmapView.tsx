@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  SurfaceShowOriginalSwitch,
+  SurfaceTitlesNotice,
+} from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -259,6 +263,7 @@ export function RoadmapView({
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <SurfaceShowOriginalSwitch />
           <Segmented<RoadmapScope>
             options={options}
             value={scope}
@@ -282,6 +287,8 @@ export function RoadmapView({
           />
         </div>
       </header>
+
+      <SurfaceTitlesNotice />
 
       {/* THE CANVAS FILLS THE FOLD (MOTIR-3839).
           
