@@ -30,6 +30,10 @@ export const chartColor = {
   axis: 'var(--el-chart-axis)',
   /** Distribution donut — the "None"/unset segment (always neutral grey, never a ramp slot). */
   categoricalNone: 'var(--el-chart-cat-none)',
+  /** Workload — the assigned segment of a person's bar. */
+  workloadAssigned: 'var(--el-chart-workload-assigned)',
+  /** Workload — the unassigned-work-they-reported segment. */
+  workloadUnassigned: 'var(--el-chart-workload-unassigned)',
   /** Created-vs-resolved — the created series line. */
   created: 'var(--el-chart-created)',
   /** Created-vs-resolved — the resolved series line. */

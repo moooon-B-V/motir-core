@@ -5216,7 +5216,14 @@
       "tablePoints": "Story Points",
       "tableIssues": "Arbeitselemente",
       "emptyTitle": "Noch keine offene Arbeit zugewiesen",
-      "emptyBody": "Jedes ungelöste Arbeitselement ist nicht zugewiesen, oder es gibt keine offene Arbeit. Wählen Sie einen anderen Umfang."
+      "emptyBody": "Jedes ungelöste Arbeitselement ist nicht zugewiesen, oder es gibt keine offene Arbeit. Wählen Sie einen anderen Umfang.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Typ",

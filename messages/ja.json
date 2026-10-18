@@ -5216,7 +5216,14 @@
       "tablePoints": "ストーリーポイント",
       "tableIssues": "作業項目",
       "emptyTitle": "割り当てられた未完了の作業はまだありません",
-      "emptyBody": "未解決の作業項目はすべて未割り当てか、未完了の作業がありません。別の対象範囲を選択してください。"
+      "emptyBody": "未解決の作業項目はすべて未割り当てか、未完了の作業がありません。別の対象範囲を選択してください。",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "種類",

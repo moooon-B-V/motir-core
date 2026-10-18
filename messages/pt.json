@@ -5216,7 +5216,14 @@
       "tablePoints": "Pontos de história",
       "tableIssues": "Itens de trabalho",
       "emptyTitle": "Ainda não há trabalho em aberto atribuído",
-      "emptyBody": "Todo item de trabalho não resolvido está sem responsável, ou não há trabalho em aberto. Escolha outro escopo."
+      "emptyBody": "Todo item de trabalho não resolvido está sem responsável, ou não há trabalho em aberto. Escolha outro escopo.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Tipo",

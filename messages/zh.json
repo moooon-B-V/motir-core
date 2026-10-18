@@ -5216,7 +5216,14 @@
       "tablePoints": "故事点",
       "tableIssues": "工作项",
       "emptyTitle": "尚无已分配的未完成工作",
-      "emptyBody": "每个未解决工作项均未分配，或没有未完成工作。请选择其他范围。"
+      "emptyBody": "每个未解决工作项均未分配，或没有未完成工作。请选择其他范围。",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "类型",

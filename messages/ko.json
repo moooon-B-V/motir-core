@@ -5216,7 +5216,14 @@
       "tablePoints": "스토리 포인트",
       "tableIssues": "작업 항목",
       "emptyTitle": "아직 배정된 미완료 작업이 없습니다",
-      "emptyBody": "모든 미해결 작업 항목이 미배정 상태이거나 미완료 작업이 없습니다. 다른 범위를 선택하세요."
+      "emptyBody": "모든 미해결 작업 항목이 미배정 상태이거나 미완료 작업이 없습니다. 다른 범위를 선택하세요.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "유형",

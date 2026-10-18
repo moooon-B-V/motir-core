@@ -17,6 +17,13 @@ export interface HBarDatum {
   /** The text drawn at the bar's end (defaults to the value). Lets the caller
    * format (e.g. "34 pts") without the chart knowing the unit. */
   valueLabel?: string;
+  /**
+   * Stacked segments, left to right; the bar ends at their sum (`value`). Absent =
+   * one `color` rect, exactly as before (the dashboard gadget passes none). A
+   * zero-width segment draws nothing; segment names live in the legend, the
+   * `<desc>` and the data table, never colour alone.
+   */
+  segments?: { value: number; color: string; label: string }[];
 }
 
 export interface HBarChartViewProps {
@@ -156,14 +163,37 @@ export function HBarChartView({
               >
                 {bar.label}
               </text>
-              <rect
-                x={plotLeft}
-                y={barY}
-                width={barW}
-                height={BAR_HEIGHT}
-                rx={3}
-                fill={bar.color}
-              />
+              {bar.segments ? (
+                (() => {
+                  let cursor = plotLeft;
+                  return bar.segments
+                    .filter((seg) => seg.value > 0)
+                    .map((seg) => {
+                      const x = cursor;
+                      const w = Math.max(0, xScale(seg.value) - plotLeft);
+                      cursor += w;
+                      return (
+                        <rect
+                          key={seg.label}
+                          x={x}
+                          y={barY}
+                          width={w}
+                          height={BAR_HEIGHT}
+                          fill={seg.color}
+                        />
+                      );
+                    });
+                })()
+              ) : (
+                <rect
+                  x={plotLeft}
+                  y={barY}
+                  width={barW}
+                  height={BAR_HEIGHT}
+                  rx={3}
+                  fill={bar.color}
+                />
+              )}
               <text
                 className="fill-(--el-text) text-[12px] font-semibold"
                 x={plotLeft + barW + 8}

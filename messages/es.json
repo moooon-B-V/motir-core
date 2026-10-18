@@ -5216,7 +5216,14 @@
       "tablePoints": "Puntos de historia",
       "tableIssues": "Elementos de trabajo",
       "emptyTitle": "Aún no hay trabajo abierto asignado",
-      "emptyBody": "Todos los elementos de trabajo sin resolver están sin asignar, o no hay trabajo abierto. Elige otro ámbito."
+      "emptyBody": "Todos los elementos de trabajo sin resolver están sin asignar, o no hay trabajo abierto. Elige otro ámbito.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Tipo",

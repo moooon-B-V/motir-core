@@ -863,3 +863,45 @@ describe('fit="page" charts', () => {
     expect(svg.getAttribute('class')).toContain('h-auto');
   });
 });
+
+describe('HBarChart segments (Story MOTIR-8919)', () => {
+  const dt = { caption: 'c', columns: ['a'], rows: [] };
+  it('without segments draws one rect per bar, exactly as before', () => {
+    const { container } = render(
+      <HBarChart bars={[{ label: 'A', value: 10, color: 'red' }]} description="d" dataTable={dt} />,
+    );
+    expect(container.querySelectorAll('svg rect[fill="red"]')).toHaveLength(1);
+  });
+
+  it('with segments draws one rect per non-zero segment, summing to the bar', () => {
+    const { container } = render(
+      <HBarChart
+        bars={[
+          { label: 'A', value: 10, color: 'red' },
+          {
+            label: 'B',
+            value: 10,
+            color: 'red',
+            segments: [
+              { value: 6, color: 'blue', label: 'one' },
+              { value: 4, color: 'green', label: 'two' },
+              { value: 0, color: 'pink', label: 'zero' },
+            ],
+          },
+        ]}
+        description="d"
+        dataTable={dt}
+      />,
+    );
+    const rects = (c: string) => Array.from(container.querySelectorAll(`svg rect[fill="${c}"]`));
+    expect(rects('pink')).toHaveLength(0);
+    const blue = Number(rects('blue')[0]!.getAttribute('width'));
+    const green = Number(rects('green')[0]!.getAttribute('width'));
+    const whole = Number(rects('red')[0]!.getAttribute('width'));
+    expect(blue + green).toBeCloseTo(whole, 5);
+    expect(Number(rects('green')[0]!.getAttribute('x'))).toBeCloseTo(
+      Number(rects('blue')[0]!.getAttribute('x')) + blue,
+      5,
+    );
+  });
+});

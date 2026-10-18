@@ -11391,5 +11391,12 @@
   "reports.help.resolutionTime.what": "",
   "reports.help.resolutionTime.how": "",
   "reports.help.workload.what": "",
-  "reports.help.workload.how": ""
+  "reports.help.workload.how": "",
+  "reports.workload.legendAssigned": "",
+  "reports.workload.legendUnassigned": "",
+  "reports.workload.tableAssigned": "",
+  "reports.workload.tableUnassigned": "",
+  "reports.workload.tableTotal": "",
+  "reports.workload.subWindow": "",
+  "reports.workload.chartDescPerson": ""
 }

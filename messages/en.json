@@ -5210,13 +5210,20 @@
       "xPoints": "Story points (open)",
       "xCount": "Work items (open)",
       "unassigned": "Unassigned",
-      "chartDesc": "Open {measure} per assignee, ranked: {breakdown}. Total {total} across {count} unresolved work items.",
-      "tableCaption": "Open (unresolved) work per assignee — story points and work-item count.",
+      "chartDesc": "Open {measure}, ranked by person over the chosen period: {breakdown}. Total {total} across {count} work items.",
+      "tableCaption": "Open work per person over the chosen period — assigned, unassigned and reported by them, and the total, for the active measure.",
       "tableAssignee": "Assignee",
       "tablePoints": "Story points",
       "tableIssues": "Work items",
       "emptyTitle": "No open work assigned yet",
-      "emptyBody": "Every unresolved work item is unassigned, or there's no open work. Pick another scope."
+      "emptyBody": "Every unresolved work item is unassigned, or there's no open work. Pick another scope.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Type",

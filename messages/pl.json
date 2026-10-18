@@ -5216,7 +5216,14 @@
       "tablePoints": "Punkty historii",
       "tableIssues": "Elementy robocze",
       "emptyTitle": "Brak przypisanej otwartej pracy",
-      "emptyBody": "Każdy nierozwiązany element roboczy jest nieprzypisany albo nie ma otwartej pracy. Wybierz inny zakres."
+      "emptyBody": "Każdy nierozwiązany element roboczy jest nieprzypisany albo nie ma otwartej pracy. Wybierz inny zakres.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Typ",

@@ -5216,7 +5216,14 @@
       "tablePoints": "Storypoints",
       "tableIssues": "Werkitems",
       "emptyTitle": "Nog geen open werk toegewezen",
-      "emptyBody": "Elk onopgelost werkitem is niet toegewezen, of er is geen open werk. Kies een ander bereik."
+      "emptyBody": "Elk onopgelost werkitem is niet toegewezen, of er is geen open werk. Kies een ander bereik.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Type",

@@ -5216,7 +5216,14 @@
       "tablePoints": "Story points",
       "tableIssues": "Éléments de travail",
       "emptyTitle": "Aucun travail ouvert attribué pour l’instant",
-      "emptyBody": "Tous les éléments de travail non résolus sont non attribués, ou il n’y a aucun travail ouvert. Choisissez une autre portée."
+      "emptyBody": "Tous les éléments de travail non résolus sont non attribués, ou il n’y a aucun travail ouvert. Choisissez une autre portée.",
+      "legendAssigned": "Assigned",
+      "legendUnassigned": "Unassigned — reported by",
+      "tableAssigned": "Assigned",
+      "tableUnassigned": "Unassigned (reported)",
+      "tableTotal": "Total",
+      "subWindow": "last {days} days",
+      "chartDescPerson": "{name} {total} ({assigned} assigned, {unassigned} unassigned and reported)"
     },
     "statistic": {
       "kind": "Type",
