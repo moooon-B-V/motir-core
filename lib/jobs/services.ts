@@ -22,6 +22,7 @@ import { attachmentsService } from '@/lib/services/attachmentsService';
 import { publicAddressCertificatesService } from '@/lib/services/publicAddressCertificatesService';
 import { rateLimitService } from '@/lib/services/rateLimitService';
 import { oauthSweepService } from '@/lib/services/oauthSweepService';
+import { workItemEmbeddingSweepService } from '@/lib/services/workItemEmbeddingSweepService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { publicFollowDigestService } from '@/lib/services/publicFollowDigestService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
@@ -98,6 +99,8 @@ export const jobServices = {
   rateLimit: rateLimitService,
   // The daily OAuth sweep (MOTIR-6984).
   oauthSweep: oauthSweepService,
+  // The hourly work-item embedding sweep (MOTIR-8227).
+  workItemEmbeddingSweep: workItemEmbeddingSweepService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
   publicFollowDigest: publicFollowDigestService,
   automationEngine: automationEngineService,
