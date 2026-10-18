@@ -600,6 +600,8 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // typed at 12 ms a key. Recorded at the ~1.5x this file's calibration note puts
   // between a local reading and the CI cost: **43.0**. RE-MEASURE from the first green
   // `playwright-report-bulk-*` artifact that includes it.
+  'density-nested-scope.spec.ts': 3.0,
+  'density-style-swap.spec.ts': 6.0,
   'refusal-reason.spec.ts': 43.0,
   // Story MOTIR-7460 — three receipts PROMOTED out of the acceptance lane when the
   // Workbench's To approve tab was renamed Waiting on you (they were

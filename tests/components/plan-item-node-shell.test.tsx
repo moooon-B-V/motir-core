@@ -142,7 +142,7 @@ describe('ONE CARD — the shell both nodes render through', () => {
       height: '124px',
       radius: ['rounded-(--radius-card)'],
       borderWeight: ['border'],
-      padding: ['p-3.5'],
+      padding: ['p-(--spacing-card-padding-12)'],
       shadowTokens: 1,
     });
     cleanup();
