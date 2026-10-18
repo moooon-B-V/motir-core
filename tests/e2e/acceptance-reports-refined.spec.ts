@@ -325,9 +325,13 @@ test('the refined reports fill the width, stay readable, and point where you ask
         const card = page.locator('main [data-surface="card"]').first();
         const [cardBox, inner, scrolls] = await Promise.all([
           card.boundingBox(),
-          page.locator('main').evaluate((m) => {
-            const cs = getComputedStyle(m);
-            return m.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+          // The card sits in the report chrome's `w-full` column; the content width it
+          // should fill is that column's parent, less the page gutters the shell puts
+          // on it (the `main` itself carries none).
+          card.evaluate((c) => {
+            const region = c.parentElement?.parentElement ?? c;
+            const cs = getComputedStyle(region);
+            return region.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
           }),
           page.evaluate(
             () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
