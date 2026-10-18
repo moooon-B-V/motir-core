@@ -299,7 +299,11 @@ describe('shape-swap lint — the roles exist and every style actually flips the
  * scanned roots. Empty is legal only until then: the check ships enforcing
  * NOTHING so it passes on `main` without touching a component.
  */
-const OWN_BOX_ENFORCED_PREFIXES: string[] = ['packages/design-system/src/', 'components/ui/'];
+const OWN_BOX_ENFORCED_PREFIXES: string[] = [
+  'packages/design-system/src/',
+  'components/ui/',
+  'components/workItems/',
+];
 
 /**
  * `file → utility` pairs a reviewer accepted as unplaceable, each with the reason.
