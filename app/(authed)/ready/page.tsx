@@ -161,7 +161,7 @@ function ReadyFrame({ header, loadingLabel }: { header: ReactNode; loadingLabel:
       <span className="sr-only">{loadingLabel}</span>
       {header}
       <div className="flex animate-pulse flex-col gap-6" aria-hidden="true">
-        <div className="h-9 w-56 rounded-(--radius-btn) bg-(--el-muted)" />
+        <div className="h-(--height-control) w-56 rounded-(--radius-btn) bg-(--el-muted)" />
         <div className="flex flex-col gap-2">
           {Array.from({ length: 6 }, (_, i) => (
             <div key={i} className="h-11 rounded-(--radius-card) bg-(--el-muted)" />

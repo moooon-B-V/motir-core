@@ -397,7 +397,7 @@ function FieldStack({
 
 function KeyValue({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-(--radius-control) bg-(--el-surface) px-2 py-1 font-mono text-[12.5px] font-medium text-(--el-text)">
+    <span className="inline-flex items-center rounded-(--radius-control) bg-(--el-surface) px-(--spacing-control-x-8) py-(--spacing-control-y-4) font-mono text-[12.5px] font-medium text-(--el-text)">
       {children}
     </span>
   );

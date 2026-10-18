@@ -397,9 +397,9 @@ function FileRow({
   control: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface-soft) p-3">
+    <div className="flex items-center gap-3 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-control-x-12)">
       <span
-        className={`inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-(--radius-control) ${FILE_ROW_TONES[tone]}`}
+        className={`inline-flex h-(--height-control-32) w-[34px] shrink-0 items-center justify-center rounded-(--radius-control) ${FILE_ROW_TONES[tone]}`}
       >
         {icon}
       </span>

@@ -169,7 +169,7 @@ export function ProposedSprintPanel({
           </div>
 
           {sprint.rationale ? (
-            <div className="mx-(--spacing-card-padding) mt-1 mb-(--spacing-card-padding) flex items-start gap-2 rounded-(--radius-card) bg-(--el-surface) px-3 py-2 text-xs leading-relaxed text-(--el-text-secondary)">
+            <div className="mx-(--spacing-card-padding) mt-1 mb-(--spacing-card-padding) flex items-start gap-2 rounded-(--radius-card) bg-(--el-surface) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs leading-relaxed text-(--el-text-secondary)">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>
                 <b className="font-semibold text-(--el-text-strong)">{t('aiPlan.whyLabel')}</b>{' '}

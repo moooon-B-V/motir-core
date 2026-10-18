@@ -88,7 +88,7 @@ export function VisibilityRadioCards({
         })}
       </div>
       {!canShare ? (
-        <p className="mt-2 rounded-(--radius-card) bg-(--el-tint-sky) px-3 py-2 text-xs text-(--el-text-strong)">
+        <p className="mt-2 rounded-(--radius-card) bg-(--el-tint-sky) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs text-(--el-text-strong)">
           {t('edit.viewerNote')}
         </p>
       ) : null}

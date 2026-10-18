@@ -119,7 +119,7 @@ export function GuideReplanOffer({
       <p className="text-xs font-semibold text-(--el-text-secondary)">{t('label')}</p>
 
       <div
-        className={`rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-input-x) py-2 text-sm text-(--el-text) ${
+        className={`rounded-(--radius-input) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-input-x) py-(--spacing-control-y-8) text-sm text-(--el-text) ${
           long && !expanded ? 'max-h-32 overflow-hidden' : ''
         }`}
         data-testid="guide-offer-request"

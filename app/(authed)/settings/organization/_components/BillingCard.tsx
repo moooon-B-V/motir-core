@@ -18,7 +18,7 @@ export async function BillingCard() {
       header={
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
+            <span className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
               <CreditCard className="h-4 w-4" aria-hidden />
             </span>
             <div>

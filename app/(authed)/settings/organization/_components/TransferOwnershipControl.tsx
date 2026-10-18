@@ -358,7 +358,7 @@ function TransferOwnershipDialog({
         <div className="flex shrink-0 flex-col gap-(--spacing-sm) pt-(--spacing-xs)">
           {selected ? (
             <div
-              className="flex items-start gap-2 rounded-(--radius-card) p-3"
+              className="flex items-start gap-2 rounded-(--radius-card) p-(--spacing-card-padding-12)"
               style={{ backgroundColor: 'var(--el-tint-lavender)' }}
               data-testid="transfer-consequence"
             >
@@ -383,7 +383,7 @@ function TransferOwnershipDialog({
           {error ? (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-(--radius-card) p-3 font-sans text-sm text-(--el-text-strong)"
+              className="flex items-start gap-2 rounded-(--radius-card) p-(--spacing-card-padding-12) font-sans text-sm text-(--el-text-strong)"
               style={{ backgroundColor: 'var(--el-tint-rose)' }}
             >
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger)" aria-hidden />

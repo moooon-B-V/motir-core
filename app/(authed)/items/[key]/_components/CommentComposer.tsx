@@ -135,7 +135,7 @@ export function CommentComposer({
         {error ? (
           <p
             role="alert"
-            className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-2.5 py-1.5 font-sans text-xs"
+            className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs"
           >
             {error}
           </p>

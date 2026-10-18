@@ -268,7 +268,7 @@ function AltMethod({
       type="button"
       onClick={onClick}
       disabled={busy}
-      className="flex w-full items-center gap-2.5 rounded-(--radius-btn) border border-(--el-button-border) px-3.5 py-3 text-left hover:bg-(--el-surface) disabled:opacity-60"
+      className="flex w-full items-center gap-2.5 rounded-(--radius-btn) border border-(--el-button-border) px-(--spacing-control-x-12) py-(--spacing-card-padding-12) text-left hover:bg-(--el-surface) disabled:opacity-60"
     >
       <span className="shrink-0 text-(--el-text-secondary)">{icon}</span>
       <span className="min-w-0">

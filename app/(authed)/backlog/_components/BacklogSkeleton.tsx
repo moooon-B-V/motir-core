@@ -17,7 +17,10 @@ function SkeletonRegion() {
       </div>
       <div className="flex flex-col gap-(--spacing-sm) p-(--spacing-control-x)">
         {[0, 1, 2].map((i) => (
-          <span key={i} className="h-9 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
+          <span
+            key={i}
+            className="h-(--height-control) animate-pulse rounded-(--radius-control) bg-(--el-muted)"
+          />
         ))}
       </div>
     </div>

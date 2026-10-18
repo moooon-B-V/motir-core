@@ -65,7 +65,7 @@ function RepoConventionCard({ convention: c }: { convention: ConventionSurfaceDT
     >
       {current ? (
         <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-2 bg-(--el-surface-soft) p-3 rounded-(--radius-card)">
+          <div className="flex items-start gap-2 bg-(--el-surface-soft) p-(--spacing-card-padding-12) rounded-(--radius-card)">
             <Sparkles
               className="mt-0.5 size-4 shrink-0 text-(--el-accent-on-surface)"
               aria-hidden

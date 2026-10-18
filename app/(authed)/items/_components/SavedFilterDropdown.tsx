@@ -183,7 +183,7 @@ export function SavedFilterDropdown({
           aria-haspopup="listbox"
           aria-label={t('dropdown.trigger')}
           className={cn(
-            'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+            'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-(--spacing-control-x-12) font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
             triggerActive ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)',
           )}
         >
@@ -213,7 +213,7 @@ export function SavedFilterDropdown({
               onChange={(e) => setRawQuery(e.target.value)}
               placeholder={t('dropdown.searchPlaceholder')}
               aria-label={t('dropdown.searchLabel')}
-              className="h-(--height-control) w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-2.5 pl-8 font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="h-(--height-control) w-full rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) pr-(--spacing-control-x) pl-8 font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             />
           </div>
         </div>

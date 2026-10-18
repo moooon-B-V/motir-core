@@ -403,7 +403,7 @@ export function BoardConfigEditor({
   if (!isAdmin) {
     return (
       <div className="flex flex-col gap-6">
-        <div className="bg-(--el-surface) border-(--el-border) flex items-center gap-2.5 rounded-(--radius-card) border px-(--spacing-card-padding) py-3 text-sm text-(--el-text-secondary)">
+        <div className="bg-(--el-surface) border-(--el-border) flex items-center gap-2.5 rounded-(--radius-card) border px-(--spacing-card-padding) py-(--spacing-card-padding-12) text-sm text-(--el-text-secondary)">
           <Lock className="text-(--el-text-muted) size-[17px] shrink-0" aria-hidden />
           {t('board.readOnlyBanner')}
         </div>
@@ -450,7 +450,7 @@ export function BoardConfigEditor({
 
       <DragOverlay>
         {activeDrag ? (
-          <span className="bg-(--el-page-bg) border-(--el-accent) text-(--el-text-secondary) shadow-(--shadow-elevated) inline-flex items-center gap-1.5 rounded-(--radius-badge) border px-2 py-0.5 text-[12.5px] font-medium">
+          <span className="bg-(--el-page-bg) border-(--el-accent) text-(--el-text-secondary) shadow-(--shadow-elevated) inline-flex items-center gap-1.5 rounded-(--radius-badge) border px-(--spacing-chip-x-8) py-(--spacing-chip-y) text-[12.5px] font-medium">
             {activeDrag.type === 'status' ? (
               <GripVertical className="text-(--el-text-faint) size-3" aria-hidden />
             ) : null}
@@ -613,7 +613,7 @@ function UnmappedRail({ statuses }: { statuses: StatusLite[] }) {
           {t('board.unmappedTitle')}
         </span>
         {!empty ? (
-          <span className="bg-(--el-tint-yellow) text-(--el-text-strong) inline-flex h-[18px] min-w-5 items-center justify-center rounded-(--radius-badge) px-1.5 text-[11px] font-bold">
+          <span className="bg-(--el-tint-yellow) text-(--el-text-strong) inline-flex h-[18px] min-w-5 items-center justify-center rounded-(--radius-badge) px-(--spacing-chip-x-6) text-[11px] font-bold">
             {statuses.length}
           </span>
         ) : null}
@@ -666,7 +666,7 @@ function DraggableStatusChip({
       {...attributes}
       {...listeners}
       data-testid={`board-config-rail-chip-${status.id}`}
-      className={`border-(--el-border) bg-(--el-page-bg) text-(--el-text-secondary) inline-flex cursor-grab items-center gap-1.5 rounded-(--radius-badge) border py-0.5 pr-2.5 pl-1 text-[12.5px] font-medium ${
+      className={`border-(--el-border) bg-(--el-page-bg) text-(--el-text-secondary) inline-flex cursor-grab items-center gap-1.5 rounded-(--radius-badge) border py-(--spacing-chip-y) pr-(--spacing-chip-x) pl-(--spacing-chip-x-4) text-[12.5px] font-medium ${
         isDragging ? 'opacity-40' : ''
       }`}
     >
@@ -738,7 +738,7 @@ function SortableColumn({
             </span>
             <span
               title={t('board.columnCountTitle', { count: column.statuses.length })}
-              className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-[18px] min-w-5 items-center justify-center rounded-(--radius-badge) px-1.5 text-[11px] font-semibold"
+              className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-[18px] min-w-5 items-center justify-center rounded-(--radius-badge) px-(--spacing-chip-x-6) text-[11px] font-semibold"
             >
               {column.statuses.length}
             </span>
@@ -784,7 +784,7 @@ function ColumnBody({
   return (
     <div className="flex flex-1 flex-col gap-2 px-2.5 py-3">
       {column.statuses.length === 0 ? (
-        <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-2.5 py-4 text-center text-xs text-(--el-text-secondary)">
+        <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-(--spacing-control-x) py-(--spacing-card-padding-16) text-center text-xs text-(--el-text-secondary)">
           {t('board.columnEmpty')}
         </p>
       ) : (
@@ -822,7 +822,7 @@ function MappedStatusChip({
     <div
       ref={setNodeRef}
       data-testid={`board-config-chip-${status.id}`}
-      className={`border-(--el-border) bg-(--el-page-bg) flex items-center gap-1.5 rounded-(--radius-badge) border py-0.5 pr-1 pl-1 text-[12.5px] font-medium text-(--el-text-secondary) ${
+      className={`border-(--el-border) bg-(--el-page-bg) flex items-center gap-1.5 rounded-(--radius-badge) border py-(--spacing-chip-y) pr-(--spacing-chip-x-4) pl-(--spacing-chip-x-4) text-[12.5px] font-medium text-(--el-text-secondary) ${
         isDragging ? 'opacity-40' : ''
       }`}
     >
@@ -965,7 +965,7 @@ function ColumnRenameField({
             onCancel();
           }
         }}
-        className="border-(--el-accent) bg-(--el-page-bg) h-[30px] min-w-0 flex-1 rounded-(--radius-input) border px-2 text-[13px] font-semibold text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        className="border-(--el-accent) bg-(--el-page-bg) h-(--height-control-28) min-w-0 flex-1 rounded-(--radius-input) border px-(--spacing-control-x-8) text-[13px] font-semibold text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
       />
       <IconButton label={t('board.saveColumnNameAria')} onClick={commit}>
         <Check className="size-[15px]" aria-hidden />
@@ -998,7 +998,7 @@ function AddColumnGhost({ onAdd }: { onAdd: (name: string) => void }) {
           />
         </div>
         <div className="px-2.5 py-3">
-          <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-2.5 py-4 text-center text-xs text-(--el-text-secondary)">
+          <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-(--spacing-control-x) py-(--spacing-card-padding-16) text-center text-xs text-(--el-text-secondary)">
             {t('board.columnEmpty')}
           </p>
         </div>
@@ -1035,7 +1035,7 @@ function ReadOnlyColumn({ column }: { column: BoardConfigColumn }) {
         <span className="flex-1 truncate text-sm font-semibold text-(--el-text-strong)">
           {column.name}
         </span>
-        <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-[18px] min-w-5 items-center justify-center rounded-(--radius-badge) px-1.5 text-[11px] font-semibold">
+        <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-[18px] min-w-5 items-center justify-center rounded-(--radius-badge) px-(--spacing-chip-x-6) text-[11px] font-semibold">
           {column.statuses.length}
         </span>
       </div>
@@ -1080,7 +1080,7 @@ function DeleteColumnModal({
           <p className="mt-2 text-sm leading-relaxed text-(--el-text-secondary)">
             {t('board.guardBody', { count: column.cardCount })}
           </p>
-          <div className="bg-(--el-tint-peach) mt-3 flex items-start gap-2 rounded-(--radius-control) px-3 py-2.5 text-[12.5px] text-(--el-text-strong)">
+          <div className="bg-(--el-tint-peach) mt-3 flex items-start gap-2 rounded-(--radius-control) px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-[12.5px] text-(--el-text-strong)">
             <AlertTriangle className="text-(--el-warning) mt-px size-4 shrink-0" aria-hidden />
             <span>
               {t('board.guardStillHolding')}{' '}
@@ -1108,7 +1108,7 @@ function DeleteColumnModal({
           <p className="mt-2 text-sm leading-relaxed text-(--el-text-secondary)">
             {t('board.deleteBody')}
           </p>
-          <div className="bg-(--el-surface) mt-3 flex items-start gap-2 rounded-(--radius-control) px-3 py-2.5 text-[12.5px] text-(--el-text-secondary)">
+          <div className="bg-(--el-surface) mt-3 flex items-start gap-2 rounded-(--radius-control) px-(--spacing-control-x-12) py-(--spacing-control-y-8) text-[12.5px] text-(--el-text-secondary)">
             {column.statuses.length > 0 ? (
               <span>
                 {t('board.deleteReturns')}{' '}

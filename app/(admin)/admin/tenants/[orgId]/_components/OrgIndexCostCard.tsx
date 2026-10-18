@@ -30,7 +30,7 @@ export async function OrgIndexCostCard({ data }: { data: PlatformOrgIndexCostDTO
           <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
+              className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
             >
               <Flame className="h-4 w-4" />
             </span>
@@ -293,7 +293,7 @@ function NothingState({
     <div className="flex flex-col items-center gap-2 py-6 text-center">
       <span
         aria-hidden
-        className="inline-flex h-10 w-10 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-secondary)"
+        className="inline-flex h-(--height-control-40) w-10 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-secondary)"
       >
         {icon}
       </span>

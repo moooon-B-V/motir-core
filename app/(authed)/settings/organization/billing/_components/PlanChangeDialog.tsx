@@ -655,7 +655,7 @@ function Figure({ changed, children }: { changed?: boolean; children: ReactNode 
   return (
     <mark
       data-changed="true"
-      className="rounded-(--radius-control) bg-(--el-tint-yellow) px-1 font-semibold text-(--el-text-strong)"
+      className="rounded-(--radius-control) bg-(--el-tint-yellow) px-(--spacing-control-x-4) font-semibold text-(--el-text-strong)"
     >
       {children}
     </mark>

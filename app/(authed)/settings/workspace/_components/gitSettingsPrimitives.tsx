@@ -28,7 +28,7 @@ export function SettingsBanner({
   return (
     <div
       role="status"
-      className={`rounded-(--radius-card) px-(--spacing-card-padding) py-3 font-sans text-sm ${toneClass}`}
+      className={`rounded-(--radius-card) px-(--spacing-card-padding) py-(--spacing-card-padding-12) font-sans text-sm ${toneClass}`}
     >
       {message}
     </div>
@@ -54,7 +54,7 @@ export function GrantRow({
     <div className="flex gap-3">
       <span
         aria-hidden
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg) [&_svg]:h-[18px] [&_svg]:w-[18px]"
+        className="inline-flex h-(--height-control) w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg) [&_svg]:h-[18px] [&_svg]:w-[18px]"
       >
         {icon}
       </span>

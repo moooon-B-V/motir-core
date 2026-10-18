@@ -90,7 +90,7 @@ export function CommentRow({
   }
 
   const quietAction =
-    'text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) rounded-(--radius-control) px-1 py-0.5 font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
+    'text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
 
   return (
     <div className="flex items-start gap-2.5">
@@ -175,7 +175,7 @@ export function CommentRow({
                 >
                   <Popover.Trigger
                     className={
-                      'text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) rounded-(--radius-control) px-1 py-0.5 font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none'
+                      'text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none'
                     }
                   >
                     {t('delete')}
@@ -188,7 +188,7 @@ export function CommentRow({
                           : t('deleteConfirm')}
                       </p>
                       {deleteError ? (
-                        <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-2.5 py-1.5 font-sans text-xs">
+                        <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs">
                           {deleteError}
                         </p>
                       ) : null}

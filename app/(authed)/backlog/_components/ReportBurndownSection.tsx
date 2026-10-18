@@ -77,7 +77,7 @@ export function ReportBurndownSection({
     <div
       role="status"
       aria-label={t('sprintReport.burndownLoading')}
-      className="flex min-h-[200px] flex-col justify-end gap-2 rounded-(--radius-card) border border-(--el-border) px-(--spacing-card-padding) py-3"
+      className="flex min-h-[200px] flex-col justify-end gap-2 rounded-(--radius-card) border border-(--el-border) px-(--spacing-card-padding) py-(--spacing-card-padding-12)"
     >
       <span className="h-3 w-2/5 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
       <div className="flex h-32 items-end gap-2">

@@ -52,7 +52,7 @@ export function BuildInPublicButton({
         // cannot be the accessible name there.
         aria-label={t('entryButton')}
         className={cn(
-          'h-9 items-center gap-2 rounded-(--radius-btn) border border-transparent bg-(--el-build-bg) px-2.5 font-sans text-sm font-medium text-(--el-text-strong) transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_18%,var(--el-page-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
+          'h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-transparent bg-(--el-build-bg) px-(--spacing-control-x) font-sans text-sm font-medium text-(--el-text-strong) transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_18%,var(--el-page-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           // Selected, not appended — equal specificity with `.hidden`.
           inDrawer ? 'inline-flex' : 'hidden md:inline-flex',
           inDrawer && 'min-w-0 max-w-full',

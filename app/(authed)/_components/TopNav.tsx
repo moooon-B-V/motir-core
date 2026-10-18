@@ -259,7 +259,7 @@ export async function TopNav({
             // touched. 6.03:1 light, 4.24:1 dark; asserted in
             // tests/theme/brand-tile-contrast.test.ts, because the ink guard
             // cannot see a pair whose ink lives in a stylesheet.
-            className="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) md:flex"
+            className="hidden h-(--height-control-32) w-8 flex-none items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) md:flex"
           >
             <BrandMark variant="mark" size={24} />
           </Link>

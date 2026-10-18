@@ -89,14 +89,14 @@ export function PreviewStep({
       </div>
 
       {isRerun ? (
-        <div className="rounded-(--radius-card) bg-(--el-tint-sky) p-3 text-sm text-(--el-text-strong)">
+        <div className="rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding-12) text-sm text-(--el-text-strong)">
           <p className="font-medium">{t('preview.rerunTitle')}</p>
           <p>{t('preview.rerunBody')}</p>
         </div>
       ) : null}
 
       {warningCount > 0 ? (
-        <div className="rounded-(--radius-card) bg-(--el-tint-peach) p-3 text-sm text-(--el-text-strong)">
+        <div className="rounded-(--radius-card) bg-(--el-tint-peach) p-(--spacing-card-padding-12) text-sm text-(--el-text-strong)">
           <span className="font-medium">{t('preview.warnings', { count: warningCount })}</span>{' '}
           {t('preview.warningsHint')}
         </div>
@@ -159,7 +159,7 @@ export function PreviewStep({
       </div>
 
       {/* The gate — nothing written yet */}
-      <div className="flex items-start gap-3 rounded-(--radius-card) bg-(--el-tint-lavender) p-3 text-sm text-(--el-text-strong)">
+      <div className="flex items-start gap-3 rounded-(--radius-card) bg-(--el-tint-lavender) p-(--spacing-card-padding-12) text-sm text-(--el-text-strong)">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-(--el-accent)" aria-hidden />
         <div>
           <p className="font-medium">{t('preview.gateTitle')}</p>
@@ -195,7 +195,7 @@ function SummaryTile({
   return (
     <div
       className={cn(
-        'flex flex-col gap-1 rounded-(--radius-card) p-4',
+        'flex flex-col gap-1 rounded-(--radius-card) p-(--spacing-card-padding-16)',
         tint,
         muted && 'border border-(--el-border)',
       )}

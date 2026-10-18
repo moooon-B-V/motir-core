@@ -35,7 +35,7 @@ export function ScopePicker({
       <select
         value={value}
         onChange={(e) => go(e.target.value)}
-        className="h-(--height-input) max-w-[20rem] rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-2 text-(--el-text)"
+        className="h-(--height-input) max-w-[20rem] rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x-8) text-(--el-text)"
       >
         <option value="organization">{labels.organization}</option>
         {scopes.map((ws) => (

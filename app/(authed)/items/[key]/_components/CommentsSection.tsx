@@ -313,7 +313,7 @@ export function CommentsSection({
                           onClick={() =>
                             setExpandedThreads((current) => new Set(current).add(thread.id))
                           }
-                          className="text-(--el-text-muted) hover:text-(--el-text) self-start rounded-(--radius-control) px-1 py-0.5 font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                          className="text-(--el-text-muted) hover:text-(--el-text) self-start rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-2) font-sans text-xs focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                         >
                           {t('showMoreReplies', {
                             count: thread.replies.length - COLLAPSED_VISIBLE_REPLIES,
@@ -380,7 +380,7 @@ export function CommentsSection({
             onSubmit={submitNewComment}
           />
         ) : (
-          <p className="bg-(--el-surface-soft) text-(--el-text-secondary) flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-2 font-sans text-xs">
+          <p className="bg-(--el-surface-soft) text-(--el-text-secondary) flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y-8) font-sans text-xs">
             <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {t('readOnly')}
           </p>

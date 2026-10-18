@@ -258,7 +258,7 @@ export function BacklogRows({
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-9 animate-pulse rounded-(--radius-control) bg-(--el-muted)"
+              className="h-(--height-control) animate-pulse rounded-(--radius-control) bg-(--el-muted)"
               data-testid="backlog-skeleton-row"
             />
           ))}

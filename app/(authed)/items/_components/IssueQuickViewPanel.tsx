@@ -287,7 +287,7 @@ function OpenTargetLink({ identifier }: { identifier: string }) {
       target="_blank"
       rel="noopener noreferrer"
       data-testid="quick-view-open-full"
-      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-3 font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-control-x-12) font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       {t('openTargetAsItStands')}
       <ArrowRight className="h-[15px] w-[15px]" aria-hidden />
@@ -305,7 +305,7 @@ function OpenFullPageLink({ identifier }: { identifier: string }) {
       target="_blank"
       rel="noopener noreferrer"
       data-testid="quick-view-open-full"
-      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-3 font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
+      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-control-x-12) font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       {t('openFullPage')}
       <ArrowRight className="h-[15px] w-[15px]" aria-hidden />
@@ -346,7 +346,7 @@ function CustomRailRow({
                 : t('quickViewEditField', { field: field.label })
             }
             aria-expanded={editing}
-            className="ml-auto inline-flex rounded-(--radius-control) p-0.5 text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            className="ml-auto inline-flex rounded-(--radius-control) p-(--spacing-control-x-2) text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             <ChevronDown
               className={`h-3.5 w-3.5 transition-transform ${editing ? 'rotate-180' : ''}`}
@@ -1734,7 +1734,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     type="button"
                     aria-expanded={showAllCustom}
                     onClick={() => setShowAllCustom((s) => !s)}
-                    className="flex items-center gap-1.5 self-start rounded-(--radius-control) px-1 py-1 font-sans text-xs font-medium text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    className="flex items-center gap-1.5 self-start rounded-(--radius-control) px-(--spacing-control-x-4) py-(--spacing-control-y-4) font-sans text-xs font-medium text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                   >
                     <ChevronRight
                       className={`h-3.5 w-3.5 shrink-0 text-(--el-text-faint) transition-transform ${showAllCustom ? 'rotate-90' : ''}`}

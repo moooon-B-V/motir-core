@@ -164,7 +164,7 @@ async function LessonsSection({
           <div className="flex min-w-0 items-start gap-3">
             <span
               aria-hidden
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
+              className="flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)"
             >
               <BookOpen className="h-4 w-4" />
             </span>

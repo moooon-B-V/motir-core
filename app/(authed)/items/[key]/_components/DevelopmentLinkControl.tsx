@@ -164,7 +164,7 @@ export function LinkPullRequestDoor() {
     <button
       type="button"
       onClick={openForm}
-      className="text-(--el-link) inline-flex items-center gap-1.5 rounded-(--radius-control) px-1.5 py-1 font-sans text-sm font-semibold whitespace-nowrap hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      className="text-(--el-link) inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-4) font-sans text-sm font-semibold whitespace-nowrap hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       <Plus className="h-4 w-4" aria-hidden />
       {t('development.linkPr')}
@@ -219,7 +219,7 @@ export function LinkPullRequestForm() {
   const shownError = error ?? search.error;
 
   return (
-    <div className="bg-(--el-surface-soft) border-(--el-border) mb-3 flex flex-col gap-2.5 rounded-(--radius-card) border p-3">
+    <div className="bg-(--el-surface-soft) border-(--el-border) mb-3 flex flex-col gap-2.5 rounded-(--radius-card) border p-(--spacing-card-padding-12)">
       <div className="flex flex-col gap-1.5">
         <span className="font-mono text-[11px] font-semibold tracking-wider text-(--el-text-eyebrow) uppercase">
           {t('development.linkPrField')}
@@ -258,7 +258,7 @@ export function LinkPullRequestForm() {
         </Button>
       </div>
       {shownError ? (
-        <div className="bg-(--el-tint-rose) flex items-start gap-2 rounded-(--radius-control) px-3 py-2">
+        <div className="bg-(--el-tint-rose) flex items-start gap-2 rounded-(--radius-control) px-(--spacing-control-x-12) py-(--spacing-control-y-8)">
           <CircleAlert className="text-(--el-danger) mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span className="text-(--el-text-strong) font-sans text-[13px]">{shownError}</span>
         </div>
@@ -348,7 +348,7 @@ export function RemovePullRequestLinkButton({
             {t('development.unlinkConfirmAfter')}
           </p>
           {error ? (
-            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-2.5 py-1.5 font-sans text-xs">
+            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs">
               {error}
             </p>
           ) : null}

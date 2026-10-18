@@ -246,7 +246,7 @@ export function OrgWorkspacesCard({
               >
                 <span
                   aria-hidden
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) font-sans text-sm font-semibold text-(--el-text-strong)"
+                  className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) font-sans text-sm font-semibold text-(--el-text-strong)"
                 >
                   {w.name.charAt(0).toUpperCase()}
                 </span>
@@ -311,7 +311,7 @@ export function OrgWorkspacesCard({
 function WorkspaceRowSkeleton() {
   return (
     <li className="border-(--el-border-soft) flex items-center gap-3 border-b py-3 last:border-b-0">
-      <span className="bg-(--el-muted) h-8 w-8 shrink-0 animate-pulse rounded-(--radius-control)" />
+      <span className="bg-(--el-muted) h-(--height-control-32) w-8 shrink-0 animate-pulse rounded-(--radius-control)" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="bg-(--el-muted) h-3 w-32 animate-pulse rounded-(--radius-control)" />
         <span className="bg-(--el-muted) h-2.5 w-44 animate-pulse rounded-(--radius-control)" />
@@ -433,7 +433,7 @@ function RemoveWorkspaceModal({
         // The org's last workspace: ALLOWED — the server has no last-workspace
         // rule — and SAID, not refused.
         <p
-          className="mb-(--spacing-md) flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-yellow) px-3 py-2 font-sans text-sm text-(--el-text-strong)"
+          className="mb-(--spacing-md) flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-yellow) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text-strong)"
           data-testid="remove-last-workspace-note"
         >
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />

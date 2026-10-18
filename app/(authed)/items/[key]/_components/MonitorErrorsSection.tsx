@@ -145,7 +145,7 @@ function ResolveNote({ link }: { link: MonitorIssueLinkDto }) {
     case 'failed':
       return (
         <div
-          className="mt-0.5 mb-1 ml-[27px] flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-warning-surface) px-2.5 py-1.5 font-sans text-xs leading-snug text-(--el-warning-text)"
+          className="mt-0.5 mb-1 ml-[27px] flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-warning-surface) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs leading-snug text-(--el-warning-text)"
           data-note="resolve-failed"
         >
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0 text-(--el-warning)" aria-hidden />
@@ -263,7 +263,7 @@ export function ErrorRow({ link, action }: { link: MonitorIssueLinkDto; action?:
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t('openInSentry')}
-            className="shrink-0 rounded-(--radius-control) p-1 text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
+            className="shrink-0 rounded-(--radius-control) p-(--spacing-control-x-4) text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none @max-[30rem]:order-2"
           >
             <ExternalLink className="h-4 w-4" aria-hidden />
           </a>
@@ -345,7 +345,7 @@ export function UnlinkErrorButton({
           </p>
           {message ? (
             <p
-              className="rounded-(--radius-control) bg-(--el-tint-rose) px-2.5 py-1.5 font-sans text-xs text-(--el-text-strong)"
+              className="rounded-(--radius-control) bg-(--el-tint-rose) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs text-(--el-text-strong)"
               role="alert"
             >
               {message}

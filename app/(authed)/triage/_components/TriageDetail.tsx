@@ -165,7 +165,7 @@ export function TriageDetail({ detail, busy, handlers }: TriageDetailProps) {
               <button
                 type="button"
                 disabled={busy}
-                className="inline-flex h-(--height-btn-sm) items-center gap-2 rounded-(--radius-btn) bg-(--el-tint-rose) px-3 text-xs font-medium text-(--el-text-strong) transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-(--height-btn-sm) items-center gap-2 rounded-(--radius-btn) bg-(--el-tint-rose) px-(--spacing-control-x-12) text-xs font-medium text-(--el-text-strong) transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
               >
                 <CircleX className="h-4 w-4 text-(--el-danger)" aria-hidden />
                 {t('actions.decline')}

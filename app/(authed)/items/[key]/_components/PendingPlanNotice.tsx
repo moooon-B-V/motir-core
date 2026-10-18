@@ -89,7 +89,7 @@ export interface PendingPlanNoticeProps {
 }
 
 const FRAME =
-  'flex items-start gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-lavender) px-3.5 py-3';
+  'flex items-start gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-lavender) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)';
 
 const ROW_LINK =
   'min-w-0 truncate font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong)';

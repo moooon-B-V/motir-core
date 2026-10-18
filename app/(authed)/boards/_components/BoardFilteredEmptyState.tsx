@@ -35,7 +35,7 @@ export function BoardFilteredEmptyState({ selectedBoardId }: { selectedBoardId?:
           href={routes.view(
             buildBoardFilterHref({ boardId: selectedBoardId, filter: EMPTY_FILTER }),
           )}
-          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-control-x-12) font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {t('filteredEmptyClear')}
         </Link>

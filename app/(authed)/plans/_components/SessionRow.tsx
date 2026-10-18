@@ -449,7 +449,7 @@ export function SessionRow({
       )}
     >
       <span
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-muted)"
+        className="inline-flex h-(--height-control-32) w-8 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-muted)"
         aria-hidden
       >
         <Icon className="h-4 w-4 text-(--el-text-strong)" aria-hidden />

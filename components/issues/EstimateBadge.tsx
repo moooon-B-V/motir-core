@@ -326,7 +326,7 @@ function EstimateBadgeEditor({
           <button
             type="button"
             onClick={() => commit(null)}
-            className="inline-flex h-7 items-center gap-1.5 rounded-(--radius-btn) px-2.5 font-sans text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text-strong)"
+            className="inline-flex h-(--height-control-28) items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-control-x) font-sans text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text-strong)"
           >
             <X className="h-3 w-3" aria-hidden />
             {t('clear')}

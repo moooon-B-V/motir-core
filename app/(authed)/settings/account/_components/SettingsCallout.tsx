@@ -38,7 +38,7 @@ export function SettingsCallout({
   const tokens = TONES[tone];
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-(--radius-card) p-3.5 ${tokens.box} ${
+      className={`flex items-start gap-2.5 rounded-(--radius-card) p-(--spacing-card-padding-12) ${tokens.box} ${
         className ?? ''
       }`}
     >

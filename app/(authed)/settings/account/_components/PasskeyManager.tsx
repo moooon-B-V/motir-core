@@ -192,7 +192,7 @@ export function PasskeyManager({ passkeys, onPasskeysChange }: Props) {
         ) : null}
 
         {registering ? (
-          <div className="flex items-center gap-3 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-3.5">
+          <div className="flex items-center gap-3 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding-12)">
             <span
               className="h-[18px] w-[18px] shrink-0 animate-spin rounded-full border-2 border-(--el-border-strong) border-t-(--el-accent)"
               aria-hidden
@@ -232,7 +232,7 @@ export function PasskeyManager({ passkeys, onPasskeysChange }: Props) {
                 key={p.id}
                 className="flex items-center gap-3.5 border-b border-(--el-border-soft) py-3.5 last:border-b-0"
               >
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-mint) text-(--el-success)">
+                <span className="inline-flex h-(--height-control) w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-mint) text-(--el-success)">
                   <Fingerprint className="h-[18px] w-[18px]" aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -370,7 +370,9 @@ function Notice({ tone, children }: { tone: 'info' | 'warn'; children: React.Rea
   const ink = tone === 'info' ? 'text-(--el-info)' : 'text-(--el-warning)';
   const Icon = tone === 'info' ? AlertTriangle : Clock;
   return (
-    <div className={`flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3 ${bg}`}>
+    <div
+      className={`flex items-start gap-2.5 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12) ${bg}`}
+    >
       <Icon className={`mt-px h-[18px] w-[18px] shrink-0 ${ink}`} aria-hidden />
       <p className="font-sans text-sm leading-relaxed text-(--el-text-strong)">{children}</p>
     </div>

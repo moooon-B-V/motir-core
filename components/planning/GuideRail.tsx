@@ -539,13 +539,13 @@ function EditStatement({ edit }: { edit: Extract<GuideAction, { type: 'edit_item
       <span className="font-semibold">{tg('fieldTitle')}: </span>
       {edit.previous.title ? (
         <>
-          <span className="rounded-(--radius-kbd) bg-(--el-diff-removed) px-1 text-(--el-text-strong) line-through">
+          <span className="rounded-(--radius-kbd) bg-(--el-diff-removed) px-(--spacing-control-x-4) text-(--el-text-strong) line-through">
             {edit.previous.title}
           </span>{' '}
           <ArrowRight className="inline size-3 text-(--el-text-secondary)" aria-hidden />{' '}
         </>
       ) : null}
-      <span className="rounded-(--radius-kbd) bg-(--el-diff-added) px-1 text-(--el-text-strong)">
+      <span className="rounded-(--radius-kbd) bg-(--el-diff-added) px-(--spacing-control-x-4) text-(--el-text-strong)">
         {edit.title}
       </span>
     </p>

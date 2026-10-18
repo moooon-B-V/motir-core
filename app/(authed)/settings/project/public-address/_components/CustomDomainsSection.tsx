@@ -228,7 +228,7 @@ export function CustomDomainsSection({
         title={removing ? t('removeModal.title', { hostname: removing.hostname }) : ''}
       >
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5 rounded-(--radius-control) bg-(--el-tint-rose) px-4 py-3">
+          <div className="flex flex-col gap-1.5 rounded-(--radius-control) bg-(--el-tint-rose) px-(--spacing-control-x-16) py-(--spacing-card-padding-12)">
             <span className="font-sans text-[13px] font-semibold text-(--el-text-strong)">
               {t('removeModal.warningTitle')}
             </span>
@@ -293,7 +293,7 @@ function DomainRow({
   return (
     <li
       data-status={address.status}
-      className="flex flex-col gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-3 py-2.5"
+      className="flex flex-col gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8)"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)">
@@ -505,7 +505,7 @@ function CopyValue({ value, label }: { value: string; label: string }) {
           ?.writeText(value)
           .then(() => toast({ variant: 'success', title: t('action.copied') }));
       }}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+      className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
     >
       <Copy className="h-3.5 w-3.5" aria-hidden />
     </button>

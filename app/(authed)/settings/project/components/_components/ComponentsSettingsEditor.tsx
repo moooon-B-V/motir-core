@@ -795,7 +795,7 @@ function DeleteComponentModalInner({
           >
             {canMove ? (
               <div
-                className={`rounded-(--radius-card) border p-3 ${
+                className={`rounded-(--radius-card) border p-(--spacing-card-padding-12) ${
                   moveSelected
                     ? 'border-(--el-accent) shadow-[0_0_0_1px_var(--el-accent)]'
                     : 'border-(--el-border)'
@@ -836,7 +836,7 @@ function DeleteComponentModalInner({
               role="radio"
               aria-checked={choice === 'remove'}
               onClick={() => setChoice('remove')}
-              className={`focus-visible:ring-(--focus-ring-color) flex items-start gap-2.5 rounded-(--radius-card) border p-3 text-left focus-visible:outline-none focus-visible:ring-2 ${
+              className={`focus-visible:ring-(--focus-ring-color) flex items-start gap-2.5 rounded-(--radius-card) border p-(--spacing-card-padding-12) text-left focus-visible:outline-none focus-visible:ring-2 ${
                 choice === 'remove'
                   ? 'border-(--el-accent) shadow-[0_0_0_1px_var(--el-accent)]'
                   : 'border-(--el-border)'
