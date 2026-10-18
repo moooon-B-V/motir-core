@@ -89,11 +89,7 @@ export default async function VelocityReportPage({
         )}
         <Suspense
           fallback={
-            <div
-              className="nav-pending-frame nav-pending-reveal"
-              aria-busy="true"
-              data-testid="velocity-skeleton"
-            >
+            <div className="nav-pending-frame" aria-busy="true" data-testid="velocity-skeleton">
               <span className="sr-only">{t('velocity.chartLoading')}</span>
               <div
                 className="animate-pulse rounded-(--radius-card) bg-(--el-muted)"
