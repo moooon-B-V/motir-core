@@ -164,11 +164,11 @@ export function StyleVignette({ styleId, palette, type, label, className }: Styl
         {/* NAV — a compact rail; data-surface lets a material style frost it. */}
         <div
           data-surface="sidebar"
-          className="flex items-center gap-2 rounded-(--radius-control) bg-(--el-sidebar-bg) px-3 py-2"
+          className="flex items-center gap-2 rounded-(--radius-control) bg-(--el-sidebar-bg) px-(--spacing-control-x-12) py-(--spacing-control-y-8)"
         >
           <span className="size-2.5 rounded-full bg-(--el-accent)" aria-hidden />
           <span className="font-serif text-[12px] font-semibold text-(--el-text)">Acme</span>
-          <span className="ml-2 rounded-(--radius-control) bg-(--el-accent) px-2 py-[3px] text-[10px] font-medium text-(--el-accent-text)">
+          <span className="ml-2 rounded-(--radius-control) bg-(--el-accent) px-(--spacing-control-x-8) py-(--spacing-control-y-2) text-[10px] font-medium text-(--el-accent-text)">
             Board
           </span>
           <span className="text-[10px] text-(--el-text-secondary)">Backlog</span>
@@ -211,7 +211,7 @@ export function StyleVignette({ styleId, palette, type, label, className }: Styl
             />
             <div
               data-surface="modal"
-              className="relative flex flex-col gap-2 rounded-(--radius-modal) border border-(--el-border) bg-(--el-page-bg) p-3 shadow-(--shadow-modal)"
+              className="relative flex flex-col gap-2 rounded-(--radius-modal) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding-12) shadow-(--shadow-modal)"
             >
               <span className="font-serif text-[12px] font-semibold text-(--el-text)">
                 New invoice

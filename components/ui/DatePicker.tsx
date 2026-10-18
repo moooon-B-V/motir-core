@@ -318,7 +318,7 @@ export function DatePicker({
               onClick={() =>
                 setView((v) => (v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 }))
               }
-              className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+              className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
             >
               <ChevronLeft className="h-[18px] w-[18px]" aria-hidden />
             </button>
@@ -328,7 +328,7 @@ export function DatePicker({
               onClick={() =>
                 setView((v) => (v.m === 11 ? { y: v.y + 1, m: 0 } : { y: v.y, m: v.m + 1 }))
               }
-              className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+              className="inline-flex h-(--height-control-28) w-7 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
             >
               <ChevronRight className="h-[18px] w-[18px]" aria-hidden />
             </button>
@@ -370,7 +370,7 @@ export function DatePicker({
                       aria-current={isToday ? 'date' : undefined}
                       onClick={() => select(day)}
                       className={cn(
-                        'relative flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-transparent text-sm',
+                        'relative flex h-(--height-control) w-9 items-center justify-center rounded-(--radius-control) border border-transparent text-sm',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
                         isOutside && 'text-(--el-text-secondary)',
                         !isOutside && 'text-(--el-text)',
@@ -399,7 +399,7 @@ export function DatePicker({
           <button
             type="button"
             onClick={() => moveFocus(todayUTC())}
-            className="rounded-(--radius-control) px-1.5 py-1 text-sm font-medium text-(--el-link) hover:bg-(--el-surface)"
+            className="rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-4) text-sm font-medium text-(--el-link) hover:bg-(--el-surface)"
           >
             Today
           </button>
@@ -409,7 +409,7 @@ export function DatePicker({
               onChange(null);
               setOpen(false);
             }}
-            className="rounded-(--radius-control) px-1.5 py-1 text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface)"
+            className="rounded-(--radius-control) px-(--spacing-control-x-6) py-(--spacing-control-y-4) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface)"
           >
             Clear
           </button>

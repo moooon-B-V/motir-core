@@ -299,7 +299,7 @@ describe('shape-swap lint — the roles exist and every style actually flips the
  * scanned roots. Empty is legal only until then: the check ships enforcing
  * NOTHING so it passes on `main` without touching a component.
  */
-const OWN_BOX_ENFORCED_PREFIXES: string[] = [];
+const OWN_BOX_ENFORCED_PREFIXES: string[] = ['packages/design-system/src/', 'components/ui/'];
 
 /**
  * `file → utility` pairs a reviewer accepted as unplaceable, each with the reason.
@@ -307,7 +307,12 @@ const OWN_BOX_ENFORCED_PREFIXES: string[] = [];
  * `file → utility` so a NEW escape in a file that already has one cannot hide
  * behind it.
  */
-const OWN_BOX_ALLOWED: Record<string, string> = {};
+const OWN_BOX_ALLOWED: Record<string, string> = {
+  'packages/design-system/src/components/theme/AppearancePickers.tsx → p-[3px]':
+    'Nested inset: the segment radius is derived from the track radius minus this 3px inset, and --radius-btn has no padding steps.',
+  'packages/design-system/src/components/ui/Segmented.tsx → p-0.5':
+    'Nested inset: the segment radius is derived from the track radius minus this 2px inset (see the comment in the file), and --radius-btn has no padding steps.',
+};
 
 /**
  * A surface is a literal carrying a TOKEN-radius utility: `rounded-(--radius-card)`
