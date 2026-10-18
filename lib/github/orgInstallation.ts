@@ -198,3 +198,57 @@ export async function latestWorkflowCommit(
   }
   return { sha, committedAt: date };
 }
+
+/** More files than any repository the fleet serves keeps under `.github`; a
+ *  larger tree is an error rather than an unbounded run of reads. */
+const MAX_WORKFLOW_FILES = 120;
+
+/**
+ * Every workflow file and local composite action at `ref`, with its text — what
+ * `workflowFingerprint` digests (MOTIR-8870). One tree read, then one read per
+ * file. Throws `OrgInstallationReadError` on any refusal, a truncated tree or a
+ * file that is not text, so the caller can tell "unchanged" from "could not read".
+ */
+export async function readWorkflowSources(
+  target: GithubOrgTarget,
+  owner: string,
+  name: string,
+  ref: string,
+): Promise<Array<{ path: string; text: string }>> {
+  const { token } = await resolveOrgAuth(target);
+  const repo = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+  const tree = await getJson(`${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, token);
+  if (!tree.res.ok) throw refusal(tree.res, tree.body);
+  const treeBody = asRecord(tree.body);
+  if (!treeBody || !Array.isArray(treeBody['tree']) || treeBody['truncated'] === true) {
+    throw new OrgInstallationReadError(tree.res.status, 'file tree was missing or truncated');
+  }
+  const paths: string[] = [];
+  for (const entry of treeBody['tree']) {
+    const rec = asRecord(entry);
+    const path = rec?.['path'];
+    if (
+      rec?.['type'] === 'blob' &&
+      typeof path === 'string' &&
+      (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(path) ||
+        /^\.github\/actions\/.+\/action\.ya?ml$/.test(path))
+    ) {
+      paths.push(path);
+    }
+  }
+  if (paths.length > MAX_WORKFLOW_FILES) {
+    throw new OrgInstallationReadError(tree.res.status, 'too many workflow files');
+  }
+  const files: Array<{ path: string; text: string }> = [];
+  for (const path of paths) {
+    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    const file = await getJson(`${repo}/contents/${encoded}?ref=${encodeURIComponent(ref)}`, token);
+    if (!file.res.ok) throw refusal(file.res, file.body);
+    const body = asRecord(file.body);
+    if (!body || body['encoding'] !== 'base64' || typeof body['content'] !== 'string') {
+      throw new OrgInstallationReadError(file.res.status, 'workflow file was not base64 text');
+    }
+    files.push({ path, text: Buffer.from(body['content'], 'base64').toString('utf8') });
+  }
+  return files;
+}
