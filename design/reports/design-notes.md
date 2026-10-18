@@ -594,3 +594,102 @@ this story is the boundary that lets the chrome and the picker paint ahead of th
 mock.
 
 **A route boundary is declined as a preference** — `/reports/burndown` does not call `notFound()`.
+
+## Reports refined — full width, readable axes, help text, workload period, CvR bars, sprint pickers
+
+**Mock:** [`reports--refined.mock.html`](./reports--refined.mock.html) — a DELTA; only the panels that
+change (MOTIR-8920, Story MOTIR-8919). Nothing below edits an older mock; this section amends them by path.
+
+**Amended panels, by file and panel number**
+
+| Existing asset           | Panel(s)                                     | Amended by (this mock) |
+| ------------------------ | -------------------------------------------- | ---------------------- |
+| `dashboard.mock.html`    | 4–7 — the report chrome, Created vs Resolved | 1, 2, 3, 5             |
+| `charts.mock.html`       | 0 (scaffold), 3 (Velocity)                   | 1, 2, 6                |
+| `more-reports.mock.html` | 4 (Workload), 5 (access path / states)       | 3, 4, 7                |
+| `cycle-graph.mock.html`  | 2–4 (the Sprint report, its access path)     | 1, 6, 7                |
+
+### Panel map
+
+0. New tokens and every number below.
+1. Full-width chrome, 1440 and 1920 px, a bounded chart above a 900 px fold; the Sprint report in the same chrome.
+2. X labels that never overlap — line, difference-area and grouped-bar forms, daily × 90 at 1280/1440/1920, plus the angled case.
+3. The help-text toggle, shown and hidden.
+4. Workload with Period and Days back, two-segment bars, the empty window.
+5. Created vs Resolved as bars, and the series switches (including the last-series lock).
+6. Sprint picker on the Sprint report; Velocity's range control; over the skeleton.
+7. The access path (both doors), the bad-sprint-id fallback, and every state.
+
+### Page chrome and the bounded height (panel 1)
+
+- `ReportPageChrome` drops `mx-auto max-w-[48rem]`; the report Card spans the content width.
+- **Chart height is `clamp(280px, 44vh, 420px)`** — 396 px at a 900 px viewport, the same at 1440 and 1920. With the Card's stack above it (shell 56, padding 24, back link 24, gap 16, card padding 24, header 88, help text 126, controls 76, legend 40) the x axis ends at ~866 px: above the 900 px fold at both widths, with the help text shown.
+- The SVG is measured and drawn at **user space = rendered pixels** (`viewBox` equals width × height), so 11 px axis type is 11 px at every width. Today's `680 × 320` viewBox under `w-full h-auto` grows with width; that is why the cap existed (MOTIR-449).
+- The Sprint report adopts the chrome: back link still points at the backlog, title and sprint picker move into the header.
+
+### X-axis labels (panel 2) — the rule, as numbers
+
+| Quantity                  | Value                                                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Bucket pitch              | plot width ÷ (n − 1) for line / difference area; ÷ n for bars                                                         |
+| Margins                   | top 16 · right 16 · left 48 · bottom 46 flat, 64 angled (plot absorbs the 18 px; total height unchanged)              |
+| Flat spacing              | label chars × 6.3 px + 12 px; show every ⌈spacing ÷ pitch⌉-th bucket from the first                                   |
+| First / last              | both always labelled; an earlier label closer than the spacing to the last is dropped                                 |
+| Angle                     | fewer than 8 labels after thinning → rotate −45° (text-anchor end, pivot under the tick) and re-thin at 16 px spacing |
+| Result, daily × 90        | 1280 px → every 4th (23 labels) · 1440 px → every 4th (23) · 1920 px → every 3rd (30)                                 |
+| Result, 26 weekly, 640 px | flat leaves 7 → angled, all 26 labelled                                                                               |
+
+Hover or focus on any bucket shows the full date and the values, labelled or not. The `<details>` data
+table keeps all buckets: thinning is a drawing decision, never a data one.
+
+### Help text (panel 3)
+
+A ghost small `Button` (info glyph · label · chevron) at the header's right edge: **"Hide help text"** /
+**"Show help text"**, `aria-expanded`, `aria-controls`. The region is an `--el-tint-lavender` callout
+(`--radius-card`, ink `--el-text-strong`) with two paragraphs — **What it shows** and **How to read it**.
+Shown on a first visit; once hidden it stays hidden on every report in this browser (one shared
+preference in browser storage, no account setting, no URL parameter). Hidden = removed from layout.
+
+### Workload (panel 4)
+
+Controls: Scope · **Period** · **Days back** · Measure (Average age's vocabulary). Each person is a bar of
+two segments — **Assigned** and **Unassigned — reported by** — with the split written at the bar's end
+("34 = 21 + 13"). Ranked by total, ties by name; the **no-reporter bar is grey and always last**. Colour
+now means kind of work, not person, so the per-assignee ramp is not used here. The dashboard Workload
+gadget is unchanged. URL: `?period=&daysBack=` beside `?savedFilterId=&measure=`.
+
+### Created vs Resolved (panel 5)
+
+New controls **Chart form** (Line · Bars) and **Series** (Created / Resolved `Switch`es). Bars are the
+shipped `BarChart` with one bar per visible series; with one series off the line form drops the
+difference shading. **At least one series stays on**: the last-on switch is disabled and the visible text
+"At least one series stays on." sits under it. URL (proposal; the code card owns exact values):
+`?form=bars` (omitted for line), `?series=created|resolved` (omitted when both).
+
+### Sprint pickers (panel 6)
+
+- **Sprint report:** a sprint `Combobox` (Active, then Completed newest-first — Burndown's grouping) that navigates to `/sprints/<id>/report`.
+- **Velocity:** **Ending at** (a completed-sprint `Combobox`, blank = latest) and **Sprints** (stepper over 3 · 5 · 7 · 10 · 15 · 26 · 52, default 7, service cap 52). URL `?endingAt=<sprintId>&count=<n>`; both omitted = today's last 7. Both pickers render in the chrome ahead of the series skeleton.
+
+### Access path and states (panel 7)
+
+Both doors are drawn unchanged (Reports nav → hub card → page; sprint "View report" → page → picker). A
+**bad or foreign sprint id opens the default sprint's report with no error, no toast and no message**,
+and says nothing about the id it was given (no existence leak). Loading, empty, error and no-access/stale
+states keep their existing bodies; the new controls render in each.
+
+### New tokens
+
+| Token                            | Maps to               | Role                                     |
+| -------------------------------- | --------------------- | ---------------------------------------- |
+| `--el-chart-workload-assigned`   | `--color-primary`     | Workload: assigned segment               |
+| `--el-chart-workload-unassigned` | `--color-accent-teal` | Workload: unassigned-by-reporter segment |
+
+Reused with no change: `--el-chart-cat-none` (no-reporter bar), `--el-chart-created` / `--el-chart-resolved`
+(CvR bars), `--el-chart-committed` / `--el-chart-completed` / `--el-chart-average` (Velocity),
+`--el-tint-lavender` (help region). No raw hue anywhere in the mock; colour is never the sole signal.
+
+### URL parameter names (summary)
+
+`period`, `daysBack` (Workload) · `form`, `series` (Created vs Resolved) · `endingAt`, `count` (Velocity);
+the Sprint report uses its path `/sprints/<id>/report`. `buildReportHref` builds them and omits defaults.
