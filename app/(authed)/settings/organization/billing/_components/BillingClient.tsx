@@ -879,7 +879,7 @@ function MotirCiLine({
         header={
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) text-(--el-text-strong)">
+              <span className="inline-flex h-(--height-control-28) w-(--height-control-28) items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) text-(--el-text-strong)">
                 <Zap className="h-4 w-4" aria-hidden />
               </span>
               <div>

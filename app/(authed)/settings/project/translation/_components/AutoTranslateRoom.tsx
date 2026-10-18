@@ -435,7 +435,7 @@ function HistoryCard({ load, onRetry }: { load: Load; onRetry: () => void }) {
 }
 
 const ROW =
-  'border-(--el-border-soft) grid min-h-(--height-control) grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 border-b py-2.5 @lg:grid-cols-[minmax(0,1fr)_9.5rem_minmax(0,12rem)]';
+  'border-(--el-border-soft) grid min-h-(--height-control) grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 border-b py-(--spacing-control-y-8) @lg:grid-cols-[minmax(0,1fr)_9.5rem_minmax(0,12rem)]';
 
 function HistoryHeads() {
   const t = useTranslations('settings.translation');
@@ -509,7 +509,7 @@ function Callout({
     <div
       data-testid={testId}
       {...(role ? { role } : {})}
-      className={`flex gap-2.5 rounded-(--radius-card) border px-3.5 py-2.5 text-xs leading-relaxed ${surface}`}
+      className={`flex gap-2.5 rounded-(--radius-card) border px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-xs leading-relaxed ${surface}`}
     >
       <span className={`mt-px shrink-0 ${iconTone}`}>{icon}</span>
       <span>{children}</span>
