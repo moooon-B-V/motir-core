@@ -55,6 +55,7 @@ export default async function BurndownReportPage({
         crumb={t('hub.title')}
         title={t('burndown.title')}
         subLine={ctx.project.name}
+        help="burndown"
       >
         <EmptyState
           title={t('burndown.noSprintsTitle')}
@@ -86,6 +87,7 @@ export default async function BurndownReportPage({
       crumb={t('hub.title')}
       title={t('burndown.title')}
       subLine={subLine}
+      help="burndown"
     >
       <BurndownReport sprints={pickerSprints} selectedSprintId={selected.id} cycle={cycle} />
     </ReportPageChrome>

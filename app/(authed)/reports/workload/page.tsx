@@ -71,6 +71,7 @@ export default async function WorkloadPage({
       crumb={t('hub.title')}
       title={t('workload.title')}
       subLine={subLine}
+      help="workload"
     >
       <WorkloadReport
         result={clientResult}

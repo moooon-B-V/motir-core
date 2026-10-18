@@ -19,6 +19,7 @@ import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { pickReportSprints } from '@/lib/reports/sprintPicker';
 import { SprintReportSprintPicker } from './_components/SprintReportSprintPicker';
+import { ReportHelp } from '@/app/(authed)/reports/_components/ReportHelp';
 
 // The standalone sprint-report page (Story 4.4 · Subtask 4.4.6) — the report
 // reachable for a CLOSED sprint after the complete-modal success state has gone
@@ -129,6 +130,8 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
           </div>
           <SurfaceShowOriginalSwitch />
         </div>
+
+        <ReportHelp report="sprintReport" />
 
         <SurfaceTitlesNotice />
 

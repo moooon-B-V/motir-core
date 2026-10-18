@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { ReportHelpRegion, ReportHelpToggle, type ReportHelpId } from './ReportHelp';
 
 // Shared chrome for the two report pages (Story 6.3 · Subtask 6.3.6) — the
 // back-to-Reports link + the report Card (breadcrumb + serif title + config
@@ -23,6 +24,7 @@ export function ReportPageChrome({
   crumb,
   title,
   subLine,
+  help,
   children,
 }: {
   backLabel: string;
@@ -31,6 +33,9 @@ export function ReportPageChrome({
   title: string;
   /** The config summary line, e.g. "Motir · Weekly · last 90 days · per-period". */
   subLine: string;
+  /** Which report's help text this page carries (Story MOTIR-8919). Required, so a
+   * page cannot be added without saying what it shows. */
+  help: ReportHelpId;
   children: ReactNode;
 }) {
   // Arbitrary `max-w-[48rem]` (768px), NOT `max-w-3xl` — this project's Tailwind
@@ -47,14 +52,20 @@ export function ReportPageChrome({
         {backLabel}
       </Link>
       <Card>
-        <header className="mb-5 flex flex-col gap-1">
-          <div className="flex items-center gap-1 text-xs text-(--el-text-muted)">
-            <span>{crumb}</span>
-            <span aria-hidden>/</span>
-            <span>{title}</span>
+        <header className="mb-5 flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex items-center gap-1 text-xs text-(--el-text-muted)">
+                <span>{crumb}</span>
+                <span aria-hidden>/</span>
+                <span>{title}</span>
+              </div>
+              <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{title}</h1>
+              <p className="text-sm text-(--el-text-muted)">{subLine}</p>
+            </div>
+            <ReportHelpToggle report={help} />
           </div>
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{title}</h1>
-          <p className="text-sm text-(--el-text-muted)">{subLine}</p>
+          <ReportHelpRegion report={help} />
         </header>
         {children}
       </Card>

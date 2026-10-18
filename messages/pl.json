@@ -5227,6 +5227,45 @@
       "sprint": "Sprint",
       "label": "Etykieta",
       "component": "Komponent"
+    },
+    "help": {
+      "hide": "Hide help text",
+      "show": "Show help text",
+      "regionLabel": "About this report",
+      "whatLabel": "What it shows.",
+      "howLabel": "How to read it.",
+      "burndown": {
+        "what": "How the sprint's scope, completed and started work move from its start to its end, with a target line and a Today marker.",
+        "how": "Completed rising toward Scope means the sprint is on track. A Scope line that climbs after the start is scope creep; a Completed line that lags the Target is behind."
+      },
+      "velocity": {
+        "what": "The story points a team committed to against the points it completed, sprint by sprint.",
+        "how": "Compare the two bars in each sprint. Steady completed bars show a reliable pace you can plan the next sprint against; pick an earlier sprint to look back from there."
+      },
+      "sprintReport": {
+        "what": "A finished or running sprint on one page: what was completed, what was not, what was added after it started, and its sprint graph.",
+        "how": "Start with completed against not completed, then read the work added mid-sprint. Use the picker under the title to switch sprint."
+      },
+      "createdVsResolved": {
+        "what": "How many work items were created and how many were resolved in each period.",
+        "how": "When the created bar is taller than the resolved bar the backlog is growing; when it is shorter the team is catching up. Use the series switches to look at one of them alone."
+      },
+      "distribution": {
+        "what": "How the project's work items split across the values of one field, such as status, type or assignee.",
+        "how": "The wider a slice, the more work items carry that value. Change the statistic to cut the same work another way."
+      },
+      "averageAge": {
+        "what": "The average number of days the unresolved work items had been open at the end of each period.",
+        "how": "A line that keeps rising means work is being left open. Compare it with the window average to see whether the latest period is unusual."
+      },
+      "resolutionTime": {
+        "what": "The average number of days it took to resolve the work items resolved in each period.",
+        "how": "A falling line means work is being finished faster. Periods are counted by resolution date, so an old item resolved today raises today's period."
+      },
+      "workload": {
+        "what": "The open work each person holds over a chosen period, counted in story points or work items. Work with no assignee is counted under its reporter.",
+        "how": "The longest bars are the people carrying the most open work. Look for a very uneven spread before assigning more."
+      }
     }
   },
   "dashboards": {

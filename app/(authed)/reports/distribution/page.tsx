@@ -124,6 +124,7 @@ export default async function DistributionPage({
       crumb={t('hub.title')}
       title={t('distribution.title')}
       subLine={subLine}
+      help="distribution"
     >
       <DistributionReport
         result={clientResult}

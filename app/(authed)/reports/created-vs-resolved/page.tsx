@@ -75,6 +75,7 @@ export default async function CreatedVsResolvedPage({
       crumb={t('hub.title')}
       title={t('cvr.title')}
       subLine={subLine}
+      help="createdVsResolved"
     >
       <CreatedVsResolvedReport
         result={clientResult}

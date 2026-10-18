@@ -71,6 +71,10 @@ vi.mock('@/app/(authed)/sprints/[id]/report/_components/SprintReportSprintPicker
   ),
 }));
 
+vi.mock('@/app/(authed)/reports/_components/ReportHelp', () => ({
+  ReportHelp: ({ report }: { report: string }) => <div data-testid="help" data-report={report} />,
+}));
+
 const { default: SprintReportPage } = await import('@/app/(authed)/sprints/[id]/report/page');
 
 function sprint(id: string, state: SprintDto['state'], sequence: number): SprintDto {
@@ -100,6 +104,8 @@ describe('the Sprint report resolves its sprint from the path', () => {
     render(await open('done2'));
     expect(screen.getByTestId('sprint-report').getAttribute('data-sprint')).toBe('done2');
     expect(screen.getByTestId('picker').getAttribute('data-selected')).toBe('done2');
+    // The help text sits under the title, as on every other report.
+    expect(screen.getByTestId('help').getAttribute('data-report')).toBe('sprintReport');
     expect(redirected).not.toHaveBeenCalled();
   });
 

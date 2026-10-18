@@ -77,6 +77,7 @@ export default async function VelocityReportPage({
       crumb={t('hub.title')}
       title={t('velocity.title')}
       subLine={subLine}
+      help="velocity"
     >
       <div className="flex flex-col gap-5">
         {completed.length > 0 && (
