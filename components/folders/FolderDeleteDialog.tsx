@@ -88,7 +88,7 @@ export function FolderDeleteDialog({
         ) : empty ? null : (
           <div
             data-testid="folder-delete-moves"
-            className="flex items-start gap-2.5 rounded-(--radius-control) bg-(--el-tint-mint) p-3 text-[13px] leading-normal text-(--el-text-strong)"
+            className="flex items-start gap-2.5 rounded-(--radius-control) bg-(--el-tint-mint) p-(--spacing-control-x-12) text-[13px] leading-normal text-(--el-text-strong)"
           >
             <ArrowUp className="mt-px h-4 w-4 shrink-0 text-(--el-success)" aria-hidden />
             <span>

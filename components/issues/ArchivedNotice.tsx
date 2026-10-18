@@ -53,7 +53,7 @@ export function ArchivedNotice({
     <div
       role="status"
       data-testid={testId}
-      className={`flex items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-3.5 py-3${
+      className={`flex items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)${
         className ? ` ${className}` : ''
       }`}
     >

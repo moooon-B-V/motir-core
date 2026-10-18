@@ -61,7 +61,7 @@ export function RunTonePill({
     <span
       className={`inline-flex items-center rounded-(--radius-badge) font-sans font-medium ${
         compact
-          ? 'gap-1 px-1.5 py-px text-[10px]'
+          ? 'gap-1 px-(--spacing-chip-x-6) py-px text-[10px]'
           : 'gap-1.5 px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs'
       } ${TONE_CLASS[tone]}`}
     >

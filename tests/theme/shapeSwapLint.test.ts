@@ -313,6 +313,18 @@ const OWN_BOX_ENFORCED_PREFIXES: string[] = [
   'components/hosted/',
   'components/github/',
   'components/howToTest/',
+  'components/pages/',
+  'components/rooms/',
+  'components/runs/',
+  'components/folders/',
+  'components/issues/',
+  'components/analytics/',
+  'components/brand/',
+  'components/errors/',
+  'components/i18n/',
+  'components/icons/',
+  'components/markdown/',
+  'components/theme/',
 ];
 
 /**
@@ -348,6 +360,10 @@ const OWN_BOX_ALLOWED: Record<string, string> = {
     'Illustration of a button drawn at 28px; the button role has no height steps and the art is a fixed-size picture, not a control.',
   'components/settings/SettingsPaneFrame.tsx → h-7':
     'Skeleton stand-in for an action button at 28px; the button role has no height steps and the placeholder mimics content, not a control.',
+  'components/issues/EstimateBadge.tsx → h-7':
+    'Compact 28px ghost trigger on --radius-btn; the button role has no steps and its size tokens (--height-btn-sm 32px, --spacing-btn-x-sm 12px) would resize it.',
+  'components/issues/EstimateBadge.tsx → px-2.5':
+    'Compact 28px ghost trigger on --radius-btn; the button role has no steps and its size tokens (--height-btn-sm 32px, --spacing-btn-x-sm 12px) would resize it.',
 };
 
 /**
