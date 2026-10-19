@@ -56,7 +56,7 @@ beforeEach(() => {
     ['c', card('c')],
     ['story', card('story')],
   ]);
-  h.enabled.mockResolvedValue(true);
+  h.enabled.mockResolvedValue({ agentAutoFixEnabled: true });
   h.resolve.mockResolvedValue({ kind: 'self' });
   h.lastRun.mockResolvedValue({ agentInstance: { id: 'ag', ownerId: 'owner' } });
   h.agent.mockResolvedValue({ id: 'ag', ownerId: 'owner', state: 'running' });
@@ -81,7 +81,7 @@ describe('maybeAutoFixOnRed', () => {
   });
 
   it('does nothing when the switch is off', async () => {
-    h.enabled.mockResolvedValue(false);
+    h.enabled.mockResolvedValue({ agentAutoFixEnabled: false });
     expect(await maybeAutoFixOnRed(input())).toBe('setting_off');
     expect(h.start).not.toHaveBeenCalled();
     expect(h.resolve).not.toHaveBeenCalled();

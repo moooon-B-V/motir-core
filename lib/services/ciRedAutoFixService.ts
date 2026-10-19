@@ -83,7 +83,7 @@ export async function maybeAutoFixOnRed(
 
     // The project's switch: the raw read, no actor, no permission asserted.
     const enabled = await projectRepository.findAgentAutoFixEnabled(cards[0]!.projectId, tx);
-    if (!enabled) return { kind: 'setting_off' as const };
+    if (!enabled?.agentAutoFixEnabled) return { kind: 'setting_off' as const };
 
     // One run per delivery: the DISTINCT run targets, and only a single one acts.
     const targets = new Map<string, WorkItem>();

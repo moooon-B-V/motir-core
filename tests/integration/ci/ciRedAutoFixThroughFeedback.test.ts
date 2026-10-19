@@ -70,6 +70,10 @@ async function makeScenario(email: string) {
 
 type Scenario = Awaited<ReturnType<typeof makeScenario>>;
 
+async function statusOf(id: string): Promise<string> {
+  return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
+}
+
 /** A card at `implemented` with its own linked pull request — the shape the
  *  fixture had when the verdict was written. */
 async function cardWithPr(s: Scenario, title: string, number: number) {
@@ -151,7 +155,7 @@ async function priorRunInAgent(s: Scenario, cardId: string, cardKey: string) {
       projectId: s.project.id,
       command: 'run',
       origin: 'instance',
-      status: 'completed',
+      status: 'succeeded',
       endedAt: new Date(),
       agentInstanceId: agent.id,
       createdById: s.user.id,
