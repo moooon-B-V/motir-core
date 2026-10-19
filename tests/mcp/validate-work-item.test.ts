@@ -1049,7 +1049,7 @@ describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory', 
 
   it('AC4: a body with MANY links resolves every id in ONE read, not one per link', async () => {
     const fx = await makeWorkItemFixture();
-    const targets = [];
+    const targets: Awaited<ReturnType<typeof mk>>[] = [];
     for (let i = 0; i < 6; i++) targets.push(await mk(fx, `Target ${i}`, 'task'));
     const body = [
       ...targets.map((t, i) => ref(targets[(i + 1) % targets.length]!.identifier, t.id)),
