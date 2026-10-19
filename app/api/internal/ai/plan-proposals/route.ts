@@ -208,6 +208,9 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const result = await aiGenerationService.appendProposals(
       jobId,
+      // An `add`'s `proposedFields.sections` (Story MOTIR-9023 · MOTIR-9030) rides
+      // through UNCHANGED: `plansService.addProposals` checks it, renders it into
+      // `descriptionMd` and strips it before anything is stored.
       rawProposals as ProposalInput[],
       auth.ctx,
       {

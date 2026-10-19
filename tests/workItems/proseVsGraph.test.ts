@@ -1346,8 +1346,24 @@ describe('underAuthored — a childless leaf carrying nothing, as a NULL CHECK (
   });
 
   it('names a heading with nothing enumerated under it as `no-criterion`', () => {
-    const md = 'Why.\n\n## Acceptance criteria\n\nIt should work well.\n';
+    const md = 'Why.\n\n## Acceptance criteria\n\n## Notes\n\nSome context.\n';
     expect(underAuthored({ ...bare, descriptionMd: md })).toEqual({ criteria: 'no-criterion' });
+  });
+
+  it('reads prose under the heading as a criterion — the parser decides, not a list scan (MOTIR-9032)', () => {
+    const md = 'Why.\n\n## Acceptance criteria\n\nIt should work well.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toBeNull();
+  });
+
+  it('is silent for a `| `-prefixed framing above real criteria (MOTIR-9032)', () => {
+    const md =
+      '| Why this exists.\n| Second line.\n\n## Acceptance criteria\n\n- The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toBeNull();
+  });
+
+  it('fires `no-heading` on a body whose every line is `| `-prefixed (MOTIR-9032)', () => {
+    const md = '| Why.\n|\n| ## Acceptance criteria\n|\n| - The thing works.\n';
+    expect(underAuthored({ ...bare, descriptionMd: md })).toEqual({ criteria: 'no-heading' });
   });
 
   it('is silent once the body enumerates ONE criterion', () => {

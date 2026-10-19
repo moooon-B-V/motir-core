@@ -204,6 +204,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   code_search: 'read',
   skeleton: 'read',
   list_folders: 'read',
+  get_section_sets: 'read',
   // MOTIR-7410 — a page read. Mapped into the RETIRED vocabulary only because
   // this table is total over the registry; its real gate is `page:view`.
   get_page: 'read',

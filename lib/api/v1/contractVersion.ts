@@ -1057,5 +1057,31 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.71.0` after MOTIR-8810's
  *   `1.70.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.72.0` — MOTIR-9029 adds `getSectionSets` (`GET /api/v1/section-sets`, optional
+ *   `kind` and `type` query parameters, `200` with `SectionSets`) and the code
+ *   `UNKNOWN_SECTION_CELL` (422): which sections a work item of a kind × type has, which
+ *   are required and the heading each renders under in the free-text `descriptionMd`.
+ *   The same descriptor the MCP `get_section_sets` tool serves.
+ *
+ *   Additive: a new operation, a new component and a new code for a new condition
+ *   (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.72.0` after MOTIR-5427's
+ *   `1.71.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION.
+ *
+ * - `1.73.0` — MOTIR-9031 adds an optional `sections` object to the `createWorkItem` and
+ *   `updateWorkItem` bodies (named sections the service checks against the registry for
+ *   the item's kind × type and renders into `descriptionMd`; sparse on PATCH), an optional
+ *   `sections` field on the error body (`missing` / `unknown` / `invalid`, by name), and the
+ *   codes `INVALID_SECTIONS` and `SECTIONS_AND_DESCRIPTION_CONFLICT` (422). `descriptionMd`
+ *   stays the one stored, always-free-text body and a write without `sections` is unchanged.
+ *
+ *   Additive: two new optional request fields, a new optional response field and two new
+ *   codes for new conditions (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.73.0` after MOTIR-9029's
+ *   `1.72.0`. If a sibling has taken it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.71.0';
+export const V1_CONTRACT_VERSION = '1.73.0';

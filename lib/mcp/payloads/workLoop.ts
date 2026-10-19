@@ -25,6 +25,7 @@ import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { redactNativeActor } from '@/lib/plans/redactNativeModel';
 import { definePayload } from './define';
+import { parsedSectionsSchema } from './parsedSectionsSchema';
 import { mcpWorkItemSchema, type McpWorkItem } from './workItems';
 
 // The WORK-LOOP payload shapes (Story 11.6 · Subtask 11.6.5 — MOTIR-2231).
@@ -251,6 +252,11 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
     })
     .nullable(),
   items: z.array(z.unknown()),
+  /**
+   * The OPTIONAL sections view (MOTIR-9033): each `add` proposal's body parsed at
+   * read time, keyed by plan item id. Present only when `includeSections` was asked.
+   */
+  parsedSections: z.record(z.string(), parsedSectionsSchema).optional(),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
 
