@@ -138,12 +138,14 @@ export function useFixInMyAgent(itemKey: string, opts: UseFixInMyAgentOptions = 
           idempotencyKey: pressKey(),
         }),
       });
+      // The body is read on EVERY answer: a start whose body nobody reads leaves a
+      // response a browser driver cannot read back (`Response.json()` then never settles).
+      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (res.ok) {
         onStarted?.();
         void load();
         return;
       }
-      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const refused = inMyAgentRefusalOf(res.status, body, viewerId);
       setRefusal(refused);
       if (refused.kind === 'settled' || refused.kind === 'busy') {

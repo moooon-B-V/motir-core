@@ -248,10 +248,10 @@ test.describe('Fix a red pull request in my own agent', () => {
         idempotencyKey: 'a-second-press',
       });
       expect(refused.status).toBe(409);
-      expect(refused.json).toMatchObject({
-        code: 'agent_run_repair_refused',
-        claim: { outcome: 'taken' },
-      });
+      // The agent is running this very fix, so the start refuses it busy at the agent's
+      // own check (step 4), before the repair claim is asked — the unit contract is
+      // `agentInstanceRunStart.test.ts`'s "the same agent pressed again is refused busy".
+      expect(refused.json).toMatchObject({ code: 'agent_instance_run_active' });
       expect(await runsOf(page, card.key)).toEqual(runs);
     });
 
