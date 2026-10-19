@@ -4,7 +4,11 @@ import type { WorkspaceContext } from '@/lib/workspaces';
 import {
   AgentRunCommandInvalidError,
   AgentRunCommandMismatchError,
+  AgentRunRepairRefusedError,
 } from '@/lib/agentInstances/errors';
+import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { AgentInstancesUnavailableError } from '@/lib/agentInstances/errors';
+import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
 import { fx, setUpHarness, tearDownHarness } from './_harness';
@@ -71,6 +75,40 @@ describe('GET /api/work-items/[id]/agent-runs/resume-target', () => {
   });
 });
 
+describe('the route’s error translation', () => {
+  const key = () => `${fx.projectIdentifier}-1`;
+
+  it('hides a card the caller cannot browse behind the same 404', async () => {
+    vi.spyOn(agentInstanceRunService, 'resumeTargetForCard').mockRejectedValue(
+      new ProjectAccessDeniedError('p1', 'browse'),
+    );
+    const res = await read(key());
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'WORK_ITEM_NOT_FOUND' });
+  });
+
+  it('maps an agent-instance error to its own answer', async () => {
+    vi.spyOn(agentInstanceRunService, 'resumeTargetForCard').mockRejectedValue(
+      new AgentInstancesUnavailableError('test'),
+    );
+    const res = await read(key());
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await res.json()).toHaveProperty('code');
+  });
+
+  it('lets an error it does not know escape', async () => {
+    vi.spyOn(agentInstanceRunService, 'resumeTargetForCard').mockRejectedValue(new Error('boom'));
+    await expect(read(key())).rejects.toThrow('boom');
+  });
+
+  it('does not hide a non-browse access denial as a 404', async () => {
+    vi.spyOn(agentInstanceRunService, 'resumeTargetForCard').mockRejectedValue(
+      new ProjectAccessDeniedError('p1', 'edit'),
+    );
+    expect((await read(key())).status).toBe(403);
+  });
+});
+
 describe('the run-command errors', () => {
   it('carry their code and what the caller needs to act', () => {
     const invalid = new AgentRunCommandInvalidError('review', ['run', 'fix', 'continue']);
@@ -81,5 +119,17 @@ describe('the run-command errors', () => {
     expect(mismatch).toMatchObject({ code: 'agent_run_command_mismatch', runId: 'r1' });
     expect(mismatch.message).toContain('fix');
     expect(mismatch.message).toContain('run');
+  });
+
+  it('names the predicate’s reason for a refused repair, or the outcome when it gave none', () => {
+    const claim = (o: object) => o as ConstructorParameters<typeof AgentRunRepairRefusedError>[0];
+    const taken = new AgentRunRepairRefusedError(claim({ outcome: 'taken', key: 'A-1' }));
+    expect(taken.message).toBe('A-1 already has a repair running.');
+    const withReason = new AgentRunRepairRefusedError(
+      claim({ outcome: 'not_repairable', reason: 'ci_running', key: 'A-1' }),
+    );
+    expect(withReason.message).toBe("A-1 can't be repaired now: ci_running.");
+    const bare = new AgentRunRepairRefusedError(claim({ outcome: 'not_repairable', key: 'A-1' }));
+    expect(bare.message).toBe("A-1 can't be repaired now: not_repairable.");
   });
 });
