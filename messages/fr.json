@@ -3959,8 +3959,8 @@
       "errorTitle": "Impossible d’enregistrer",
       "saveError": "Vos paramètres d’agent hébergé n’ont pas été enregistrés. Veuillez réessayer.",
       "autoFix": {
-        "label": "Fix a red pull request in the work item's own agent.",
-        "help": "When a pull request goes red and the work item's last run was in an agent that is signed in and up, Motir starts the fix in that agent. Off — the default — nothing starts on its own."
+        "label": "Corriger une pull request en échec dans l'agent propre à l'élément de travail.",
+        "help": "Lorsqu'une pull request passe au rouge et que la dernière exécution de l'élément de travail a eu lieu dans un agent connecté et actif, Motir lance la correction dans cet agent. Désactivé (par défaut), rien ne démarre tout seul."
       }
     },
     "connectedApps": {
@@ -7311,40 +7311,40 @@
           }
         },
         "myAgent": {
-          "lead": "Fix it in your own agent: <b>{agent}</b>, the agent this work item's last run used.",
+          "lead": "Corrigez-la dans votre propre agent : <b>{agent}</b>, l'agent utilisé par la dernière exécution de cet élément de travail.",
           "door": {
-            "label": "Fix in my agent",
-            "starting": "Starting the fix…",
-            "why": "The fix runs in the same agent on the same branch, so it starts from the run's own context instead of a blank one."
+            "label": "Corriger dans mon agent",
+            "starting": "Démarrage de la correction…",
+            "why": "La correction s'exécute dans le même agent sur la même branche : elle part donc du contexte propre à l'exécution plutôt que d'une page blanche."
           },
           "fixing": {
-            "by": "<b>{name}</b> started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "byYou": "You started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "why": "One fix at a time: this run holds the repair until it ends, so a second fix cannot start over it."
+            "by": "<b>{name}</b> a lancé une correction dans <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "Vous avez lancé une correction dans <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "why": "Une seule correction à la fois : cette exécution garde la réparation jusqu'à sa fin, donc une seconde correction ne peut pas démarrer par-dessus."
           },
           "refused": {
             "busy": {
-              "title": "Not started — a fix is already running on this work item.",
-              "body": "<b>{name}</b> started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged.",
-              "bodyYou": "You started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged."
+              "title": "Non démarré — une correction est déjà en cours sur cet élément de travail.",
+              "body": "<b>{name}</b> l'a lancée <when></when> — <run>{label}</run>. Rien n'a été démarré et rien n'a été facturé.",
+              "bodyYou": "Vous l'avez lancée <when></when> — <run>{label}</run>. Rien n'a été démarré et rien n'a été facturé."
             },
             "signedOut": {
-              "title": "Not started — <b>{agent}</b> is signed out.",
-              "body": "Sign <b>{agent}</b> in, then press Fix in my agent again. <link>Open the agent</link> to sign in with <cmd>{cmd}</cmd>. Nothing was started and nothing was charged."
+              "title": "Non démarré — <b>{agent}</b> n'est pas connecté.",
+              "body": "Connectez <b>{agent}</b>, puis appuyez de nouveau sur « Corriger dans mon agent ». <link>Ouvrez l'agent</link> pour vous connecter avec <cmd>{cmd}</cmd>. Rien n'a été démarré et rien n'a été facturé."
             }
           },
           "fellBack": {
-            "notice": "<b>{agent}</b> could not resume this work item's run session, so the fix started a new session on the same branch (<b>{branch}</b>)."
+            "notice": "<b>{agent}</b> n'a pas pu reprendre la session d'exécution de cet élément de travail ; la correction a donc démarré une nouvelle session sur la même branche (<b>{branch}</b>)."
           },
           "settled": {
-            "notice": "This work item's pull requests are green now, so no fix was started."
+            "notice": "Les pull requests de cet élément de travail sont maintenant au vert : aucune correction n'a donc été lancée."
           },
           "gaveUp": {
-            "note": "The last fix in <b>{agent}</b> gave up after {attempts, plural, one {1 attempt} other {# attempts}} <when></when>. Fix in my agent can be pressed again.",
-            "noteNoCount": "The last fix in <b>{agent}</b> gave up <when></when>. Fix in my agent can be pressed again."
+            "note": "La dernière correction dans <b>{agent}</b> a abandonné après {attempts, plural, one {# tentative} other {# tentatives}} <when></when>. Vous pouvez appuyer de nouveau sur « Corriger dans mon agent ».",
+            "noteNoCount": "La dernière correction dans <b>{agent}</b> a abandonné <when></when>. Vous pouvez appuyer de nouveau sur « Corriger dans mon agent »."
           },
           "modal": {
-            "lead": "This run ended with a red pull request. Fix it in the same agent, without copying the failure into a new one."
+            "lead": "Cette exécution s'est terminée avec une pull request en échec. Corrigez-la dans le même agent, sans recopier l'échec dans un nouveau."
           }
         }
       },

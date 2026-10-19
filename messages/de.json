@@ -3959,8 +3959,8 @@
       "errorTitle": "Speichern nicht möglich",
       "saveError": "Die Einstellungen des gehosteten Agents wurden nicht gespeichert. Bitte versuchen Sie es erneut.",
       "autoFix": {
-        "label": "Fix a red pull request in the work item's own agent.",
-        "help": "When a pull request goes red and the work item's last run was in an agent that is signed in and up, Motir starts the fix in that agent. Off — the default — nothing starts on its own."
+        "label": "Einen roten Pull Request im eigenen Agenten des Arbeitselements reparieren.",
+        "help": "Wird ein Pull Request rot und lief der letzte Lauf des Arbeitselements in einem angemeldeten, laufenden Agenten, startet Motir die Reparatur in diesem Agenten. Aus – die Standardeinstellung – startet nichts von selbst."
       }
     },
     "connectedApps": {
@@ -7311,40 +7311,40 @@
           }
         },
         "myAgent": {
-          "lead": "Fix it in your own agent: <b>{agent}</b>, the agent this work item's last run used.",
+          "lead": "Reparieren Sie ihn im eigenen Agenten: <b>{agent}</b>, dem Agenten, den der letzte Lauf dieses Arbeitselements verwendet hat.",
           "door": {
-            "label": "Fix in my agent",
-            "starting": "Starting the fix…",
-            "why": "The fix runs in the same agent on the same branch, so it starts from the run's own context instead of a blank one."
+            "label": "Im eigenen Agenten reparieren",
+            "starting": "Reparatur wird gestartet…",
+            "why": "Die Reparatur läuft im selben Agenten auf demselben Branch und beginnt daher mit dem eigenen Kontext des Laufs statt mit einem leeren."
           },
           "fixing": {
-            "by": "<b>{name}</b> started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "byYou": "You started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "why": "One fix at a time: this run holds the repair until it ends, so a second fix cannot start over it."
+            "by": "<b>{name}</b> hat <when></when> eine Reparatur in <b>{agent}</b> gestartet – <run>{label}</run>.",
+            "byYou": "Sie haben <when></when> eine Reparatur in <b>{agent}</b> gestartet – <run>{label}</run>.",
+            "why": "Immer nur eine Reparatur: Dieser Lauf hält die Reparatur, bis er endet, daher kann keine zweite darüber gestartet werden."
           },
           "refused": {
             "busy": {
-              "title": "Not started — a fix is already running on this work item.",
-              "body": "<b>{name}</b> started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged.",
-              "bodyYou": "You started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged."
+              "title": "Nicht gestartet – für dieses Arbeitselement läuft bereits eine Reparatur.",
+              "body": "<b>{name}</b> hat sie <when></when> gestartet – <run>{label}</run>. Es wurde nichts gestartet und nichts berechnet.",
+              "bodyYou": "Sie haben sie <when></when> gestartet – <run>{label}</run>. Es wurde nichts gestartet und nichts berechnet."
             },
             "signedOut": {
-              "title": "Not started — <b>{agent}</b> is signed out.",
-              "body": "Sign <b>{agent}</b> in, then press Fix in my agent again. <link>Open the agent</link> to sign in with <cmd>{cmd}</cmd>. Nothing was started and nothing was charged."
+              "title": "Nicht gestartet – <b>{agent}</b> ist abgemeldet.",
+              "body": "Melden Sie <b>{agent}</b> an und klicken Sie dann erneut auf „Im eigenen Agenten reparieren“. <link>Öffnen Sie den Agenten</link>, um sich mit <cmd>{cmd}</cmd> anzumelden. Es wurde nichts gestartet und nichts berechnet."
             }
           },
           "fellBack": {
-            "notice": "<b>{agent}</b> could not resume this work item's run session, so the fix started a new session on the same branch (<b>{branch}</b>)."
+            "notice": "<b>{agent}</b> konnte die Lauf-Sitzung dieses Arbeitselements nicht fortsetzen, daher hat die Reparatur auf demselben Branch (<b>{branch}</b>) eine neue Sitzung gestartet."
           },
           "settled": {
-            "notice": "This work item's pull requests are green now, so no fix was started."
+            "notice": "Die Pull Requests dieses Arbeitselements sind jetzt grün, daher wurde keine Reparatur gestartet."
           },
           "gaveUp": {
-            "note": "The last fix in <b>{agent}</b> gave up after {attempts, plural, one {1 attempt} other {# attempts}} <when></when>. Fix in my agent can be pressed again.",
-            "noteNoCount": "The last fix in <b>{agent}</b> gave up <when></when>. Fix in my agent can be pressed again."
+            "note": "Die letzte Reparatur in <b>{agent}</b> wurde <when></when> nach {attempts, plural, one {# Versuch} other {# Versuchen}} aufgegeben. „Im eigenen Agenten reparieren“ kann erneut gedrückt werden.",
+            "noteNoCount": "Die letzte Reparatur in <b>{agent}</b> wurde <when></when> aufgegeben. „Im eigenen Agenten reparieren“ kann erneut gedrückt werden."
           },
           "modal": {
-            "lead": "This run ended with a red pull request. Fix it in the same agent, without copying the failure into a new one."
+            "lead": "Dieser Lauf endete mit einem roten Pull Request. Reparieren Sie ihn im selben Agenten, ohne den Fehler in einen neuen zu kopieren."
           }
         }
       },

@@ -3959,8 +3959,8 @@
       "errorTitle": "저장하지 못했습니다",
       "saveError": "호스팅 에이전트 설정이 저장되지 않았습니다. 다시 시도하세요.",
       "autoFix": {
-        "label": "Fix a red pull request in the work item's own agent.",
-        "help": "When a pull request goes red and the work item's last run was in an agent that is signed in and up, Motir starts the fix in that agent. Off — the default — nothing starts on its own."
+        "label": "풀 리퀘스트가 빨간색이 되면 작업 항목 자체의 에이전트에서 수정합니다.",
+        "help": "풀 리퀘스트가 빨간색이 되고 작업 항목의 마지막 실행이 로그인되어 있고 켜져 있는 에이전트에서 이루어졌다면, Motir가 그 에이전트에서 수정을 시작합니다. 꺼짐(기본값)이면 아무것도 자동으로 시작되지 않습니다."
       }
     },
     "connectedApps": {
@@ -7305,40 +7305,40 @@
           }
         },
         "myAgent": {
-          "lead": "Fix it in your own agent: <b>{agent}</b>, the agent this work item's last run used.",
+          "lead": "내 에이전트에서 수정하세요: <b>{agent}</b>, 이 작업 항목의 마지막 실행에서 사용한 에이전트입니다.",
           "door": {
-            "label": "Fix in my agent",
-            "starting": "Starting the fix…",
-            "why": "The fix runs in the same agent on the same branch, so it starts from the run's own context instead of a blank one."
+            "label": "내 에이전트에서 수정",
+            "starting": "수정을 시작하는 중…",
+            "why": "수정은 같은 에이전트의 같은 브랜치에서 실행되므로, 빈 상태가 아니라 그 실행 자체의 컨텍스트에서 시작합니다."
           },
           "fixing": {
-            "by": "<b>{name}</b> started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "byYou": "You started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "why": "One fix at a time: this run holds the repair until it ends, so a second fix cannot start over it."
+            "by": "<b>{name}</b> 님이 <when></when> <b>{agent}</b>에서 수정을 시작했습니다 — <run>{label}</run>.",
+            "byYou": "내가 <when></when> <b>{agent}</b>에서 수정을 시작했습니다 — <run>{label}</run>.",
+            "why": "수정은 한 번에 하나만 실행됩니다. 이 실행이 끝날 때까지 수리를 점유하므로, 그 위에 두 번째 수정을 시작할 수 없습니다."
           },
           "refused": {
             "busy": {
-              "title": "Not started — a fix is already running on this work item.",
-              "body": "<b>{name}</b> started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged.",
-              "bodyYou": "You started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged."
+              "title": "시작하지 않음 — 이 작업 항목에서 이미 수정이 실행 중입니다.",
+              "body": "<b>{name}</b> 님이 <when></when> 시작했습니다 — <run>{label}</run>. 시작된 것도, 청구된 것도 없습니다.",
+              "bodyYou": "내가 <when></when> 시작했습니다 — <run>{label}</run>. 시작된 것도, 청구된 것도 없습니다."
             },
             "signedOut": {
-              "title": "Not started — <b>{agent}</b> is signed out.",
-              "body": "Sign <b>{agent}</b> in, then press Fix in my agent again. <link>Open the agent</link> to sign in with <cmd>{cmd}</cmd>. Nothing was started and nothing was charged."
+              "title": "시작하지 않음 — <b>{agent}</b>에서 로그아웃되어 있습니다.",
+              "body": "<b>{agent}</b>에 로그인한 다음 “내 에이전트에서 수정”을 다시 누르세요. <link>에이전트 열기</link>로 이동해 <cmd>{cmd}</cmd>(으)로 로그인합니다. 시작된 것도, 청구된 것도 없습니다."
             }
           },
           "fellBack": {
-            "notice": "<b>{agent}</b> could not resume this work item's run session, so the fix started a new session on the same branch (<b>{branch}</b>)."
+            "notice": "<b>{agent}</b>이(가) 이 작업 항목의 실행 세션을 재개하지 못해, 수정은 같은 브랜치(<b>{branch}</b>)에서 새 세션을 시작했습니다."
           },
           "settled": {
-            "notice": "This work item's pull requests are green now, so no fix was started."
+            "notice": "이 작업 항목의 풀 리퀘스트가 이제 초록색이므로 수정을 시작하지 않았습니다."
           },
           "gaveUp": {
-            "note": "The last fix in <b>{agent}</b> gave up after {attempts, plural, other {# attempts}} <when></when>. Fix in my agent can be pressed again.",
-            "noteNoCount": "The last fix in <b>{agent}</b> gave up <when></when>. Fix in my agent can be pressed again."
+            "note": "<b>{agent}</b>에서 마지막 수정이 {attempts, plural, other {#회 시도}} 후 <when></when> 포기했습니다. “내 에이전트에서 수정”을 다시 누를 수 있습니다.",
+            "noteNoCount": "<b>{agent}</b>에서 마지막 수정이 <when></when> 포기했습니다. “내 에이전트에서 수정”을 다시 누를 수 있습니다."
           },
           "modal": {
-            "lead": "This run ended with a red pull request. Fix it in the same agent, without copying the failure into a new one."
+            "lead": "이 실행은 빨간색 풀 리퀘스트로 끝났습니다. 실패를 새 에이전트에 복사하지 않고 같은 에이전트에서 수정하세요."
           }
         }
       },
