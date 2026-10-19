@@ -216,11 +216,12 @@ describe('reconcileAbandoned hands the lost-machine fact back (the sweep path)',
       'fetch',
       vi
         .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({ jobId: 'job-sweep', status: 'running', result: null, error: null }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-          ),
+        .mockImplementation(
+          async () =>
+            new Response(
+              JSON.stringify({ jobId: 'job-sweep', status: 'running', result: null, error: null }),
+              { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
         ),
     );
 
@@ -236,6 +237,8 @@ describe('reconcileAbandoned hands the lost-machine fact back (the sweep path)',
         reason: 'silent',
         lostMachine: false,
         autoResume: null,
+        // Given up on by silence, so the sweep cancels it (MOTIR-9065).
+        jobCancel: { cancelled: true },
       },
     ]);
   });

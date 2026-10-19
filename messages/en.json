@@ -9511,6 +9511,7 @@
         "token_expired": "its connection to the AI provider expired",
         "prompt_too_large": "the plan's context was too large for the model",
         "job_failed": "the planning job failed",
+        "stalled": "the plan stopped making progress",
         "internal": "something went wrong on our side"
       },
       "refusal": {
