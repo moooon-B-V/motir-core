@@ -268,8 +268,10 @@ describe('motir fix — the happy path', () => {
     expect(events().map((e) => e.kind)).toEqual([
       'run_opened',
       'checkout_ready',
-      // Each fixing attempt is a started / exited pair, so a `ci` repair's leg
+      // The watch reports each fixing attempt to the run (MOTIR-8979), then
+      // each attempt is a started / exited pair, so a `ci` repair's leg
       // learns the model that answered (MOTIR-7506).
+      'ci_fix_attempt',
       'agent_started',
       'agent_exited',
       'ci_verdict',
@@ -378,6 +380,7 @@ describe('motir fix — an acceptance sent back with Re-run (MOTIR-6502)', () =>
       'checkout_ready',
       'agent_started',
       'agent_exited',
+      'log',
       'ci_verdict',
       'agent_started',
       'agent_exited',
@@ -563,6 +566,7 @@ describe('motir fix — a card a REVIEW sent back (MOTIR-6822)', () => {
       'checkout_ready',
       'agent_started',
       'agent_exited',
+      'log',
       'ci_verdict',
       'card_settled',
     ]);
