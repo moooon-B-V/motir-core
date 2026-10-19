@@ -24,14 +24,26 @@ and into the run's log.
 The pull request's number is the content of the release file the spec writes
 (paths.ts `runReleaseFile`) — the spec plays GitHub opening it. SIGTERM/SIGHUP
 (Cancel run -> `motir agent-terminal stop`) stop the coding agent and exit.
+
+THE `fix` FORM (Story MOTIR-8981 - MOTIR-9056). `motir fix <KEY>` is what a run started
+with `command: 'fix'` re-enters, adopting the server-opened run through
+`MOTIR_DISPATCH_RUN_ID` (the real CLI's own contract). Everything that CHOOSES the agent
+is the shipped code: the run's `repair.resume` is read off `GET /api/v1/dispatch-runs/<id>`
+and handed to `fix-agent-argv.ts`, which asks `chooseRepairAgent` for the command, so the
+argv the stub vendor CLI records is the product's. What the real fix does around that
+(check the branches out, push, watch CI) needs a real GitHub and is not played: the stub
+runs the agent, then waits for the file the spec writes to say how the fix ended
+(`green` closes the run `completed`, `gave_up` closes it `halted`).
 """
 import json
 import os
 import signal
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
+import uuid
 
 CHILD = None
 
@@ -86,11 +98,127 @@ class Api:
         self.call("POST", f"/api/v1/dispatch-runs/{run_id}/heartbeat")
 
 
-def main():
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def agent_text(line):
+    """The words in one line of a stub vendor CLI's JSON stream, or None."""
+    try:
+        value = json.loads(line)
+    except ValueError:
+        return line.rstrip("\n") or None
+    if value.get("type") == "assistant":
+        parts = value.get("message", {}).get("content", [])
+        text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
+        return text or None
+    item = value.get("item") or {}
+    if value.get("type") == "item.completed" and item.get("type") == "agent_message":
+        return item.get("text")
+    return None
+
+
+def launch_agent(argv, key, api, run_id):
+    """Run the vendor stub on the fix prompt; its words go to the session and the run's log."""
     global CHILD
+    prompt = f"The checks on {key}'s pull request are failing. Fix them on the same branch."
+    CHILD = subprocess.Popen(
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    CHILD.stdin.write(prompt)
+    CHILD.stdin.close()
+    for line in CHILD.stdout:
+        text = agent_text(line)
+        if text:
+            print(text, flush=True)
+            api.events(run_id, [{"kind": "log", "workItemKey": key, "body": text + "\n"}])
+        api.heartbeat(run_id)
+    return CHILD.wait()
+
+
+def fix(key):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGHUP, stop)
+    run_id = os.environ.get("MOTIR_DISPATCH_RUN_ID", "")
+    state = os.environ.get("MOTIR_HOSTED_STATE", "")
+    if os.environ.get("MOTIR_AGENT_RUN") != "1" or not state or not run_id:
+        say("not started as a fix in an agent (MOTIR_AGENT_RUN / MOTIR_HOSTED_STATE / MOTIR_DISPATCH_RUN_ID unset)")
+        return 2
+    with open(os.path.join(state, "run.json"), encoding="utf-8") as fh:
+        access = json.load(fh)
+    # The run the launcher wrote the token for IS the run this process adopts.
+    if access.get("runId") not in (None, run_id):
+        say(f"run.json names {access.get('runId')}, not {run_id}")
+        return 2
+    api = Api(access["apiUrl"], access["token"])
+    say(f"motir fix {key} - agent mode, run {run_id}")
+    view = api.must("GET", f"/api/v1/dispatch-runs/{run_id}")
+    if view.get("command") != "fix":
+        say(f"run {run_id} is a {view.get('command')} run, not a repair")
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "halted"})
+        return 1
+    repair = view.get("repair") or {}
+    e2e_dir = os.path.join(os.environ["HOME"], ".motir-e2e")
+    chosen = subprocess.run(
+        [os.path.join(REPO_ROOT, "node_modules", ".bin", "tsx"), os.path.join(HERE, "fix-agent-argv.ts"), key],
+        input=json.dumps(repair.get("resume")),
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    if chosen.returncode != 0:
+        say(f"could not choose the agent: {chosen.stderr[-400:]}")
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "halted"})
+        return 1
+    choice = json.loads(chosen.stdout)
+    for pr in repair.get("pullRequests", []):
+        say(f"  {pr['repo']}#{pr['number']} - {pr['branch']}")
+    api.events(
+        run_id,
+        [{"kind": "checkout_ready", "workItemKey": key, "disposition": "running",
+          "data": {"branch": (repair.get("pullRequests") or [{}])[0].get("branch")}}],
+    )
+    say(choice["line"])
+    api.events(run_id, [{"kind": "agent_started", "workItemKey": key, "disposition": "running"}])
+    code = launch_agent(choice["argv"], key, api, run_id)
+    if code != 0 and choice.get("fresh"):
+        # withFreshFallback: the FIRST failed resumed turn is retried once as a fresh agent.
+        say("the agent could not resume that session - starting a fresh agent.")
+        code = launch_agent(choice["fresh"], key, api, run_id)
+    api.events(run_id, [{"kind": "agent_exited", "workItemKey": key, "exitCode": code}])
+    if code != 0:
+        say(f"the agent exited {code}")
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "halted"})
+        return code
+    say("fix pushed - watching the checks")
+    release = os.path.join(e2e_dir, f"release-{run_id}")
+    while not os.path.exists(release):
+        time.sleep(1)
+        api.heartbeat(run_id)
+    with open(release, encoding="utf-8") as fh:
+        ended = fh.read().strip()
+    if ended == "gave_up":
+        say(f"{key}: the checks are still red - giving up.")
+        api.events(run_id, [{"kind": "card_settled", "workItemKey": key, "disposition": "failed"}])
+        api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "halted"})
+        return 1
+    say(f"{key}: the checks are green.")
+    api.events(run_id, [{"kind": "card_settled", "workItemKey": key, "disposition": "implemented"}])
+    api.must("POST", f"/api/v1/dispatch-runs/{run_id}/close", {"stopReason": "completed"})
+    return 0
+
+
+def main():
+    global CHILD
     args = sys.argv[1:]
+    if len(args) == 2 and args[0] == "fix":
+        return fix(args[1])
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGHUP, stop)
     if len(args) < 4 or args[0] != "run" or args[2] != "--run-id":
         say(f"unexpected arguments: {args}")
         return 2
@@ -129,7 +257,16 @@ def main():
         ],
     )
     say("starting Claude Code")
-    api.events(run_id, [{"kind": "agent_started", "workItemKey": key}])
+    # The conversation this run's agent holds, recorded the way the real CLI records it
+    # (`agent_started.data.sessionId`) so a later fix can resume it (MOTIR-9056). A marker
+    # file in the agent's e2e dir makes a run that recorded none.
+    session_id = str(uuid.uuid4())
+    with open(os.path.join(e2e_dir, f"session-{run_id}"), "w", encoding="utf-8") as fh:
+        fh.write(session_id + "\n")
+    started = {"kind": "agent_started", "workItemKey": key}
+    if not os.path.exists(os.path.join(e2e_dir, "no-session")):
+        started["data"] = {"agent": "claude", "sessionId": session_id}
+    api.events(run_id, [started])
 
     release = os.path.join(e2e_dir, f"release-{run_id}")
     env = dict(os.environ, MOTIR_E2E_RELEASE=release)
