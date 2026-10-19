@@ -234,6 +234,61 @@ describe('checkout_ready names the BRANCH the leg’s work will be on (MOTIR-653
   });
 });
 
+describe('the agent’s session id is recorded on the run (MOTIR-8980)', () => {
+  async function events(
+    agent: { stream?: { profile: string; sessionId: string | null } },
+    sessionId: string | null | undefined,
+  ) {
+    const out: Array<{ kind: string; data?: unknown }> = [];
+    const primary = target();
+    await runDispatchLeg({
+      client: {
+        getWorkItem: async () => ({ item: { status: 'in_progress' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: PROMPT,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [], ...agent },
+      targets: [primary],
+      primary,
+      sessionBranch: null,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({
+        exitCode: 0,
+        signal: null,
+        model: null,
+        ...(sessionId === undefined ? {} : { sessionId }),
+      }),
+      run: git(true),
+      reporter: { event: (e: (typeof out)[number]) => out.push(e) } as never,
+    });
+    return out;
+  }
+
+  it('names a session Motir chose on agent_started, before the agent has done anything', async () => {
+    const out = await events({ stream: { profile: 'claude', sessionId: 'chosen' } }, 'chosen');
+    expect(out.find((e) => e.kind === 'agent_started')!.data).toEqual({
+      agent: 'fake-agent',
+      sessionId: 'chosen',
+    });
+  });
+
+  it('puts the id the run came back with on agent_exited — also for an agent that chose its own', async () => {
+    const out = await events({ stream: { profile: 'codex', sessionId: null } }, 'thread-7');
+    expect(out.find((e) => e.kind === 'agent_started')!.data).toEqual({ agent: 'fake-agent' });
+    expect(out.find((e) => e.kind === 'agent_exited')!.data).toMatchObject({
+      sessionId: 'thread-7',
+    });
+  });
+
+  it('is an explicit null when there is none', async () => {
+    const out = await events({}, undefined);
+    expect(out.find((e) => e.kind === 'agent_exited')!.data).toMatchObject({ sessionId: null });
+  });
+});
+
 describe('agent_exited carries the agent’s self-reported model TOP-LEVEL (MOTIR-7504)', () => {
   async function exitedEvent(model: string | null) {
     const events: Array<{ kind: string; model?: unknown; data?: unknown; exitCode?: number }> = [];
@@ -263,7 +318,7 @@ describe('agent_exited carries the agent’s self-reported model TOP-LEVEL (MOTI
     const exited = await exitedEvent('m');
     expect(exited.model).toBe('m');
     expect(exited.exitCode).toBe(0);
-    expect(exited.data).toEqual({ model: 'm', signal: null });
+    expect(exited.data).toEqual({ model: 'm', signal: null, sessionId: null });
   });
 
   it('sends null — never a guess — when the agent reported none', async () => {

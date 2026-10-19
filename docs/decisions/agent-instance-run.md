@@ -232,6 +232,25 @@ never falls back to the hosted OpenCode agent.
   `agent_profile_cannot_run` (§4). Today that is only the two profiles no agent can be created with,
   so the refusal is reachable only by a future profile added with no unattended form.
 
+**AMENDMENT (MOTIR-8980) — the command a run launches is the profile's STREAMING form where it has
+one.** `agentCommand` stays the plain-text form, but `claude -p`, `codex exec` and the rest print
+nothing until the turn ends, so a run in a developer's agent showed no Agent output for the
+whole of the work. Each profile with a headless stream now carries `agentStream` beside it, taken from
+[`agent-chat.md`](agent-chat.md) Q1/Q3 (the Chat tab's flags, so the two cannot drift), and `motir run`
+launches that: `claude -p --output-format stream-json --verbose …`, `codex exec --json …`,
+`opencode run --format json …`, `kimi --output-format stream-json -p`, and `goose run -q --output-format
+stream-json -i -` (without `--no-session`, so there is a session to resume). `aider` has no stream and
+keeps `agentCommand`.
+
+- **The log is readable lines, never the event objects.** `runAgent` reads the stream with the profile's
+  own chat adapter and writes the reply text, one line per tool call (`Edit lib/x.ts`, `Bash: pnpm test`)
+  and a line for each failure, to the terminal and to the run's `log` events alike.
+- **The run records the agent's session id** — `data.sessionId` on `agent_started` where Motir chose it
+  (`claude --session-id`), on `agent_exited` always (from the stream, else the agent's own session store
+  for the run's checkout) — and each profile carries `resumeArgs(sessionId)` for a later fix to continue
+  that conversation.
+- **`MOTIR_AGENT_OUTPUT=text` forces the plain form** for a CLI version that refuses the stream flags.
+
 **Rejected:** **(b) asking the developer to configure a command per agent.** It adds a setting whose
 wrong value is found only when a run hangs at a prompt, and the verified matrix already exists.
 

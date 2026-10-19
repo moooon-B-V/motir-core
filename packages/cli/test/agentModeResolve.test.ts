@@ -59,7 +59,11 @@ describe('resolveAgent in agent mode', () => {
     const agent = resolveAgent({ runId: 'run-1' }, env, () => 'opencode');
 
     expect(agent?.source).toBe('agent');
-    expect(agent?.parsed.command).toBe('claude -p --dangerously-skip-permissions');
+    // The STREAMING form (MOTIR-8980), with the session id Motir chose for it.
+    expect(agent?.parsed.command).toMatch(
+      /^claude -p --output-format stream-json --verbose --dangerously-skip-permissions --session-id [0-9a-f-]{36}$/,
+    );
+    expect(agent?.parsed.stream?.profile).toBe('claude');
     expect(agent?.parsed.promptAddendum).toBeTypeOf('function');
     // Never the hosted launcher, never its gateway pair, never a local choice.
     expect(hostedOpenCodeAgent).not.toHaveBeenCalled();
@@ -75,7 +79,7 @@ describe('resolveAgent in agent mode', () => {
       { MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'codex', MOTIR_AGENT: 'goose' },
       () => 'opencode',
     );
-    expect(agent?.parsed.command).toBe('codex exec --sandbox danger-full-access -');
+    expect(agent?.parsed.command).toBe('codex exec --json --sandbox danger-full-access -');
   });
 
   it('refuses a profile with no unattended command, with a typed error naming it', () => {

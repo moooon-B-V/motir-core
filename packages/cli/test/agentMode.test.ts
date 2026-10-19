@@ -381,7 +381,15 @@ describe('motir run in agent mode — adopt, the image’s own agent, and a clea
     expect(runAgentMock).toHaveBeenCalledTimes(1);
     const { command } = agentOptions();
     expect(command.binary).toBe('claude');
-    expect(command.args).toEqual(['-p', '--dangerously-skip-permissions']);
+    // The STREAMING form (MOTIR-8980): its output reaches Motir while the agent works.
+    expect(command.args.slice(0, 5)).toEqual([
+      '-p',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--dangerously-skip-permissions',
+    ]);
+    expect(command.stream).toEqual({ profile: 'claude', sessionId: expect.any(String) });
     // The session's environment, extended: the agent's sign-in stays reachable…
     expect(command.env!['CLAUDE_CONFIG_DIR']).toBe(join(home, '.claude'));
     // …the run's git setup is in it, and no Motir or git credential is.

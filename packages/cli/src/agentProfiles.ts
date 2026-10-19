@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 
 // The per-agent PROFILE TABLE — what the BYOK preflight knows about the coding
@@ -173,6 +174,42 @@ export interface AgentProfile {
    * never anything that narrows or replaces the agent's own sign-in.
    */
   agentEnv: Readonly<Record<string, string>>;
+  /**
+   * The profile's STREAMING form (MOTIR-8980) — the same agent, launched in the
+   * structured headless mode it has, so a run's output reaches Motir while the agent
+   * works instead of in one piece when it exits. `null` where the agent has none
+   * (`aider`'s `--message` prints plain text) or no unattended form at all; those keep
+   * {@link AgentProfile.agentCommand} as it is.
+   *
+   * ⚠️ THE FLAGS ARE THE CHAT TAB'S, NOT A SECOND LIST. `docs/decisions/agent-chat.md`
+   * Q1/Q3 settled each profile's headless stream, its session id and its resume form,
+   * and `agentTerminal/chat/adapters/*` parse that stream. A run reads the stream with
+   * the SAME adapter's mapper, so a flag changed on one side and not the other makes
+   * the parser read a stream it was not written for.
+   * `test/agentStreamForm.test.ts` pins the shared tokens against the adapters'
+   * own `turnCommand`.
+   */
+  agentStream: AgentStreamForm | null;
+}
+
+/** How a profile is launched when its output is to be STREAMED (MOTIR-8980). */
+export interface AgentStreamForm {
+  /** The arguments after the binary for a fresh run (the prompt rides {@link prompt}). */
+  args: readonly string[];
+  /** How the prompt reaches it — on stdin, or as the last argument. */
+  prompt: 'stdin' | 'argument';
+  /**
+   * The flag that lets Motir CHOOSE the agent's session id (`claude --session-id`), or
+   * null when the agent picks its own and announces it in the stream.
+   */
+  sessionIdFlag: string | null;
+  /**
+   * The arguments after the binary that CONTINUE session `sessionId` — the agent's own
+   * conversation, with its context, rather than a cold start on a new prompt. Not yet
+   * called by a run (the follow-up story, MOTIR-8981, resumes a red pull request's
+   * agent); it is here so the resume form lives beside the stream form it must match.
+   */
+  resumeArgs: (sessionId: string) => string[];
 }
 
 /**
@@ -255,6 +292,22 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: 'claude -p --dangerously-skip-permissions',
     agentPrompt: 'stdin',
     agentEnv: {},
+    // `--output-format stream-json` needs `--verbose` under `-p`: https://code.claude.com/docs/en/headless.
+    // Without it `-p` prints nothing until the turn ends. `--session-id` is Motir's to choose.
+    agentStream: {
+      args: ['-p', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'],
+      prompt: 'stdin',
+      sessionIdFlag: '--session-id',
+      resumeArgs: (id) => [
+        '-p',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--dangerously-skip-permissions',
+        '--resume',
+        id,
+      ],
+    },
     codegraphTarget: 'claude',
     codegraphConfig: {
       // Claude Code reads its MCP servers from <CLAUDE_CONFIG_DIR>/.claude.json
@@ -307,6 +360,23 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: 'codex exec --sandbox danger-full-access -',
     agentPrompt: 'stdin',
     agentEnv: {},
+    // https://developers.openai.com/codex/noninteractive — `--json` makes stdout a JSONL
+    // stream; the thread id arrives in its `thread.started` event. `exec resume` takes
+    // the sandbox as a `-c` override (the chat's own resume does the same).
+    agentStream: {
+      args: ['exec', '--json', '--sandbox', 'danger-full-access', '-'],
+      prompt: 'stdin',
+      sessionIdFlag: null,
+      resumeArgs: (id) => [
+        'exec',
+        'resume',
+        '--json',
+        '-c',
+        'sandbox_mode="danger-full-access"',
+        id,
+        '-',
+      ],
+    },
     codegraphTarget: 'codex',
     codegraphConfig: {
       // codegraph's default target is ~/.codex/config.toml — INSIDE the `:ro`
@@ -344,6 +414,14 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: 'opencode run --auto',
     agentPrompt: 'argument',
     agentEnv: {},
+    // https://opencode.ai/docs/cli/ — `--format json` is "raw JSON events"; `--session`
+    // "Session ID to continue". The session id is the `sessionID` on each event.
+    agentStream: {
+      args: ['run', '--format', 'json', '--auto'],
+      prompt: 'argument',
+      sessionIdFlag: null,
+      resumeArgs: (id) => ['run', '--format', 'json', '--auto', '--session', id],
+    },
     codegraphTarget: 'opencode',
     codegraphConfig: {
       // codegraph's default target is ~/.config/opencode/opencode.jsonc —
@@ -387,6 +465,15 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: 'kimi -p',
     agentPrompt: 'argument',
     agentEnv: {},
+    // https://moonshotai.github.io/kimi-code/en/reference/kimi-command.html — `-p` takes
+    // the prompt as its value, so it stays LAST; `--session` resumes, and the id is the
+    // stream's closing `session.resume_hint`.
+    agentStream: {
+      args: ['--output-format', 'stream-json', '-p'],
+      prompt: 'argument',
+      sessionIdFlag: null,
+      resumeArgs: (id) => ['--output-format', 'stream-json', '--session', id, '-p'],
+    },
     credentialHint:
       'Run `kimi` once to sign in — it writes <KIMI_CODE_HOME or ~/.kimi-code>/credentials/<profile>.json, whose name follows the active profile, so Motir cannot confirm it.',
     codegraphTarget: null,
@@ -412,6 +499,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: null,
     agentPrompt: null,
     agentEnv: {},
+    agentStream: null,
     codegraphTarget: 'antigravity',
     codegraphConfig: {
       // This profile mounts NO credential directory at all, so nothing can
@@ -444,6 +532,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: null,
     agentPrompt: null,
     agentEnv: {},
+    agentStream: null,
     codegraphTarget: 'cursor',
     codegraphConfig: {
       // Cursor's credential mount is ~/.local/share/cursor-agent, which does not
@@ -475,6 +564,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: 'aider --yes-always --message',
     agentPrompt: 'argument',
     agentEnv: {},
+    agentStream: null,
     codegraphTarget: null,
     codegraphConfig: null,
   },
@@ -502,6 +592,25 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     agentCommand: 'goose run --no-session -t',
     agentPrompt: 'argument',
     agentEnv: { GOOSE_MODE: 'auto' },
+    // https://goose-docs.ai/docs/guides/goose-cli-commands — `--output-format stream-json`
+    // is "events as they occur". No `--no-session`: a run that keeps no session cannot be
+    // resumed. The prompt goes on stdin (`-i -`).
+    agentStream: {
+      args: ['run', '-q', '--output-format', 'stream-json', '-i', '-'],
+      prompt: 'stdin',
+      sessionIdFlag: null,
+      resumeArgs: (id) => [
+        'run',
+        '-q',
+        '--output-format',
+        'stream-json',
+        '-i',
+        '-',
+        '--resume',
+        '--session-id',
+        id,
+      ],
+    },
     codegraphTarget: null,
     codegraphConfig: null,
   },
@@ -540,6 +649,18 @@ export interface ParsedAgentCommand {
    * above it.
    */
   promptAddendum?: () => string;
+  /**
+   * Set when the agent is launched in its STREAMING form (MOTIR-8980): its stdout is a
+   * structured event stream, which `runAgent` reads with this profile's chat adapter and
+   * writes out as readable lines. Absent for a command the user typed and for a profile
+   * with no stream.
+   */
+  stream?: {
+    /** The profile whose adapter reads the stream. */
+    profile: string;
+    /** The session id known BEFORE the spawn — Motir chose it, or it is being resumed. */
+    sessionId: string | null;
+  };
 }
 
 /**
@@ -651,8 +772,30 @@ export function agentProfileById(profileId: string): AgentProfile | null {
 }
 
 /**
+ * The environment variable that forces the profile's plain-text form
+ * ({@link AgentProfile.agentCommand}) instead of its streaming one — for a CLI version
+ * that refuses the stream flags. Its value is `text`; anything else changes nothing.
+ */
+export const AGENT_OUTPUT_ENV = 'MOTIR_AGENT_OUTPUT';
+
+export interface UnattendedAgentOptions {
+  /**
+   * Continue this session of the agent (its own conversation, context included) rather
+   * than start a new one. Only a profile with a streaming form can resume; for any other
+   * the option is ignored.
+   */
+  resumeSessionId?: string;
+  /** Mints the session id a profile lets Motir choose. Overridden only by the tests. */
+  newSessionId?: () => string;
+}
+
+/**
  * The profile's UNATTENDED command as a launcher, or null when the id is
  * unknown or the profile has no unattended form (`agentCommand: null`).
+ *
+ * It is the profile's STREAMING form wherever it has one (MOTIR-8980), so the run's
+ * output arrives while the agent works and its session id is known; `MOTIR_AGENT_OUTPUT=text`
+ * in `env` asks for the plain-text form instead.
  *
  * ⚠️ THE ENVIRONMENT IS THE SESSION'S OWN, EXTENDED — never an allow-list. The
  * agent needs the `CLAUDE_CONFIG_DIR` / `CODEX_HOME` the image set, which is
@@ -664,16 +807,47 @@ export function agentProfileById(profileId: string): AgentProfile | null {
 export function unattendedAgentCommand(
   profileId: string,
   env: NodeJS.ProcessEnv = process.env,
+  options: UnattendedAgentOptions = {},
 ): ParsedAgentCommand | null {
   const profile = agentProfileById(profileId);
   const parsed = parseAgentCommand(profile?.agentCommand ?? undefined);
   if (!profile || !parsed) return null;
   const agentEnv: NodeJS.ProcessEnv = { ...env, ...profile.agentEnv };
   for (const name of AGENT_RUN_WITHHELD_ENV) delete agentEnv[name];
-  if (profile.agentPrompt === 'stdin') return { ...parsed, env: agentEnv };
+
+  const form = env[AGENT_OUTPUT_ENV]?.trim().toLowerCase() === 'text' ? null : profile.agentStream;
+  if (!form) return withPrompt({ ...parsed, env: agentEnv }, profile.agentPrompt);
+
+  let sessionId: string | null = options.resumeSessionId?.trim() || null;
+  let args: string[];
+  if (sessionId) {
+    args = form.resumeArgs(sessionId);
+  } else if (form.sessionIdFlag) {
+    sessionId = (options.newSessionId ?? randomUUID)();
+    args = [...form.args, form.sessionIdFlag, sessionId];
+  } else {
+    args = [...form.args];
+  }
+  return withPrompt(
+    {
+      command: [parsed.binary, ...args].join(' '),
+      binary: parsed.binary,
+      args,
+      env: agentEnv,
+      stream: { profile: profile.id, sessionId },
+    },
+    form.prompt,
+  );
+}
+
+/** Deliver the prompt the way the profile takes it: stdin as it stands, or argv only. */
+function withPrompt(
+  command: ParsedAgentCommand,
+  channel: 'stdin' | 'argument' | null,
+): ParsedAgentCommand {
+  if (channel === 'stdin') return command;
   return {
-    ...parsed,
-    env: agentEnv,
+    ...command,
     // An argv agent would also read a piped stdin — the prompt goes on argv only.
     promptOnStdin: false,
     promptArgs: (prompt, promptFile) =>

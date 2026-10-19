@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -458,5 +458,142 @@ describe('an agent-mode launcher (MOTIR-7024)', () => {
       'MOTIR_PROMPT_FILE',
       'PATH',
     ]);
+  });
+});
+
+describe('a streaming run (MOTIR-8980)', () => {
+  const line = (value: unknown) => JSON.stringify(value) + '\n';
+  const init = line({ type: 'system', subtype: 'init', session_id: 'sess-from-stream' });
+  const toolCall = line({
+    type: 'assistant',
+    message: {
+      id: 'm1',
+      content: [{ type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: 'lib/x.ts' } }],
+    },
+  });
+  const reply = line({
+    type: 'assistant',
+    message: { id: 'm2', content: [{ type: 'text', text: 'Done.' }] },
+  });
+
+  /** A child that writes `first`, waits for the test to say go, then writes `rest` and exits. */
+  function streamingAgent(first: string, rest: string, goFile: string) {
+    return {
+      ...fakeAgent(
+        `process.stdout.write(${JSON.stringify(first)});` +
+          `const fs=require('fs');` +
+          `const t=setInterval(()=>{if(fs.existsSync(${JSON.stringify(goFile)})){clearInterval(t);` +
+          `process.stdout.write(${JSON.stringify(rest)});}},10);`,
+      ),
+      stream: { profile: 'claude', sessionId: null },
+    };
+  }
+
+  it('hands the log a readable line WHILE the agent is still running, never the JSON event', async () => {
+    const goFile = join(work, 'go');
+    const chunks: string[] = [];
+    let seenEarly: string | null = null;
+    let finished = false;
+    const run = runAgent({
+      command: streamingAgent(init + toolCall, reply, goFile),
+      prompt: PROMPT,
+      cwd: work,
+      onOutput: (chunk) => {
+        chunks.push(chunk);
+        if (!finished && seenEarly === null) seenEarly = chunks.join('');
+      },
+    }).finally(() => {
+      finished = true;
+    });
+    // The agent has not exited, and its first action is already in the log.
+    await vi.waitFor(() => expect(seenEarly).toBe('Edit lib/x.ts\n'));
+    expect(finished).toBe(false);
+    writeFileSync(goFile, '');
+    const result = await run;
+    expect(result.exitCode).toBe(0);
+    expect(chunks.join('')).toBe('Edit lib/x.ts\nDone.\n');
+    expect(chunks.join('')).not.toContain('{');
+  });
+
+  it('records the session id the stream named', async () => {
+    const goFile = join(work, 'go');
+    writeFileSync(goFile, '');
+    const result = await runAgent({
+      command: streamingAgent(init + toolCall, reply, goFile),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.sessionId).toBe('sess-from-stream');
+  });
+
+  it('falls back to the id Motir chose before the spawn when the stream names none', async () => {
+    const goFile = join(work, 'go');
+    writeFileSync(goFile, '');
+    const result = await runAgent({
+      command: {
+        ...streamingAgent(toolCall, reply, goFile),
+        stream: { profile: 'claude', sessionId: 'chosen-id' },
+      },
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.sessionId).toBe('chosen-id');
+  });
+
+  it('pipes stdout even with no log to tee, so the terminal never gets the JSON either', async () => {
+    const goFile = join(work, 'go');
+    writeFileSync(goFile, '');
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      written.push(String(chunk));
+      return true;
+    });
+    try {
+      await runAgent({
+        command: streamingAgent(init + toolCall, reply, goFile),
+        prompt: PROMPT,
+        cwd: work,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.join('')).toBe('Edit lib/x.ts\nDone.\n');
+  });
+
+  it('flushes the line still open when the agent exits mid-sentence', async () => {
+    const goFile = join(work, 'go');
+    writeFileSync(goFile, '');
+    const delta = line({
+      type: 'stream_event',
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Half a thou' },
+      },
+    });
+    const start = line({
+      type: 'stream_event',
+      event: { type: 'message_start', message: { id: 'm9' } },
+    });
+    const chunks: string[] = [];
+    await runAgent({
+      command: streamingAgent(start + delta, '', goFile),
+      prompt: PROMPT,
+      cwd: work,
+      onOutput: (c) => chunks.push(c),
+    });
+    expect(chunks.join('')).toBe('Half a thou\n');
+  });
+
+  it('leaves a command with no stream alone: raw output, no session id', async () => {
+    const chunks: string[] = [];
+    const result = await runAgent({
+      command: fakeAgent(`process.stdout.write('{"type":"x"}\\n')`),
+      prompt: PROMPT,
+      cwd: work,
+      onOutput: (c) => chunks.push(c),
+    });
+    expect(chunks.join('')).toBe('{"type":"x"}\n');
+    expect(result.sessionId).toBeUndefined();
   });
 });
