@@ -227,7 +227,11 @@ function Command({
   conflict,
   reviewedAgain = false,
   hostedDoor = null,
+  myAgentDoor = null,
 }: {
+  /** *Fix in my agent* (MOTIR-9053): drawn beside the copyable command of a red-checks
+   *  repair, in the offer state only. */
+  myAgentDoor?: ReactNode;
   /** A card a REVIEW sent back (MOTIR-6825): the next green version is reviewed again. */
   reviewedAgain?: boolean;
   /** *Fix on the hosted agent* (MOTIR-6930; § 30 Panel 3): it LEADS, under its own lead,
@@ -253,6 +257,7 @@ function Command({
       ) : (
         <p className="text-[13px] leading-normal text-(--el-text)">{t('lead')}</p>
       )}
+      {myAgentDoor}
       <CopyableCodeBlock language="shell" code={`motir fix ${itemIdentifier}`} />
       <p className="text-xs leading-normal text-(--el-text-secondary)">
         {hostedDoor
@@ -335,8 +340,16 @@ export function RepairFixPart({
   now,
   sentBackBy = null,
   hostedDoor = null,
+  myAgentDoor = null,
 }: {
   repair: WorkItemRepairViewDto;
+  /**
+   * *FIX IN MY AGENT* (MOTIR-9053) — drawn beside the copyable `motir fix <KEY>` of a
+   * red-checks (`ci`) repair in the offer state, and only where the host passes it: the
+   * item page, for a viewer who may use agents on the project. Every other class and state
+   * draws no door, and the read-only peek omits it.
+   */
+  myAgentDoor?: ReactNode;
   /** Who sent a `review` repair's commits back — the host's frame knows (MOTIR-6825). */
   sentBackBy?: SentBackBy | null;
   /**
@@ -456,6 +469,7 @@ export function RepairFixPart({
             conflict={repair.failing.some((pr) => pr.conflict !== null)}
             reviewedAgain={reviewSentBack}
             hostedDoor={reviewSentBack ? hostedDoor : null}
+            myAgentDoor={repair.repairClass === 'ci' ? myAgentDoor : null}
           />
           {!sentBack && repair.failing.some(isEjectedOnly) ? (
             <WhichToUse ejected={repair.failing.filter(isEjectedOnly)} />

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Cloud, CloudOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { RunTonePill } from '@/components/runs/RunTonePill';
+import { FixInMyAgentControl } from '@/components/agentRuns/FixInMyAgentControl';
+import { announceRunsChanged } from '@/components/hosted/runsChangedSignal';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
 import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
 import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
@@ -202,7 +204,20 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
               on the agent's own interval (MOTIR-7023, Q3.3). */}
           {run.origin === 'instance' ? (
             <>
-              <AgentEndStrip run={run} />
+              <AgentEndStrip
+                run={run}
+                fixDoor={
+                  run.cards[0]?.key ? (
+                    <FixInMyAgentControl
+                      itemKey={run.cards[0].key}
+                      viewerId={viewerId}
+                      variant="modal"
+                      onStarted={() => announceRunsChanged(run.cards[0]!.key!)}
+                      onStateMoved={() => announceRunsChanged(run.cards[0]!.key!)}
+                    />
+                  ) : null
+                }
+              />
               <AgentRunCost run={run} live={isLiveRun(run.status)} variant="strip" />
             </>
           ) : null}

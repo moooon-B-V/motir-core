@@ -100,3 +100,42 @@ export interface CardRunResumeTargetDto {
 export interface CardResumeTargetDto {
   lastRun: CardRunResumeTargetDto | null;
 }
+
+/**
+ * THE "FIX IN MY AGENT" DOOR'S STATE for one card (Story MOTIR-8981 · MOTIR-9053).
+ * Read by the Development block's fix part and by an ended run's modal, so one
+ * server evaluation serves both mounts.
+ *
+ * `offered: false` is an ANSWER, never a permission problem: "there is nothing to fix
+ * here" is a state the door draws as nothing. `repair_open` carries the open fix run so
+ * the door can say who is fixing and link the run; `agent_unusable` carries the agent's
+ * own refusal verbatim.
+ */
+export type FixInMyAgentDoorDto =
+  | {
+      offered: true;
+      /** The agent the card's last run used, else the viewer's first usable one. */
+      agent: Pick<AgentForCardDto, 'id' | 'name' | 'profileId' | 'profileName' | 'state'>;
+    }
+  | {
+      offered: false;
+      reason:
+        | 'no_pull_request'
+        | 'green'
+        | 'not_ci'
+        | 'repair_open'
+        | 'no_agent'
+        | 'agent_unusable';
+      /** Set on `repair_open`: the open fix run and who holds it. */
+      run: {
+        id: string;
+        label: string;
+        startedAt: string;
+        holder: { id: string; name: string } | null;
+        byViewer: boolean;
+        /** The agent the fix runs in, when it is one of the viewer's own; else null. */
+        agentName: string | null;
+      } | null;
+      /** Set on `agent_unusable`. */
+      refusal: AgentRunAgentRefusal | null;
+    };
