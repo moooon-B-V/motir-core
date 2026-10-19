@@ -3471,11 +3471,19 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
-`{ key, valid, blockers, invalidEdges, crossLevelEdges, advisories, softBlocks }`. When `valid` is `false`,
+`{ key, valid, blockers, invalidEdges, crossLevelEdges, advisories, softBlocks, sectionFindings }`. When `valid` is `false`,
 `blockers` lists each gated in-subtree item as
 `{ item, blockedBy, blockerStatus, blockerSprintId }` (the out-of-subtree,
 unsatisfied work gating it — always an item's OWN edge). An unknown /
 cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
+
+`sectionFindings` (MOTIR-9032) is a second **advisory** channel: each not-`done`
+subtree card whose body, parsed against the section registry for its kind × type,
+misses a required section or carries one it cannot read is reported as
+`{ item, state: "unstructured" | "incomplete", missing, invalid, otherHeadings, signals }`,
+sorted by `item`. It never changes `valid` (a VALID verdict states the count and says
+so), and with a `planId` the body is the projected one. Fix a finding by re-writing the
+card with `sections` (see `get_section_sets`).
 
 `softBlocks` (MOTIR-6354 / MOTIR-6368) is **never gating**: it lists every open
 `blocked_by` edge owned by one of the target's ANCESTORS (parent → … → root) — a
@@ -4886,6 +4894,11 @@ still reports that child edge, and re-wiring one end of an old bad edge makes it
 this plan's to fix. An old edge the plan touches nothing of is reported by
 `validate_work_item` without a `planId`, unchanged. The same narrowing applies to
 `validate_work_item` with a `planId`.
+
+`validate_plan` also returns `sectionFindings` (MOTIR-9032), the same advisory
+channel as on `validate_work_item`, over the cards the plan adds or modifies: the
+projected body parsed against the section registry, a missing required section
+named by `item`. It never changes `valid`.
 
 ```jsonc
 validate_plan({ planId })

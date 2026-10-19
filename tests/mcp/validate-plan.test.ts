@@ -533,3 +533,34 @@ describe('validate_sprint — the optional planId', () => {
     expect(text(res)).not.toContain('materializes');
   });
 });
+
+describe('validate_plan — SECTION findings, advisory (MOTIR-9032)', () => {
+  it('names a prose-only proposal in a VALID plan, states the count, and never flips `valid`', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    const plan = await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: {
+          title: 'Prose card',
+          kind: 'task',
+          type: 'code',
+          descriptionMd: 'Just prose.',
+        },
+      },
+    ]);
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(res.isError).toBeFalsy();
+    expect(struct(res)).toMatchObject({ planId, valid: true });
+    const findings = struct(res).sectionFindings as { item: string; state: string }[];
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      item: `${TEMP_REF_PREFIX}${itemIdByTitle(plan, 'Prose card')}`,
+      state: 'unstructured',
+    });
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain('Section findings (1, advisory — they do NOT change VALID)');
+  });
+});

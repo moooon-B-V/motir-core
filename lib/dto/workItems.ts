@@ -1820,6 +1820,39 @@ export interface WorkItemValidityDto {
    * empty when no ancestor is blocked.
    */
   softBlocks: WorkItemSoftBlockDto[];
+  /**
+   * Per-card SECTION findings (MOTIR-9032) — the body PARSED against the section
+   * registry for the card's kind × type, one entry per not-done subtree card that
+   * misses a required section or carries one it cannot read. A SEPARATE advisory
+   * channel, **never a blocker**: `valid` and `blockers` are byte-identical
+   * whether or not this array is empty. Sorted by `item`; empty when every card
+   * reads clean.
+   */
+  sectionFindings: SectionFindingDto[];
+}
+
+/**
+ * One card's section finding (MOTIR-9032): what parsing its stored (or
+ * projected) body against the registry for its kind × type found missing.
+ * Advisory — see {@link WorkItemValidityDto.sectionFindings}.
+ */
+export interface SectionFindingDto {
+  /** The card's identifier (a real key, or the plan item's projected key). */
+  item: string;
+  /** The card's kind and type — the registry cell its body was read against. */
+  kind: string;
+  type: string | null;
+  /** `unstructured` — the body has no section headings at all (or is empty);
+   *  `incomplete` — it has some, and a required one is missing or unreadable. */
+  state: 'unstructured' | 'incomplete';
+  /** Required sections absent or empty, in registry order. */
+  missing: string[];
+  /** Sections found but unreadable into their shape, with why. */
+  invalid: { section: string; message: string }[];
+  /** Headings the body carries that the registry does not define for this cell. */
+  otherHeadings: string[];
+  /** The parser's diagnostics (`empty`, `no-headings`, `quoted-gutter`, …). */
+  signals: string[];
 }
 
 /** A `{ key, title }` reference to a work item, as a soft block names one. */

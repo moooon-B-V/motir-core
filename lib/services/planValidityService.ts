@@ -39,6 +39,8 @@ import type {
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import type { PlanValidityDto } from '@/lib/dto/plans';
+import type { SectionFindingDto } from '@/lib/dto/workItems';
+import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
 import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 
@@ -188,6 +190,50 @@ function projectedSizing(
   const patch = proj.patchByWorkItemId.get(nodeId);
   if (patch && field in patch) return patch[field] ?? null;
   return stored;
+}
+
+/**
+ * The SECTION findings (MOTIR-9032) over the PROJECTED tree: each scanned
+ * not-done node's projected body parsed against the registry for its projected
+ * kind × type. Same layering as every projected read above — the plan's value
+ * where the plan sets one, the stored row otherwise — and one batched read for
+ * the real nodes. ADVISORY: never an input to a verdict.
+ */
+async function projectedSectionFindings(
+  proj: Projection,
+  nodeIds: Iterable<string>,
+  ctx: ServiceContext,
+): Promise<SectionFindingDto[]> {
+  const scanned = [...nodeIds]
+    .map((id) => proj.nodes.get(id))
+    .filter((n): n is ProjectedNode => n !== undefined && !isDone(proj, n));
+  if (scanned.length === 0) return [];
+  const storedRows = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findDescriptionsByIds(
+          scanned.filter((n) => !n.id.startsWith(TEMP_REF_PREFIX)).map((n) => n.id),
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((r) => [r.id, r] as const),
+  );
+  return sectionFindingsFor(
+    scanned.map((node) => {
+      const stored = storedRows.get(node.id);
+      return {
+        item: node.identifier,
+        kind: node.kind,
+        type: proj.projectedType.has(node.id)
+          ? (proj.projectedType.get(node.id) ?? null)
+          : (stored?.type ?? null),
+        descriptionMd: proj.projectedDescription.has(node.id)
+          ? (proj.projectedDescription.get(node.id) ?? null)
+          : (stored?.descriptionMd ?? null),
+      };
+    }),
+  );
 }
 
 async function projectedProseAdvisories(
@@ -760,6 +806,7 @@ export const planValidityService = {
       crossLevelEdges,
       advisories: [...prose, ...coverage, ...titleCoverage],
       softBlocks: await projectedSoftBlocks(proj, root.id, ctx),
+      sectionFindings: await projectedSectionFindings(proj, memberIds, ctx),
     };
   },
 
@@ -884,6 +931,13 @@ export const planValidityService = {
       rejections,
       invalidEdges,
       crossLevelEdges,
+      // Only the cards the PLAN writes (an `add`, or a `modify` of a real card):
+      // an untouched stored card's body is the committed verdict's to judge.
+      sectionFindings: await projectedSectionFindings(
+        proj,
+        [...memberIds].filter((id) => proj.proposalByRef.has(id) || proj.patchByWorkItemId.has(id)),
+        ctx,
+      ),
     };
   },
 

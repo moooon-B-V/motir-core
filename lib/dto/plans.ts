@@ -15,6 +15,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
+import type { SectionFindingDto } from '@/lib/dto/workItems';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import type { Locale } from '@/lib/i18n/locales';
 import type { WorkItemSections } from '@/lib/workItems/sections/registry';
@@ -1588,6 +1589,13 @@ export interface PlanValidityDto {
    * removes (MOTIR-7727) — a validation verdict, as on `validate_work_item`.
    */
   crossLevelEdges: CrossLevelEdgeDto[];
+  /**
+   * Per-card SECTION findings over the PROJECTED tree (MOTIR-9032) — every
+   * added or modified not-done card whose projected body misses a required
+   * section for its projected kind × type. ADVISORY: never changes `valid`.
+   * Sorted by `item`.
+   */
+  sectionFindings: SectionFindingDto[];
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

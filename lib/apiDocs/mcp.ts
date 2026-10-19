@@ -778,6 +778,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // scope — a childless card that is not itself `type: design`. Summary
     // UNCHANGED: it narrows an advisory, and this line describes the verdict.
     //
+    // Re-pinned for MOTIR-9032's advisory `sectionFindings` (the body parsed against
+    // the section registry). Summary UNCHANGED: like the other advisory channels it
+    // never touches the finishability verdict this line describes.
+    //
     // Re-pinned for MOTIR-6368's NON-gating `softBlocks` (an ancestor's open
     // blockers). Summary UNCHANGED: like the advisory channel, it never touches
     // the finishability verdict this line describes.
@@ -801,7 +805,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // never touches the finishability verdict this line describes.
     // Re-pinned for MOTIR-5427, summary UNCHANGED: the new `under-authored` advisory
     // is another severity on the channel, not part of the verdict this line names.
-    descriptionFingerprint: 'c17bdac70969',
+    descriptionFingerprint: '62d9e7d60eaa',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -825,7 +829,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-7727, summary UNCHANGED and now more exactly true: "its
     // cross-parent edges" are the plan's own — the two edge lists hold only the
     // findings the plan introduces, not every old edge in the project.
-    descriptionFingerprint: 'e5bc9d691542',
+    // Re-pinned for MOTIR-9032's advisory `sectionFindings`, summary UNCHANGED.
+    descriptionFingerprint: '700a1f88e643',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

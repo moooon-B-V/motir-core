@@ -312,6 +312,7 @@ import {
 import { buildPathReferenceAdvisories } from '@/lib/services/pathReferenceAdvisoryService';
 import { containerCoverageFinding, unnamedTitleWords } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
+import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
@@ -9234,6 +9235,7 @@ async function computeWorkItemValidity(
       crossLevelEdges: [],
       advisories: [],
       softBlocks,
+      sectionFindings: [],
     };
   }
 
@@ -9308,6 +9310,16 @@ async function computeWorkItemValidity(
     crossLevelEdges,
     advisories: [...prose, ...coverage, ...titleCoverage, ...pathReferences],
     softBlocks,
+    // MOTIR-9032 — the SAME scanned bodies, parsed against the section registry.
+    // Advisory: `valid` above is computed without it.
+    sectionFindings: sectionFindingsFor(
+      subjects.map((subject) => ({
+        item: subject.item,
+        kind: subject.kind ?? 'task',
+        type: subject.type,
+        descriptionMd: subject.descriptionMd,
+      })),
+    ),
   };
 }
 

@@ -40,6 +40,9 @@ export interface ParsedBody {
   /** `checkSections`' invalid, plus every section found but unreadable into its shape. */
   invalid: { section: SectionName; message: string }[];
   signals: ParseSignal[];
+  /** Every registry section whose heading the body carries, whether or not
+   *  anything stands under it (an empty heading is in `headed`, not `found`). */
+  headed: SectionName[];
 }
 
 const HEADING = /^(#{2,})\s+(.*?)\s*$/;
@@ -262,6 +265,7 @@ export function parseSections(
       missing: check.missing as SectionName[],
       invalid: [...(check.invalid as ParsedBody['invalid']), ...invalid],
       signals,
+      headed: [] as SectionName[],
     };
   };
 
@@ -330,5 +334,7 @@ export function parseSections(
   if (body.length > 0 && body.every((l) => GUTTER.test(l))) signals.push('quoted-gutter');
   if (!blocks.some((b) => b.name !== null)) signals.push('no-headings');
 
-  return done(sections as WorkItemSections, invalid);
+  const result = done(sections as WorkItemSections, invalid);
+  result.headed = set.sections.filter((n) => blocks.some((b) => b.name === n));
+  return result;
 }

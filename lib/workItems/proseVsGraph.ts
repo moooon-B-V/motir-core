@@ -29,6 +29,9 @@ import { WORKITEM_TOKEN_RE, INTRA_PLAN_REF_TOKEN_RE } from '@/lib/mentions/workI
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { isTypeableKind } from '@/lib/issues/executorDefaults';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
+import type { IssueType } from '@/lib/issues/parentRules';
+import { parseSections } from '@/lib/workItems/sections/parse';
+import type { SectionType } from '@/lib/workItems/sections/registry';
 
 /**
  * How strongly a body reference suggests a MISSING `blocked_by` edge. Two tiers,
@@ -1173,11 +1176,19 @@ export function underAuthored(card: {
   if (card.kind != null && !isTypeableKind(card.kind as WorkItemKindDto)) return null;
   if (card.storyPoints != null || card.estimateMinutes != null) return null;
   if (card.type != null || card.executor != null) return null;
-  if (acceptanceCriteriaTexts(card.descriptionMd).length > 0) return null;
-  const hasHeading = card.descriptionMd
-    ? acceptanceCriteriaSpan(card.descriptionMd) !== null
-    : false;
-  return { criteria: hasHeading ? 'no-criterion' : 'no-heading' };
+  // One parse of the body against the registry decides "has criteria": a
+  // criterion is a FOUND acceptanceCriteria section; a heading with nothing under
+  // it is HEADED but not found. An unknown kind reads as a task, the cell every
+  // childless leaf shares.
+  const parsed = parseSections(
+    card.descriptionMd,
+    (card.kind ?? 'task') as IssueType,
+    (card.type ?? null) as SectionType,
+  );
+  if (parsed.found.includes('acceptanceCriteria')) return null;
+  return {
+    criteria: parsed.headed.includes('acceptanceCriteria') ? 'no-criterion' : 'no-heading',
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
