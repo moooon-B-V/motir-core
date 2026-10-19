@@ -3054,7 +3054,9 @@ jobs:
     # names each run's target) — MOTIR-9075's per-file floor over the files the story
     # added (`vitest.coverage.runs-overlay-parity.config.ts`), measured by the story
     # gate (a real run row to the rendered Target cell, real legs to the real console)
-    # and the code cards' suites against Postgres.
+    # and the code cards' suites against Postgres. A new lane with no CI run to quote
+    # yet; the ceiling bounds a hang at 20 min rather than setting a target — replace
+    # it with a measured figure.
     timeout-minutes: 20
     needs: changes
     if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
