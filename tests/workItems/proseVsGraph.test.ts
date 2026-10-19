@@ -1160,6 +1160,77 @@ describe('selfBlockingDesignCriteria — a card that is its OWN design blocker (
     });
   });
 
+  it('does not read a TEST DOUBLE as a design asset — plan cmvez6dl300gmhmrffl127q95', () => {
+    // Four test and route cards in that plan were reported as their own design
+    // blocker, and `check-plan` read each as a guard #3 stop: a bare `mock` in a
+    // criterion that asserts on a test double made it the DESIGN half, and an
+    // ordinary render criterion the SURFACE half. The criteria are quoted from
+    // MOTIR-8637 and MOTIR-8643, trimmed, with one render criterion each.
+    const routeCard = [
+      '## Acceptance criteria',
+      '',
+      '- Both answers carry `Cache-Control: no-store`: a second identical call reaches the',
+      '  boundary again (asserted on the boundary mock).',
+      '- A body the input schema refuses answers 400 and the boundary is NEVER called',
+      '  (asserted on the mock).',
+      '- The Calculator view renders the answer the route returns.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(routeCard)).toBeNull();
+
+    const testCard = [
+      '## Acceptance criteria',
+      '',
+      '- The only stubbed boundary is the global `fetch`, and no test mocks the helper or',
+      '  the route module wholesale.',
+      '- The Calculator tab shows the recorded credit range for the pinned input.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(testCard)).toBeNull();
+  });
+
+  it.each([
+    'asserted on the boundary mock',
+    'no test mocks the helper wholesale',
+    "the lane's `E2E_TEST_BILLING` boundary mock",
+    'the client is mocked at the transport',
+    '`vi.mock` replaces the session reader',
+    'a mock client answers every call',
+    'tests/x.test.tsx mocks @/lib/foo and is not modified',
+    'it mocks @/app/(authed)/runs/_components/RunsIndex and asserts nothing about the columns',
+    'the suite mocks ./foo and ../bar',
+    'the test mocks lib/x directly',
+  ])('a test-double "mock" is not a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(false);
+  });
+
+  it('does not read "mocks <module path>" as a design asset — MOTIR-9077', () => {
+    // MOTIR-8982's runs-index card: criterion 12 names the module its suite mocks,
+    // criterion 1 is an ordinary render criterion. The card draws nothing.
+    const card = [
+      '## Acceptance criteria',
+      '',
+      '- No `Command` or `Scope` header renders anywhere on the page.',
+      '- `tests/components/runsPage-scope.test.tsx` is not modified: it **mocks** ' +
+        "`@/app/(authed)/runs/_components/RunsIndex` and asserts nothing about the index's columns.",
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(card)).toBeNull();
+  });
+
+  it.each(['the delta mock draws the Target column', 'the mock and/or the export is committed'])(
+    'a drawing "mock" followed by prose is still a design asset: %s',
+    (line) => {
+      expect(namesDesignAsset(line)).toBe(true);
+    },
+  );
+
+  it.each([
+    'each panel is drawn in the mock',
+    'the mocks of every state are committed',
+    'a mockup of the empty state',
+    '`design/billing/calculator.mock.html` is added',
+  ])('a drawing "mock" is still a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(true);
+  });
+
   it('reports the FIRST criterion of each role when several qualify', () => {
     const many = [
       '## Acceptance criteria',
