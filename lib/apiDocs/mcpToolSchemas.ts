@@ -1479,6 +1479,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_code_health: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+    },
+    required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_coding_convention: {
     type: 'object',
     properties: {
@@ -1496,20 +1510,6 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'repo'],
-    additionalProperties: false,
-    $schema: 'http://json-schema.org/draft-07/schema#',
-  },
-  get_code_health: {
-    type: 'object',
-    properties: {
-      projectKey: {
-        type: 'string',
-        minLength: 1,
-        description:
-          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
-      },
-    },
-    required: ['projectKey'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
