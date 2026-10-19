@@ -16,13 +16,17 @@ import {
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isUnderAuthoredAdvisory,
+  isMislabelledLinkAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import {
   BODY_ABOVE_FIELD_MOVE_REMEDY,
   describeBodyAboveFieldMove,
 } from '@/lib/workItems/bodyAboveFieldMove';
-import type { WorkItemValidityDto } from '@/lib/dto/workItems';
+import type {
+  WorkItemProseMislabelledLinkAdvisoryDto,
+  WorkItemValidityDto,
+} from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -97,6 +101,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
   const underAuthored = result.advisories.filter(isUnderAuthoredAdvisory);
+  const mislabelled = result.advisories.filter(isMislabelledLinkAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
   const unnamedTitles = result.advisories.filter(isTitleCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
@@ -118,6 +123,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
       `Advisory (${unaffected}): ${a.item} claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Update the prose or the graph.`,
     );
   }
+  lines.push(...mislabelledLinkLines(mislabelled, unaffected));
   if (references.length > 0) {
     lines.push(
       '',
@@ -344,6 +350,24 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
  * The UNCOVERED CROSS-PARENT lines (MOTIR-6370) — shared wording for both
  * validators' text blocks. Empty when there are none.
  */
+/**
+ * The MISLABELLED-LINK advisories (MOTIR-9007), one block per link. Exported for
+ * `validate_plan`, which reports the same finding over a plan's proposed bodies.
+ * `unaffected` is the caller's "not a blocker" clause — the two verdicts phrase it
+ * differently.
+ */
+export function mislabelledLinkLines(
+  advisories: readonly WorkItemProseMislabelledLinkAdvisoryDto[],
+  unaffected: string,
+): string[] {
+  return advisories.flatMap((a) => [
+    '',
+    a.targetKey === null
+      ? `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which opens NO work item. Fix the id — resolve the key you meant with get_work_item.`
+      : `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which is ${a.targetKey}. The label and the card disagree — fix the id or the label.`,
+  ]);
+}
+
 export function invalidEdgeLines(
   invalidEdges: ReadonlyArray<{
     item: string;
@@ -566,7 +590,10 @@ export function registerValidateWorkItem(
         '`claim`, `claimedCount`, and `blockerCount`), or `under-authored` when a CHILDLESS card ' +
         'has no enumerated acceptance criterion AND null `storyPoints`, `estimateMinutes`, `type` ' +
         'and `executor` (with `criteria`: `no-heading` or `no-criterion` — a pure null check, ' +
-        'never a gate, because a card is routinely saved mid-authoring). A `coverage` ' +
+        'never a gate, because a card is routinely saved mid-authoring), or ' +
+        '`likely-mislabelled-link` when a `[label](motir:<id>)` link in the body opens a ' +
+        'different card than the key its label names, or opens no card at all (with the ' +
+        '`label`, the `targetId`, and the `targetKey` it really opens, `null` for none). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +
