@@ -34,10 +34,11 @@ import { bindInterruptSignals, INTERRUPT_EXIT_CODE, type InterruptSignal } from 
 import { CliError } from '../errors.js';
 import { execCommand, type CommandRunner } from '../git.js';
 import type { LinkConfig } from '../config/linkConfig.js';
+import { chooseRepairAgent, withFreshFallback } from '../agentResume.js';
 import { hostedOpenCodeAgent } from '../hostedAgent.js';
 import { activeHostedRun } from '../hostedAttribution.js';
 import { lockHostedRunToBranches } from '../hostedGit.js';
-import { assertAdoptsLeaf, hostedRunId, type AdoptedRun } from '../hostedMode.js';
+import { assertAdoptsLeaf, hostedRunId, isAgentRun, type AdoptedRun } from '../hostedMode.js';
 import { info } from '../output.js';
 import { withHostedProjectSession, withProjectSession } from '../session.js';
 import { requireAgent } from './auto.js';
@@ -500,14 +501,17 @@ async function fixHosted(input: {
   }
   assertAdoptsLeaf(adopted, key);
   const decided = view.repair ?? null;
+  // A run in the person's OWN agent (MOTIR-9052) answers every class; the hosted lane
+  // answers a review only (§12.4b).
+  const ownAgent = isAgentRun(env);
   // What the claim decided, or a refusal — never a guess: without it there is no
   // branch this run may push to. The run IS ours, so it is closed on the way out.
   const missing =
     decided === null
       ? 'the run records no repair decision'
-      : decided.repairClass !== 'review'
+      : decided.repairClass !== 'review' && !ownAgent
         ? `the run records a \`${decided.repairClass}\` repair, and a hosted repair answers a review`
-        : decided.findings === null
+        : decided.repairClass === 'review' && decided.findings === null
           ? 'the run records no review findings'
           : decided.pullRequests.length === 0
             ? 'the run records no pull request'
@@ -534,15 +538,29 @@ async function fixHosted(input: {
   );
   // Read AFTER the lock, so the agent's allow-listed environment carries it. An explicit
   // `--agent` is honoured, as `resolveAgent` honours it for every hosted command.
-  const agent = opts.agent
-    ? requireAgent({ ...opts, print: false }, 'motir fix')
-    : {
-        parsed: hostedOpenCodeAgent(env, { addendum: hostedRepairAddendum }),
-        source: 'hosted' as const,
-      };
+  let agent: { parsed: ParsedAgentCommand };
+  let agentDeps = deps;
+  if (opts.agent) {
+    agent = requireAgent({ ...opts, print: false }, 'motir fix');
+  } else if (ownAgent) {
+    // The person's own agent resumes the card's last session when it can (MOTIR-9052).
+    const choice = chooseRepairAgent(key, decided.resume, env);
+    info(choice.line);
+    agent = choice;
+    agentDeps = {
+      ...deps,
+      runAgentFn: withFreshFallback(deps.runAgentFn ?? defaultRunAgent, choice, info),
+    };
+  } else {
+    agent = { parsed: hostedOpenCodeAgent(env, { addendum: hostedRepairAddendum }) };
+  }
 
   const claim = claimFromRun({ key, runId: adopted.runId, repair: decided });
-  info(`Adopted run ${adopted.runId}: repairing ${key}, sent back by a review.`);
+  info(
+    `Adopted run ${adopted.runId}: repairing ${key}, ${
+      decided.repairClass === 'review' ? 'sent back by a review' : 'red on CI or acceptance'
+    }.`,
+  );
   const run = deps.run ?? execCommand;
   await repair({
     client,
@@ -565,7 +583,7 @@ async function fixHosted(input: {
     },
     agent,
     opts,
-    deps,
+    deps: agentDeps,
     hosted: { run },
   });
 }

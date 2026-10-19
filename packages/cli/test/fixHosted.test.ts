@@ -77,6 +77,7 @@ function decision(twoRepos = false): DispatchRunRepair {
           ]
         : []),
     ],
+    resume: null,
     findings: {
       gate: 'agent_review',
       gateId: 'gate_1',
@@ -317,6 +318,36 @@ describe('hosted `motir fix` — adopts the fix run, never claims (MOTIR-6929)',
     setup({ repair: { ...decision(), repairClass: 'ci' } });
     await expect(fixCommand(KEY, {}, deps())).rejects.toThrow(/a `ci` repair/);
     expect(h.closed).toEqual(['halted']);
+  });
+
+  it('in the person’s own agent, a ci repair is admitted (the hosted lane refuses it)', async () => {
+    setup({ repair: { ...decision(), repairClass: 'ci', findings: null } });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    await fixCommand(KEY, {}, d);
+    expect(h.closed).not.toEqual(['halted']);
+    expect(h.locked).toHaveLength(1);
+  });
+
+  it('in the person’s own agent, a review repair resumes the recorded session, and a failed resume re-runs fresh once', async () => {
+    setup({
+      repair: {
+        ...decision(),
+        resume: { profile: 'claude', sessionId: 'sess-1', canResume: true },
+      },
+    });
+    const d = deps()!;
+    d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+    const first = d.runAgentFn!;
+    d.runAgentFn = async (opts: RunAgentOptions) => {
+      const r = await first(opts);
+      return h.agentRuns.length === 1 ? { ...r, exitCode: 1 } : r;
+    };
+    await fixCommand(KEY, {}, d);
+    expect(h.agentRuns.length).toBeGreaterThanOrEqual(2);
+    expect(h.agentRuns[0]!.command.stream?.sessionId).toBe('sess-1');
+    expect(h.agentRuns[1]!.command.stream?.sessionId).not.toBe('sess-1');
+    expect(h.agentRuns[1]!.prompt).toBe(h.agentRuns[0]!.prompt);
   });
 });
 

@@ -2221,6 +2221,14 @@ export const dispatchRunSchema = z.object({
           headSha: z.string().nullable(),
         }),
       ),
+      resume: z
+        .object({
+          profile: z.string(),
+          sessionId: z.string().nullable(),
+          canResume: z.boolean(),
+        })
+        .nullable()
+        .optional(),
       findings: z
         .object({
           gate: z.enum(['agent_review', 'pull_request_approval']),

@@ -533,8 +533,14 @@ export const agentInstanceRunService = {
     // its ONE `run_opened`; nothing below the claim's own steps applies — no keyed
     // claim, no provenance, no second `run_opened`. No `admit`: every class is admitted.
     if (isFix) {
+      // Read BEFORE the claim opens its own run, or the latest run would be this one.
+      const last = (await agentInstanceRunService.resumeTargetForCard(identifier, ctx)).lastRun;
       const claim = await workItemRepairService.openAgentRepair(project.id, identifier, ctx, {
         origin: 'instance',
+        resume:
+          last?.agent && last.agentIsReaders
+            ? { profile: last.agent.profile, sessionId: last.sessionId, canResume: last.canResume }
+            : null,
         agent: agent.profileId,
         agentInstanceId: agent.id,
         idempotencyKey: input.idempotencyKey ?? randomUUID(),

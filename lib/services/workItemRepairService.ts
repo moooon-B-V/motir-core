@@ -165,6 +165,12 @@ export interface AgentRepairOpening {
   model?: string | null | undefined;
   agentInstanceId: string;
   idempotencyKey: string;
+  /**
+   * The card's last run's agent profile and recorded session, read BEFORE this run opened
+   * (Story MOTIR-8981 · MOTIR-9052) — what the CLI needs to resume that conversation
+   * instead of starting a fresh one. Null when the card has no earlier agent run.
+   */
+  resume?: { profile: string; sessionId: string | null; canResume: boolean } | null | undefined;
 }
 
 export interface ClaimRepairOptions {
@@ -265,7 +271,11 @@ async function repairOpenedData(
       // The agent door's run names the agent it runs in; the hosted payload has no
       // `agent` key (its agent lives on the run row).
       ...(opening.origin === 'instance'
-        ? { agent: opening.agent, agentInstanceId: opening.agentInstanceId }
+        ? {
+            agent: opening.agent,
+            agentInstanceId: opening.agentInstanceId,
+            resume: opening.resume ?? null,
+          }
         : {}),
       model: opening.model,
       repairClass: decided.repairClass,
