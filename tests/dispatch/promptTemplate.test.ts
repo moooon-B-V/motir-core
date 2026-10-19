@@ -3302,3 +3302,64 @@ describe('the repository convention is fetched with get_coding_convention (MOTIR
     expect(render('manual')).not.toContain('get_coding_convention');
   });
 });
+
+describe('the run prompt states the product’s approval and receipt rules (MOTIR-9085)', () => {
+  const designPrompt = assembleDispatchPrompt(
+    source({ type: 'design', executor: 'coding_agent', openDependentKeys: ['X-2'] }),
+  ).prompt;
+  const acceptancePrompt = assembleDispatchPrompt(
+    source({
+      key: 'PROD-40',
+      type: 'test',
+      title: 'Story E2E (Playwright) + ACCEPTANCE VIDEO — walk both surfaces',
+      descriptionMd: 'Record the story working.\n\n## Acceptance criteria\n\n- Declares its story.',
+    }),
+  ).prompt;
+  const codePrompt = assembleDispatchPrompt(source({ type: 'code' })).prompt;
+
+  it.each([
+    'Publishing raises an approval gate on this card.',
+    'you never approve it and have no way to.',
+    'holds two gates and asks ONE question',
+    'Approve\n     moves the card to done only when no pull request is open',
+    'Your publish does NOT release a blocked_by on this card.',
+    'Republish only because the design CHANGED.',
+    'A second publish retires the\n     pending question',
+    'A superseded design’s missing files are expected',
+  ])('a design card that something waits on says: %s', (sentence) => {
+    expect(designPrompt).toContain(sentence);
+  });
+
+  it('a design card nothing waits on carries none of the publish rules', () => {
+    const quiet = assembleDispatchPrompt(
+      source({ type: 'design', executor: 'coding_agent' }),
+    ).prompt;
+    expect(quiet).not.toContain('Publishing raises an approval gate');
+  });
+
+  it.each([
+    'AN ACCEPTANCE SPEC IS A RECEIPT, NOT A REGRESSION TEST',
+    'Approving pins the recording; it does not freeze the story.',
+    'the story goes back below implemented',
+    'Only the spec’s AUTHOR moves it out of the acceptance lane',
+    'do NOT edit the assertion to match today',
+  ])('an acceptance card says: %s', (sentence) => {
+    expect(acceptancePrompt).toContain(sentence);
+  });
+
+  it('an ordinary code card is not told about receipts', () => {
+    expect(codePrompt).not.toContain('ACCEPTANCE SPEC IS A RECEIPT');
+  });
+
+  it('every reporting section tells the agent a manual-mode pull request is awaiting approval', () => {
+    expect(codePrompt).toContain('OPEN AND\n  AWAITING APPROVAL');
+    expect(codePrompt).toContain('You never approve a gate or merge a pull request.');
+  });
+
+  it('names no motir-core path, lane or file in the new sentences', () => {
+    for (const p of [designPrompt, acceptancePrompt, codePrompt]) {
+      expect(p).not.toContain('tests/e2e/acceptance');
+      expect(p).not.toContain('docs/approval-gates');
+    }
+  });
+});
