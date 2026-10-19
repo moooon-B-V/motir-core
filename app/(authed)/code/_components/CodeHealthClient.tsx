@@ -717,7 +717,14 @@ export function CodeHealthClient({
           />
         </>
       ) : (
-        <ConventionPanel conventions={conventions} />
+        <ConventionPanel
+          conventions={conventions}
+          // A save re-reads the repository's surface; replace that repo's entry in
+          // the island's own state (page-state contract, case 3).
+          onSaved={(saved) =>
+            setConventions((prev) => prev.map((c) => (c.repoKey === saved.repoKey ? saved : c)))
+          }
+        />
       )}
     </div>
   );

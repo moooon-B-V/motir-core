@@ -30,6 +30,9 @@ export interface CodingConventionDTO {
   authorKind: 'derived' | 'edited';
   // The person who saved an `edited` version; null for a derived one.
   editedByUserId: string | null;
+  // The editor's display name, resolved from `editedByUserId` by the service; null
+  // for a derived version, or when the account no longer resolves.
+  editedByName: string | null;
   // A re-derive's output parked beside an edited version instead of replacing it.
   pendingDerivedMd: string | null;
   createdAt: string;

@@ -1255,6 +1255,30 @@ export async function getConvention(query: ConventionQuery): Promise<RawConventi
   return (await res.json()) as RawConventionSurface;
 }
 
+export interface PutConventionInput {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  repoKey: string;
+  contentMd: string;
+  editedByUserId: string;
+  // The version the editor loaded (0 when the repository had none).
+  baseVersion: number;
+}
+
+// PUT /v1/convention — a person's save: motir-ai records version + 1 as an `edited`
+// version, or refuses a stale `baseVersion` as a 409 (MOTIR-9080), which
+// `errorFromProblem` maps to `MotirAiConventionConflictError`.
+export async function putConvention(input: PutConventionInput): Promise<RawConvention> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/convention`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawConvention;
+}
+
 // The RUN-SCOPED CREDENTIAL a fleet index container presents to motir-ai
 // (MOTIR-1989 / MOTIR-1986). `credential` is OPAQUE to motir-core: motir-ai signs
 // it and motir-ai verifies it, and nothing here parses, inspects or re-signs it.

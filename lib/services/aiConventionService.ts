@@ -1,6 +1,7 @@
 import {
   getCodeAudit,
   getConvention,
+  putConvention,
   refreshCodeAudit,
   type RawConvention,
   type RawConventionSurface,
@@ -8,9 +9,15 @@ import {
   type RawExternalScannerState,
 } from '@/lib/ai/motirAiClient';
 import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
-import { EmptyRepoScopeError, UnknownRepoScopeError } from '@/lib/codeHealth/errors';
+import {
+  ConventionBlankError,
+  ConventionTooLongError,
+  ConventionVersionConflictError,
+  EmptyRepoScopeError,
+  UnknownRepoScopeError,
+} from '@/lib/codeHealth/errors';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
-import { MotirAiError } from '@/lib/ai/errors';
+import { MotirAiConventionConflictError, MotirAiError } from '@/lib/ai/errors';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
@@ -44,6 +51,28 @@ import type {
 
 const FINDINGS_PAGE_SIZE = 100;
 
+// The longest convention a person may save, in characters. The editor's counter
+// shows the same number (design-notes § The editable convention card); motir-ai
+// stores up to 64 KB, and a character is at least one byte, so this never exceeds it.
+export const CONVENTION_MAX_CHARS = 65_536;
+
+// Resolve `editedByName` on every version of a surface from `editedByUserId`. One
+// lookup for the set of editors, not one per version.
+async function withEditorNames(surface: ConventionSurfaceDTO): Promise<ConventionSurfaceDTO> {
+  const all = [...(surface.convention ? [surface.convention] : []), ...surface.versions];
+  const ids = [...new Set(all.map((c) => c.editedByUserId).filter((id): id is string => !!id))];
+  if (ids.length === 0) return surface;
+  const users = await userRepository.findByIds(ids);
+  const names = new Map(users.map((u) => [u.id, u.name]));
+  const named = (c: CodingConventionDTO): CodingConventionDTO =>
+    c.editedByUserId ? { ...c, editedByName: names.get(c.editedByUserId) ?? null } : c;
+  return {
+    ...surface,
+    convention: surface.convention ? named(surface.convention) : null,
+    versions: surface.versions.map(named),
+  };
+}
+
 // The PLANNING read's page sizes (MOTIR-7793). motir-ai's `parsePositiveInt`
 // REJECTS `0` for both `findingsLimit` and `versionsLimit`, so the cheapest legal
 // summary read is `1` — and the one finding / one version it returns is dropped.
@@ -63,6 +92,8 @@ function toConventionDTO(raw: RawConvention): CodingConventionDTO {
     provenance: toProvenance(raw.provenance),
     authorKind: raw.authorKind ?? 'derived',
     editedByUserId: raw.editedByUserId ?? null,
+    // Filled in by `withEditorNames`; the pure mapper has no user lookup.
+    editedByName: null,
     pendingDerivedMd: raw.pendingDerivedMd ?? null,
     createdAt: raw.createdAt,
   };
@@ -324,7 +355,48 @@ export const aiConventionService = {
       repoKey: opts.repoKey,
       versionsCursor: opts.versionsCursor,
     });
-    return toConventionSurfaceDTO(raw, opts.repoKey);
+    return withEditorNames(toConventionSurfaceDTO(raw, opts.repoKey));
+  },
+
+  // A person's save of one repository's convention (MOTIR-9082): a NEW version,
+  // `edited`, written by motir-ai (`PUT /v1/convention`, MOTIR-9080). Gated on
+  // `ai:configure` exactly as the read is. `baseVersion` is the version the editor
+  // loaded (0 for a repository with none); a stale one is refused by motir-ai and
+  // surfaces here as `ConventionVersionConflictError` carrying the version that
+  // won, so the editor can offer it. Answers the re-read surface, so the card
+  // replaces its text, byline and history from ONE response.
+  async saveConvention(
+    projectId: string,
+    ctx: AccessActorContext,
+    input: { repoKey: string; contentMd: string; baseVersion: number },
+  ): Promise<ConventionSurfaceDTO> {
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
+    if (input.contentMd.trim().length === 0) throw new ConventionBlankError();
+    if (input.contentMd.length > CONVENTION_MAX_CHARS) {
+      throw new ConventionTooLongError(CONVENTION_MAX_CHARS);
+    }
+    const scope = { coreWorkspaceId: ctx.workspaceId, coreProjectId: projectId };
+    try {
+      await putConvention({
+        ...scope,
+        repoKey: input.repoKey,
+        contentMd: input.contentMd,
+        editedByUserId: ctx.userId,
+        baseVersion: input.baseVersion,
+      });
+    } catch (err) {
+      if (!(err instanceof MotirAiConventionConflictError)) throw err;
+      // Read what won, so the conflict state can name who saved it and when.
+      const latest = await withEditorNames(
+        toConventionSurfaceDTO(
+          await getConvention({ ...scope, repoKey: input.repoKey }),
+          input.repoKey,
+        ),
+      );
+      throw new ConventionVersionConflictError(err.latestVersion, latest);
+    }
+    const raw = await getConvention({ ...scope, repoKey: input.repoKey });
+    return withEditorNames(toConventionSurfaceDTO(raw, input.repoKey));
   },
 
   // The PLANNING read (Story MOTIR-7782 · Subtask MOTIR-7793) — what

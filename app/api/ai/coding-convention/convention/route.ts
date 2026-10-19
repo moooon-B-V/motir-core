@@ -30,3 +30,43 @@ export async function GET(req: Request): Promise<Response> {
     return mapCodeHealthError(err);
   }
 }
+
+// PUT /api/ai/coding-convention/convention — a person's save of one repository's
+// convention (MOTIR-9082): body `{ repoKey, contentMd, baseVersion }`. Answers the
+// re-read ConventionSurfaceDTO. `ai:configure` is enforced in the service; a stale
+// `baseVersion` is a 409 carrying what won. NOT rate-limited: it submits no model job.
+export async function PUT(req: Request): Promise<Response> {
+  const resolved = await resolveActiveProjectContext();
+  if ('response' in resolved) return resolved.response;
+  const { ctx } = resolved;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ code: 'INVALID_BODY' }, { status: 400 });
+  }
+  const b = body as { repoKey?: unknown; contentMd?: unknown; baseVersion?: unknown } | null;
+  if (
+    !b ||
+    typeof b.repoKey !== 'string' ||
+    b.repoKey.length === 0 ||
+    typeof b.contentMd !== 'string' ||
+    typeof b.baseVersion !== 'number' ||
+    !Number.isInteger(b.baseVersion) ||
+    b.baseVersion < 0
+  ) {
+    return NextResponse.json({ code: 'INVALID_BODY' }, { status: 400 });
+  }
+  try {
+    const surface = await aiConventionService.saveConvention(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      { repoKey: b.repoKey, contentMd: b.contentMd, baseVersion: b.baseVersion },
+    );
+    return NextResponse.json(surface);
+  } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
+    return mapCodeHealthError(err);
+  }
+}
