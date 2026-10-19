@@ -362,6 +362,36 @@ export default defineConfig({
         'components/planning/SupersedesChip.tsx',
         'components/planning/ProposalMarkRailRows.tsx',
         'components/planning/changeCellText.ts',
+        // Story MOTIR-9023 · MOTIR-9036 — the fourteen NEW modules the typed-sections
+        // story added: the registry, parser, renderer and validity check, the two
+        // door rules (plan / work item), the section-sets read in its REST, MCP and
+        // service forms, and the opt-in parsed view. Pinned in `thresholds` below
+        // after being MEASURED on this branch against the story's own specs
+        // (stmts / branch / fn / lines):
+        //
+        //   parse.ts                 97.32 / 90.44 / 100   / 99.45
+        //   registry.ts              97.33 / 96.55 / 94.11 / 96.96
+        //   render.ts                98.7  / 90    / 100   / 100
+        //   validity.ts              100   / 100   / 100   / 100
+        //   sectionsInput.ts         100   / 95.55 / 100   / 100
+        //   applySectionsInput.ts    100   / 95.55 / 100   / 100
+        //   getSectionSets.ts        100   / 62.5  / 100   / 100   (the `|| 'none'` / `?? 'no type'`
+        //                                                          fallbacks no registry cell reaches)
+        //   the other seven          100 on all four
+        'lib/workItems/sections/errors.ts',
+        'lib/workItems/sections/parse.ts',
+        'lib/workItems/sections/registry.ts',
+        'lib/workItems/sections/render.ts',
+        'lib/workItems/sections/validity.ts',
+        'lib/mcp/parsedSections.ts',
+        'lib/mcp/payloads/parsedSectionsSchema.ts',
+        'lib/mcp/payloads/sectionSets.ts',
+        'lib/mcp/sectionsInput.ts',
+        'lib/mcp/tools/getSectionSets.ts',
+        'lib/api/v1/sectionSets/operations.ts',
+        'lib/api/v1/sectionSets/schema.ts',
+        'lib/plans/applySectionsInput.ts',
+        'lib/services/sectionSchemaService.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
         // added, pinned at the project floor in `thresholds` below after being
         // measured on this branch against the story's own specs.
@@ -3954,6 +3984,84 @@ export default defineConfig({
         'lib/issues/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/mcp/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/workItems/linkRelationships.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-9023 · TYPED SECTIONS (Subtask MOTIR-9036) ───────────
+        // Pinned at the floor, not at the ≥97 measured (the include block above
+        // carries the numbers). `getSectionSets.ts` branches sit at 60: its
+        // fallback arms answer a cell the registry never returns.
+        'lib/workItems/sections/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/sections/parse.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/sections/registry.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/sections/render.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/sections/validity.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mcp/parsedSections.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mcp/payloads/parsedSectionsSchema.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mcp/payloads/sectionSets.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mcp/sectionsInput.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mcp/tools/getSectionSets.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 60,
+          statements: 90,
+        },
+        'lib/api/v1/sectionSets/operations.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/api/v1/sectionSets/schema.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/plans/applySectionsInput.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/sectionSchemaService.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

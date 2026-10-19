@@ -25,6 +25,9 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+// The wire view carries the parser's answer without `headed`, which is an internal
+// signal for `underAuthored` (MOTIR-9032) and not part of the read contract.
+const onWire = ({ headed: _headed, ...rest }: ReturnType<typeof parseSections>) => rest;
 const structured = (r: CallToolResult) => r.structuredContent as Record<string, unknown>;
 const text = (r: CallToolResult) => (r.content as { text: string }[])[0]!.text;
 
@@ -69,7 +72,7 @@ describe('get_work_item includeSections (MOTIR-9033)', () => {
       const res = await runGetWorkItem({ key: card.identifier, includeSections: true }, fx.ctx);
       const stored = (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } }))
         .descriptionMd;
-      expect(structured(res).parsedSections).toEqual(parseSections(stored, 'task', 'code'));
+      expect(structured(res).parsedSections).toEqual(onWire(parseSections(stored, 'task', 'code')));
       expect(text(res)).toMatch(/^Sections: found /m);
     }
 
@@ -142,7 +145,7 @@ describe('get_work_item includeSections (MOTIR-9033)', () => {
       fx.ctx,
     );
     expect(structured(addView).parsedSections).toEqual(
-      parseSections('Plain proposal body.', 'task', 'code'),
+      onWire(parseSections('Plain proposal body.', 'task', 'code')),
     );
     const modifyView = await runGetWorkItem(
       { key: plain.identifier, planId: plan.id, includeSections: true },

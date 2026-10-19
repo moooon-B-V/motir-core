@@ -646,7 +646,13 @@ describe('get_plan — includeSections (MOTIR-9033)', () => {
       .parsedSections;
     const adds = struct(asked).items.filter((i) => i.op === 'add');
     expect(Object.keys(view)).toEqual(adds.map((i) => i.id));
-    expect(view[adds[0]!.id]).toEqual(parseSections('Plain body, no headings.', 'task', 'code'));
+    // The wire view omits `headed` (the parser's own extra), so compare without it.
+    const { headed: _headed, ...onWire } = parseSections(
+      'Plain body, no headings.',
+      'task',
+      'code',
+    );
+    expect(view[adds[0]!.id]).toEqual(onWire);
     expect(struct(asked).items).toEqual(struct(unasked).items);
     expect(text(asked)).toMatch(/Prose add.* · sections missing: /);
     await client.close();
