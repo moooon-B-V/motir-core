@@ -7346,7 +7346,9 @@ enum PlanSessionEndReason {
 /// WHY a hosted planning attempt failed, as motir-ai's CLOSED vocabulary
 /// (`walkStop.reasonCode`, motir-ai `docs/contract.md` §5; Story MOTIR-7905).
 /// A CODE, never motir-ai's English: core translates each member (en / zh) at
-/// render time. The failure path maps any code it does not recognise, and a
+/// render time. `stalled` is the one member motir-ai never sends: it is core's
+/// abandoned-plan sweep finding the plan silent (MOTIR-9065). The failure path
+/// maps any code it does not recognise, and a
 /// missing `walkStop`, to `internal` before it writes, so the column is total.
 enum PlanSessionFailureReason {
   rate_limited
@@ -7355,6 +7357,7 @@ enum PlanSessionFailureReason {
   token_expired
   prompt_too_large
   job_failed
+  stalled
   internal
 
   @@map("plan_session_failure_reason")

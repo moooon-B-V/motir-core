@@ -9510,6 +9510,7 @@
         "token_expired": "die Verbindung zum KI-Anbieter abgelaufen ist",
         "prompt_too_large": "der Kontext des Plans für das Modell zu groß war",
         "job_failed": "der Planungsauftrag fehlgeschlagen ist",
+        "stalled": "der Plan nicht mehr vorankam",
         "internal": "auf unserer Seite etwas schiefgelaufen ist"
       },
       "refusal": {

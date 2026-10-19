@@ -9504,6 +9504,7 @@
         "token_expired": "与 AI 服务的连接已过期",
         "prompt_too_large": "计划的上下文对该模型来说过大",
         "job_failed": "规划任务执行失败",
+        "stalled": "规划长时间没有进展",
         "internal": "我们这边出了故障"
       },
       "refusal": {

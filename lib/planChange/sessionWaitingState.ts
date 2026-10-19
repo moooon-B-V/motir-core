@@ -138,6 +138,7 @@ export const PLAN_SESSION_FAILURE_REASONS = [
   'token_expired',
   'prompt_too_large',
   'job_failed',
+  'stalled',
   'internal',
 ] as const satisfies readonly PlanSessionFailureReason[];
 

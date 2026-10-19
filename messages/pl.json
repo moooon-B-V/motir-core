@@ -9510,6 +9510,7 @@
         "token_expired": "połączenie z dostawcą AI wygasło",
         "prompt_too_large": "kontekst planu był zbyt duży dla modelu",
         "job_failed": "zadanie planowania nie powiodło się",
+        "stalled": "plan przestał posuwać się naprzód",
         "internal": "po naszej stronie wystąpił problem"
       },
       "refusal": {

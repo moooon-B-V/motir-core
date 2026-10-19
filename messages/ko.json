@@ -9504,6 +9504,7 @@
         "token_expired": "AI 제공업체와의 연결이 만료되었습니다",
         "prompt_too_large": "플랜의 컨텍스트가 모델에 비해 너무 컸습니다",
         "job_failed": "계획 작업이 실패했습니다",
+        "stalled": "계획이 더 이상 진행되지 않았습니다",
         "internal": "저희 쪽에서 문제가 발생했습니다"
       },
       "refusal": {

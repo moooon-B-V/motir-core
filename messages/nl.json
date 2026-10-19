@@ -9510,6 +9510,7 @@
         "token_expired": "de verbinding met de AI-aanbieder verlopen was",
         "prompt_too_large": "de context van het plan te groot was voor het model",
         "job_failed": "de planningstaak mislukt is",
+        "stalled": "het plan niet meer vorderde",
         "internal": "er aan onze kant iets misging"
       },
       "refusal": {
