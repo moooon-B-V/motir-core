@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
+import { projectedBodyOf } from '@/lib/services/planProjectionService';
 import { runGetWorkItem } from '@/lib/mcp/tools/getWorkItem';
 import { renderSections } from '@/lib/workItems/sections/render';
 import { parseSections } from '@/lib/workItems/sections/parse';
@@ -155,5 +156,36 @@ describe('get_work_item includeSections (MOTIR-9033)', () => {
 
     const unasked = await runGetWorkItem({ key: plain.identifier, planId: plan.id }, fx.ctx);
     expect(structured(unasked)).not.toHaveProperty('parsedSections');
+  });
+  it('projectedBodyOf answers each projected shape: bare proposal, patched and unpatched card, removed card', async () => {
+    const { fx, plain, headed, gutter } = await seed();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Shapes' }, fx.ctx);
+    const proposed = await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', proposedFields: { title: 'Bare' } },
+        { op: 'modify', workItemId: plain.id, patch: { title: 'Plain, retitled' } },
+        { op: 'modify', workItemId: headed.id, patch: { type: 'design' } },
+        { op: 'remove', workItemId: gutter.id },
+      ],
+      fx.ctx,
+    );
+    const bare = proposed.items.find((i) => i.op === 'add')!;
+    // No kind, type or body on the proposal: the defaults, a null type, a null body.
+    const bareBody = await projectedBodyOf(plan.id, `planItem:${bare.id}`, fx.ctx);
+    expect(bareBody).toMatchObject({ descriptionMd: null, type: null });
+    // A card the plan edits but not its body or type: the stored ones.
+    const unpatched = await projectedBodyOf(plan.id, plain.identifier, fx.ctx);
+    expect(unpatched).toMatchObject({
+      descriptionMd: 'Just a paragraph, no headings at all.',
+      kind: 'task',
+      type: 'code',
+    });
+    // A card whose type the plan sets: the plan's type, the stored body.
+    const retyped = await projectedBodyOf(plan.id, headed.identifier, fx.ctx);
+    expect(retyped).toMatchObject({ type: 'design' });
+    expect(retyped?.descriptionMd).toContain('##');
+    // A card the plan removes has no body to parse.
+    expect(await projectedBodyOf(plan.id, gutter.identifier, fx.ctx)).toBeNull();
   });
 });

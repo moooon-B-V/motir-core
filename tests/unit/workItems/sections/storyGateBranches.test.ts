@@ -3,6 +3,7 @@ import { parseSections } from '@/lib/workItems/sections/parse';
 import { sectionFindingFor, sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import { runGetSectionSets } from '@/lib/mcp/tools/getSectionSets';
 import { sectionsSummary } from '@/lib/mcp/parsedSections';
+import { classifyApiV1Error } from '@/lib/api/v1/errors';
 import { sectionSetsPayload } from '@/lib/mcp/payloads/sectionSets';
 import {
   SECTION_SET_COMPONENTS,
@@ -75,6 +76,30 @@ describe('section branches without a database', () => {
     expect(SECTION_SET_OPERATIONS.map((o) => o.operationId)).toEqual(['getSectionSets']);
     expect(Object.keys(SECTION_SET_COMPONENTS)).toEqual(['SectionSets']);
     expect(sectionSetsPayload.probes.map((p) => p.resource)).toEqual(['SectionSets']);
+    const probe = sectionSetsPayload.probes[0]!;
+    const payload = { sets: [] } as never;
+    expect(probe.select(payload)).toEqual([payload]);
+  });
+
+  it('puts the by-name findings of INVALID_SECTIONS on the v1 error body', () => {
+    const full = classifyApiV1Error({
+      code: 'INVALID_SECTIONS',
+      message: 'bad sections',
+      missing: ['approach'],
+      unknown: ['nope'],
+      invalid: [{ section: 'cases', message: 'no arrow' }],
+    });
+    expect(full?.body.sections).toEqual({
+      missing: ['approach'],
+      unknown: ['nope'],
+      invalid: [{ section: 'cases', message: 'no arrow' }],
+    });
+    // Fields that are not arrays read as empty rather than throwing.
+    const bare = classifyApiV1Error({ code: 'INVALID_SECTIONS', message: 'bad' });
+    expect(bare?.body.sections).toEqual({ missing: [], unknown: [], invalid: [] });
+    // Any other domain code carries no sections block.
+    const other = classifyApiV1Error({ code: 'WORK_ITEM_NOT_FOUND', message: 'gone' });
+    expect(other?.body).not.toHaveProperty('sections');
   });
 
   it('names an unreadable section in the finding', () => {
