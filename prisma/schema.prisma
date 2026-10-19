@@ -10793,6 +10793,13 @@ model CiRunnerProvisioningIntent {
   /// `provision_failed`.
   bootAttempts Int @default(0) @map("boot_attempts")
 
+  /// Which RECONCILE of the job this intent is (MOTIR-8976). 0 is the intent the
+  /// `workflow_job.queued` delivery recorded. A fleet runner is not tied to a job
+  /// (GitHub hands a new runner to the OLDEST queued job carrying the label), so a
+  /// lost runner leaves some job queued while every intent settles `job_completed`;
+  /// the reconcile sweep mints generation N+1 for a job GitHub still holds queued.
+  reconcileGeneration Int @default(0) @map("reconcile_generation")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -10806,7 +10813,7 @@ model CiRunnerProvisioningIntent {
   /// The idempotency guarantee: a redelivered webhook produces no second intent,
   /// while a RE-RUN (a new attempt) and every sibling JOB of the same run each
   /// get their own.
-  @@unique([runId, runAttempt, jobId])
+  @@unique([runId, runAttempt, jobId, reconcileGeneration])
   @@index([workspaceId])
   /// MOTIR-1921's work queue: the oldest unclaimed intents, and MOTIR-1922's
   /// per-org in-flight count, are both served by this.

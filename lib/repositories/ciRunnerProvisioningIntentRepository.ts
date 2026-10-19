@@ -62,6 +62,8 @@ export interface CiRunnerProvisioningIntentCreateInput {
   repoName: string;
   requestedLabels: string[];
   queuedAt: Date;
+  /** 0 for the intent a delivery records; N+1 for a reconcile (MOTIR-8976). */
+  reconcileGeneration?: number;
 }
 
 export const ciRunnerProvisioningIntentRepository = {
@@ -93,6 +95,7 @@ export const ciRunnerProvisioningIntentRepository = {
         repoName: data.repoName,
         requestedLabels: data.requestedLabels,
         queuedAt: data.queuedAt,
+        reconcileGeneration: data.reconcileGeneration ?? 0,
         status: CI_RUNNER_INTENT_PENDING,
       },
     });
@@ -110,7 +113,63 @@ export const ciRunnerProvisioningIntentRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<CiRunnerProvisioningIntent | null> {
     return tx.ciRunnerProvisioningIntent.findUnique({
-      where: { runId_runAttempt_jobId: { runId, runAttempt, jobId } },
+      where: {
+        runId_runAttempt_jobId_reconcileGeneration: {
+          runId,
+          runAttempt,
+          jobId,
+          reconcileGeneration: 0,
+        },
+      },
+    });
+  },
+
+  /**
+   * The highest reconcile generation recorded for one job of one run attempt, or
+   * -1 when it has no intent at all (MOTIR-8976). The next reconcile writes this
+   * plus one; two sweeps that read the same value collide on the unique index.
+   */
+  async maxReconcileGeneration(
+    runId: string,
+    runAttempt: number,
+    jobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.ciRunnerProvisioningIntent.aggregate({
+      where: { runId, runAttempt, jobId },
+      _max: { reconcileGeneration: true },
+    });
+    return r._max.reconcileGeneration ?? -1;
+  },
+
+  /**
+   * The newest intent of each repository the fleet served since `since` — the
+   * reconcile sweep's list of where to ask GitHub what is queued, and the
+   * attribution (workspace, org, project) a reconcile intent copies (MOTIR-8976).
+   */
+  async listLatestPerRepoSince(
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: { createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['repoOwner', 'repoName'],
+    });
+  },
+
+  /**
+   * Intents of one GitHub org that already stand for a runner that is not yet
+   * visible as an idle runner there: `pending` (awaiting admission or dispatch)
+   * and `provisioning` (booting). Owner compared case-insensitively, as GitHub
+   * logins are (MOTIR-8976).
+   */
+  async countAwaitingRunnerForOwner(owner: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: {
+        repoOwner: { equals: owner, mode: 'insensitive' },
+        status: { in: [CI_RUNNER_INTENT_PENDING, CI_RUNNER_INTENT_PROVISIONING] },
+      },
     });
   },
 
