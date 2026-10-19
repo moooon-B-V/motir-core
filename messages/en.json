@@ -12333,6 +12333,7 @@
   },
   "runs": {
     "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Run",
     "searchLabel": "Search this run",
     "gloss": "what the agent did",

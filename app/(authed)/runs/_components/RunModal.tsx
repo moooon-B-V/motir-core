@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Cloud, CloudOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
+import { ResizableSplit } from '@/components/split/ResizableSplit';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
 import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
@@ -20,6 +21,10 @@ import {
   agentOf,
   agentPanelHref,
 } from '@/app/(authed)/runs/_components/AgentRunParts';
+import {
+  RUN_FRAME_STACKED_ROWS,
+  RUN_LOG_WIDTH_STORAGE_KEY,
+} from '@/app/(authed)/runs/_components/runFrameRows';
 import { useRunEvents } from '@/app/(authed)/runs/_components/useRunEvents';
 import type { DispatchRunDetailDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunDuration, formatRunInstant } from '@/lib/runs/runClock';
@@ -238,59 +243,64 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
               {t('reportingOffline')}
             </p>
           ) : null}
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <section
-              className="flex min-h-0 min-w-0 flex-1 flex-col border-(--el-border-soft) lg:border-r"
-              aria-label={t('paneSet')}
-            >
-              <h2 className="border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
-                {run.cards.length === 0
-                  ? t('tookNone')
-                  : t('paneSetCount', { count: run.cards.length })}
-              </h2>
-              {run.cards.length === 0 ? (
-                // A run that took no work items is a REAL outcome — never an
-                // error face, and never an empty canvas the reader has to
-                // interpret.
-                <p
-                  className="flex flex-1 items-center justify-center p-(--spacing-card-padding) text-sm text-(--el-text-secondary)"
-                  data-testid="run-modal-no-members"
-                >
-                  {t('tookNoneBody')}
-                </p>
-              ) : (
-                <div className="min-h-0 flex-1">
-                  <RunCanvasPane
-                    run={run}
-                    projectKey={projectKey}
-                    onSelectWorkItem={setSelectedWorkItemId}
-                    reloadKey={reloadKey}
-                  />
-                </div>
-              )}
-            </section>
-            {/* The right-hand REGION. The log pane itself is MOTIR-3962's; this
-                lays out the space and holds the selection it will consume, so
-                the two land independently. */}
-            <section
-              className="flex min-h-0 w-full shrink-0 flex-col lg:w-[26rem]"
-              aria-label={t('paneLog')}
-              data-testid="run-modal-log-region"
-              data-selected-work-item={selectedWorkItemId ?? ''}
-            >
-              <h2 className="flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
-                {t('paneLog')}
-                {/* Both paths run in Motir's cloud and walk the same phases. */}
-                {run.origin === 'hosted' || run.origin === 'instance' ? (
-                  <HostedPhaseChip run={run} events={events} />
-                ) : null}
-              </h2>
-              {/* PINNED ABOVE THE LOG, and absent entirely when the run
+          <ResizableSplit
+            className="min-h-0 flex-1"
+            storageKey={RUN_LOG_WIDTH_STORAGE_KEY}
+            dividerLabel={t('logDividerAria')}
+            stackedRows={RUN_FRAME_STACKED_ROWS}
+            left={
+              <section className="flex min-h-0 min-w-0 flex-col" aria-label={t('paneSet')}>
+                <h2 className="border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
+                  {run.cards.length === 0
+                    ? t('tookNone')
+                    : t('paneSetCount', { count: run.cards.length })}
+                </h2>
+                {run.cards.length === 0 ? (
+                  // A run that took no work items is a REAL outcome — never an
+                  // error face, and never an empty canvas the reader has to
+                  // interpret.
+                  <p
+                    className="flex flex-1 items-center justify-center p-(--spacing-card-padding) text-sm text-(--el-text-secondary)"
+                    data-testid="run-modal-no-members"
+                  >
+                    {t('tookNoneBody')}
+                  </p>
+                ) : (
+                  <div className="min-h-0 flex-1">
+                    <RunCanvasPane
+                      run={run}
+                      projectKey={projectKey}
+                      onSelectWorkItem={setSelectedWorkItemId}
+                      reloadKey={reloadKey}
+                    />
+                  </div>
+                )}
+              </section>
+            }
+            right={
+              // The right-hand REGION — the pane the divider sizes. The log pane
+              // itself is MOTIR-3962's; this lays out the space and holds the
+              // selection it will consume, so the two land independently.
+              <section
+                className="flex min-h-0 flex-col border-(--el-border-soft) md:border-l"
+                aria-label={t('paneLog')}
+                data-testid="run-modal-log-region"
+                data-selected-work-item={selectedWorkItemId ?? ''}
+              >
+                <h2 className="flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
+                  {t('paneLog')}
+                  {/* Both paths run in Motir's cloud and walk the same phases. */}
+                  {run.origin === 'hosted' || run.origin === 'instance' ? (
+                    <HostedPhaseChip run={run} events={events} />
+                  ) : null}
+                </h2>
+                {/* PINNED ABOVE THE LOG, and absent entirely when the run
                   produced nothing — which is most runs. See `RunFindings`. */}
-              <RunFindings events={events} cards={run.cards} />
-              <RunLogPane run={run} events={events} selectedWorkItemId={selectedWorkItemId} />
-            </section>
-          </div>
+                <RunFindings events={events} cards={run.cards} />
+                <RunLogPane run={run} events={events} selectedWorkItemId={selectedWorkItemId} />
+              </section>
+            }
+          />
         </>
       ) : null}
     </Modal>

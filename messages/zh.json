@@ -12327,6 +12327,7 @@
   },
   "runs": {
     "escKey": "Esc",
+    "logDividerAria": "调整代理输出面板宽度",
     "title": "运行",
     "searchLabel": "搜索本次运行",
     "gloss": "智能体做了什么",
