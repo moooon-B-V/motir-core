@@ -35,9 +35,11 @@ import type {
   WorkItemCoverageAdvisoryDto,
   WorkItemTitleCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
+  WorkItemProseMislabelledLinkAdvisoryDto,
   WorkItemSoftBlockDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
+import { isMislabelledLinkAdvisory } from '@/lib/dto/workItems';
 import type { PlanValidityDto } from '@/lib/dto/plans';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
 import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
@@ -885,6 +887,32 @@ export const planValidityService = {
       invalidEdges,
       crossLevelEdges,
     };
+  },
+
+  /**
+   * The MISLABELLED-LINK advisories (MOTIR-9007) over every body this plan
+   * PROPOSES — an `add`'s body and a `modify`'s patched one — for `validate_plan`.
+   *
+   * Deliberately NOT part of {@link validateProjectedPlan}'s verdict: that DTO is
+   * also the internal `validate-plan-forest` contract motir-ai reads, and the
+   * forest's no-advisory rule exists because a body-vs-EDGES gap has no single
+   * subject there. A mislabelled link has no such problem — it is a property of
+   * one body, decided by what its id opens — so it is reported per proposed card,
+   * beside the verdict and never inside it. Untouched committed cards are not
+   * scanned: they are not the plan's finding (`validate_work_item` reports them).
+   */
+  async projectedLinkAdvisories(
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemProseMislabelledLinkAdvisoryDto[]> {
+    const proj = await buildProjection(planId, ctx);
+    const proposedBodies = new Set(
+      [...proj.projectedDescription.keys()].filter(
+        (id) => proj.nodes.get(id)?.projectId === proj.projectId,
+      ),
+    );
+    const advisories = await projectedProseAdvisories(proj, proposedBodies, ctx);
+    return advisories.filter(isMislabelledLinkAdvisory);
   },
 
   /**

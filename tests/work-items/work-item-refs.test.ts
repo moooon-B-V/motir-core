@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   WORKITEM_TOKEN_RE,
+  WORKITEM_LINK_RE,
   WORKITEM_HREF_RE,
   buildWorkItemKeyRe,
   parseWorkItemTokenIds,
+  parseWorkItemLinks,
   parseWorkItemKeys,
   parseWorkItemRefs,
   normalizeWorkItemRefs,
@@ -25,6 +27,7 @@ describe('parseWorkItemTokenIds', () => {
     const started = Date.now();
     expect(parseWorkItemTokenIds(body)).toEqual([]);
     expect(parseIntraPlanRefIds(body)).toEqual([]);
+    expect(parseWorkItemLinks(body)).toEqual([]); // MOTIR-9007's label-capturing twin
     expect(Date.now() - started).toBeLessThan(500);
     // …and a real token after the noise is still found.
     expect(parseWorkItemTokenIds('[[[MOTIR-1](motir:cltreal)')).toEqual(['cltreal']);
@@ -50,6 +53,45 @@ describe('parseWorkItemTokenIds', () => {
 
   it('returns [] for an empty body', () => {
     expect(parseWorkItemTokenIds('')).toEqual([]);
+  });
+});
+
+describe('parseWorkItemLinks (MOTIR-9007)', () => {
+  it('keeps the MOTIR-4202 label class — no `[` inside a label, the same as WORKITEM_TOKEN_RE', () => {
+    // The ONLY difference is the capture group around the label.
+    expect(WORKITEM_LINK_RE.source).toBe(
+      WORKITEM_TOKEN_RE.source.replace('\\[[^\\]\\[]*\\]', '\\[([^\\]\\[]*)\\]'),
+    );
+    expect(WORKITEM_LINK_RE.source).toContain('[^\\]\\[]*');
+    expect(WORKITEM_LINK_RE.flags).toBe(WORKITEM_TOKEN_RE.flags);
+  });
+
+  it('captures each link as its label and its id', () => {
+    expect(
+      parseWorkItemLinks('See [MOTIR-7656](motir:cmA) and [the export flow](motir:cmB).'),
+    ).toEqual([
+      { label: 'MOTIR-7656', id: 'cmA' },
+      { label: 'the export flow', id: 'cmB' },
+    ]);
+  });
+
+  it('dedupes an identical (label, id) pair, but keeps the same id under two labels', () => {
+    expect(
+      parseWorkItemLinks('[MOTIR-1](motir:a) [MOTIR-1](motir:a) [MOTIR-2](motir:a) [](motir:b)'),
+    ).toEqual([
+      { label: 'MOTIR-1', id: 'a' },
+      { label: 'MOTIR-2', id: 'a' },
+      { label: '', id: 'b' },
+    ]);
+  });
+
+  it('finds the real link after unclosed openers, and ignores malformed and intra-plan tokens', () => {
+    expect(parseWorkItemLinks('[[[MOTIR-1](motir:cltreal)')).toEqual([
+      { label: 'MOTIR-1', id: 'cltreal' },
+    ]);
+    expect(
+      parseWorkItemLinks('[a](motir:) [b(motir:c) [Story](motir-ref:planItem:pi_1) [d](https://x)'),
+    ).toEqual([]);
   });
 });
 
