@@ -94,12 +94,28 @@ async function withJob(planId: string, jobId: string): Promise<void> {
 const job = (status: PlanJobStateDto['status']): PlanJobStateDto =>
   ({ jobId: 'job', status, reachable: true, failure: null }) as PlanJobStateDto;
 
-const deps = (state: PlanJobStateDto, onAsk?: () => Promise<void>): AbandonedPlanDeps => ({
+/** The cancels the sweep sent to the stubbed motir-ai, as `[jobId, coreProjectId]`. */
+let cancels: [string, string][] = [];
+beforeEach(() => {
+  cancels = [];
+});
+
+const deps = (
+  state: PlanJobStateDto,
+  onAsk?: () => Promise<void>,
+  cancel?: AbandonedPlanDeps['cancelJob'],
+): AbandonedPlanDeps => ({
   resolveJobState: async () => {
     await onAsk?.();
     return state;
   },
   getFailedJobFacts: async () => ({ walkStop: null, lostMachine: false }),
+  cancelJob:
+    cancel ??
+    (async (jobId, coreProjectId) => {
+      cancels.push([jobId, coreProjectId]);
+      return { jobId, status: 'canceled' };
+    }),
 });
 
 async function toResumeSessionIds(): Promise<string[]> {
@@ -138,7 +154,9 @@ describe('a silent plan is RECORDED, not declined', () => {
       expect(session.failedAt).not.toBeNull();
       // No job to resume from: To resume lists it, and there is no `fromJobId` to offer.
       expect(session.failedJobId).toBeNull();
-      expect(session.failureReason).toBe('internal');
+      // The sweep's own verdict, not a reason borrowed from a job it never had (MOTIR-9065).
+      expect(session.failureReason).toBe('stalled');
+      expect(session.failureDetail).toMatch(/^The plan wrote nothing for \d+ minutes\.$/);
       expect(session.failureStopRef).toBeNull();
       expect(await toResumeSessionIds()).toEqual([sessionId]);
     },
@@ -153,11 +171,98 @@ describe('a silent plan is RECORDED, not declined', () => {
       deps: deps(job('running')),
     });
 
-    expect(summary.outcomes[0]).toMatchObject({ outcome: 'awaiting_resume', reason: 'silent' });
+    expect(summary.outcomes[0]).toMatchObject({
+      outcome: 'awaiting_resume',
+      reason: 'silent',
+      jobCancel: { cancelled: true },
+    });
     const session = await sessionRow(sessionId);
     expect(session.failedJobId).toBe('job-running');
+    expect(session.failureReason).toBe('stalled');
+    expect(session.failureDetail).toMatch(/while motir-ai reported its job running\.$/);
     expect((await planRow(planId)).status).toBe('generating');
+    // Core gave up on the job, so it cancels it in motir-ai (MOTIR-9065).
+    expect(cancels).toEqual([['job-running', fx.projectId]]);
   });
+
+  it(
+    'a QUEUED job is never recorded by silence alone — it has not started (MOTIR-9065)',
+    T,
+    async () => {
+      const { planId, sessionId } = await mcpPlan();
+      await withJob(planId, 'job-queued');
+      const stamp = await silence(planId, SILENT_MS);
+
+      const summary = await abandonedPlanService.reconcileAbandoned({ deps: deps(job('queued')) });
+
+      expect(summary.outcomes).toEqual([
+        { planId, projectId: fx.projectId, outcome: 'left_as_is', reason: 'job_queued' },
+      ]);
+      const plan = await planRow(planId);
+      expect(plan.status).toBe('generating');
+      expect(plan.lastActivityAt.getTime()).toBe(stamp.getTime());
+      expect((await sessionRow(sessionId)).failedAt).toBeNull();
+      expect(cancels).toEqual([]);
+      expect(await toResumeSessionIds()).toEqual([]);
+    },
+  );
+
+  it(
+    'an UNREACHABLE job read is recorded as stalled, never model_unavailable (MOTIR-9065)',
+    T,
+    async () => {
+      const { planId, sessionId } = await mcpPlan();
+      await withJob(planId, 'job-unread');
+      await silence(planId, SILENT_MS);
+      const unreachable = {
+        jobId: 'job-unread',
+        status: null,
+        reachable: false,
+        failure: {
+          code: 'MOTIR_AI_UNAVAILABLE',
+          message: 'motir-ai did not respond within 30000ms',
+        },
+      } as unknown as PlanJobStateDto;
+
+      const summary = await abandonedPlanService.reconcileAbandoned({ deps: deps(unreachable) });
+
+      expect(summary.outcomes[0]).toMatchObject({
+        outcome: 'awaiting_resume',
+        reason: 'silent',
+        jobCancel: { cancelled: true },
+      });
+      const session = await sessionRow(sessionId);
+      expect(session.failureReason).toBe('stalled');
+      expect(session.failureReason).not.toBe('model_unavailable');
+      expect(session.failureDetail).toMatch(
+        /its job could not be read: motir-ai did not respond within 30000ms\.$/,
+      );
+      expect(cancels).toEqual([['job-unread', fx.projectId]]);
+    },
+  );
+
+  it(
+    'a cancel motir-ai refuses is REPORTED with why, and the record stands (MOTIR-9065)',
+    T,
+    async () => {
+      const { planId, sessionId } = await mcpPlan();
+      await withJob(planId, 'job-refused');
+      await silence(planId, SILENT_MS);
+
+      const summary = await abandonedPlanService.reconcileAbandoned({
+        deps: deps(job('running'), undefined, async () => {
+          throw new Error('Not Found');
+        }),
+      });
+
+      expect(summary.outcomes[0]).toMatchObject({
+        outcome: 'awaiting_resume',
+        reason: 'silent',
+        jobCancel: { cancelled: false, why: 'Not Found' },
+      });
+      expect((await sessionRow(sessionId)).failureReason).toBe('stalled');
+    },
+  );
 
   it('a FAILED job is recorded INSIDE the threshold — the fast path', T, async () => {
     const { planId, sessionId } = await mcpPlan();
@@ -172,6 +277,9 @@ describe('a silent plan is RECORDED, not declined', () => {
     });
     expect((await sessionRow(sessionId)).failedJobId).toBe('job-failed');
     expect((await planRow(planId)).status).toBe('generating');
+    // A job that already ended has nothing left to cancel.
+    expect(summary.outcomes[0]).not.toHaveProperty('jobCancel');
+    expect(cancels).toEqual([]);
   });
 
   it('a plan WRITING for more than a day is untouched — age is not the clock', T, async () => {

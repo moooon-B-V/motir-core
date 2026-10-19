@@ -209,19 +209,25 @@ describe('the decision table — what counts as evidence the producer is gone', 
     expect(classifyAbandonedCandidate(gone(), 0)).toEqual({ abandoned: true, reason: 'job_gone' });
   });
 
-  it.each(['queued', 'running'] as const)(
-    'a %s job keeps NOTHING alive — the plan is judged by its silence',
-    (status) => {
-      expect(classifyAbandonedCandidate(reachable(status), WRITING_MS)).toEqual({
+  it('a running job keeps NOTHING alive — the plan is judged by its silence', () => {
+    expect(classifyAbandonedCandidate(reachable('running'), WRITING_MS)).toEqual({
+      abandoned: false,
+      reason: 'writing',
+    });
+    expect(classifyAbandonedCandidate(reachable('running'), SILENT_MS)).toEqual({
+      abandoned: true,
+      reason: 'silent',
+    });
+  });
+
+  it('a QUEUED job is kept at any silence — it has not started (MOTIR-9065)', () => {
+    for (const silentMs of [0, WRITING_MS, SILENT_MS, 24 * 60 * 60 * 1000]) {
+      expect(classifyAbandonedCandidate(reachable('queued'), silentMs)).toEqual({
         abandoned: false,
-        reason: 'writing',
+        reason: 'job_queued',
       });
-      expect(classifyAbandonedCandidate(reachable(status), SILENT_MS)).toEqual({
-        abandoned: true,
-        reason: 'silent',
-      });
-    },
-  );
+    }
+  });
 
   it('an OUTAGE proves nothing either way — it falls through to the silence rule', () => {
     // It used to be a keep at any age. A motir-ai outage longer than the threshold
