@@ -578,6 +578,11 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // (AMENDMENT 23 §6; MOTIR-7641).
   PLAN_SESSION_NOT_COPYABLE: 409,
 
+  // ── Story MOTIR-9023, the SECTION SETS read (MOTIR-9029) ───────────────────
+  // 422 — a `kind` or `type` that names no cell of the registry. The caller can
+  // fix it, and it is never answered with a default set.
+  UNKNOWN_SECTION_CELL: 422,
+
   // ── Story MOTIR-5310, the FOLDER resource (MOTIR-5408) ────────────────────
   // The statuses `lib/folders/errors.ts`' own header names, so the tree's
   // actions and this door describe one refusal one way. Each is driven through

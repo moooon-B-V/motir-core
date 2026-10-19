@@ -43,6 +43,7 @@ import {
   sessionCloseOutPayload,
 } from './workLoop';
 import { folderDeletionPayload, folderWritePayload, listFoldersPayload } from './folders';
+import { sectionSetsPayload } from './sectionSets';
 
 // The TOOL → PAYLOAD map (Story 11.6 · Subtask 11.6.6 — MOTIR-2232).
 //
@@ -113,6 +114,8 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // `FolderDeletion` resources whole and PROBE them; the tree read is a declared
   // narrowing of `Folder` and carries no probe, like the search row.
   list_folders: listFoldersPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-9029 — the section registry read: v1's `SectionSets` whole, no probe.
+  get_section_sets: sectionSetsPayload as unknown as PayloadDefinition<never>,
   create_folder: folderWritePayload as unknown as PayloadDefinition<never>,
   update_folder: folderWritePayload as unknown as PayloadDefinition<never>,
   delete_folder: folderDeletionPayload as unknown as PayloadDefinition<never>,

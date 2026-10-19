@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **99 tools**.
+`initialize` handshake and registers **100 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -3026,6 +3026,28 @@ the whole work-item tree. The read is capped (the Move to… picker's cap), and
 row of `folders` is `{ id, parentFolderId, name, path }` and `path` is the
 folder's name and every ancestor's, root first (`["Parked", "2025"]`). The text
 summary is the indented tree.
+
+#### `get_section_sets`
+
+Which sections a work item of a given kind and type has, which of them are
+**required**, and the heading each renders under in the free-text description.
+A planner calls it before writing a card, instead of guessing and learning from a
+refusal. The sets are a product contract, the same for every tenant, so the tool
+takes **no `projectKey`**. It is the same descriptor `GET /api/v1/section-sets`
+returns and the one motir-ai builds its author tool from. Gated on
+`project:browse`, like `whoami`.
+
+| Input  | Type   | Required | Notes                                                                                          |
+| ------ | ------ | -------- | ---------------------------------------------------------------------------------------------- |
+| `kind` | string | no       | Only this kind's sets: `epic`, `story`, `task`, `subtask` or `bug`.                            |
+| `type` | string | no       | Only this type's sets, one cell per kind (a story and an epic have one set whatever the type). |
+
+**Output** — `structuredContent`: `{ version, sections, sets }`. `sections` maps
+each section name to its `heading` (`null` for the unheaded opening) and its value
+`shape`; `sets` has one `{ kind, type, sections: [{ name, required }] }` per cell
+asked for. The text summary lists each cell's required sections first, then the
+optional ones. A `kind` or `type` that names nothing is refused by name
+(`UNKNOWN_SECTION_CELL`), never answered with a default set.
 
 #### `create_folder`
 

@@ -635,6 +635,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "The whole project's tree shape in one read — every item's key, kind, title, status, parent, folder and obsolescence mark, with no paging loop.",
     descriptionFingerprint: 'a655e6804ec8',
   },
+  get_section_sets: {
+    summary:
+      'Which sections a card of a given kind and type has, which are required and the heading each renders under — read it before writing a card.',
+    descriptionFingerprint: 'e229abdc1b1d',
+  },
   list_folders: {
     summary:
       "Every folder of a project in one read — each folder's id and its path — to find a folder by name.",

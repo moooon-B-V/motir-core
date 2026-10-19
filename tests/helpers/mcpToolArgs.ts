@@ -58,6 +58,7 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // inside the caller's workspace first, so a non-member reads it as not-found
     // before any folder id is looked at.
     list_folders: { projectKey: t.projectKey },
+    get_section_sets: {},
     create_folder: { projectKey: t.projectKey, name: 'rogue' },
     update_folder: { projectKey: t.projectKey, folderId: 'fld_whatever', name: 'rogue' },
     delete_folder: { projectKey: t.projectKey, folderId: 'fld_whatever' },

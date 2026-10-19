@@ -1057,5 +1057,18 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.71.0` after MOTIR-8810's
  *   `1.70.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.72.0` — MOTIR-9029 adds `getSectionSets` (`GET /api/v1/section-sets`, optional
+ *   `kind` and `type` query parameters, `200` with `SectionSets`) and the code
+ *   `UNKNOWN_SECTION_CELL` (422): which sections a work item of a kind × type has, which
+ *   are required and the heading each renders under in the free-text `descriptionMd`.
+ *   The same descriptor the MCP `get_section_sets` tool serves.
+ *
+ *   Additive: a new operation, a new component and a new code for a new condition
+ *   (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.72.0` after MOTIR-5427's
+ *   `1.71.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.71.0';
+export const V1_CONTRACT_VERSION = '1.72.0';

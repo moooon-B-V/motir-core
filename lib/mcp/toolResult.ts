@@ -44,6 +44,7 @@ import {
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
 import { InvalidActivityCursorError } from '@/lib/activity/errors';
+import { UnknownSectionCellError } from '@/lib/workItems/sections/errors';
 import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
@@ -543,6 +544,12 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof CrossProjectSprintAssignmentError ||
     err instanceof BulkBatchTooLargeError
   ) {
+    return toolError(err.code, err.message);
+  }
+  // `get_section_sets` (MOTIR-9029): a `kind` / `type` that names no cell. The message
+  // names the value and lists the legal ones, so the agent corrects it — it is never
+  // answered with a default set.
+  if (err instanceof UnknownSectionCellError) {
     return toolError(err.code, err.message);
   }
   if (err instanceof FilterValidationError) {

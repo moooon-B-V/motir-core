@@ -1576,6 +1576,23 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_section_sets: {
+    type: 'object',
+    properties: {
+      kind: {
+        type: 'string',
+        description:
+          'Only this kind’s sets: epic, story, task, subtask or bug. Omit for every kind.',
+      },
+      type: {
+        type: 'string',
+        description:
+          'Only this type’s sets (code, design, decision, test, …), one cell per kind (a story and an epic have one set whatever the type). Omit for every type.',
+      },
+    },
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_work_item: {
     type: 'object',
     properties: {
@@ -4002,6 +4019,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_plan: 'Read plan proposals',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
+  get_section_sets: 'Get section sets',
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
   hold_plan_revision: 'Hold a plan while you revise it',
@@ -4287,6 +4305,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
+  get_section_sets: { title: 'Get section sets', readOnlyHint: true, openWorldHint: false },
   get_work_item: { title: 'Get work item', readOnlyHint: true, openWorldHint: false },
   get_work_item_activity: {
     title: 'Get work item activity',

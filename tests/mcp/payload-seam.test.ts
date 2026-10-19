@@ -182,6 +182,7 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   skeleton: true,
   // MOTIR-5409 — the folder tools.
   list_folders: true,
+  get_section_sets: true,
   create_folder: true,
   update_folder: true,
   delete_folder: true,
