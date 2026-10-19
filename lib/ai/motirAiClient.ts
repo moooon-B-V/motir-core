@@ -1054,6 +1054,12 @@ export interface RawConvention {
   contentMd: string;
   provenance: RawConventionProvenance[];
   sourceAuditId: string | null;
+  // Who wrote this version (MOTIR-9080). Optional on the wire: a motir-ai that
+  // predates the editable convention sends none of the three, and reads as
+  // `derived` with nothing waiting.
+  authorKind?: 'derived' | 'edited';
+  editedByUserId?: string | null;
+  pendingDerivedMd?: string | null;
   createdAt: string;
   updatedAt: string;
 }

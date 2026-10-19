@@ -42,6 +42,9 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // health as not-found. Aimed at a project with no repository set, it answers
     // `repos: []` without ever reaching the motir-ai boundary.
     get_code_health: { projectKey: t.projectKey },
+    // MOTIR-9083 — project-keyed: a non-member reads tenant A's key as not-found
+    // before the repo is resolved or the boundary is asked.
+    get_coding_convention: { projectKey: t.projectKey, repo: 'motir-core' },
     // MOTIR-7861 — project-keyed, so a non-member reads tenant A's key as
     // not-found before the repo is resolved or any host is asked.
     read_file: { projectKey: t.projectKey, repo: 'motir-core', path: 'README.md' },

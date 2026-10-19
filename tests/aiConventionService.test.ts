@@ -202,10 +202,15 @@ describe('aiConventionService — project-admin gate', () => {
     // Assert on KEYS, not on a serialized substring — `proposed` survives as a
     // provenance VALUE (adopted vs proposed), which is a different axis entirely.
     expect(Object.keys(dto).sort()).toEqual(['convention', 'nextCursor', 'repoKey', 'versions']);
+    // `authorKind` / `editedByUserId` / `pendingDerivedMd` are the editable
+    // convention's fields (MOTIR-9080), not the retired approve lifecycle.
     expect(Object.keys(dto.convention!).sort()).toEqual([
+      'authorKind',
       'contentMd',
       'createdAt',
+      'editedByUserId',
       'id',
+      'pendingDerivedMd',
       'provenance',
       'repoKey',
       'version',

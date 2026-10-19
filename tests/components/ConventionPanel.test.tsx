@@ -36,6 +36,9 @@ function convention(over: Partial<CodingConventionDTO> = {}): CodingConventionDT
       { ruleId: 'layering.no-upward-imports', category: 'layering', source: 'adopted' },
       { ruleId: 'error.typed-taxonomy', category: 'error-handling', source: 'proposed' },
     ],
+    authorKind: 'derived',
+    editedByUserId: null,
+    pendingDerivedMd: null,
     createdAt: '2026-07-04T00:00:00.000Z',
     ...over,
   };

@@ -60,6 +60,7 @@ SUMMARIES = {
     "list_projects": "Every project this token can reach, each with the projectKey every other tool takes.",
     "get_project_state": "A project's planning preconditions — established, code connected, indexed, repo set — before you plan.",
     "get_code_health": "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
+    "get_coding_convention": "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
     "read_file": "One file's text from a project repository at a ref — capped, line-ranged, every absence a named outcome.",
     "code_explore": "Explore the hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
     "code_search": "Search the hosted code graph for symbols by name — the hosted planner's own answer, paged.",

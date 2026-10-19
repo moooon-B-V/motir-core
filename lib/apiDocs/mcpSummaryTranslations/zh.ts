@@ -189,6 +189,12 @@ export const zh: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      '某个仓库的完整编码规范：由代码推导或由人工编辑，并附版本号，即该仓库中的改动应遵循的内容。',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       '一个设计工作项的已批准设计，附带指向其文件的短时效链接；若没有，则说明五种原因中的哪一种。',

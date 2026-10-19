@@ -14,6 +14,8 @@ import { MotirAiError } from '@/lib/ai/errors';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import { matchRepoInSet } from '@/lib/services/repoFileReadService';
+import { userRepository } from '@/lib/repositories/userRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   CodingConventionDTO,
@@ -27,6 +29,7 @@ import type {
   PlanningCodeHealthConventionDTO,
   PlanningCodeHealthDTO,
   PlanningCodeHealthRepoDTO,
+  PlanningConventionDTO,
   ReauditRepoJobsDTO,
   ReauditResultDTO,
 } from '@/lib/dto/codeHealth';
@@ -58,6 +61,9 @@ function toConventionDTO(raw: RawConvention): CodingConventionDTO {
     version: raw.version,
     contentMd: raw.contentMd,
     provenance: toProvenance(raw.provenance),
+    authorKind: raw.authorKind ?? 'derived',
+    editedByUserId: raw.editedByUserId ?? null,
+    pendingDerivedMd: raw.pendingDerivedMd ?? null,
     createdAt: raw.createdAt,
   };
 }
@@ -371,6 +377,44 @@ export const aiConventionService = {
     );
 
     return { project: { key: project.identifier, name: project.name }, repos: sections };
+  },
+
+  // The convention of ONE repository, in full (MOTIR-9083) — what
+  // `get_coding_convention` returns, so a run agent reads its repository's own
+  // rules from the stored convention instead of a file in the checkout.
+  //
+  // GATED ON `ai:plan`, the key `TOOL_PERMISSIONS.get_coding_convention` checks at
+  // the door, for the reason `getPlanningCodeHealth` above gives: the hosted
+  // planner already shows this text to every `ai:plan` holder, and
+  // `CLI_TOKEN_GRANT` holds it, so every `motir run` token reaches it without the
+  // grant widening. The `/code` page's reads stay on `ai:configure`.
+  //
+  // `repo` resolves against the project's realized set the way `read_file`'s does
+  // (`matchRepoInSet`); a repository outside it answers with the set. Every
+  // outcome is a named result, never a throw — only the permission and a missing
+  // project are errors.
+  async getPlanningConvention(
+    projectKey: string,
+    repo: string,
+    ctx: ServiceContext,
+  ): Promise<PlanningConventionDTO> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertPermission(project.id, ctx, 'ai:plan');
+
+    const repoSet = (await resolveCodeContextState(project.id, ctx)).repos.map((r) => r.repoRef);
+    const repoRef = matchRepoInSet(repo, repoSet);
+    if (!repoRef) return { state: 'repo_not_in_project', repo, repoSet };
+
+    const read = await readPlanningConvention(project.id, ctx, repoRef);
+    if (read.state === 'absent') return { state: 'absent', repoRef };
+    if (read.state === 'unavailable') return { state: 'unavailable', repoRef, code: read.code };
+
+    const editorId = read.convention.editedByUserId;
+    const editedByName =
+      read.convention.authorKind === 'edited' && editorId
+        ? ((await userRepository.findById(editorId))?.name ?? null)
+        : null;
+    return { state: 'present', repoRef, convention: read.convention, editedByName };
   },
 
   // Trigger a re-audit + re-propose for the project (the "Deepen this audit" →

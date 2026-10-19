@@ -376,6 +376,11 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // planner already shows this content to every `ai:plan` holder —
   // `docs/decisions/member-facing-permissions.md` AMENDMENT 3 to §4.
   get_code_health: 'ai:plan',
+  // MOTIR-9083 — one repository's convention text. The same content
+  // `get_code_health` and the hosted planner show every `ai:plan` holder
+  // (AMENDMENT 3 to §4), and `CLI_TOKEN_GRANT` holds the key, so every `motir run`
+  // token reaches it without the grant widening.
+  get_coding_convention: 'ai:plan',
   // MOTIR-7861 — a file's text from a project repository at a ref. The hosted
   // planner's `read_file` already shows exactly this to every `ai:plan` holder;
   // the same AMENDMENT 3 to §4 names it as a second instance.

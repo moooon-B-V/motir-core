@@ -611,6 +611,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
     descriptionFingerprint: 'ab6d4bd4fd37',
   },
+  get_coding_convention: {
+    summary:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+    descriptionFingerprint: '1c7784e4be1f',
+  },
   read_file: {
     summary:
       "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
