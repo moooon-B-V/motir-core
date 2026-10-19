@@ -3482,6 +3482,8 @@ export const workItemRepository = {
     Array<{
       id: string;
       descriptionMd: string | null;
+      /** The row's kind — the section registry's first coordinate (MOTIR-9032). */
+      kind: string;
       type: string | null;
       executor: string | null;
       targetRepo: string | null;
@@ -3511,6 +3513,7 @@ export const workItemRepository = {
       select: {
         id: true,
         descriptionMd: true,
+        kind: true,
         type: true,
         executor: true,
         targetRepo: true,

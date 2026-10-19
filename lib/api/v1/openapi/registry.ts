@@ -7,6 +7,10 @@ import {
   WORK_ITEM_OPERATIONS,
   WORK_ITEM_SHARED_SCHEMAS,
 } from '@/lib/api/v1/workItems/operations';
+import {
+  SECTION_SET_COMPONENTS,
+  SECTION_SET_OPERATIONS,
+} from '@/lib/api/v1/sectionSets/operations';
 import { WORK_LOOP_COMPONENTS, WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
 
 // The v1 OPERATION REGISTRY (Story 11.4 · Subtask 11.4.4 — MOTIR-2185).
@@ -51,6 +55,8 @@ const RESOURCE_MODULES: readonly V1ResourceModule[] = [
   { operations: WORK_LOOP_OPERATIONS, components: WORK_LOOP_COMPONENTS },
   // Story MOTIR-5310's folder resource (MOTIR-5408).
   { operations: FOLDER_OPERATIONS, components: FOLDER_COMPONENTS },
+  // Story MOTIR-9023's section sets read (MOTIR-9029).
+  { operations: SECTION_SET_OPERATIONS, components: SECTION_SET_COMPONENTS },
 ];
 
 /**

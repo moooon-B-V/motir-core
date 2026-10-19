@@ -423,6 +423,46 @@ export function crossLevelEdgeLines(
 }
 
 /**
+ * The SECTION-finding lines (MOTIR-9032) — shared wording for both validators.
+ * The body parsed against the section registry, a required section named when it
+ * is missing. ADVISORY: stated as a count in a valid verdict, so a reader who
+ * sees VALID is told in the same breath that the findings did not change it.
+ * Empty when there are none.
+ */
+export function sectionFindingLines(
+  findings: ReadonlyArray<{
+    item: string;
+    kind: string;
+    type: string | null;
+    state: 'unstructured' | 'incomplete';
+    missing: string[];
+    invalid: { section: string; message: string }[];
+    otherHeadings: string[];
+    signals: string[];
+  }>,
+  verdict: 'valid' | 'invalid',
+): string[] {
+  if (findings.length === 0) return [];
+  return [
+    '',
+    `Section findings (${findings.length}, advisory — they do NOT change ${
+      verdict === 'valid' ? 'VALID' : 'the verdict'
+    }): the body parsed against the sections its kind and type expect:`,
+    ...findings.map((f) => {
+      const parts: string[] = [];
+      if (f.missing.length > 0) parts.push(`missing ${f.missing.join(', ')}`);
+      if (f.invalid.length > 0) {
+        parts.push(`invalid ${f.invalid.map((i) => `${i.section} — ${i.message}`).join(', ')}`);
+      }
+      if (f.otherHeadings.length > 0) parts.push(`other headings ${f.otherHeadings.join(', ')}`);
+      if (f.signals.length > 0) parts.push(`signals ${f.signals.join(', ')}`);
+      return `  ${f.item} (${f.kind}/${f.type ?? 'untyped'}, ${f.state}): ${parts.join('; ')}`;
+    }),
+    'Re-write the card with `sections` (see `get_section_sets`) so each section is named, or add the missing heading to the body.',
+  ];
+}
+
+/**
  * The SOFT-block lines (MOTIR-6368) — an ancestor's open blocker, which reaches
  * the target only through the readiness cascade. Phrased as information, never a
  * failure: soft blocks do not change `valid`.
@@ -456,6 +496,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
       `Work item ${result.key} is VALID — its whole subtree can be finished within itself${over}.`,
       ...softBlockLines(result),
       ...advisoryLines(result),
+      ...sectionFindingLines(result.sectionFindings, 'valid'),
     ].join('\n');
   }
   if (result.blockers.length === 0) {
@@ -467,6 +508,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
       ...crossLevelEdgeLines(result.crossLevelEdges),
       ...softBlockLines(result),
       ...advisoryLines(result),
+      ...sectionFindingLines(result.sectionFindings, 'invalid'),
     ].join('\n');
   }
   return [
@@ -482,6 +524,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
     ...crossLevelEdgeLines(result.crossLevelEdges),
     ...softBlockLines(result),
     ...advisoryLines(result),
+    ...sectionFindingLines(result.sectionFindings, 'invalid'),
   ].join('\n');
 }
 
@@ -541,7 +584,7 @@ export function registerValidateWorkItem(
         'dependency outside the subtree counts as satisfied); pass `tight` to require every ' +
         'dependency to be IN the subtree (a done item outside it is then reported as a blocker). ' +
         'Returns `{ key, valid, blockers: [...], invalidEdges: [...], crossLevelEdges: [...], ' +
-        'advisories: [...], softBlocks: [...] }` — `blockers` naming each in-subtree item and the out-of-subtree, ' +
+        'advisories: [...], softBlocks: [...], sectionFindings: [...] }` — `blockers` naming each in-subtree item and the out-of-subtree, ' +
         'unsatisfied work gating it (always an item’s OWN blocked_by edge); `invalidEdges` naming ' +
         'each same-level blocked_by between items under DIFFERENT parents whose parents carry no ' +
         'matching edge (`{ item, blockedBy, itemParent, blockerParent }` — a cross-parent edge is ' +
@@ -606,6 +649,10 @@ export function registerValidateWorkItem(
         'the `repo`, and the other item as `referenced` / `referencedStatus`; the remedy is to ' +
         'wire blocked_by from the citing card to the creating one. Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
+        '`sectionFindings` is a second advisory channel of the same kind: each not-done subtree ' +
+        'card whose BODY, parsed against the section registry for its kind and type, misses a ' +
+        'required section or carries one it cannot read, as `{ item, state: "unstructured" | ' +
+        '"incomplete", missing, invalid, otherHeadings, signals }` — it never changes `valid`. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +
         'subtree you have PROPOSED before anybody reviews it. With a `planId`, `invalidEdges` ' +

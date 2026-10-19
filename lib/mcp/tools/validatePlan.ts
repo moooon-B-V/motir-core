@@ -7,6 +7,7 @@ import {
   crossLevelEdgeLines,
   invalidEdgeLines,
   mislabelledLinkLines,
+  sectionFindingLines,
 } from '@/lib/mcp/tools/validateWorkItem';
 import type { WorkItemProseMislabelledLinkAdvisoryDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
@@ -79,6 +80,7 @@ function summarize(
       `Plan ${result.planId} is VALID — it would be ACCEPTED by approve, and every item in ` +
         'the projected forest can be finished once it materializes. No work item was created: ' +
         'approving the plan in Motir is still the only path from a proposal to a work item.',
+      ...sectionFindingLines(result.sectionFindings, 'valid'),
       ...linkLines,
     ].join('\n');
   }
@@ -115,6 +117,7 @@ function summarize(
 
   lines.push(...invalidEdgeLines(result.invalidEdges));
   lines.push(...crossLevelEdgeLines(result.crossLevelEdges));
+  lines.push(...sectionFindingLines(result.sectionFindings, 'invalid'));
   lines.push(...linkLines);
 
   return lines.join('\n');
@@ -180,10 +183,14 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'than the card the id opens, or whose id opens no card (`targetKey: null`) — fix the ' +
         'id before sealing, or every reader follows the link to the wrong card. Returns ' +
         '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
-        'crossLevelEdges: [...], advisories: [...] }`; an item named ' +
+        'crossLevelEdges: [...], sectionFindings: [...], advisories: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
         '`condition` defaults to `loose` (a done dependency outside the plan counts as ' +
         'satisfied); `tight` requires every dependency to be IN the projection. This is the ' +
+        'ADVISORY `sectionFindings` name each card the plan adds or modifies whose projected body, ' +
+        'parsed against the section registry for its kind and type, misses a required section ' +
+        '(`{ item, state, missing, invalid, otherHeadings, signals }`); they never change ' +
+        '`valid`. This is the ' +
         'WHOLE-plan verdict and takes no target — use `validate_work_item` with a `planId` for ' +
         'one subtree. Do NOT approximate it by looping that call per root: a blocked_by edge ' +
         'between two sibling roots is valid here and a false positive per-root, because both ' +

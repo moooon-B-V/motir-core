@@ -1,0 +1,230 @@
+import { describe, expect, it } from 'vitest';
+import { InvalidProposalError } from '@/lib/plans/errors';
+import { applySectionsInput, hasSectionsInput } from '@/lib/plans/applySectionsInput';
+import { splitPlanBody } from '@/lib/markdown/planBody';
+import { parseSections } from '@/lib/workItems/sections/parse';
+import { renderSections } from '@/lib/workItems/sections/render';
+
+// Story MOTIR-9023 · Subtask MOTIR-9030 — the ONE helper every plan door calls to
+// turn a sections INPUT into the `descriptionMd` it stores. Pure, so every rule of
+// the card is asserted here without a database; the doors' wiring (the plan row
+// lock, the stored JSON, the review PATCH) is `tests/integration/plans/
+// proposalSections.test.ts`.
+
+const LABEL = '“A card”';
+
+const base = {
+  framing: 'Why this card exists.',
+  scopeBoundary: 'Stops at the renderer.',
+  acceptanceCriteria: ['It renders.', 'It refuses by name.'],
+  contextRefs: [{ ref: 'lib/a.ts', why: 'the module' }],
+};
+
+function apply(
+  sections: unknown,
+  over: Partial<Parameters<typeof applySectionsInput>[0]> = {},
+): string {
+  return applySectionsInput({
+    sections,
+    descriptionMd: undefined,
+    currentBody: undefined,
+    kind: 'task',
+    type: 'code',
+    label: LABEL,
+    ...over,
+  });
+}
+
+function refusal(fn: () => unknown): string {
+  try {
+    fn();
+  } catch (err) {
+    expect(err).toBeInstanceOf(InvalidProposalError);
+    return (err as Error).message;
+  }
+  throw new Error('expected a refusal');
+}
+
+describe('hasSectionsInput', () => {
+  it('is true for any value but undefined, so an explicit null is refused rather than ignored', () => {
+    expect(hasSectionsInput({})).toBe(false);
+    expect(hasSectionsInput({ sections: undefined })).toBe(false);
+    expect(hasSectionsInput({ sections: null })).toBe(true);
+    expect(hasSectionsInput({ sections: {} })).toBe(true);
+    expect(hasSectionsInput(null)).toBe(false);
+  });
+});
+
+describe('an add (no stored body)', () => {
+  it('renders exactly what the renderer renders, and the plan-body parser reads it back', () => {
+    const body = apply(base);
+    expect(body).toBe(renderSections('task', 'code', base));
+    const split = splitPlanBody(body);
+    expect(split.acceptanceCriteria.map((l) => l.replace(/^\s*-\s*/, ''))).toEqual(
+      base.acceptanceCriteria,
+    );
+    expect(split.contextRefs).toEqual(['lib/a.ts']);
+    expect(body).toContain('## Scope BOUNDARY');
+  });
+
+  it('names a missing required section', () => {
+    const { acceptanceCriteria: _omitted, ...without } = base;
+    expect(refusal(() => apply(without))).toBe(
+      `${LABEL}: sections missing required section(s): acceptanceCriteria.`,
+    );
+  });
+
+  it('treats an empty required list as missing, by name', () => {
+    expect(refusal(() => apply({ ...base, acceptanceCriteria: [] }))).toContain(
+      'missing required section(s): acceptanceCriteria',
+    );
+  });
+
+  it('names every missing section at once', () => {
+    expect(refusal(() => apply({ framing: 'x' }))).toContain(
+      'missing required section(s): scopeBoundary, acceptanceCriteria, contextRefs',
+    );
+  });
+
+  it('names options when a decision card has none', () => {
+    const message = refusal(() =>
+      apply({ ...base, question: 'Q?', recommendation: 'A' }, { type: 'decision' }),
+    );
+    expect(message).toContain('missing required section(s): options');
+  });
+
+  it('refuses a section the cell does not define, by name, never dropping it', () => {
+    const message = refusal(() =>
+      apply(
+        { framing: 'f', scopeBoundary: 'b', acceptanceCriteria: ['x'] },
+        { kind: 'epic', type: null },
+      ),
+    );
+    expect(message).toContain('not defined for a epic: acceptanceCriteria');
+  });
+
+  it('names an invalid section', () => {
+    const message = refusal(() => apply({ ...base, contextRefs: [{ ref: 'lib/a.ts' }] }));
+    expect(message).toContain('invalid section(s): contextRefs');
+  });
+
+  it('refuses a non-object', () => {
+    for (const value of [null, 'text', ['a'], 3]) {
+      expect(refusal(() => apply(value))).toContain('`sections` must be an object');
+    }
+  });
+
+  it('refuses a kind or type no cell exists for', () => {
+    expect(refusal(() => apply(base, { kind: 'saga' }))).toContain("kind 'saga'");
+    expect(refusal(() => apply(base, { type: 'sorcery' }))).toContain("type 'sorcery'");
+  });
+
+  it('judges the cell on the kind and type it is handed — null type is the leaf core', () => {
+    expect(() => apply(base, { type: null })).not.toThrow();
+    expect(() => apply(base, { type: undefined })).not.toThrow();
+  });
+});
+
+describe('sections beside descriptionMd', () => {
+  it('is refused, naming both keys', () => {
+    const message = refusal(() => apply(base, { descriptionMd: 'a body' }));
+    expect(message).toContain('`sections`');
+    expect(message).toContain('`descriptionMd`');
+  });
+
+  it('is refused even when descriptionMd is an explicit null', () => {
+    expect(refusal(() => apply(base, { descriptionMd: null }))).toContain('not both');
+  });
+});
+
+describe('a sparse edit over the stored body', () => {
+  const stored = renderSections('task', 'code', {
+    ...base,
+    assumptions: ['A stays true.'],
+  });
+
+  it('keeps every section the patch omits and changes only the one sent', () => {
+    const next = apply({ scopeBoundary: 'Stops at the parser.' }, { currentBody: stored });
+    const before = parseSections(stored, 'task', 'code').sections;
+    const after = parseSections(next, 'task', 'code').sections;
+    expect(after).toEqual({ ...before, scopeBoundary: 'Stops at the parser.' });
+    expect(splitPlanBody(next).acceptanceCriteria).toEqual(
+      splitPlanBody(stored).acceptanceCriteria,
+    );
+    expect(splitPlanBody(next).contextRefs).toEqual(splitPlanBody(stored).contextRefs);
+  });
+
+  it('REPLACES a list rather than merging into it', () => {
+    const next = apply({ acceptanceCriteria: ['Only this.'] }, { currentBody: stored });
+    expect(parseSections(next, 'task', 'code').sections.acceptanceCriteria).toEqual(['Only this.']);
+  });
+
+  it('clears an optional section on an explicit null', () => {
+    const next = apply({ assumptions: null }, { currentBody: stored });
+    expect(parseSections(next, 'task', 'code').sections.assumptions).toBeUndefined();
+    expect(next).not.toContain('Assumptions');
+  });
+
+  it('refuses clearing a required section, by name', () => {
+    expect(refusal(() => apply({ scopeBoundary: null }, { currentBody: stored }))).toContain(
+      'missing required section(s): scopeBoundary',
+    );
+  });
+
+  it('is idempotent: re-sending a section it already holds changes nothing', () => {
+    expect(apply({ scopeBoundary: base.scopeBoundary }, { currentBody: stored })).toBe(stored);
+  });
+
+  it('judges the MERGED cell: a re-typed card needs the sections its new type requires', () => {
+    expect(
+      refusal(() => apply({ framing: 'Still framed.' }, { currentBody: stored, type: 'decision' })),
+    ).toContain('missing required section(s): question, options, recommendation');
+  });
+
+  it('keeps every line of a hand-written body that has no headings, in framing', () => {
+    const handWritten = 'Free text the planner wrote.\nA second line of it.';
+    const next = apply(
+      {
+        scopeBoundary: base.scopeBoundary,
+        acceptanceCriteria: base.acceptanceCriteria,
+        contextRefs: base.contextRefs,
+      },
+      { currentBody: handWritten },
+    );
+    for (const line of handWritten.split('\n')) expect(next).toContain(line);
+  });
+
+  it('names the sections a hand-written body still lacks', () => {
+    const message = refusal(() =>
+      apply({ scopeBoundary: 'b' }, { currentBody: 'Free text, no headings.' }),
+    );
+    expect(message).toContain('missing required section(s): acceptanceCriteria, contextRefs');
+  });
+
+  it('carries an unplaced heading through otherSections', () => {
+    const withExtra = `${stored}\n## Notes from review\n\nKeep the retry.\n`;
+    const next = apply({ scopeBoundary: 'New boundary.' }, { currentBody: withExtra });
+    expect(next).toContain('## Notes from review');
+    expect(next).toContain('Keep the retry.');
+  });
+
+  it('does not silently fix a section the stored body carries but cannot be read — it names it', () => {
+    const corrupt = `${stored}\n## Tier\n\nnot-a-tier\n`;
+    const message = refusal(() =>
+      apply({ scopeBoundary: 'b' }, { currentBody: corrupt, type: 'test' }),
+    );
+    expect(message).toContain('tier');
+  });
+});
+
+describe('a framing whose every line carries a "| " gutter', () => {
+  it('hides nothing: the separately sent criteria and refs stay readable', () => {
+    const body = apply({
+      ...base,
+      framing: '| The planner pasted this\n| from a quoted block',
+    });
+    const split = splitPlanBody(body);
+    expect(split.acceptanceCriteria).toHaveLength(2);
+    expect(split.contextRefs).toEqual(['lib/a.ts']);
+  });
+});

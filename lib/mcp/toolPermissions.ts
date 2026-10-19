@@ -109,6 +109,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   skeleton: 'project:browse',
   // `foldersService.listProjectFolders` asserts `project:browse` by name.
   list_folders: 'project:browse',
+  // MOTIR-9029 — the section registry read is a product contract, the same for
+  // every tenant: no project and no service call that asserts a key. Gated like
+  // `whoami`, the other project-less read.
+  get_section_sets: 'project:browse',
   // `sprintsService.listByProject` asserts `project:browse` by name.
   list_sprints: 'project:browse',
   validate_sprint: 'project:browse',

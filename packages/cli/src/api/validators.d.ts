@@ -56,6 +56,7 @@ export declare const operation_getProjectBacklog: ValidateFunction;
 export declare const operation_getProjectReadyBugs: ValidateFunction;
 export declare const operation_getProjectReadyContainers: ValidateFunction;
 export declare const operation_getProjectReadyLeaves: ValidateFunction;
+export declare const operation_getSectionSets: ValidateFunction;
 export declare const operation_getSprint: ValidateFunction;
 export declare const operation_getWorkItem: ValidateFunction;
 export declare const operation_getWorkItemActivity: ValidateFunction;

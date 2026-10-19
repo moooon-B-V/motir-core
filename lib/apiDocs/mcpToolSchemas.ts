@@ -173,6 +173,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                     'The proposed kind. Defaults to `task` (a standalone leaf) when omitted.',
                 },
                 descriptionMd: { type: 'string', description: 'Markdown body — WHAT to do.' },
+                sections: {
+                  type: 'object',
+                  additionalProperties: {},
+                  description:
+                    'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+                },
                 explanationMd: { type: 'string', description: 'Markdown body — WHY it matters.' },
                 type: {
                   type: 'string',
@@ -1162,6 +1168,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           "Optional: the id of a folder (as `list_folders` returns it) to FILE the new item into — the other placement beside parentKey, which it may not be combined with (PLACEMENT_CONFLICT). A filed item is a root, so any kind may be filed, a subtask included. The folder must be in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
       },
       descriptionMd: { type: 'string', description: 'Optional Markdown description body.' },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The item’s sections as named values (framing, acceptanceCriteria, scopeBoundary, …), instead of composing headings inside `descriptionMd`: the door checks them against the section set for the item’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_SECTIONS, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` is never stored. Never send it together with `descriptionMd` (SECTIONS_AND_DESCRIPTION_CONFLICT). The section sets, their shapes and which are required are served by `get_section_sets`. On an UPDATE it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list; it is judged on the item’s type AFTER this write. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+      },
       language: {
         type: 'string',
         enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
@@ -1560,6 +1572,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The plan id — as returned by an `expand_item` submit, by `get_plan_status`, or shown on the plan in Motir.',
       },
+      includeSections: {
+        type: 'boolean',
+        description:
+          'OPTIONAL, default false. When true the tool also parses the free-text body into the registry’s sections for the card’s kind × type and returns the result as `parsedSections` beside the body: `{ sections, found, missing, invalid, signals }` — the sections found, the required ones missing BY NAME, the ones that could not be read into their shape, and the parser’s signals (`no-headings`, `quoted-gutter`, …). The body is returned unchanged and nothing is stored; a body with no headings is answered, never refused.',
+      },
     },
     required: ['planId'],
     additionalProperties: false,
@@ -1596,6 +1613,23 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_section_sets: {
+    type: 'object',
+    properties: {
+      kind: {
+        type: 'string',
+        description:
+          'Only this kind’s sets: epic, story, task, subtask or bug. Omit for every kind.',
+      },
+      type: {
+        type: 'string',
+        description:
+          'Only this type’s sets (code, design, decision, test, …), one cell per kind (a story and an epic have one set whatever the type). Omit for every type.',
+      },
+    },
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_work_item: {
     type: 'object',
     properties: {
@@ -1610,6 +1644,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         minLength: 1,
         description:
           'OPTIONAL — the id of a plan (as returned by `create_plan`) to PROJECT over. When given, the answer is computed over the project’s live tree ⊕ that plan’s proposals, so an agent can check the tree it is proposing BEFORE anyone reviews it. Omit it for the committed tree — a call without this argument behaves exactly as it did before projection existed. Nothing is created, mutated or persisted either way, and a proposal never becomes a work item except by approving the plan in Motir.',
+      },
+      includeSections: {
+        type: 'boolean',
+        description:
+          'OPTIONAL, default false. When true the tool also parses the free-text body into the registry’s sections for the card’s kind × type and returns the result as `parsedSections` beside the body: `{ sections, found, missing, invalid, signals }` — the sections found, the required ones missing BY NAME, the ones that could not be read into their shape, and the parser’s signals (`no-headings`, `quoted-gutter`, …). The body is returned unchanged and nothing is stored; a body with no headings is answered, never refused.',
       },
     },
     required: ['key'],
@@ -3168,6 +3207,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Markdown body — WHAT to do. Send `null` to clear it; omit to leave it as it is.',
       },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+      },
       explanationMd: {
         type: ['string', 'null'],
         description:
@@ -3297,6 +3342,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: ['string', 'null'],
         description:
           'Markdown body — WHAT to do. Send `null` to clear it; omit to leave it as it is.',
+      },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The card’s sections as named values, instead of composing headings inside `descriptionMd`: the door checks them against the section set for the proposal’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_PROPOSAL, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` itself is never stored. Never send it together with `descriptionMd` (refused, naming both). The section sets, their shapes and which are required are served by `get_section_sets`. On an EDIT it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list. Omit it to keep sending a plain `descriptionMd` exactly as before.',
       },
       explanationMd: {
         type: ['string', 'null'],
@@ -3692,6 +3743,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: ['string', 'null'],
         description: 'New Markdown description body; null clears it.',
       },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The item’s sections as named values (framing, acceptanceCriteria, scopeBoundary, …), instead of composing headings inside `descriptionMd`: the door checks them against the section set for the item’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_SECTIONS, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` is never stored. Never send it together with `descriptionMd` (SECTIONS_AND_DESCRIPTION_CONFLICT). The section sets, their shapes and which are required are served by `get_section_sets`. On an UPDATE it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list; it is judged on the item’s type AFTER this write. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+      },
       explanationMd: {
         type: ['string', 'null'],
         description: 'New Markdown explanation body (the "why"); null clears it.',
@@ -4023,6 +4080,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_plan: 'Read plan proposals',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
+  get_section_sets: 'Get section sets',
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
   hold_plan_revision: 'Hold a plan while you revise it',
@@ -4313,6 +4371,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
+  get_section_sets: { title: 'Get section sets', readOnlyHint: true, openWorldHint: false },
   get_work_item: { title: 'Get work item', readOnlyHint: true, openWorldHint: false },
   get_work_item_activity: {
     title: 'Get work item activity',

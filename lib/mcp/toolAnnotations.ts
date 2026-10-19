@@ -504,6 +504,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   skeleton: { readOnlyHint: true, openWorldHint: false },
   // R: listFolders.ts → foldersService.listProjectFolders
   list_folders: { readOnlyHint: true, openWorldHint: false },
+  // R: getSectionSets.ts → sectionSchemaService.describe (an in-memory registry read)
+  get_section_sets: { readOnlyHint: true, openWorldHint: false },
   // W: createFolder.ts → foldersService.createFolder → folderRepository.create; additive
   create_folder: {
     readOnlyHint: false,
