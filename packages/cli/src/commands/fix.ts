@@ -609,7 +609,9 @@ async function repair(input: {
   claim: WorkItemRepairClaim;
   /** Check each pull request out on its own branch — a terminal's worktrees, or a hosted clone. */
   prepare: () => Prepared;
-  agent: { parsed: ParsedAgentCommand };
+  /** `fresh` is set when `parsed` is a RESUMED command (MOTIR-9052): the watch then launches it as
+   *  `resumeAgent`, and `fresh` is the plain command it stands behind. */
+  agent: { parsed: ParsedAgentCommand; fresh?: ParsedAgentCommand | null };
   opts: FixOptions;
   deps: FixDeps;
   /**
@@ -764,7 +766,10 @@ async function repair(input: {
       client,
       key,
       title: claim.title,
-      agent: agent.parsed,
+      agent: agent.fresh ?? agent.parsed,
+      // The session its repair resolved, or none (MOTIR-9059): the watch says "continuing the
+      // run's own session" only when it really launches one.
+      ...(agent.fresh ? { resumeAgent: agent.parsed } : {}),
       cwd: prepared.checkouts[0]!.path,
       checkouts: prepared.checkouts,
       report: (line) => info(line),

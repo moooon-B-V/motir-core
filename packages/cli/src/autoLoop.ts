@@ -132,6 +132,11 @@ export interface DispatchRecord {
   sessionBranch: string | null;
   repo: string | null;
   /**
+   * The agent conversation that built this card (MOTIR-9059) — what its CI watch resumes.
+   * `null` when the agent recorded none; absent on a record that never ran an agent.
+   */
+  sessionId?: string | null;
+  /**
    * EVERY repository the card ships in (MOTIR-3135), primary first — `[]` when
    * it names none, so `repo` is `repos[0] ?? null`.
    *

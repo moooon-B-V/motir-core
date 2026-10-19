@@ -329,6 +329,26 @@ describe('hosted `motir fix` — adopts the fix run, never claims (MOTIR-6929)',
     expect(h.locked).toHaveLength(1);
   });
 
+  it('in the person’s own agent, a ci repair’s watch fixes in the resolved session — and in a fresh one when it resolved none', async () => {
+    const red = (): WorkItemDelivery[] => green().map((d) => ({ ...d, ci: 'failing' as const }));
+    for (const [resume, sessionId] of [
+      [{ profile: 'claude', sessionId: 'sess-1', canResume: true }, 'sess-1'],
+      [null, undefined],
+    ] as const) {
+      setup({
+        repair: { ...decision(), repairClass: 'ci', findings: null, resume },
+        verdicts: [red(), green()],
+      });
+      const d = deps()!;
+      d.env = { ...HOSTED_ENV, MOTIR_AGENT_RUN: '1', MOTIR_SANDBOX_AGENT: 'claude' };
+      await fixCommand(KEY, {}, d);
+      const fix = h.agentRuns.find((r) => r.prompt.startsWith('# Make the build pass'));
+      if (sessionId) expect(fix?.command.stream?.sessionId).toBe(sessionId);
+      else expect(fix?.command.stream?.sessionId).not.toBe('sess-1');
+      expect(fix).toBeDefined();
+    }
+  });
+
   it('in the person’s own agent, a review repair resumes the recorded session, and a failed resume re-runs fresh once', async () => {
     setup({
       repair: {
