@@ -1882,6 +1882,11 @@ model Project {
   /// deliberately-off setting back on: `NOT NULL DEFAULT false` is the whole
   /// data step. Every flip is recorded in `autoTranslateChanges`.
   autoTranslateWorkContent         Boolean               @default(false) @map("auto_translate_work_content")
+  /// Whether a delivery set reported red starts the fix in the card's own agent on
+  /// its own (Story MOTIR-8981 · MOTIR-9060). `false` is the product's intended
+  /// default, not an accident of the column: `NOT NULL DEFAULT false` leaves every
+  /// existing project off, and nothing is started until a person flips it.
+  agentAutoFixEnabled              Boolean               @default(false) @map("agent_auto_fix_enabled")
   /// How this project's pull requests are merged (MOTIR-4880 ·
   /// `docs/decisions/approval-gates.md` §7). PROJECT-scoped because a merge
   /// policy is a property of a codebase and its team, and the merge gate that
