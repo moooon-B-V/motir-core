@@ -833,6 +833,21 @@ type RunFn = (
   ) => Promise<{ jobId: string; planId?: string; session: PlanChangeSessionDto }>,
 ) => Promise<void>;
 
+/** Whether the picker's target set names exactly the session's own targets. No set
+ *  ("no opinion") matches, as it falls back to the entrance anchor everywhere else. */
+function planningTargetsMatchSession(
+  targets: readonly PlanningTarget[] | undefined,
+  session: { targetKeys: readonly string[] } | null,
+): boolean {
+  if (targets === undefined || !session) return true;
+  const norm = (keys: readonly string[]) =>
+    keys
+      .map((k) => k.toUpperCase())
+      .sort()
+      .join(',');
+  return norm(targets.map((t) => t.identifier)) === norm(session.targetKeys);
+}
+
 /**
  * Which conversation a turn belongs to. The picker's SET wins when the caller
  * has one (an empty set is a real answer — the project thread); a caller that
@@ -1335,8 +1350,9 @@ export function usePlanChangeConversation({
               }
             : anchorId
               ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
-                // is seeded from that same item, and any target the user adds later
-                // starts a differently-scoped thread anyway.
+                // is seeded from that same item. A target the user adds later is a
+                // differently-scoped thread: the server sets the held session aside
+                // and answers with the one for the new scope (MOTIR-8983).
                 await resumeContextualSession(anchorId, [], controller.signal).then((r) => ({
                   session: r.session,
                   planId: r.planId ?? null,
@@ -2599,9 +2615,17 @@ export function usePlanChangeConversation({
       // its plan still waits, when the send CARRIES it into a new session (MOTIR-7932).
       if (sessionEnded(stateRef.current.session)) {
         if (carriesWaitingPlan(stateRef.current.session, stateRef.current.readOnly)) {
-          await carrySend(body, options.anchorKey ?? null);
+          // The carry keeps the ended session's SCOPE, so it can only carry a turn
+          // for that scope. A composer whose targets name something else is not a
+          // carry: the plan that waits belongs to the old scope, and the turn goes
+          // out as a fresh targeted one (MOTIR-8983).
+          if (planningTargetsMatchSession(targets, stateRef.current.session)) {
+            await carrySend(body, options.anchorKey ?? null);
+            return;
+          }
+        } else {
+          return;
         }
-        return;
       }
       // A stale notice still offering Plan it again is answered by this turn; one
       // that was acted on stays as the thread's record.

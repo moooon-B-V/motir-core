@@ -111,13 +111,15 @@ describe('PlanningWorkspaceHost — the rail’s controls reach the hook', () =>
     expect(hook.answerRunPause.mock.calls).toEqual([['start_over'], ['apply']]);
   });
 
-  it('an ended session’s send is CARRIED through the hook’s own send, with no targets (MOTIR-7932)', () => {
+  it('an ended session’s send is CARRIED through the hook’s own send, with the composer’s targets (MOTIR-7932 · MOTIR-8983)', () => {
     renderHost();
 
     act(() => rail.props.onCarrySend('Carry this on.'));
 
     expect(hook.send).toHaveBeenCalledTimes(1);
-    expect(hook.send).toHaveBeenCalledWith('Carry this on.');
+    // The composer's target set rides along, so the hook can tell a carry from a
+    // turn about a different card; this render has picked none.
+    expect(hook.send).toHaveBeenCalledWith('Carry this on.', []);
   });
 
   it('Start a new session, Plan again and Show earlier each call their own method, once', () => {

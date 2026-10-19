@@ -1278,7 +1278,7 @@ function PlanWorkspaceHost({
           onAnswerRunPause={(choice) => void answerRunPause(choice)}
           // THE CARRY (MOTIR-7932): the hook routes an ended session's send to it, and
           // its swap re-keys the address through `onRestarted`, the restart's path.
-          onCarrySend={(text) => void send(text)}
+          onCarrySend={sendTargeted}
           onPlanAgain={() => void planAgain()}
           // RESUME a failed attempt (MOTIR-7918): its starter or a project manager (panels 3b / 3c).
           // A session of the viewer's own, or one the server did not name a starter for, is theirs.
