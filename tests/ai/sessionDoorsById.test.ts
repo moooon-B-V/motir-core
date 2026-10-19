@@ -140,6 +140,28 @@ describe('ITEM-ANCHORED planning', () => {
     expect(await userBodies(older.id)).toEqual(['older', 'split it']);
   });
 
+  it('sets a held PROJECT-WIDE session aside when the turn names a card, and sends that card (MOTIR-8983)', async () => {
+    const item = await story();
+    const projectWide = await planChangeSessionsService.startWithFirstTurn(
+      pctx(),
+      PROJECT_SCOPE,
+      'earlier project talk',
+    );
+
+    const run = await contextualPlanningService.planFromWorkItem(
+      { anchorId: item.id, prompt: 'plan this story', sessionId: projectWide.id },
+      pctx(),
+    );
+
+    // The turn went to a session of the REQUESTED scope, not the held one…
+    expect(run.sessionId).not.toBe(projectWide.id);
+    expect(await userBodies(projectWide.id)).toEqual(['earlier project talk']);
+    expect(await userBodies(run.sessionId)).toEqual(['plan this story']);
+    // …and the job names the card the person added.
+    const context = submitJobMock.mock.calls[0]![2] as Record<string, unknown>;
+    expect(context['targetKeys']).toEqual([item.identifier]);
+  });
+
   it('a browse-only member reading the item’s planning state creates nothing', async () => {
     const item = await story();
     const viewer = await usersService.createUser({
