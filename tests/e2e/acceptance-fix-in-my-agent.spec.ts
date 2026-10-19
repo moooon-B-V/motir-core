@@ -20,6 +20,7 @@ import {
   runCalls,
   sessionOf,
   signInCodex,
+  stubCalls,
 } from './_helpers/fix-in-my-agent-seed';
 import en from '@/messages/en.json';
 
@@ -367,8 +368,19 @@ test.describe('Fix a red pull request in my own agent', () => {
     await expect.poll(() => runCalls(agentId).length, { timeout: 60_000 }).toBe(1);
     const call = runCalls(agentId)[0]!;
     expect(call.cli).toBe('codex');
-    expect(call.args!.slice(0, 2)).toEqual(['exec', 'resume']);
-    expect(call.args).toContain(session);
+    expect(call.args).toEqual([
+      'exec',
+      'resume',
+      '--json',
+      '-c',
+      'sandbox_mode="danger-full-access"',
+      session,
+      '-',
+    ]);
+    for (const flag of ['--session-id', '--output-format', '--include-partial-messages']) {
+      expect(call.args).not.toContain(flag);
+    }
+    expect(stubCalls(agentId).filter((entry) => entry.refused)).toEqual([]);
     endFix(agentId, sent.body['dispatchRunId'] as string, 'green');
   });
 });
