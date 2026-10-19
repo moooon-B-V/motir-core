@@ -246,3 +246,77 @@ describe('⚠️ FOLLOWING releases on an upward scroll and is re-armed only by 
     expect(screen.queryByRole('button', { name: 'Follow' })).toBeNull();
   });
 });
+
+// MOTIR-9069 — agent output WRAPS inside the log pane; no line is clipped behind
+// a scroller of its own, and the gutter stays a hanging indent.
+//
+// ⚠️ WHAT THIS LANE CAN AND CANNOT ASSERT. happy-dom performs no layout: every box
+// is 0×0, so `scrollWidth <= clientWidth` reads `0 <= 0` and is green on the
+// UNFIXED component. A guard that cannot go red is not a guard, so this block
+// asserts the MECHANISM — the classes that produce the geometry — the way
+// `guide-rail-overflow.test.tsx` and `plan-review-rail-overflow.test.tsx` do. The
+// real-browser geometry at a dragged width is the story's E2E (MOTIR-9076).
+
+/** A token with NO line-break opportunity — no space, `/` or `-`. */
+const UNBREAKABLE = `TOKEN_${'X'.repeat(64)}`;
+
+/** Is `el` reached by `overflow-wrap: anywhere`? The property INHERITS, so the
+ *  element itself or any ancestor up to the scroller counts. */
+function reachedByWrapGuard(el: HTMLElement, scroller: HTMLElement): boolean {
+  for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+    if (node.classList.contains('wrap-anywhere')) return true;
+    if (node === scroller) return false;
+  }
+  return false;
+}
+
+describe('⚠️ a long line WRAPS — nothing is clipped behind a scroller of its own', () => {
+  it('states both overflow axes on the scroller, with no sideways bar', async () => {
+    await mount(run(), null, [logEvent(1, 'a line')]);
+    const scroller = screen.getByTestId('run-log-body');
+    expect(scroller.classList.contains('overflow-x-hidden')).toBe(true);
+    expect(scroller.classList.contains('overflow-y-auto')).toBe(true);
+    expect(scroller.classList.contains('overflow-auto')).toBe(false);
+  });
+
+  it('gives the body cell whitespace-pre-wrap and no per-line scroller', async () => {
+    await mount(run(), null, [logEvent(1, UNBREAKABLE)]);
+    const body = screen.getByTestId('run-log-line-body');
+    expect(body.classList.contains('whitespace-pre-wrap')).toBe(true);
+    expect(body.classList.contains('min-w-0')).toBe(true);
+    expect(body.classList.contains('overflow-x-auto')).toBe(false);
+    // The row no longer forbids a soft break in its cells.
+    expect(screen.getByTestId('run-log-line').classList.contains('whitespace-pre')).toBe(false);
+  });
+
+  it('reaches the body with wrap-anywhere, and renders an unbreakable token whole', async () => {
+    await mount(run(), null, [logEvent(1, UNBREAKABLE)]);
+    const scroller = screen.getByTestId('run-log-body');
+    const body = screen.getByTestId('run-log-line-body');
+    expect(body.textContent).toBe(UNBREAKABLE);
+    expect(reachedByWrapGuard(body, scroller)).toBe(true);
+    // No scroll container of its own anywhere between the token and the scroller.
+    for (
+      let node: HTMLElement | null = body;
+      node && node !== scroller;
+      node = node.parentElement
+    ) {
+      expect(node.className).not.toMatch(/overflow-(x-)?(auto|scroll)/);
+    }
+  });
+
+  it('keeps both gutter cells flex-none and unwrappable, so the wrap lands under the body', async () => {
+    await mount(run(), null, [logEvent(1, 'a line', 'MOTIR-1791')]);
+    const line = screen.getByTestId('run-log-line');
+    const body = screen.getByTestId('run-log-line-body');
+    const gutter = Array.from(line.children).filter((c) => c !== body) as HTMLElement[];
+    // Timestamp cell + work-item-key cell (unfiltered).
+    expect(gutter).toHaveLength(2);
+    for (const cell of gutter) {
+      expect(cell.classList.contains('flex-none')).toBe(true);
+      expect(cell.classList.contains('whitespace-nowrap')).toBe(true);
+    }
+    // The body is the one shrinkable cell.
+    expect(line.classList.contains('flex')).toBe(true);
+  });
+});

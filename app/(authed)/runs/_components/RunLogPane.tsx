@@ -143,9 +143,13 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
             ref={bodyRef}
             onScroll={onScroll}
             data-testid="run-log-body"
-            // ⚠️ `min-w-0` on the scroller and `overflow-x-auto` on the LINE:
-            // a very long line scrolls inside the console, never the page.
-            className="min-h-0 min-w-0 flex-1 overflow-auto bg-(--el-surface) px-(--spacing-card-padding) py-2 font-mono text-[0.6875rem] leading-relaxed text-(--el-text-secondary)"
+            // ⚠️ A long line WRAPS inside the console — it is never clipped behind a
+            // scroller of its own and never scrolls the page sideways. The scroller
+            // states both axes (`overflow-y-auto overflow-x-hidden`), the body cell
+            // is the one shrinkable cell (`min-w-0 whitespace-pre-wrap wrap-anywhere`),
+            // and the gutter cells are `flex-none whitespace-nowrap`, so a wrapped
+            // continuation lands under the body's left edge: a hanging indent.
+            className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-(--el-surface) px-(--spacing-card-padding) py-2 font-mono text-[0.6875rem] leading-relaxed text-(--el-text-secondary)"
           >
             {dropped > 0 ? (
               <p className="pb-1 text-(--el-text-tertiary)" data-testid="run-log-truncated">
@@ -153,16 +157,23 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
               </p>
             ) : null}
             {lines.map((ev) => (
-              <div key={ev.seq} className="flex gap-2 whitespace-pre">
-                <span className="flex-none text-(--el-text-tertiary)">
+              <div key={ev.seq} data-testid="run-log-line" className="flex gap-2">
+                <span className="flex-none whitespace-nowrap text-(--el-text-tertiary)">
                   {formatRunInstant(ev.createdAt, locale)}
                 </span>
                 {/* Unfiltered, every line names its SOURCE member; filtered to
                     one, the label is noise on every row and is dropped. */}
                 {selectedWorkItemId === null && keyOf(ev) !== null ? (
-                  <span className="flex-none text-(--el-accent-on-surface)">{keyOf(ev)}</span>
+                  <span className="flex-none whitespace-nowrap text-(--el-accent-on-surface)">
+                    {keyOf(ev)}
+                  </span>
                 ) : null}
-                <span className="min-w-0 overflow-x-auto text-(--el-text)">{ev.body}</span>
+                <span
+                  data-testid="run-log-line-body"
+                  className="min-w-0 whitespace-pre-wrap wrap-anywhere text-(--el-text)"
+                >
+                  {ev.body}
+                </span>
               </div>
             ))}
           </div>
