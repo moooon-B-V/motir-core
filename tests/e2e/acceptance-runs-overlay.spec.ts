@@ -47,8 +47,8 @@ const TOLERANCE_PX = 1;
 const LOG_WIDTH_KEY = 'motir.runs.logWidth';
 /** An unbroken token longer than any pane — the line that used to clip. */
 const LONG_TOKEN = 'x'.repeat(120);
-const BATCH_AGENT = 'batch-agent';
-const AUTO_AGENT = 'auto-agent';
+const BATCH_AGENT = 'rowan-agent';
+const AUTO_AGENT = 'sable-agent';
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -208,13 +208,20 @@ test('the run overlay splits, wraps, closes top left and switches its set like t
     ]);
 
     const batch = runRow(page, BATCH_AGENT);
-    await expect(batch.getByRole('link', { name: cardA.identifier })).toBeVisible();
+    const keyLink = batch.getByRole('link', { name: cardA.identifier });
+    await expect(keyLink).toBeVisible();
+    await expect(keyLink).toHaveAttribute('href', new RegExp(`/items/${cardA.identifier}$`));
+    await expect(keyLink.getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /command|scope/i })).toHaveCount(0);
     await expect(batch).toContainText('+2');
 
     const auto = runRow(page, AUTO_AGENT);
     await expect(auto).toBeVisible();
     await expect(auto.getByRole('link')).toHaveCount(0);
     await expect(auto).not.toContainText(/\+\d/);
+    await expect(auto).not.toContainText(/\b(auto|batch)\b/i);
+    await expect(batch).not.toContainText(/\b(auto|batch)\b/i);
+    await expect(openButton(auto)).toBeVisible();
     // Opening is its own button, named; the key beside it is a link to the card.
     await expect(openButton(batch)).toBeVisible();
     await beat();
