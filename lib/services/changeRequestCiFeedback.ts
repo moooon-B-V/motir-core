@@ -1,5 +1,6 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
 import { createConcurrencyGate } from '@/lib/async/concurrencyGate';
+import { maybeAutoFixOnRed } from './ciRedAutoFixService';
 import {
   bindWorkspaceContext,
   withSystemContext,
@@ -619,6 +620,20 @@ async function applyOneCiDelivery(
       actorUserId: resolved.actorUserId,
     }).catch((err: unknown) => {
       console.error('[changeRequestCiFeedback] withdrawal failed; the verdict still stands', {
+        changeRequestId: resolved.prId,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+    });
+    // …and, behind the project's Agent auto-fix switch (off by default), the failure is
+    // handed back to the card's own agent (MOTIR-9054). A side effect of the durable
+    // write above, in its own `catch`: it never turns a recorded verdict into a retry.
+    await maybeAutoFixOnRed({
+      changeRequestId: resolved.prId,
+      headSha: event.commitSha,
+      workspaceId: resolved.workspaceId,
+      deliveredWorkItemIds: resolved.allDeliveredWorkItemIds,
+    }).catch((err: unknown) => {
+      console.error('[changeRequestCiFeedback] auto-fix failed; the verdict still stands', {
         changeRequestId: resolved.prId,
         error: err instanceof Error ? err.message : 'unknown',
       });
