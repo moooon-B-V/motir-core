@@ -7941,7 +7941,6 @@
       "replan": "{project}의 기존 계획을 변경하기 위해 열림.",
       "contextual": "{project}의 맥락에서 열림.",
       "contextualItem": "{item}의 맥락에서 열림.",
-      "conventionRefine": "{repo}의 코딩 규칙을 다듬기 위해 열림.",
       "roadmap": "로드맵에서 열림.",
       "followUp": "{item}에서 {choice}의 후속 작업을 계획하기 위해 열림.",
       "followUpProject": "{choice}의 후속 작업을 계획하기 위해 {project}에서 열림."

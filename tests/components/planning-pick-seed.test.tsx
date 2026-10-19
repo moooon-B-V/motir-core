@@ -182,7 +182,6 @@ function rail(
         mode: itemKey ? 'contextual' : 'project',
         from: itemKey ? 'work-item' : 'project',
         itemKey,
-        repoKey: null,
       }}
       projectName="Acme"
       {...(opts.autoSend === false ? {} : { autoSendTurn: TURN, autoSendKey: GATE })}

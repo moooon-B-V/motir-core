@@ -7947,7 +7947,6 @@
       "replan": "Ouvert pour modifier le plan existant de {project}.",
       "contextual": "Ouvert en contexte sur {project}.",
       "contextualItem": "Ouvert dans le contexte de {item}.",
-      "conventionRefine": "Ouvert pour affiner la convention de code de {repo}.",
       "roadmap": "Ouvert depuis la feuille de route.",
       "followUp": "Ouvert pour planifier la suite de {choice}, sur {item}.",
       "followUpProject": "Ouvert sur {project} pour planifier la suite de {choice}."

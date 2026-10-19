@@ -77,7 +77,6 @@ function parseHref(context: PlanningLaunchContext) {
     from: context.kind,
   });
   if (context.kind === 'work-item') params.set('item', context.itemKey);
-  if (context.kind === 'convention-refine') params.set('repo', context.repoKey);
   return parsePlanningLaunch(Object.fromEntries(params.entries()));
 }
 
@@ -87,7 +86,6 @@ describe('parsePlanningLaunch — the ROUTE-era query, still read by the forward
       mode: 'replan',
       from: 'project',
       itemKey: null,
-      repoKey: null,
     });
   });
 
@@ -96,7 +94,6 @@ describe('parsePlanningLaunch — the ROUTE-era query, still read by the forward
       mode: 'project',
       from: 'project',
       itemKey: null,
-      repoKey: null,
     });
   });
 
@@ -105,7 +102,6 @@ describe('parsePlanningLaunch — the ROUTE-era query, still read by the forward
       mode: 'contextual',
       from: 'work-item',
       itemKey: 'MOTIR-7',
-      repoKey: null,
     });
   });
 
@@ -117,7 +113,6 @@ describe('parsePlanningLaunch — the ROUTE-era query, still read by the forward
       mode: 'replan',
       from: 'work-item',
       itemKey: 'MOTIR-5',
-      repoKey: null,
     });
   });
 
@@ -126,16 +121,6 @@ describe('parsePlanningLaunch — the ROUTE-era query, still read by the forward
       mode: 'roadmap',
       from: 'roadmap',
       itemKey: null,
-      repoKey: null,
-    });
-  });
-
-  it('round-trips a convention-refine launch, carrying the repo key', () => {
-    expect(parseHref({ kind: 'convention-refine', repoKey: 'moooon/motir-core' })).toEqual({
-      mode: 'contextual',
-      from: 'convention-refine',
-      itemKey: null,
-      repoKey: 'moooon/motir-core',
     });
   });
 });
@@ -146,7 +131,6 @@ describe('parsePlanningLaunch — a hand-edited or absent query never errors', (
       mode: DEFAULT_PLANNING_MODE,
       from: 'project',
       itemKey: null,
-      repoKey: null,
     });
     expect(DEFAULT_PLANNING_MODE).toBe('project');
   });
@@ -160,7 +144,6 @@ describe('parsePlanningLaunch — a hand-edited or absent query never errors', (
       mode: 'project',
       from: 'project',
       itemKey: null,
-      repoKey: null,
     });
   });
 
@@ -171,7 +154,6 @@ describe('parsePlanningLaunch — a hand-edited or absent query never errors', (
   it('drops a target the origin did not write (no smuggling into another mode)', () => {
     const launch = parsePlanningLaunch({ mode: 'roadmap', from: 'roadmap', item: 'MOTIR-7' });
     expect(launch.itemKey).toBeNull();
-    expect(parsePlanningLaunch({ from: 'work-item', repo: 'x' }).repoKey).toBeNull();
   });
 });
 
@@ -198,7 +180,6 @@ describe('the overlay address — the parameter NAMES are the design contract', 
     'plan',
     'planFrom',
     'planItem',
-    'planRepo',
     'planSession',
     'planVia',
     'planGate',
@@ -308,7 +289,6 @@ describe('parsePlanningOverlay', () => {
       { kind: 'roadmap' },
       { kind: 'work-item', itemKey: 'MOTIR-42' },
       { kind: 'work-item', itemKey: 'MOTIR-42', hasPlan: true },
-      { kind: 'convention-refine', repoKey: 'motir-core' },
     ];
     for (const context of contexts) {
       const launch = parsePlanningOverlay(planningOverlaySearch(context));
@@ -316,7 +296,6 @@ describe('parsePlanningOverlay', () => {
       expect(launch!.mode).toBe(resolvePlanningMode(context));
       expect(launch!.from).toBe(context.kind);
       expect(launch!.itemKey).toBe(context.kind === 'work-item' ? context.itemKey : null);
-      expect(launch!.repoKey).toBe(context.kind === 'convention-refine' ? context.repoKey : null);
     }
   });
 
@@ -326,7 +305,6 @@ describe('parsePlanningOverlay', () => {
       mode: 'contextual',
       from: 'work-item',
       itemKey: 'MOTIR-7',
-      repoKey: null,
     });
     // Next hands a repeated key through as an array — take the first, as the
     // route-era parser does.
@@ -337,9 +315,9 @@ describe('parsePlanningOverlay', () => {
 
   it('does NOT let a hand-edited address smuggle a target', () => {
     const smuggled = parsePlanningOverlay(
-      new URLSearchParams('plan=roadmap&planFrom=roadmap&planItem=MOTIR-1&planRepo=motir-core'),
+      new URLSearchParams('plan=roadmap&planFrom=roadmap&planItem=MOTIR-1'),
     );
-    expect(smuggled).toEqual({ mode: 'roadmap', from: 'roadmap', itemKey: null, repoKey: null });
+    expect(smuggled).toEqual({ mode: 'roadmap', from: 'roadmap', itemKey: null });
   });
 
   it('degrades an unknown mode and an unknown origin to the project defaults', () => {
@@ -347,7 +325,6 @@ describe('parsePlanningOverlay', () => {
       mode: DEFAULT_PLANNING_MODE,
       from: 'project',
       itemKey: null,
-      repoKey: null,
     });
     // A present-but-blank `plan` is an ABSENT overlay, not a defaulted one: a
     // stripped address can leave `?plan=` behind, and opening the workspace on
@@ -460,7 +437,6 @@ describe('planGate — a REFUSED gate opens the seeded re-plan (MOTIR-6210, §10
       mode: 'replan',
       from: 'refused-gate',
       itemKey: null,
-      repoKey: null,
       gateId: 'cmg7k2q0',
     });
     // The record form a Server Component hands over reads the same.
@@ -489,7 +465,7 @@ describe('planGate — a REFUSED gate opens the seeded re-plan (MOTIR-6210, §10
 
   it('Close strips all EIGHT owned params and leaves the host query byte-identical', () => {
     const host = '/items/MOTIR-44?tab=activity&peek=MOTIR-9';
-    const loaded = `${host}&plan=replan&planFrom=refused-gate&planItem=X&planRepo=r&planSession=s&planVia=approvals&planGate=g&planReturned=1`;
+    const loaded = `${host}&plan=replan&planFrom=refused-gate&planItem=X&planSession=s&planVia=approvals&planGate=g&planReturned=1`;
     expect(withoutPlanningOverlay(loaded)).toBe(host);
     expect(withoutPlanningOverlay(withPlanningOverlay(host, gate))).toBe(host);
   });
@@ -514,7 +490,6 @@ describe('the GUIDE address (MOTIR-7466)', () => {
       mode: 'guide',
       from: 'guide',
       itemKey: 'MOTIR-9',
-      repoKey: null,
     });
   });
 
@@ -523,7 +498,6 @@ describe('the GUIDE address (MOTIR-7466)', () => {
       mode: 'guide',
       from: 'guide',
       itemKey: 'MOTIR-9',
-      repoKey: null,
     });
   });
 
@@ -532,7 +506,6 @@ describe('the GUIDE address (MOTIR-7466)', () => {
       mode: 'project',
       from: 'project',
       itemKey: null,
-      repoKey: null,
     });
   });
 });
@@ -551,7 +524,6 @@ describe('planStart — Expand STARTS a conversation on its stub (MOTIR-7973)', 
       mode: 'contextual',
       from: 'work-item',
       itemKey: 'ACME-14',
-      repoKey: null,
       startTurn: true,
     });
   });

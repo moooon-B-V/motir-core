@@ -6,14 +6,12 @@ import { renderMarkdown } from '@/lib/markdown/render';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 import type { ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
 
 // Per-repo read-only convention surface (MOTIR-1663). The convention is derived +
 // auto-used — there is no approve gate and no free-edit. Each connected repo gets
 // its own card, expandable to show the read-only convention document (Adopted
-// rules + provenance badges), with a "Refine with Motir" entry that opens the
-// universal AI chat launcher.
+// rules + provenance badges).
 //
 // The old approve/edit form, status banners (PROPOSED/STANDARD), confirmation
 // modal, and editable Textarea are removed.
@@ -59,7 +57,6 @@ function RepoConventionCard({ convention: c }: { convention: ConventionSurfaceDT
               </Pill>
             ) : null}
           </div>
-          <PlanWithAILauncher context={{ kind: 'convention-refine', repoKey: c.repoKey ?? '' }} />
         </div>
       }
     >

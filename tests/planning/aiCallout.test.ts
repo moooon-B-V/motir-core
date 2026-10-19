@@ -12,7 +12,6 @@ const CONTEXTS: PlanningLaunchContext[] = [
   { kind: 'project', hasPlan: true },
   { kind: 'work-item', itemKey: 'MOTIR-1812' },
   { kind: 'roadmap' },
-  { kind: 'convention-refine', repoKey: 'motir-core' },
 ];
 
 // ⚠️ RE-POINTED (MOTIR-4730). The registry used to RESOLVE the href from a

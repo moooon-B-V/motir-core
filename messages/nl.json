@@ -7947,7 +7947,6 @@
       "replan": "Geopend om het bestaande plan van {project} te wijzigen.",
       "contextual": "Geopend in context op {project}.",
       "contextualItem": "Geopend in de context van {item}.",
-      "conventionRefine": "Geopend om de codeconventie van {repo} te verfijnen.",
       "roadmap": "Geopend vanuit de roadmap.",
       "followUp": "Geopend om het vervolg op {choice} te plannen, op {item}.",
       "followUpProject": "Geopend op {project} om het vervolg op {choice} te plannen."

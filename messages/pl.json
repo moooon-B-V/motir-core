@@ -7947,7 +7947,6 @@
       "replan": "Otwarto, aby zmienić istniejący plan projektu {project}.",
       "contextual": "Otwarto w kontekście projektu {project}.",
       "contextualItem": "Otwarto w kontekście {item}.",
-      "conventionRefine": "Otwarto, aby dopracować konwencję kodowania repozytorium {repo}.",
       "roadmap": "Otwarto z roadmapy.",
       "followUp": "Otwarto, aby zaplanować kontynuację wyboru {choice} w {item}.",
       "followUpProject": "Otwarto w projekcie {project}, aby zaplanować kontynuację wyboru {choice}."

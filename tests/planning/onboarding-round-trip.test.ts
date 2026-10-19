@@ -37,7 +37,6 @@ describe('the launch context survives the trip OUT', () => {
     ['project', { kind: 'project' } as const],
     ['roadmap', { kind: 'roadmap' } as const],
     ['work-item', { kind: 'work-item', itemKey: 'ACME-7' } as const],
-    ['convention-refine', { kind: 'convention-refine', repoKey: 'acme/widgets' } as const],
   ])('a %s launch round-trips through the address', (_kind, context) => {
     expect(readHandoffReturn(outbound(context))).toMatchObject(context);
   });
@@ -72,12 +71,6 @@ describe('COMPLETING lands back in the window they opened', () => {
     ['project', { kind: 'project' } as const, '/roadmap'],
     ['roadmap', { kind: 'roadmap' } as const, '/roadmap'],
     ['work-item', { kind: 'work-item', itemKey: 'ACME-7' } as const, '/items/ACME-7'],
-    // ⚠️ `/code`, not `/code-health` (MOTIR-1768). The convention-refine host
-    // moved: the audit is one SECTION of the Code room now, and `/code-health`
-    // permanently redirects into it. The round trip must name the real address —
-    // a forward that lands on a 308 still arrives, but it arrives having asked
-    // twice, and the link a test pins is the one a person's history records.
-    ['convention-refine', { kind: 'convention-refine', repoKey: 'r' } as const, '/code'],
   ])('a %s context returns to %s', (_kind, context, expected) => {
     expect(onboardingReturnHref(outbound(context), 'completed')!.split('?')[0]).toBe(expected);
   });
@@ -120,9 +113,6 @@ describe('AC4 · the host mapping exists in ONE place', () => {
       planningForwardTarget({ mode: 'contextual', from: 'work-item', item: 'ACME-7' }),
     ).toMatch(/^\/items\/ACME-7\?/);
     expect(planningForwardTarget({ mode: 'contextual', from: 'roadmap' })).toMatch(/^\/roadmap\?/);
-    expect(
-      planningForwardTarget({ mode: 'contextual', from: 'convention-refine', repo: 'r' }),
-    ).toMatch(/^\/code\?/);
   });
 
   it('and the forward declares no mapping of its own any more', () => {
@@ -138,7 +128,6 @@ describe('AC4 · the host mapping exists in ONE place', () => {
       { kind: 'project' } as const,
       { kind: 'roadmap' } as const,
       { kind: 'work-item', itemKey: 'A-1' } as const,
-      { kind: 'convention-refine', repoKey: 'r' } as const,
     ]) {
       expect(planningHostPathFor(context).startsWith('/')).toBe(true);
     }

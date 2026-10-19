@@ -7944,7 +7944,6 @@
       "replan": "{project} の既存の計画を変更するために開きました。",
       "contextual": "{project} のコンテキストで開きました。",
       "contextualItem": "{item} のコンテキストで開きました。",
-      "conventionRefine": "{repo} のコーディング規約を調整するために開きました。",
       "roadmap": "ロードマップから開きました。",
       "followUp": "{item} で、{choice} のフォローアップを計画するために開きました。",
       "followUpProject": "{project} で、{choice} のフォローアップを計画するために開きました。"
