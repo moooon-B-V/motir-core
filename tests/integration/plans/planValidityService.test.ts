@@ -263,6 +263,44 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
     ]);
   });
 
+  it('a blocker the plan does NOT own is also reported as a WAIT; one the plan draws is not (MOTIR-9021)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const outside = await outsideTask(fx, 'Outside');
+    await link(fx, story.id, outside.elsewhere.id); // LIVE, before the plan: Story blocked_by Elsewhere
+
+    const planId = await freshPlan(fx);
+    const p = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'New child', kind: 'subtask' },
+      parentRef: story.id,
+      blockedByRefs: [outside.id],
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+    const addId = itemIdByTitle(p, 'New child');
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    // `valid` and `blockers` are unchanged: both edges still gate the subtree …
+    expect(res.valid).toBe(false);
+    expect(res.blockers.map((b) => b.blockedBy).sort()).toEqual(
+      [outside.elsewhere.identifier, outside.identifier].sort(),
+    );
+    // … but only the edge in place before the plan is a wait.
+    expect(res.waits).toEqual([
+      {
+        item: story.identifier,
+        blockedBy: outside.elsewhere.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+    expect(res.waits!.some((w) => w.item === `planItem:${addId}`)).toBe(false);
+  });
+
   it('a `modify` adding an out-of-subtree blocked_by edge is INVALID, and the verdict EQUALS post-materialize validate_work_item', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
