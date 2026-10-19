@@ -41,6 +41,8 @@ import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService'
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
+import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
+import { randomToken } from '../helpers/random';
 import { fleet, fx, seedRepo, setUpHarness, stub, tearDownHarness } from './_harness';
 
 // START A CARD'S RUN IN MY AGENT — the ROUTES, the launch JOB's registration and
@@ -99,6 +101,19 @@ async function agent(name = 'yue-claude'): Promise<string> {
 const card = (title = 'a card') =>
   workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'task', title }, fx.ctx);
 
+/** A card delivered by one pull request whose only check failed — what a fix repairs. */
+async function redCard() {
+  const item = await card('red');
+  await setStatus(item.id, 'implemented');
+  await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: fx.ownerId } });
+  const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+  await deliveredPr(fx, item.id, repo, {
+    headRef: `subtask/${item.identifier}`,
+    checks: { Vitest: 'failure' },
+  });
+  return item;
+}
+
 describe('POST /api/work-items/[id]/agent-runs — the run command (MOTIR-9045)', () => {
   const start = async (key: string, body: object) => startRoute.POST(post(key, body), params(key));
   const runOf = async (res: Response) => {
@@ -108,7 +123,7 @@ describe('POST /api/work-items/[id]/agent-runs — the run command (MOTIR-9045)'
 
   it('opens a fix as a fix and records it on run_opened; no command opens today’s run', async () => {
     const id = await agent();
-    const fix = await card('red');
+    const fix = await redCard();
     const res = await start(fix.identifier, { agentInstanceId: id, command: 'fix' });
     expect(res.status).toBe(201);
     const run = await runOf(res);
@@ -148,7 +163,7 @@ describe('POST /api/work-items/[id]/agent-runs — the run command (MOTIR-9045)'
 
   it('answers the same key for the same command, and 409 for a different one', async () => {
     const id = await agent();
-    const item = await card();
+    const item = await redCard();
     const first = await start(item.identifier, {
       agentInstanceId: id,
       idempotencyKey: 'k-fix',
