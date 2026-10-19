@@ -13,7 +13,15 @@ import {
   AgentRunCancelForbiddenError,
   AgentRunCardNotReadyError,
   AgentRunNotFoundError,
+  AgentRunCommandInvalidError,
+  AgentRunCommandMismatchError,
 } from '@/lib/agentInstances/errors';
+import {
+  AGENT_RUN_COMMANDS,
+  DEFAULT_AGENT_RUN_COMMAND,
+  isAgentRunCommand,
+  type AgentRunCommand,
+} from '@/lib/agentInstances/runCommand';
 import { profileCanRunCards, profileDisplayName } from '@/lib/agentInstances/profiles';
 import {
   AGENT_RUN_LAUNCH_TIMEOUT_SECONDS,
@@ -134,6 +142,12 @@ export interface StartAgentRunInput {
   agentInstanceId: string;
   /** Optional: a repeated key answers the run it already started. */
   idempotencyKey?: string | undefined;
+  /**
+   * What the run is for (MOTIR-9045): `run` (the default — a parent card opens
+   * `run_scope` instead), `fix` or `continue`. The value is the run's own
+   * `DispatchCommand`, recorded on the run and on its `run_opened` event.
+   */
+  command?: AgentRunCommand | undefined;
 }
 
 /** How long the launch job waits for a woken agent to come up before failing the run. */
@@ -404,6 +418,10 @@ export const agentInstanceRunService = {
    */
   async start(input: StartAgentRunInput, ctx: ServiceContext): Promise<AgentRunStartedDto> {
     const identifier = input.workItemKey.trim().toUpperCase();
+    const requested = input.command ?? DEFAULT_AGENT_RUN_COMMAND;
+    if (!isAgentRunCommand(requested)) {
+      throw new AgentRunCommandInvalidError(String(requested), AGENT_RUN_COMMANDS);
+    }
 
     // ── 1 · Access: `instance:use` on the project and edit on the card ────────
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
@@ -417,7 +435,15 @@ export const agentInstanceRunService = {
       const already = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, key, tx),
       );
-      if (already) return { dispatchRunId: already.id, created: false, woke: false };
+      if (already) {
+        // The same key for a different command would answer a `run` to a caller
+        // that asked for a `fix`, which reads as a fix that never starts.
+        const startedAs = already.command === 'run_scope' ? 'run' : already.command;
+        if (startedAs !== requested) {
+          throw new AgentRunCommandMismatchError(already.id, already.command, requested);
+        }
+        return { dispatchRunId: already.id, created: false, woke: false };
+      }
     }
     // The `hosted_runs` kill-switch (MOTIR-750): an agent run is a hosted run.
     await assertWorkspaceFeatureEnabled(ctx.workspaceId, 'hosted_runs');
@@ -487,7 +513,7 @@ export const agentInstanceRunService = {
       const byId = new Map(rows.map((r) => [r.id, r.identifier]));
       return legIds.map((id) => byId.get(id) ?? '');
     });
-    const command = isParent ? 'run_scope' : 'run';
+    const command = requested === 'run' && isParent ? 'run_scope' : requested;
     let opened;
     try {
       opened = await dispatchRunService.open(
@@ -668,7 +694,7 @@ export const agentInstanceRunService = {
       });
       const result = await getPersistentOrchestrator().exec(
         handle,
-        agentRunLaunchCommand(target, dispatchRunId),
+        agentRunLaunchCommand(target, dispatchRunId, run.command),
         {
           timeoutSeconds: AGENT_RUN_LAUNCH_TIMEOUT_SECONDS,
           stdin: JSON.stringify({ apiUrl: resolveBaseUrlTrimmed(), token: credential.token }),
@@ -918,6 +944,7 @@ export const agentInstanceRunService = {
    * read for all of them, one read of those runs' cards. A caller without
    * `instance:use` has no agents to offer.
    */
+
   async listAgentsForCard(workItemKey: string, ctx: ServiceContext): Promise<AgentsForCardDto> {
     const identifier = workItemKey.trim().toUpperCase();
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);

@@ -21,6 +21,7 @@ import {
   isRunId,
   isWorkItemKey,
   parseControlRequest,
+  type ControlRequest,
   runStateDir,
   runWorkspaceDir,
 } from '../../src/agentTerminal/control.js';
@@ -539,11 +540,27 @@ describe('the control socket', () => {
       op: 'status',
       runId: 'a',
     });
+    // An absent command is today's `run` (an older launcher sends none).
     expect(parseControlRequest('{"op":"run","runId":"a","workItemKey":"ACME-7"}')).toEqual({
       op: 'run',
       runId: 'a',
       workItemKey: 'ACME-7',
+      command: 'run',
     });
+    expect(
+      parseControlRequest('{"op":"run","runId":"a","workItemKey":"ACME-7","command":"fix"}'),
+    ).toEqual({ op: 'run', runId: 'a', workItemKey: 'ACME-7', command: 'fix' });
+    expect(
+      parseControlRequest('{"op":"run","runId":"a","workItemKey":"ACME-7","command":"continue"}'),
+    ).toMatchObject({ command: 'continue' });
+    // A command outside the set is a bad request, so the server spawns nothing.
+    for (const command of ['run_scope', 'review', 'nope', '', 7, null]) {
+      expect(
+        parseControlRequest(
+          JSON.stringify({ op: 'run', runId: 'a', workItemKey: 'ACME-7', command }),
+        ),
+      ).toBeNull();
+    }
     for (const bad of [
       'not json',
       '[]',
@@ -568,6 +585,68 @@ function output(): { lines: unknown[]; write: (text: string) => void } {
   const lines: unknown[] = [];
   return { lines, write: (text) => lines.push(JSON.parse(text)) };
 }
+
+describe('motir agent-terminal run --command (MOTIR-9045)', () => {
+  const asks = async (opts: { command?: string }) => {
+    const stateRoot = temp();
+    const sent: ControlRequest[] = [];
+    await agentTerminalRunCommand(
+      'motir-1',
+      { runId: 'run_c', ...opts },
+      {
+        env: { [CONTROL_SOCKET_ENV]: '/nowhere' },
+        readStdin: async () => JSON.stringify({ apiUrl: API, token: TOKEN }),
+        stateDir: (runId) => join(stateRoot, runId),
+        stdout: () => undefined,
+        request: async (_path, request) => {
+          sent.push(request);
+          return { ok: true, session: 's1' };
+        },
+      },
+    );
+    return sent;
+  };
+
+  it('puts a fix or a continue on the control request', async () => {
+    expect(await asks({ command: 'fix' })).toEqual([
+      { op: 'run', runId: 'run_c', workItemKey: 'MOTIR-1', command: 'fix' },
+    ]);
+    expect(await asks({ command: 'continue' })).toEqual([
+      { op: 'run', runId: 'run_c', workItemKey: 'MOTIR-1', command: 'continue' },
+    ]);
+  });
+
+  it('sends today’s request byte for byte for a plain run, with or without the flag', async () => {
+    const plain = { op: 'run', runId: 'run_c', workItemKey: 'MOTIR-1' };
+    expect(await asks({})).toEqual([plain]);
+    const [flagged] = await asks({ command: 'run' });
+    expect(flagged).toEqual(plain);
+    expect(Object.keys(flagged as object)).not.toContain('command');
+  });
+
+  it('refuses a command outside the three before any state or socket is touched', async () => {
+    const stateRoot = temp();
+    let asked = 0;
+    const err = await agentTerminalRunCommand(
+      'MOTIR-1',
+      { runId: 'run_c', command: 'nope' },
+      {
+        env: { [CONTROL_SOCKET_ENV]: '/nowhere' },
+        readStdin: async () => JSON.stringify({ apiUrl: API, token: TOKEN }),
+        stateDir: (runId) => join(stateRoot, runId),
+        stdout: () => undefined,
+        request: async () => {
+          asked += 1;
+          return { ok: true, session: 's1' };
+        },
+      },
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CliError);
+    expect((err as CliError).message).toBe('--command must be one of run, fix, continue.');
+    expect(asked).toBe(0);
+    expect(existsSync(join(stateRoot, 'run_c'))).toBe(false);
+  });
+});
 
 describe('motir agent-terminal run', () => {
   it('returns the session id within 2 seconds, with the token in a 0600 run.json — never in argv or env', async () => {

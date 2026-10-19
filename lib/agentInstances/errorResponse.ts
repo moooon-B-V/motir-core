@@ -26,6 +26,8 @@ import {
   AgentInstanceUpToDateError,
   AgentImageCatalogUnavailableError,
   AgentRunAlreadyEndedError,
+  AgentRunCommandInvalidError,
+  AgentRunCommandMismatchError,
   AgentRunCancelForbiddenError,
   AgentRunNotFoundError,
 } from './errors';
@@ -94,6 +96,21 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     // run the way the start's busy refusal does, so the page links it the same way.
     return NextResponse.json(
       { code: err.code, error: err.message, runId: err.runId, workItemKey: err.workItemKey },
+      { status: 409 },
+    );
+  }
+  if (err instanceof AgentRunCommandInvalidError) {
+    return NextResponse.json({ code: 'BAD_REQUEST', error: err.message }, { status: 400 });
+  }
+  if (err instanceof AgentRunCommandMismatchError) {
+    // An idempotency key reused for another command (MOTIR-9045) — names the run.
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        runId: err.runId,
+        command: err.startedCommand,
+      },
       { status: 409 },
     );
   }
