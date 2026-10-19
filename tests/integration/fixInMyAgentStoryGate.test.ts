@@ -343,7 +343,7 @@ describe('2 · a command written at the top is read, unchanged, at the bottom', 
         card.identifier,
         { runId: run.id, command: argv[argv.length - 1] as string },
         {
-          env: { MOTIR_AGENT_TERMINAL_CONTROL: '/nowhere' } as NodeJS.ProcessEnv,
+          env: { NODE_ENV: 'test', MOTIR_AGENT_TERMINAL_CONTROL: '/nowhere' },
           readStdin: async () => JSON.stringify({ apiUrl: 'https://app.test', token: 'tok' }),
           stateDir: (runId) => join(stateRoot, runId),
           stdout: () => undefined,
