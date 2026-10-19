@@ -46,6 +46,20 @@ export const v1ErrorBodySchema = z
      * `Retry-After` header. Additive under ADR §8; the code is unchanged.
      */
     retryAfterSeconds: z.number().int().min(1).optional(),
+    /**
+     * Present on an `INVALID_SECTIONS` refusal only (MOTIR-9031): the sections the
+     * registry refused for the item's kind × type, BY NAME — `missing` (required,
+     * absent), `unknown` (not defined for the cell) and `invalid` (present, wrong
+     * shape, with why). Additive under ADR §8; the code is unchanged.
+     */
+    sections: z
+      .object({
+        missing: z.array(z.string()),
+        unknown: z.array(z.string()),
+        invalid: z.array(z.object({ section: z.string(), message: z.string() }).strict()),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

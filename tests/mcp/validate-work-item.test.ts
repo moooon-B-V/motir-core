@@ -25,6 +25,7 @@ import {
   MOTIR_6241_DESIGN_CARD_CRITERIA,
 } from '../fixtures/designCardCriteria';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { fixture as sectionsFixture } from '../unit/workItems/sections/helpers/sectionFixture';
 import { adminDb } from '../helpers/adminDb';
 import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
@@ -106,6 +107,7 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -300,6 +302,7 @@ describe('workItemsService.validateWorkItem — softBlocks (MOTIR-6368)', () => 
           blockerStatus: 'todo',
         },
       ],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -2652,5 +2655,50 @@ describe('workItemsService.validateWorkItem — the POST-MERGE-CHILD advisory (M
     expect(
       result.advisories.filter((a) => a.severity === 'likely-post-merge-child-under-container'),
     ).toEqual([]);
+  });
+});
+
+describe('validate_work_item — SECTION findings, advisory (MOTIR-9032)', () => {
+  const run = async (fx: Awaited<ReturnType<typeof makeWorkItemFixture>>, key: string) => {
+    const client = await connectClient(fx.ctx);
+    return (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key },
+    })) as CallToolResult;
+  };
+
+  it('names a bare child as UNSTRUCTURED in a VALID verdict, says it is advisory, and leaves `valid` true', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Bare child', 'task', story.id);
+
+    const res = await run(fx, story.identifier);
+    const body = res.structuredContent as unknown as WorkItemValidityDto;
+    expect(body.valid).toBe(true);
+    expect(body.sectionFindings.map((f) => f.item)).toContain(child.identifier);
+    const finding = body.sectionFindings.find((f) => f.item === child.identifier)!;
+    expect(finding.state).toBe('unstructured');
+    expect(finding.missing.length).toBeGreaterThan(0);
+    const text = JSON.stringify(res.content);
+    expect(text).toContain('is VALID');
+    expect(text).toContain('advisory — they do NOT change VALID');
+    expect(text).toContain(`${child.identifier} (task/code, unstructured)`);
+  });
+
+  it('is silent when every card carries its required sections', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'story',
+        title: 'Story',
+        sections: sectionsFixture('story', null) as never,
+      },
+      fx.ctx,
+    );
+    const res = await run(fx, story.identifier);
+    const body = res.structuredContent as unknown as WorkItemValidityDto;
+    expect(body.sectionFindings).toEqual([]);
+    expect(JSON.stringify(res.content)).not.toContain('Section findings');
   });
 });

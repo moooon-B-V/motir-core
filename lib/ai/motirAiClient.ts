@@ -399,6 +399,27 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
   };
 }
 
+// DELETE /v1/jobs/:id — cancel a job core has given up on (MOTIR-9065), so a job
+// still waiting in motir-ai's queue cannot start later against a session core has
+// already recorded failed. The route is the one `docs/contract.md` names
+// (`200 { jobId, status: "canceled" }`); it carries the same project scope as
+// `getJob`. A non-2xx throws the typed error, which the caller reports — a cancel
+// that could not be made is said, never swallowed.
+export async function cancelJob(
+  jobId: string,
+  coreProjectId: string,
+): Promise<{ jobId: string; status: string }> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ [JOB_SCOPE_QUERY_PARAM]: coreProjectId });
+  const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}?${params.toString()}`, {
+    method: 'DELETE',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as { jobId: string; status: string };
+  return { jobId: body.jobId, status: body.status };
+}
+
 // GET /v1/usage — the org cost rollup for the cost dashboard (Subtask 7.2.11),
 // at a drill level (org / workspace / project). Read-through: the caller is the
 // aiUsageService, which has already gated the actor and narrowed the scope. A

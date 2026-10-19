@@ -314,6 +314,11 @@ describe('every operation’s REAL response validates against its declared schem
     // ── Identity + discovery ────────────────────────────────────────────────
     await drive('getMe', () => import('@/app/api/v1/me/route'), get('/api/v1/me'));
     await drive(
+      'getSectionSets',
+      () => import('@/app/api/v1/section-sets/route'),
+      get('/api/v1/section-sets'),
+    );
+    await drive(
       'listWorkspaces',
       () => import('@/app/api/v1/workspaces/route'),
       get('/api/v1/workspaces'),

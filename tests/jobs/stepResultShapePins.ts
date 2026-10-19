@@ -398,9 +398,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/abandonedPlanSweep.ts',
     // MOTIR-8304 added `lostMachine` and MOTIR-8307 `autoResume` to the
     // `awaiting_resume` outcome, so the id was bumped.
+    //
+    // MOTIR-9065 added the OPTIONAL `jobCancel` to the `awaiting_resume` and
+    // `declined` outcomes and the `job_queued` keep reason. The id is KEPT: the
+    // change only ADDS members, so every memo written under the old shape is still
+    // a valid value of the new one, and the handler returns it without reading it.
     shape:
-      '{ declined: number; outcomes: Array<{ autoResume: null | { count: number; jobId: string; started: true } | { reason: "bound_spent" | "lost_race" | "no_proposal" | "not_failed" | "not_resumable" | "starter_cannot_plan" | "submit_refused"; started: false }; lostMachine: boolean; outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
+      '{ declined: number; outcomes: Array<{ autoResume: null | { count: number; jobId: string; started: true } | { reason: "bound_spent" | "lost_race" | "no_proposal" | "not_failed" | "not_resumable" | "starter_cannot_plan" | "submit_refused"; started: false }; jobCancel?: undefined | { cancelled: false; why: string } | { cancelled: true }; lostMachine: boolean; outcome: "awaiting_resume"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { jobCancel?: undefined | { cancelled: false; why: string } | { cancelled: true }; outcome: "declined"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "left_as_is"; planId: string; projectId: string; reason: "ai_unreachable" | "job_in_flight" | "job_queued" | "revision_held" | "row_moved" | "session_waiting" | "writing" } | { outcome: "revision_failed"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" } | { outcome: "revision_released"; planId: string; projectId: string; reason: "job_gone" | "job_terminal" | "lease_lapsed" | "max_age" | "silent" }>; scanned: number }',
   },
+
   'reconcile-established-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
     shape: '{ failed: number; scanned: number; terminated: number }',

@@ -15,8 +15,10 @@ import type {
 } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
+import type { SectionFindingDto } from '@/lib/dto/workItems';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import type { Locale } from '@/lib/i18n/locales';
+import type { WorkItemSections } from '@/lib/workItems/sections/registry';
 
 /** Wire form of the Prisma `PlanStatus` enum, as a VALUE — so a surface that
  *  must be total over the lifecycle (the tab strip, the per-status counts) can
@@ -1056,13 +1058,36 @@ export interface CreatePlanInput {
   origin?: PlanOriginDto;
 }
 
+/**
+ * A proposal's SECTIONS INPUT (Story MOTIR-9023 · MOTIR-9030) — the typed way a
+ * planner hands a door a card's sections instead of composing headings inside
+ * `descriptionMd`. An INPUT only: the door checks it against the registry for the
+ * proposal's merged kind × type, refuses a missing / unknown / invalid section by
+ * name, renders it, and stores ONLY the rendered `descriptionMd`. It is never
+ * persisted, so {@link PlanItemProposedFields} gains no key.
+ *
+ * On an EDIT it is sparse at the section key: an omitted section is kept (read
+ * back from the stored body), an explicit `null` clears that section, a list
+ * REPLACES the list. Never sent beside `descriptionMd`.
+ */
+export type ProposalSectionsInput = {
+  [K in keyof WorkItemSections]?: WorkItemSections[K] | null;
+};
+
+/** The fields of an `add` as a door RECEIVES them: the stored bag plus the
+ *  optional sections input, which a door renders into `descriptionMd` and strips
+ *  before anything is written. */
+export type ProposedFieldsInput = PlanItemProposedFields & {
+  sections?: ProposalSectionsInput;
+};
+
 /** A single proposed operation appended via `plansService.addProposals`. */
 export interface ProposalInput {
   op: PlanItemOpDto;
   /** `modify` / `remove`: the existing target work-item id. Omitted for `add`. */
   workItemId?: string | null;
   /** `add` only. */
-  proposedFields?: PlanItemProposedFields | null;
+  proposedFields?: ProposedFieldsInput | null;
   /** `add` only: the language each proposed text field was written in
    *  (MOTIR-8743), beside `proposedFields` on the wire and copied INTO them on
    *  append. Fixed at generation, never re-read from the setting. */
@@ -1105,6 +1130,13 @@ export interface UpdateProposalInput {
   title?: string;
   kind?: string;
   descriptionMd?: string | null;
+  /**
+   * The card's sections as an INPUT (Story MOTIR-9023 · MOTIR-9030) — rendered
+   * into `descriptionMd`, never stored, never sent beside it. Sparse at the
+   * section key over the stored body, which the service parses first. See
+   * {@link ProposalSectionsInput}.
+   */
+  sections?: ProposalSectionsInput;
   type?: string | null;
   priority?: string | null;
   /** Leaf sizing (MOTIR-1433) — patchable on the proposal-edit / deepen path
@@ -1293,6 +1325,8 @@ export const UPDATE_PROPOSAL_KEYS = [
   'title',
   'kind',
   'descriptionMd',
+  // The sections INPUT (MOTIR-9030) — rendered into `descriptionMd`, never stored.
+  'sections',
   'type',
   'priority',
   'storyPoints',
@@ -1539,6 +1573,8 @@ export interface PlanValidityDto {
    */
   valid: boolean;
   blockers: SprintBlockerDto[];
+  /** As on `WorkItemValidityDto.waits` (MOTIR-9021): the subset of `blockers` the plan does not own. */
+  waits?: SprintBlockerDto[];
   rejections: PlanApprovabilityRejectionDto[];
   /**
    * Every same-level cross-parent `blocked_by` in the PROJECTION whose parents
@@ -1555,6 +1591,13 @@ export interface PlanValidityDto {
    * removes (MOTIR-7727) — a validation verdict, as on `validate_work_item`.
    */
   crossLevelEdges: CrossLevelEdgeDto[];
+  /**
+   * Per-card SECTION findings over the PROJECTED tree (MOTIR-9032) — every
+   * added or modified not-done card whose projected body misses a required
+   * section for its projected kind × type. ADVISORY: never changes `valid`.
+   * Sorted by `item`.
+   */
+  sectionFindings: SectionFindingDto[];
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

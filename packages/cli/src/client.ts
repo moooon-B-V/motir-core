@@ -1231,7 +1231,7 @@ export interface DispatchRunRepair {
   }>;
   /**
    * The last agent run's profile and recorded session, for an agent-door repair to resume
-   * (MOTIR-9052); null when there is none, and always null from a server older than 1.72.0.
+   * (MOTIR-9052); null when there is none, and always null from a server older than 1.74.0.
    */
   resume: { profile: string; sessionId: string | null; canResume: boolean } | null;
   /** The review's refusal the repair answers, the findings verbatim; null off `review`. */

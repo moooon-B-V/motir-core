@@ -1,3 +1,4 @@
+import type { UpdateWorkItemInput } from '@/lib/dto/workItems';
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
@@ -129,6 +130,11 @@ export const PATCH = withV1Route<{ key: string }>({ permission: 'work_item:edit'
         'dueDate',
       ]),
       ...parentPatch,
+      // The sections input (MOTIR-9031): the service merges it over the stored body,
+      // checks it for the item's kind × type after this PATCH, and renders it.
+      ...(body.sections === undefined
+        ? {}
+        : { sections: body.sections as NonNullable<UpdateWorkItemInput['sections']> }),
       // `folderId` files the item (a string) or unfiles it (`null`); absent leaves
       // the placement alone. Beside `parentKey` the service raises
       // `PLACEMENT_CONFLICT` (422) before the row lock (MOTIR-5412).

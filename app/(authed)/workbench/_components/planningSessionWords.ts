@@ -12,7 +12,8 @@ import { OUT_OF_CREDITS_CODE } from '@/lib/planning/planEditsClient';
 // newer motir-ai wrote before this build learned it — reads as the `internal` sentence rather
 // than leaking the raw code to a person.
 
-/** The seven stable reason codes a failed attempt records. */
+/** The stable reason codes a failed attempt records. `stalled` is core's own (MOTIR-9065): the
+ *  abandoned-plan sweep's silence verdict, never a code motir-ai sends. */
 export const RESUME_REASON_CODES = [
   'rate_limited',
   'out_of_credits',
@@ -20,6 +21,7 @@ export const RESUME_REASON_CODES = [
   'token_expired',
   'prompt_too_large',
   'job_failed',
+  'stalled',
   'internal',
 ] as const;
 export type ResumeReasonCode = (typeof RESUME_REASON_CODES)[number];

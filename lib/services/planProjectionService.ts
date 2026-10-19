@@ -913,6 +913,48 @@ export async function projectedWorkItem(
 }
 
 /**
+ * The body, kind and type of one projected target — what `get_work_item` parses
+ * when it is asked for the sections view of a card as the plan would leave it
+ * (MOTIR-9033). A proposal's body is its own `proposedFields`; a committed card's
+ * is the plan's patched text where the plan sets one, else the stored row, with
+ * the same has-semantics every other projected read uses. `null` when the plan
+ * removes the card — there is no body to parse.
+ */
+export async function projectedBodyOf(
+  planId: string,
+  targetKey: string,
+  ctx: ServiceContext,
+): Promise<{ descriptionMd: string | null; kind: string; type: string | null } | null> {
+  const proj = await buildProjection(planId, ctx);
+  const root = await resolveProjectedRoot(proj, targetKey, ctx);
+  const node = proj.nodes.get(root.id);
+  if (!node) return null;
+  const proposal = proj.proposalByRef.get(root.id);
+  if (proposal) {
+    const f = proposal.proposedFields ?? NO_PROPOSED_FIELDS;
+    return {
+      descriptionMd: f.descriptionMd ?? null,
+      kind: f.kind ?? DEFAULT_PROPOSED_KIND,
+      type: f.type ?? null,
+    };
+  }
+  const stored = (
+    await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findDescriptionsByIds([root.id], ctx.workspaceId, tx),
+    )
+  )[0];
+  return {
+    descriptionMd: proj.projectedDescription.has(root.id)
+      ? (proj.projectedDescription.get(root.id) ?? null)
+      : (stored?.descriptionMd ?? null),
+    kind: stored?.kind ?? node.kind,
+    type: proj.projectedType.has(root.id)
+      ? (proj.projectedType.get(root.id) ?? null)
+      : (stored?.type ?? null),
+  };
+}
+
+/**
  * The plan's own delta, as rows a search can publish beside its committed page.
  *
  * ⚠️ It does NOT apply the caller's filter. The FilterAST compiles to SQL over

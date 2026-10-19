@@ -347,6 +347,7 @@ export type PlanSessionFailureReasonDto =
   | 'token_expired'
   | 'prompt_too_large'
   | 'job_failed'
+  | 'stalled'
   | 'internal';
 
 /** A failed attempt waiting to resume — see {@link PlanChangeSessionDto.failure}. */
