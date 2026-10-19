@@ -114,7 +114,9 @@ test('an agent runs a card through the MCP, and its run is where you look for ru
     await expect(page.getByRole('heading', { name: 'Running now' })).toBeVisible();
     // Each row carries its `run-open` door (see `cloud-agent-runs.spec.ts`), and
     // the agent column joins harness and model.
-    const row = page.getByRole('row').filter({ has: page.getByTestId('run-open') });
+    const row = page
+      .getByRole('row')
+      .filter({ has: page.getByRole('button', { name: 'Open run' }) });
     await expect(row.first()).toContainText(`${HARNESS} · ${MODEL}`);
     await expect(row.first()).toContainText('Running');
     await beat();
