@@ -1,5 +1,11 @@
 # Changelog — `@motir/cli`
 
+## 0.14.0
+
+### Minor Changes
+
+- 9552e64: A run in your own agent now shows the agent's progress while it works (MOTIR-8980). `motir run` launches each agent in the structured streaming mode it has, and no longer in the print-only mode that wrote nothing until the turn ended: `claude -p --output-format stream-json --verbose`, `codex exec --json`, `opencode run --format json`, `kimi --output-format stream-json -p`, and `goose run -q --output-format stream-json` (without `--no-session`). The stream is read with the same adapters as the Chat tab and written, to your terminal and to the run's Agent output, as readable lines: the reply text, one line per tool call (`Edit lib/x.ts`, `Bash: pnpm test`) and a line for each failure, never the raw events. Log lines reach Motir within about two seconds of the agent writing them instead of waiting for a 4 KiB batch and the next heartbeat. The run also records the agent's session id (`sessionId` on the `agent_started` and `agent_exited` events), and each profile carries the form that resumes that session. `aider` has no stream and is unchanged. Set `MOTIR_AGENT_OUTPUT=text` to force the old plain-text launch if a CLI version refuses the flags.
+
 ## 0.13.1
 
 ### Patch Changes
