@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Cloud, CloudOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
 import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
@@ -65,6 +66,7 @@ type Load =
 
 export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunModalProps) {
   const t = useTranslations('runs');
+  const tc = useTranslations('common');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   // ONE connection for the whole modal (MOTIR-3983): the findings strip and the
@@ -177,7 +179,13 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
       // the border/radius/padding a `md` dialog wants would draw a frame around
       // the whole viewport.
       className="flex flex-col rounded-none border-0 p-0"
+      // The Modal's own corner X comes off: the exit is drawn top left, the way the
+      // plan overlay draws it, so Close and Esc land in one place (MOTIR-9070).
+      hideClose
     >
+      <div className="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2">
+        <OverlayExitButton onClose={onClose} label={tc('close')} escLabel={t('escKey')} />
+      </div>
       {/* modal-scroll-container: measured 1280x700, tallest = a live run with 60 streamed log lines; the full-size panel IS the viewport and the canvas and log panes scroll (min-h-0 flex-1 overflow-auto), panel 700px */}
       {load.state === 'loading' ? (
         <div

@@ -12326,6 +12326,7 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
     "title": "运行",
     "searchLabel": "搜索本次运行",
     "gloss": "智能体做了什么",

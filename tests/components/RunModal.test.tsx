@@ -276,3 +276,43 @@ describe("⚠️ the RUN's own ending — carried by `done`, not by any card eve
     expect(screen.getByText('the ready set is drained')).toBeTruthy();
   });
 });
+
+describe('the exit is drawn top left, once (MOTIR-9070)', () => {
+  it('draws no corner X, and one shared exit control that precedes the title', async () => {
+    await mountWith(run());
+    // The dialog's icon-only corner control is the only one named exactly "Close".
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    const exit = screen.getByTestId('overlay-exit');
+    expect(exit.textContent).toContain('Esc');
+    const title = screen.getByRole('heading', { level: 1 });
+
+    expect(exit.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('draws it while the run loads', () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    render(<RunModal runId="run_a91f" projectKey="MOTIR" onClose={onClose} />);
+    expect(screen.getByTestId('run-modal-loading')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('overlay-exit'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws it when the read fails', async () => {
+    await mountFailing(500);
+    expect(screen.getByTestId('run-modal-failed')).toBeTruthy();
+    expect(screen.getAllByTestId('overlay-exit')).toHaveLength(1);
+  });
+
+  it('Close calls onClose exactly once', async () => {
+    await mountWith(run());
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('overlay-exit'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape reaches the same close seam', async () => {
+    await mountWith(run());
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

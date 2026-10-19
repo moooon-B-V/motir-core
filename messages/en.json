@@ -12332,6 +12332,7 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
     "title": "Run",
     "searchLabel": "Search this run",
     "gloss": "what the agent did",

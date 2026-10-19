@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { X } from 'lucide-react';
+import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { GuideTodoCanvas } from '@/components/planning/GuideTodoCanvas';
 import { GuideRail } from '@/components/planning/GuideRail';
@@ -100,17 +100,7 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
         // pushed the chat column off the right edge (and the divider with it).
         <div className="flex h-full min-h-0 min-w-0 flex-col bg-(--el-canvas)">
           <div className="flex items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-            >
-              <X className="h-4 w-4 shrink-0" aria-hidden />
-              {t('close')}
-              <kbd className="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)">
-                {t('escKey')}
-              </kbd>
-            </button>
+            <OverlayExitButton onClose={onClose} label={t('close')} escLabel={t('escKey')} />
             {/* THE CRUMB NAMES THE CARD (design § What guide mode changes, 2):
                 project / KEY title, the key in the identifier ink, the title
                 truncating — and the title the walk last set, marked until the
