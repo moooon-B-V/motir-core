@@ -155,12 +155,33 @@ async function seedRuns(
     {
       kind: 'log',
       workItemKey: a.identifier,
+      data: { workItemKey: a.identifier },
       body: `A one: reading the export service ${LONG_TOKEN}`,
     },
-    { kind: 'log', workItemKey: b.identifier, body: 'B one: composing the receipt template' },
-    { kind: 'log', workItemKey: a.identifier, body: 'A two: wrote the CSV writer' },
-    { kind: 'log', workItemKey: b.identifier, body: `B two: ${LONG_TOKEN} sent` },
-    { kind: 'log', workItemKey: c.identifier, body: 'C one: rounding half away from zero' },
+    {
+      kind: 'log',
+      workItemKey: b.identifier,
+      data: { workItemKey: b.identifier },
+      body: 'B one: composing the receipt template',
+    },
+    {
+      kind: 'log',
+      workItemKey: a.identifier,
+      data: { workItemKey: a.identifier },
+      body: 'A two: wrote the CSV writer',
+    },
+    {
+      kind: 'log',
+      workItemKey: b.identifier,
+      data: { workItemKey: b.identifier },
+      body: `B two: ${LONG_TOKEN} sent`,
+    },
+    {
+      kind: 'log',
+      workItemKey: c.identifier,
+      data: { workItemKey: c.identifier },
+      body: 'C one: rounding half away from zero',
+    },
   ]);
   await heartbeat(api, batchId);
 
