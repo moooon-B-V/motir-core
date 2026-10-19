@@ -27,6 +27,7 @@ import type { LegBranch } from '../checkpoint.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
 import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
+import { createLegLogTee } from '../agentLogTee.js';
 import { runCiWatchPhase, type CiWatchOutcome } from '../ciWatch.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, runIdFromDate, sessionBranchName, type CommandRunner } from '../git.js';
@@ -652,6 +653,7 @@ export async function deliver(input: DeliverInput): Promise<void> {
     // green ends the run, red dispatches a fixing iteration, and the sixth red
     // gives up non-zero. A red check does NOT move the card — `implemented` is
     // exactly right for code that is committed and whose build has not spoken.
+    const ciLogTee = createLegLogTee(reporter, key);
     const watch = await runCiWatchPhase({
       client,
       key,
@@ -659,10 +661,16 @@ export async function deliver(input: DeliverInput): Promise<void> {
       agent: agent.parsed,
       cwd: target.cwd,
       report: (line) => info(line),
+      // The watch's sign of life, and the fixing agent's output (MOTIR-8979): the
+      // server reads the run's latest event to decide a run has stalled, so a
+      // watch that writes none is killed after 15 minutes of CI.
+      onEvent: (event) => reporter.event({ ...event, workItemKey: key }),
+      ...(ciLogTee ? { onOutput: ciLogTee.write } : {}),
       ...(deps.wait ? { wait: deps.wait } : {}),
       ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
       ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
     });
+    ciLogTee?.flush();
     // ⚠️ NON-ZERO on a give-up, and it must be obvious it gave up rather than
     // succeeded: the card is at `implemented` either way, and a script wrapping
     // `motir run` can only tell the two apart by the exit code.

@@ -28,6 +28,7 @@ import {
   resolveDispatchTarget,
   resolveDispatchTargets,
 } from '../dispatch.js';
+import { createLegLogTee } from '../agentLogTee.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, INTERRUPT_EXIT_CODE, type InterruptSignal } from '../interrupt.js';
 import { CliError } from '../errors.js';
@@ -740,6 +741,7 @@ async function repair(input: {
       }
     }
 
+    const ciLogTee = createLegLogTee(reporter, key);
     const watch = await runCiWatchPhase({
       client,
       key,
@@ -748,6 +750,8 @@ async function repair(input: {
       cwd: prepared.checkouts[0]!.path,
       checkouts: prepared.checkouts,
       report: (line) => info(line),
+      onEvent: (event) => reporter.event({ ...event, workItemKey: key }),
+      ...(ciLogTee ? { onOutput: ciLogTee.write } : {}),
       ...(deps.wait ? { wait: deps.wait } : {}),
       // Each FIXING attempt is reported as a started / exited pair, like every other
       // agent turn here (MOTIR-7506): a `ci` repair runs no agent outside this loop,
@@ -760,6 +764,7 @@ async function repair(input: {
       },
       ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
     });
+    ciLogTee?.flush();
     reporter.event({ kind: CI_WATCH_EVENT[watch.kind], workItemKey: key, data: watch });
 
     if (watch.kind === 'gave_up' || watch.kind === 'fix_failed') {
