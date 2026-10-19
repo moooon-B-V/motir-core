@@ -114,7 +114,7 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // `FolderDeletion` resources whole and PROBE them; the tree read is a declared
   // narrowing of `Folder` and carries no probe, like the search row.
   list_folders: listFoldersPayload as unknown as PayloadDefinition<never>,
-  // MOTIR-9029 — the section registry read: v1's `SectionSets` whole, no probe.
+  // MOTIR-9029 — the section registry read: v1's `SectionSets` whole, and it PROBES it.
   get_section_sets: sectionSetsPayload as unknown as PayloadDefinition<never>,
   create_folder: folderWritePayload as unknown as PayloadDefinition<never>,
   update_folder: folderWritePayload as unknown as PayloadDefinition<never>,

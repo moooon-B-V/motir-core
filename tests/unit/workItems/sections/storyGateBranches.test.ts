@@ -74,7 +74,7 @@ describe('section branches without a database', () => {
   it('carries the section-sets read as one GET operation and one component', () => {
     expect(SECTION_SET_OPERATIONS.map((o) => o.operationId)).toEqual(['getSectionSets']);
     expect(Object.keys(SECTION_SET_COMPONENTS)).toEqual(['SectionSets']);
-    expect(sectionSetsPayload.probes).toEqual([]);
+    expect(sectionSetsPayload.probes.map((p) => p.resource)).toEqual(['SectionSets']);
   });
 
   it('names an unreadable section in the finding', () => {

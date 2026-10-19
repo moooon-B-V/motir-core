@@ -107,6 +107,11 @@ async function resolveObsoleteNeighbours(
   // order the card names them.
   const named: Array<{ id: string } | { key: string }> = [];
   for (const ref of refs) {
+    // A chip bullet reads back as its link TARGET (`motir:<id>`, MOTIR-9027 — a
+    // chip's label and why are never the ref); a hand-written one may still carry
+    // the whole `[KEY](motir:<id>)` token.
+    const chipTarget = ref.match(/^motir:(\S+)$/)?.[1];
+    if (chipTarget) named.push({ id: chipTarget });
     for (const id of parseWorkItemTokenIds(ref)) named.push({ id });
     for (const key of parseWorkItemKeys(ref, projectIdentifier)) named.push({ key });
   }
