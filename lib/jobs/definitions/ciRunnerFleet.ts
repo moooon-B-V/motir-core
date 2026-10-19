@@ -100,6 +100,20 @@ export const ciRunnerProvisionSweep = defineJob(
       services.ciRunnerBoot.listRunnableIntentIds(SWEEP_BATCH),
     );
 
+    // THE RECONCILE (MOTIR-8976) runs on every tick, whether or not there were
+    // pending intents to fan out: a lost runner leaves a job queued on GitHub with
+    // NO pending intent in our DB at all, which is exactly the case this finds.
+    // A step of its own so an outage on the GitHub side cannot fail the fan-out.
+    await ctx.step.run('reconcile-github-queue', async () => {
+      try {
+        const outcome = await services.ciRunnerReconcile.reconcile();
+        return { added: outcome.added };
+      } catch (err) {
+        console.error('[ciRunnerProvisionSweep] the GitHub-queue reconcile failed', err);
+        return { added: 0 };
+      }
+    });
+
     if (intentIds.length === 0) return { dispatched: 0 };
 
     if (intentIds.length === SWEEP_BATCH) {
