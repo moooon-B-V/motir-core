@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { agentInstanceRunService } from '@/lib/services/agentInstanceRunService';
@@ -84,7 +85,7 @@ async function seedRun(opts: {
         dispatchRunCardId: e.key ? (legs.find((l) => l.workItemKey === e.key)?.id ?? null) : null,
         seq: (seq += 1),
         kind: e.kind,
-        data: e.data ?? undefined,
+        data: (e.data ?? undefined) as Prisma.InputJsonValue | undefined,
       },
     });
   }
