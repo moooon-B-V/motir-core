@@ -81,4 +81,23 @@ describe('AgentAutoFixRow', () => {
     expect(sw().disabled).toBe(false);
     expect(screen.getByText(/hosted agent settings weren.t saved/i)).toBeTruthy();
   });
+
+  it('a write that never reaches the server restores the switch the same way', async () => {
+    fetchMock.mockRejectedValue(new Error('offline'));
+    mount(true);
+    await press();
+    expect(sw().getAttribute('aria-checked')).toBe('true');
+    expect(sw().disabled).toBe(false);
+    expect(screen.getByText(/hosted agent settings weren.t saved/i)).toBeTruthy();
+  });
+
+  it('turning it off sends the off value', async () => {
+    fetchMock.mockResolvedValue(reply(true, { agentAutoFixEnabled: false }));
+    mount(true);
+    await press();
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toEqual({
+      agentAutoFixEnabled: false,
+    });
+    expect(sw().getAttribute('aria-checked')).toBe('false');
+  });
 });

@@ -124,6 +124,19 @@ export default defineConfig({
         'src/commands/continue.ts': { branches: 90, functions: 90, lines: 90 },
         'src/interrupt.ts': { branches: 90, functions: 90, lines: 90 },
 
+        // Story MOTIR-8981 · MOTIR-9057 (the story gate) — the same agent stays on its
+        // pull request. Each changed CLI file is NAMED here: a module this list does not
+        // name is not held, and an ungated file at 100% is indistinguishable from a gated
+        // one until the day it regresses. `src/ciWatch.ts`, `src/dispatchLeg.ts`,
+        // `src/autoLoop.ts`, `src/batchPlan.ts`, `src/commands/{auto,batch,dispatch,
+        // agentTerminal}.ts`, `src/adapters/reads.ts` and `src/agentTerminal/{control,
+        // server}.ts` are already above; `src/program.ts` is ungated for the reason below.
+        // `fix.ts` is a large older command, held whole-file: the story's own lines are
+        // `fixHosted`'s own-agent arms, driven by `test/fixHosted.test.ts`.
+        'src/agentResume.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/commands/fix.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/commandCatalog.ts': { branches: 90, functions: 90, lines: 90 },
+
         // Story MOTIR-6861 · MOTIR-6938 — the in-agent terminal server. MEASURED
         // FIRST over `test/agentTerminal/` (fake PTY), lines / branches / funcs:
         // relayToken 100/100/100, protocol 100/100/100, signIn 100/95.45/100,

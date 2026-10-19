@@ -62,6 +62,7 @@
     "coverage:agent-instances": "vitest run --config vitest.coverage.agent-instances.config.ts --coverage",
     "coverage:platform-admin": "vitest run --config vitest.coverage.platform-admin.config.ts --coverage",
     "coverage:agent-instance-run": "vitest run --config vitest.coverage.agent-instance-run.config.ts --coverage",
+    "coverage:fix-in-my-agent": "vitest run --config vitest.coverage.fix-in-my-agent.config.ts --coverage",
     "coverage:pages": "vitest run --config vitest.coverage.pages.config.ts --coverage",
     "coverage:planning-session-needs-you": "vitest run --config vitest.coverage.planning-session-needs-you.config.ts --coverage",
     "coverage:lost-machine-auto-resume": "vitest run --config vitest.coverage.lost-machine-auto-resume.config.ts --coverage",

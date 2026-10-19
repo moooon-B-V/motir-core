@@ -173,6 +173,114 @@ describe('the press', () => {
   });
 });
 
+describe('the other refusals and failures (MOTIR-9057)', () => {
+  const pressWith = async (response: Response | Error, props = {}) => {
+    await mount(OFFERED, props);
+    if (response instanceof Error) fetchMock.mockRejectedValueOnce(response);
+    else fetchMock.mockResolvedValueOnce(response);
+    await press();
+  };
+
+  it('a signed-out agent says so and points at the agent’s panel', async () => {
+    await pressWith(json({ code: 'agent_not_signed_in' }, 409));
+    const notice = screen.getByTestId('fix-my-agent-refused-signedOut');
+    expect(notice.textContent).toContain('yue-claude');
+    expect(notice.querySelector('a')?.getAttribute('href')).toContain('ag1');
+  });
+
+  it.each([
+    [403, 'permission'],
+    [402, 'outOfCredits'],
+    [500, 'failed'],
+  ])('a %s answer draws the %s notice and does not move the host', async (status, kind) => {
+    const onStateMoved = vi.fn();
+    await pressWith(json({}, status), { onStateMoved });
+    expect(screen.getByTestId(`fix-my-agent-refused-${kind}`)).toBeTruthy();
+    expect(onStateMoved).not.toHaveBeenCalled();
+  });
+
+  it('a press that never reaches the server draws the failed notice and frees the button', async () => {
+    await pressWith(new Error('offline'));
+    expect(screen.getByTestId('fix-my-agent-refused-failed')).toBeTruthy();
+    expect(screen.getByTestId('fix-my-agent').hasAttribute('disabled')).toBe(false);
+  });
+
+  it('a read that never reaches the server draws the failed-read notice', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    renderWithIntl(<FixInMyAgentControl itemKey="PROD-7" viewerId="u1" />);
+    await act(async () => {});
+    expect(screen.getByTestId('fix-my-agent-read-failed')).toBeTruthy();
+  });
+});
+
+describe('what the taken and fixing notices do with missing detail (MOTIR-9057)', () => {
+  const taken = (claim: object) =>
+    json({ code: 'agent_run_repair_refused', claim: { outcome: 'taken', ...claim } }, 409);
+
+  it('names the viewer’s own fix when the holder is the viewer, with no start or run to link', async () => {
+    await mount(OFFERED);
+    fetchMock.mockResolvedValueOnce(taken({ holder: { id: 'u1', name: 'Me' } }));
+    fetchMock.mockResolvedValueOnce(json(NOT_OFFERED('green')));
+    await press();
+    const notice = screen.getByTestId('fix-my-agent-refused-busy');
+    expect(notice.querySelector('a')).toBeNull();
+  });
+
+  it('draws a taken answer with no holder at all, linking the run when the claim names it', async () => {
+    await mount(OFFERED);
+    fetchMock.mockResolvedValueOnce(
+      taken({ runId: 'run9', startedAt: '2026-10-19T10:00:00.000Z' }),
+    );
+    fetchMock.mockResolvedValueOnce(json(NOT_OFFERED('green')));
+    await press();
+    expect(screen.getByTestId('fix-my-agent-refused-busy')).toBeTruthy();
+    expect(screen.getByTestId('repair-hosted-run-link').getAttribute('href')).toContain('run9');
+  });
+
+  it('reads the viewer’s own running fix back in the modal, with no agent name recorded', async () => {
+    await mount(
+      NOT_OFFERED('repair_open', {
+        id: 'run1',
+        label: 'Fix PROD-7',
+        startedAt: '2026-10-19T10:00:00.000Z',
+        holder: null,
+        byViewer: true,
+        agentName: null,
+      } as never),
+      { variant: 'modal' },
+    );
+    expect(screen.getByTestId('fix-my-agent-fixing')).toBeTruthy();
+  });
+
+  it('reads another person’s running fix back with no holder recorded', async () => {
+    await mount(
+      NOT_OFFERED('repair_open', {
+        id: 'run1',
+        label: 'Fix PROD-7',
+        startedAt: '2026-10-19T10:00:00.000Z',
+        holder: null,
+        byViewer: false,
+        agentName: null,
+      } as never),
+      { variant: 'modal' },
+    );
+    expect(screen.getByTestId('fix-my-agent-fixing')).toBeTruthy();
+  });
+
+  it('refuses without a claim as settled, and a taken claim with no holder or viewer as busy', () => {
+    expect(inMyAgentRefusalOf(409, { code: 'agent_run_repair_refused' }, null).kind).toBe(
+      'settled',
+    );
+    expect(
+      inMyAgentRefusalOf(
+        409,
+        { code: 'agent_run_repair_refused', claim: { outcome: 'taken' } },
+        null,
+      ),
+    ).toMatchObject({ kind: 'busy', holderName: null, byViewer: false });
+  });
+});
+
 describe('inMyAgentRefusalOf', () => {
   it.each([
     [
