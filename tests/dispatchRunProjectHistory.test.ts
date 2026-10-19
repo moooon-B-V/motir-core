@@ -126,6 +126,109 @@ describe('the project is the handle — every run, newest first', () => {
   });
 });
 
+describe('a row names its TARGET — key, id and the count behind +N (MOTIR-9071)', () => {
+  it('a scoped run names the scope’s KEY, not the title stored as its label', async () => {
+    const { storyKey, keys } = await seedStory(fixture, 3);
+    const scope = await db.workItem.findFirstOrThrow({ where: { identifier: storyKey } });
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'run',
+        reportedBy: 'cli',
+        scopeKey: storyKey,
+        scopeLabel: 'A story a run works',
+        cards: keys.map((key) => ({ key, disposition: 'queued' as const })),
+      },
+      fixture.ctx,
+    );
+
+    const [row] = await list({ take: 10 });
+
+    expect(row!.id).toBe(run.id);
+    // Key and id are asserted TOGETHER: they come from one branch.
+    expect({ key: row!.targetKey, id: row!.targetWorkItemId }).toEqual({
+      key: storyKey,
+      id: scope.id,
+    });
+    expect(row!.otherCardCount).toBe(3);
+    expect(row!.cardCount).toBe(3);
+  });
+
+  it('a scoped run with NO label still names its scope', async () => {
+    const { storyKey, keys } = await seedStory(fixture, 2);
+    const scope = await db.workItem.findFirstOrThrow({ where: { identifier: storyKey } });
+    await openRun(fixture, { keys, scopeKey: storyKey, command: 'run' });
+
+    const [row] = await list({ take: 10 });
+
+    expect({ key: row!.targetKey, id: row!.targetWorkItemId }).toEqual({
+      key: storyKey,
+      id: scope.id,
+    });
+    expect(row!.otherCardCount).toBe(2);
+  });
+
+  it('an unscoped run names its FIRST leg, in the run’s own order, and counts the rest', async () => {
+    const { keys } = await seedStory(fixture, 3);
+    // Claimed in an order that is NOT alphabetical, so sorting by key, or taking
+    // the last leg, picks a different card.
+    const claimed = [keys[2]!, keys[0]!, keys[1]!];
+    await openRun(fixture, { keys: claimed });
+    const first = await db.workItem.findFirstOrThrow({ where: { identifier: claimed[0]! } });
+
+    const [row] = await list({ take: 10 });
+
+    expect({ key: row!.targetKey, id: row!.targetWorkItemId }).toEqual({
+      key: claimed[0],
+      id: first.id,
+    });
+    expect(row!.otherCardCount).toBe(2);
+  });
+
+  it('a run whose only leg is its own target counts nothing beyond it', async () => {
+    const { keys } = await seedStory(fixture, 1);
+    await openRun(fixture, { keys });
+
+    const [row] = await list({ take: 10 });
+
+    expect(row!.targetKey).toBe(keys[0]);
+    expect(row!.otherCardCount).toBe(0);
+  });
+
+  it('a deleted scope leaves the stored label as TEXT with no id to open', async () => {
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fixture.projectId, kind: 'story', title: 'Soon gone' },
+      fixture.ctx,
+    );
+    await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'run',
+        reportedBy: 'cli',
+        scopeKey: parent.identifier,
+        scopeLabel: 'Soon gone',
+        cards: [],
+      },
+      fixture.ctx,
+    );
+    await adminDb.workItem.delete({ where: { id: parent.id } });
+
+    const [row] = await list({ take: 10 });
+
+    expect(row!.targetKey).toBe('Soon gone');
+    expect(row!.targetWorkItemId).toBeNull();
+    expect(row!.otherCardCount).toBe(0);
+  });
+
+  it('a run with no label, no scope and no legs has no target and does not throw', async () => {
+    await openRun(fixture, { keys: [], command: 'auto' });
+
+    const [row] = await list({ take: 10 });
+
+    expect(row).toMatchObject({ targetKey: null, targetWorkItemId: null, otherCardCount: 0 });
+  });
+});
+
 describe('the narrowings are applied by the QUERY, never to the page', () => {
   it('partitions live from past, and agrees with the active read on the same data', async () => {
     const { keys } = await seedStory(fixture, 2);

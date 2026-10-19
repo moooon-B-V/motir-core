@@ -121,6 +121,7 @@ async function roomsFixture() {
     plans: { hidden: p1.id, visible: p2.id },
     gates: { onC: gateOnC.id, onV: gateOnV.id, onP1: gateOnP1.id, onP2: gateOnP2.id },
     runs: { onC: runOnC.id, onV: runOnV.id },
+    visibleKey: visible.identifier,
   };
 }
 
@@ -190,6 +191,12 @@ describe('the Runs room', () => {
     const t = await roomsFixture();
     const page = await dispatchRunService.listRunsForProject(t.identifier, { take: 20 }, t.visitor);
     expect(page.runs.map((r) => r.id)).toEqual([t.runs.onV]);
+    // The visible run names its subject; the hidden one is not a blanked row but
+    // no row at all, so a blanket blank cannot pass for this (MOTIR-9071).
+    expect(page.runs[0]).toMatchObject({
+      targetKey: t.visibleKey,
+      targetWorkItemId: expect.any(String),
+    });
     const active = await dispatchRunService.listActiveRunsForProject(t.identifier, t.visitor);
     expect(active.runs.map((r) => r.id)).toEqual([t.runs.onV]);
     expect(await dispatchRunService.roomAccess(t.identifier, t.visitor)).toEqual({

@@ -71,6 +71,9 @@ function run(over: Partial<DispatchRunListItemDto> = {}): DispatchRunListItemDto
     createdById: 'usr_1',
     cardCount: 11,
     legs: { ...NO_LEGS, implemented: 9, skipped: 1, not_reached: 1 },
+    targetKey: 'PROD-42',
+    targetWorkItemId: 'itm_1',
+    otherCardCount: 11,
     ...over,
   };
 }
