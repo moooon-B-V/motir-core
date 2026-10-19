@@ -274,7 +274,7 @@ describe('the canvas pane', () => {
     handler = ordinary({ before: [], after: [] });
     renderHost({ ...CARD, identifier: 'PROD-88', title: 'A very long card title '.repeat(20) });
     await waitFor(() => expect(posted('/api/ai/guide/settle')).toHaveLength(1));
-    const frame = screen.getByTestId('planning-resizable-frame');
+    const frame = screen.getByTestId('resizable-split');
     const canvasPane = screen.getByTestId('guide-crumb').parentElement?.parentElement;
     expect(canvasPane?.parentElement).toBe(frame);
     expect(canvasPane?.className).toContain('min-w-0');
