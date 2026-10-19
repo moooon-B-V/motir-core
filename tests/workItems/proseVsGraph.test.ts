@@ -1192,9 +1192,33 @@ describe('selfBlockingDesignCriteria — a card that is its OWN design blocker (
     'the client is mocked at the transport',
     '`vi.mock` replaces the session reader',
     'a mock client answers every call',
+    'tests/x.test.tsx mocks @/lib/foo and is not modified',
+    'it mocks @/app/(authed)/runs/_components/RunsIndex and asserts nothing about the columns',
+    'the suite mocks ./foo and ../bar',
+    'the test mocks lib/x directly',
   ])('a test-double "mock" is not a design asset: %s', (line) => {
     expect(namesDesignAsset(line)).toBe(false);
   });
+
+  it('does not read "mocks <module path>" as a design asset — MOTIR-9077', () => {
+    // MOTIR-8982's runs-index card: criterion 12 names the module its suite mocks,
+    // criterion 1 is an ordinary render criterion. The card draws nothing.
+    const card = [
+      '## Acceptance criteria',
+      '',
+      '- No `Command` or `Scope` header renders anywhere on the page.',
+      '- `tests/components/runsPage-scope.test.tsx` is not modified: it **mocks** ' +
+        "`@/app/(authed)/runs/_components/RunsIndex` and asserts nothing about the index's columns.",
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(card)).toBeNull();
+  });
+
+  it.each(['the delta mock draws the Target column', 'the mock and/or the export is committed'])(
+    'a drawing "mock" followed by prose is still a design asset: %s',
+    (line) => {
+      expect(namesDesignAsset(line)).toBe(true);
+    },
+  );
 
   it.each([
     'each panel is drawn in the mock',

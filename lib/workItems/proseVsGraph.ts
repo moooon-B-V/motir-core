@@ -1272,13 +1272,14 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
 // So a bare `mock` counts only on a line that does not use it as a test double:
 // the verb (*mocks the*, *mocked*, *mocking*, `vi.mock`), a double's noun
 // before it (*boundary mock*, *fetch mock*), the thing it stands in for after
-// it (*mock client*, *mock module*), or an assertion read off it (*asserted on
-// the mock*). `*.mock.html` and *mockup* stay tells on any line, so a design
+// it (*mock client*, *mock module*), a module specifier or path after the verb
+// (*mocks @/lib/foo*, *mocks ./foo*, *mocks lib/x* — MOTIR-9077), or an
+// assertion read off it (*asserted on the mock*). `*.mock.html` and *mockup* stay tells on any line, so a design
 // card's export criterion is unaffected.
 const BARE_MOCK_RE = /\bmocks?\b/i;
 
 const TEST_DOUBLE_MOCK_RE =
-  /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+on\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
+  /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+on\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmocks?\s+(?:@\/|\.{1,2}\/|(?!and\/or\b)[\w@.()[\]-]+\/[\w@.()[\]-]+)|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
 
 // ── The AMENDMENT, not only the NEW ASSET (MOTIR-4477) ───────────────────────
 // Every matcher above is an ASSET tell — a file, a path, or a word for a
