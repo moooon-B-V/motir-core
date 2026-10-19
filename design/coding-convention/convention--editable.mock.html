@@ -583,138 +583,374 @@
         margin-top: 18px;
       }
 
-
-      :root { --spacing-card-padding-12: 12px; }
+      :root {
+        --spacing-card-padding-12: 12px;
+      }
       /* ── MOTIR-9081 additions: only layout glue for the editable card. Every colour is an
             --el-* token and every shaped surface a shape token; nothing here is a new primitive. ── */
-      .card-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-      .card-top .who { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-      .repo-name { font-size: 14px; font-weight: 500; color: var(--el-text-strong); }
-      .byline { font-size: 12px; color: var(--el-text-secondary); }
-      .stack { display: flex; flex-direction: column; gap: 14px; }
-      .pill-edited { background: var(--el-tint-sky); }
-      .pill-derived { background: var(--el-tint-lavender); }
-      .notice { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: var(--radius-card); }
-      .notice svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
-      .notice .n-body { flex: 1; min-width: 0; }
-      .notice .n-title { font-weight: 600; font-size: 13px; color: var(--el-text-strong); }
-      .notice .n-sub { font-size: 13px; color: var(--el-text-secondary); margin-top: 2px; line-height: 1.5; }
-      .notice .n-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-      .notice-warning { background: var(--el-warning-surface); }
-      .notice-warning svg { color: var(--el-warning); }
-      .notice-info { background: var(--el-surface-soft); }
-      .notice-info svg { color: var(--el-accent-on-surface); }
-      .editbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
-      .editbar .meta { font-size: 12px; color: var(--el-text-secondary); }
-      .editbar .btns { display: flex; gap: 8px; }
-      .textarea.tall { min-height: 260px; }
-      .copybox { margin-top: 10px; }
-      .copybox .textarea { min-height: 96px; background: var(--el-surface-soft); }
-      .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-      .side-by-side .col { border: 1px solid var(--el-border); border-radius: var(--radius-card); padding: var(--spacing-card-padding-12); min-width: 0; }
-      .side-by-side .col h5 { margin: 0 0 6px; font-size: 12px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--el-text-secondary); }
-      .side-by-side .col p, .side-by-side .col li { font-size: 13px; line-height: 1.5; margin: 4px 0; color: var(--el-text); }
-      .side-by-side .col ul { margin: 0; padding-left: 18px; }
-      .diff-add { background: var(--el-success-surface); border-radius: var(--radius-control); padding: 0 4px; }
-      .viewer-note { font-size: 12px; color: var(--el-text-secondary); margin: 0 0 10px; }
-      .empty-wrap { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 24px 12px; }
-      .empty-wrap svg { width: 32px; height: 32px; color: var(--el-icon-muted); }
-      .empty-wrap h3 { font-family: var(--font-serif); font-size: 16px; margin: 0; }
-      .empty-wrap p { margin: 0; font-size: 13px; color: var(--el-text-subtitle); max-width: 44ch; line-height: 1.5; }
-      .phone { width: 360px; max-width: 100%; margin: 0 auto; border: 1px dashed var(--el-border-strong); border-radius: var(--radius-card); padding: 12px; background: var(--el-page-bg); }
-      .phone .btns { flex-wrap: wrap; }
-      .phone .editbar .btns .btn { flex: 1; }
-      .phone .side-by-side { grid-template-columns: 1fr; }
-      .annot { max-width: 1080px; margin: 6px auto 0; font-size: 12px; color: var(--el-text-secondary); line-height: 1.5; }
-
+      .card-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .card-top .who {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .repo-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .byline {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .pill-edited {
+        background: var(--el-tint-sky);
+      }
+      .pill-derived {
+        background: var(--el-tint-lavender);
+      }
+      .notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+      }
+      .notice svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .notice .n-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .notice .n-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .notice .n-sub {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+        line-height: 1.5;
+      }
+      .notice .n-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .notice-warning {
+        background: var(--el-warning-surface);
+      }
+      .notice-warning svg {
+        color: var(--el-warning);
+      }
+      .notice-info {
+        background: var(--el-surface-soft);
+      }
+      .notice-info svg {
+        color: var(--el-accent-on-surface);
+      }
+      .editbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .editbar .meta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .editbar .btns {
+        display: flex;
+        gap: 8px;
+      }
+      .textarea.tall {
+        min-height: 260px;
+      }
+      .copybox {
+        margin-top: 10px;
+      }
+      .copybox .textarea {
+        min-height: 96px;
+        background: var(--el-surface-soft);
+      }
+      .side-by-side {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .side-by-side .col {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding-12);
+        min-width: 0;
+      }
+      .side-by-side .col h5 {
+        margin: 0 0 6px;
+        font-size: 12px;
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+      .side-by-side .col p,
+      .side-by-side .col li {
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 4px 0;
+        color: var(--el-text);
+      }
+      .side-by-side .col ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .diff-add {
+        background: var(--el-success-surface);
+        border-radius: var(--radius-control);
+        padding: 0 4px;
+      }
+      .viewer-note {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+      }
+      .empty-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 8px;
+        padding: 24px 12px;
+      }
+      .empty-wrap svg {
+        width: 32px;
+        height: 32px;
+        color: var(--el-icon-muted);
+      }
+      .empty-wrap h3 {
+        font-family: var(--font-serif);
+        font-size: 16px;
+        margin: 0;
+      }
+      .empty-wrap p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-subtitle);
+        max-width: 44ch;
+        line-height: 1.5;
+      }
+      .phone {
+        width: 360px;
+        max-width: 100%;
+        margin: 0 auto;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-page-bg);
+      }
+      .phone .btns {
+        flex-wrap: wrap;
+      }
+      .phone .editbar .btns .btn {
+        flex: 1;
+      }
+      .phone .side-by-side {
+        grid-template-columns: 1fr;
+      }
+      .annot {
+        max-width: 1080px;
+        margin: 6px auto 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
         <h1>Coding convention — the editable per-repository card</h1>
-        <p>Delta of design/coding-convention/convention.mock.html. Six panels: read, edit, save conflict, a derived update waiting, an empty repository, and a narrow viewport. Edit shows only for a member who holds <code>ai:configure</code>.</p>
+        <p>
+          Delta of design/coding-convention/convention.mock.html. Six panels: read, edit, save
+          conflict, a derived update waiting, an empty repository, and a narrow viewport. Edit shows
+          only for a member who holds <code>ai:configure</code>.
+        </p>
       </div>
-      <button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle light / dark</button>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle light / dark
+      </button>
     </div>
 
-    <div class="panel-label">Panel 1 — Read state — byline, and Edit for a person who holds <code>ai:configure</code></div>
+    <div class="panel-label">
+      Panel 1 — Read state — byline, and Edit for a person who holds <code>ai:configure</code>
+    </div>
     <div class="panel">
       <div class="card">
         <div class="card-top">
-            <div class="who">
-              <span class="repo-name">acme/web</span>
-              <span class="pill pill-derived">v3 · derived</span>
-              <span class="byline">Derived from the code</span>
-            </div>
-            <button class="btn btn-secondary btn-sm" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Edit</button>
+          <div class="who">
+            <span class="repo-name">acme/web</span>
+            <span class="pill pill-derived">v3 · derived</span>
+            <span class="byline">Derived from the code</span>
           </div>
-        <div class="stack" style="margin-top:14px">
+          <button class="btn btn-secondary btn-sm" type="button">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg
+            >Edit
+          </button>
+        </div>
+        <div class="stack" style="margin-top: 14px">
           <div class="doc-section">
             <h4>Layering</h4>
-            <div class="rule"><span class="r-text">Routes call one service method; services own transactions; repositories hold one Prisma call each.</span></div>
+            <div class="rule">
+              <span class="r-text"
+                >Routes call one service method; services own transactions; repositories hold one
+                Prisma call each.</span
+              >
+            </div>
           </div>
           <div class="doc-section">
             <h4>Errors</h4>
-            <div class="rule"><span class="r-text">Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes map them to status codes.</span></div>
+            <div class="rule">
+              <span class="r-text"
+                >Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes
+                map them to status codes.</span
+              >
+            </div>
           </div>
         </div>
       </div>
       <div class="card">
         <div class="card-top">
-            <div class="who">
-              <span class="repo-name">acme/web</span>
-              <span class="pill pill-edited">v4 · edited</span>
-              <span class="byline">Edited by Priya Nair · 19 Oct 2026</span>
-            </div>
-            <button class="btn btn-secondary btn-sm" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Edit</button>
+          <div class="who">
+            <span class="repo-name">acme/web</span>
+            <span class="pill pill-edited">v4 · edited</span>
+            <span class="byline">Edited by Priya Nair · 19 Oct 2026</span>
           </div>
-        <div class="stack" style="margin-top:14px">
+          <button class="btn btn-secondary btn-sm" type="button">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg
+            >Edit
+          </button>
+        </div>
+        <div class="stack" style="margin-top: 14px">
           <div class="doc-section">
             <h4>Layering</h4>
-            <div class="rule"><span class="r-text">Routes call one service method; services own transactions; repositories hold one Prisma call each.</span></div>
+            <div class="rule">
+              <span class="r-text"
+                >Routes call one service method; services own transactions; repositories hold one
+                Prisma call each.</span
+              >
+            </div>
           </div>
           <div class="doc-section">
             <h4>Errors</h4>
-            <div class="rule"><span class="r-text">Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes map them to status codes.</span></div>
+            <div class="rule">
+              <span class="r-text"
+                >Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes
+                map them to status codes.</span
+              >
+            </div>
           </div>
         </div>
       </div>
       <div class="card">
-        <p class="viewer-note">A member without <code>ai:configure</code> sees the same card with no Edit action — nothing is disabled or greyed.</p>
+        <p class="viewer-note">
+          A member without <code>ai:configure</code> sees the same card with no Edit action —
+          nothing is disabled or greyed.
+        </p>
         <div class="card-top">
-            <div class="who">
-              <span class="repo-name">acme/web</span>
-              <span class="pill pill-edited">v4 · edited</span>
-              <span class="byline">Edited by Priya Nair · 19 Oct 2026</span>
-            </div>
-            
+          <div class="who">
+            <span class="repo-name">acme/web</span>
+            <span class="pill pill-edited">v4 · edited</span>
+            <span class="byline">Edited by Priya Nair · 19 Oct 2026</span>
           </div>
-        <div class="stack" style="margin-top:14px">
+        </div>
+        <div class="stack" style="margin-top: 14px">
           <div class="doc-section">
             <h4>Layering</h4>
-            <div class="rule"><span class="r-text">Routes call one service method; services own transactions; repositories hold one Prisma call each.</span></div>
+            <div class="rule">
+              <span class="r-text"
+                >Routes call one service method; services own transactions; repositories hold one
+                Prisma call each.</span
+              >
+            </div>
           </div>
           <div class="doc-section">
             <h4>Errors</h4>
-            <div class="rule"><span class="r-text">Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes map them to status codes.</span></div>
+            <div class="rule">
+              <span class="r-text"
+                >Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes
+                map them to status codes.</span
+              >
+            </div>
           </div>
         </div>
-      </div></div>
-    <p class="annot">The derived-banner of the shipped card (“Derived from your code — auto-used … use the Refine with Motir entry above”) is replaced by the byline: its body points at a launcher that no longer exists.</p>
-    <div class="panel-label">Panel 2 — Edit state — the document as Markdown, opened at a version</div>
+      </div>
+    </div>
+    <p class="annot">
+      The derived-banner of the shipped card (“Derived from your code — auto-used … use the Refine
+      with Motir entry above”) is replaced by the byline: its body points at a launcher that no
+      longer exists.
+    </p>
+    <div class="panel-label">
+      Panel 2 — Edit state — the document as Markdown, opened at a version
+    </div>
     <div class="panel">
       <div class="card">
         <div class="card-top">
-            <div class="who">
-              <span class="repo-name">acme/web</span>
-              <span class="pill pill-derived">v3 · derived</span>
-              <span class="byline">Editing v3</span>
-            </div>
-            
+          <div class="who">
+            <span class="repo-name">acme/web</span>
+            <span class="pill pill-derived">v3 · derived</span>
+            <span class="byline">Editing v3</span>
           </div>
-        <label class="field-label" for="conv-text" style="margin-top:14px">Convention (Markdown)</label>
-        <textarea class="textarea tall" id="conv-text" spellcheck="false"># Coding convention — acme/web
+        </div>
+        <label class="field-label" for="conv-text" style="margin-top: 14px"
+          >Convention (Markdown)</label
+        >
+        <textarea class="textarea tall" id="conv-text" spellcheck="false">
+# Coding convention — acme/web
 
 ## Layering
 Routes call one service method; services own transactions;
@@ -722,7 +958,8 @@ repositories hold one Prisma call each.
 
 ## Errors
 Services throw typed errors from lib/&lt;domain&gt;/errors.ts;
-routes map them to status codes.</textarea>
+routes map them to status codes.</textarea
+        >
         <div class="editbar">
           <span class="meta">Saving creates v4. 312 / 65,536 characters.</span>
           <span class="btns">
@@ -730,25 +967,45 @@ routes map them to status codes.</textarea>
             <button class="btn btn-primary btn-sm" type="button">Save</button>
           </span>
         </div>
-        <p class="helper" style="color:var(--el-text-secondary)">Every new prompt for this repository reads the saved text. A newer derived version never replaces it.</p>
-      </div></div>
-    
-    <div class="panel-label">Panel 3 — Save conflict — someone saved v4 while this edit was open at v3</div>
+        <p class="helper" style="color: var(--el-text-secondary)">
+          Every new prompt for this repository reads the saved text. A newer derived version never
+          replaces it.
+        </p>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      Panel 3 — Save conflict — someone saved v4 while this edit was open at v3
+    </div>
     <div class="panel">
       <div class="card">
         <div class="card-top">
-            <div class="who">
-              <span class="repo-name">acme/web</span>
-              <span class="pill pill-derived">v3 · derived</span>
-              <span class="byline">Editing v3</span>
-            </div>
-            
+          <div class="who">
+            <span class="repo-name">acme/web</span>
+            <span class="pill pill-derived">v3 · derived</span>
+            <span class="byline">Editing v3</span>
           </div>
-        <div class="notice notice-warning" role="alert" style="margin-top:14px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        </div>
+        <div class="notice notice-warning" role="alert" style="margin-top: 14px">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+          </svg>
           <div class="n-body">
             <div class="n-title">Someone saved a newer version</div>
-            <div class="n-sub">Priya Nair saved v4 on 19 Oct 2026 while you were editing v3. Your changes have not been saved.</div>
+            <div class="n-sub">
+              Priya Nair saved v4 on 19 Oct 2026 while you were editing v3. Your changes have not
+              been saved.
+            </div>
             <div class="n-actions">
               <button class="btn btn-primary btn-sm" type="button">Load their version</button>
               <button class="btn btn-secondary btn-sm" type="button">Keep mine as a copy</button>
@@ -757,7 +1014,8 @@ routes map them to status codes.</textarea>
         </div>
         <div class="copybox">
           <label class="field-label" for="conv-copy">Your text — copy it, then load theirs</label>
-          <textarea class="textarea" id="conv-copy" readonly spellcheck="false"># Coding convention — acme/web
+          <textarea class="textarea" id="conv-copy" readonly spellcheck="false">
+# Coding convention — acme/web
 
 ## Layering
 Routes call one service method; services own transactions;
@@ -765,75 +1023,219 @@ repositories hold one Prisma call each.
 
 ## Errors
 Services throw typed errors from lib/&lt;domain&gt;/errors.ts;
-routes map them to status codes.</textarea>
-          <div class="editbar"><span class="meta">Read-only copy. Loading their version closes this editor.</span><span class="btns"><button class="btn btn-secondary btn-sm" type="button">Copy to clipboard</button></span></div>
+routes map them to status codes.</textarea
+          >
+          <div class="editbar">
+            <span class="meta">Read-only copy. Loading their version closes this editor.</span
+            ><span class="btns"
+              ><button class="btn btn-secondary btn-sm" type="button">
+                Copy to clipboard
+              </button></span
+            >
+          </div>
         </div>
-      </div></div>
-    <p class="annot">“Keep mine as a copy” reveals the read-only box once, so the person can paste their text elsewhere; it never saves a second version.</p>
-    <div class="panel-label">Panel 4 — A derived update is waiting — the person’s text stays current</div>
+      </div>
+    </div>
+    <p class="annot">
+      “Keep mine as a copy” reveals the read-only box once, so the person can paste their text
+      elsewhere; it never saves a second version.
+    </p>
+    <div class="panel-label">
+      Panel 4 — A derived update is waiting — the person’s text stays current
+    </div>
     <div class="panel">
       <div class="card">
         <div class="card-top">
-            <div class="who">
-              <span class="repo-name">acme/web</span>
-              <span class="pill pill-edited">v4 · edited</span>
-              <span class="byline">Edited by Priya Nair · 19 Oct 2026</span>
-            </div>
-            <button class="btn btn-secondary btn-sm" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Edit</button>
+          <div class="who">
+            <span class="repo-name">acme/web</span>
+            <span class="pill pill-edited">v4 · edited</span>
+            <span class="byline">Edited by Priya Nair · 19 Oct 2026</span>
           </div>
-        <div class="notice notice-info" style="margin-top:14px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          <button class="btn btn-secondary btn-sm" type="button">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg
+            >Edit
+          </button>
+        </div>
+        <div class="notice notice-info" style="margin-top: 14px">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+            />
+          </svg>
           <div class="n-body">
             <div class="n-title">A newer version was derived from the code</div>
-            <div class="n-sub">A re-audit on 22 Oct 2026 produced a derived version. It is not in use — the text below is. Nothing changes unless you edit.</div>
-            <div class="n-actions"><button class="btn btn-secondary btn-sm" type="button">Compare side by side</button></div>
+            <div class="n-sub">
+              A re-audit on 22 Oct 2026 produced a derived version. It is not in use — the text
+              below is. Nothing changes unless you edit.
+            </div>
+            <div class="n-actions">
+              <button class="btn btn-secondary btn-sm" type="button">Compare side by side</button>
+            </div>
           </div>
         </div>
         <div class="side-by-side">
-          <div class="col"><h5>In use · v4 edited</h5><ul><li>Routes call one service method.</li><li>Services throw typed errors.</li></ul></div>
-          <div class="col"><h5>Waiting · derived</h5><ul><li>Routes call one service method.</li><li>Services throw typed errors.</li><li><span class="diff-add">Repositories never call each other.</span></li></ul></div>
+          <div class="col">
+            <h5>In use · v4 edited</h5>
+            <ul>
+              <li>Routes call one service method.</li>
+              <li>Services throw typed errors.</li>
+            </ul>
+          </div>
+          <div class="col">
+            <h5>Waiting · derived</h5>
+            <ul>
+              <li>Routes call one service method.</li>
+              <li>Services throw typed errors.</li>
+              <li><span class="diff-add">Repositories never call each other.</span></li>
+            </ul>
+          </div>
         </div>
-        <div class="stack" style="margin-top:14px"><div class="doc-section">
+        <div class="stack" style="margin-top: 14px">
+          <div class="doc-section">
             <h4>Layering</h4>
-            <div class="rule"><span class="r-text">Routes call one service method; services own transactions; repositories hold one Prisma call each.</span></div>
+            <div class="rule">
+              <span class="r-text"
+                >Routes call one service method; services own transactions; repositories hold one
+                Prisma call each.</span
+              >
+            </div>
           </div>
           <div class="doc-section">
             <h4>Errors</h4>
-            <div class="rule"><span class="r-text">Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes map them to status codes.</span></div>
-          </div></div>
-      </div></div>
-    <p class="annot">The comparison is read-only and offers no “apply”: to take a line from the derived text, the person edits, as in Panel 2.</p>
-    <div class="panel-label">Panel 5 — Empty repository — the shipped empty state, with Edit to write the first version</div>
+            <div class="rule">
+              <span class="r-text"
+                >Services throw typed errors from <code>lib/&lt;domain&gt;/errors.ts</code>; routes
+                map them to status codes.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="annot">
+      The comparison is read-only and offers no “apply”: to take a line from the derived text, the
+      person edits, as in Panel 2.
+    </p>
+    <div class="panel-label">
+      Panel 5 — Empty repository — the shipped empty state, with Edit to write the first version
+    </div>
     <div class="panel">
       <div class="card">
-        <div class="card-top"><div class="who"><span class="repo-name">acme/api</span></div><button class="btn btn-secondary btn-sm" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Write the convention</button></div>
-        <div class="empty-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><circle cx="11.5" cy="14.5" r="2.5"/><path d="m13.3 16.3 2.2 2.2"/></svg>
-          <h3>No convention yet</h3>
-          <p>No convention rules have been derived yet for this repo. Write the first version here, or wait for Motir to derive one from your code.</p>
+        <div class="card-top">
+          <div class="who"><span class="repo-name">acme/api</span></div>
+          <button class="btn btn-secondary btn-sm" type="button">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg
+            >Write the convention
+          </button>
         </div>
-      </div></div>
-    
-    <div class="panel-label">Panel 6 — Narrow viewport (360 px) — Edit and Save stay reachable, panels stack</div>
+        <div class="empty-wrap">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+            <circle cx="11.5" cy="14.5" r="2.5" />
+            <path d="m13.3 16.3 2.2 2.2" />
+          </svg>
+          <h3>No convention yet</h3>
+          <p>
+            No convention rules have been derived yet for this repo. Write the first version here,
+            or wait for Motir to derive one from your code.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      Panel 6 — Narrow viewport (360 px) — Edit and Save stay reachable, panels stack
+    </div>
     <div class="panel">
       <div class="phone">
         <div class="card">
           <div class="card-top">
-            <div class="who"><span class="repo-name">acme/web</span><span class="pill pill-edited">v4 · edited</span></div>
-            <button class="btn btn-secondary btn-sm" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Edit</button>
+            <div class="who">
+              <span class="repo-name">acme/web</span
+              ><span class="pill pill-edited">v4 · edited</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg
+              >Edit
+            </button>
           </div>
-          <p class="byline" style="margin:6px 0 0">Edited by Priya Nair · 19 Oct 2026</p>
-          <div class="notice notice-warning" role="alert" style="margin-top:12px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <p class="byline" style="margin: 6px 0 0">Edited by Priya Nair · 19 Oct 2026</p>
+          <div class="notice notice-warning" role="alert" style="margin-top: 12px">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+            </svg>
             <div class="n-body">
               <div class="n-title">Someone saved a newer version</div>
               <div class="n-sub">Priya Nair saved v4 while you were editing v3.</div>
-              <div class="n-actions"><button class="btn btn-primary btn-sm" type="button">Load their version</button><button class="btn btn-secondary btn-sm" type="button">Keep mine as a copy</button></div>
+              <div class="n-actions">
+                <button class="btn btn-primary btn-sm" type="button">Load their version</button
+                ><button class="btn btn-secondary btn-sm" type="button">Keep mine as a copy</button>
+              </div>
             </div>
           </div>
-          <div class="editbar"><span class="meta">Saving creates v4.</span><span class="btns"><button class="btn btn-ghost btn-sm" type="button">Cancel</button><button class="btn btn-primary btn-sm" type="button">Save</button></span></div>
+          <div class="editbar">
+            <span class="meta">Saving creates v4.</span
+            ><span class="btns"
+              ><button class="btn btn-ghost btn-sm" type="button">Cancel</button
+              ><button class="btn btn-primary btn-sm" type="button">Save</button></span
+            >
+          </div>
         </div>
-      </div></div>
-    
+      </div>
+    </div>
   </body>
 </html>
