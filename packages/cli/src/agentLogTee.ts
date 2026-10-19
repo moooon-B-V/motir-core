@@ -35,6 +35,16 @@ import type { DispatchRunReporter } from './dispatchRunReporter.js';
  */
 export const LOG_CHUNK_BYTES = 4096;
 
+/**
+ * The longest a line of agent output waits for company before it is queued anyway
+ * (MOTIR-8980). A streamed run writes a line when the agent acts — "Edit lib/x.ts" is
+ * 20 bytes — and 4 KiB of those is minutes of work: the size threshold alone would
+ * keep the first lines of a run back until long after they happened. The cap keeps the
+ * reporter's bound meaningful: one event per interval at the very most, however
+ * chatty the agent.
+ */
+export const LOG_FLUSH_MS = 2000;
+
 export interface AgentLogTee {
   /** Take a chunk of the agent's output. Never throws. */
   write(chunk: string): void;
@@ -47,11 +57,21 @@ export interface AgentLogTeeDeps {
   emit: (body: string) => void;
   /** Overridden only by the tests. */
   chunkBytes?: number;
+  /** Overridden only by the tests. */
+  flushMs?: number;
 }
 
 export function createAgentLogTee(deps: AgentLogTeeDeps): AgentLogTee {
   const limit = deps.chunkBytes ?? LOG_CHUNK_BYTES;
+  const waitMs = deps.flushMs ?? LOG_FLUSH_MS;
   let buffer = '';
+  /** Armed by the first byte of a batch; sends it if the size threshold has not. */
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const disarm = (): void => {
+    if (timer === null) return;
+    clearTimeout(timer);
+    timer = null;
+  };
 
   // Reporting is an OBSERVATION of the run and may never change it: a throw
   // here would propagate out of a stream 'data' handler and take the dispatch
@@ -70,11 +90,24 @@ export function createAgentLogTee(deps: AgentLogTeeDeps): AgentLogTee {
   return {
     write(chunk) {
       buffer += chunk;
-      if (buffer.length < limit) return;
-      send(buffer);
-      buffer = '';
+      if (buffer.length >= limit) {
+        disarm();
+        send(buffer);
+        buffer = '';
+        return;
+      }
+      if (timer !== null || buffer === '') return;
+      timer = setTimeout(() => {
+        timer = null;
+        const rest = buffer;
+        buffer = '';
+        send(rest);
+      }, waitMs);
+      // Never the thing that keeps a finished process alive.
+      timer.unref?.();
     },
     flush() {
+      disarm();
       const rest = buffer;
       buffer = '';
       send(rest);
@@ -100,6 +133,12 @@ export function createLegLogTee(
 ): AgentLogTee | null {
   if (!reporter.wantsLogBodies) return null;
   return createAgentLogTee({
-    emit: (body) => reporter.event({ kind: 'log', workItemKey, body }),
+    emit: (body) => {
+      reporter.event({ kind: 'log', workItemKey, body });
+      // A `log` event waits for the reporter's next flush, which is the heartbeat — up to
+      // a minute — so a batch would reach the run page long after the agent wrote it
+      // (MOTIR-8980). The tee already batches, so this is at most one request per batch.
+      void reporter.flush().catch(() => undefined);
+    },
   });
 }

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ParsedAgentCommand } from './agentProfiles.js';
+import { createAgentStreamFormatter, lookupSessionId } from './agentStreamLog.js';
 import { CliError } from './errors.js';
 import { DESIGN_SUBDIR, MOTIR_DESIGN_DIR_ENV } from './designFiles.js';
 
@@ -61,6 +62,13 @@ export interface AgentRunResult {
   exitCode: number;
   /** The signal that killed the agent, when it was killed by one. */
   signal: NodeJS.Signals | null;
+  /**
+   * The agent's OWN session id (MOTIR-8980) — the conversation a later fix resumes. Read
+   * from the agent's stream, or chosen by Motir before the spawn where the agent lets it,
+   * or looked up in the agent's session store. Null when the run was not in a streaming
+   * form or none could be established; absent from a caller's fake.
+   */
+  sessionId?: string | null;
   /**
    * The model the agent SELF-REPORTED, or null when it reported none.
    *
@@ -309,6 +317,26 @@ export interface RunAgentOptions {
   tempDirFactory?: () => string;
 }
 
+/**
+ * The session id to record: what the stream said, else the one Motir chose or is
+ * resuming, else the newest session the agent's own store holds for this checkout.
+ */
+async function sessionIdOf(
+  opts: RunAgentOptions,
+  fromStream: string | null,
+  since: number,
+): Promise<string | null> {
+  const stream = opts.command.stream;
+  if (!stream) return null;
+  const known = fromStream ?? stream.sessionId;
+  if (known) return known;
+  return lookupSessionId(
+    stream.profile,
+    { cwd: opts.cwd, env: opts.command.env ?? opts.env ?? process.env },
+    since,
+  );
+}
+
 function defaultTempDir(): string {
   return mkdtempSync(join(tmpdir(), 'motir-prompt-'));
 }
@@ -345,6 +373,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
   }
 
   try {
+    // Two seconds of slack: a store may stamp a session at a coarser resolution than the clock.
+    const startedAt = Date.now() - 2000;
+    // The agent's event stream, turned into readable lines (MOTIR-8980). Null for a
+    // command the user typed, and for a profile no chat adapter reads.
+    const formatter = opts.command.stream
+      ? createAgentStreamFormatter(opts.command.stream.profile)
+      : null;
     const result = await new Promise<Omit<AgentRunResult, 'model' | 'unbuildableReason'>>(
       (resolve, reject) => {
         const tee = opts.onOutput;
@@ -362,7 +397,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
           // prompt on argv leaves stdin unconnected (`promptOnStdin: false`).
           stdio: [
             promptOnStdin ? 'pipe' : 'ignore',
-            tee ? 'pipe' : 'inherit',
+            // A stream is never left to `inherit`: its raw JSON is not for a terminal.
+            tee || formatter ? 'pipe' : 'inherit',
             tee ? 'pipe' : 'inherit',
           ],
           env: {
@@ -378,27 +414,37 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
           },
         });
 
-        if (tee) {
+        if (tee || formatter) {
           // Forward FIRST, tee second: the terminal is the contract and the copy
           // is the extra. A `pipe` nobody reads fills its buffer and stalls the
           // child, so both streams are consumed unconditionally once piped.
           const forward = (
             src: NodeJS.ReadableStream | null,
             sink: NodeJS.WritableStream,
+            render: (chunk: string) => string = (chunk) => chunk,
           ): void => {
             if (!src) return;
             src.setEncoding('utf8');
             src.on('data', (chunk: string) => {
-              sink.write(chunk);
+              const text = render(chunk);
+              if (text === '') return;
+              sink.write(text);
               try {
-                tee(chunk);
+                tee?.(text);
               } catch {
                 /* an observation may never break the run it observes */
               }
             });
             src.on('error', () => {});
           };
-          forward(child.stdout, process.stdout);
+          // stdout goes through the stream formatter when there is one, so what the
+          // terminal and the log both get is the readable line, never the JSON event.
+          forward(
+            child.stdout,
+            process.stdout,
+            formatter ? (chunk) => formatter.write(chunk) : undefined,
+          );
+          // stderr is the agent's own words, plain text, in every form.
           forward(child.stderr, process.stderr);
         }
 
@@ -422,6 +468,16 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
         }
 
         child.on('close', (code, signal) => {
+          // The line still open when the stream ended goes out before the verdict.
+          const rest = formatter?.flush() ?? '';
+          if (rest !== '') {
+            process.stdout.write(rest);
+            try {
+              tee?.(rest);
+            } catch {
+              /* an observation may never break the run it observes */
+            }
+          }
           resolve({ exitCode: signal ? 1 : (code ?? 1), signal });
         });
       },
@@ -429,7 +485,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
     // Read the self-report BEFORE the `finally` takes the temp dir with it —
     // and read it whatever the exit code was: an agent that reported its model
     // and then failed still ran on that model.
-    return { ...result, ...readAgentReport(reportFile) };
+    return {
+      ...result,
+      ...readAgentReport(reportFile),
+      ...(opts.command.stream
+        ? { sessionId: await sessionIdOf(opts, formatter?.sessionId() ?? null, startedAt) }
+        : {}),
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

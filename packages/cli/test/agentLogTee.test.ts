@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createAgentLogTee, createLegLogTee, LOG_CHUNK_BYTES } from '../src/agentLogTee.js';
+import {
+  createAgentLogTee,
+  createLegLogTee,
+  LOG_CHUNK_BYTES,
+  LOG_FLUSH_MS,
+} from '../src/agentLogTee.js';
 import { createDispatchRunReporter, nullDispatchRunReporter } from '../src/dispatchRunReporter.js';
 // ⚠️ FROM `client.js`, WHICH IS WHERE IT LIVES. The reporter only IMPORTS this
 // type; it never re-exported it, so the old path type-checked nowhere — and the
@@ -103,6 +108,65 @@ describe('it BATCHES — one event per line would blow the reporter’s queue bo
     tee.flush();
     tee.flush();
     expect(bodies).toEqual([]);
+  });
+});
+
+describe('a streamed run’s first lines are not held back for a size they will never reach (MOTIR-8980)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('queues a short batch after the wait, with no flush and no threshold crossed', () => {
+    vi.useFakeTimers();
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b) });
+    tee.write('Read lib/x.ts\n');
+    expect(bodies).toEqual([]);
+    vi.advanceTimersByTime(LOG_FLUSH_MS - 1);
+    expect(bodies).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(bodies).toEqual(['Read lib/x.ts\n']);
+  });
+
+  it('is one event per wait however many lines arrive in it', () => {
+    vi.useFakeTimers();
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b) });
+    tee.write('a\n');
+    vi.advanceTimersByTime(1000);
+    tee.write('b\n');
+    vi.advanceTimersByTime(1000);
+    expect(bodies).toEqual(['a\nb\n']);
+    tee.write('c\n');
+    vi.advanceTimersByTime(LOG_FLUSH_MS);
+    expect(bodies).toEqual(['a\nb\n', 'c\n']);
+  });
+
+  it('a size flush or the final flush disarms the wait, so nothing is sent twice', () => {
+    vi.useFakeTimers();
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b), chunkBytes: 4 });
+    tee.write('12345');
+    tee.flush();
+    tee.write('x');
+    tee.flush();
+    vi.advanceTimersByTime(LOG_FLUSH_MS * 3);
+    expect(bodies).toEqual(['12345', 'x']);
+  });
+
+  it('sends each batch to the server now — a log event otherwise waits for the minute-long heartbeat', async () => {
+    const flushes: number[] = [];
+    const reporter = {
+      wantsLogBodies: true,
+      event: () => undefined,
+      flush: async () => {
+        flushes.push(1);
+      },
+    };
+    const tee = createLegLogTee(reporter as never, 'PROD-1')!;
+    tee.write('Bash: pnpm test\n');
+    tee.flush();
+    expect(flushes).toHaveLength(1);
   });
 });
 

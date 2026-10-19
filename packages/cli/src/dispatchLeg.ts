@@ -197,7 +197,12 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     kind: 'agent_started',
     workItemKey: key,
     disposition: 'running',
-    data: { agent: agent.binary },
+    data: {
+      agent: agent.binary,
+      // The agent's session, when Motir chose it or is resuming it (MOTIR-8980) — known
+      // before the agent runs, so a run that dies still names the conversation.
+      ...(agent.stream?.sessionId ? { sessionId: agent.stream.sessionId } : {}),
+    },
   });
   // The producer for the `log` event kind (MOTIR-3961). `null` unless the
   // operator passed `--report-log`, and then the spawn is unchanged.
@@ -238,7 +243,13 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     // renders that rather than inventing one. TOP-LEVEL is what the server writes
     // onto the leg (MOTIR-7504); `data` keeps its copy so the stream reads as before.
     model: result.model ?? null,
-    data: { model: result.model ?? null, signal: result.signal ?? null },
+    data: {
+      model: result.model ?? null,
+      signal: result.signal ?? null,
+      // The agent's own session id (MOTIR-8980) — what a later fix resumes. Null when the
+      // agent ran in a form that has none, so the key's absence never reads as unknown.
+      sessionId: result.sessionId ?? null,
+    },
   });
 
   // THE RUN-FOUND REPORT (MOTIR-8698) — the agent stopped on an unbuildable card and
