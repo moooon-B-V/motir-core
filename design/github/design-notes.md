@@ -1655,6 +1655,8 @@ desktop, dark and ~400px. Card MOTIR-5463. **No existing mock is edited** and no
 (`docs/decisions/design-result.md` AMENDMENT 4; `CLAUDE.md` § "Design assets — TWO files per
 surface"). The component that builds every panel is **MOTIR-5466**.
 
+> **Third door (MOTIR-9043).** The fix part gains **Fix in my agent** beside the command and the hosted door, and the same action in an ended run's modal: see `design/runs/design-notes.md` § _Fix in my agent_ and `design/runs/development--fix-in-my-agent.mock.html`.
+
 **Why it is owed.** On an Implemented card whose run has ended, a red pull request shows the
 _Checks failing_ pill (§ 20's tone table: `severity="danger"`, `--el-tint-rose`, lucide `circle-x`)
 and nothing to do about it. The product has no hosted dispatch, so what the card hands over is a
