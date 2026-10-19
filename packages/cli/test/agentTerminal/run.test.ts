@@ -144,7 +144,7 @@ describe('the run session the server opens', () => {
     expect(pty.options.cwd).toBe(HOME);
     expect(h.terminal.sessionCount()).toBe(1);
     expect(h.logs).toContain(
-      `agent-terminal: run run_1 session ${session} opened (pid ${pty.pid})`,
+      `agent-terminal: run run_1 (run) session ${session} opened (pid ${pty.pid})`,
     );
   });
 
@@ -205,7 +205,7 @@ describe('the run session the server opens', () => {
         code: 'spawn_failed',
       });
       expect(h.removed).toEqual([runStateDir('r9')]);
-      expect(failing.logs).toContain('agent-terminal: run r9 failed to start');
+      expect(failing.logs).toContain('agent-terminal: run r9 (run) failed to start');
     } finally {
       await failing.terminal.close();
     }
@@ -295,7 +295,7 @@ describe('stop', () => {
       { pid, signal: 'SIGTERM' },
       { pid, signal: 'SIGKILL' },
     ]);
-    expect(h.logs).toContain('agent-terminal: run run_1 killed (grace elapsed)');
+    expect(h.logs).toContain('agent-terminal: run run_1 (run) killed (grace elapsed)');
     expect(await h.terminal.control({ op: 'status', runId: 'run_1' })).toMatchObject({
       state: 'exited',
       signal: 9,
