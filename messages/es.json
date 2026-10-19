@@ -12459,6 +12459,10 @@
       "expired": {
         "title": "Fuera del periodo de retención",
         "body": "El contenido de los registros se elimina 30 días después de una Ejecución. El de esta ya se eliminó."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12799,7 +12803,10 @@
       "progressAria": "{done} de {total} pasos hechos",
       "progressAllDone": "{total} de {total} pasos hechos",
       "door": "Guíame"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Añadir repositorio",

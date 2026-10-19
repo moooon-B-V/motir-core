@@ -12459,6 +12459,10 @@
       "expired": {
         "title": "Oltre il periodo di conservazione",
         "body": "Il contenuto dei log viene eliminato 30 giorni dopo un’esecuzione. Quello di questa è già stato eliminato."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12799,7 +12803,10 @@
       "progressAria": "{done} di {total} passaggi completati",
       "progressAllDone": "{total} di {total} passaggi completati",
       "door": "Guidami"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Aggiungi repository",

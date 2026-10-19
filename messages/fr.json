@@ -12459,6 +12459,10 @@
       "expired": {
         "title": "Au-delà de la durée de conservation",
         "body": "Le contenu des journaux est supprimé 30 jours après une exécution. C'est le cas pour celle-ci."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12799,7 +12803,10 @@
       "progressAria": "{done} étapes terminées sur {total}",
       "progressAllDone": "{total} étapes terminées sur {total}",
       "door": "Me guider"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Ajouter un dépôt",

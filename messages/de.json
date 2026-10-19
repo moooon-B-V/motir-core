@@ -12459,6 +12459,10 @@
       "expired": {
         "title": "Außerhalb der Aufbewahrungsfrist",
         "body": "Log-Inhalte werden 30 Tage nach einem Lauf gelöscht. Die dieses Laufs wurden bereits gelöscht."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12799,7 +12803,10 @@
       "progressAria": "{done} von {total} Schritten erledigt",
       "progressAllDone": "{total} von {total} Schritten erledigt",
       "door": "Führen Sie mich durch"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Repository hinzufügen",

@@ -114,6 +114,23 @@ describe('⚠️ THE THREE SILENCES are distinct, and none reads as an error', (
   });
 });
 
+describe('the FILTERED silence (MOTIR-9074)', () => {
+  it('a selection that admits no lines says so, even on a live run', async () => {
+    await mount(run({ status: 'running', stopReason: null, endedAt: null }), 'wi_1', [
+      logEvent(1, 'from b', 'MOTIR-1793'),
+    ]);
+    const panel = screen.getByTestId('run-log-silence-filtered');
+    expect(panel.textContent).toContain('Nothing logged for this work item');
+    expect(screen.queryByTestId('run-log-silence-waiting')).toBeNull();
+  });
+
+  it('with no selection the run’s own silence still wins', async () => {
+    await mount(run());
+    expect(screen.queryByTestId('run-log-silence-filtered')).toBeNull();
+    expect(screen.getByTestId('run-log-silence-neverSent')).toBeTruthy();
+  });
+});
+
 describe('the lines — backfill and live through ONE path, in seq order', () => {
   it('renders what the stream backfills, and resumes from seq 0 to get it', async () => {
     await mount(run(), null, [logEvent(1, 'first line'), logEvent(2, 'second line')]);

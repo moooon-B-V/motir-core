@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { Cloud, CloudOff, TriangleAlert } from 'lucide-react';
+import { Cloud, CloudOff, List, TriangleAlert, Workflow } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { Segmented } from '@/components/ui/Segmented';
 import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
 import { ResizableSplit } from '@/components/split/ResizableSplit';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
+import { RunSetListPane } from '@/app/(authed)/runs/_components/RunSetListPane';
+import { useRunSetLevel } from '@/app/(authed)/runs/_components/useRunSetLevel';
 import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
 import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
 import { HostedRunCancel } from '@/app/(authed)/runs/_components/HostedRunCancel';
@@ -63,6 +66,8 @@ export interface RunModalProps {
   viewerId?: string | null;
 }
 
+const NO_CARDS: DispatchRunDetailDto['cards'] = [];
+
 type Load =
   | { state: 'loading' }
   | { state: 'ready'; run: DispatchRunDetailDto }
@@ -82,6 +87,12 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
   const [reloadKey, setReloadKey] = useState(0);
 
   const run = load.state === 'ready' ? load.run : null;
+  const [setView, setSetView] = useState<'list' | 'canvas'>('canvas');
+  const { read: readSet, byId: setById } = useRunSetLevel(
+    run?.cards ?? NO_CARDS,
+    projectKey,
+    reloadKey,
+  );
 
   const fetchRun = useCallback(async (): Promise<void> => {
     try {
@@ -250,11 +261,26 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
             stackedRows={RUN_FRAME_STACKED_ROWS}
             left={
               <section className="flex min-h-0 min-w-0 flex-col" aria-label={t('paneSet')}>
-                <h2 className="border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
-                  {run.cards.length === 0
-                    ? t('tookNone')
-                    : t('paneSetCount', { count: run.cards.length })}
-                </h2>
+                <div className="flex items-center justify-between gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2">
+                  <h2 className="text-xs font-semibold text-(--el-text-secondary)">
+                    {run.cards.length === 0
+                      ? t('tookNone')
+                      : t('paneSetCount', { count: run.cards.length })}
+                  </h2>
+                  <Segmented<'list' | 'canvas'>
+                    label={t('viewSwitchAria')}
+                    value={setView}
+                    onChange={setSetView}
+                    options={[
+                      { value: 'list', label: t('viewList'), icon: <List className="size-3.5" /> },
+                      {
+                        value: 'canvas',
+                        label: t('viewCanvas'),
+                        icon: <Workflow className="size-3.5" />,
+                      },
+                    ]}
+                  />
+                </div>
                 {run.cards.length === 0 ? (
                   // A run that took no work items is a REAL outcome — never an
                   // error face, and never an empty canvas the reader has to
@@ -266,13 +292,36 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
                     {t('tookNoneBody')}
                   </p>
                 ) : (
-                  <div className="min-h-0 flex-1">
-                    <RunCanvasPane
-                      run={run}
-                      projectKey={projectKey}
-                      onSelectWorkItem={setSelectedWorkItemId}
-                      reloadKey={reloadKey}
-                    />
+                  <div className="relative min-h-0 flex-1">
+                    {/* KEPT ALIVE, NOT UNMOUNTED: the canvas owns its zoom, focus
+                      and drill, and a switch to List and back must not lose them
+                      (the plan overlay's pattern, `PlanProposalViews`). */}
+                    <div
+                      className={
+                        setView === 'list'
+                          ? 'pointer-events-none invisible absolute inset-0'
+                          : 'h-full'
+                      }
+                      inert={setView === 'list'}
+                      aria-hidden={setView === 'list' || undefined}
+                      data-testid="run-canvas-keepalive"
+                    >
+                      <RunCanvasPane
+                        run={run}
+                        projectKey={projectKey}
+                        onSelectWorkItem={setSelectedWorkItemId}
+                        reloadKey={reloadKey}
+                        readSet={readSet}
+                      />
+                    </div>
+                    {setView === 'list' ? (
+                      <RunSetListPane
+                        run={run}
+                        byId={setById}
+                        selectedWorkItemId={selectedWorkItemId}
+                        onSelectWorkItem={setSelectedWorkItemId}
+                      />
+                    ) : null}
                   </div>
                 )}
               </section>

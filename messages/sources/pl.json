@@ -11410,5 +11410,10 @@
   "titleTranslation.noCredit": "Titles stay in their original language because your organization has no credit left.",
   "titleTranslation.pendingMark": "Translating",
   "titleTranslation.showOriginal": "Show original",
-  "titleTranslation.showTranslation": "Show translation"
+  "titleTranslation.showTranslation": "Show translation",
+  "runs.viewList": "List",
+  "runs.viewCanvas": "Canvas",
+  "runs.viewSwitchAria": "Show this run's work items as",
+  "runs.logSilence.filtered.title": "Nothing logged for this work item",
+  "runs.logSilence.filtered.body": "This work item has not printed anything yet. Clear the selection to see the whole run."
 }

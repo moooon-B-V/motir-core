@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowDownToLine, CloudOff, Clock, Hourglass } from 'lucide-react';
+import { ArrowDownToLine, CloudOff, Clock, Hourglass, ListFilter } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { DispatchRunDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunInstant } from '@/lib/runs/runClock';
@@ -131,7 +131,7 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  const silence = whichSilence(run, runIsLive, lines.length);
+  const silence = whichSilence(run, runIsLive, lines.length, selectedWorkItemId !== null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -231,7 +231,7 @@ function countAll(
   return n;
 }
 
-type SilenceKind = 'neverSent' | 'waiting' | 'expired';
+type SilenceKind = 'neverSent' | 'waiting' | 'expired' | 'filtered';
 
 /**
  * WHICH SILENCE — the decision the design's table exists to force.
@@ -247,15 +247,26 @@ function whichSilence(
   run: DispatchRunDto,
   runIsLive: boolean,
   rendered: number,
+  filteredOut = false,
 ): SilenceKind | null {
   if (rendered > 0) return null;
+  // The SELECTION admits no lines although the run has some: the reader chose a
+  // work item with nothing logged yet, which is not the run's silence.
+  if (filteredOut) return 'filtered';
   if (runIsLive) return 'waiting';
   const ageDays = (Date.now() - new Date(run.startedAt).getTime()) / 86_400_000;
   return ageDays > RETENTION_DAYS ? 'expired' : 'neverSent';
 }
 
 function Silence({ kind, t }: { kind: SilenceKind; t: ReturnType<typeof useTranslations> }) {
-  const Icon = kind === 'waiting' ? Hourglass : kind === 'expired' ? Clock : CloudOff;
+  const Icon =
+    kind === 'waiting'
+      ? Hourglass
+      : kind === 'expired'
+        ? Clock
+        : kind === 'filtered'
+          ? ListFilter
+          : CloudOff;
   return (
     <div
       className="flex flex-1 flex-col items-center justify-center gap-1.5 p-(--spacing-card-padding) text-center"

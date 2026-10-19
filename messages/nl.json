@@ -12459,6 +12459,10 @@
       "expired": {
         "title": "Buiten de bewaartermijn",
         "body": "Loginhoud wordt 30 dagen na een run verwijderd. Die van deze run is al verwijderd."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12799,7 +12803,10 @@
       "progressAria": "{done} van {total} stappen klaar",
       "progressAllDone": "{total} van {total} stappen klaar",
       "door": "Begeleid me"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Repository toevoegen",

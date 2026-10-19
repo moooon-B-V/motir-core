@@ -37,6 +37,14 @@ vi.mock('@/app/(authed)/runs/_components/RunCanvasPane', () => ({
   ),
 }));
 
+vi.mock('@/lib/planning/roadmapClient', () => ({
+  fetchRoadmapLevel: async () => ({
+    items: [{ id: 'wi_1', title: 'The ingest route' }],
+    edges: [],
+    offLevelBlockers: [],
+  }),
+}));
+
 const fetchMock = vi.fn();
 const onClose = vi.fn();
 
@@ -314,5 +322,43 @@ describe('the exit is drawn top left, once (MOTIR-9070)', () => {
     await mountWith(run());
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape', code: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the List | Canvas switch (MOTIR-9074)', () => {
+  it('opens on Canvas, with the switch named and the list not drawn', async () => {
+    await mountWith(run());
+    expect(screen.getByRole('button', { name: 'Canvas' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(screen.queryByTestId('run-set-list')).toBeNull();
+    expect(screen.getByTestId('run-canvas-keepalive').hasAttribute('inert')).toBe(false);
+  });
+
+  it('List shows the rows and keeps the canvas mounted but inert and hidden', async () => {
+    await mountWith(run());
+    const stub = screen.getByTestId('stub-node');
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByTestId('run-set-list')).toBeTruthy();
+    const keep = screen.getByTestId('run-canvas-keepalive');
+    expect(keep.hasAttribute('inert')).toBe(true);
+    expect(keep.getAttribute('aria-hidden')).toBe('true');
+    // The SAME node survived — switching must not remount the canvas.
+    expect(screen.getByTestId('stub-node')).toBe(stub);
+  });
+
+  it('a row selects the work item the log region follows', async () => {
+    await mountWith(run());
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    fireEvent.click(screen.getByTestId('run-set-row'));
+    expect(screen.getByTestId('run-modal-log-region').getAttribute('data-selected-work-item')).toBe(
+      'wi_1',
+    );
+  });
+
+  it('a run with no members still says so', async () => {
+    await mountWith(run({ cards: [] }));
+    expect(screen.getByTestId('run-modal-no-members')).toBeTruthy();
+    expect(screen.queryByTestId('run-set-list')).toBeNull();
   });
 });

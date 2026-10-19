@@ -12453,6 +12453,10 @@
       "expired": {
         "title": "보존 기간이 지났습니다",
         "body": "로그 본문은 실행 후 30일이 지나면 삭제됩니다. 이 실행의 로그 본문은 삭제되었습니다."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12793,7 +12797,10 @@
       "progressAria": "{total}단계 중 {done}단계 완료",
       "progressAllDone": "{total}단계 중 {total}단계 완료",
       "door": "단계별로 안내받기"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "저장소 추가",
