@@ -3589,6 +3589,19 @@ carries the exact `claim`, its `claimedCount` and the graph's current
 `blockerCount`; the body-edit member carries `bodyEdit` and `fieldMove`. Only two
 of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 
+One more `shape` member is reported by `validate_work_item` and `validate_plan`
+only, never on the dispatch wire: **`likely-mislabelled-link`** (MOTIR-9007). A
+body link `[label](motir:<id>)` whose `label` names one or more work-item keys
+(a token whose prefix is a project identifier in the workspace) none of which
+is the key `<id>` actually opens — or whose `<id>` opens no work item the caller
+can read. It carries the link's `label`, its `targetId`, and `targetKey`: the
+key the id resolves to, or `null` when it resolves to nothing (an unknown id,
+another workspace's id and an unbrowsable id all read the same, so the advisory
+leaks no existence). A label that names no key — `[the export flow](motir:…)` —
+is never checked. Fix the id (resolve the key you meant with `get_work_item`) or
+the label; a link that opens the wrong card is consumed by every agent that
+reads the body.
+
 A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
 body names is being changed SOMEWHERE ELSE — the one advisory family whose far
 end is a pull request rather than a work item. It carries `state`, which is the
@@ -4886,7 +4899,7 @@ Motir-generated plan arrives coherent.
 | `condition` | enum   | no       | `loose` (default) — a done dependency outside the plan counts as satisfied. `tight` — every dependency must be IN the projection. |
 
 **Output** — `structuredContent`: `{ planId, valid, blockers, rejections,
-invalidEdges, crossLevelEdges }`. Each blocker is `{ item, blockedBy, blockerStatus,
+invalidEdges, crossLevelEdges, advisories }`. Each blocker is `{ item, blockedBy, blockerStatus,
 blockerSprintId }`; an `item` or `blockedBy` of the form `planItem:<id>` names a
 **proposal in this plan**, not a work item. `invalidEdges` is the cross-parent
 rule under `validate_work_item` above, asked of the PROJECTION — proposed parents,
@@ -4898,6 +4911,15 @@ children before it may have drawn every parent edge. `crossLevelEdges` is the
 PROJECTION: a PROPOSED cross-level edge is a `cross_level` rejection instead, so
 what it reports is a COMMITTED cross-level edge (the link door writes one —
 MOTIR-6509). `valid` is `true` only when all four lists are empty.
+
+**`advisories` rides beside the verdict and never changes it (MOTIR-9007).** It
+lists every `likely-mislabelled-link` shape advisory in a body the plan
+PROPOSES — an `add`'s body, or a `modify` that rewrites one — as
+`{ kind: "shape", item, severity, label, targetId, targetKey }`: a
+`[label](motir:<id>)` link whose label names a work-item key the id does not
+open, or whose id opens no card at all (`targetKey: null`). Fix the id before
+sealing. Only the MCP tool carries it; the internal `validate-plan-forest`
+verdict is unchanged.
 
 **Both edge lists hold only the findings the PLAN introduces (MOTIR-7727).** The
 projection holds every edge anyone ever drew in the project, so judging all of

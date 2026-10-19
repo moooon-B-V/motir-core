@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   submitJob,
   getJob,
+  cancelJob,
   getPreplanState,
   parseSseFrame,
   createCheckoutSession,
@@ -259,6 +260,36 @@ describe('getJob', () => {
         ),
     );
     await expect(getJob('job_x', 'pj_1')).rejects.toBeInstanceOf(MotirAiJobNotFoundError);
+  });
+});
+
+describe('cancelJob (MOTIR-9065)', () => {
+  it('sends DELETE /v1/jobs/:id with the project scope and returns the answer', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ jobId: 'job_1', status: 'canceled' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(cancelJob('job_1', 'pj_42')).resolves.toEqual({
+      jobId: 'job_1',
+      status: 'canceled',
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe('https://ai.example.test/v1/jobs/job_1?coreProjectId=pj_42');
+    expect((init as RequestInit).method).toBe('DELETE');
+  });
+
+  it('throws a typed error when motir-ai refuses, so the caller can say why', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(new Response('404 Not Found', { status: 404, statusText: 'Not Found' })),
+    );
+    // A bare 404 is not problem+json, so it reads as motir-ai's own failure, carrying
+    // the status text the sweep reports as why.
+    await expect(cancelJob('job_1', 'pj_1')).rejects.toThrow(MotirAiUnavailableError);
+    await expect(cancelJob('job_1', 'pj_1')).rejects.toThrow('Not Found');
   });
 });
 

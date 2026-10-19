@@ -534,6 +534,62 @@ describe('validate_sprint — the optional planId', () => {
   });
 });
 
+describe('validate_plan — the MISLABELLED-LINK advisory beside the verdict (MOTIR-9007)', () => {
+  it('reports a crossed link in a PROPOSED body in `advisories` and the text, and stays VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const meant = await mk(fx, 'Meant', 'task');
+    const opened = await mk(fx, 'Opened', 'task');
+    const planId = await freshPlan(fx);
+    const plan = await addProposals(fx, planId, [
+      {
+        op: 'add',
+        proposedFields: {
+          title: 'New card',
+          kind: 'task',
+          type: 'code',
+          descriptionMd: `Depends on [${meant.identifier}](motir:${opened.id}).`,
+        },
+      },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+    const addRef = `planItem:${itemIdByTitle(plan, 'New card')}`;
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).advisories).toEqual([
+      {
+        kind: 'shape',
+        item: addRef,
+        severity: 'likely-mislabelled-link',
+        label: meant.identifier,
+        targetId: opened.id,
+        targetKey: opened.identifier,
+      },
+    ]);
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain(
+      `${addRef} links "${meant.identifier}" to motir:${opened.id}, which is ${opened.identifier}.`,
+    );
+    await client.close();
+  });
+
+  it('a plan with no such link carries an empty `advisories` and no advisory prose', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    await addProposals(fx, planId, [
+      { op: 'add', proposedFields: { title: 'Plain', kind: 'task', type: 'code' } },
+    ]);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, 'validate_plan', { planId });
+    expect(struct(res).advisories).toEqual([]);
+    expect(text(res)).not.toContain('Advisory');
+    await client.close();
+  });
+});
+
 describe('validate_plan — SECTION findings, advisory (MOTIR-9032)', () => {
   it('names a prose-only proposal in a VALID plan, states the count, and never flips `valid`', async () => {
     const fx = await makeWorkItemFixture();

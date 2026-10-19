@@ -75,11 +75,17 @@ const judgedFailure = (jobId: string): RawJob => ({
 
 /** What motir-ai answers per job id; an unlisted `job-new-*` is a resume still queued. */
 let jobs = new Map<string, RawJob>();
-const fetchMock = vi.fn(async (input: string | URL | Request) => {
+const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input : input.url);
   const match = /^\/v1\/jobs\/([^/]+)$/.exec(url.pathname);
   if (url.origin !== AI_URL || !match) throw new Error(`unexpected motir-ai call: ${url.href}`);
   const jobId = decodeURIComponent(match[1]!);
+  // The cancel the sweep sends for a job it gave up on by silence (MOTIR-9065).
+  const method = input instanceof Request ? input.method : (init?.method ?? 'GET');
+  if (method === 'DELETE') {
+    jobs.set(jobId, { status: 'canceled' });
+    return Response.json({ jobId, status: 'canceled' });
+  }
   const raw = jobs.get(jobId) ?? (jobId.startsWith('job-new-') ? { status: 'queued' } : null);
   if (!raw) {
     return Response.json(
@@ -499,9 +505,12 @@ describe('B · every other failure waits in To resume, as before the story', () 
         reason: 'silent',
         lostMachine: false,
         autoResume: null,
+        jobCancel: { cancelled: true },
       },
     ]);
     expect((await sessionRow(sessionId)).failedJobId).toBe('job-old');
+    // Core gave up on the job, so it is cancelled in motir-ai (MOTIR-9065).
+    expect(jobs.get('job-old')).toEqual({ status: 'canceled' });
     await expectWaits(sessionId, planId);
   });
 
@@ -580,28 +589,25 @@ describe('C · a resuming plan reads resuming and is not swept', () => {
   });
 
   it(
-    '14 · a resumed job that never starts is recorded once, as silence, and not resumed again',
+    '14 · a resumed job still QUEUED is not recorded by silence, and not resumed again',
     T,
     async () => {
+      // MOTIR-9065: a queued job has not started, so the plan's silence says nothing about
+      // it. A job that never leaves the queue is motir-ai's to fail (MOTIR-9064); the fast
+      // path records it then.
       const { sessionId, planId, resumedAt } = await resumedPlan();
 
       const out = await sweep(new Date(resumedAt.getTime() + PLAN_STALLED_AFTER_MS + MIN));
 
       expect(out.outcomes).toEqual([
-        {
-          planId,
-          projectId: fx.projectId,
-          outcome: 'awaiting_resume',
-          reason: 'silent',
-          lostMachine: false,
-          autoResume: null,
-        },
+        { planId, projectId: fx.projectId, outcome: 'left_as_is', reason: 'job_queued' },
       ]);
       const s = await sessionRow(sessionId);
-      expect(s.failedJobId).toBe('job-new-1');
+      expect(s.failedAt).toBeNull();
       expect(s.autoResumeCount).toBe(1);
       expect(submitJobMock).toHaveBeenCalledTimes(1);
-      expect(await toResumeIds()).toContain(sessionId);
+      expect(await toResumeIds()).not.toContain(sessionId);
+      expect(jobs.get('job-new-1')).toBeUndefined();
     },
   );
 });

@@ -6,8 +6,10 @@ import type { PlanValidityDto } from '@/lib/dto/plans';
 import {
   crossLevelEdgeLines,
   invalidEdgeLines,
+  mislabelledLinkLines,
   sectionFindingLines,
 } from '@/lib/mcp/tools/validateWorkItem';
+import type { WorkItemProseMislabelledLinkAdvisoryDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -64,13 +66,22 @@ interface ValidatePlanArgs {
  * only, in a sentence a reader takes as *this plan is sound*, which is what made
  * a plan the approve button then refused safe to close.
  */
-function summarize(result: PlanValidityDto): string {
+function summarize(
+  result: PlanValidityDto,
+  advisories: readonly WorkItemProseMislabelledLinkAdvisoryDto[],
+): string {
+  // The link advisories (MOTIR-9007) ride beside the verdict and never change it.
+  const linkLines = mislabelledLinkLines(
+    advisories,
+    `NOT a blocker — the plan is ${result.valid ? 'still VALID' : 'unaffected'} either way`,
+  );
   if (result.valid) {
     return [
       `Plan ${result.planId} is VALID — it would be ACCEPTED by approve, and every item in ` +
         'the projected forest can be finished once it materializes. No work item was created: ' +
         'approving the plan in Motir is still the only path from a proposal to a work item.',
       ...sectionFindingLines(result.sectionFindings, 'valid'),
+      ...linkLines,
     ].join('\n');
   }
 
@@ -107,6 +118,7 @@ function summarize(result: PlanValidityDto): string {
   lines.push(...invalidEdgeLines(result.invalidEdges));
   lines.push(...crossLevelEdgeLines(result.crossLevelEdges));
   lines.push(...sectionFindingLines(result.sectionFindings, 'invalid'));
+  lines.push(...linkLines);
 
   return lines.join('\n');
 }
@@ -119,14 +131,13 @@ export async function runValidatePlan(
     // The plan is read through `plansService.getPlan`, which resolves the
     // project AND asserts browse on it — so there is no project argument to
     // take and no second access check to add here.
-    const result = await planValidityService.validateProjectedPlan(
-      args.planId,
-      ctx,
-      args.condition,
-    );
+    const [result, advisories] = await Promise.all([
+      planValidityService.validateProjectedPlan(args.planId, ctx, args.condition),
+      planValidityService.projectedLinkAdvisories(args.planId, ctx),
+    ]);
     return toolOk(
-      summarize(result),
-      exempt('validate_plan', result as unknown as Record<string, unknown>),
+      summarize(result, advisories),
+      exempt('validate_plan', { ...result, advisories } as unknown as Record<string, unknown>),
     );
   } catch (err) {
     return toToolError(err);
@@ -166,9 +177,13 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'item or blocker, or an ancestor of either, the plan adds, re-parents, re-wires ' +
         '(`blockedByAdd` / `blockedByRemove`) or removes. An old bad edge the plan touches ' +
         'nothing of is not this plan’s finding — `validate_work_item` without a `planId` still ' +
-        'reports it. Returns ' +
+        'reports it. Beside the verdict, never part of it, `advisories` lists every ' +
+        '`likely-mislabelled-link` in a body the plan PROPOSES (an `add`, or a `modify` that ' +
+        'rewrites the body): a `[label](motir:<id>)` link whose label names a different key ' +
+        'than the card the id opens, or whose id opens no card (`targetKey: null`) — fix the ' +
+        'id before sealing, or every reader follows the link to the wrong card. Returns ' +
         '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
-        'crossLevelEdges: [...], sectionFindings: [...] }`; an item named ' +
+        'crossLevelEdges: [...], sectionFindings: [...], advisories: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
         '`condition` defaults to `loose` (a done dependency outside the plan counts as ' +
         'satisfied); `tight` requires every dependency to be IN the projection. This is the ' +

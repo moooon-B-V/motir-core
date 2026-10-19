@@ -271,6 +271,7 @@ describe('every other failure waits in To resume, as recorded', () => {
       deps: {
         resolveJobState: async () => state('running'),
         getFailedJobFacts: async () => ({ walkStop: null, lostMachine: false }),
+        cancelJob: async (jobId) => ({ jobId, status: 'canceled' }),
       },
     });
 
@@ -282,6 +283,7 @@ describe('every other failure waits in To resume, as recorded', () => {
         reason: 'silent',
         lostMachine: false,
         autoResume: null,
+        jobCancel: { cancelled: true },
       },
     ]);
     expect(submitJobMock).not.toHaveBeenCalled();

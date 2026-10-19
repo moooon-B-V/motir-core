@@ -5,12 +5,17 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { plansService } from '@/lib/services/plansService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueType } from '@/lib/issues/parentRules';
-import { isCoverageAdvisory, isReferenceAdvisory } from '@/lib/dto/workItems';
+import {
+  isCoverageAdvisory,
+  isMislabelledLinkAdvisory,
+  isReferenceAdvisory,
+} from '@/lib/dto/workItems';
 import type { ExecutorDto, WorkItemTypeDto, WorkItemValidityDto } from '@/lib/dto/workItems';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -731,7 +736,7 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
     expect(result.advisories).toEqual([]);
   });
 
-  it('a MALFORMED or UNKNOWN id is body text — ignored, never an error', async () => {
+  it('a MALFORMED id is body text — ignored; an UNKNOWN id is a dead link, never an error (MOTIR-9007)', async () => {
     const fx = await makeWorkItemFixture();
     const card = await mkBody(
       fx,
@@ -741,7 +746,19 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
     );
 
     const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
-    expect(result.advisories).toEqual([]);
+    // The two MALFORMED tokens are not links at all. The well-formed one opens
+    // nothing — no REFERENCE advisory (there is no far end), but the link itself
+    // is reported, as a shape advisory with no target.
+    expect(result.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: 'GHOST',
+        targetId: 'cl_does_not_exist',
+        targetKey: null,
+      },
+    ]);
     expect(result.valid).toBe(true);
   });
 
@@ -757,7 +774,19 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
     );
 
     const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
-    expect(result.advisories).toEqual([]);
+    // No reference advisory, and the dead-link advisory reads EXACTLY as an
+    // unknown id does — `targetKey: null`, nothing about the other tenant.
+    expect(result.advisories.filter(isReferenceAdvisory)).toEqual([]);
+    expect(result.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: 'ZULU-1',
+        targetId: foreign.id,
+        targetKey: null,
+      },
+    ]);
   });
 
   it('an id in a project the caller cannot BROWSE is omitted (no existence leak)', async () => {
@@ -803,7 +832,21 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
       card.identifier,
       plainCtx,
     );
-    expect(asPlain.advisories).toEqual([]);
+    // No reference advisory — and the link reads as a dead one, byte-identical
+    // to an id that exists nowhere, so it leaks nothing about SECRET-1.
+    expect(asPlain.advisories.filter(isReferenceAdvisory)).toEqual([]);
+    expect(asPlain.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: 'SECRET-1',
+        targetId: secretItem.id,
+        targetKey: null,
+      },
+    ]);
+    // The owner, who CAN open it, sees a correctly labelled link — nothing.
+    expect(asOwner.advisories.filter(isMislabelledLinkAdvisory)).toEqual([]);
   });
 });
 
@@ -885,6 +928,187 @@ describe('validate_work_item MCP tool — advisories in the dual content', () =>
 
     expect(struct(res).advisories).toEqual([]);
     expect(text(res)).not.toContain('NOT a blocker');
+    await client.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE MISLABELLED-LINK ADVISORY (MOTIR-9007) — a `[label](motir:<id>)` link whose
+// label names one key while the id opens another card, or opens none. The
+// projected (`planId`) half is pinned in
+// `tests/integration/plans/planValidityService.test.ts`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('workItemsService.validateWorkItem — the MISLABELLED-LINK advisory', () => {
+  const mislabelled = (r: WorkItemValidityDto) => r.advisories.filter(isMislabelledLinkAdvisory);
+
+  it('AC1: a link labelled with one key that opens ANOTHER card names the label, the id and the real key', async () => {
+    const fx = await makeWorkItemFixture();
+    const meant = await mk(fx, 'The card the label names', 'task'); // PROD-1
+    const opened = await mk(fx, 'The card the id opens', 'task'); // PROD-2
+    const card = await mkBody(
+      fx,
+      'Card with a crossed link',
+      'task',
+      `See ${ref(meant.identifier, opened.id)} for the gateway address.`,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: meant.identifier,
+        targetId: opened.id,
+        targetKey: opened.identifier,
+      },
+    ]);
+    // An advisory, never a blocker.
+    expect(result.valid).toBe(true);
+    expect(result.blockers).toEqual([]);
+  });
+
+  it('AC1: a link whose label MATCHES its target raises nothing — in any case', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await mk(fx, 'Target', 'task');
+    const card = await mkBody(
+      fx,
+      'Card with good links',
+      'task',
+      `${ref(target.identifier, target.id)} and ${ref(target.identifier.toLowerCase(), target.id)}`,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([]);
+  });
+
+  it('AC2: a link to an id that names NO card reports `targetKey: null`, whatever its label', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await mkBody(
+      fx,
+      'Card with dead links',
+      'task',
+      `${ref('PROD-4202', 'cmtehjd4s00kjhwphdoxk2mwz')} and ${ref('the ReDoS guard', 'cl_nowhere')}`,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([
+      // Ordered by target id, then label — `cl_…` sorts before `cm…`.
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: 'the ReDoS guard',
+        targetId: 'cl_nowhere',
+        targetKey: null,
+      },
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-mislabelled-link',
+        label: 'PROD-4202',
+        targetId: 'cmtehjd4s00kjhwphdoxk2mwz',
+        targetKey: null,
+      },
+    ]);
+  });
+
+  it('AC4: a NAME label on an existing card, or a key-shaped word no project carries, raises nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await mk(fx, 'Target', 'task');
+    const card = await mkBody(
+      fx,
+      'Card with name labels',
+      'task',
+      `${ref('Epic 10', target.id)}, ${ref('the export flow', target.id)}, ${ref('UTF-8 handling', target.id)}`,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([]);
+  });
+
+  it("a key in ANOTHER project of the workspace is a key too — the target's own prefix is not the only one", async () => {
+    const fx = await makeWorkItemFixture();
+    const sibling = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'ZETA',
+    });
+    await workItemsService.createWorkItem(
+      { projectId: sibling.id, kind: 'task', title: 'Over there' },
+      fx.ctx,
+    );
+    const here = await mk(fx, 'Here', 'task');
+    // The service may normalize the requested key, so read the one it stored.
+    const otherKey = `${sibling.identifier}-1`;
+    const card = await mkBody(fx, 'Card', 'task', `See ${ref(otherKey, here.id)}.`);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result).map((a) => [a.label, a.targetKey])).toEqual([
+      [otherKey, here.identifier],
+    ]);
+  });
+
+  it('AC4: a body with MANY links resolves every id in ONE read, not one per link', async () => {
+    const fx = await makeWorkItemFixture();
+    const targets: Awaited<ReturnType<typeof mk>>[] = [];
+    for (let i = 0; i < 6; i++) targets.push(await mk(fx, `Target ${i}`, 'task'));
+    const body = [
+      ...targets.map((t, i) => ref(targets[(i + 1) % targets.length]!.identifier, t.id)),
+      ref('PROD-999', 'cl_missing_one'),
+      ref('PROD-998', 'cl_missing_two'),
+    ].join('\n');
+    const card = await mkBody(fx, 'Card with many links', 'task', body);
+
+    const spy = vi.spyOn(workItemRepository, 'findByIdsInWorkspace');
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(new Set(spy.mock.calls[0]![0])).toEqual(
+      new Set([...targets.map((t) => t.id), 'cl_missing_one', 'cl_missing_two']),
+    );
+    // Every one of the eight is mislabelled: six crossed, two dead.
+    expect(mislabelled(result)).toHaveLength(8);
+  });
+
+  it('a DONE member is not scanned — its links are history', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await mkBody(fx, 'Shipped', 'task', ref('PROD-77', 'cl_gone'));
+    await markDone(card.id);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(mislabelled(result)).toEqual([]);
+  });
+});
+
+describe('validate_work_item (MCP) — the MISLABELLED-LINK advisory reaches the author', () => {
+  const text = (r: CallToolResult) =>
+    (r.content as { text: string }[]).map((c) => c.text).join('\n');
+
+  it('renders the crossed link with the real key, and the dead link as opening nothing — still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const meant = await mk(fx, 'Meant', 'task');
+    const opened = await mk(fx, 'Opened', 'task');
+    const card = await mkBody(
+      fx,
+      'Card',
+      'task',
+      `${ref(meant.identifier, opened.id)} and ${ref('PROD-404', 'cl_dead')}`,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain(
+      `${card.identifier} links "${meant.identifier}" to motir:${opened.id}, which is ${opened.identifier}.`,
+    );
+    expect(text(res)).toContain(
+      `${card.identifier} links "PROD-404" to motir:cl_dead, which opens NO work item.`,
+    );
     await client.close();
   });
 });

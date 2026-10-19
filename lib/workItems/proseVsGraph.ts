@@ -1543,3 +1543,57 @@ export function acceptanceCriteriaTexts(md: string | null | undefined): string[]
   }
   return criteria;
 }
+
+// ── The MISLABELLED-LINK check (MOTIR-9007) ───────────────────────────────────
+//
+// A `[label](motir:<id>)` link whose label says one key while the id opens
+// another card, or whose id opens no card at all. Every other check here reads
+// the id and never the label, so a link the author wrote from memory — the label
+// right, the id copied from a neighbouring card — passed every validation and
+// rendered as a chip for the wrong card. The judgement is pure; the service
+// resolves each id to its key first.
+
+/** A work-item key anywhere in a label, any case: `MOTIR-7656`, `acme-12`. */
+const LABEL_KEY_RE = /\b([A-Za-z][A-Za-z0-9]*)-(\d+)\b/g;
+
+/**
+ * The work-item keys a link LABEL names, upper-cased, in first-seen order — but
+ * only those whose prefix is in `knownPrefixes` (the workspace's project keys,
+ * upper-cased). A label is free text, so `UTF-8`, `RFC-9110` or `ADR-12` have
+ * the shape of a key without being one; a prefix no project carries is read as
+ * a word, which is what keeps a correct link with a descriptive label quiet.
+ */
+export function labelWorkItemKeys(label: string, knownPrefixes: ReadonlySet<string>): string[] {
+  const keys: string[] = [];
+  for (const m of label.matchAll(LABEL_KEY_RE)) {
+    const prefix = (m[1] as string).toUpperCase();
+    if (!knownPrefixes.has(prefix)) continue;
+    const key = `${prefix}-${m[2] as string}`;
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * Is this link mislabelled? `targetKey` is the key its id resolves to, or `null`
+ * when it resolves to no card the reader can see.
+ *
+ * - A link to NO card is mislabelled whatever its label says — the chip opens
+ *   nothing, and that holds for a label that is a name as much as for a key.
+ * - A link whose label names one or more keys, none of them the target's, is
+ *   mislabelled: a reader trusts the label and acts on the wrong card.
+ * - A label that names no key ("Epic 10", "the export story") is a NAME, and
+ *   says nothing a target could contradict.
+ *
+ * A label naming several keys is satisfied by any one of them matching, since
+ * "MOTIR-12 (was MOTIR-9)" is still a label for MOTIR-12.
+ */
+export function isMislabelledLink(
+  label: string,
+  targetKey: string | null,
+  knownPrefixes: ReadonlySet<string>,
+): boolean {
+  if (targetKey === null) return true;
+  const named = labelWorkItemKeys(label, knownPrefixes);
+  return named.length > 0 && !named.includes(targetKey.toUpperCase());
+}

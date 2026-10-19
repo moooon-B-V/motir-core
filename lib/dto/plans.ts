@@ -1573,6 +1573,8 @@ export interface PlanValidityDto {
    */
   valid: boolean;
   blockers: SprintBlockerDto[];
+  /** As on `WorkItemValidityDto.waits` (MOTIR-9021): the subset of `blockers` the plan does not own. */
+  waits?: SprintBlockerDto[];
   rejections: PlanApprovabilityRejectionDto[];
   /**
    * Every same-level cross-parent `blocked_by` in the PROJECTION whose parents

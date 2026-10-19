@@ -807,7 +807,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // never touches the finishability verdict this line describes.
     // Re-pinned for MOTIR-5427, summary UNCHANGED: the new `under-authored` advisory
     // is another severity on the channel, not part of the verdict this line names.
-    descriptionFingerprint: '62d9e7d60eaa',
+    // Re-pinned for MOTIR-9007, summary UNCHANGED: the new `likely-mislabelled-link`
+    // advisory is another severity on the channel, outside the verdict.
+    descriptionFingerprint: '94d73c229405',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -832,7 +834,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // cross-parent edges" are the plan's own — the two edge lists hold only the
     // findings the plan introduces, not every old edge in the project.
     // Re-pinned for MOTIR-9032's advisory `sectionFindings`, summary UNCHANGED.
-    descriptionFingerprint: '700a1f88e643',
+    // Re-pinned for MOTIR-9007, summary UNCHANGED: `advisories` (mislabelled links in
+    // proposed bodies) rides beside the verdict and never touches it.
+    descriptionFingerprint: 'f10d745aade7',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

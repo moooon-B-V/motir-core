@@ -19,6 +19,8 @@ import {
   overGateSizing,
   resolvePathRepo,
   underAuthored,
+  isMislabelledLink,
+  labelWorkItemKeys,
   selfBlockingDesignCriteria,
   namesDesignAsset,
   namesDesignDocumentAmendment,
@@ -1395,5 +1397,41 @@ describe('underAuthored — a childless leaf carrying nothing, as a NULL CHECK (
   it('EXEMPTS A CONTAINER by construction — gate 20 is a leaf bar', () => {
     expect(underAuthored({ ...bare, hasChildren: true })).toBeNull();
     expect(underAuthored({ ...bare, hasChildren: true, descriptionMd: null })).toBeNull();
+  });
+});
+
+describe('the MISLABELLED-LINK check (MOTIR-9007) — pure', () => {
+  const projects = new Set(['MOTIR', 'ACME']);
+
+  it('reads only keys whose prefix is a project, upper-cased and deduped', () => {
+    expect(labelWorkItemKeys('MOTIR-7656', projects)).toEqual(['MOTIR-7656']);
+    expect(labelWorkItemKeys('acme-12 and ACME-12, then MOTIR-3', projects)).toEqual([
+      'ACME-12',
+      'MOTIR-3',
+    ]);
+    // Key-shaped words no project carries are words, not keys.
+    expect(labelWorkItemKeys('UTF-8 per RFC-9110', projects)).toEqual([]);
+    expect(labelWorkItemKeys('Epic 10', projects)).toEqual([]);
+  });
+
+  it('the MOTIR-714 instance: a label naming MOTIR-7656 on a link that opens MOTIR-7324', () => {
+    expect(isMislabelledLink('MOTIR-7656', 'MOTIR-7324', projects)).toBe(true);
+    expect(isMislabelledLink('MOTIR-7656', 'MOTIR-7656', projects)).toBe(false);
+    expect(isMislabelledLink('motir-7656', 'MOTIR-7656', projects)).toBe(false);
+  });
+
+  it('a label naming SEVERAL keys passes when any one of them is the target', () => {
+    expect(isMislabelledLink('MOTIR-1 / MOTIR-2', 'MOTIR-2', projects)).toBe(false);
+    expect(isMislabelledLink('MOTIR-1 / MOTIR-2', 'MOTIR-3', projects)).toBe(true);
+  });
+
+  it('a NAME label is never contradicted by a target that exists', () => {
+    expect(isMislabelledLink('the export flow', 'MOTIR-7324', projects)).toBe(false);
+    expect(isMislabelledLink('', 'MOTIR-7324', projects)).toBe(false);
+  });
+
+  it('a link to NO card is mislabelled whatever its label says', () => {
+    expect(isMislabelledLink('MOTIR-4202', null, projects)).toBe(true);
+    expect(isMislabelledLink('the ReDoS guard', null, projects)).toBe(true);
   });
 });
