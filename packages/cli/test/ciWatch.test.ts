@@ -340,6 +340,75 @@ describe('a card read that FAILS', () => {
   });
 });
 
+describe('the lane-facing phase — resuming the run’s own session (MOTIR-9048)', () => {
+  const plain = { command: 'fresh', binary: 'fresh', args: [] };
+  const resumed = { command: 'resume', binary: 'resume', args: ['--resume', 's1'] };
+
+  const watch = async (opts: { resumeAgent?: typeof resumed; reds: number }) => {
+    const used: { command: string; prompt: string; cwd: string }[] = [];
+    const lines: string[] = [];
+    let call = 0;
+    const outcome = await runCiWatchPhase({
+      client: {
+        getWorkItem: async () => {
+          call += 1;
+          return {
+            deliveries: [delivery({ ci: call <= opts.reds ? 'failing' : 'passing' })],
+          } as never;
+        },
+      },
+      key: 'PROD-1',
+      title: 'the card',
+      agent: plain,
+      ...(opts.resumeAgent ? { resumeAgent: opts.resumeAgent } : {}),
+      cwd: '/tmp/checkout',
+      report: (line) => lines.push(line),
+      wait: async () => {},
+      runAgentFn: async ({ command, prompt, cwd }) => {
+        used.push({ command: command.command, prompt, cwd });
+        return { exitCode: 0, signal: null, model: null };
+      },
+    });
+    return { outcome, used, lines };
+  };
+
+  it('spawns the resume command with the unchanged prompt and cwd on every attempt', async () => {
+    const { used, lines } = await watch({ resumeAgent: resumed, reds: 3 });
+    expect(used.map((u) => u.command)).toEqual(['resume', 'resume', 'resume']);
+    expect(used.every((u) => u.cwd === '/tmp/checkout')).toBe(true);
+    expect(used[0]?.prompt).toContain('# Make the build pass — PROD-1 (the card)');
+    expect(lines.filter((l) => l.includes('continuing the run’s own agent session'))).toHaveLength(
+      3,
+    );
+    expect(lines.join('\n')).not.toContain('fresh agent');
+  });
+
+  it('spawns exactly the plain agent when no resume command is given', async () => {
+    const { used, lines } = await watch({ reds: 2 });
+    expect(used.map((u) => u.command)).toEqual(['fresh', 'fresh']);
+    expect(lines.filter((l) => l.includes('starting a fresh agent'))).toHaveLength(2);
+    expect(lines.join('\n')).not.toContain('continuing');
+  });
+
+  it('keeps the budget under either form: five reds give up, a failing agent is fix_failed', async () => {
+    const gaveUp = await watch({ resumeAgent: resumed, reds: 99 });
+    expect(gaveUp.outcome).toMatchObject({ kind: 'gave_up', attempts: 5 });
+    expect(gaveUp.used).toHaveLength(5);
+    const failed = await runCiWatchPhase({
+      client: { getWorkItem: async () => ({ deliveries: [delivery({ ci: 'failing' })] }) as never },
+      key: 'PROD-1',
+      title: null,
+      agent: plain,
+      resumeAgent: resumed,
+      cwd: '/tmp/checkout',
+      report: () => {},
+      wait: async () => {},
+      runAgentFn: async () => ({ exitCode: 3, signal: null, model: null }),
+    });
+    expect(failed).toEqual({ kind: 'fix_failed', attempts: 1, detail: 'exit 3' });
+  });
+});
+
 describe('the lane-facing phase', () => {
   it('turns a non-zero fixing agent into a fix_failed, naming the exit code', async () => {
     let reads = 0;
