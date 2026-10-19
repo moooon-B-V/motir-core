@@ -309,6 +309,16 @@ test('the run overlay splits, wraps, closes top left and switches its set like t
       await page.keyboard.press('Escape');
       await page.waitForURL(noRunParam);
       await expect(overlay(page)).toHaveCount(0);
+
+      // Focus returns to whatever held it when the dialog opened. The previous
+      // chapter reopened by address, so nothing held it then; open by the row's
+      // own door from here on, which is how a reader does.
+      await opener.click();
+      await page.waitForURL(hasRunParam);
+      await expect(overlay(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await page.keyboard.press('Escape');
+      await page.waitForURL(noRunParam);
+      await expect(overlay(page)).toHaveCount(0);
       await expect(opener).toBeFocused();
 
       await opener.click();
