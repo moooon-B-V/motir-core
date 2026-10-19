@@ -158,7 +158,10 @@ describe('ITEM-ANCHORED planning', () => {
     expect(await userBodies(projectWide.id)).toEqual(['earlier project talk']);
     expect(await userBodies(run.sessionId)).toEqual(['plan this story']);
     // …and the job names the card the person added.
-    const context = submitJobMock.mock.calls[0]![2] as Record<string, unknown>;
+    const context = (submitJobMock.mock.calls as unknown as unknown[][])[0]![2] as Record<
+      string,
+      unknown
+    >;
     expect(context['targetKeys']).toEqual([item.identifier]);
   });
 
