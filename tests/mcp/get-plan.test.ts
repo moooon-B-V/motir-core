@@ -7,6 +7,7 @@ import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { toolScope } from '@/lib/mcp/scopes';
 import { GET_PLAN_TOOL_NAME } from '@/lib/mcp/tools/getPlan';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import { parseSections } from '@/lib/workItems/sections/parse';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -589,6 +590,65 @@ describe('get_plan — malformed rows are rendered, never crash the read', () =>
     expect(rendered).toContain('~ modify (no target)');
     // Neither half of the cycle was swallowed by the root-set walk.
     expect(struct(res).items.map((i) => i.id)).toEqual(expect.arrayContaining([first, second]));
+    await client.close();
+  });
+});
+
+describe('get_plan — includeSections (MOTIR-9033)', () => {
+  const planWithProposals = async (fx: WorkItemFixture) => {
+    const existing = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', type: 'code', title: 'Existing' },
+      fx.ctx,
+    );
+    const other = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', type: 'code', title: 'Other' },
+      fx.ctx,
+    );
+    const plan = await makePlan(fx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Prose add',
+            kind: 'task',
+            type: 'code',
+            descriptionMd: 'Plain body, no headings.',
+          },
+        },
+        { op: 'modify', workItemId: existing.id, patch: { title: 'Renamed' } },
+        { op: 'remove', workItemId: other.id },
+      ],
+      fx.ctx,
+    );
+    return plan;
+  };
+
+  it('an unasked call is unchanged: no parsedSections, no suffix', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await planWithProposals(fx);
+    const client = await connectClient(fx.ctx);
+    const res = await call(client, { planId: plan.id });
+    expect(res.structuredContent).not.toHaveProperty('parsedSections');
+    expect(text(res)).not.toContain('· sections');
+    await client.close();
+  });
+
+  it('an asked call parses every add, none of the modify / remove, and leaves items alone', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await planWithProposals(fx);
+    const client = await connectClient(fx.ctx);
+    const unasked = await call(client, { planId: plan.id });
+    const asked = await call(client, { planId: plan.id, includeSections: true });
+
+    const view = (asked.structuredContent as { parsedSections: Record<string, unknown> })
+      .parsedSections;
+    const adds = struct(asked).items.filter((i) => i.op === 'add');
+    expect(Object.keys(view)).toEqual(adds.map((i) => i.id));
+    expect(view[adds[0]!.id]).toEqual(parseSections('Plain body, no headings.', 'task', 'code'));
+    expect(struct(asked).items).toEqual(struct(unasked).items);
+    expect(text(asked)).toMatch(/Prose add.* · sections missing: /);
     await client.close();
   });
 });

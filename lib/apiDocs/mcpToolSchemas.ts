@@ -1552,6 +1552,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The plan id — as returned by an `expand_item` submit, by `get_plan_status`, or shown on the plan in Motir.',
       },
+      includeSections: {
+        type: 'boolean',
+        description:
+          'OPTIONAL, default false. When true the tool also parses the free-text body into the registry’s sections for the card’s kind × type and returns the result as `parsedSections` beside the body: `{ sections, found, missing, invalid, signals }` — the sections found, the required ones missing BY NAME, the ones that could not be read into their shape, and the parser’s signals (`no-headings`, `quoted-gutter`, …). The body is returned unchanged and nothing is stored; a body with no headings is answered, never refused.',
+      },
     },
     required: ['planId'],
     additionalProperties: false,
@@ -1619,6 +1624,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         minLength: 1,
         description:
           'OPTIONAL — the id of a plan (as returned by `create_plan`) to PROJECT over. When given, the answer is computed over the project’s live tree ⊕ that plan’s proposals, so an agent can check the tree it is proposing BEFORE anyone reviews it. Omit it for the committed tree — a call without this argument behaves exactly as it did before projection existed. Nothing is created, mutated or persisted either way, and a proposal never becomes a work item except by approving the plan in Motir.',
+      },
+      includeSections: {
+        type: 'boolean',
+        description:
+          'OPTIONAL, default false. When true the tool also parses the free-text body into the registry’s sections for the card’s kind × type and returns the result as `parsedSections` beside the body: `{ sections, found, missing, invalid, signals }` — the sections found, the required ones missing BY NAME, the ones that could not be read into their shape, and the parser’s signals (`no-headings`, `quoted-gutter`, …). The body is returned unchanged and nothing is stored; a body with no headings is answered, never refused.',
       },
     },
     required: ['key'],

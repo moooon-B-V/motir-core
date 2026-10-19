@@ -539,7 +539,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-8940, summary UNCHANGED: the item may be addressed by its
     // internal id as well as its key — how a card is NAMED, which a summary of what
     // the read returns does not describe.
-    descriptionFingerprint: 'e36551ac6537',
+    // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` adds a
+    // parsed view of the body the read already returns — the body, not a new read.
+    descriptionFingerprint: '18bf3c3889bd',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
@@ -872,7 +874,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // person's progress needs to know it does.
     summary:
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, and the steps a change replaces with how many were ticked.',
-    descriptionFingerprint: '2db178782de8',
+    // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` parses
+    // each `add`'s body into sections on request; the summary describes what is bundled.
+    descriptionFingerprint: '00accdd86bbd',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and

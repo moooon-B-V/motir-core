@@ -1050,10 +1050,11 @@ single named extension point enrichment lands on. Requires `project:browse`.
 Read one work item by identifier as the full issue-detail aggregate — the same
 shape the detail page reads.
 
-| Input           | Type   | Required | Notes                                                                                                              |
-| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                             |
-| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
+| Input             | Type    | Required | Notes                                                                                                                                                                 |
+| ----------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`             | string  | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                                |
+| `sessionBranch`   | string  | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`).                                                    |
+| `includeSections` | boolean | no       | Default `false`. `true` also returns `parsedSections` — the body parsed at read time into the registry's sections for the card's kind × type (MOTIR-9033). See below. |
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
 (description, status, priority, assignee, …), its parent, children, dependency
@@ -1066,6 +1067,16 @@ array of `{ linkId, item }`, `[]` when empty. The text block prints
 so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
 paid when there is something to read. The child rows do **not** carry it: this
 aggregate answers for one card, and the list reads answer per row.
+
+**`includeSections`** (MOTIR-9033) is an opt-in read of the body as sections.
+Unasked, the answer is byte-identical to before. Asked, the tool runs
+`parseSections` on the body it already read, with the card's kind and type, and
+returns `parsedSections: { sections, found, missing, invalid, signals }` beside the
+unchanged `item.descriptionMd`, plus one `Sections: found … · missing …` text line
+after `Readiness:`. It is computed at read time, never stored and never written back;
+a hand-written body with no headings is answered (its text comes back as `framing`,
+the required sections are `missing`, signal `no-headings`), never refused. With a
+`planId` it parses the projected target's own body, kind and type.
 
 The aggregate **declares** the item's OWN folder placement (MOTIR-5413) —
 `folderId` (the folder it is filed in) and `folderPath` (that folder's names,
@@ -3853,9 +3864,16 @@ other tool keeps. Requires `project:browse`.
 Read a plan **with the proposals it bundles** — what the planning pass actually
 proposed, not just how many items it produced.
 
-| Input    | Type   | Required | Notes                                                                    |
-| -------- | ------ | -------- | ------------------------------------------------------------------------ |
-| `planId` | string | yes      | The plan id — from an `expand_item` submit, `get_plan_status`, or Motir. |
+| Input             | Type    | Required | Notes                                                                                                       |
+| ----------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `planId`          | string  | yes      | The plan id — from an `expand_item` submit, `get_plan_status`, or Motir.                                    |
+| `includeSections` | boolean | no       | Default `false`. `true` also returns `parsedSections`, keyed by plan item id, for every `add` (MOTIR-9033). |
+
+With `includeSections`, `structuredContent.parsedSections[<planItemId>]` holds each
+`add` proposal's body parsed at read time (`{ sections, found, missing, invalid,
+signals }`, the kind defaulting as the plan doors default it), and each `add` line
+ends ` · sections missing: …` or ` · sections: complete`. `modify` and `remove`
+proposals are not parsed, `items[]` is untouched, and an unasked call is unchanged.
 
 **Which one to reach for:** `get_plan_status` answers _"what became of the job I
 fired?"_ — a status, a count, and (while generating) whether the job died. It is
