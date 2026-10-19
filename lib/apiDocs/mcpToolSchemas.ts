@@ -1168,6 +1168,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           "Optional: the id of a folder (as `list_folders` returns it) to FILE the new item into — the other placement beside parentKey, which it may not be combined with (PLACEMENT_CONFLICT). A filed item is a root, so any kind may be filed, a subtask included. The folder must be in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
       },
       descriptionMd: { type: 'string', description: 'Optional Markdown description body.' },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The item’s sections as named values (framing, acceptanceCriteria, scopeBoundary, …), instead of composing headings inside `descriptionMd`: the door checks them against the section set for the item’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_SECTIONS, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` is never stored. Never send it together with `descriptionMd` (SECTIONS_AND_DESCRIPTION_CONFLICT). The section sets, their shapes and which are required are served by `get_section_sets`. On an UPDATE it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list; it is judged on the item’s type AFTER this write. Omit it to keep sending a plain `descriptionMd` exactly as before.',
+      },
       language: {
         type: 'string',
         enum: ['en', 'zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'],
@@ -3706,6 +3712,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       descriptionMd: {
         type: ['string', 'null'],
         description: 'New Markdown description body; null clears it.',
+      },
+      sections: {
+        type: 'object',
+        additionalProperties: {},
+        description:
+          'OPTIONAL. The item’s sections as named values (framing, acceptanceCriteria, scopeBoundary, …), instead of composing headings inside `descriptionMd`: the door checks them against the section set for the item’s kind × type, refuses a missing, unknown or invalid section BY NAME with INVALID_SECTIONS, writes the headings itself and stores ONLY the rendered `descriptionMd` — `sections` is never stored. Never send it together with `descriptionMd` (SECTIONS_AND_DESCRIPTION_CONFLICT). The section sets, their shapes and which are required are served by `get_section_sets`. On an UPDATE it is sparse at the section key: the stored body is read back into its sections first, a section you omit is kept, an explicit `null` clears one, and a list REPLACES the list; it is judged on the item’s type AFTER this write. Omit it to keep sending a plain `descriptionMd` exactly as before.',
       },
       explanationMd: {
         type: ['string', 'null'],

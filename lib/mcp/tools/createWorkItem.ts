@@ -24,6 +24,10 @@ import type {
 } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import {
+  WORK_ITEM_SECTIONS_INPUT_DESCRIPTION,
+  workItemSectionsInputSchema,
+} from '../sectionsInput';
 import { obsolescenceNoteWriteField, obsolescenceWriteField } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { presentMcpWorkItem, workItemPlacementWritePayload } from '../payloads/workItems';
@@ -107,6 +111,7 @@ const inputSchema = {
         "in this project: an unknown id is FOLDER_NOT_FOUND, another project's is CROSS_PROJECT_FOLDER.",
     ),
   descriptionMd: z.string().optional().describe('Optional Markdown description body.'),
+  sections: workItemSectionsInputSchema.optional().describe(WORK_ITEM_SECTIONS_INPUT_DESCRIPTION),
   // The language the text is written in (Story MOTIR-7731 · MOTIR-8098). No
   // `explanation` member: this tool writes no explanation.
   language: languageInput,
@@ -243,6 +248,7 @@ interface CreateWorkItemArgs {
   parentKey?: string;
   folderId?: string;
   descriptionMd?: string;
+  sections?: Record<string, unknown>;
   language?: Locale;
   languages?: Partial<Record<'title' | 'description', Locale>>;
   priority?: WorkItemPriority;
@@ -301,7 +307,16 @@ export async function runCreateWorkItem(
       // FOLDERS (MOTIR-5413): forwarded only when supplied. The service refuses
       // it beside `parentId` and validates the folder under a lock.
       ...(args.folderId !== undefined ? { folderId: args.folderId } : {}),
-      descriptionMd: args.descriptionMd ?? null,
+      // Sections (MOTIR-9031): with `sections` the service renders the body, so a
+      // missing `descriptionMd` stays ABSENT (never `null`, which would read as a
+      // second source) and one that is sent is left for the service to refuse.
+      // Without it, today's `?? null` is unchanged.
+      ...(args.sections !== undefined
+        ? {
+            sections: args.sections as NonNullable<CreateWorkItemInput['sections']>,
+            ...(args.descriptionMd !== undefined ? { descriptionMd: args.descriptionMd } : {}),
+          }
+        : { descriptionMd: args.descriptionMd ?? null }),
       // The service records the org's content language when neither is supplied.
       ...languageArgs(args),
       ...(args.priority ? { priority: args.priority } : {}),
@@ -389,7 +404,11 @@ export function registerCreateWorkItem(
         'Honors the same kind-parent rules (an epic is root-only — ' +
         'a parented epic is rejected), leaf-only type/executor/difficulty rule, and access ' +
         'checks as the UI. `language` (or per-field `languages`) names the language the ' +
-        "text is written in; omitted, the organisation's content language is recorded.",
+        "text is written in; omitted, the organisation's content language is recorded. " +
+        'Send `sections` (see get_section_sets) instead of `descriptionMd` to have the door ' +
+        'check them for the kind and type, name a missing one (INVALID_SECTIONS) and render ' +
+        'them into the description; sending both is refused (SECTIONS_AND_DESCRIPTION_CONFLICT) ' +
+        'and a plain `descriptionMd` is stored exactly as sent.',
       inputSchema,
     },
     async (args, extra) => runCreateWorkItem(args, resolveContext(extra)),

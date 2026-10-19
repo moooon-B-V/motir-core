@@ -13,6 +13,7 @@ import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { Locale } from '@/lib/i18n/locales';
+import type { WorkItemSections } from '@/lib/workItems/sections/registry';
 import type { WorkflowDto, StatusCategoryDto } from './workflows';
 import type { SprintBlockerDto } from './sprints';
 import type { RelationshipKind } from './workItemLinks';
@@ -1292,8 +1293,24 @@ export interface WorkItemProvenanceInput {
   implementation?: WorkItemImplementationProvenanceInput;
 }
 
+/**
+ * The `sections` input of a work-item write (Story MOTIR-9023 · MOTIR-9031): the
+ * card's sections as separate typed values, rendered into `descriptionMd` by the
+ * service. On an UPDATE it is a SPARSE patch at the section key — an omitted
+ * section is kept, an explicit `null` clears it, a list replaces the list. A
+ * write input only: nothing structured is stored and no read returns it.
+ */
+export type WorkItemSectionsInput = { [K in keyof WorkItemSections]?: WorkItemSections[K] | null };
+
 export interface CreateWorkItemInput {
   projectId: string;
+  /**
+   * Sections to render into `descriptionMd` (MOTIR-9031). Checked against the
+   * registry for `kind` × `type`; a missing, unknown or invalid section is
+   * `InvalidSectionsError`, and `sections` beside `descriptionMd` is
+   * `SectionsWithDescriptionError`. Omitted, `descriptionMd` is stored as sent.
+   */
+  sections?: WorkItemSectionsInput;
   /**
    * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
    * `language` for every text field written, `languages` per field (wins).
@@ -1510,6 +1527,12 @@ export interface CreateWorkItemLinkInput {
  * transitions the source to `user_edited`.
  */
 export interface UpdateWorkItemInput {
+  /**
+   * Sections to merge over the stored body and render into `descriptionMd`
+   * (MOTIR-9031), judged on the card's FINAL kind × type. See
+   * {@link WorkItemSectionsInput}. Refused beside `descriptionMd`.
+   */
+  sections?: WorkItemSectionsInput;
   /**
    * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
    * `language` for every text field written, `languages` per field (wins).

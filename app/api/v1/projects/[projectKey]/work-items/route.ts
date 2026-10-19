@@ -1,3 +1,4 @@
+import type { CreateWorkItemInput } from '@/lib/dto/workItems';
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { encodePageCursor, parsePageRequest } from '@/lib/api/v1/pagination';
@@ -125,6 +126,11 @@ export const POST = withV1Route<{ projectKey: string }>(
         kind: body.kind,
         title: body.title,
         parentId,
+        // The sections input (MOTIR-9031): the service checks it against the registry
+        // for the new item's kind × type and renders it into `descriptionMd`.
+        ...(body.sections === undefined
+          ? {}
+          : { sections: body.sections as NonNullable<CreateWorkItemInput['sections']> }),
         // The folder to file it into (MOTIR-5412). Beside a `parentKey` this is
         // the service's `PLACEMENT_CONFLICT` (422), raised before anything is written.
         ...(body.folderId === undefined ? {} : { folderId: body.folderId }),

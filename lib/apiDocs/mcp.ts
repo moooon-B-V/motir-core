@@ -1015,7 +1015,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-8098, summary WIDENED: `language` / `languages` override the
     // organisation's content language for the new item's text, one more field set in
     // the one call, and this summary enumerates them.
-    descriptionFingerprint: '058838aefb65',
+    // Re-pinned for MOTIR-9031, summary UNCHANGED: the description names the optional
+    // `sections` input (INVALID_SECTIONS, SECTIONS_AND_DESCRIPTION_CONFLICT); a body
+    // written as sections is still one description, and the summary lists no body
+    // rule. Left alone so the ten translated summaries keep matching their source.
+    descriptionFingerprint: '0f4e3cd9e4f1',
   },
   update_work_item: {
     // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
@@ -1032,7 +1036,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // status rule.
     // Re-pinned for MOTIR-8098, summary UNCHANGED: the description names `language` /
     // `languages` for the edited text; "any subset of an item's fields" covers them.
-    descriptionFingerprint: '1a04f0375758',
+    // Re-pinned for MOTIR-9031, summary UNCHANGED: the description names the optional
+    // `sections` input merged over the stored body; "any subset of an item's fields"
+    // covers it, and the translated summaries keep matching their source.
+    descriptionFingerprint: '9dc87a265b74',
   },
   transition_status: {
     summary:

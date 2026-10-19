@@ -30,6 +30,14 @@ export interface ApiV1ErrorBody {
   /** `RATE_LIMIT_EXCEEDED` (MOTIR-8600): whole seconds to wait before retrying —
    *  the same number as the `Retry-After` header. */
   retryAfterSeconds?: number;
+  /** `INVALID_SECTIONS` (MOTIR-9031): the sections the registry refused for the
+   *  item's kind × type, by name — the same three lists the MCP tool names in its
+   *  message. */
+  sections?: {
+    missing: string[];
+    unknown: string[];
+    invalid: { section: string; message: string }[];
+  };
 }
 
 /**
@@ -274,6 +282,11 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // the service's own `InvalidObsolescenceError` backstop maps here rather than
   // falling through to a 500.
   INVALID_OBSOLESCENCE: 422,
+  // The sections write interface (Story MOTIR-9023 · MOTIR-9031): `sections` the
+  // registry refuses for the item's kind × type (a missing, unknown or invalid
+  // section, named in the `sections` field), and `sections` beside `descriptionMd`.
+  INVALID_SECTIONS: 422,
+  SECTIONS_AND_DESCRIPTION_CONFLICT: 422,
   // MOTIR-6672 · MOTIR-6673 — a mark SET on a card whose status is outside the
   // done category. The value is valid; the card is not finished, and the remedy is
   // to archive it instead (or finish it first). Its payload rides as `item`.
@@ -662,6 +675,24 @@ function obsolescencePayload(err: { code: string }): Pick<ApiV1ErrorBody, 'item'
   return {};
 }
 
+/**
+ * The `INVALID_SECTIONS` body's by-name findings (MOTIR-9031), read off the error's
+ * own fields by CODE — like {@link obsolescencePayload}, this module imports no
+ * domain class.
+ */
+function sectionsPayload(err: { code: string }): Pick<ApiV1ErrorBody, 'sections'> {
+  if (err.code !== 'INVALID_SECTIONS') return {};
+  const e = err as Record<string, unknown>;
+  const names = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+  const invalid = Array.isArray(e['invalid'])
+    ? (e['invalid'] as { section?: unknown; message?: unknown }[]).map((i) => ({
+        section: String(i.section),
+        message: String(i.message),
+      }))
+    : [];
+  return { sections: { missing: names(e['missing']), unknown: names(e['unknown']), invalid } };
+}
+
 function hasStringCode(err: unknown): err is { code: string; message: string } {
   return (
     typeof err === 'object' && err !== null && typeof (err as { code?: unknown }).code === 'string'
@@ -702,7 +733,15 @@ export function classifyApiV1Error(
   if (hasStringCode(err)) {
     const status = DOMAIN_ERROR_STATUS[err.code];
     if (status !== undefined) {
-      return { status, body: { code: err.code, error: err.message, ...obsolescencePayload(err) } };
+      return {
+        status,
+        body: {
+          code: err.code,
+          error: err.message,
+          ...obsolescencePayload(err),
+          ...sectionsPayload(err),
+        },
+      };
     }
   }
   return undefined;

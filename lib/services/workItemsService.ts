@@ -351,6 +351,11 @@ import {
 import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import { ContainerRepoSetNotWritableError } from '@/lib/workItems/errors';
+import { resolveSectionsInput } from '@/lib/plans/applySectionsInput';
+import {
+  InvalidSectionsError,
+  SectionsWithDescriptionError,
+} from '@/lib/workItems/sections/errors';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
@@ -1794,6 +1799,50 @@ export interface CreateWorkItemOptions {
   inTransaction?: (created: WorkItemDto, tx: Prisma.TransactionClient) => Promise<void>;
 }
 
+/**
+ * The ONE place the sections-write rules are applied on the work-item doors
+ * (Story MOTIR-9023 · MOTIR-9031). Returns the `descriptionMd` to write, or
+ * throws before anything is written:
+ *   · `sections` beside `descriptionMd` → `SectionsWithDescriptionError`;
+ *   · a missing / unknown / invalid section for the FINAL kind × type →
+ *     `InvalidSectionsError`, naming each.
+ * On an update `currentBody` is the stored body, parsed and merged sparsely under
+ * the row lock the caller already holds; on a create it is null. The plan doors
+ * run the same resolution (`applySectionsInput`), so one partial `sections`
+ * behaves alike on both families. Nothing structured is stored: the rendered text
+ * is the only thing that is.
+ */
+function resolveSectionsWrite(args: {
+  kind: string;
+  type: string | null;
+  sections: unknown;
+  descriptionMd: string | null | undefined;
+  currentBody: string | null;
+}): string {
+  if (args.descriptionMd !== undefined) throw new SectionsWithDescriptionError();
+  const outcome = resolveSectionsInput({ ...args, label: 'work item' });
+  if (outcome.ok) return outcome.body;
+  if (outcome.reason === 'conflict') throw new SectionsWithDescriptionError();
+  const findings: string[] = [];
+  if (outcome.reason === 'sections') {
+    if (outcome.missing.length > 0) findings.push(`missing: ${outcome.missing.join(', ')}`);
+    if (outcome.unknown.length > 0) findings.push(`unknown: ${outcome.unknown.join(', ')}`);
+    if (outcome.invalid.length > 0) {
+      findings.push(
+        `invalid: ${outcome.invalid.map((i) => `${i.section} (${i.message})`).join(', ')}`,
+      );
+    }
+  }
+  throw new InvalidSectionsError(
+    findings.length > 0
+      ? `sections refused — ${findings.join('; ')}. Read the section set for this kind and type with get_section_sets.`
+      : `sections refused — ${outcome.detail}`,
+    outcome.missing,
+    outcome.unknown,
+    outcome.invalid,
+  );
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -1917,6 +1966,20 @@ export const workItemsService = {
     const itemType = input.type ?? null;
     const itemExecutor = resolveExecutor(itemType, input.executor, null);
     assertTypeKindConsistent(input.kind, itemType, itemExecutor);
+    // Sections (Story MOTIR-9023 · MOTIR-9031): an agent's typed `sections` are
+    // checked against the registry for THIS kind × type and rendered into the body
+    // BEFORE the key-allocation transaction, so a refused write burns no key. A
+    // write with no `sections` stores `descriptionMd` exactly as sent.
+    const writtenDescriptionMd =
+      input.sections !== undefined
+        ? resolveSectionsWrite({
+            kind: input.kind,
+            type: itemType,
+            sections: input.sections,
+            descriptionMd: input.descriptionMd,
+            currentBody: null,
+          })
+        : input.descriptionMd;
     // Difficulty (Story MOTIR-6016): leaf-only by the same kind rule, checked
     // before the key-allocation transaction for the same reason.
     const itemDifficulty = input.difficulty ?? null;
@@ -2006,7 +2069,7 @@ export const workItemsService = {
     // transaction (reference data, the commentsService pattern); invalid /
     // non-viewable ids are silently dropped (the Jira rule). The validated set
     // rides the post-commit `work-item/mentioned` event.
-    const descTokenIds = parseMentionIds(input.descriptionMd ?? '');
+    const descTokenIds = parseMentionIds(writtenDescriptionMd ?? '');
     let descMentionIds: string[] = [];
     if (descTokenIds.length > 0) {
       const mentionable = await resolveDescriptionMentionable(
@@ -2075,7 +2138,7 @@ export const workItemsService = {
         {
           projectId: input.projectId,
           projectIdentifier: prefix,
-          fields: [input.descriptionMd, input.explanationMd],
+          fields: [writtenDescriptionMd, input.explanationMd],
         },
         tx,
       );
@@ -2493,6 +2556,7 @@ export const workItemsService = {
       'kind',
       'title',
       'descriptionMd',
+      'sections',
       'explanationMd',
       'explanationSource',
       'assigneeId',
@@ -2646,9 +2710,26 @@ export const workItemsService = {
       // already-canonical body stays a no-op (the normalize is idempotent).
       // Runs only when a body field is supplied; a field absent from the patch
       // stays `undefined`, preserving the "was it supplied?" guards below.
-      let normalizedDescriptionMd: string | null | undefined = patch.descriptionMd;
+      //
+      // Sections (Story MOTIR-9023 · MOTIR-9031): a patch carrying `sections` is
+      // rendered HERE, under the lock, against the stored body and the card's
+      // FINAL kind × type (the patched one when this write changes it). The check
+      // and the render both finish before any write, so a refused write changes
+      // nothing. The rendered text then flows through the same normalize / diff
+      // path as a typed body. No `sections` → `patch.descriptionMd` as sent.
+      const writtenDescriptionMd: string | null | undefined =
+        patch.sections !== undefined
+          ? resolveSectionsWrite({
+              kind: patch.kind !== undefined ? patch.kind : current.kind,
+              type: patch.type !== undefined ? patch.type : current.type,
+              sections: patch.sections,
+              descriptionMd: patch.descriptionMd,
+              currentBody: current.descriptionMd,
+            })
+          : patch.descriptionMd;
+      let normalizedDescriptionMd: string | null | undefined = writtenDescriptionMd;
       let normalizedExplanationMd: string | null | undefined = patch.explanationMd;
-      if (patch.descriptionMd !== undefined || patch.explanationMd !== undefined) {
+      if (writtenDescriptionMd !== undefined || patch.explanationMd !== undefined) {
         const refProject = await projectRepository.findById(current.projectId, tx);
         /* istanbul ignore else -- the project always resolves (it was read to gate
            the edit above); the guard narrows the nullable type only */
@@ -2657,7 +2738,7 @@ export const workItemsService = {
             {
               projectId: current.projectId,
               projectIdentifier: refProject.identifier,
-              fields: [patch.descriptionMd, patch.explanationMd],
+              fields: [writtenDescriptionMd, patch.explanationMd],
             },
             tx,
           );

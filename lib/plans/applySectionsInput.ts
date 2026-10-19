@@ -44,23 +44,55 @@ export interface ApplySectionsArgs {
   sections: unknown;
   /** The `descriptionMd` the SAME call sent — `undefined` when it sent none. */
   descriptionMd: string | null | undefined;
-  /** The proposal's stored body before this call; `undefined`/`null` on an `add`
-   *  that has none yet. Only an edit has one. */
+  /** The stored body before this call; `undefined`/`null` on an `add` that has
+   *  none yet. Only an edit has one. */
   currentBody: string | null | undefined;
-  /** The MERGED kind — the cell is judged on what the proposal will BE. */
+  /** The MERGED kind — the cell is judged on what the item will BE. */
   kind: string;
   /** The MERGED type. */
   type: string | null | undefined;
-  /** How the proposal is named in a refusal (`proposalLabel(...)`). */
+  /** How the proposal is named in a plan-door refusal (`proposalLabel(...)`).
+   *  The work-item doors raise their own typed errors and never read it. */
   label: string;
 }
+
+/**
+ * The structured answer of {@link resolveSectionsInput}: the body to store, or
+ * the refusal in the two shapes the two door families need. `detail` is the whole
+ * sentence (no label), which the plan doors prefix with the proposal's label;
+ * `missing` / `unknown` / `invalid` are the same findings by name, which the
+ * work-item doors carry on `InvalidSectionsError`.
+ */
+export type SectionsOutcome =
+  | { ok: true; body: string }
+  | {
+      ok: false;
+      /** `conflict` — `sections` beside `descriptionMd`; `shape` — not an object,
+       *  or a kind / type the registry has no cell for; `sections` — a missing,
+       *  unknown or invalid section. */
+      reason: 'conflict' | 'shape' | 'sections';
+      detail: string;
+      missing: string[];
+      unknown: string[];
+      invalid: { section: string; message: string }[];
+    };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function refuse(
+  reason: 'conflict' | 'shape',
+  detail: string,
+): Extract<SectionsOutcome, { ok: false }> {
+  return { ok: false, reason, detail, missing: [], unknown: [], invalid: [] };
+}
+
 /**
- * Resolve a proposal's sections input into the `descriptionMd` to store, or throw.
+ * Resolve a sections input into the `descriptionMd` to store, or say why not.
+ * The ONE implementation of the rules; {@link applySectionsInput} (plan doors,
+ * `InvalidProposalError`) and the work-item doors (`InvalidSectionsError`) both
+ * read it, so one partial `sections` behaves alike on both families.
  *
  *  1. `sections` + no `descriptionMd`, no stored body → check, render.
  *  2. `sections` + no `descriptionMd`, a stored body (an edit) → SPARSE at the
@@ -70,11 +102,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  *     place rides through in `framing` / `otherSections`, so none is lost.
  *  3. `sections` + `descriptionMd` → refused naming both keys.
  */
-export function applySectionsInput(args: ApplySectionsArgs): string {
-  const { label } = args;
+export function resolveSectionsInput(args: ApplySectionsArgs): SectionsOutcome {
   if (!isPlainObject(args.sections)) {
-    throw new InvalidProposalError(
-      `${label}: \`sections\` must be an object of named sections (see get_section_sets), not ${
+    return refuse(
+      'shape',
+      `\`sections\` must be an object of named sections (see get_section_sets), not ${
         args.sections === null
           ? 'null'
           : Array.isArray(args.sections)
@@ -84,22 +116,25 @@ export function applySectionsInput(args: ApplySectionsArgs): string {
     );
   }
   if (args.descriptionMd !== undefined) {
-    throw new InvalidProposalError(
-      `${label}: send \`sections\` or \`descriptionMd\`, not both — the body is rendered from the ` +
+    return refuse(
+      'conflict',
+      'send `sections` or `descriptionMd`, not both — the body is rendered from the ' +
         'sections, and two sources would contradict each other.',
     );
   }
 
   const kind = args.kind;
   if (!(ISSUE_TYPES as readonly string[]).includes(kind)) {
-    throw new InvalidProposalError(
-      `${label}: \`sections\` cannot be checked for kind '${kind}'. Legal kinds: ${ISSUE_TYPES.join(', ')}.`,
+    return refuse(
+      'shape',
+      `\`sections\` cannot be checked for kind '${kind}'. Legal kinds: ${ISSUE_TYPES.join(', ')}.`,
     );
   }
   const type = args.type ?? null;
   if (type !== null && !(WORK_ITEM_TYPES as readonly string[]).includes(type)) {
-    throw new InvalidProposalError(
-      `${label}: \`sections\` cannot be checked for type '${type}'. Legal types: ${WORK_ITEM_TYPES.join(', ')}.`,
+    return refuse(
+      'shape',
+      `\`sections\` cannot be checked for type '${type}'. Legal types: ${WORK_ITEM_TYPES.join(', ')}.`,
     );
   }
   const issueKind = kind as IssueType;
@@ -125,18 +160,36 @@ export function applySectionsInput(args: ApplySectionsArgs): string {
       `section(s) not defined for a ${kind}${type ? ` of type ${type}` : ''}: ${check.unknown.join(', ')}`,
     );
   }
-  const invalid = check.invalid.map((i) => `${i.section} (${i.message})`);
+  const invalid = check.invalid.map((i) => ({ section: i.section, message: i.message }));
   // A section the stored body carries but the parser could not read into its
   // shape is never silently fixed: unless the caller resends it, it is named.
   for (const i of parsed?.invalid ?? []) {
     if (!(i.section in sent) && !check.missing.includes(i.section)) {
-      invalid.push(`${i.section} (${i.message} in the stored body — resend it)`);
+      invalid.push({ section: i.section, message: `${i.message} in the stored body — resend it` });
     }
   }
-  if (invalid.length > 0) problems.push(`invalid section(s): ${invalid.join(', ')}`);
+  if (invalid.length > 0) {
+    problems.push(
+      `invalid section(s): ${invalid.map((i) => `${i.section} (${i.message})`).join(', ')}`,
+    );
+  }
   if (problems.length > 0) {
-    throw new InvalidProposalError(`${label}: sections ${problems.join('; ')}.`);
+    return {
+      ok: false,
+      reason: 'sections',
+      detail: `sections ${problems.join('; ')}.`,
+      missing: [...check.missing],
+      unknown: [...check.unknown],
+      invalid,
+    };
   }
 
-  return renderSections(issueKind, sectionType, merged as WorkItemSections);
+  return { ok: true, body: renderSections(issueKind, sectionType, merged as WorkItemSections) };
+}
+
+/** The plan doors' form: the same resolution, refused as `InvalidProposalError`. */
+export function applySectionsInput(args: ApplySectionsArgs): string {
+  const outcome = resolveSectionsInput(args);
+  if (!outcome.ok) throw new InvalidProposalError(`${args.label}: ${outcome.detail}`);
+  return outcome.body;
 }

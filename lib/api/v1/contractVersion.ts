@@ -1070,5 +1070,18 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.72.0` after MOTIR-5427's
  *   `1.71.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   OPERATION.
+ *
+ * - `1.73.0` — MOTIR-9031 adds an optional `sections` object to the `createWorkItem` and
+ *   `updateWorkItem` bodies (named sections the service checks against the registry for
+ *   the item's kind × type and renders into `descriptionMd`; sparse on PATCH), an optional
+ *   `sections` field on the error body (`missing` / `unknown` / `invalid`, by name), and the
+ *   codes `INVALID_SECTIONS` and `SECTIONS_AND_DESCRIPTION_CONFLICT` (422). `descriptionMd`
+ *   stays the one stored, always-free-text body and a write without `sections` is unchanged.
+ *
+ *   Additive: two new optional request fields, a new optional response field and two new
+ *   codes for new conditions (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.73.0` after MOTIR-9029's
+ *   `1.72.0`. If a sibling has taken it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.72.0';
+export const V1_CONTRACT_VERSION = '1.73.0';
