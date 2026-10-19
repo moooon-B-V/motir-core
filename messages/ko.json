@@ -12326,6 +12326,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "실행",
     "searchLabel": "이 실행 검색",
     "gloss": "에이전트가 한 일",
@@ -12401,8 +12403,9 @@
     "sectionPast": "지난 실행",
     "noneRunning": "실행 중인 것이 없습니다.",
     "nonePast": "아직 끝난 실행이 없습니다.",
-    "colCommand": "명령어",
-    "colScope": "범위",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, other {and # more work items}}",
     "colAgent": "에이전트",
     "colStarted": "시작",
     "colStatus": "상태",

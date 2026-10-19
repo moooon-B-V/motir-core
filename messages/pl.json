@@ -12332,6 +12332,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Uruchomienie",
     "searchLabel": "Szukaj w tym uruchomieniu",
     "gloss": "co zrobił agent",
@@ -12407,8 +12409,9 @@
     "sectionPast": "Poprzednie uruchomienia",
     "noneRunning": "Nic nie działa.",
     "nonePast": "Żadne uruchomienie jeszcze się nie zakończyło.",
-    "colCommand": "Polecenie",
-    "colScope": "Zakres",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Rozpoczęto",
     "colStatus": "Status",

@@ -105,18 +105,16 @@ test('a run claims a story, and you can watch the whole set advance', async ({
 
   await chapter('the run appears on the runs page', async () => {
     await page.goto('/runs');
-    // The live section carries it, with the command it was started by.
+    // The live section carries it, and each row carries its door (MOTIR-9073): the
+    // index no longer prints the command — the modal's HEADER renders
+    // `t('command.*')` — so the row is located by its `run-open` control.
     await expect(page.getByRole('heading', { name: 'Running now' })).toBeVisible();
-    // ⚠️ THE INDEX PRINTS THE RAW COMMAND (`{run.command}`), not the
-    // translated label — the modal's HEADER is what renders `t('command.*')`.
-    // Asserting the pretty string here would have been a spec written against
-    // a surface that does not exist.
-    await expect(page.getByRole('button', { name: 'run_scope' }).first()).toBeVisible();
+    await expect(page.getByTestId('run-open').first()).toBeVisible();
     await beat();
   });
 
   await chapter('the run opens full screen', async () => {
-    await page.getByRole('button', { name: 'run_scope' }).first().click();
+    await page.getByTestId('run-open').first().click();
     await expect(page.getByRole('dialog')).toBeVisible();
     // ⚠️ THE URL STAYED ON `/runs`. An overlay, not a navigation — the whole
     // reason the list survives underneath.

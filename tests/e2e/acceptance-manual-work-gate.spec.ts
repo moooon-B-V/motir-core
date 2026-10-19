@@ -334,7 +334,7 @@ test('a run hands manual work to you — guided through and closed, or marked do
 
   await chapter('A run reaches the manual work item — and says it is waiting on you', async () => {
     await page.goto('/runs');
-    await page.getByRole('button', { name: 'run_scope' }).first().click();
+    await page.getByTestId('run-open').first().click();
     await expect(overlay(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
     const set = page.getByRole('region', { name: 'The set' });
     await expect(set.getByText(first.manual.key, { exact: false }).first()).toBeVisible();

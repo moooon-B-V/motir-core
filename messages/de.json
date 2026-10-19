@@ -12332,6 +12332,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Lauf",
     "searchLabel": "Diesen Lauf durchsuchen",
     "gloss": "was der Agent getan hat",
@@ -12407,8 +12409,9 @@
     "sectionPast": "Vergangene Läufe",
     "noneRunning": "Es läuft nichts.",
     "nonePast": "Bisher ist kein Lauf abgeschlossen.",
-    "colCommand": "Befehl",
-    "colScope": "Umfang",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Gestartet",
     "colStatus": "Status",

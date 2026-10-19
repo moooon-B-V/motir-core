@@ -12329,6 +12329,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "実行",
     "searchLabel": "この実行を検索",
     "gloss": "エージェントが行ったこと",
@@ -12404,8 +12406,9 @@
     "sectionPast": "過去の実行",
     "noneRunning": "実行中のものはありません。",
     "nonePast": "まだ完了した実行はありません。",
-    "colCommand": "コマンド",
-    "colScope": "スコープ",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, other {and # more work items}}",
     "colAgent": "エージェント",
     "colStarted": "開始",
     "colStatus": "ステータス",

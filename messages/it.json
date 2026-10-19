@@ -12332,6 +12332,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Esecuzione",
     "searchLabel": "Cerca in questa esecuzione",
     "gloss": "cosa ha fatto l’agente",
@@ -12407,8 +12409,9 @@
     "sectionPast": "Esecuzioni passate",
     "noneRunning": "Non c’è nulla in esecuzione.",
     "nonePast": "Nessuna esecuzione è ancora terminata.",
-    "colCommand": "Comando",
-    "colScope": "Ambito",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agente",
     "colStarted": "Avviata",
     "colStatus": "Stato",

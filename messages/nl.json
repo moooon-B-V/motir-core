@@ -12332,6 +12332,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Run",
     "searchLabel": "Deze run doorzoeken",
     "gloss": "wat de agent heeft gedaan",
@@ -12407,8 +12409,9 @@
     "sectionPast": "Eerdere runs",
     "noneRunning": "Er draait niets.",
     "nonePast": "Er is nog geen run afgerond.",
-    "colCommand": "Opdracht",
-    "colScope": "Scope",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Gestart",
     "colStatus": "Status",
