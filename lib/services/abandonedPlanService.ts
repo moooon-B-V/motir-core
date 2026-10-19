@@ -16,10 +16,12 @@ import {
   REVISION_ENDED_KIND,
   REVISION_STARTED_KIND,
 } from '@/lib/planChange/revisionLease';
-import { getJob } from '@/lib/ai/motirAiClient';
+import { cancelJob, getJob } from '@/lib/ai/motirAiClient';
 import { failureRecordFrom, type JobWalkStop } from '@/lib/planChange/failureRecord';
 import {
+  FAILURE_DETAIL_MAX,
   sessionWaitingState,
+  type PlanSessionFailureRecord,
   type SessionWaitingRow,
   type SessionWaitingState,
 } from '@/lib/planChange/sessionWaitingState';
@@ -167,6 +169,10 @@ export type KeepReason =
    *  its producer is gone (MOTIR-8132) — it is being written. Replaces
    *  `job_in_flight` and `no_producer_recent` for a `generating` plan. */
   | 'writing'
+  /** motir-ai reports the plan's job `queued` — it has not started, so the plan's
+   *  silence says nothing about its producer (MOTIR-9065). A job that never leaves
+   *  the queue is motir-ai's to fail (MOTIR-9064), and the fast path takes it then. */
+  | 'job_queued'
   /** A REVISION's job is `queued` / `running` inside {@link REVISION_JOB_MAX_AGE_MS}
    *  (MOTIR-7936). Never a `generating` plan's verdict. */
   | 'job_in_flight'
@@ -186,8 +192,19 @@ export type KeepReason =
    *  revision is still writing. Not abandoned; the revision closes it. */
   | 'revision_held';
 
+/** What became of the cancel the sweep sends when it gives up on a job it judged by
+ *  silence (MOTIR-9065): sent and answered, or the reason it could not be. */
+export type JobCancelOutcome = { cancelled: true } | { cancelled: false; why: string };
+
 export type AbandonedPlanOutcome =
-  | { planId: string; projectId: string; outcome: 'declined'; reason: AbandonReason }
+  | {
+      planId: string;
+      projectId: string;
+      outcome: 'declined';
+      reason: AbandonReason;
+      /** Present only when a `silent` verdict gave up on a job (MOTIR-9065). */
+      jobCancel?: JobCancelOutcome;
+    }
   /** A failure nobody watched, RECORDED on the open session — the plan stays
    *  `generating` and the session waits in To resume (MOTIR-7912). */
   | {
@@ -202,6 +219,8 @@ export type AbandonedPlanOutcome =
       /** The automatic resume the recording started or skipped (MOTIR-8307) — attempted only
        *  when the job read said lost machine; `null` otherwise. */
       autoResume: AutoResumeOutcome | null;
+      /** Present only when a `silent` verdict gave up on a job (MOTIR-9065). */
+      jobCancel?: JobCancelOutcome;
     }
   | { planId: string; projectId: string; outcome: 'left_as_is'; reason: KeepReason }
   /** A revision whose job died and whose failure no relay saw: its lease is given back and
@@ -233,6 +252,9 @@ export interface AbandonedPlanDeps {
     jobId: string,
     coreProjectId: string,
   ) => Promise<{ walkStop: JobWalkStop | null; lostMachine: boolean }>;
+  /** The cancel sent to motir-ai for a job the sweep gave up on (MOTIR-9065), behind
+   *  the same seam. Absent means the shipped {@link cancelJob}. */
+  cancelJob?: (jobId: string, coreProjectId: string) => Promise<unknown>;
 }
 
 const defaultDeps: AbandonedPlanDeps = {
@@ -271,7 +293,9 @@ function jobFastPath(
  *   * a job that is `failed` / `canceled` / `succeeded` (the plan is still
  *     `generating`, so a success never closed it) → dead at once, `job_terminal`;
  *   * a job motir-ai says does not exist (404) → dead at once, `job_gone`;
- *   * anything else — `queued` / `running`, motir-ai unreachable, or no job to ask
+ *   * a job motir-ai reports `queued` → kept, `job_queued`: it has not started, so
+ *     silence proves nothing (MOTIR-9065);
+ *   * anything else — `running`, motir-ai unreachable, or no job to ask
  *     (`sourceJobId` null) → the silence rule: dead (`silent`) when
  *     `silentMs > PLAN_STALLED_AFTER_MS`, otherwise kept (`writing`).
  *
@@ -285,6 +309,13 @@ export function classifyAbandonedCandidate(
   if (job) {
     const fast = jobFastPath(job);
     if (fast.dead) return { abandoned: true, reason: fast.reason };
+    // A QUEUED job has not started (MOTIR-9065): the plan is silent because nothing
+    // has run yet, not because its producer died. Recording it failed told a person
+    // the session had stopped while the job waited for a planning machine — and the
+    // job then started later against a session that no longer expected it.
+    if (job.reachable && job.status === 'queued') {
+      return { abandoned: false, reason: 'job_queued' };
+    }
   }
   if (silentMs > PLAN_STALLED_AFTER_MS) return { abandoned: true, reason: 'silent' };
   return { abandoned: false, reason: 'writing' };
@@ -402,6 +433,52 @@ async function findRecordableSession(plan: {
 }
 
 /**
+ * The record for a `silent` verdict (MOTIR-9065): the reason is the sweep's own,
+ * `stalled`, and the detail says what the sweep knew about the job — never the job
+ * read's error mapped to a reason. An unreachable read is not evidence about the
+ * model provider, and recording it as `model_unavailable` sent a person to wait on a
+ * healthy one. Pure; the stop point and everything else in `record` stand.
+ */
+export function silentFailureRecord(
+  record: PlanSessionFailureRecord,
+  job: PlanJobStateDto | null,
+  silentMs: number,
+): PlanSessionFailureRecord {
+  const minutes = Math.floor(silentMs / 60_000);
+  const silence = `The plan wrote nothing for ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const detail = !job
+    ? `${silence}.`
+    : !job.reachable
+      ? `${silence}, and its job could not be read: ${job.failure?.message ?? job.failure?.code ?? 'motir-ai did not answer'}.`
+      : `${silence}, while motir-ai reported its job ${job.status ?? 'in an unknown state'}.`;
+  return {
+    ...record,
+    failureReason: 'stalled',
+    failureDetail: detail.slice(0, FAILURE_DETAIL_MAX),
+  };
+}
+
+/** Cancel the job the sweep gave up on (MOTIR-9065), so a job still waiting in motir-ai
+ *  cannot start against a session already recorded failed. Never throws: a cancel that
+ *  could not be made is reported, with why, in the outcome and the log. */
+async function cancelAbandonedJob(
+  deps: AbandonedPlanDeps,
+  jobId: string,
+  plan: { id: string; projectId: string },
+): Promise<JobCancelOutcome> {
+  try {
+    await (deps.cancelJob ?? cancelJob)(jobId, plan.projectId);
+    return { cancelled: true };
+  } catch (err) {
+    const why = err instanceof Error ? err.message || err.name : String(err);
+    console.warn(
+      `[abandoned-plan-sweep] could not cancel job ${jobId} of plan ${plan.id} in motir-ai — ${why}`,
+    );
+    return { cancelled: false, why };
+  }
+}
+
+/**
  * Whether the session ALREADY holds the answer the job ask would bring, so the ask is
  * pointless (MOTIR-8407). A session awaiting its person is kept whatever the job says, and
  * a failed-waiting one whose recorded failure is for THIS plan's job is kept whatever the
@@ -501,10 +578,13 @@ export const abandonedPlanService = {
       // SILENCE, from the one fact every write stamps (MOTIR-8132). Never null — the
       // column defaults to the plan's creation — so a plan that never wrote reads
       // silent from its `createdAt`, which is what the old grace did.
-      const verdict = classifyAbandonedCandidate(
-        job,
-        now.getTime() - plan.lastActivityAt.getTime(),
-      );
+      const silentMs = now.getTime() - plan.lastActivityAt.getTime();
+      const verdict = classifyAbandonedCandidate(job, silentMs);
+      // The job the sweep is GIVING UP ON (MOTIR-9065): one judged by silence, so as far
+      // as motir-ai knows it may still run. A job the fast path found ended has nothing
+      // left to cancel.
+      const giveUpJobId =
+        verdict.abandoned && verdict.reason === 'silent' ? plan.sourceJobId : null;
 
       if (!verdict.abandoned) {
         outcomes.push({
@@ -552,13 +632,17 @@ export const abandonedPlanService = {
           }
         }
         const { walkStop } = facts;
-        const record = failureRecordFrom({
+        const fromJob = failureRecordFrom({
           failedJobId: plan.sourceJobId,
           now,
           walkStop,
           lastPosition: null,
           error: job?.failure ?? null,
         });
+        // A job that ENDED tells its own story; a plan judged by SILENCE is recorded as
+        // the sweep's verdict, whatever the job read said (MOTIR-9065).
+        const record =
+          verdict.reason === 'silent' ? silentFailureRecord(fromJob, job, silentMs) : fromJob;
         // GUARDED on the silence it was judged by: a write that landed since the
         // candidate was read moved `lastActivityAt`, and that producer is alive.
         const recorded = await withWorkspaceServiceContext(plan.workspaceId, (tx) =>
@@ -572,6 +656,10 @@ export const abandonedPlanService = {
             `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}) recorded as failed on session ${session.id} — ${decision.reason}; ${plan._count.items} proposal(s) retained`,
           );
         }
+        const jobCancel =
+          recorded === 'recorded' && giveUpJobId
+            ? await cancelAbandonedJob(deps, giveUpJobId, plan)
+            : null;
         // A LOST MACHINE is resumed by core itself (MOTIR-8307); every other recording waits.
         const autoResume =
           recorded === 'recorded' && facts.lostMachine
@@ -595,6 +683,7 @@ export const abandonedPlanService = {
                 reason: decision.reason,
                 lostMachine: facts.lostMachine,
                 autoResume,
+                ...(jobCancel ? { jobCancel } : {}),
               }
             : {
                 planId: plan.id,
@@ -670,6 +759,7 @@ export const abandonedPlanService = {
       // plan that never had one. Printing `job null` and a job status for a
       // job-less plan would read as a failed lookup rather than an absent
       // producer, which is the distinction the sweep's no-ask path turns on.
+      const jobCancel = giveUpJobId ? await cancelAbandonedJob(deps, giveUpJobId, plan) : null;
       const producer = job
         ? `job ${plan.sourceJobId}; job status ${job.status ?? 'unreachable'}${
             job.failure ? ` (${job.failure.code})` : ''
@@ -683,6 +773,7 @@ export const abandonedPlanService = {
         projectId: plan.projectId,
         outcome: 'declined',
         reason: verdict.reason,
+        ...(jobCancel ? { jobCancel } : {}),
       });
     }
 

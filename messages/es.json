@@ -9511,6 +9511,7 @@
         "token_expired": "la conexión con el proveedor de IA caducó",
         "prompt_too_large": "el contexto del plan era demasiado grande para el modelo",
         "job_failed": "el trabajo de planificación falló",
+        "stalled": "el plan dejó de avanzar",
         "internal": "algo salió mal por nuestra parte"
       },
       "refusal": {

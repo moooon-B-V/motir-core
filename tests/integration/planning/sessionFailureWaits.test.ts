@@ -459,7 +459,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     },
   );
 
-  it('records a SILENT plan with NO producer — no job, `internal`, no stop point', T, async () => {
+  it('records a SILENT plan with NO producer — no job, `stalled`, no stop point', T, async () => {
     const sessionId = await openSession(await seedCard());
     const plan = await planIn(sessionId, { ageHours: 1, proposals: 1 });
 
@@ -478,7 +478,7 @@ describe('the abandoned-plan sweep — an unwatched failure', () => {
     const s = await sessionRow(sessionId);
     expect(s.endedAt).toBeNull();
     expect(s.failedJobId).toBeNull();
-    expect(s.failureReason).toBe('internal');
+    expect(s.failureReason).toBe('stalled');
     expect(s.failureStopRef).toBeNull();
     expect((await planRow(plan.id)).status).toBe('generating');
     expect(await locksOf(sessionId)).toBe(1);
