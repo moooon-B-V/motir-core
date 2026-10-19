@@ -6,6 +6,7 @@ import {
   FINDINGS_POLICY_TOKENS,
   FULL_FINDINGS_POLICY,
   DESIGN_DIR_ENV,
+  GET_CODING_CONVENTION_TOOL_NAME,
   GET_DESIGN_TOOL_NAME,
   HOW_TO_TEST_TOOL_NAME,
   LINKING_RATIONALE,
@@ -22,6 +23,7 @@ import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME } from '@/lib/mcp/tools/publishTestInstructions';
 import { RECORD_RUN_DISCREPANCY_TOOL_NAME } from '@/lib/mcp/tools/recordRunDiscrepancy';
 import { REPORT_UNBUILDABLE_TARGET_TOOL_NAME } from '@/lib/mcp/tools/reportUnbuildableTarget';
+import { GET_CODING_CONVENTION_TOOL_NAME as REGISTERED_GET_CODING_CONVENTION } from '@/lib/mcp/tools/getCodingConvention';
 import { GET_DESIGN_TOOL_NAME as REGISTERED_GET_DESIGN } from '@/lib/mcp/tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME as REGISTERED_LIST_DESIGNS } from '@/lib/mcp/tools/listDesigns';
 import { MOTIR_DESIGN_DIR_ENV as CLI_MOTIR_DESIGN_DIR_ENV } from '../../packages/cli/src/designFiles';
@@ -784,16 +786,16 @@ describe('assembleDispatchPrompt — the Epic-9 injection extension point', () =
     expect(withEmpty).toBe(assembleDispatchPrompt(source()).prompt);
   });
 
-  it('appends filled slots to CONTEXT, conventions before lessons', () => {
+  it('appends a filled lessons slot to CONTEXT', () => {
     const { prompt } = assembleDispatchPrompt(
-      source({
-        injections: { conventions: ['CONVENTION BLOCK'], lessons: ['LESSON BLOCK'] },
-      }),
+      source({ injections: { lessons: ['LESSON BLOCK'] } }),
     );
     const context = prompt.slice(prompt.indexOf('CONTEXT'), prompt.indexOf('WHAT TO DO'));
-    expect(context).toContain('CONVENTION BLOCK');
     expect(context).toContain('LESSON BLOCK');
-    expect(context.indexOf('CONVENTION BLOCK')).toBeLessThan(context.indexOf('LESSON BLOCK'));
+  });
+
+  it('has no conventions slot: the convention is fetched, not pasted (MOTIR-9084)', () => {
+    expect(Object.keys(NO_INJECTIONS)).toEqual(['lessons']);
   });
 });
 
@@ -3221,5 +3223,82 @@ describe('THE CARD IS WRONG — the WHAT test, BUILD THROUGH and STOP (MOTIR-865
       '"## Deviations from the plan" section for PROD-7 to the BODY of the session pull request',
     );
     expect(section).not.toMatch(/open (a|the) pull request/i);
+  });
+});
+
+// THE REPOSITORY'S CONVENTION IS READ, NOT AUTO-LOADED (Story MOTIR-9079 · MOTIR-9084).
+// The prompt used to send the agent to "its CLAUDE.md", which holds only on a harness
+// that loads one and in a repository whose owner wrote one. It now names the MCP read
+// that returns the convention the team keeps on the Code page, and says what to do
+// when that read has nothing or fails.
+describe('the repository convention is fetched with get_coding_convention (MOTIR-9084)', () => {
+  const ALL_TYPES: WorkItemTypeDto[] = [
+    'code',
+    'design',
+    'test',
+    'content',
+    'copy',
+    'translate',
+    'research',
+    'review',
+    'verification',
+    'decision',
+    'choice',
+    'deploy',
+    'manual',
+    'legal',
+    'chore',
+  ];
+  const CHANGES_A_REPO: (WorkItemTypeDto | null)[] = [
+    'code',
+    'test',
+    'content',
+    'copy',
+    'translate',
+    'chore',
+    null,
+  ];
+  const render = (type: WorkItemTypeDto | null) =>
+    assembleDispatchPrompt(source({ type, executor: 'coding_agent' })).prompt;
+
+  it('the tool name is the REGISTERED one', () => {
+    expect(GET_CODING_CONVENTION_TOOL_NAME).toBe(REGISTERED_GET_CODING_CONVENTION);
+    expect(MCP_TOOL_NAMES).toContain(GET_CODING_CONVENTION_TOOL_NAME);
+  });
+
+  it.each([...ALL_TYPES, null])('the prompt for type %s never names CLAUDE.md', (type) => {
+    expect(render(type)).not.toContain('CLAUDE.md');
+  });
+
+  it.each(CHANGES_A_REPO)(
+    'type %s names the read with the project key and the target repository',
+    (type) => {
+      expect(render(type)).toContain(
+        'get_coding_convention { projectKey: "PROD", repo: "motir-core" }',
+      );
+    },
+  );
+
+  it('says what to do when no convention is recorded and when the read fails', () => {
+    const prompt = render('code');
+    expect(prompt).toContain('BEFORE you build, read the repository’s coding convention');
+    expect(prompt).toContain(
+      'If it says no convention is recorded, follow the patterns of the surrounding',
+    );
+    expect(prompt).toContain(
+      'If the call fails, say so in your report and follow the surrounding code.',
+    );
+    expect(prompt).toContain('this prompt never relies on one.');
+  });
+
+  it('a card with no target repository still names the read, without inventing a repo', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ type: 'code', targetRepo: null, targetRepos: undefined }),
+    );
+    expect(prompt).toContain('repo: <the repository you are working in>');
+  });
+
+  it('a manual item is a person’s instructions and carries no tool call', () => {
+    expect(render('manual')).not.toContain('get_coding_convention');
   });
 });
