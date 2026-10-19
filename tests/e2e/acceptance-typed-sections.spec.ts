@@ -196,8 +196,11 @@ async function seed(): Promise<Seed> {
 const descriptionOf = (page: Page) => page.getByRole('main').getByLabel('Work item description');
 const editorOf = (page: Page) => page.getByRole('textbox', { name: 'Description', exact: true });
 const proposalButton = (page: Page, title: string) =>
-  page.getByTestId('plan-proposal-list').getByRole('button', { name: new RegExp(title) });
-const peekOf = (page: Page) => page.getByTestId('proposal-peek');
+  page
+    .getByRole('dialog')
+    .getByTestId('plan-proposal-list')
+    .getByRole('button', { name: new RegExp(title) });
+const peekOf = (page: Page) => page.getByRole('dialog').getByTestId('proposal-peek');
 
 async function openItem(page: Page, item: { key: string }, title: string): Promise<Locator> {
   expect((await page.goto(`/items/${item.key}`))?.status()).toBe(200);
