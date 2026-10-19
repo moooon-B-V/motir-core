@@ -3,6 +3,8 @@
 // page shows (the MOTIR-6868 design's panel 5) — never a 500. The
 // route maps each `code` to a status in `lib/agentInstances/errorResponse.ts`.
 
+import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
+
 /** An instance that does not exist, is deleted, or is not the caller's (§8) — one answer for all three. */
 export class AgentInstanceNotFoundError extends Error {
   readonly code = 'agent_instance_not_found' as const;
@@ -168,6 +170,24 @@ export class AgentRunCardNotReadyError extends Error {
   ) {
     super(`${workItemKey} isn’t ready to run: ${detail}.`);
     this.name = 'AgentRunCardNotReadyError';
+  }
+}
+
+/**
+ * A `fix` start the repair claim did not open a run for (409; MOTIR-9049): the card is
+ * `taken` (an open repair holds it — `holder` and `startedAt` say who and since when) or
+ * `not_repairable` (`reason` is the predicate's own refusal). Carries the claim's whole
+ * answer so the door can say which, rather than a bare error.
+ */
+export class AgentRunRepairRefusedError extends Error {
+  readonly code = 'agent_run_repair_refused' as const;
+  constructor(readonly claim: WorkItemRepairClaimDto) {
+    super(
+      claim.outcome === 'taken'
+        ? `${claim.key} already has a repair running.`
+        : `${claim.key} can't be repaired now: ${claim.reason ?? claim.outcome}.`,
+    );
+    this.name = 'AgentRunRepairRefusedError';
   }
 }
 

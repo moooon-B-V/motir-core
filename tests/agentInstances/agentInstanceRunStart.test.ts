@@ -35,6 +35,11 @@ import { hostedRunKeyService } from '@/lib/services/hostedRunKeyService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestLink } from '../fixtures/workItemFixtures';
+import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
+import { randomToken } from '../helpers/random';
+import * as sendEventModule from '@/lib/jobs/sendEvent';
+import { AgentRunRepairRefusedError } from '@/lib/agentInstances/errors';
+import { mapAgentInstanceError } from '@/lib/agentInstances/errorResponse';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
@@ -798,5 +803,124 @@ describe('the card’s agent picker', () => {
       new PermissionDeniedError(fx.projectId, 'instance:use'),
     );
     expect(await runs.listAgentsForCard(item.identifier, fx.ctx)).toEqual({ agents: [] });
+  });
+});
+
+describe('a fix start — the repair claim instead of the keyed claim (MOTIR-9049)', () => {
+  async function redCard(status = 'implemented', check: 'failure' | 'success' = 'failure') {
+    const item = await card();
+    await setStatus(item.id, status);
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: fx.ownerId } });
+    const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+    await deliveredPr(fx, item.id, repo, {
+      headRef: `subtask/${item.identifier}`,
+      checks: { Vitest: check },
+    });
+    return item;
+  }
+  const fixStart = (key: string, id: string, idem?: string) =>
+    runs.start(
+      { workItemKey: key, agentInstanceId: id, command: 'fix', idempotencyKey: idem },
+      fx.ctx,
+    );
+  const cardRuns = (workItemId: string) =>
+    adminDb.dispatchRun.findMany({ where: { cards: { some: { workItemId } } } });
+
+  it('opens one fix run in the agent, claims nothing, and leaves an implemented card as it was', async () => {
+    const id = await agent();
+    const item = await redCard();
+    const started = await fixStart(item.identifier, id);
+
+    expect(started.created).toBe(true);
+    const rows = await cardRuns(item.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: started.dispatchRunId,
+      command: 'fix',
+      origin: 'instance',
+      agentInstanceId: id,
+      agent: 'claude',
+      status: 'running',
+    });
+    const opened = await adminDb.dispatchRunEvent.findMany({
+      where: { dispatchRunId: started.dispatchRunId, kind: 'run_opened' },
+    });
+    expect(opened).toHaveLength(1);
+    expect(opened[0]!.data).toMatchObject({ command: 'fix', repairClass: 'ci' });
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(after).toMatchObject({ status: 'implemented', assigneeId: fx.ownerId });
+    expect(await launchJobs()).toHaveLength(1);
+  });
+
+  it('refuses a card that is not repairable carrying the predicate’s reason, and enqueues nothing', async () => {
+    const id = await agent();
+    const green = await redCard('implemented', 'success');
+    const err = await fixStart(green.identifier, id).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentRunRepairRefusedError);
+    expect((err as AgentRunRepairRefusedError).claim).toMatchObject({
+      outcome: 'not_repairable',
+      reason: 'not_failing',
+    });
+    expect(await cardRuns(green.id)).toEqual([]);
+    expect(await launchJobs()).toEqual([]);
+    const mapped = mapAgentInstanceError(err);
+    expect(mapped?.status).toBe(409);
+  });
+
+  it('a second press from another agent is taken, naming the holder, and opens nothing', async () => {
+    const first = await agent('first');
+    const second = await agent('second');
+    const item = await redCard();
+    await fixStart(item.identifier, first);
+    const err = await fixStart(item.identifier, second).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentRunRepairRefusedError);
+    expect((err as AgentRunRepairRefusedError).claim).toMatchObject({ outcome: 'taken' });
+    expect((err as AgentRunRepairRefusedError).claim.holder).not.toBeNull();
+    expect(await cardRuns(item.id)).toHaveLength(1);
+  });
+
+  it('the same agent pressed again is refused busy at step 4, before any claim', async () => {
+    const id = await agent();
+    const item = await redCard();
+    await fixStart(item.identifier, id);
+    const err = await fixStart(item.identifier, id).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DispatchRunAgentBusyError);
+    expect(await cardRuns(item.id)).toHaveLength(1);
+  });
+
+  it('a repeated key answers the run already opened, created false', async () => {
+    const id = await agent();
+    const item = await redCard();
+    const first = await fixStart(item.identifier, id, 'key-1');
+    const again = await fixStart(item.identifier, id, 'key-1');
+    expect(again).toMatchObject({ dispatchRunId: first.dispatchRunId, created: false });
+    expect(await cardRuns(item.id)).toHaveLength(1);
+  });
+
+  it('a busy agent names the busy run’s own card and writes no fix run for the pressed card', async () => {
+    const id = await agent();
+    const busy = await card('busy');
+    await start(busy.identifier, id);
+    const item = await redCard();
+    const err = await fixStart(item.identifier, id).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DispatchRunAgentBusyError);
+    expect((err as DispatchRunAgentBusyError).workItemKey).toBe(busy.identifier);
+    expect(await cardRuns(item.id)).toEqual([]);
+  });
+
+  it('a launch that cannot be enqueued ends the claimed run failed, so the next press claims', async () => {
+    const id = await agent();
+    const item = await redCard();
+    const spy = vi
+      .spyOn(sendEventModule, 'sendEvent')
+      .mockRejectedValueOnce(new Error('queue down'));
+    await expect(fixStart(item.identifier, id)).rejects.toThrow('queue down');
+    spy.mockRestore();
+    const rows = await cardRuns(item.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'failed' });
+    const again = await fixStart(item.identifier, id);
+    expect(again.created).toBe(true);
+    expect(await cardRuns(item.id)).toHaveLength(2);
   });
 });

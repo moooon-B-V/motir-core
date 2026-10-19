@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AgentInstance } from '@/generated/prisma/client';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
@@ -15,6 +16,7 @@ import {
   AgentRunNotFoundError,
   AgentRunCommandInvalidError,
   AgentRunCommandMismatchError,
+  AgentRunRepairRefusedError,
 } from '@/lib/agentInstances/errors';
 import {
   AGENT_RUN_COMMANDS,
@@ -78,6 +80,7 @@ import {
 } from '@/lib/services/agentInstanceLifecycleService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
@@ -473,7 +476,12 @@ export const agentInstanceRunService = {
     }
 
     // ── 3 · The card is ready ────────────────────────────────────────────────
-    const { legIds, isParent } = await readyLegs(project, item, ctx);
+    // A `fix` claims nothing and previews no scope (MOTIR-9049): it is decided by the
+    // repair claim in step 9, so a story card or an `implemented` one is not refused here.
+    const isFix = requested === 'fix';
+    const { legIds, isParent } = isFix
+      ? { legIds: [item.id], isParent: false }
+      : await readyLegs(project, item, ctx);
 
     // ── 4 · No run already running in the agent (the index is the real guard) ─
     const running = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -518,6 +526,47 @@ export const agentInstanceRunService = {
         throw new AgentInstanceStateConflictError(agent.id, woken.state, 'given a run');
       }
       woke = true;
+    }
+
+    // ── 9 (fix) · The REPAIR CLAIM is the open (MOTIR-9049) ──────────────────
+    // One claim under the card's row lock opens the `fix` run in this agent and writes
+    // its ONE `run_opened`; nothing below the claim's own steps applies — no keyed
+    // claim, no provenance, no second `run_opened`. No `admit`: every class is admitted.
+    if (isFix) {
+      const claim = await workItemRepairService.openAgentRepair(project.id, identifier, ctx, {
+        origin: 'instance',
+        agent: agent.profileId,
+        agentInstanceId: agent.id,
+        idempotencyKey: input.idempotencyKey ?? randomUUID(),
+      });
+      if (claim.outcome !== 'claimed' || claim.runId === null) {
+        throw new AgentRunRepairRefusedError(claim);
+      }
+      const runId = claim.runId;
+      try {
+        await sendEvent(
+          'agent-instance-run/launch',
+          {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: runId,
+            idempotencyKey: agentRunLaunchKey(runId),
+          },
+          { strict: true },
+        );
+        await sendEvent(
+          'agent-instance-run/supervise',
+          {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: runId,
+            idempotencyKey: agentRunSuperviseKey(runId),
+          },
+          { strict: true },
+        );
+        return { dispatchRunId: runId, created: true, woke };
+      } catch (err) {
+        await this.end(runId, 'failed', `the run could not start: ${detailOf(err)}`);
+        throw err;
+      }
     }
 
     // ── 9 · Open the run, one leg per card, `origin: instance` (§5) ──────────

@@ -28,6 +28,7 @@ import {
   AgentRunAlreadyEndedError,
   AgentRunCommandInvalidError,
   AgentRunCommandMismatchError,
+  AgentRunRepairRefusedError,
   AgentRunCancelForbiddenError,
   AgentRunNotFoundError,
 } from './errors';
@@ -117,6 +118,14 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
   if (err instanceof AgentRunAlreadyEndedError) {
     return NextResponse.json(
       { code: err.code, error: err.message, status: err.status },
+      { status: 409 },
+    );
+  }
+  if (err instanceof AgentRunRepairRefusedError) {
+    // A fix press the repair claim did not open a run for (MOTIR-9049): the claim's own
+    // answer — `taken` with its holder and start, or the predicate's reason.
+    return NextResponse.json(
+      { code: err.code, error: err.message, claim: err.claim },
       { status: 409 },
     );
   }
