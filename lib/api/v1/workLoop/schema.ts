@@ -13,13 +13,17 @@ import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import {
   isBodyAboveFieldMoveAdvisory,
+  isMislabelledLinkAdvisory,
   isPostMergeChildAdvisory,
   isBlockerCountAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isUnderAuthoredAdvisory,
 } from '@/lib/dto/workItems';
-import type { WorkItemProsePostMergeChildAdvisoryDto } from '@/lib/dto/workItems';
+import type {
+  WorkItemProseMislabelledLinkAdvisoryDto,
+  WorkItemProsePostMergeChildAdvisoryDto,
+} from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
 import type { CurrentTestInstructionsDTO } from '@/lib/dto/testInstructions';
@@ -456,11 +460,16 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     // child's PLACEMENT in its container. The dispatch builder hands the prose
     // check no parent, so it never emits one here; the filter keeps the wire
     // contract unchanged (no new variant, no contract-version move) and makes the
-    // mapper total over the DTO union.
+    // mapper total over the DTO union. The MISLABELLED-LINK member (MOTIR-9007)
+    // is the same case: the dispatch builder switches that check off.
     advisories: dto.advisories
       .filter(
-        (advisory): advisory is Exclude<typeof advisory, WorkItemProsePostMergeChildAdvisoryDto> =>
-          !isPostMergeChildAdvisory(advisory),
+        (
+          advisory,
+        ): advisory is Exclude<
+          typeof advisory,
+          WorkItemProsePostMergeChildAdvisoryDto | WorkItemProseMislabelledLinkAdvisoryDto
+        > => !isPostMergeChildAdvisory(advisory) && !isMislabelledLinkAdvisory(advisory),
       )
       .map((advisory) => {
         if (isUnderAuthoredAdvisory(advisory)) {

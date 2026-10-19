@@ -1857,7 +1857,8 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-post-merge-child-under-container'
   | 'body-edit-above-field-move'
   | 'likely-blocker-count-mismatch'
-  | 'under-authored';
+  | 'under-authored'
+  | 'likely-mislabelled-link';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -2223,6 +2224,34 @@ export interface WorkItemProseUnderAuthoredAdvisoryDto extends WorkItemProseShap
 }
 
 /**
+ * A `[label](motir:<id>)` link in the card's body whose label names one work-item
+ * key while its id opens a different card — or whose id opens no card the reader
+ * can see at all (MOTIR-9007).
+ *
+ * The reader of a body trusts the LABEL and the chip opens the ID, so a mismatch
+ * sends them, or an agent dispatched on the card, to the wrong card silently.
+ * Every author writing ids from memory makes it, and no other check reads the
+ * label. `targetKey` is the card the link really opens, or `null` when the id
+ * resolves to nothing — a deleted or invented id, another workspace's, or one in a
+ * project the reader cannot browse, which are deliberately indistinguishable so
+ * the finding leaks no existence. A label that is a NAME rather than a key is
+ * checked only for the `null` arm.
+ *
+ * ⚠️ Never a gate, like every member: a broken link is a defect in prose, and the
+ * card is as finishable with it as without. No criterion index — a link can sit
+ * anywhere in the body.
+ */
+export interface WorkItemProseMislabelledLinkAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-mislabelled-link';
+  /** The link's label exactly as written. */
+  label: string;
+  /** The work-item id the link opens. */
+  targetId: string;
+  /** The key of the card that id opens, or `null` when it opens none. */
+  targetKey: string | null;
+}
+
+/**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
  *
@@ -2238,7 +2267,8 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProsePostMergeChildAdvisoryDto
   | WorkItemProseBodyAboveFieldMoveAdvisoryDto
   | WorkItemProseBlockerCountAdvisoryDto
-  | WorkItemProseUnderAuthoredAdvisoryDto;
+  | WorkItemProseUnderAuthoredAdvisoryDto
+  | WorkItemProseMislabelledLinkAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2603,6 +2633,13 @@ export function isUnderAuthoredAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseUnderAuthoredAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'under-authored';
+}
+
+/** Narrow an advisory to the MISLABELLED-LINK shape (MOTIR-9007). */
+export function isMislabelledLinkAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseMislabelledLinkAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-mislabelled-link';
 }
 
 /** Narrow an advisory to the counted-own-blockers shape (MOTIR-5428). */

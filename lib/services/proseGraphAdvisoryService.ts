@@ -19,6 +19,7 @@ import {
   isPostMergeChildCandidate,
   isPostMergeChildCheckExemptContainer,
   isSelfBlockingDesignCheckExempt,
+  isMislabelledLink,
   isSubsumptionCheckExempt,
   overGateSizing,
   underAuthored,
@@ -26,6 +27,7 @@ import {
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
+import { parseWorkItemLinks, type WorkItemLink } from '@/lib/mentions/workItemRefs';
 import {
   BODY_ABOVE_FIELD_MOVE_SCAN,
   bodyEditAboveFieldMove,
@@ -227,12 +229,17 @@ export async function buildProseVsGraphAdvisories(
   subjects: ProseAdvisorySubject[],
   ctx: ServiceContext,
   localRefs?: ReadonlyMap<string, ProseAdvisoryLocalRef>,
+  options: { mislabelledLinks?: boolean } = {},
 ): Promise<WorkItemProseAdvisoryDto[]> {
-  // Scan every body once, dropping the exempt references as we go.
+  const checkLinks = options.mislabelledLinks ?? true;
+  // Scan every body once, dropping the exempt references as we go. The LINKS
+  // (MOTIR-9007) are scanned separately and keep the exempt ones: a link to the
+  // card's own blocker with the wrong label is as wrong as any other.
   const scanned = subjects.map((s) => {
     const refs = new Map(bodyReferenceSeverities(s.descriptionMd));
     for (const id of s.exemptIds) refs.delete(id);
-    return { item: s.item, refs, subject: s };
+    const links: WorkItemLink[] = checkLinks ? parseWorkItemLinks(s.descriptionMd ?? '') : [];
+    return { item: s.item, refs, links, subject: s };
   });
 
   const unresolved = new Set<string>();
@@ -240,7 +247,20 @@ export async function buildProseVsGraphAdvisories(
     for (const id of s.refs.keys()) {
       if (!localRefs?.has(id)) unresolved.add(id);
     }
+    for (const link of s.links) {
+      if (!localRefs?.has(link.id)) unresolved.add(link.id);
+    }
   }
+
+  // The workspace's projects, read at most ONCE: the browse gate below needs
+  // them, and so does the mislabelled-link check (the prefixes that make a label
+  // token a KEY rather than a word).
+  let workspaceProjects: Awaited<ReturnType<typeof projectRepository.findByWorkspace>> | null =
+    null;
+  const readProjects = async () =>
+    (workspaceProjects ??= await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepository.findByWorkspace(ctx.workspaceId, tx),
+    ));
 
   // ONE batched read for everything the caller could not resolve locally, then
   // the browse gate, then per-project done-ness.
@@ -250,9 +270,7 @@ export async function buildProseVsGraphAdvisories(
       workItemRepository.findByIdsInWorkspace([...unresolved], ctx.workspaceId, tx),
     );
     if (rows.length > 0) {
-      const projects = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-        projectRepository.findByWorkspace(ctx.workspaceId, tx),
-      );
+      const projects = await readProjects();
       const browsable = await projectAccessService.filterBrowsable(projects, ctx);
       const browsableProjectIds = new Set(browsable.map((p) => p.id));
       const visible = rows.filter((r) => browsableProjectIds.has(r.projectId));
@@ -304,8 +322,24 @@ export async function buildProseVsGraphAdvisories(
     ctx,
   );
 
+  // The MISLABELLED-LINK check's prefixes (MOTIR-9007): every project key in the
+  // workspace, so a label naming another project's card is still read as a key.
+  // Read only when some body carries a link at all.
+  const knownPrefixes = scanned.some((s) => s.links.length > 0)
+    ? new Set((await readProjects()).map((p) => p.identifier.toUpperCase()))
+    : new Set<string>();
+
   const advisories: WorkItemProseAdvisoryDto[] = [];
   for (const s of scanned) {
+    for (const link of s.links) {
+      const mislabelled = mislabelledLinkAdvisory(
+        s.item,
+        link,
+        (localRefs?.get(link.id) ?? resolved.get(link.id))?.identifier ?? null,
+        knownPrefixes,
+      );
+      if (mislabelled) advisories.push(mislabelled);
+    }
     // The SHAPE advisories first: they need no reference resolution at all (each
     // is a property of this body alone), so they are emitted even for a card
     // that names nothing. A card can carry BOTH — they are different defects.
@@ -374,7 +408,43 @@ const familyRank = (a: WorkItemProseAdvisoryDto): number =>
  * card, so this only has to be total, not discriminating).
  */
 const tieKey = (a: WorkItemProseAdvisoryDto): string =>
-  a.kind === 'shape' ? a.severity : a.kind === 'subsumption' ? a.path : a.referenced;
+  a.kind === 'shape'
+    ? a.severity === 'likely-mislabelled-link'
+      ? `${a.severity}\u0000${a.targetId}\u0000${a.label}`
+      : a.severity
+    : a.kind === 'subsumption'
+      ? a.path
+      : a.referenced;
+
+/**
+ * THE MISLABELLED-LINK advisory for ONE link (MOTIR-9007) — the label says one
+ * key, the id opens another card or none. `targetKey` is the key the id resolved
+ * to: from the caller's projection, else from the batched read behind its browse
+ * gate, so a card the reader cannot see reads exactly like one that does not
+ * exist (`null`) and the finding leaks nothing. The judgement is
+ * {@link isMislabelledLink}'s.
+ */
+function mislabelledLinkAdvisory(
+  item: string,
+  link: WorkItemLink,
+  targetKey: string | null,
+  knownPrefixes: ReadonlySet<string>,
+): WorkItemProseAdvisoryDto | null {
+  // The target's own prefix always counts, so a projected sibling resolves the
+  // same way before and after the projects read.
+  const prefixes = targetKey
+    ? new Set([...knownPrefixes, targetKey.slice(0, targetKey.lastIndexOf('-')).toUpperCase()])
+    : knownPrefixes;
+  if (!isMislabelledLink(link.label, targetKey, prefixes)) return null;
+  return {
+    kind: 'shape',
+    item,
+    severity: 'likely-mislabelled-link',
+    label: link.label,
+    targetId: link.id,
+    targetKey,
+  };
+}
 
 /**
  * The ORDERING advisory for ONE subject (MOTIR-2175) — gate 14's third axis.
@@ -1134,6 +1204,11 @@ export async function buildDispatchProseAdvisories(
       },
     ],
     ctx,
+    undefined,
+    // The MISLABELLED-LINK check (MOTIR-9007) is an AUTHORING finding, reported by
+    // `validate_work_item` / `validate_plan` while the body is still being written.
+    // Dispatch does not run it: its wire contract carries no such member.
+    { mislabelledLinks: false },
   );
   return advisories.filter(
     (a) => a.kind === 'shape' || a.kind === 'subsumption' || a.severity === 'likely-missing-edge',
