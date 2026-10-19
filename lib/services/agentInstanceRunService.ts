@@ -22,7 +22,11 @@ import {
   isAgentRunCommand,
   type AgentRunCommand,
 } from '@/lib/agentInstances/runCommand';
-import { profileCanRunCards, profileDisplayName } from '@/lib/agentInstances/profiles';
+import {
+  profileCanResume,
+  profileCanRunCards,
+  profileDisplayName,
+} from '@/lib/agentInstances/profiles';
 import {
   AGENT_RUN_LAUNCH_TIMEOUT_SECONDS,
   AGENT_RUN_STOP_TIMEOUT_SECONDS,
@@ -37,6 +41,7 @@ import type {
   AgentRunAgentRefusal,
   AgentRunStartedDto,
   AgentsForCardDto,
+  CardResumeTargetDto,
 } from '@/lib/dto/agentInstanceRuns';
 import {
   hostedRunWriteAccess,
@@ -55,6 +60,7 @@ import {
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
 import { toAgentForCardDto } from '@/lib/mappers/agentInstanceRunMappers';
+import { toDispatchRunAgentInstanceDto } from '@/lib/mappers/dispatchRunMappers';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
@@ -312,6 +318,13 @@ function refusalError(
     case 'agent_not_signed_in':
       return new AgentNotSignedInError(row.id, name);
   }
+}
+
+/** A non-blank `sessionId` out of an event's `data`, else null (`null` and blank read as absent). */
+function sessionIdOf(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const id = (data as Record<string, unknown>)['sessionId'];
+  return typeof id === 'string' && id.trim() !== '' ? id : null;
 }
 
 /** The card a running run works on, for the refusal's words. */
@@ -944,6 +957,66 @@ export const agentInstanceRunService = {
    * read for all of them, one read of those runs' cards. A caller without
    * `instance:use` has no agents to offer.
    */
+  /**
+   * A card's LAST run read back for the door and the resume (MOTIR-9046): which
+   * agent it ran in, the session id it recorded, whether that agent's profile has
+   * a resume form. A caller without `instance:use` has no agent door, so gets
+   * `{ lastRun: null }`.
+   *
+   * The session belongs to the card's LEG: that leg's newest `agent_exited`, else
+   * its newest `agent_started`; only a run with NO leg for the card (a scope
+   * target) falls back to the run-scoped read. A leg that recorded nothing answers
+   * null — never another leg's id, which would resume a different card's conversation.
+   */
+  async resumeTargetForCard(
+    workItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<CardResumeTargetDto> {
+    const identifier = workItemKey.trim().toUpperCase();
+    const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
+    const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
+    try {
+      await projectAccessService.assertPermission(project.id, ctx, 'instance:use');
+    } catch (err) {
+      if (err instanceof PermissionDeniedError) return { lastRun: null };
+      /* v8 ignore next -- the project was resolved above; browse cannot fail here */
+      throw err;
+    }
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+      async (tx) => {
+        const run = await dispatchRunRepository.findLatestResumeRunForWorkItem(item.id, tx);
+        if (!run) return { lastRun: null };
+        const legId = run.cards[0]?.id ?? null;
+        let sessionId: string | null = null;
+        if (run.agentInstance) {
+          for (const kind of ['agent_exited', 'agent_started'] as const) {
+            const event = await dispatchRunEventRepository.findLatestOfKind(
+              run.id,
+              kind,
+              tx,
+              legId,
+            );
+            sessionId = sessionIdOf(event?.data);
+            if (sessionId) break;
+          }
+        }
+        return {
+          lastRun: {
+            id: run.id,
+            command: run.command,
+            status: run.status,
+            startedAt: run.startedAt.toISOString(),
+            endedAt: run.endedAt?.toISOString() ?? null,
+            agent: toDispatchRunAgentInstanceDto(run.agentInstance),
+            agentIsReaders: run.agentInstance?.ownerId === ctx.userId,
+            sessionId,
+            canResume: run.agentInstance ? profileCanResume(run.agentInstance.profileId) : false,
+          },
+        };
+      },
+    );
+  },
 
   async listAgentsForCard(workItemKey: string, ctx: ServiceContext): Promise<AgentsForCardDto> {
     const identifier = workItemKey.trim().toUpperCase();

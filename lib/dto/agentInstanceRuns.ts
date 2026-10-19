@@ -1,8 +1,11 @@
 import type {
   AgentInstanceState,
+  DispatchCommand,
+  DispatchRunStatus,
   AgentRunLauncher,
   AgentSignInState,
 } from '@/generated/prisma/client';
+import type { DispatchRunAgentInstanceDto } from '@/lib/dto/dispatchRuns';
 
 // The DTOs of STARTING A CARD'S RUN IN AN AGENT (Story MOTIR-6864 · MOTIR-7026,
 // `docs/decisions/agent-instance-run.md` §4) — what `POST
@@ -69,4 +72,31 @@ export interface AgentForCardDto {
 
 export interface AgentsForCardDto {
   agents: AgentForCardDto[];
+}
+
+/**
+ * A card's LAST run, read back for the "Fix in my agent" door and for the resume
+ * (MOTIR-8981 · MOTIR-9046): which agent it ran in, the session id it recorded and
+ * whether that agent's profile has a resume form. Three facts, not a decision —
+ * `sessionId: null` with `canResume: true` means "no id was recorded, a fresh agent
+ * on the same branch is the only route", and `canResume: false` means "this profile
+ * has no resume form at all".
+ */
+export interface CardRunResumeTargetDto {
+  id: string;
+  command: DispatchCommand;
+  status: DispatchRunStatus;
+  startedAt: string;
+  endedAt: string | null;
+  /** The agent the run executed in; null for a hosted or local run, or a removed agent. */
+  agent: DispatchRunAgentInstanceDto | null;
+  /** True exactly when that agent is the calling user's own. */
+  agentIsReaders: boolean;
+  /** The session id the card's leg recorded, or null. */
+  sessionId: string | null;
+  canResume: boolean;
+}
+
+export interface CardResumeTargetDto {
+  lastRun: CardRunResumeTargetDto | null;
 }
