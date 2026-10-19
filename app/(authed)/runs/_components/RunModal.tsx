@@ -45,7 +45,7 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 // server has nothing to answer.
 //
 // The dialog's a11y is the SHIPPED `Modal`'s (Radix): focus is trapped while
-// open, ESC closes, and focus RETURNS to the row that opened it. The canvas
+// open, ESC closes, and focus RETURNS to the row that opened it (restored by hand below, as no Trigger exists). The canvas
 // inside owns `/` for search and does NOT take ESC — a full-screen canvas in a
 // dialog is exactly where two key handlers collide, and the dialog's must win.
 
@@ -78,6 +78,20 @@ export function RunModal({ runId, projectKey, onClose, viewerId = null }: RunMod
   const t = useTranslations('runs');
   const tc = useTranslations('common');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
+  // Radix returns focus to a Dialog.Trigger, and this dialog has none: the modal
+  // is mounted by the URL, so the element that held focus (the row's door) is
+  // remembered here, before the dialog takes focus, and restored on unmount.
+  const opener = useRef<Element | null>(
+    typeof document === 'undefined' ? null : document.activeElement,
+  );
+  useEffect(() => {
+    const el = opener.current;
+    return () => {
+      setTimeout(() => {
+        if (el instanceof HTMLElement && el.isConnected) el.focus();
+      }, 0);
+    };
+  }, []);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   // ONE connection for the whole modal (MOTIR-3983): the findings strip and the
   // log pane are two readers of the same stream, not two streams.
