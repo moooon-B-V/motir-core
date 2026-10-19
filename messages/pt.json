@@ -3957,7 +3957,11 @@
       "savedTitle": "Configurações do agente hospedado salvas",
       "savedDesc": "As novas execuções hospedadas usam estes modelos.",
       "errorTitle": "Não foi possível salvar",
-      "saveError": "Suas configurações do agente hospedado não foram salvas. Tente novamente."
+      "saveError": "Suas configurações do agente hospedado não foram salvas. Tente novamente.",
+      "autoFix": {
+        "label": "Fix a red pull request in the work item's own agent.",
+        "help": "When a pull request goes red and the work item's last run was in an agent that is signed in and up, Motir starts the fix in that agent. Off — the default — nothing starts on its own."
+      }
     },
     "connectedApps": {
       "title": "Apps conectados",
@@ -7304,6 +7308,43 @@
             "outOfCredits": {
               "body": "Nada foi iniciado e nada foi cobrado. Corrigir no agente hospedado volta a funcionar assim que a organização tiver créditos — ou repare pelo seu terminal."
             }
+          }
+        },
+        "myAgent": {
+          "lead": "Fix it in your own agent: <b>{agent}</b>, the agent this work item's last run used.",
+          "door": {
+            "label": "Fix in my agent",
+            "starting": "Starting the fix…",
+            "why": "The fix runs in the same agent on the same branch, so it starts from the run's own context instead of a blank one."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "You started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "why": "One fix at a time: this run holds the repair until it ends, so a second fix cannot start over it."
+          },
+          "refused": {
+            "busy": {
+              "title": "Not started — a fix is already running on this work item.",
+              "body": "<b>{name}</b> started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged.",
+              "bodyYou": "You started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged."
+            },
+            "signedOut": {
+              "title": "Not started — <b>{agent}</b> is signed out.",
+              "body": "Sign <b>{agent}</b> in, then press Fix in my agent again. <link>Open the agent</link> to sign in with <cmd>{cmd}</cmd>. Nothing was started and nothing was charged."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> could not resume this work item's run session, so the fix started a new session on the same branch (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "This work item's pull requests are green now, so no fix was started."
+          },
+          "gaveUp": {
+            "note": "The last fix in <b>{agent}</b> gave up after {attempts, plural, one {1 attempt} other {# attempts}} <when></when>. Fix in my agent can be pressed again.",
+            "noteNoCount": "The last fix in <b>{agent}</b> gave up <when></when>. Fix in my agent can be pressed again."
+          },
+          "modal": {
+            "lead": "This run ended with a red pull request. Fix it in the same agent, without copying the failure into a new one."
           }
         }
       },
