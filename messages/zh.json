@@ -3959,8 +3959,8 @@
       "errorTitle": "无法保存",
       "saveError": "你的托管智能体设置未保存，请重试。",
       "autoFix": {
-        "label": "Fix a red pull request in the work item's own agent.",
-        "help": "When a pull request goes red and the work item's last run was in an agent that is signed in and up, Motir starts the fix in that agent. Off — the default — nothing starts on its own."
+        "label": "在工作项自己的智能体中修复未通过的拉取请求。",
+        "help": "当拉取请求的检查未通过，且该工作项上一次运行所在的智能体已登录并在线时，Motir 会在该智能体中启动修复。关闭（默认）时，不会自动启动任何修复。"
       }
     },
     "connectedApps": {
@@ -7305,40 +7305,40 @@
           }
         },
         "myAgent": {
-          "lead": "Fix it in your own agent: <b>{agent}</b>, the agent this work item's last run used.",
+          "lead": "在你自己的智能体中修复：<b>{agent}</b>，即此工作项上一次运行所用的智能体。",
           "door": {
-            "label": "Fix in my agent",
-            "starting": "Starting the fix…",
-            "why": "The fix runs in the same agent on the same branch, so it starts from the run's own context instead of a blank one."
+            "label": "在我的智能体中修复",
+            "starting": "正在启动修复…",
+            "why": "修复会在同一个智能体、同一个分支上运行，因此从该次运行自己的上下文开始，而不是从空白开始。"
           },
           "fixing": {
-            "by": "<b>{name}</b> started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "byYou": "You started a fix in <b>{agent}</b> <when></when> — <run>{label}</run>.",
-            "why": "One fix at a time: this run holds the repair until it ends, so a second fix cannot start over it."
+            "by": "<b>{name}</b> <when></when>在 <b>{agent}</b> 中启动了修复——<run>{label}</run>。",
+            "byYou": "你<when></when>在 <b>{agent}</b> 中启动了修复——<run>{label}</run>。",
+            "why": "同一时间只运行一个修复：这次运行在结束前一直持有修复，因此无法在它之上再启动第二个修复。"
           },
           "refused": {
             "busy": {
-              "title": "Not started — a fix is already running on this work item.",
-              "body": "<b>{name}</b> started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged.",
-              "bodyYou": "You started it <when></when> — <run>{label}</run>. Nothing was started and nothing was charged."
+              "title": "未启动——此工作项上已有一个修复在运行。",
+              "body": "<b>{name}</b> <when></when>启动了它——<run>{label}</run>。没有启动任何东西，也没有产生任何费用。",
+              "bodyYou": "你<when></when>启动了它——<run>{label}</run>。没有启动任何东西，也没有产生任何费用。"
             },
             "signedOut": {
-              "title": "Not started — <b>{agent}</b> is signed out.",
-              "body": "Sign <b>{agent}</b> in, then press Fix in my agent again. <link>Open the agent</link> to sign in with <cmd>{cmd}</cmd>. Nothing was started and nothing was charged."
+              "title": "未启动——<b>{agent}</b> 已退出登录。",
+              "body": "请先登录 <b>{agent}</b>，然后再次点击“在我的智能体中修复”。<link>打开该智能体</link>，用 <cmd>{cmd}</cmd> 登录。没有启动任何东西，也没有产生任何费用。"
             }
           },
           "fellBack": {
-            "notice": "<b>{agent}</b> could not resume this work item's run session, so the fix started a new session on the same branch (<b>{branch}</b>)."
+            "notice": "<b>{agent}</b> 无法恢复此工作项的运行会话，因此修复在同一个分支（<b>{branch}</b>）上启动了新的会话。"
           },
           "settled": {
-            "notice": "This work item's pull requests are green now, so no fix was started."
+            "notice": "此工作项的拉取请求现已通过检查，因此没有启动修复。"
           },
           "gaveUp": {
-            "note": "The last fix in <b>{agent}</b> gave up after {attempts, plural, other {# attempts}} <when></when>. Fix in my agent can be pressed again.",
-            "noteNoCount": "The last fix in <b>{agent}</b> gave up <when></when>. Fix in my agent can be pressed again."
+            "note": "<b>{agent}</b> 中上一次修复在尝试 {attempts, plural, other {# 次}}后放弃 <when></when>。可以再次点击“在我的智能体中修复”。",
+            "noteNoCount": "<b>{agent}</b> 中上一次修复已放弃 <when></when>。可以再次点击“在我的智能体中修复”。"
           },
           "modal": {
-            "lead": "This run ended with a red pull request. Fix it in the same agent, without copying the failure into a new one."
+            "lead": "这次运行以一个未通过检查的拉取请求结束。在同一个智能体中修复它，无需把失败信息复制到新的智能体里。"
           }
         }
       },
