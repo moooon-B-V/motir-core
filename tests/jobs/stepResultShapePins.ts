@@ -326,6 +326,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape: 'Array<string>',
   },
+  'reconcile-github-queue': {
+    file: 'lib/jobs/definitions/ciRunnerFleet.ts',
+    shape: '{ added: number }',
+  },
   'mark-stale-for-terminal-target': {
     file: 'lib/jobs/definitions/planDrift.ts',
     shape: '{ markedStale: Array<string>; restored: Array<string>; skipped: Array<string> }',
