@@ -129,7 +129,7 @@ describe('the project is the handle — every run, newest first', () => {
 describe('a row names its TARGET — key, id and the count behind +N (MOTIR-9071)', () => {
   it('a scoped run names the scope’s KEY, not the title stored as its label', async () => {
     const { storyKey, keys } = await seedStory(fixture, 3);
-    const scope = await db.workItem.findFirstOrThrow({ where: { identifier: storyKey } });
+    const scope = await adminDb.workItem.findFirstOrThrow({ where: { identifier: storyKey } });
     const { run } = await dispatchRunService.open(
       {
         projectKey: fixture.projectIdentifier,
@@ -156,7 +156,7 @@ describe('a row names its TARGET — key, id and the count behind +N (MOTIR-9071
 
   it('a scoped run with NO label still names its scope', async () => {
     const { storyKey, keys } = await seedStory(fixture, 2);
-    const scope = await db.workItem.findFirstOrThrow({ where: { identifier: storyKey } });
+    const scope = await adminDb.workItem.findFirstOrThrow({ where: { identifier: storyKey } });
     await openRun(fixture, { keys, scopeKey: storyKey, command: 'run' });
 
     const [row] = await list({ take: 10 });
@@ -174,7 +174,7 @@ describe('a row names its TARGET — key, id and the count behind +N (MOTIR-9071
     // the last leg, picks a different card.
     const claimed = [keys[2]!, keys[0]!, keys[1]!];
     await openRun(fixture, { keys: claimed });
-    const first = await db.workItem.findFirstOrThrow({ where: { identifier: claimed[0]! } });
+    const first = await adminDb.workItem.findFirstOrThrow({ where: { identifier: claimed[0]! } });
 
     const [row] = await list({ take: 10 });
 
