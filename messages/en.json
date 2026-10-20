@@ -8256,7 +8256,9 @@
       "onlyStarter": "Only {name} or a project manager can resume this.",
       "onlyStarterAnon": "Only the person who started this or a project manager can resume it.",
       "failureLine": "Your last change to this plan could not be made · {when}",
-      "failureLineAgain": "Your last change could not be made again · {when}"
+      "failureLineAgain": "Your last change could not be made again · {when}",
+      "failureLinePlanAgain": "This attempt could not be continued · {when}. Your next message plans it again.",
+      "failureLinePlanAgainAgain": "This attempt could not be continued again · {when}. Your next message plans it again."
     },
     "grill": {
       "control": {

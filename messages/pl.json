@@ -8256,7 +8256,9 @@
       "onlyStarter": "Tylko {name} lub kierownik projektu może to wznowić.",
       "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić.",
       "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona · {when}",
-      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}"
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}",
+      "failureLinePlanAgain": "Nie udało się kontynuować tej próby · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
+      "failureLinePlanAgainAgain": "Tej próby znów nie udało się kontynuować · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
     },
     "grill": {
       "control": {

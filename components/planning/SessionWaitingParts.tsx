@@ -133,13 +133,27 @@ export function FailedWaitingNotice({
 export function WaitingPlanFailureLine({
   failure,
   again,
+  planAgain = false,
 }: {
   failure: PlanSessionFailureDto;
   again: boolean;
+  /**
+   * The attempt cannot be resumed and no plan waits beside it (MOTIR-9121): its cards were
+   * given back, and the person's next message plans again — the same line, saying THAT
+   * instead of naming a plan that is not there.
+   */
+  planAgain?: boolean;
 }) {
   const tw = useTranslations('planningWorkspace.waiting');
   const format = useFormatter();
   const when = format.relativeTime(new Date(failure.failedAt));
+  const text = planAgain
+    ? again
+      ? tw('failureLinePlanAgainAgain', { when })
+      : tw('failureLinePlanAgain', { when })
+    : again
+      ? tw('failureLineAgain', { when })
+      : tw('failureLine', { when });
   return (
     <p
       role="status"
@@ -148,7 +162,7 @@ export function WaitingPlanFailureLine({
       className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
     >
       <TriangleAlert className="mt-0.5 size-4 flex-none text-(--el-icon-muted)" aria-hidden />
-      <span>{again ? tw('failureLineAgain', { when }) : tw('failureLine', { when })}</span>
+      <span>{text}</span>
     </p>
   );
 }

@@ -294,6 +294,12 @@ export interface JobView {
    * `error` rather than in it. Optional, and absent reads as `false`.
    */
   lostMachine?: boolean;
+  /**
+   * motir-ai's verdict on whether a FAILED planning job can be resumed (MOTIR-9121) —
+   * `false` when it failed before its conversation settled, so a resume would be refused.
+   * Absent when motir-ai did not say (any other status, or an older motir-ai).
+   */
+  resumable?: boolean;
 }
 
 /** The problem code motir-ai's reaper fails an abandoned job with (`src/jobs/reaper.ts`). */

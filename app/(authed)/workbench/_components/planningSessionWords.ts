@@ -105,9 +105,14 @@ export function resumeRefusalKeyOf(
   }
 }
 
-/** Whether a refusal means the session is no longer waiting to resume (hold + re-read). */
+/**
+ * Whether a refusal means the session is no longer waiting to resume (hold + re-read). A
+ * `notResumable` refusal is one: the server has recorded that the attempt cannot be resumed
+ * and given its cards back (MOTIR-9121), so offering the same Resume again would only be
+ * refused again — the next message in the session plans again instead.
+ */
 export function refusalEndsWaiting(key: ResumeRefusalKey): boolean {
-  return key === 'ended' || key === 'notFailed';
+  return key === 'ended' || key === 'notFailed' || key === 'notResumable';
 }
 
 // ── Situation 2 (Story MOTIR-7905 · MOTIR-7940; design § 38) ───────────────────────────────

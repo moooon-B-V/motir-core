@@ -9278,6 +9278,13 @@ model PlanChangeSession {
   /// That level's or card's title at the moment of failure, so a row can name it
   /// without a second read.
   failureStopTitle    String?                   @map("failure_stop_title")
+  /// Whether the failed attempt can be RESUMED (MOTIR-9121): motir-ai's own verdict on
+  /// the failed job (`resumable` on `GET /v1/jobs/:id`) — `false` when the job failed
+  /// before its conversation settled, so a resume has nothing to continue from. A
+  /// `false` record offers no Resume, has released the attempt's targets, and lets the
+  /// next turn plan again. Null when unknown (a motir-ai that does not say, or a failure
+  /// recorded before this column), which reads as resumable, as it always did.
+  failureResumable    Boolean?                  @map("failure_resumable")
   // ── AWAITING ITS PERSON ───────────────────────────────────────────────────────
   /// When the conversation began waiting on its owner's next turn. Written by the
   /// planning-session gate (`markAwaitingPerson`), cleared by the person's next turn

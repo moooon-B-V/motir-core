@@ -17,7 +17,11 @@ import type { SessionWaitingState } from '@/lib/planChange/sessionWaitingState';
 //                        no third exit.
 //   - `continue`       → no resumable walk, and the most recent UNDECIDED plan is
 //                        `planned` / `stale`: the shipped routing takes the turn, and the
-//                        bind clears the failure.
+//                        bind clears the failure. ALSO a failure motir-ai said cannot be
+//                        resumed (`failureResumable: false`, MOTIR-9121) with nothing waiting:
+//                        there is no walk to continue and no plan to revise, so the turn plans
+//                        again — refusing it in favour of a Resume that is always refused was
+//                        the dead end.
 //
 // PURE — no I/O. It keys on the MOST RECENT undecided plan, as `classifySessionTurn`
 // does, so the two agree on every failed shape.
@@ -32,6 +36,9 @@ export interface FailedWaitingTurnPlan {
 export interface ClassifyFailedWaitingTurnInput {
   waiting: SessionWaitingState;
   failedJobId: string | null;
+  /** motir-ai's verdict on the failed job (MOTIR-9121); `false` rules a Resume out. Absent or
+   *  `null` is unknown and reads as resumable, as every failure did before it existed. */
+  failureResumable?: boolean | null;
   plans: readonly FailedWaitingTurnPlan[];
 }
 
@@ -41,16 +48,20 @@ export function classifyFailedWaitingTurn(
   input: ClassifyFailedWaitingTurnInput,
 ): FailedWaitingTurn {
   if (input.waiting !== 'failed') return 'not_failed';
-  const resumable = input.plans.some(
-    (p) =>
-      p.status === 'generating' &&
-      input.failedJobId !== null &&
-      p.sourceJobId === input.failedJobId,
-  );
+  const unresumable = input.failureResumable === false;
+  const resumable =
+    !unresumable &&
+    input.plans.some(
+      (p) =>
+        p.status === 'generating' &&
+        input.failedJobId !== null &&
+        p.sourceJobId === input.failedJobId,
+    );
   if (resumable) return 'refuse_resume';
   const latest = [...input.plans].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1),
   )[0];
   if (latest && (latest.status === 'planned' || latest.status === 'stale')) return 'continue';
+  if (unresumable) return 'continue';
   return 'refuse_resume';
 }

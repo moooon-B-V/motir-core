@@ -73,6 +73,9 @@ export interface FailedJobFacts {
   walkStop: JobWalkStop | null;
   /** motir-ai failed the job because its machine stopped renewing the lease. */
   lostMachine: boolean;
+  /** motir-ai's verdict on whether the job can be resumed (MOTIR-9121); `null` when it
+   *  did not say. */
+  resumable: boolean | null;
 }
 
 const REASONS: ReadonlySet<string> = new Set(PLAN_SESSION_FAILURE_REASONS);
@@ -118,6 +121,8 @@ export interface FailureRecordInput {
   walkStop: JobWalkStop | null;
   lastPosition: JobWalkPosition | null;
   error: { code: string; message?: string } | null;
+  /** motir-ai's resumable verdict (MOTIR-9121); absent or `null` when unknown. */
+  resumable?: boolean | null;
 }
 
 /**
@@ -142,5 +147,6 @@ export function failureRecordFrom(input: FailureRecordInput): PlanSessionFailure
     failureStopPhase: stop?.phase ?? null,
     failureStopRef: stop?.target ?? null,
     failureStopTitle: stop?.targetTitle ?? null,
+    failureResumable: input.resumable ?? null,
   };
 }

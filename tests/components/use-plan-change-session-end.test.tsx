@@ -683,7 +683,7 @@ describe('Resume', () => {
     expect(result.current.state.resumeError ?? null).toBeNull();
   });
 
-  it.each(['SESSION_NOT_FAILED', 'PLAN_NOT_RESUMABLE', 'NOT_SESSION_OWNER', 'PLAN_SESSION_ENDED'])(
+  it.each(['SESSION_NOT_FAILED', 'NOT_SESSION_OWNER', 'PLAN_SESSION_ENDED'])(
     '%s keeps the failure line and holds the code beside it',
     async (code) => {
       open.mockResolvedValue(failedSession());
@@ -697,6 +697,26 @@ describe('Resume', () => {
       expect(stream).not.toHaveBeenCalled();
     },
   );
+
+  // MOTIR-9121: the server has just recorded the attempt as not resumable and released it, so
+  // the overlay adopts the re-read row — the rail then draws the plan-again line, not Resume.
+  it('PLAN_NOT_RESUMABLE re-reads the session and adopts the not-resumable record', async () => {
+    open.mockResolvedValue(failedSession());
+    resumeSession.mockRejectedValue(new PlanEditsClientError(409, 'PLAN_NOT_RESUMABLE'));
+    readSession.mockResolvedValue({
+      ...failedSession({ resumable: false }),
+      failedWaiting: 'reply',
+    });
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.resume();
+    });
+    await waitFor(() => expect(result.current.state.session?.failure?.resumable).toBe(false));
+    expect(readSession).toHaveBeenCalledWith('s1');
+    expect(result.current.state.resumeError).toBe('PLAN_NOT_RESUMABLE');
+    expect(result.current.state.session?.failure?.reason).toBe('rate_limited');
+    expect(stream).not.toHaveBeenCalled();
+  });
 
   it('out of credits reads as the credit code', async () => {
     open.mockResolvedValue(failedSession());

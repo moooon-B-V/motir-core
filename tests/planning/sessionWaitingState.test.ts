@@ -72,12 +72,13 @@ describe('the predicates mirror their where fragments', () => {
 });
 
 describe('the cleared-column lists name every column, once', () => {
-  it('the seven failure columns and the two awaiting columns are all null', () => {
+  it('the eight failure columns and the two awaiting columns are all null', () => {
     expect(Object.keys(CLEARED_FAILURE_COLUMNS).sort()).toEqual([
       'failedAt',
       'failedJobId',
       'failureDetail',
       'failureReason',
+      'failureResumable',
       'failureStopPhase',
       'failureStopRef',
       'failureStopTitle',
@@ -101,6 +102,7 @@ describe('parsePlanSessionFailureRecord', () => {
       failureStopPhase: null,
       failureStopRef: null,
       failureStopTitle: null,
+      failureResumable: null,
     });
   });
 

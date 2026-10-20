@@ -77,8 +77,14 @@ describe('resumeRefusalKeyOf — TOTAL over the resume route’s refusals', () =
     }
   });
 
-  it('only `ended` and `notFailed` say the session no longer waits', () => {
-    expect(RESUME_REFUSAL_KEYS.filter(refusalEndsWaiting).sort()).toEqual(['ended', 'notFailed']);
+  // `notResumable` joined them in MOTIR-9121: the server records the attempt as not resumable
+  // and releases it, so the same Resume is never offered again.
+  it('only `ended`, `notFailed` and `notResumable` say the session no longer waits', () => {
+    expect(RESUME_REFUSAL_KEYS.filter(refusalEndsWaiting).sort()).toEqual([
+      'ended',
+      'notFailed',
+      'notResumable',
+    ]);
   });
 });
 

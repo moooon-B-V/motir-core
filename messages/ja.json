@@ -8253,7 +8253,9 @@
       "onlyStarter": "再開できるのは {name} またはプロジェクトマネージャーのみです。",
       "onlyStarterAnon": "再開できるのは開始した本人またはプロジェクトマネージャーのみです。",
       "failureLine": "この計画への直前の変更を反映できませんでした · {when}",
-      "failureLineAgain": "直前の変更を再び反映できませんでした · {when}"
+      "failureLineAgain": "直前の変更を再び反映できませんでした · {when}",
+      "failureLinePlanAgain": "この試行は続行できませんでした · {when}。次のメッセージで計画し直します。",
+      "failureLinePlanAgainAgain": "この試行は再び続行できませんでした · {when}。次のメッセージで計画し直します。"
     },
     "grill": {
       "control": {

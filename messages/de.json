@@ -8256,7 +8256,9 @@
       "onlyStarter": "Nur {name} oder ein Projektmanager kann dies fortsetzen.",
       "onlyStarterAnon": "Nur die Person, die dies gestartet hat, oder ein Projektmanager kann es fortsetzen.",
       "failureLine": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden · {when}",
-      "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden · {when}"
+      "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden · {when}",
+      "failureLinePlanAgain": "Dieser Versuch konnte nicht fortgesetzt werden · {when}. Ihre nächste Nachricht plant neu.",
+      "failureLinePlanAgainAgain": "Dieser Versuch konnte erneut nicht fortgesetzt werden · {when}. Ihre nächste Nachricht plant neu."
     },
     "grill": {
       "control": {

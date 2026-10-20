@@ -1395,9 +1395,15 @@ export function PlanChangeRail({
           <AlsoWaitingPlan session={state.session} />
         ) : null}
         {/* A failure beside a waiting plan (situation 2; MOTIR-7941): ONE current failure line, an
-            open composer, no Resume — the next turn continues the session. */}
+            open composer, no Resume — the next turn continues the session. With NO plan waiting
+            it is an attempt motir-ai cannot resume (MOTIR-9121): the same line says the next
+            message plans again. */}
         {failure && !awaitsResume ? (
-          <WaitingPlanFailureLine failure={failure} again={failedAgain} />
+          <WaitingPlanFailureLine
+            failure={failure}
+            again={failedAgain}
+            planAgain={!state.session?.waitingPlan}
+          />
         ) : null}
 
         {state.errorCode === GUIDE_OFFER_CLOSED && !ended ? (

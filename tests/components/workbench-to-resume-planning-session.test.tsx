@@ -259,7 +259,6 @@ describe('pressing Resume', () => {
 
   it.each([
     ['NOT_SESSION_OWNER', 403, 'notOwner'],
-    ['PLAN_NOT_RESUMABLE', 409, 'notResumable'],
     ['MOTIR_AI_OUT_OF_CREDITS', 402, 'credits'],
   ] as const)('%s keeps the row and shows its sentence', async (code, status, key) => {
     resumePlanSession.mockRejectedValue(new PlanEditsClientError(status, code));
@@ -275,6 +274,8 @@ describe('pressing Resume', () => {
   it.each([
     ['PLAN_SESSION_ENDED', 'ended'],
     ['SESSION_NOT_FAILED', 'notFailed'],
+    // MOTIR-9121: the server recorded the attempt as not resumable and released it.
+    ['PLAN_NOT_RESUMABLE', 'notResumable'],
   ] as const)(
     '%s holds the row with its sentence and asks the list to re-read',
     async (code, key) => {
