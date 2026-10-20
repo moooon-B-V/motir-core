@@ -603,7 +603,7 @@ describe('the Prometheus client', () => {
     expect(stub.calls).toHaveLength(0);
   });
 
-  it('honours LOADTEST_PROM_URL, sends Bearer by default and FlyV1 when told, and reads fly auth token otherwise', async () => {
+  it('honours LOADTEST_PROM_URL, sends FlyV1 by default and the override when told, and reads fly auth token otherwise', async () => {
     const stub = promStub(healthyProm(1));
     await createPromClient({
       app: APP,
@@ -613,7 +613,7 @@ describe('the Prometheus client', () => {
     }).instant('up{app="x"}', new Date());
     await createPromClient({
       app: APP,
-      env: { LOADTEST_FLY_PROM_TOKEN: TOKEN, LOADTEST_FLY_PROM_TOKEN_SCHEME: 'FlyV1' },
+      env: { LOADTEST_FLY_PROM_TOKEN: TOKEN, LOADTEST_FLY_PROM_TOKEN_SCHEME: 'Bearer' },
       exec,
       fetchImpl: stub.fetchImpl,
     }).instant('up{app="x"}', new Date());
@@ -622,10 +622,10 @@ describe('the Prometheus client', () => {
       new Date(),
     );
     expect(stub.calls[0]!.url.href.startsWith(`${PROM_URL}/api/v1/query?`)).toBe(true);
-    expect(stub.calls[0]!.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(stub.calls[0]!.authorization).toBe(`FlyV1 ${TOKEN}`);
     expect(stub.calls[1]!.url.origin).toBe('https://api.fly.io');
-    expect(stub.calls[1]!.authorization).toBe(`FlyV1 ${TOKEN}`);
-    expect(stub.calls[2]!.authorization).toBe('Bearer flyctl-token-from-auth-1234567890');
+    expect(stub.calls[1]!.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(stub.calls[2]!.authorization).toBe('FlyV1 flyctl-token-from-auth-1234567890');
   });
 
   it('no token appears in any output', async () => {

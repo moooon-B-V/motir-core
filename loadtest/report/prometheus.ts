@@ -8,10 +8,10 @@
 // request leaves. The report only ever reads the staging app's series.
 //
 // The token is `LOADTEST_FLY_PROM_TOKEN`, else `fly auth token` through the injected
-// runner, sent as `Authorization: Bearer <token>` (a flyctl token) or, with
-// `LOADTEST_FLY_PROM_TOKEN_SCHEME=FlyV1`, as `FlyV1 <token>` (a token made with
-// `fly tokens create`, docs.fly.io/monitoring/metrics). It is never printed: every
-// error message is redacted against it.
+// runner, sent as `Authorization: FlyV1 <token>` — Fly answers a `fly auth token` value
+// 401 as `Bearer` and 200 as `FlyV1` (MOTIR-9151). `LOADTEST_FLY_PROM_TOKEN_SCHEME=Bearer`
+// overrides it (docs.fly.io/monitoring/metrics). It is never printed: every error
+// message is redacted against it.
 //
 // An unreachable endpoint or a non-success answer is a `Reading` that says
 // `unmeasured` with the reason; nothing here throws on a platform failure.
@@ -76,7 +76,7 @@ export function createPromClient(opts: {
   now?: () => Date;
 }): PromClient {
   const endpoint = (opts.env['LOADTEST_PROM_URL']?.trim() || PROM_URL_DEFAULT).replace(/\/+$/, '');
-  const scheme = opts.env['LOADTEST_FLY_PROM_TOKEN_SCHEME']?.trim() || 'Bearer';
+  const scheme = opts.env['LOADTEST_FLY_PROM_TOKEN_SCHEME']?.trim() || 'FlyV1';
   const fetchImpl = opts.fetchImpl ?? fetch;
   const now = opts.now ?? (() => new Date());
   let token: Reading<string> | null = null;
