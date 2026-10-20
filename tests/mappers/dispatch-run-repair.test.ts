@@ -67,6 +67,7 @@ describe('toDispatchRunRepairDto', () => {
         decidedUnderAuthority: 'review_agent',
         decidedAt: '2026-09-29T10:00:00.000Z',
       },
+      resume: null,
     });
   });
 
@@ -89,7 +90,7 @@ describe('toDispatchRunRepairDto', () => {
     (repairClass) => {
       expect(
         toDispatchRunRepairDto({ repairClass, title: '', pullRequests: 'not a list' }),
-      ).toEqual({ repairClass, title: null, pullRequests: [], findings: null });
+      ).toEqual({ repairClass, title: null, pullRequests: [], findings: null, resume: null });
     },
   );
 
