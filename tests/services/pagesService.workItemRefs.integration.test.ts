@@ -143,3 +143,46 @@ describe('pagesService.getPage — workItemRefs (MOTIR-7572)', () => {
     expect(revision).toBe(2);
   });
 });
+
+describe('pagesService.getPageVersion — workItemRefs (MOTIR-9138)', () => {
+  const readVersion = (ctx: ServiceContext, pageId: string, number: number) =>
+    pagesService.getPageVersion(ctx, { projectId: fx.projectId, pageId, number });
+
+  it("resolves the version's own mentions under the reader's access", async () => {
+    const live = await item('Live one');
+    const pageId = await pageWith(`See ${mention(live)}.`);
+
+    const version = await readVersion(fx.ctx, pageId, 1);
+    expect(version.workItemRefs[live.id]).toMatchObject({
+      accessible: true,
+      identifier: live.identifier,
+      title: 'Live one',
+    });
+  });
+
+  it('reads a mention the live body has since dropped, and returns {} for a version with none', async () => {
+    const live = await item('Live one');
+    const pageId = await pageWith(`See ${mention(live)}.`);
+    const page = await pagesService.getPage(fx.ctx, { projectId: fx.projectId, pageId });
+    await withWorkspaceContext(
+      { userId: fx.ownerId, workspaceId: fx.workspaceId, projectId: fx.projectId },
+      (tx) =>
+        savePageMarkdown(pageStoreFor(tx), systemClock, {
+          pageId,
+          actorId: fx.ownerId,
+          markdown: 'Nothing here now.',
+          expectedRevision: page.revision,
+        }),
+    );
+
+    expect((await readVersion(fx.ctx, pageId, 1)).workItemRefs[live.id]).toMatchObject({
+      accessible: true,
+    });
+    const latest = await pagesService.listPageVersions(fx.ctx, {
+      projectId: fx.projectId,
+      pageId,
+    });
+    const current = latest.items.find((v) => v.isCurrent)!;
+    expect((await readVersion(fx.ctx, pageId, current.number)).workItemRefs).toEqual({});
+  });
+});

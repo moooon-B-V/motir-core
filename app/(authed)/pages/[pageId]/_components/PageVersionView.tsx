@@ -24,6 +24,8 @@ const PageEditorHost = lazy(() => import('@/components/pages/PageEditorHost'));
 export interface PageVersionViewProps {
   pageId: string;
   number: number;
+  /** `PageDto.projectId` — the project the version's work-item chips resolve in. */
+  projectId: string;
   viewerId: string;
   onClose: () => void;
   /** `GET …/versions/<n>` answered 404 `PAGE_VERSION_NOT_FOUND`: the version was pruned. */
@@ -57,6 +59,7 @@ type VersionState =
 export function PageVersionView({
   pageId,
   number,
+  projectId,
   viewerId,
   onClose,
   onGone,
@@ -130,6 +133,8 @@ export function PageVersionView({
               pageId={pageId}
               bodyState={state.version.bodyState}
               canEdit={false}
+              projectId={projectId}
+              workItemRefs={state.version.workItemRefs}
             />
           </Suspense>
         ) : state.kind === 'failed' ? (

@@ -330,6 +330,8 @@ export interface PageVersionListDto {
 export interface PageVersionDto extends PageVersionListItemDto {
   /** The version's Yjs state, base64-encoded — the shape `PageDto.bodyState` uses. */
   bodyState: string;
+  /** The live chip data of every work item the version's body mentions — `PageDto.workItemRefs`'s shape. */
+  workItemRefs: WorkItemRefMap;
 }
 
 /** What a restore returns: the new current state, so an open editor re-seeds without a read. */
