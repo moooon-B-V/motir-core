@@ -41,9 +41,6 @@ function contextFor(launch: PlanningLaunch): PlanningLaunchContext {
   if (launch.from === 'work-item' && launch.itemKey) {
     return { kind: 'work-item', itemKey: launch.itemKey, hasPlan: launch.mode === 'replan' };
   }
-  if (launch.from === 'convention-refine' && launch.repoKey) {
-    return { kind: 'convention-refine', repoKey: launch.repoKey };
-  }
   if (launch.from === 'roadmap') return { kind: 'roadmap' };
   return { kind: 'project', hasPlan: launch.mode === 'replan' ? true : undefined };
 }

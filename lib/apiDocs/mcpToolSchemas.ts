@@ -1505,6 +1505,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_coding_convention: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository whose convention to read — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively. `get_code_health` and `get_project_state` list the set.',
+      },
+    },
+    required: ['projectKey', 'repo'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_design: {
     type: 'object',
     properties: {
@@ -4054,6 +4074,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_approval_gate: 'Get approval gate',
   get_approved_shape_verdict: 'Is this card still what its plan approved?',
   get_code_health: 'Get code health',
+  get_coding_convention: 'Get coding convention',
   get_design: 'Get design',
   get_page: 'Get page',
   get_plan: 'Read plan proposals',
@@ -4340,6 +4361,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   get_code_health: { title: 'Get code health', readOnlyHint: true, openWorldHint: false },
+  get_coding_convention: {
+    title: 'Get coding convention',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
   get_design: { title: 'Get design', readOnlyHint: true, openWorldHint: false },
   get_page: { title: 'Get page', readOnlyHint: true, openWorldHint: false },
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },

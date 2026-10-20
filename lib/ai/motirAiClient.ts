@@ -1075,6 +1075,12 @@ export interface RawConvention {
   contentMd: string;
   provenance: RawConventionProvenance[];
   sourceAuditId: string | null;
+  // Who wrote this version (MOTIR-9080). Optional on the wire: a motir-ai that
+  // predates the editable convention sends none of the three, and reads as
+  // `derived` with nothing waiting.
+  authorKind?: 'derived' | 'edited';
+  editedByUserId?: string | null;
+  pendingDerivedMd?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1247,6 +1253,30 @@ export async function getConvention(query: ConventionQuery): Promise<RawConventi
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawConventionSurface;
+}
+
+export interface PutConventionInput {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  repoKey: string;
+  contentMd: string;
+  editedByUserId: string;
+  // The version the editor loaded (0 when the repository had none).
+  baseVersion: number;
+}
+
+// PUT /v1/convention — a person's save: motir-ai records version + 1 as an `edited`
+// version, or refuses a stale `baseVersion` as a 409 (MOTIR-9080), which
+// `errorFromProblem` maps to `MotirAiConventionConflictError`.
+export async function putConvention(input: PutConventionInput): Promise<RawConvention> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/convention`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawConvention;
 }
 
 // The RUN-SCOPED CREDENTIAL a fleet index container presents to motir-ai

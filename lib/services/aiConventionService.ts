@@ -1,6 +1,7 @@
 import {
   getCodeAudit,
   getConvention,
+  putConvention,
   refreshCodeAudit,
   type RawConvention,
   type RawConventionSurface,
@@ -8,12 +9,20 @@ import {
   type RawExternalScannerState,
 } from '@/lib/ai/motirAiClient';
 import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
-import { EmptyRepoScopeError, UnknownRepoScopeError } from '@/lib/codeHealth/errors';
+import {
+  ConventionBlankError,
+  ConventionTooLongError,
+  ConventionVersionConflictError,
+  EmptyRepoScopeError,
+  UnknownRepoScopeError,
+} from '@/lib/codeHealth/errors';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
-import { MotirAiError } from '@/lib/ai/errors';
+import { MotirAiConventionConflictError, MotirAiError } from '@/lib/ai/errors';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import { matchRepoInSet } from '@/lib/services/repoFileReadService';
+import { userRepository } from '@/lib/repositories/userRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   CodingConventionDTO,
@@ -27,6 +36,7 @@ import type {
   PlanningCodeHealthConventionDTO,
   PlanningCodeHealthDTO,
   PlanningCodeHealthRepoDTO,
+  PlanningConventionDTO,
   ReauditRepoJobsDTO,
   ReauditResultDTO,
 } from '@/lib/dto/codeHealth';
@@ -40,6 +50,28 @@ import type {
 // with refine-via-universal-chat). Per-repo scope per MOTIR-1662.
 
 const FINDINGS_PAGE_SIZE = 100;
+
+// The longest convention a person may save, in characters. The editor's counter
+// shows the same number (design-notes § The editable convention card); motir-ai
+// stores up to 64 KB, and a character is at least one byte, so this never exceeds it.
+export const CONVENTION_MAX_CHARS = 65_536;
+
+// Resolve `editedByName` on every version of a surface from `editedByUserId`. One
+// lookup for the set of editors, not one per version.
+async function withEditorNames(surface: ConventionSurfaceDTO): Promise<ConventionSurfaceDTO> {
+  const all = [...(surface.convention ? [surface.convention] : []), ...surface.versions];
+  const ids = [...new Set(all.map((c) => c.editedByUserId).filter((id): id is string => !!id))];
+  if (ids.length === 0) return surface;
+  const users = await userRepository.findByIds(ids);
+  const names = new Map(users.map((u) => [u.id, u.name]));
+  const named = (c: CodingConventionDTO): CodingConventionDTO =>
+    c.editedByUserId ? { ...c, editedByName: names.get(c.editedByUserId) ?? null } : c;
+  return {
+    ...surface,
+    convention: surface.convention ? named(surface.convention) : null,
+    versions: surface.versions.map(named),
+  };
+}
 
 // The PLANNING read's page sizes (MOTIR-7793). motir-ai's `parsePositiveInt`
 // REJECTS `0` for both `findingsLimit` and `versionsLimit`, so the cheapest legal
@@ -58,6 +90,11 @@ function toConventionDTO(raw: RawConvention): CodingConventionDTO {
     version: raw.version,
     contentMd: raw.contentMd,
     provenance: toProvenance(raw.provenance),
+    authorKind: raw.authorKind ?? 'derived',
+    editedByUserId: raw.editedByUserId ?? null,
+    // Filled in by `withEditorNames`; the pure mapper has no user lookup.
+    editedByName: null,
+    pendingDerivedMd: raw.pendingDerivedMd ?? null,
     createdAt: raw.createdAt,
   };
 }
@@ -318,7 +355,48 @@ export const aiConventionService = {
       repoKey: opts.repoKey,
       versionsCursor: opts.versionsCursor,
     });
-    return toConventionSurfaceDTO(raw, opts.repoKey);
+    return withEditorNames(toConventionSurfaceDTO(raw, opts.repoKey));
+  },
+
+  // A person's save of one repository's convention (MOTIR-9082): a NEW version,
+  // `edited`, written by motir-ai (`PUT /v1/convention`, MOTIR-9080). Gated on
+  // `ai:configure` exactly as the read is. `baseVersion` is the version the editor
+  // loaded (0 for a repository with none); a stale one is refused by motir-ai and
+  // surfaces here as `ConventionVersionConflictError` carrying the version that
+  // won, so the editor can offer it. Answers the re-read surface, so the card
+  // replaces its text, byline and history from ONE response.
+  async saveConvention(
+    projectId: string,
+    ctx: AccessActorContext,
+    input: { repoKey: string; contentMd: string; baseVersion: number },
+  ): Promise<ConventionSurfaceDTO> {
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
+    if (input.contentMd.trim().length === 0) throw new ConventionBlankError();
+    if (input.contentMd.length > CONVENTION_MAX_CHARS) {
+      throw new ConventionTooLongError(CONVENTION_MAX_CHARS);
+    }
+    const scope = { coreWorkspaceId: ctx.workspaceId, coreProjectId: projectId };
+    try {
+      await putConvention({
+        ...scope,
+        repoKey: input.repoKey,
+        contentMd: input.contentMd,
+        editedByUserId: ctx.userId,
+        baseVersion: input.baseVersion,
+      });
+    } catch (err) {
+      if (!(err instanceof MotirAiConventionConflictError)) throw err;
+      // Read what won, so the conflict state can name who saved it and when.
+      const latest = await withEditorNames(
+        toConventionSurfaceDTO(
+          await getConvention({ ...scope, repoKey: input.repoKey }),
+          input.repoKey,
+        ),
+      );
+      throw new ConventionVersionConflictError(err.latestVersion, latest);
+    }
+    const raw = await getConvention({ ...scope, repoKey: input.repoKey });
+    return withEditorNames(toConventionSurfaceDTO(raw, input.repoKey));
   },
 
   // The PLANNING read (Story MOTIR-7782 · Subtask MOTIR-7793) — what
@@ -371,6 +449,44 @@ export const aiConventionService = {
     );
 
     return { project: { key: project.identifier, name: project.name }, repos: sections };
+  },
+
+  // The convention of ONE repository, in full (MOTIR-9083) — what
+  // `get_coding_convention` returns, so a run agent reads its repository's own
+  // rules from the stored convention instead of a file in the checkout.
+  //
+  // GATED ON `ai:plan`, the key `TOOL_PERMISSIONS.get_coding_convention` checks at
+  // the door, for the reason `getPlanningCodeHealth` above gives: the hosted
+  // planner already shows this text to every `ai:plan` holder, and
+  // `CLI_TOKEN_GRANT` holds it, so every `motir run` token reaches it without the
+  // grant widening. The `/code` page's reads stay on `ai:configure`.
+  //
+  // `repo` resolves against the project's realized set the way `read_file`'s does
+  // (`matchRepoInSet`); a repository outside it answers with the set. Every
+  // outcome is a named result, never a throw — only the permission and a missing
+  // project are errors.
+  async getPlanningConvention(
+    projectKey: string,
+    repo: string,
+    ctx: ServiceContext,
+  ): Promise<PlanningConventionDTO> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertPermission(project.id, ctx, 'ai:plan');
+
+    const repoSet = (await resolveCodeContextState(project.id, ctx)).repos.map((r) => r.repoRef);
+    const repoRef = matchRepoInSet(repo, repoSet);
+    if (!repoRef) return { state: 'repo_not_in_project', repo, repoSet };
+
+    const read = await readPlanningConvention(project.id, ctx, repoRef);
+    if (read.state === 'absent') return { state: 'absent', repoRef };
+    if (read.state === 'unavailable') return { state: 'unavailable', repoRef, code: read.code };
+
+    const editorId = read.convention.editedByUserId;
+    const editedByName =
+      read.convention.authorKind === 'edited' && editorId
+        ? ((await userRepository.findById(editorId))?.name ?? null)
+        : null;
+    return { state: 'present', repoRef, convention: read.convention, editedByName };
   },
 
   // Trigger a re-audit + re-propose for the project (the "Deepen this audit" →

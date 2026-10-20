@@ -197,7 +197,6 @@ const PROJECT_LAUNCH: PlanningLaunch = {
   mode: 'project',
   from: 'project',
   itemKey: null,
-  repoKey: null,
 };
 
 export function PlanningWorkspaceOverlay({
@@ -317,7 +316,6 @@ export function PlanningWorkspaceOverlay({
             mode: 'contextual',
             from: 'work-item',
             itemKey: settledSeed.anchorKey,
-            repoKey: null,
             ...resumed,
           };
     }
@@ -325,7 +323,6 @@ export function PlanningWorkspaceOverlay({
       mode: 'replan',
       from: 'work-item',
       itemKey: settledSeed.anchorKey,
-      repoKey: null,
       ...resumed,
     };
   }, [launch, settledSeed, guideSeed]);
@@ -855,9 +852,6 @@ function launchContext(launch: PlanningLaunch): PlanningLaunchContext {
       hasPlan: launch.mode === 'replan',
       ...(launch.startTurn ? { startTurn: true } : {}),
     };
-  }
-  if (launch.from === 'convention-refine' && launch.repoKey) {
-    return { kind: 'convention-refine', repoKey: launch.repoKey };
   }
   if (launch.from === 'roadmap') return { kind: 'roadmap' };
   // The address a refusal wrote round-trips as itself — the gate's id, not the

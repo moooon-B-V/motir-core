@@ -357,7 +357,7 @@ function rail(
   return (
     <PlanChangeRail
       key={opts.key}
-      launch={{ mode: 'contextual', from: 'work-item', itemKey: 'ACME-12', repoKey: null }}
+      launch={{ mode: 'contextual', from: 'work-item', itemKey: 'ACME-12' }}
       projectName="Acme"
       autoSendTurn={REQUEST}
       autoSendKey={`guide:${OFFER}`}

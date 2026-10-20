@@ -210,6 +210,12 @@ export const ja: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      '1つのリポジトリのコーディング規約の全文。導出されたものか人が編集したものかと、そのバージョンを示す。そのリポジトリでの変更が従う内容。',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       '1つのデザイン作業項目の承認済みデザインと、そのファイルへの短時間有効なリンク。承認済みデザインがない場合は、5つの理由のどれに当たるかを返します。',

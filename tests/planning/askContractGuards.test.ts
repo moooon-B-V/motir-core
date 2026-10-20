@@ -44,7 +44,6 @@ describe('one surface, no mode', () => {
       { kind: 'project' },
       { kind: 'roadmap' },
       { kind: 'work-item', itemKey: 'PAY-7' },
-      { kind: 'convention-refine', repoKey: 'motir-core' },
     ] as const) {
       const hrefs = aiCalloutActions(overlayHref(context)).map((a) => a.href);
       expect(hrefs.length).toBeGreaterThan(1);

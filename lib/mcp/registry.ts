@@ -108,6 +108,10 @@ import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
 import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/getProjectState';
 import { GET_CODE_HEALTH_TOOL_NAME, registerGetCodeHealth } from './tools/getCodeHealth';
+import {
+  GET_CODING_CONVENTION_TOOL_NAME,
+  registerGetCodingConvention,
+} from './tools/getCodingConvention';
 import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
 import {
   CODE_EXPLORE_TOOL_NAME,
@@ -255,6 +259,7 @@ export const MCP_TOOL_NAMES = [
   LIST_PROJECTS_TOOL_NAME,
   GET_PROJECT_STATE_TOOL_NAME,
   GET_CODE_HEALTH_TOOL_NAME,
+  GET_CODING_CONVENTION_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
@@ -500,6 +505,10 @@ export function registerMcpTools(
   // audit summary and derived convention: what the hosted planner reads for
   // every session, for an agent planning over the MCP. Gated on `ai:plan`.
   registerGetCodeHealth(target, resolveContext);
+  // MOTIR-9083 — ONE repository's coding convention in full, so a run prompt can
+  // point the agent at the stored convention instead of a file in the checkout.
+  // Gated on `ai:plan`; the repo resolves against the PROJECT's set.
+  registerGetCodingConvention(target, resolveContext);
   // MOTIR-7861 — one file's TEXT from one of the project's repositories at a
   // ref: the read the hosted planner's `read_file` makes, for an agent planning
   // over the MCP. Gated on `ai:plan`; the repo resolves against the PROJECT's set.
