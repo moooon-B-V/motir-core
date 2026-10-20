@@ -194,6 +194,7 @@ async function failedWaitingShape(
     classifyFailedWaitingTurn({
       waiting: sessionWaitingState(row),
       failedJobId: row.failedJobId,
+      failureResumable: row.failureResumable,
       plans,
     }) === 'refuse_resume';
   // Newest first (the repository orders it): the first `planned` / `stale` one waits.
@@ -2967,6 +2968,7 @@ export const planChangeSessionsService = {
     const failedTurn = classifyFailedWaitingTurn({
       waiting: sessionWaitingState(session),
       failedJobId: session.failedJobId,
+      failureResumable: session.failureResumable,
       plans:
         sessionWaitingState(session) === 'failed'
           ? await withWorkspaceServiceContext(pctx.workspaceId, async (tx) =>

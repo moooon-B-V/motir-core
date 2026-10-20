@@ -7988,7 +7988,6 @@
       "replan": "Otwarto, aby zmienić istniejący plan projektu {project}.",
       "contextual": "Otwarto w kontekście projektu {project}.",
       "contextualItem": "Otwarto w kontekście {item}.",
-      "conventionRefine": "Otwarto, aby dopracować konwencję kodowania repozytorium {repo}.",
       "roadmap": "Otwarto z roadmapy.",
       "followUp": "Otwarto, aby zaplanować kontynuację wyboru {choice} w {item}.",
       "followUpProject": "Otwarto w projekcie {project}, aby zaplanować kontynuację wyboru {choice}."
@@ -8298,7 +8297,9 @@
       "onlyStarter": "Tylko {name} lub kierownik projektu może to wznowić.",
       "onlyStarterAnon": "Tylko osoba, która to rozpoczęła, lub kierownik projektu może to wznowić.",
       "failureLine": "Twoja ostatnia zmiana w tym planie nie mogła zostać wprowadzona · {when}",
-      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}"
+      "failureLineAgain": "Twoja ostatnia zmiana znów nie mogła zostać wprowadzona · {when}",
+      "failureLinePlanAgain": "Nie udało się kontynuować tej próby · {when}. Twoja następna wiadomość zaplanuje ją od nowa.",
+      "failureLinePlanAgainAgain": "Tej próby znów nie udało się kontynuować · {when}. Twoja następna wiadomość zaplanuje ją od nowa."
     },
     "grill": {
       "control": {
@@ -8403,13 +8404,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · edytowana",
+      "bylineDerived": "Wyprowadzona z kodu",
+      "bylineEdited": "Edytowana przez {name} · {date}",
+      "bylineEditedUnknown": "Edytowana przez członka zespołu · {date}",
+      "edit": "Edytuj",
+      "writeFirst": "Napisz konwencję",
+      "editFieldLabel": "Konwencja (Markdown)",
+      "editingVersion": "Edytowanie v{version}",
+      "saveCreates": "Zapisanie utworzy v{next}. {count} / {max} znaków.",
+      "editHelper": "Każdy nowy prompt dla tego repozytorium czyta zapisany tekst. Nowsza wersja wyprowadzona z kodu nigdy go nie zastępuje.",
+      "save": "Zapisz",
+      "cancel": "Anuluj",
+      "saving": "Zapisywanie…",
+      "saveFailed": "Nie udało się zapisać konwencji. Twój tekst nadal tu jest — spróbuj ponownie.",
+      "tooLong": "Konwencja ma więcej niż {max} znaków. Skróć ją, aby zapisać.",
+      "blank": "Napisz coś, aby zapisać.",
+      "conflictTitle": "Ktoś zapisał nowszą wersję",
+      "conflictBody": "Wersja v{latest} została zapisana przez {name} dnia {date}, gdy edytowano v{base}. Twoje zmiany nie zostały zapisane.",
+      "conflictLoadTheirs": "Wczytaj ich wersję",
+      "conflictKeepMine": "Zachowaj moją jako kopię",
+      "conflictCopyLabel": "Twój tekst — skopiuj go, a potem wczytaj ich wersję",
+      "conflictCopyHint": "Kopia tylko do odczytu. Wczytanie ich wersji zamyka ten edytor.",
+      "copy": "Kopiuj do schowka",
+      "pendingTitle": "Z kodu wyprowadzono nowszą wersję",
+      "pendingBody": "Ponowny audyt z {date} wygenerował wyprowadzoną wersję. Nie jest używana — używany jest tekst poniżej. Nic się nie zmieni, dopóki nie edytujesz.",
+      "pendingCompare": "Porównaj obok siebie",
+      "pendingInUse": "Używana · v{version} edytowana",
+      "pendingWaiting": "Oczekuje · wyprowadzona",
+      "emptyWriteBody": "Dla tego repozytorium nie wyprowadzono jeszcze reguł konwencji. Napisz tutaj pierwszą wersję lub poczekaj, aż Motir wyprowadzi ją z Twojego kodu.",
       "emptyTitle": "Brak konwencji",
       "emptyDescription": "Motir wyprowadza konwencję kodowania z kodu po połączeniu repozytorium. Przejrzyj ją tutaj.",
       "defaultRepo": "Kod",
       "noRules": "Nie wyprowadzono jeszcze żadnych reguł konwencji dla tego repozytorium.",
       "versionDerived": "v{version} · wyprowadzona",
-      "bannerDerivedTitle": "Wyprowadzona z kodu — używana automatycznie",
-      "bannerDerivedBody": "Ta konwencja jest wyprowadzona z bazy kodu i dołączana do każdego promptu dla nowego kodu. Aby ją dopracować, użyj powyższej opcji Dopracuj z Motir, która otwiera czat AI.",
       "provenanceTitle": "Pochodzenie reguł",
       "provenanceLegend": "Przyjęta — kod już tak robi, a my to udokumentowaliśmy. Proponowana — kod milczał lub był niespójny, więc umieszczono tu domyślną zasadę czystego kodu.",
       "provenance": {
@@ -12374,6 +12402,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Uruchomienie",
     "searchLabel": "Szukaj w tym uruchomieniu",
     "gloss": "co zrobił agent",
@@ -12449,8 +12479,9 @@
     "sectionPast": "Poprzednie uruchomienia",
     "noneRunning": "Nic nie działa.",
     "nonePast": "Żadne uruchomienie jeszcze się nie zakończyło.",
-    "colCommand": "Polecenie",
-    "colScope": "Zakres",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Rozpoczęto",
     "colStatus": "Status",
@@ -12498,6 +12529,10 @@
       "expired": {
         "title": "Poza okresem przechowywania",
         "body": "Treści logów są usuwane 30 dni po uruchomieniu. Treści tego uruchomienia zostały już usunięte."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12838,7 +12873,10 @@
       "progressAria": "Wykonano {done} z {total} kroków",
       "progressAllDone": "Wykonano {total} z {total} kroków",
       "door": "Przeprowadź mnie"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Dodaj repozytorium",

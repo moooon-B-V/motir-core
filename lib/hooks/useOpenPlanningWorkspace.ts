@@ -117,12 +117,7 @@ export function useOpenGuide(itemKey: string): OpenPlanningWorkspace & {
  * it changes the MODE, which changes the address.
  */
 function contextValueKey(context: PlanningLaunchContext): string {
-  const target =
-    context.kind === 'work-item' || context.kind === 'guide'
-      ? context.itemKey
-      : context.kind === 'convention-refine'
-        ? context.repoKey
-        : '';
+  const target = context.kind === 'work-item' || context.kind === 'guide' ? context.itemKey : '';
   const hasPlan = 'hasPlan' in context ? String(context.hasPlan) : '';
   // `sessionId` changes the address too — `planSession=<id>` (MOTIR-6024).
   const session = 'sessionId' in context ? (context.sessionId ?? '') : '';

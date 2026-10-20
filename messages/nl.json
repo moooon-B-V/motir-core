@@ -7988,7 +7988,6 @@
       "replan": "Geopend om het bestaande plan van {project} te wijzigen.",
       "contextual": "Geopend in context op {project}.",
       "contextualItem": "Geopend in de context van {item}.",
-      "conventionRefine": "Geopend om de codeconventie van {repo} te verfijnen.",
       "roadmap": "Geopend vanuit de roadmap.",
       "followUp": "Geopend om het vervolg op {choice} te plannen, op {item}.",
       "followUpProject": "Geopend op {project} om het vervolg op {choice} te plannen."
@@ -8298,7 +8297,9 @@
       "onlyStarter": "Alleen {name} of een projectmanager kan dit hervatten.",
       "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten.",
       "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd · {when}",
-      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}"
+      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}",
+      "failureLinePlanAgain": "Deze poging kon niet worden voortgezet · {when}. Je volgende bericht plant opnieuw.",
+      "failureLinePlanAgainAgain": "Deze poging kon opnieuw niet worden voortgezet · {when}. Je volgende bericht plant opnieuw."
     },
     "grill": {
       "control": {
@@ -8403,13 +8404,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · bewerkt",
+      "bylineDerived": "Afgeleid uit de code",
+      "bylineEdited": "Bewerkt door {name} · {date}",
+      "bylineEditedUnknown": "Bewerkt door een teamlid · {date}",
+      "edit": "Bewerken",
+      "writeFirst": "Schrijf de conventie",
+      "editFieldLabel": "Conventie (Markdown)",
+      "editingVersion": "v{version} bewerken",
+      "saveCreates": "Opslaan maakt v{next} aan. {count} / {max} tekens.",
+      "editHelper": "Elke nieuwe prompt voor deze repository leest de opgeslagen tekst. Een nieuwere afgeleide versie vervangt die nooit.",
+      "save": "Opslaan",
+      "cancel": "Annuleren",
+      "saving": "Opslaan…",
+      "saveFailed": "De conventie kon niet worden opgeslagen. Je tekst staat er nog — probeer het opnieuw.",
+      "tooLong": "De conventie is langer dan {max} tekens. Kort haar in om op te slaan.",
+      "blank": "Schrijf iets om op te slaan.",
+      "conflictTitle": "Iemand heeft een nieuwere versie opgeslagen",
+      "conflictBody": "{name} heeft v{latest} opgeslagen op {date} terwijl je v{base} bewerkte. Je wijzigingen zijn niet opgeslagen.",
+      "conflictLoadTheirs": "Hun versie laden",
+      "conflictKeepMine": "Mijn versie bewaren als kopie",
+      "conflictCopyLabel": "Jouw tekst — kopieer hem en laad dan hun versie",
+      "conflictCopyHint": "Alleen-lezen kopie. Als je hun versie laadt, sluit deze editor.",
+      "copy": "Kopiëren naar klembord",
+      "pendingTitle": "Er is een nieuwere versie afgeleid uit de code",
+      "pendingBody": "Een nieuwe audit op {date} leverde een afgeleide versie op. Die is niet in gebruik — de tekst hieronder wel. Er verandert niets tenzij je bewerkt.",
+      "pendingCompare": "Naast elkaar vergelijken",
+      "pendingInUse": "In gebruik · v{version} bewerkt",
+      "pendingWaiting": "Wacht · afgeleid",
+      "emptyWriteBody": "Er zijn nog geen conventieregels afgeleid voor deze repo. Schrijf hier de eerste versie, of wacht tot Motir er een uit je code afleidt.",
       "emptyTitle": "Nog geen conventie",
       "emptyDescription": "Motir leidt een codeconventie uit je code af zodra er een repo is gekoppeld. Bekijk hem hier.",
       "defaultRepo": "Code",
       "noRules": "Er zijn nog geen conventieregels afgeleid voor deze repo.",
       "versionDerived": "v{version} · afgeleid",
-      "bannerDerivedTitle": "Afgeleid uit je code — automatisch gebruikt",
-      "bannerDerivedBody": "Deze conventie is afgeleid uit je codebase en wordt in elke prompt voor nieuwe code opgenomen. Gebruik hierboven Verfijnen met Motir om de AI-chat te openen en hem te verfijnen.",
       "provenanceTitle": "Herkomst van regels",
       "provenanceLegend": "Overgenomen — je code doet dit al, wij hebben het vastgelegd. Voorgesteld — je code zei niets of was inconsistent, hier is een standaard voor schone code geplaatst.",
       "provenance": {
@@ -12374,6 +12402,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Run",
     "searchLabel": "Deze run doorzoeken",
     "gloss": "wat de agent heeft gedaan",
@@ -12449,8 +12479,9 @@
     "sectionPast": "Eerdere runs",
     "noneRunning": "Er draait niets.",
     "nonePast": "Er is nog geen run afgerond.",
-    "colCommand": "Opdracht",
-    "colScope": "Scope",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Gestart",
     "colStatus": "Status",
@@ -12498,6 +12529,10 @@
       "expired": {
         "title": "Buiten de bewaartermijn",
         "body": "Loginhoud wordt 30 dagen na een run verwijderd. Die van deze run is al verwijderd."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12838,7 +12873,10 @@
       "progressAria": "{done} van {total} stappen klaar",
       "progressAllDone": "{total} van {total} stappen klaar",
       "door": "Begeleid me"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Repository toevoegen",

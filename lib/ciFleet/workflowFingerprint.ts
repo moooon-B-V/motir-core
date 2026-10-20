@@ -57,42 +57,172 @@ const SHELL_WORDS = new Set([
   ']]',
 ]);
 
+type Frame = 'code' | 'subst' | 'paren' | 'backtick' | 'single' | 'double';
+
+/**
+ * Cut a script into simple commands. A separator (`&&`, `||`, `;`, `|`, a
+ * newline) ends a command only OUTSIDE quotes (MOTIR-9126: a quoted jq filter is
+ * one argument, not a pipeline). `$( )`, backticks and a `( )` subshell open a
+ * nested command — inside double quotes too, since the shell runs them there —
+ * and the text after one closes resumes the command it interrupted. Here-document
+ * bodies and comments are dropped; a quote may span lines.
+ */
+function commandSegments(script: string): string[] {
+  const segments: string[] = [];
+  const stack: Frame[] = ['code'];
+  const bufs: string[] = [''];
+  let heredocEnd: string | null = null;
+  let line = '';
+  const top = () => stack[stack.length - 1]!;
+  const append = (s: string) => {
+    bufs[bufs.length - 1] += s;
+  };
+  const flush = () => {
+    segments.push(bufs[bufs.length - 1]!);
+    bufs[bufs.length - 1] = '';
+  };
+  const open = (frame: Frame) => {
+    stack.push(frame);
+    bufs.push('');
+  };
+  const close = () => {
+    flush();
+    stack.pop();
+    bufs.pop();
+  };
+  const src = script.replace(/\\\r?\n/g, ' ').replace(/\r\n/g, '\n');
+
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]!;
+    if (heredocEnd !== null) {
+      // Skip whole lines until the terminator.
+      const end = src.indexOf('\n', i);
+      const bodyLine = src.slice(i, end === -1 ? src.length : end);
+      if (bodyLine.trim() === heredocEnd) heredocEnd = null;
+      i = end === -1 ? src.length : end;
+      continue;
+    }
+    line += c;
+    const frame = top();
+    if (frame === 'single') {
+      if (c === "'") stack.pop();
+      append(c);
+      continue;
+    }
+    if (frame === 'double') {
+      if (c === '\\') {
+        append(c + (src[i + 1] ?? ''));
+        i++;
+      } else if (c === '"') {
+        stack.pop();
+        append(c);
+      } else if (c === '$' && src[i + 1] === '(') {
+        open('subst');
+        i++;
+      } else if (c === '`') {
+        open('backtick');
+      } else {
+        append(c);
+      }
+      continue;
+    }
+    // An unquoted context: the script itself, or a nested command.
+    if (c === '\n') {
+      if (stack.length === 1) {
+        const here = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
+        if (here) heredocEnd = here[2] ?? null;
+      }
+      line = '';
+      flush();
+    } else if (c === '\\') {
+      append(c + (src[i + 1] ?? ''));
+      i++;
+    } else if (c === '#' && /(^|[\s;&|(])$/.test(bufs[bufs.length - 1]!)) {
+      // A comment runs to the end of the line; the newline itself is kept.
+      while (i + 1 < src.length && src[i + 1] !== '\n') i++;
+    } else if (c === "'") {
+      stack.push('single');
+      append(c);
+    } else if (c === '"') {
+      stack.push('double');
+      append(c);
+    } else if (c === '$' && src[i + 1] === '(') {
+      open('subst');
+      i++;
+    } else if (c === '(') {
+      open('paren');
+    } else if (c === ')') {
+      if (frame === 'subst' || frame === 'paren') close();
+      else flush();
+    } else if (c === '`') {
+      if (frame === 'backtick') close();
+      else open('backtick');
+    } else if ((c === '&' && src[i + 1] === '&') || (c === '|' && src[i + 1] === '|')) {
+      flush();
+      i++;
+    } else if (c === ';' || c === '|') {
+      flush();
+    } else {
+      append(c);
+    }
+  }
+  while (bufs.length > 0) {
+    segments.push(bufs.pop()!);
+  }
+  return segments;
+}
+
+/** Split one simple command on whitespace outside quotes, so an assignment like
+ *  `TITLE="a b"` stays one word. */
+function shellWords(segment: string): string[] {
+  const words: string[] = [];
+  let word = '';
+  let quote: string | null = null;
+  for (let i = 0; i < segment.length; i++) {
+    const c = segment[i]!;
+    if (quote) {
+      if (c === quote) quote = null;
+      if (c === '\\' && quote === '"') word += c + (segment[++i] ?? '');
+      else word += c;
+      continue;
+    }
+    if (/\s/.test(c)) {
+      if (word !== '') words.push(word);
+      word = '';
+      continue;
+    }
+    if (c === "'" || c === '"') quote = c;
+    word += c;
+  }
+  if (word !== '') words.push(word);
+  return words;
+}
+
 /**
  * The executables a `run:` body invokes: the first word of each simple command,
- * after leading `NAME=value` assignments. Comments, here-document bodies and
- * shell keywords are skipped. Deliberately coarse — it over-reports (an `echo`
- * counts) and never under-reports a real executable at the head of a command.
+ * after leading `NAME=value` assignments. Comments, here-document bodies, quoted
+ * text and shell keywords are skipped. Deliberately coarse — it over-reports (an
+ * `echo` counts) and never under-reports a real executable at the head of a
+ * command.
  */
 export function commandWords(script: string): string[] {
   const words = new Set<string>();
-  let heredocEnd: string | null = null;
-  const joined = script.replace(/\\\r?\n/g, ' ');
-  for (const rawLine of joined.split(/\r?\n/)) {
-    if (heredocEnd !== null) {
-      if (rawLine.trim() === heredocEnd) heredocEnd = null;
-      continue;
+  for (const part of commandSegments(script)) {
+    const tokens = shellWords(part);
+    let i = 0;
+    // A keyword that introduces a command (`if gh …`, `then make`) is not the
+    // command: look past it, and past assignments, to the executable.
+    while (
+      i < tokens.length &&
+      (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]!) || SHELL_WORDS.has(tokens[i]!))
+    ) {
+      i++;
     }
-    const line = rawLine.trim();
-    if (line === '' || line.startsWith('#')) continue;
-    const here = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
-    if (here) heredocEnd = here[2] ?? null;
-    for (const part of line.split(/&&|\|\||;|\||\$\(|`|\(|\)/)) {
-      const tokens = part.trim().split(/\s+/);
-      let i = 0;
-      // A keyword that introduces a command (`if gh …`, `then make`) is not the
-      // command: look past it, and past assignments, to the executable.
-      while (
-        i < tokens.length &&
-        (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]!) || SHELL_WORDS.has(tokens[i]!))
-      ) {
-        i++;
-      }
-      const word = tokens[i];
-      if (!word || SHELL_WORDS.has(word) || word.startsWith('#') || word.startsWith('-')) continue;
-      if (word.startsWith('>') || word.startsWith('<') || /^\d?[<>]/.test(word)) continue;
-      const bare = word.replace(/^['"]+|['"]+$/g, '');
-      if (bare !== '') words.add(bare);
-    }
+    const word = tokens[i];
+    if (!word || SHELL_WORDS.has(word) || word.startsWith('#') || word.startsWith('-')) continue;
+    if (word.startsWith('>') || word.startsWith('<') || /^\d?[<>]/.test(word)) continue;
+    const bare = word.replace(/^['"]+|['"]+$/g, '');
+    if (bare !== '') words.add(bare);
   }
   return [...words];
 }
@@ -151,9 +281,12 @@ export function workflowStructure(files: WorkflowSourceFile[]): WorkflowStructur
   const readSteps = (container: unknown) => {
     for (const step of stepsOf(container)) {
       if (typeof step['uses'] === 'string') actions.add(actionName(step['uses']));
-      if (typeof step['run'] === 'string')
+      const shell = typeof step['shell'] === 'string' ? step['shell'] : null;
+      // A `python3 {0}` body is not shell: its interpreter is recorded in
+      // `shells`, and reading its lines as commands only adds noise (MOTIR-9126).
+      if (typeof step['run'] === 'string' && (shell === null || /^(ba)?sh\b/.test(shell)))
         for (const w of commandWords(step['run'])) commands.add(w);
-      if (typeof step['shell'] === 'string') shells.add(step['shell']);
+      if (shell !== null) shells.add(shell);
     }
   };
 

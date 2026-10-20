@@ -888,7 +888,7 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     specCount: number,
     eventName: 'pull_request' | 'push' | 'merge_group',
     changedFiles: readonly string[] = ['tests/e2e/acceptance-story-1.spec.ts'],
-    { bsdSeq = false }: { bsdSeq?: boolean } = {},
+    { bsdSeq = false, mergeDiff }: { bsdSeq?: boolean; mergeDiff?: readonly string[] } = {},
   ): Record<string, string> & { stdout: string; summary: string } {
     const dir = mkdtempSync(join(tmpdir(), 'acceptance-gate-'));
     try {
@@ -917,6 +917,28 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
       const summaryPath = join(dir, 'github-step-summary');
       writeFileSync(outPath, '');
       writeFileSync(summaryPath, '');
+      // A real two-commit repository for a queue entry: the base, then a head
+      // that changes exactly `mergeDiff`, so the gate's `git diff` is the real one.
+      const mergeEnv: Record<string, string> = {};
+      if (mergeDiff) {
+        const git = (...args: string[]) =>
+          execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
+            cwd: dir,
+            stdio: 'pipe',
+            encoding: 'utf8',
+          }).trim();
+        git('init', '-q');
+        git('add', 'tests');
+        git('commit', '-q', '-m', 'base');
+        mergeEnv.MERGE_BASE_SHA = git('rev-parse', 'HEAD');
+        for (const f of mergeDiff) {
+          mkdirSync(join(dir, f, '..'), { recursive: true });
+          writeFileSync(join(dir, f), `changed ${f}`);
+        }
+        git('add', '-A', '--', ...mergeDiff);
+        git('commit', '-q', '-m', 'head');
+        mergeEnv.MERGE_HEAD_SHA = git('rev-parse', 'HEAD');
+      }
       let stdout: string;
       try {
         stdout = execFileSync('bash', ['-c', gateScript], {
@@ -926,6 +948,9 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
             PATH: `${binDir}:${process.env.PATH ?? ''}`,
             GITHUB_REPOSITORY: 'moooon-B-V/motir-core',
             PR_NUMBER: '1',
+            MERGE_BASE_SHA: '',
+            MERGE_HEAD_SHA: '',
+            ...mergeEnv,
             EVENT_NAME: eventName,
             GITHUB_OUTPUT: outPath,
             GITHUB_STEP_SUMMARY: summaryPath,
@@ -1165,18 +1190,31 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     expect(runGate(1, 'pull_request', buried).run).toBe('true');
   });
 
-  it('lets NO changed-file list speak for the queue or the baseline', () => {
-    // The gate MOTIR-4257 adds. `merge_group` and `push` never consult the paths
-    // at all — they run whenever the lane holds a spec — so a merge that touches
-    // nothing acceptance-shaped is still checked against the MERGED result. That
-    // is what `e055b6b23` slipped through, and what a paths filter can never
-    // catch: this lane's specs read the whole app.
+  it('runs the queue entry only when ITS diff touches the lane; the baseline always', () => {
+    // The queue used to run the whole lane on every entry (~60 min against a
+    // 60-min check timeout). It now reads the entry's own base...head diff, like
+    // a pull request does; `push` still runs whenever the lane holds a spec, so
+    // the composed tree is checked after the merge by the main baseline.
     const untouched = ['components/planning/ProposalPeek.tsx'];
-    expect(runGate(1, 'merge_group', untouched).run).toBe('true');
+    expect(runGate(1, 'merge_group', undefined, { mergeDiff: untouched }).run).toBe('false');
+    expect(
+      runGate(1, 'merge_group', undefined, {
+        mergeDiff: [...untouched, 'tests/e2e/acceptance-story-1.spec.ts'],
+      }).run,
+    ).toBe('true');
+    expect(
+      runGate(1, 'merge_group', undefined, { mergeDiff: ['playwright.acceptance.config.ts'] }).run,
+    ).toBe('true');
     expect(runGate(1, 'push', untouched).run).toBe('true');
     // …and an EMPTY lane still stops early on both, which is MOTIR-2760 intact.
-    expect(runGate(0, 'merge_group', untouched).run).toBe('false');
+    expect(runGate(0, 'merge_group', undefined, { mergeDiff: untouched }).run).toBe('false');
     expect(runGate(0, 'push', untouched).run).toBe('false');
+  });
+
+  it('FAILS OPEN for a queue entry whose diff cannot be read', () => {
+    // No shas in the payload (or no git history): an unclassifiable entry runs
+    // the lane rather than being skipped.
+    expect(runGate(1, 'merge_group', ['components/x.tsx']).run).toBe('true');
   });
 });
 

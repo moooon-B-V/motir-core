@@ -3,16 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import {
-  ArrowUpRight,
-  CircleDashed,
-  FileX2,
-  Lock,
-  RefreshCw,
-  TriangleAlert,
-  X,
-} from 'lucide-react';
+import { ArrowUpRight, CircleDashed, FileX2, Lock, RefreshCw, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { OverlayExitButton, OVERLAY_EXIT_CONTROL } from '@/components/ui/OverlayExitButton';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
@@ -132,11 +125,6 @@ function tokenOf(itemKey: string, kind: ApprovalGateKindDTO): string {
   return `${itemKey} ${kind}`;
 }
 
-/** The exit row's control recipe — `PlanningWorkspaceHost`'s Close, class for
- *  class, which is what the design composes. */
-const EXIT_CONTROL =
-  'inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)';
-
 /**
  * THE EXIT ROW — Close with its `Esc` chip, then the work item's key and title,
  * then *Open work item*, the one way out that LEAVES the page (§ 22 *THE EXIT*).
@@ -180,13 +168,12 @@ function ExitRow({
   const tc = useTranslations('common');
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2">
-      <button type="button" onClick={onClose} className={EXIT_CONTROL}>
-        <X className="h-4 w-4 shrink-0" aria-hidden />
-        {tc('close')}
-        <kbd className="ml-1 hidden rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary) md:inline">
-          {t('escKey')}
-        </kbd>
-      </button>
+      <OverlayExitButton
+        onClose={onClose}
+        label={tc('close')}
+        escLabel={t('escKey')}
+        escHint="md"
+      />
       {workItem ? (
         <>
           {/* THE TITLE DOOR (§ 28, DECISION 6): `usePeekRowClick`'s condition — a
@@ -225,7 +212,7 @@ function ExitRow({
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t('openWorkItemNewTab')}
-            className={`ml-auto ${EXIT_CONTROL}`}
+            className={`ml-auto ${OVERLAY_EXIT_CONTROL}`}
           >
             <span className="hidden md:inline">{t('openWorkItem')}</span>
             <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden />

@@ -7988,7 +7988,6 @@
       "replan": "Abierto para cambiar el plan existente de {project}.",
       "contextual": "Abierto en contexto en {project}.",
       "contextualItem": "Abierto en el contexto de {item}.",
-      "conventionRefine": "Abierto para refinar la convención de código de {repo}.",
       "roadmap": "Abierto desde la hoja de ruta.",
       "followUp": "Abierto para planificar el seguimiento de {choice}, en {item}.",
       "followUpProject": "Abierto en {project} para planificar el seguimiento de {choice}."
@@ -8298,7 +8297,9 @@
       "onlyStarter": "Solo {name} o un responsable del proyecto puede reanudarlo.",
       "onlyStarterAnon": "Solo la persona que lo inició o un responsable del proyecto puede reanudarlo.",
       "failureLine": "No se pudo hacer tu último cambio en este plan · {when}",
-      "failureLineAgain": "Tu último cambio no se pudo hacer de nuevo · {when}"
+      "failureLineAgain": "Tu último cambio no se pudo hacer de nuevo · {when}",
+      "failureLinePlanAgain": "No se pudo continuar este intento · {when}. Tu próximo mensaje lo vuelve a planificar.",
+      "failureLinePlanAgainAgain": "Este intento no se pudo continuar de nuevo · {when}. Tu próximo mensaje lo vuelve a planificar."
     },
     "grill": {
       "control": {
@@ -8403,13 +8404,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · editada",
+      "bylineDerived": "Derivada del código",
+      "bylineEdited": "Editada por {name} · {date}",
+      "bylineEditedUnknown": "Editada por un miembro del equipo · {date}",
+      "edit": "Editar",
+      "writeFirst": "Escribe la convención",
+      "editFieldLabel": "Convención (Markdown)",
+      "editingVersion": "Editando v{version}",
+      "saveCreates": "Al guardar se crea v{next}. {count} / {max} caracteres.",
+      "editHelper": "Cada prompt nuevo para este repositorio lee el texto guardado. Una versión derivada más reciente nunca lo reemplaza.",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "saving": "Guardando…",
+      "saveFailed": "No se pudo guardar la convención. Tu texto sigue aquí; inténtalo de nuevo.",
+      "tooLong": "La convención supera los {max} caracteres. Acórtala para guardar.",
+      "blank": "Escribe algo para guardar.",
+      "conflictTitle": "Alguien guardó una versión más reciente",
+      "conflictBody": "{name} guardó v{latest} el {date} mientras editabas v{base}. Tus cambios no se han guardado.",
+      "conflictLoadTheirs": "Cargar su versión",
+      "conflictKeepMine": "Conservar la mía como copia",
+      "conflictCopyLabel": "Tu texto: cópialo y luego carga la otra versión",
+      "conflictCopyHint": "Copia de solo lectura. Al cargar su versión se cierra este editor.",
+      "copy": "Copiar al portapapeles",
+      "pendingTitle": "Se derivó una versión más reciente del código",
+      "pendingBody": "Una nueva auditoría el {date} produjo una versión derivada. No está en uso; el texto de abajo sí. Nada cambia a menos que edites.",
+      "pendingCompare": "Comparar lado a lado",
+      "pendingInUse": "En uso · v{version} editada",
+      "pendingWaiting": "En espera · derivada",
+      "emptyWriteBody": "Aún no se han derivado reglas de convención para este repositorio. Escribe aquí la primera versión o espera a que Motir derive una a partir de tu código.",
       "emptyTitle": "Aún no hay convención",
       "emptyDescription": "Motir deriva una convención de código a partir de tu código una vez que se conecta un repositorio. Revísala aquí.",
       "defaultRepo": "Código",
       "noRules": "Aún no se han derivado reglas de convención para este repositorio.",
       "versionDerived": "v{version} · derivada",
-      "bannerDerivedTitle": "Derivada de tu código: se usa automáticamente",
-      "bannerDerivedBody": "Esta convención se deriva de tu código y se inyecta en cada prompt para código nuevo. Para refinarla, usa la opción Refinar con Motir de arriba para abrir el chat de IA.",
       "provenanceTitle": "Origen de las reglas",
       "provenanceLegend": "Adoptada: tu código ya hace esto y lo documentamos. Propuesta: tu código no decía nada o era inconsistente, así que se colocó aquí un valor predeterminado de código limpio.",
       "provenance": {
@@ -12374,6 +12402,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Ejecución",
     "searchLabel": "Buscar en esta Ejecución",
     "gloss": "lo que hizo el Agente",
@@ -12449,8 +12479,9 @@
     "sectionPast": "Ejecuciones pasadas",
     "noneRunning": "No hay nada en ejecución.",
     "nonePast": "Ninguna Ejecución ha terminado todavía.",
-    "colCommand": "Comando",
-    "colScope": "Alcance",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agente",
     "colStarted": "Inicio",
     "colStatus": "Estado",
@@ -12498,6 +12529,10 @@
       "expired": {
         "title": "Fuera del periodo de retención",
         "body": "El contenido de los registros se elimina 30 días después de una Ejecución. El de esta ya se eliminó."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12838,7 +12873,10 @@
       "progressAria": "{done} de {total} pasos hechos",
       "progressAllDone": "{total} de {total} pasos hechos",
       "door": "Guíame"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Añadir repositorio",

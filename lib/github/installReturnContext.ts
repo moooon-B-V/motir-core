@@ -27,7 +27,6 @@ export interface InstallReturnContext {
   steps?: string;
   backKind?: string;
   backItem?: string;
-  backRepo?: string;
 }
 
 /** The context's keys, in the order they are written back onto an address. */
@@ -36,7 +35,6 @@ export const INSTALL_RETURN_CONTEXT_KEYS = [
   'steps',
   'backKind',
   'backItem',
-  'backRepo',
 ] as const satisfies readonly (keyof InstallReturnContext)[];
 
 /** The longest value the context carries. A work-item key, a repository key or

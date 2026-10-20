@@ -120,6 +120,8 @@ export const RECORD_DISCREPANCY_TOOL_NAME = 'record_run_discrepancy';
  */
 export const GET_DESIGN_TOOL_NAME = 'get_design';
 export const LIST_DESIGNS_TOOL_NAME = 'list_designs';
+/** The MCP read that returns a repository's coding convention (MOTIR-9084). */
+export const GET_CODING_CONVENTION_TOOL_NAME = 'get_coding_convention';
 
 /**
  * The environment variable the CLI sets when it has put the design on disk.
@@ -142,11 +144,6 @@ export const DESIGN_DIR_ENV = 'MOTIR_DESIGN_DIR';
  */
 export interface DispatchPromptInjections {
   /**
-   * The project's STANDARD convention — the productized `CLAUDE.md` (MOTIR-927).
-   * Blocked under Story 9.1 pending exactly this seam.
-   */
-  conventions: string[];
-  /**
    * Retrieved `coding`-type lessons relevant to this item (MOTIR-1191), so a
    * known past mistake is never repeated. Blocked under Story 9.1 likewise.
    */
@@ -154,7 +151,7 @@ export interface DispatchPromptInjections {
 }
 
 /** The no-op injection set — what `motir-core` alone can supply today. */
-export const NO_INJECTIONS: DispatchPromptInjections = { conventions: [], lessons: [] };
+export const NO_INJECTIONS: DispatchPromptInjections = { lessons: [] };
 
 /** Everything the prompt is assembled from. Resolved by the service; the
  *  assembly reads nothing else. */
@@ -596,6 +593,39 @@ export interface AssembledDispatchPrompt {
 }
 
 /**
+ * A placeholder line in a step list, replaced at assembly by
+ * {@link conventionStepLines}: the convention read names the card's project and
+ * target repository, which a static step list cannot (MOTIR-9084).
+ */
+const CONVENTION_STEP = '@@CONVENTION_STEP@@';
+
+/**
+ * The repository's coding convention is read through the MCP door, not from a file
+ * in the checkout (Story MOTIR-9079). A file in the checkout reaches only an agent
+ * whose harness auto-loads it, and only in a repository whose owner wrote one; the
+ * door reaches every run token and returns the text the team keeps on the Code
+ * page. Each fallback is named so an agent does not stall on a missing answer.
+ */
+function conventionStepLines(src: DispatchPromptSource): string[] {
+  const repo = src.targetRepo
+    ? `repo: "${src.targetRepo}"`
+    : 'repo: <the repository you are working in>';
+  return [
+    '   BEFORE you build, read the repository’s coding convention and follow it:',
+    `   ${GET_CODING_CONVENTION_TOOL_NAME} { projectKey: "${src.projectKey}", ${repo} }`,
+    '   If it says no convention is recorded, follow the patterns of the surrounding',
+    '   code. If the call fails, say so in your report and follow the surrounding code.',
+    '   The repository’s own instruction files may also apply where your harness loads',
+    '   them, but this prompt never relies on one.',
+  ];
+}
+
+/** Replace each {@link CONVENTION_STEP} placeholder with the card's own read. */
+function withConventionStep(steps: readonly string[], src: DispatchPromptSource): string[] {
+  return steps.flatMap((line) => (line === CONVENTION_STEP ? conventionStepLines(src) : [line]));
+}
+
+/**
  * The per-`type` WHAT-TO-DO steps. TOTAL over `WorkItemTypeDto` by construction
  * (`Record<WorkItemTypeDto, …>`), so adding a work-item type without deciding
  * how it dispatches is a COMPILE error here — the same totality guarantee
@@ -604,8 +634,8 @@ export interface AssembledDispatchPrompt {
 const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
   code: [
     '1. Read the card description above and every file it names under "Context refs".',
-    '2. Implement the change, following the repository conventions in its CLAUDE.md',
-    '   (auto-loaded when you enter the repo) — do not restate or re-derive them.',
+    '2. Implement the change.',
+    CONVENTION_STEP,
     `   ⚠️ If this change ${RENDERED_SURFACE_TRIGGER}`,
     '   and NO DESIGN REFERENCE is listed in CONTEXT above, do not draw it from',
     `   imagination: look first with the ${LIST_DESIGNS_TOOL_NAME} tool (\`blockersOf\` this`,
@@ -677,6 +707,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above and the behaviour under test.',
     '2. Write the tests it names, against the real dependencies this repository',
     '   uses for tests — not mocks of the thing being verified.',
+    CONVENTION_STEP,
     '3. Make each test fail for the right reason first, so it can actually catch the',
     '   regression it claims to cover.',
     '4. Run the test files you added or changed and leave them green.',
@@ -685,6 +716,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above for the audience, surface, and voice.',
     '2. Write the copy to the existing product vocabulary — match the terms the app',
     '   already uses on screen; do not coin a synonym for a shipped term.',
+    CONVENTION_STEP,
     '3. Land the copy where the product reads it from (the message catalogue or the',
     '   content file), not inline in a component, and keep every locale in parity.',
   ],
@@ -692,6 +724,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above for the surface, the audience and the voice.',
     '2. Write the strings to the product vocabulary already on screen — match the',
     '   terms the app uses; never coin a synonym for a shipped term.',
+    CONVENTION_STEP,
     '3. Land them where the product reads them from (the message catalogue), keyed',
     '   the way its neighbours are — never inline in a component.',
     '4. Every locale the catalogue ships stays in parity: a new key needs its twin',
@@ -701,6 +734,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '1. Read the card description above for the target locale and the source strings.',
     '2. Translate ONLY what already exists — a translation card authors no new',
     '   meaning. If a source string is missing or wrong, say so; do not invent it.',
+    CONVENTION_STEP,
     '3. Follow the locale style guide the repository records (register, tone, and',
     '   the glossary of terms that must not be translated).',
     '4. Leave the catalogue at exact key parity with the source locale.',
@@ -821,6 +855,7 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
   chore: [
     '1. Read the card description above for the exact maintenance change.',
     '2. Make it mechanically and keep the diff to that change alone.',
+    CONVENTION_STEP,
     '3. Run the repository checks and leave everything green.',
   ],
 };
@@ -886,6 +921,22 @@ function designResultSteps(openDependentKeys: readonly string[]): string[] {
     '   (curl -X PUT --upload-file <file> -H "Content-Type: <type>" "<url>"),',
     '   and then send each grant’s pathname to publish_design_result instead of',
     '   contentBase64. One publish uses one form for all of its assets.',
+    '',
+    '   WHAT A PUBLISH STARTS, AND WHAT IT DOES NOT DO:',
+    '   - Publishing raises an approval gate on this card. A person decides it;',
+    '     you never approve it and have no way to.',
+    '   - A card with an open pull request holds two gates and asks ONE question:',
+    '     the design gate is the primary, and one Approve decides both. Approve',
+    '     moves the card to done only when no pull request is open; with one open,',
+    '     the merge is what writes done.',
+    '   - Your publish does NOT release a blocked_by on this card. Readiness reads',
+    '     done, so work that waits on this design continues after the approval or',
+    '     the merge, never after your commit.',
+    '   - Republish only because the design CHANGED. A second publish retires the',
+    '     pending question, so a reviewer mid-review loses it. Never republish to',
+    '     refresh.',
+    '   - A superseded design’s missing files are expected: a version that was sent',
+    '     back loses its bytes on the ordinary sweep. It is not a defect.',
   ];
 }
 
@@ -959,6 +1010,18 @@ const ACCEPTANCE_PUBLISH_STEPS = [
   '   checks green, pull request merged, and a story nobody can watch working. A',
   '   red run publishes nothing, and that is correct: the receipt records a GREEN',
   '   run or it records nothing.',
+  '',
+  '   AN ACCEPTANCE SPEC IS A RECEIPT, NOT A REGRESSION TEST:',
+  '   - It records ONE watchable run of a story working, which a person then',
+  '     approves. Approving pins the recording; it does not freeze the story. To',
+  '     record again, the story goes back below implemented.',
+  '   - Only the spec’s AUTHOR moves it out of the acceptance lane, by promoting',
+  '     it into a lane that runs on every pull request or by retiring it. A signed',
+  '     receipt never moves it.',
+  '   - If an acceptance spec goes red on a pull request that did not change its',
+  '     story, do NOT edit the assertion to match today. That rewrites history to',
+  '     agree with the present. Give it a disposition (promote or retire) and',
+  '     say which.',
 ];
 
 /**
@@ -1030,8 +1093,8 @@ const BUG_REPRODUCTION_STEPS = [
 /** WHAT TO DO for an item with no `type` set — the card body is all we have. */
 const UNTYPED_WHAT_TO_DO = [
   '1. Read the card description above; it is the specification for this work.',
-  '2. Do exactly what it asks, following the repository conventions in its',
-  '   CLAUDE.md (auto-loaded when you enter the repo).',
+  '2. Do exactly what it asks.',
+  CONVENTION_STEP,
   '3. Stop when every acceptance criterion below holds.',
   '',
   'NOTE: this work item has no `type` set, so these steps are the generic form.',
@@ -1482,7 +1545,6 @@ function contextSection(
   facts.push(...obsoleteNeighbourLines(src.obsoleteNeighbours ?? []));
 
   // The Epic-9 enrichment slots (empty in motir-core — see the module header).
-  for (const block of injections.conventions) facts.push('', block);
   for (const block of injections.lessons) facts.push('', block);
 
   // Sibling to the lessons slot, and for the same reason: something the agent
@@ -2307,6 +2369,12 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '  when the checks on your pushed commit go green, by the webhook, server-side',
     '  and after you have exited. Setting it yourself asserts a green run that has',
     '  not happened yet.',
+    '',
+    '  In your report, never say a card is finished or a pull request is merged',
+    '  when a person still has to act. A project in manual merge mode raises ONE',
+    '  approval question over a run’s whole set of pull requests once they are',
+    '  green, and a person presses Approve and merge; report them as OPEN AND',
+    '  AWAITING APPROVAL. You never approve a gate or merge a pull request.',
     '',
     ...cardIsWrongHeader(),
     ...whatTest(src),
@@ -3413,6 +3481,7 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   let whatToDo = UNTYPED_WHAT_TO_DO;
   if (manual) whatToDo = MANUAL_WHAT_TO_DO;
   else if (src.type) whatToDo = WHAT_TO_DO[src.type];
+  whatToDo = withConventionStep(whatToDo, src);
   // The acceptance-receipt steps (MOTIR-4704) — appended, never substituted: an
   // acceptance card still writes and greens its spec, and the publish is the
   // step AFTER that. A manual item is excluded by construction (it took

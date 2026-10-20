@@ -288,10 +288,16 @@ kill_timeout = "90s"
 # machine size the process group inherits is larger than intended, stop and
 # re-scope rather than absorbing the spend silently."* It fired. This is the
 # re-scope.
+# ⚠️ STAGING RUNS PRODUCTION'S `app` SIZE (MOTIR-9117). The load test measures what one
+# production-sized machine holds, and `pnpm loadtest:run` refuses (exit 4) a staging
+# size that differs from production's. This block was `shared-cpu-2x` / 2 CPUs until
+# production moved to `performance-1x` on 2026-10-16, and every deploy from here put
+# staging back on the old box. `tests/loadtest/stagingSize.test.ts` fails when the two
+# files' `app` sizes differ.
 [[vm]]
-  size      = "shared-cpu-2x"
+  size      = "performance-1x"
   memory    = "2gb"
-  cpus      = 2
+  cpus      = 1
   processes = ["app"]
 
 # The WORKER, sized on a MEASUREMENT rather than on a guess or on the web tier.

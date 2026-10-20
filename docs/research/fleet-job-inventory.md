@@ -33,6 +33,17 @@ stale only if it differs. Any read that fails, or an entry with no fingerprint,
 stays stale. To record it after a re-measure:
 `pnpm exec tsx scripts/ci-fleet/fingerprint-workflows.ts <checkout> <sha>`.
 
+**Quote-aware fingerprint (MOTIR-9126):** the first tokenizer split `run:` lines on
+`|`, `;`, `(` and `)` even inside quotes, so motir-ai#778's quoted jq filter in
+`sweep-planning-machines.yml` read as six new executables (`now`, `sub`,
+`fromdateiso8601?`, …) and made the entry stale with no tool added. Separators now
+count only outside quotes, words split only outside quotes, and a step whose
+`shell:` is not bash or sh (motir-meta's two `python3 {0}` steps) contributes its
+interpreter but not its lines. Every recorded fingerprint was recomputed at its
+entry's sha. motir-ai is re-measured at `857ac4244`: the workflow set, the job set and
+every `runsOn` are unchanged since `35d359a22`, and the fingerprint is identical at
+both.
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the

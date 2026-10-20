@@ -154,10 +154,9 @@ const MODE_LEAD_KEY: Record<PlanningMode, string> = {
 };
 
 /** The originating DETAIL wins over the mode's generic line when one was carried
- *  (a work item, a repo) — both resolve to the `contextual` mode. */
+ *  (a work item) — both resolve to the `contextual` mode. */
 function leadKey(launch: PlanningLaunch): string {
   if (launch.itemKey) return 'lead.contextualItem';
-  if (launch.repoKey) return 'lead.conventionRefine';
   return MODE_LEAD_KEY[launch.mode];
 }
 
@@ -956,7 +955,6 @@ export function PlanChangeRail({
                 : t(leadKey(launch), {
                     project: projectName,
                     item: launch.itemKey ?? '',
-                    repo: launch.repoKey ?? '',
                   })}
           </span>{' '}
           {guideOrigin ? null : (
@@ -1397,9 +1395,15 @@ export function PlanChangeRail({
           <AlsoWaitingPlan session={state.session} />
         ) : null}
         {/* A failure beside a waiting plan (situation 2; MOTIR-7941): ONE current failure line, an
-            open composer, no Resume — the next turn continues the session. */}
+            open composer, no Resume — the next turn continues the session. With NO plan waiting
+            it is an attempt motir-ai cannot resume (MOTIR-9121): the same line says the next
+            message plans again. */}
         {failure && !awaitsResume ? (
-          <WaitingPlanFailureLine failure={failure} again={failedAgain} />
+          <WaitingPlanFailureLine
+            failure={failure}
+            again={failedAgain}
+            planAgain={!state.session?.waitingPlan}
+          />
         ) : null}
 
         {state.errorCode === GUIDE_OFFER_CLOSED && !ended ? (

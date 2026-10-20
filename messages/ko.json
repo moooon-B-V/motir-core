@@ -7982,7 +7982,6 @@
       "replan": "{project}의 기존 계획을 변경하기 위해 열림.",
       "contextual": "{project}의 맥락에서 열림.",
       "contextualItem": "{item}의 맥락에서 열림.",
-      "conventionRefine": "{repo}의 코딩 규칙을 다듬기 위해 열림.",
       "roadmap": "로드맵에서 열림.",
       "followUp": "{item}에서 {choice}의 후속 작업을 계획하기 위해 열림.",
       "followUpProject": "{choice}의 후속 작업을 계획하기 위해 {project}에서 열림."
@@ -8292,7 +8291,9 @@
       "onlyStarter": "{name} 님 또는 프로젝트 관리자만 재개할 수 있습니다.",
       "onlyStarterAnon": "시작한 사람 또는 프로젝트 관리자만 재개할 수 있습니다.",
       "failureLine": "이 계획에 대한 마지막 변경을 반영하지 못했습니다 · {when}",
-      "failureLineAgain": "마지막 변경을 다시 반영하지 못했습니다 · {when}"
+      "failureLineAgain": "마지막 변경을 다시 반영하지 못했습니다 · {when}",
+      "failureLinePlanAgain": "이 시도를 계속하지 못했습니다 · {when}. 다음 메시지로 다시 계획합니다.",
+      "failureLinePlanAgainAgain": "이 시도를 다시 계속하지 못했습니다 · {when}. 다음 메시지로 다시 계획합니다."
     },
     "grill": {
       "control": {
@@ -8397,13 +8398,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · 편집됨",
+      "bylineDerived": "코드에서 도출됨",
+      "bylineEdited": "{name} 편집 · {date}",
+      "bylineEditedUnknown": "팀 멤버가 편집 · {date}",
+      "edit": "편집",
+      "writeFirst": "규칙 작성",
+      "editFieldLabel": "규칙(Markdown)",
+      "editingVersion": "v{version} 편집 중",
+      "saveCreates": "저장하면 v{next}이(가) 생성됩니다. {count} / {max}자.",
+      "editHelper": "이 리포지토리의 모든 새 프롬프트는 저장된 텍스트를 읽습니다. 더 새로운 도출 버전이 이 텍스트를 대체하는 일은 없습니다.",
+      "save": "저장",
+      "cancel": "취소",
+      "saving": "저장 중…",
+      "saveFailed": "규칙을 저장하지 못했습니다. 입력한 텍스트는 그대로 남아 있습니다. 다시 시도해 주십시오.",
+      "tooLong": "규칙이 {max}자를 초과했습니다. 저장하려면 줄여 주십시오.",
+      "blank": "저장할 내용을 입력해 주십시오.",
+      "conflictTitle": "다른 사용자가 더 새로운 버전을 저장했습니다",
+      "conflictBody": "{name}이(가) {date}에 v{base}을(를) 편집하는 동안 v{latest}을(를) 저장했습니다. 변경 사항은 저장되지 않았습니다.",
+      "conflictLoadTheirs": "상대 버전 불러오기",
+      "conflictKeepMine": "내 버전을 사본으로 유지",
+      "conflictCopyLabel": "내 텍스트 — 복사한 다음 상대 버전을 불러오십시오",
+      "conflictCopyHint": "읽기 전용 사본입니다. 상대 버전을 불러오면 이 편집기가 닫힙니다.",
+      "copy": "클립보드에 복사",
+      "pendingTitle": "코드에서 더 새로운 버전이 도출되었습니다",
+      "pendingBody": "{date}에 재감사를 수행하여 도출 버전이 생성되었습니다. 이 버전은 사용되지 않으며, 아래 텍스트가 사용 중입니다. 편집하지 않으면 아무것도 바뀌지 않습니다.",
+      "pendingCompare": "나란히 비교",
+      "pendingInUse": "사용 중 · v{version} 편집됨",
+      "pendingWaiting": "대기 중 · 도출됨",
+      "emptyWriteBody": "이 리포지토리에는 아직 도출된 규칙이 없습니다. 여기에 첫 번째 버전을 작성하거나 Motir가 코드에서 도출할 때까지 기다리십시오.",
       "emptyTitle": "아직 규칙이 없습니다",
       "emptyDescription": "저장소가 연결되면 Motir가 코드에서 코딩 규칙을 도출합니다. 여기에서 검토하세요.",
       "defaultRepo": "코드",
       "noRules": "이 저장소에 대해 아직 도출된 규칙이 없습니다.",
       "versionDerived": "v{version} · 도출됨",
-      "bannerDerivedTitle": "코드에서 도출됨 — 자동으로 사용됨",
-      "bannerDerivedBody": "이 규칙은 코드베이스에서 도출되었으며 새 코드에 대한 모든 프롬프트에 주입됩니다. 다듬으려면 위의 Motir로 다듬기 항목을 사용해 AI 채팅을 여세요.",
       "provenanceTitle": "규칙 출처",
       "provenanceLegend": "채택됨 — 코드가 이미 이렇게 하고 있어 문서화했습니다. 제안됨 — 코드에 언급이 없거나 일관성이 없어 클린 코드 기본값을 넣었습니다.",
       "provenance": {
@@ -12368,6 +12396,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "실행",
     "searchLabel": "이 실행 검색",
     "gloss": "에이전트가 한 일",
@@ -12443,8 +12473,9 @@
     "sectionPast": "지난 실행",
     "noneRunning": "실행 중인 것이 없습니다.",
     "nonePast": "아직 끝난 실행이 없습니다.",
-    "colCommand": "명령어",
-    "colScope": "범위",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, other {and # more work items}}",
     "colAgent": "에이전트",
     "colStarted": "시작",
     "colStatus": "상태",
@@ -12492,6 +12523,10 @@
       "expired": {
         "title": "보존 기간이 지났습니다",
         "body": "로그 본문은 실행 후 30일이 지나면 삭제됩니다. 이 실행의 로그 본문은 삭제되었습니다."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12832,7 +12867,10 @@
       "progressAria": "{total}단계 중 {done}단계 완료",
       "progressAllDone": "{total}단계 중 {total}단계 완료",
       "door": "단계별로 안내받기"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "저장소 추가",

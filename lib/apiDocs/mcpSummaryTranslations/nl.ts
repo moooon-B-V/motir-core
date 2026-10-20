@@ -211,6 +211,12 @@ export const nl: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      'De codeconventie van één repository in zijn geheel, afgeleid of door een persoon bewerkt, met de versie – wat een wijziging in die repository volgt.',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       'Het GOEDGEKEURDE ontwerp van één ontwerp-werkitem, met kortlevende links naar de bestanden — of welke van de vijf redenen er is waarom er geen is.',

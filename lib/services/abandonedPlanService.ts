@@ -5,6 +5,7 @@ import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessio
 import {
   endSessionForAbandonedPlan,
   recordFailureWithin,
+  releaseUnresumableAttempt,
   releaseLapsedRevision,
   resumeAutomaticallySafely,
   settleFailedJob,
@@ -251,7 +252,7 @@ export interface AbandonedPlanDeps {
   getFailedJobFacts?: (
     jobId: string,
     coreProjectId: string,
-  ) => Promise<{ walkStop: JobWalkStop | null; lostMachine: boolean }>;
+  ) => Promise<{ walkStop: JobWalkStop | null; lostMachine: boolean; resumable?: boolean | null }>;
   /** The cancel sent to motir-ai for a job the sweep gave up on (MOTIR-9065), behind
    *  the same seam. Absent means the shipped {@link cancelJob}. */
   cancelJob?: (jobId: string, coreProjectId: string) => Promise<unknown>;
@@ -407,10 +408,14 @@ function openRevisionJobId(
 async function readFailedJobFacts(
   jobId: string,
   coreProjectId: string,
-): Promise<{ walkStop: JobWalkStop | null; lostMachine: boolean }> {
+): Promise<{ walkStop: JobWalkStop | null; lostMachine: boolean; resumable?: boolean | null }> {
   try {
     const view = await getJob(jobId, coreProjectId);
-    return { walkStop: view.walkStop ?? null, lostMachine: view.lostMachine ?? false };
+    return {
+      walkStop: view.walkStop ?? null,
+      lostMachine: view.lostMachine ?? false,
+      resumable: view.resumable ?? null,
+    };
   } catch {
     return { walkStop: null, lostMachine: false };
   }
@@ -617,7 +622,11 @@ export const abandonedPlanService = {
         // plan with no job has none to read: it is recorded with `failedJobId: null`,
         // `internal` and no stop point (MOTIR-8130 §3), which To resume lists and
         // Resume does not offer — its producer resumes by writing again.
-        let facts: { walkStop: JobWalkStop | null; lostMachine: boolean } = {
+        let facts: {
+          walkStop: JobWalkStop | null;
+          lostMachine: boolean;
+          resumable?: boolean | null;
+        } = {
           walkStop: null,
           lostMachine: false,
         };
@@ -638,6 +647,8 @@ export const abandonedPlanService = {
           walkStop,
           lastPosition: null,
           error: job?.failure ?? null,
+          // A job that has not ended (judged by silence) has no verdict yet: unknown, not `false`.
+          resumable: facts.resumable ?? null,
         });
         // A job that ENDED tells its own story; a plan judged by SILENCE is recorded as
         // the sweep's verdict, whatever the job read said (MOTIR-9065).
@@ -656,13 +667,17 @@ export const abandonedPlanService = {
             `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}) recorded as failed on session ${session.id} — ${decision.reason}; ${plan._count.items} proposal(s) retained`,
           );
         }
+        // NOTHING TO RESUME (MOTIR-9121): motir-ai said the job failed before its conversation
+        // settled, so its cards are given back now rather than held for a Resume it will refuse.
+        const unresumable = recorded === 'recorded' && record.failureResumable === false;
+        if (unresumable) await releaseUnresumableAttempt(session.id, plan.workspaceId);
         const jobCancel =
           recorded === 'recorded' && giveUpJobId
             ? await cancelAbandonedJob(deps, giveUpJobId, plan)
             : null;
         // A LOST MACHINE is resumed by core itself (MOTIR-8307); every other recording waits.
         const autoResume =
-          recorded === 'recorded' && facts.lostMachine
+          recorded === 'recorded' && facts.lostMachine && !unresumable
             ? await resumeAutomaticallySafely({
                 sessionId: session.id,
                 workspaceId: plan.workspaceId,

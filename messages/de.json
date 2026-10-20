@@ -7988,7 +7988,6 @@
       "replan": "Geöffnet, um den bestehenden Plan von {project} zu ändern.",
       "contextual": "Im Kontext von {project} geöffnet.",
       "contextualItem": "Im Kontext von {item} geöffnet.",
-      "conventionRefine": "Geöffnet, um die Coding-Konvention von {repo} zu verfeinern.",
       "roadmap": "Über die Roadmap geöffnet.",
       "followUp": "Geöffnet, um die Folgeplanung zu {choice} für {item} zu erstellen.",
       "followUpProject": "Für {project} geöffnet, um die Folgeplanung zu {choice} zu erstellen."
@@ -8298,7 +8297,9 @@
       "onlyStarter": "Nur {name} oder ein Projektmanager kann dies fortsetzen.",
       "onlyStarterAnon": "Nur die Person, die dies gestartet hat, oder ein Projektmanager kann es fortsetzen.",
       "failureLine": "Ihre letzte Änderung an diesem Plan konnte nicht vorgenommen werden · {when}",
-      "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden · {when}"
+      "failureLineAgain": "Ihre letzte Änderung konnte erneut nicht vorgenommen werden · {when}",
+      "failureLinePlanAgain": "Dieser Versuch konnte nicht fortgesetzt werden · {when}. Ihre nächste Nachricht plant neu.",
+      "failureLinePlanAgainAgain": "Dieser Versuch konnte erneut nicht fortgesetzt werden · {when}. Ihre nächste Nachricht plant neu."
     },
     "grill": {
       "control": {
@@ -8403,13 +8404,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · bearbeitet",
+      "bylineDerived": "Aus dem Code abgeleitet",
+      "bylineEdited": "Bearbeitet von {name} · {date}",
+      "bylineEditedUnknown": "Bearbeitet von einem Teammitglied · {date}",
+      "edit": "Bearbeiten",
+      "writeFirst": "Konvention schreiben",
+      "editFieldLabel": "Konvention (Markdown)",
+      "editingVersion": "v{version} wird bearbeitet",
+      "saveCreates": "Beim Speichern entsteht v{next}. {count} / {max} Zeichen.",
+      "editHelper": "Jeder neue Prompt für dieses Repository liest den gespeicherten Text. Eine neuere abgeleitete Version ersetzt ihn nie.",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "saving": "Wird gespeichert…",
+      "saveFailed": "Die Konvention konnte nicht gespeichert werden. Ihr Text ist noch da – versuchen Sie es erneut.",
+      "tooLong": "Die Konvention überschreitet {max} Zeichen. Kürzen Sie sie, um zu speichern.",
+      "blank": "Schreiben Sie etwas, um zu speichern.",
+      "conflictTitle": "Jemand hat eine neuere Version gespeichert",
+      "conflictBody": "{name} hat am {date} v{latest} gespeichert, während Sie v{base} bearbeitet haben. Ihre Änderungen wurden nicht gespeichert.",
+      "conflictLoadTheirs": "Deren Version laden",
+      "conflictKeepMine": "Meine als Kopie behalten",
+      "conflictCopyLabel": "Ihr Text – kopieren Sie ihn und laden Sie dann die andere Version",
+      "conflictCopyHint": "Schreibgeschützte Kopie. Beim Laden der anderen Version wird dieser Editor geschlossen.",
+      "copy": "In die Zwischenablage kopieren",
+      "pendingTitle": "Aus dem Code wurde eine neuere Version abgeleitet",
+      "pendingBody": "Ein erneutes Audit am {date} hat eine abgeleitete Version erzeugt. Sie ist nicht in Gebrauch – der Text unten ist es. Es ändert sich nichts, solange Sie nicht bearbeiten.",
+      "pendingCompare": "Nebeneinander vergleichen",
+      "pendingInUse": "In Gebrauch · v{version} bearbeitet",
+      "pendingWaiting": "Wartet · abgeleitet",
+      "emptyWriteBody": "Für dieses Repository wurden noch keine Konventionsregeln abgeleitet. Schreiben Sie hier die erste Version oder warten Sie, bis Motir eine aus Ihrem Code ableitet.",
       "emptyTitle": "Noch keine Konvention",
       "emptyDescription": "Motir leitet aus Ihrem Code eine Coding-Konvention ab, sobald ein Repository verbunden ist. Prüfen Sie sie hier.",
       "defaultRepo": "Code",
       "noRules": "Für dieses Repository wurden noch keine Konventionsregeln abgeleitet.",
       "versionDerived": "v{version} · abgeleitet",
-      "bannerDerivedTitle": "Aus Ihrem Code abgeleitet – wird automatisch verwendet",
-      "bannerDerivedBody": "Diese Konvention wird aus Ihrer Codebasis abgeleitet und in jeden Prompt für neuen Code eingefügt. Um sie zu verfeinern, öffnen Sie über „Mit Motir verfeinern“ oben den AI-Chat.",
       "provenanceTitle": "Herkunft der Regeln",
       "provenanceLegend": "Übernommen – Ihr Code macht das bereits, wir haben es dokumentiert. Vorgeschlagen – Ihr Code sagte dazu nichts oder war inkonsistent, hier wurde ein Clean-Code-Standard eingesetzt.",
       "provenance": {
@@ -12374,6 +12402,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Lauf",
     "searchLabel": "Diesen Lauf durchsuchen",
     "gloss": "was der Agent getan hat",
@@ -12449,8 +12479,9 @@
     "sectionPast": "Vergangene Läufe",
     "noneRunning": "Es läuft nichts.",
     "nonePast": "Bisher ist kein Lauf abgeschlossen.",
-    "colCommand": "Befehl",
-    "colScope": "Umfang",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Gestartet",
     "colStatus": "Status",
@@ -12498,6 +12529,10 @@
       "expired": {
         "title": "Außerhalb der Aufbewahrungsfrist",
         "body": "Log-Inhalte werden 30 Tage nach einem Lauf gelöscht. Die dieses Laufs wurden bereits gelöscht."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12838,7 +12873,10 @@
       "progressAria": "{done} von {total} Schritten erledigt",
       "progressAllDone": "{total} von {total} Schritten erledigt",
       "door": "Führen Sie mich durch"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Repository hinzufügen",

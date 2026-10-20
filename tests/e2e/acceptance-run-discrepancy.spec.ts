@@ -180,7 +180,7 @@ test('an agent builds a card through a wrong HOW, and its discrepancy is where y
   await chapter('The run modal’s findings strip shows both, each as itself', async () => {
     await signIn(page, EMAIL, SCOPED_RUN_PASSWORD);
     await page.goto('/runs');
-    await page.getByRole('button', { name: 'run', exact: true }).first().click();
+    await page.getByTestId('run-open').first().click();
     await expect(dialog).toBeVisible();
     await expect(page).toHaveURL(/\/runs\?(?:[^#]*&)?run=/);
 

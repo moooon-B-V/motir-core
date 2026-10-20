@@ -1261,10 +1261,36 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
   // card that has none — and a manufactured design criterion plus any ordinary
   // render criterion is a brand-new false positive, the exact cost this widening
   // is paying down. Every export criterion that motivated it names its mock.
-  /\bmock(?:-?ups?|s)?\b/i,
+  //
+  // A BARE `mock` / `mocks` is read by {@link namesDesignAsset} instead, because
+  // the word has a second meaning this corpus uses constantly (below).
+  /\bmock-?ups?\b/i,
   /\bartboards?\b/i,
   /\bdesign assets?\b/i,
 ];
+
+// ── A TEST DOUBLE is not a drawing ───────────────────────────────────────────
+// A bare `mock` is the commonest export tell above — and the commonest word for
+// a TEST DOUBLE in every test card's criteria: *"asserted on the boundary mock"*,
+// *"no test mocks the helper wholesale"*, *"the lane's `E2E_TEST_BILLING`
+// boundary mock"*. Read as a design asset, such a criterion becomes the DESIGN
+// half of the finding, and the card's ordinary render criterion the SURFACE
+// half, so a test or route card that draws nothing is reported as its own
+// design blocker. Plan `cmvez6dl300gmhmrffl127q95` (2026-10-19) carried four
+// such cards — MOTIR-8637, MOTIR-8640, MOTIR-8643 and the larger-pool E2E —
+// and `check-plan` read each advisory as a guard #3 stop.
+//
+// So a bare `mock` counts only on a line that does not use it as a test double:
+// the verb (*mocks the*, *mocked*, *mocking*, `vi.mock`), a double's noun
+// before it (*boundary mock*, *fetch mock*), the thing it stands in for after
+// it (*mock client*, *mock module*), a module specifier or path after the verb
+// (*mocks @/lib/foo*, *mocks ./foo*, *mocks lib/x* — MOTIR-9077), or an
+// assertion read off it (*asserted on the mock*). `*.mock.html` and *mockup* stay tells on any line, so a design
+// card's export criterion is unaffected.
+const BARE_MOCK_RE = /\bmocks?\b/i;
+
+const TEST_DOUBLE_MOCK_RE =
+  /\b(?:vi|jest)\.mock\b|\bmock(?:ed|ing)\b|\bmocks?\s+(?:the|a|an|its|every|each|out)\b|\b(?:boundary|test|stub|fake|spy|http|fetch|network|transport|server|client|module)\s+mocks?\b|\b(?:asserted|asserts?|recorded|seen|checked|counted)\s+on\s+(?:the\s+)?(?:[\w-]+\s+)?mocks?\b|\bmocks?\s+(?:@\/|\.{1,2}\/|(?!and\/or\b)[\w@.()[\]-]+\/[\w@.()[\]-]+)|\bmocks?\s+(?:clients?|servers?|fetch|calls?|responses?|requests?|modules?|helpers?|leaf|leaves|routes?|boundar(?:y|ies)|transports?|gateways?|adapters?|implementations?|functions?|handlers?)\b/i;
 
 // ── The AMENDMENT, not only the NEW ASSET (MOTIR-4477) ───────────────────────
 // Every matcher above is an ASSET tell — a file, a path, or a word for a
@@ -1382,7 +1408,8 @@ const COMPONENT_PATH_RE = /[A-Za-z0-9_.@()[\]-]+(?:\/[A-Za-z0-9_.@()[\]-]+)*\.[j
  * cannot say WHICH half moved.
  */
 export function namesDesignAsset(text: string): boolean {
-  return DESIGN_ASSET_MATCHERS.some((re) => re.test(text));
+  if (DESIGN_ASSET_MATCHERS.some((re) => re.test(text))) return true;
+  return BARE_MOCK_RE.test(text) && !TEST_DOUBLE_MOCK_RE.test(text);
 }
 
 /**

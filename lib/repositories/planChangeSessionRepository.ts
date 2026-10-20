@@ -65,6 +65,16 @@ function failedOpenForOwnerWhere(args: {
     // sweep records a silent plan's failure on, so both must be where it is seen.
     origin: { in: ['conversation', 'mcp'] },
     ...FAILED_WAITING_WHERE,
+    // A failure that cannot be resumed and has no plan waiting beside it asks nothing of its
+    // person (MOTIR-9121): its attempt was released when it was recorded, and the session's
+    // next turn simply plans again. Listing it would offer an entry with nothing to press.
+    // ⚠️ Spelled as an OR, never `NOT { failureResumable: false, … }`: on a NULL (unknown)
+    // verdict that NOT evaluates to NULL and drops every failure recorded before the column.
+    OR: [
+      { failureResumable: null },
+      { failureResumable: true },
+      { plans: { some: { status: { in: ['generating', 'planned', 'stale'] } } } },
+    ],
   };
 }
 
@@ -587,6 +597,24 @@ export const planChangeSessionRepository = {
     const result = await tx.planChangeSession.updateMany({
       where: { id, endedAt: null },
       data: { lastJobId: attempt.jobId, lastSubmittedAt: attempt.at },
+    });
+    return result.count > 0;
+  },
+
+  /**
+   * Mark a recorded failure as one that cannot be resumed (MOTIR-9121) — motir-ai refused a
+   * resume of it for want of a settled conversation. Guarded on the failure still being the
+   * one the caller judged (`failedJobId`) on an open session, so a newer attempt or an end
+   * is never overwritten. Returns whether a row moved.
+   */
+  async markFailureUnresumable(
+    id: string,
+    failedJobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null, failedAt: { not: null }, failedJobId },
+      data: { failureResumable: false },
     });
     return result.count > 0;
   },

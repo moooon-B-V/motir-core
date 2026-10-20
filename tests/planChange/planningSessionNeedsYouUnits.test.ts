@@ -43,7 +43,7 @@ describe('failureRecord — parsing never throws, mapping is total', () => {
     ['MOTIR_AI_UNAUTHORIZED', 'token_expired'],
     ['MOTIR_AI_UNAVAILABLE', 'model_unavailable'],
     ['MOTIR_AI_JOB_FAILED', 'job_failed'],
-    ['MOTIR_AI_BAD_REQUEST', 'model_unavailable'],
+    ['MOTIR_AI_BAD_REQUEST', 'job_failed'],
     ['SOMETHING_NEW', 'internal'],
   ])('maps %s to %s', (code, reason) => {
     expect(reasonCodeFromError({ code })).toBe(reason);

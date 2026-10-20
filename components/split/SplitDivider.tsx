@@ -3,17 +3,16 @@
 import { type KeyboardEvent, type PointerEvent } from 'react';
 
 /**
- * The planning split's DIVIDER (MOTIR-6250), built to MOTIR-6249's approved
- * design result.
+ * The split's DIVIDER — built to MOTIR-6249's approved design result for the
+ * planning workspace (MOTIR-6250) and shared with the run overlay (MOTIR-9068).
  *
  * ── WHY ITS OWN FILE AND NOT A DESIGN-SYSTEM PRIMITIVE ──────────────────────
- * MOTIR-6250 asks for the decision on the evidence, and the evidence is that
- * there is exactly ONE consumer: `PlanningResizableFrame`. A second consumer is
- * what earns a primitive, and the plan page is explicitly NOT one — both
- * MOTIR-6250 (*"Does NOT change: … the plan page's rail"*) and MOTIR-6236
- * (*"This host is NOT a split"*) say so. Promoting it to `packages/design-system`
- * today would publish a shape nothing else consumes and make its first real
- * second consumer a breaking change rather than a reuse.
+ * It began with exactly ONE consumer, and that is what kept it out of
+ * `packages/design-system`. The second consumer has now arrived, so the shape
+ * earned sharing WITHIN THIS APP. Promotion into the package is still not made:
+ * the package would publish a split whose bounds are the plan overlay's design
+ * decision (`lib/planning/railWidth.ts`), and that is not a fact the design
+ * system should own.
  *
  * ── THE GEOMETRY IS THE DESIGN'S ────────────────────────────────────────────
  * 1px visible, an 11px hit area ABSOLUTELY POSITIONED over the seam so the grid
@@ -22,22 +21,21 @@ import { type KeyboardEvent, type PointerEvent } from 'react';
  * Ink steps `--el-border` → `--el-border-strong` → `--el-accent` across rest →
  * hover → drag, over 120ms ease-out.
  *
- * ⚠️ THE RESTING 1px LINE IS THE RAIL'S OWN `border-l`, NOT THIS COMPONENT'S —
- * a deliberate deviation from the design's MECHANISM that preserves its RESULT.
- * The design says the divider "TAKES the rail's own `border-l`… remove that, or
- * the seam gets two edges". Removing it would be right if this frame were the
- * rail's only host, and it is not: `PlanChangeRail`'s
+ * ⚠️ THE RESTING 1px LINE IS THE SECOND PANE'S OWN `border-l`, NOT THIS
+ * COMPONENT'S — a deliberate deviation from the design's MECHANISM that preserves
+ * its RESULT. The design says the divider "TAKES the rail's own `border-l`…
+ * remove that, or the seam gets two edges". Removing it would be right if this
+ * frame were the rail's only host, and it is not: `PlanChangeRail`'s
  * `border-l border-(--el-border)` also draws the seam for `GenerationFlow` and
- * `DiscoveryOnboarding`, which keep the FIXED frame and are outside this card's
- * scope. So the rail keeps its 1px edge as the resting line — the same 1px of
- * `--el-border` the design specifies — and this component paints only the 3px
- * hover / focus / drag states, which cover it exactly. One resting edge, no
- * double line, four other consumers untouched.
+ * `DiscoveryOnboarding`, which keep the FIXED frame. So the second pane keeps its
+ * 1px edge as the resting line — the same 1px of `--el-border` the design
+ * specifies — and this component paints only the 3px hover / focus / drag states,
+ * which cover it exactly. One resting edge, no double line.
  */
-export interface PlanningSplitDividerProps {
-  /** The conversation pane's current width in CSS pixels — `aria-valuenow`. */
+export interface SplitDividerProps {
+  /** The second pane's current width in CSS pixels — `aria-valuenow`. */
   widthPx: number;
-  /** The conversation pane's bounds in CSS pixels. */
+  /** The second pane's bounds in CSS pixels. */
   min: number;
   max: number;
   /** Accessible name; the caller owns the copy so it can be translated. */
@@ -48,7 +46,7 @@ export interface PlanningSplitDividerProps {
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
 }
 
-export function PlanningSplitDivider({
+export function SplitDivider({
   widthPx,
   min,
   max,
@@ -56,7 +54,7 @@ export function PlanningSplitDivider({
   dragging,
   onPointerDown,
   onKeyDown,
-}: PlanningSplitDividerProps) {
+}: SplitDividerProps) {
   return (
     <div
       // `role="separator"` WITH `tabindex` is the focusable variant, and that is
@@ -69,7 +67,7 @@ export function PlanningSplitDivider({
       aria-valuemin={Math.round(min)}
       aria-valuemax={Math.round(max)}
       aria-label={label}
-      data-testid="planning-split-divider"
+      data-testid="split-divider"
       data-dragging={dragging ? 'true' : undefined}
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
@@ -83,7 +81,7 @@ export function PlanningSplitDivider({
     >
       <span
         aria-hidden
-        data-testid="planning-split-divider-line"
+        data-testid="split-divider-line"
         className={[
           'pointer-events-none absolute inset-y-0',
           'transition-[width,left,background-color] duration-[120ms] ease-out',

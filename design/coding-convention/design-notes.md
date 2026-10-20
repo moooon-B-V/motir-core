@@ -1052,3 +1052,84 @@ title and subtitle are on screen while the audit surfaces resolve. **No read is 
 `allSettledOrThrow` is touched, and no asset is drawn.**
 
 **A route boundary is declined as a preference** — `/code-health` does not call `notFound()`.
+
+## The editable convention card — Edit, Save, conflict, a derived update waiting (MOTIR-9081)
+
+**Amends** the section _Panel anatomy + exact copy_ (the read-only per-repository convention card, Panel 2/3) and the shipped `design/coding-convention/convention.mock.html`. **The delta mock is `design/coding-convention/convention--editable.mock.html`**, six panels. The older mock is a record and is not edited. Story MOTIR-9079; built by MOTIR-9082.
+
+**What changes.** The card stops being read-only. A member who holds **`ai:configure`** sees an **Edit** action and can save a new version of one repository's convention; every other member sees the same card with no Edit action (not disabled, not greyed). The card no longer carries a **Plan with AI** launcher (removed by MOTIR-9090): Edit is the one way to change a convention, and no panel draws the launcher. The derived-banner (“Derived from your code — auto-used … use the Refine with Motir entry above”) is replaced by a byline, because its body pointed at that launcher.
+
+**Rules the surface keeps.** Saving always makes a NEW version (`vN+1`); history is never rewritten. A re-audit never replaces a person's text: it parks its output as a waiting derived version. Nothing is applied automatically.
+
+### The panels
+
+| #   | state                  | what is drawn                                                                                                                                                                                   |
+| --- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Read                   | Card header: repo name · version pill · byline · **Edit** (`ai:configure` only). Three cards: derived, edited, and the viewer without the permission                                            |
+| 2   | Edit                   | `Textarea` with the document as Markdown, “Saving creates v4”, a character count out of 65,536, **Cancel** (ghost) and **Save** (primary)                                                       |
+| 3   | Save conflict          | A warning notice and the two ways out: **Load their version** (primary) and **Keep mine as a copy** (secondary), which reveals a read-only copy of the person's text with **Copy to clipboard** |
+| 4   | Derived update waiting | The person's text stays current. An info notice with **Compare side by side**; the comparison is read-only with no “apply”                                                                      |
+| 5   | Empty repository       | The shipped empty state, with **Write the convention** offered to a member who holds `ai:configure`                                                                                             |
+| 6   | Narrow viewport        | 360 px: Edit and Save stay reachable, the notice actions wrap, the side-by-side columns stack                                                                                                   |
+
+### Permission
+
+The **Edit** action (and **Write the convention** in the empty state) shows only for a member who holds the **`ai:configure`** project permission. The server enforces the same permission on save; hiding the action is a courtesy, not the gate.
+
+### Exact copy — every string, `codeHealth.convention.*` (en · zh)
+
+| key                     | en                                                                                                                                       | zh                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `versionDerived` (kept) | `v{version} · derived`                                                                                                                   | `v{version} · 已提取`                                                                                 |
+| `versionEdited`         | `v{version} · edited`                                                                                                                    | `v{version} · 已编辑`                                                                                 |
+| `bylineDerived`         | `Derived from the code`                                                                                                                  | `提取自代码`                                                                                          |
+| `bylineEdited`          | `Edited by {name} · {date}`                                                                                                              | `{name} 编辑于 {date}`                                                                                |
+| `bylineEditedUnknown`   | `Edited by a team member · {date}`                                                                                                       | `团队成员编辑于 {date}`                                                                               |
+| `edit`                  | `Edit`                                                                                                                                   | `编辑`                                                                                                |
+| `writeFirst`            | `Write the convention`                                                                                                                   | `撰写编码规范`                                                                                        |
+| `editFieldLabel`        | `Convention (Markdown)`                                                                                                                  | `编码规范（Markdown）`                                                                                |
+| `editingVersion`        | `Editing v{version}`                                                                                                                     | `正在编辑 v{version}`                                                                                 |
+| `saveCreates`           | `Saving creates v{next}. {count} / {max} characters.`                                                                                    | `保存将创建 v{next}。{count} / {max} 个字符。`                                                        |
+| `editHelper`            | `Every new prompt for this repository reads the saved text. A newer derived version never replaces it.`                                  | `此仓库之后的每条新提示词都会读取已保存的文本。更新的提取版本不会替换它。`                            |
+| `save`                  | `Save`                                                                                                                                   | `保存`                                                                                                |
+| `cancel`                | `Cancel`                                                                                                                                 | `取消`                                                                                                |
+| `saving`                | `Saving…`                                                                                                                                | `正在保存…`                                                                                           |
+| `saveFailed`            | `Couldn’t save the convention. Your text is still here — try again.`                                                                     | `无法保存编码规范。你的文本仍在此处，请重试。`                                                        |
+| `tooLong`               | `The convention is over {max} characters. Shorten it to save.`                                                                           | `编码规范超过 {max} 个字符。请精简后再保存。`                                                         |
+| `blank`                 | `Write something to save.`                                                                                                               | `请输入内容后再保存。`                                                                                |
+| `conflictTitle`         | `Someone saved a newer version`                                                                                                          | `有人保存了更新的版本`                                                                                |
+| `conflictBody`          | `{name} saved v{latest} on {date} while you were editing v{base}. Your changes have not been saved.`                                     | `{name} 于 {date} 保存了 v{latest}，而你正在编辑 v{base}。你的更改尚未保存。`                         |
+| `conflictLoadTheirs`    | `Load their version`                                                                                                                     | `载入对方的版本`                                                                                      |
+| `conflictKeepMine`      | `Keep mine as a copy`                                                                                                                    | `将我的内容保留为副本`                                                                                |
+| `conflictCopyLabel`     | `Your text — copy it, then load theirs`                                                                                                  | `你的文本——请先复制，再载入对方的版本`                                                                |
+| `conflictCopyHint`      | `Read-only copy. Loading their version closes this editor.`                                                                              | `只读副本。载入对方的版本会关闭此编辑器。`                                                            |
+| `copy`                  | `Copy to clipboard`                                                                                                                      | `复制到剪贴板`                                                                                        |
+| `pendingTitle`          | `A newer version was derived from the code`                                                                                              | `已从代码中提取出更新的版本`                                                                          |
+| `pendingBody`           | `A re-audit on {date} produced a derived version. It is not in use — the text below is. Nothing changes unless you edit.`                | `{date} 的重新审计提取出了一个版本。它尚未启用——启用的是下方的文本。除非你编辑，否则不会有任何变化。` |
+| `pendingCompare`        | `Compare side by side`                                                                                                                   | `并排比较`                                                                                            |
+| `pendingInUse`          | `In use · v{version} edited`                                                                                                             | `使用中 · v{version} 已编辑`                                                                          |
+| `pendingWaiting`        | `Waiting · derived`                                                                                                                      | `待处理 · 已提取`                                                                                     |
+| `emptyTitle` (kept)     | `No convention yet`                                                                                                                      | `尚无规范`                                                                                            |
+| `noRules` (kept)        | `No convention rules have been derived yet for this repo.`                                                                               | `此仓库尚未提取出编码规范。`                                                                          |
+| `emptyWriteBody`        | `No convention rules have been derived yet for this repo. Write the first version here, or wait for Motir to derive one from your code.` | `此仓库尚未提取出编码规范。可在此撰写第一个版本，或等待 Motir 从你的代码中提取。`                     |
+
+Retired with the launcher: `bannerDerivedTitle` and `bannerDerivedBody` (the byline replaces them).
+
+### Per-element roles (colour `--el-*`, shape `[data-style]` tokens)
+
+| element                           | primitive              | colour                                                                                                    | shape                                        |
+| --------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| card                              | `Card`                 | `--el-card`, `--el-border`                                                                                | `--radius-card`, `--spacing-card-padding`    |
+| repo name                         | text                   | `--el-text-strong`                                                                                        | —                                            |
+| version pill, derived             | `Pill`                 | tint `--el-tint-lavender`, ink `--el-text-strong`                                                         | `--radius-badge`, `--spacing-chip-*`         |
+| version pill, edited              | `Pill`                 | tint `--el-tint-sky`, ink `--el-text-strong`                                                              | same                                         |
+| byline                            | text                   | `--el-text-secondary`                                                                                     | —                                            |
+| Edit · Copy · Compare · Keep mine | `Button` secondary, sm | `--el-button-border`, `--el-text`                                                                         | `--radius-btn`, `--height-btn-sm`            |
+| Save · Load their version         | `Button` primary, sm   | `--el-accent`, `--el-accent-text`                                                                         | same                                         |
+| Cancel                            | `Button` ghost, sm     | `--el-text`                                                                                               | same                                         |
+| editor                            | `Textarea`             | `--el-input-border`, `--el-page-bg`, `--el-text`                                                          | `--radius-input`, `--spacing-input-x/y`      |
+| conflict notice                   | callout                | fill `--el-warning-surface`, glyph `--el-warning`, copy `--el-text-strong` / `--el-text-secondary`        | `--radius-card`                              |
+| waiting-derived notice            | callout                | fill `--el-surface-soft`, glyph `--el-accent-on-surface`, copy `--el-text-strong` / `--el-text-secondary` | `--radius-card`                              |
+| comparison column                 | box                    | `--el-border`, added line `--el-success-surface`                                                          | `--radius-card`, `--spacing-card-padding-12` |
+
+The conflict is a warning, not a danger: nothing is lost (the person's text is on screen), so the danger hue is not used and `--el-danger-text` appears nowhere. Every secondary line is `--el-text-secondary`, which clears AA on `--el-surface-soft`, `--el-warning-surface` and the card; no `--el-text-muted` or `--el-text-faint` carries text. No colour is invented and no panel draws a Plan with AI launcher.

@@ -26,6 +26,15 @@ export interface CodingConventionDTO {
   version: number;
   contentMd: string;
   provenance: ConventionProvenanceDTO[];
+  // `derived` from the code-graph audit, or `edited` by a person (MOTIR-9080).
+  authorKind: 'derived' | 'edited';
+  // The person who saved an `edited` version; null for a derived one.
+  editedByUserId: string | null;
+  // The editor's display name, resolved from `editedByUserId` by the service; null
+  // for a derived version, or when the account no longer resolves.
+  editedByName: string | null;
+  // A re-derive's output parked beside an edited version instead of replacing it.
+  pendingDerivedMd: string | null;
   createdAt: string;
 }
 
@@ -234,6 +243,23 @@ export type PlanningCodeHealthConventionDTO =
   | { state: 'present'; convention: CodingConventionDTO }
   | { state: 'absent' }
   | PlanningCodeHealthSectionUnavailableDTO;
+
+// What `get_coding_convention` returns for ONE repository (MOTIR-9083): the
+// CURRENT convention version in full, or a named reason there is none. Not an
+// error in any case — a model must tell "nothing recorded" from "motir-ai did not
+// answer" from "that is not a repository of this project".
+export type PlanningConventionDTO =
+  | {
+      state: 'present';
+      repoRef: string;
+      convention: CodingConventionDTO;
+      // The display name of the person who saved an `edited` version; null for a
+      // derived one, or when that user can no longer be found.
+      editedByName: string | null;
+    }
+  | { state: 'absent'; repoRef: string }
+  | { state: 'unavailable'; repoRef: string; code: string }
+  | { state: 'repo_not_in_project'; repo: string; repoSet: string[] };
 
 export interface PlanningCodeHealthRepoDTO extends Pick<
   CodeContextRepoDTO,

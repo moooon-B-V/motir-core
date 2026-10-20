@@ -10,6 +10,8 @@
 // parseable at all never reaches the service — the route answers that 400
 // itself.
 
+import type { ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
+
 export abstract class CodeHealthError extends Error {
   abstract readonly code: string;
 }
@@ -36,5 +38,39 @@ export class EmptyRepoScopeError extends CodeHealthError {
   constructor() {
     super('a repo scope was supplied but names no repo');
     this.name = 'EmptyRepoScopeError';
+  }
+}
+
+// A convention save with nothing in it. Raised before motir-ai is called, so a
+// blank body never costs a version.
+export class ConventionBlankError extends CodeHealthError {
+  readonly code = 'CONVENTION_BLANK' as const;
+  constructor() {
+    super('the convention is blank');
+    this.name = 'ConventionBlankError';
+  }
+}
+
+// A convention save over the size motir-ai stores (MOTIR-9080's 64 KB). Counted in
+// characters here, as the editor counts, so the 422 and the editor's counter agree.
+export class ConventionTooLongError extends CodeHealthError {
+  readonly code = 'CONVENTION_TOO_LONG' as const;
+  constructor(readonly max: number) {
+    super(`the convention is over ${max} characters`);
+    this.name = 'ConventionTooLongError';
+  }
+}
+
+// A convention save over a version that moved: the editor loaded version N and a
+// newer one landed first. NOT a CodeHealthError — the route answers it 409, not 422,
+// and it carries what won (`latest`, the re-read surface) so the editor can offer it.
+export class ConventionVersionConflictError extends Error {
+  readonly code = 'CONVENTION_VERSION_CONFLICT' as const;
+  constructor(
+    readonly latestVersion: number,
+    readonly latest: ConventionSurfaceDTO,
+  ) {
+    super(`the convention is at v${latestVersion}, not the version the edit was based on`);
+    this.name = 'ConventionVersionConflictError';
   }
 }

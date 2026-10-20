@@ -72,7 +72,7 @@ export type ProjectFileReadResult =
  * two owners share resolves to the first in set order; `owner/name` is the
  * unambiguous spelling, and the set the miss returns names it.
  */
-function matchRepoInSet(repo: string, repoSet: readonly string[]): string | null {
+export function matchRepoInSet(repo: string, repoSet: readonly string[]): string | null {
   const wanted = repo.trim().toLowerCase();
   if (!wanted) return null;
   const full = repoSet.find((r) => r.toLowerCase() === wanted);

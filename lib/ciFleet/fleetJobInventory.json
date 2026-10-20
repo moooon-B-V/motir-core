@@ -683,11 +683,11 @@
     "moooon-B-V/motir-ai": {
       "repoRef": "moooon-B-V/motir-ai",
       "ref": "main",
-      "sha": "35d359a22f15719eb3c0e9569a9adbe2049f4ce2",
+      "sha": "857ac4244be6d3f7c7fcf298f488c95f23ac9f3a",
       "visibility": "private",
-      "measuredAt": "2026-10-17T19:12:40Z",
+      "measuredAt": "2026-10-20T09:06:28Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "bfa0328c1b22f8286e1aa4047cc580d3f305568afbbff6af9526203f22cdd6df",
+      "structureFingerprint": "b8beb453692b09bc35a56c43bd2f2adb5f557cfe5631d517b2f8528fa149c1f2",
       "workflows": [
         {
           "path": ".github/workflows/ci.yml",
@@ -944,7 +944,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-16T19:25:32Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "1f85a8adb4ec942d1eebff359be2da1d21ab91e498f9098d1f483ee308ca8638",
+      "structureFingerprint": "b4a9ef5cd44bb2642578e8482c7f5af093f22734650a007bede461016b4f9243",
       "workflows": [
         {
           "path": ".github/workflows/catalog-refresh.yml",
@@ -1048,7 +1048,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-16T19:27:50Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "81c7d90f2dfc65772318cd6f54161e00281b017b5470c0a988911193fdf70319",
+      "structureFingerprint": "d23779c44102f96bbc43e895cf6d0620ff7bd32111ba8aaa99ba375bc666a864",
       "workflows": [
         {
           "path": ".github/workflows/guards.yml",

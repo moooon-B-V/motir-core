@@ -154,7 +154,6 @@ describe('every row’s href is the launcher’s own OVERLAY address', () => {
     { kind: 'project', hasPlan: true },
     { kind: 'work-item', itemKey: 'MOTIR-1813' },
     { kind: 'roadmap' },
-    { kind: 'convention-refine', repoKey: 'motir-core' },
   ];
 
   it.each(CONTEXTS)('renders %j through the launcher, not a copy of it', (context) => {
