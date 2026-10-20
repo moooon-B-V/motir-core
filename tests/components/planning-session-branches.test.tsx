@@ -65,7 +65,13 @@ function entry(over: Partial<ToResumePlanningSessionDto> = {}): ToResumePlanning
 
 const mount = (e: ToResumePlanningSessionDto, arrived = false) =>
   renderWithIntl(
-    <PlanningSessionResumeEntry entry={e} arrived={arrived} held={false} onSettled={vi.fn()} />,
+    <PlanningSessionResumeEntry
+      entry={e}
+      arrived={arrived}
+      held={false}
+      onSettled={vi.fn()}
+      onResumed={vi.fn()}
+    />,
   );
 
 describe('PlanningSessionResumeEntry', () => {

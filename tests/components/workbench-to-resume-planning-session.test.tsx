@@ -326,6 +326,74 @@ describe('a re-read', () => {
     view.reread([]);
     expect(entryOf().getAttribute('data-held')).toBe('true');
   });
+
+  // MOTIR-9122 — § 37: the resuming row CLEARS when the attempt starts. It is not § 35.5's
+  // gated-run hold, which keeps a dropped row until the next load.
+  it('a successful Resume asks the list to re-read, and the re-read that drops it clears it', async () => {
+    resumePlanSession.mockResolvedValue({ jobId: 'j', planId: 'plan-1', session: {} });
+    const view = mount([session()]);
+    await act(async () =>
+      fireEvent.click(within(entryOf()).getByRole('button', { name: 'Resume' })),
+    );
+    expect(reread).toHaveBeenCalledTimes(1);
+    // Until that read lands the entry stays resuming (§ 37).
+    expect(entryOf().getAttribute('data-state')).toBe('resuming');
+
+    view.reread([]);
+    expect(screen.queryByTestId('to-resume-session-sess-1')).toBeNull();
+    expect(screen.getByText('Nothing to resume')).toBeTruthy();
+  });
+
+  it('RESUME_ALREADY_STARTED re-reads too, and the dropped entry clears', async () => {
+    resumePlanSession.mockRejectedValue(
+      new PlanEditsClientError(409, 'RESUME_ALREADY_STARTED', { jobId: 'j' }),
+    );
+    const view = mount([session(), session({ sessionId: 'sess-2' })]);
+    await act(async () =>
+      fireEvent.click(within(entryOf()).getByRole('button', { name: 'Resume' })),
+    );
+    expect(reread).toHaveBeenCalledTimes(1);
+    view.reread([session({ sessionId: 'sess-2' })]);
+    expect(screen.queryByTestId('to-resume-session-sess-1')).toBeNull();
+    // Its sibling, never resumed, is untouched.
+    expect(entryOf('sess-2').getAttribute('data-state')).toBe('waiting');
+  });
+
+  it('a gated run the read drops keeps § 35.5’s hold beside a cleared session', async () => {
+    resumePlanSession.mockResolvedValue({ jobId: 'j', planId: 'plan-1', session: {} });
+    // A run stopped at an awaiting gate — the shape that draws § 35.4's entry.
+    const gated = {
+      ...run('ACME-31'),
+      resumeRun: {
+        ranWhere: 'hosted',
+        ranById: 'u1',
+        ranByName: 'Mara S.',
+        agentName: null,
+        branch: 'story/ACME-31',
+        gates: [
+          {
+            gateId: 'g1',
+            kind: 'design_result',
+            state: 'awaiting',
+            subjectKey: 'ACME-32',
+            subjectTitle: 'Gate on ACME-32',
+            deciderId: 'u1',
+            decidedById: null,
+            decidedByLabel: null,
+            decidedAt: null,
+            notePreview: null,
+          },
+        ],
+      },
+    } as HomeWorkItemRowDto;
+    const view = mount([session()], [gated]);
+    await act(async () =>
+      fireEvent.click(within(entryOf()).getByRole('button', { name: 'Resume' })),
+    );
+    view.reread([], []);
+    expect(screen.queryByTestId('to-resume-session-sess-1')).toBeNull();
+    expect(screen.getByTestId('workbench-row-ACME-31').getAttribute('data-held')).toBe('true');
+  });
 });
 
 describe('the tab’s composition — sessions first, one pager, one empty state', () => {
