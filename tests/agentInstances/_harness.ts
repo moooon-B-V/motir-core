@@ -173,7 +173,9 @@ export async function seedRepo(owner: string, name: string): Promise<void> {
       name,
       seedSource: SEED_SOURCE_PLATFORM_STARTER,
       state: 'connected',
-      position: `b${String(repoSeq).padStart(3, '0')}`,
+      // Ends in 1 on purpose: an order key may not end in a zero (`b010` is not a key), and
+      // a later real append (`keyForAppend`) parses the last row's position.
+      position: `b${String(repoSeq).padStart(3, '0')}1`,
       githubRepoId: mirror.id,
     },
   });

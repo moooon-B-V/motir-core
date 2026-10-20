@@ -461,6 +461,7 @@ export function DevelopmentSectionBody({
   decision = null,
   agentReview = null,
   repairHostedDoor,
+  repairMyAgentDoor,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -640,6 +641,8 @@ export function DevelopmentSectionBody({
    * host omits it, and the part draws the command alone.
    */
   repairHostedDoor?: ReactNode;
+  /** *Fix in my agent* (MOTIR-9053): the door beside the command of a red-checks repair. */
+  repairMyAgentDoor?: ReactNode;
 }) {
   const t = useTranslations('github');
   const locale = useLocale();
@@ -711,6 +714,7 @@ export function DevelopmentSectionBody({
           itemIdentifier={itemIdentifier}
           sentBackBy={sentBackBy}
           hostedDoor={repairHostedDoor}
+          myAgentDoor={repairMyAgentDoor}
         />
       ) : null}
       {continuePart}

@@ -76,7 +76,13 @@ export type DispatchLegVerdict =
   /** Exit 0, work on the remote, the card genuinely built. `suspects` is
    *  non-empty when a bootstrap dispatch did not produce its checkout — which
    *  the CALLER decides the severity of. */
-  | { kind: 'succeeded'; model: string | null; suspects: SuspectDispatch[] };
+  | {
+      kind: 'succeeded';
+      model: string | null;
+      /** The agent's own session id (MOTIR-9048) — what the CI watch resumes; null when it reported none. */
+      sessionId: string | null;
+      suspects: SuspectDispatch[];
+    };
 
 export interface DispatchLegInput {
   client: Pick<MotirClient, 'getWorkItem' | 'listWorkItemDesigns'>;
@@ -294,5 +300,10 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
   // second half had no checkout to happen in is exactly the run that otherwise
   // exits 0 with half the work missing.
   const suspects = over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
-  return settle({ kind: 'succeeded', model: result.model ?? null, suspects });
+  return settle({
+    kind: 'succeeded',
+    model: result.model ?? null,
+    sessionId: result.sessionId ?? null,
+    suspects,
+  });
 }

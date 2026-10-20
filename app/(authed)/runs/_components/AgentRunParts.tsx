@@ -88,7 +88,14 @@ function useEndLine(): (kind: AgentEndKind) => string {
  * request it opened; every other end says what happened, quotes the RECORDED
  * reason verbatim, and says the work item stays where it was.
  */
-export function AgentEndBlock({ detail }: { detail: DispatchRunDetailDto }) {
+export function AgentEndBlock({
+  detail,
+  fixDoor = null,
+}: {
+  detail: DispatchRunDetailDto;
+  /** *Fix in my agent* (MOTIR-9053) — drawn under the end line of an ENDED run only. */
+  fixDoor?: ReactNode;
+}) {
   const tHosted = useTranslations('runs.hosted');
   const endLine = useEndLine();
   const kind = agentEndKind(detail.status, detail.hostedEnd);
@@ -126,12 +133,20 @@ export function AgentEndBlock({ detail }: { detail: DispatchRunDetailDto }) {
       {kind !== 'succeeded' ? (
         <p className="font-sans text-sm text-(--el-text-secondary)">{tHosted('end.stays')}</p>
       ) : null}
+      {fixDoor}
     </div>
   );
 }
 
 /** The end as ONE strip under the modal's header (design panel 12). */
-export function AgentEndStrip({ run }: { run: DispatchRunDetailDto }) {
+export function AgentEndStrip({
+  run,
+  fixDoor = null,
+}: {
+  run: DispatchRunDetailDto;
+  /** *Fix in my agent* (MOTIR-9053) — drawn under the end strip of an ENDED run only. */
+  fixDoor?: ReactNode;
+}) {
   const tHosted = useTranslations('runs.hosted');
   const endLine = useEndLine();
   const kind = agentEndKind(run.status, run.hostedEnd);
@@ -139,28 +154,31 @@ export function AgentEndStrip({ run }: { run: DispatchRunDetailDto }) {
   const reason = hostedReasonLine(run, tHosted);
   const prs = hostedPullRequests(run);
   return (
-    <p
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-1.5 font-sans text-xs text-(--el-text)"
-      data-testid="agent-end-strip"
-      data-end={kind}
-    >
-      {prs.map((pr) => (
-        <span key={pr.url}>
-          {tHosted('prHeadline')}{' '}
-          <a
-            className="font-mono text-(--el-link) underline"
-            href={pr.url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {`${pr.repo} #${pr.number}`}
-          </a>
-          {' ·'}
-        </span>
-      ))}
-      <span>{endLine(kind)}</span>
-      {reason ? <span className="font-mono text-(--el-text-secondary)">{reason}</span> : null}
-    </p>
+    <div className="border-b border-(--el-border-soft)">
+      <p
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 px-(--spacing-card-padding) py-1.5 font-sans text-xs text-(--el-text)"
+        data-testid="agent-end-strip"
+        data-end={kind}
+      >
+        {prs.map((pr) => (
+          <span key={pr.url}>
+            {tHosted('prHeadline')}{' '}
+            <a
+              className="font-mono text-(--el-link) underline"
+              href={pr.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {`${pr.repo} #${pr.number}`}
+            </a>
+            {' ·'}
+          </span>
+        ))}
+        <span>{endLine(kind)}</span>
+        {reason ? <span className="font-mono text-(--el-text-secondary)">{reason}</span> : null}
+      </p>
+      {fixDoor ? <div className="px-(--spacing-card-padding) pb-2">{fixDoor}</div> : null}
+    </div>
   );
 }
 

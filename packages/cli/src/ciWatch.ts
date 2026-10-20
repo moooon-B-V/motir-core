@@ -845,6 +845,13 @@ export interface CiWatchPhaseInput {
   key: string;
   title: string | null;
   agent: ParsedAgentCommand;
+  /**
+   * The command that CONTINUES the watched run's conversation (MOTIR-9048). The lane
+   * builds it (`resumeFixAgent`); the watch prefers it for every fixing attempt, so
+   * the fix arrives in the session that built the branch. Absent ⇒ every attempt
+   * starts `agent`, a fresh process, exactly as before.
+   */
+  resumeAgent?: ParsedAgentCommand;
   /** Where the fixing agent runs — the checkout holding the branch CI is red on. */
   cwd: string;
   /** Every branch's checkout, named in the prompt — `motir fix` only. */
@@ -883,8 +890,14 @@ export async function runCiWatchPhase(input: CiWatchPhaseInput): Promise<CiWatch
     wait: input.wait ?? realWait,
     ...(input.maxPolls === undefined ? {} : { maxPolls: input.maxPolls }),
     fix: async (failing, attempt) => {
+      // One line naming the form it is about to run — never a continuation it did not launch.
+      input.report(
+        input.resumeAgent
+          ? `Fix attempt ${attempt}: continuing the run’s own agent session.`
+          : `Fix attempt ${attempt}: starting a fresh agent (the run’s session is not resumable).`,
+      );
       const result = await runAgentFn({
-        command: input.agent,
+        command: input.resumeAgent ?? input.agent,
         prompt: renderFixPrompt({
           key: input.key,
           title: input.title,

@@ -3957,7 +3957,11 @@
       "savedTitle": "Impostazioni dell’agente ospitato salvate",
       "savedDesc": "Le nuove esecuzioni ospitate usano questi modelli.",
       "errorTitle": "Impossibile salvare",
-      "saveError": "Le impostazioni dell’agente ospitato non sono state salvate. Riprova."
+      "saveError": "Le impostazioni dell’agente ospitato non sono state salvate. Riprova.",
+      "autoFix": {
+        "label": "Correggi una pull request in rosso nell’agente proprio dell’elemento di lavoro.",
+        "help": "Quando una pull request diventa rossa e l’ultima esecuzione dell’elemento di lavoro è avvenuta in un agente connesso e attivo, Motir avvia la correzione in quell’agente. Disattivato (l’impostazione predefinita), nulla parte da solo."
+      }
     },
     "connectedApps": {
       "title": "App collegate",
@@ -7304,6 +7308,43 @@
             "outOfCredits": {
               "body": "Non è stato avviato nulla e non è stato addebitato nulla. La correzione con l’agente ospitato tornerà a funzionare quando l’organizzazione avrà crediti; in alternativa, ripara dal tuo terminale."
             }
+          }
+        },
+        "myAgent": {
+          "lead": "Correggila nel tuo agente: <b>{agent}</b>, l’agente usato dall’ultima esecuzione di questo elemento di lavoro.",
+          "door": {
+            "label": "Correggi nel mio agente",
+            "starting": "Avvio della correzione…",
+            "why": "La correzione viene eseguita nello stesso agente sullo stesso branch, quindi parte dal contesto dell’esecuzione stessa invece che da uno vuoto."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> ha avviato una correzione in <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "Hai avviato una correzione in <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "why": "Una correzione alla volta: questa esecuzione trattiene la riparazione finché non termina, quindi non se ne può avviare una seconda sopra."
+          },
+          "refused": {
+            "busy": {
+              "title": "Non avviata — su questo elemento di lavoro è già in corso una correzione.",
+              "body": "<b>{name}</b> l’ha avviata <when></when> — <run>{label}</run>. Non è stato avviato nulla e non è stato addebitato nulla.",
+              "bodyYou": "L’hai avviata <when></when> — <run>{label}</run>. Non è stato avviato nulla e non è stato addebitato nulla."
+            },
+            "signedOut": {
+              "title": "Non avviata — <b>{agent}</b> non ha effettuato l’accesso.",
+              "body": "Accedi a <b>{agent}</b>, poi premi di nuovo «Correggi nel mio agente». <link>Apri l’agente</link> per accedere con <cmd>{cmd}</cmd>. Non è stato avviato nulla e non è stato addebitato nulla."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> non ha potuto riprendere la sessione di esecuzione di questo elemento di lavoro, quindi la correzione ha avviato una nuova sessione sullo stesso branch (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "Le pull request di questo elemento di lavoro ora sono verdi, quindi non è stata avviata alcuna correzione."
+          },
+          "gaveUp": {
+            "note": "L’ultima correzione in <b>{agent}</b> è stata abbandonata dopo {attempts, plural, one {# tentativo} other {# tentativi}} <when></when>. Si può premere di nuovo «Correggi nel mio agente».",
+            "noteNoCount": "L’ultima correzione in <b>{agent}</b> è stata abbandonata <when></when>. Si può premere di nuovo «Correggi nel mio agente»."
+          },
+          "modal": {
+            "lead": "Questa esecuzione è terminata con una pull request in rosso. Correggila nello stesso agente, senza copiare l’errore in uno nuovo."
           }
         }
       },

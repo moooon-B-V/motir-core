@@ -352,6 +352,12 @@ interface ExecResult {
   stderr: string;
 }
 
+/** `--command <command>`'s value, if the argv carries one (`fix` for a repair run). */
+function commandOf(args: readonly string[]): string | undefined {
+  const at = args.indexOf('--command');
+  return at >= 0 ? args[at + 1] : undefined;
+}
+
 /** `--run-id <id>`'s value, if the argv carries one. */
 function runIdOf(args: readonly string[]): string | undefined {
   const at = args.indexOf('--run-id');
@@ -387,7 +393,7 @@ async function runExec(request: ExecRequest): Promise<ExecResult | null> {
       case 'run':
         await agentTerminalRunCommand(
           args[0] ?? '',
-          { runId: runIdOf(args) },
+          { runId: runIdOf(args), command: commandOf(args) },
           { env, stdout: out, readStdin: async () => request.stdin ?? '' },
         );
         break;
@@ -398,7 +404,8 @@ async function runExec(request: ExecRequest): Promise<ExecResult | null> {
         await agentTerminalStatusCommand({ runId: runIdOf(args) }, { env, stdout: out });
         break;
       default:
-        return { exitCode: 0, stdout: '', stderr: '' };
+        // An unrouted sub fails loudly: answering 0 hid a launcher that had drifted.
+        return { exitCode: 2, stdout: '', stderr: `unrouted agent-terminal sub: ${sub}\n` };
     }
     return { exitCode: 0, stdout, stderr: '' };
   } catch (err) {

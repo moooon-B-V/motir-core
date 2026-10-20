@@ -132,7 +132,19 @@ describe('the verdicts', () => {
   it('succeeds with the agent’s self-reported model', async () => {
     const { verdict } = await leg({ agent: { model: 'claude-opus-5' } });
 
-    expect(verdict).toEqual({ kind: 'succeeded', model: 'claude-opus-5', suspects: [] });
+    expect(verdict).toEqual({
+      kind: 'succeeded',
+      model: 'claude-opus-5',
+      sessionId: null,
+      suspects: [],
+    });
+  });
+
+  it('carries the session id the agent reported, and null when it reported none (MOTIR-9048)', async () => {
+    const { verdict } = await leg({ agent: { sessionId: 'sess-1' } });
+    expect(verdict.kind === 'succeeded' && verdict.sessionId).toBe('sess-1');
+    const none = await leg({ agent: { sessionId: null } });
+    expect(none.verdict.kind === 'succeeded' && none.verdict.sessionId).toBeNull();
   });
 
   it('carries a NULL model for an agent that reported nothing — never a guess', async () => {

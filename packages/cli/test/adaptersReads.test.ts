@@ -402,7 +402,18 @@ describe('toDispatchRunView — an adopted hosted REPAIR run (MOTIR-6929)', () =
       title: 'Export button',
       pullRequests: [pr],
       findings,
+      // A server that records no resume reads as none (MOTIR-9052).
+      resume: null,
     });
+  });
+
+  it('carries the recorded resume — the agent’s profile, session and whether it can resume', () => {
+    const resume = { profile: 'claude', sessionId: 's-1', canResume: true };
+    const view = toDispatchRunView({
+      ...base,
+      repair: { repairClass: 'review', title: 'Export button', pullRequests: [pr], resume },
+    } as never);
+    expect(view.repair?.resume).toEqual(resume);
   });
 
   it('carries a repair recorded WITHOUT findings as null findings, never throwing', () => {

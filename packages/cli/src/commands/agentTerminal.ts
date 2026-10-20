@@ -3,13 +3,16 @@ import { join } from 'node:path';
 import { CliError } from '../errors.js';
 import type { HostedRunAccess } from '../hostedGit.js';
 import {
+  AGENT_RUN_COMMANDS,
   CONTROL_SOCKET,
   CONTROL_SOCKET_ENV,
   ControlUnavailableError,
   controlRequest,
+  isAgentRunCommand,
   isRunId,
   isWorkItemKey,
   runStateDir,
+  type AgentRunCommand,
   type ControlRequest,
   type ControlResponse,
 } from '../agentTerminal/control.js';
@@ -49,6 +52,12 @@ export interface AgentTerminalServeOptions {
 /** `agent-terminal run | stop | status` — the run the command acts on. */
 export interface AgentTerminalRunIdOptions {
   runId?: string;
+}
+
+/** `agent-terminal run` only (MOTIR-9045): the run, and what the session is for. */
+export interface AgentTerminalRunOptions extends AgentTerminalRunIdOptions {
+  /** run (the default), fix or continue. */
+  command?: string;
 }
 
 export interface AgentTerminalServeDeps {
@@ -201,6 +210,15 @@ function requireRunId(raw: string | undefined): string {
   return raw;
 }
 
+/** `--command`: absent is a plain run; anything outside the three is refused up front. */
+function requireCommand(raw: string | undefined): AgentRunCommand | undefined {
+  if (raw === undefined) return undefined;
+  if (!isAgentRunCommand(raw)) {
+    throw new CliError(`--command must be one of ${AGENT_RUN_COMMANDS.join(', ')}.`);
+  }
+  return raw;
+}
+
 async function ask(
   deps: AgentTerminalControlDeps,
   request: ControlRequest,
@@ -232,13 +250,14 @@ const REFUSAL_WORDS: Record<string, string> = {
  */
 export async function agentTerminalRunCommand(
   key: string,
-  opts: AgentTerminalRunIdOptions,
+  opts: AgentTerminalRunOptions,
   deps: AgentTerminalRunDeps = {},
 ): Promise<string> {
   if (!isWorkItemKey(key)) {
     throw new CliError(`"${key}" is not a card key (like MOTIR-123).`);
   }
   const runId = requireRunId(opts.runId);
+  const command = requireCommand(opts.command);
   const credentials = parseRunCredentials(await (deps.readStdin ?? readStdinBounded)());
   const dir = (deps.stateDir ?? runStateDir)(runId);
 
@@ -267,7 +286,13 @@ export async function agentTerminalRunCommand(
   try {
     response = await ask(
       deps,
-      { op: 'run', runId, workItemKey: key.toUpperCase() },
+      // A plain run sends today's request byte for byte; only a fix or a continue names its command.
+      {
+        op: 'run',
+        runId,
+        workItemKey: key.toUpperCase(),
+        ...(command !== undefined && command !== 'run' ? { command } : {}),
+      },
       CONTROL_TIMEOUT_MS,
     );
   } catch (err) {

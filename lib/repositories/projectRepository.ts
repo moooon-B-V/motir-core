@@ -1049,6 +1049,39 @@ export const projectRepository = {
     });
   },
 
+  /**
+   * Read just a project's agent auto-fix switch (Story MOTIR-8981 · MOTIR-9060) —
+   * the stored value, never a computed default. Null when the id doesn't exist.
+   * Optional `tx` — same contract as `findAutoTranslateWorkContent`.
+   */
+  async findAgentAutoFixEnabled(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ agentAutoFixEnabled: boolean } | null> {
+    const client = tx ?? dbRead;
+    return client.project.findUnique({
+      where: { id },
+      select: { agentAutoFixEnabled: true },
+    });
+  },
+
+  /**
+   * Write a project's agent auto-fix switch. `tx` REQUIRED; the caller
+   * (`projectAgentAutoFixSettingsService`) has asserted `ai:configure` and holds
+   * the row lock.
+   */
+  async updateAgentAutoFixEnabled(
+    id: string,
+    agentAutoFixEnabled: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ agentAutoFixEnabled: boolean }> {
+    return tx.project.update({
+      where: { id },
+      data: { agentAutoFixEnabled },
+      select: { agentAutoFixEnabled: true },
+    });
+  },
+
   // --- Merge mode (Story MOTIR-4880 · Subtask MOTIR-5177) -------------------
   // `prMergeMode` + its `prMergeModeDecidedAt` stamp (`approval-gates.md` §7 and
   // its 2026-09-13 amendment). The stamp is what separates the column's FLOOR

@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { HOSTED_STATE_ENV, defaultCliInvocation } from '../hostedGit.js';
+import { RUN_ID_ENV_VAR } from '../hostedMode.js';
 import { resolveChatAdapter, type ChatAdapter, type ChatContext } from './chat/adapter.js';
 import {
   createChatHub,
@@ -16,6 +17,7 @@ import {
   listenControl,
   runStateDir,
   runWorkspaceDir,
+  type AgentRunCommand,
   type ControlRequest,
   type ControlResponse,
   type ControlServer,
@@ -163,6 +165,7 @@ interface Session {
 
 interface RunRecord {
   runId: string;
+  command: AgentRunCommand;
   session: Session;
   state: 'running' | 'exited';
   exitCode: number | null;
@@ -489,26 +492,56 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
     [RUN_WORKSPACE_ENV]: runWorkspaceDir(home, runId),
   });
 
-  const startRun = (runId: string, workItemKey: string): ControlResponse => {
+  /**
+   * The process a run's command turns into (MOTIR-9050): `<cli> <command> <KEY>`, the
+   * shape the hosted entrypoint's `cliArgs` already uses. `motir run` is the only one of
+   * the three that registers `--run-id`, so it keeps that argument; `fix` and `continue`
+   * adopt the server-opened run through `MOTIR_DISPATCH_RUN_ID`, as both already do. The
+   * switch is TOTAL over the command, with no fallback to `run`: a fix started as a run
+   * would work the card again instead of repairing its branch.
+   */
+  const runProcess = (
+    command: AgentRunCommand,
+    runId: string,
+    workItemKey: string,
+  ): { args: string[]; env: Record<string, string> } => {
+    switch (command) {
+      case 'run':
+        return { args: [command, workItemKey, '--run-id', runId], env: runEnv(runId) };
+      case 'fix':
+      case 'continue':
+        return {
+          args: [command, workItemKey],
+          env: { ...runEnv(runId), [RUN_ID_ENV_VAR]: runId },
+        };
+    }
+  };
+
+  const startRun = (
+    runId: string,
+    workItemKey: string,
+    command: AgentRunCommand,
+  ): ControlResponse => {
     if (closing) return { ok: false, code: 'spawn_failed' };
     const active = liveRun();
     if (active) {
-      log(`agent-terminal: run ${runId} refused (run ${active.runId} active)`);
+      log(`agent-terminal: run ${runId} (${command}) refused (run ${active.runId} active)`);
       return { ok: false, code: 'run_active' };
     }
     const cli = options.cli ?? defaultCliInvocation();
     let pty: PtyProcess;
     try {
+      const spawned = runProcess(command, runId, workItemKey);
       pty = options.spawnPty({
         file: cli[0] as string,
-        args: [...cli.slice(1), 'run', workItemKey, '--run-id', runId],
+        args: [...cli.slice(1), ...spawned.args],
         cols: RUN_COLS,
         rows: RUN_ROWS,
         cwd: shellCwd(options.env),
-        env: runEnv(runId),
+        env: spawned.env,
       });
     } catch {
-      log(`agent-terminal: run ${runId} failed to start`);
+      log(`agent-terminal: run ${runId} (${command}) failed to start`);
       removeDir(runStateDir(runId));
       return { ok: false, code: 'spawn_failed' };
     }
@@ -518,6 +551,7 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
     });
     const record: RunRecord = {
       runId,
+      command,
       // Assigned just below; the exit callback cannot fire before it is.
       session: null as unknown as Session,
       state: 'running',
@@ -537,12 +571,14 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
       // However the run ends, its credentials and its checkouts go with it (§2).
       removeDir(runStateDir(runId));
       removeDir(runWorkspaceDir(home, runId));
-      log(`agent-terminal: run ${runId} ended (code ${String(exitCode)})`);
+      log(`agent-terminal: run ${runId} (${command}) ended (code ${String(exitCode)})`);
       record.markExited();
       forgetOldRuns();
       broadcastSessions();
     });
-    log(`agent-terminal: run ${runId} session ${record.session.id} opened (pid ${pty.pid})`);
+    log(
+      `agent-terminal: run ${runId} (${command}) session ${record.session.id} opened (pid ${pty.pid})`,
+    );
     broadcastSessions();
     return { ok: true, session: record.session.id };
   };
@@ -552,13 +588,13 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
     if (!record) return { ok: true, result: 'not_found' };
     if (record.state === 'running') {
       const pid = record.session.pty.pid;
-      log(`agent-terminal: run ${runId} stopping`);
+      log(`agent-terminal: run ${runId} (${record.command}) stopping`);
       signalGroup(pid, 'SIGTERM');
       if (!record.killTimer) {
         record.killTimer = setTimeout(() => {
           record.killTimer = null;
           if (record.state !== 'running') return;
-          log(`agent-terminal: run ${runId} killed (grace elapsed)`);
+          log(`agent-terminal: run ${runId} (${record.command}) killed (grace elapsed)`);
           signalGroup(pid, 'SIGKILL');
         }, stopGraceMs);
         record.killTimer.unref();
@@ -590,7 +626,7 @@ export function createTerminalServer(options: TerminalServerOptions): TerminalSe
   const handleControl = async (request: ControlRequest): Promise<ControlResponse> => {
     switch (request.op) {
       case 'run':
-        return startRun(request.runId, request.workItemKey);
+        return startRun(request.runId, request.workItemKey, request.command ?? 'run');
       case 'stop':
         return stopRun(request.runId);
       case 'status':

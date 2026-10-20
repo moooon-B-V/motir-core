@@ -3,6 +3,8 @@
 // page shows (the MOTIR-6868 design's panel 5) — never a 500. The
 // route maps each `code` to a status in `lib/agentInstances/errorResponse.ts`.
 
+import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
+
 /** An instance that does not exist, is deleted, or is not the caller's (§8) — one answer for all three. */
 export class AgentInstanceNotFoundError extends Error {
   readonly code = 'agent_instance_not_found' as const;
@@ -172,6 +174,24 @@ export class AgentRunCardNotReadyError extends Error {
 }
 
 /**
+ * A `fix` start the repair claim did not open a run for (409; MOTIR-9049): the card is
+ * `taken` (an open repair holds it — `holder` and `startedAt` say who and since when) or
+ * `not_repairable` (`reason` is the predicate's own refusal). Carries the claim's whole
+ * answer so the door can say which, rather than a bare error.
+ */
+export class AgentRunRepairRefusedError extends Error {
+  readonly code = 'agent_run_repair_refused' as const;
+  constructor(readonly claim: WorkItemRepairClaimDto) {
+    super(
+      claim.outcome === 'taken'
+        ? `${claim.key} already has a repair running.`
+        : `${claim.key} can't be repaired now: ${claim.reason ?? claim.outcome}.`,
+    );
+    this.name = 'AgentRunRepairRefusedError';
+  }
+}
+
+/**
  * The agent's image predates the run launcher (409) — or was never probed for
  * its current digest, which §4 reads as the same thing.
  */
@@ -289,5 +309,36 @@ export class AgentImageCatalogUnavailableError extends Error {
   constructor() {
     super('Motir couldn’t check for a newer version just now. Try again in a few minutes.');
     this.name = 'AgentImageCatalogUnavailableError';
+  }
+}
+
+/**
+ * An idempotency key reused for a different command (MOTIR-9045). Answering the
+ * run it already started would hand a `run` to a caller that asked for a `fix`,
+ * which would read as a fix that never starts — so it is refused, naming the run.
+ */
+export class AgentRunCommandMismatchError extends Error {
+  readonly code = 'agent_run_command_mismatch' as const;
+  constructor(
+    readonly runId: string,
+    readonly startedCommand: string,
+    readonly requestedCommand: string,
+  ) {
+    super(
+      `That request already started a ${startedCommand} run, so it can’t start a ${requestedCommand} run.`,
+    );
+    this.name = 'AgentRunCommandMismatchError';
+  }
+}
+
+/** A `command` outside the three a run in an agent can be asked for (MOTIR-9045). */
+export class AgentRunCommandInvalidError extends Error {
+  readonly code = 'agent_run_command_invalid' as const;
+  constructor(
+    readonly requestedCommand: string,
+    readonly allowed: readonly string[],
+  ) {
+    super(`command must be one of ${allowed.join(', ')}.`);
+    this.name = 'AgentRunCommandInvalidError';
   }
 }

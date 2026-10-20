@@ -479,3 +479,67 @@ describe('an ACCEPTANCE SENT BACK TO RE-RUN (Story MOTIR-6071 · MOTIR-6502 / MO
     expect(screen.queryByTestId('repair-sent-back-line')).toBeNull();
   });
 });
+
+describe('Fix in my agent — the door node beside the command (MOTIR-9053)', () => {
+  const DOOR = <span data-testid="my-agent-door">door</span>;
+  const renderWithDoor = (repair: WorkItemRepairViewDto) =>
+    render(
+      <DevelopmentSectionBody
+        pullRequests={[{ ...CORE_PR, ci: 'failing' }]}
+        itemIdentifier="ACME-12"
+        repair={repair}
+        repairMyAgentDoor={DOOR}
+      />,
+    );
+
+  it('draws the door beside the copyable command for a red-checks offer', () => {
+    renderWithDoor({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing: [CORE],
+      lastGaveUp: null,
+    });
+    expect(within(part()).getByTestId('my-agent-door')).toBeTruthy();
+    expect(codeBlocks).toEqual([{ language: 'shell', code: 'motir fix ACME-12' }]);
+  });
+
+  it.each([
+    [
+      'in progress',
+      {
+        state: 'in_progress',
+        repairClass: 'ci',
+        acceptanceRefusal: null,
+        failing: [CORE],
+        holder: null,
+        byViewer: false,
+        startedAt: '2026-09-16T14:00:00Z',
+      },
+    ],
+    [
+      'an acceptance re-run',
+      {
+        state: 'offer',
+        repairClass: 'acceptance_rerun',
+        acceptanceRefusal: null,
+        failing: [CORE],
+        lastGaveUp: null,
+      },
+    ],
+    [
+      'a review sent back',
+      {
+        state: 'offer',
+        repairClass: 'review',
+        acceptanceRefusal: null,
+        failing: [CORE],
+        lastGaveUp: null,
+      },
+    ],
+    ['hidden', { state: 'hidden' }],
+  ])('draws no door for %s', (_name, repair) => {
+    renderWithDoor(repair as WorkItemRepairViewDto);
+    expect(screen.queryByTestId('my-agent-door')).toBeNull();
+  });
+});

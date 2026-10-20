@@ -131,9 +131,11 @@ export const dispatchRunEventRepository = {
     dispatchRunId: string,
     kind: DispatchRunEvent['kind'],
     tx: Prisma.TransactionClient,
+    /** Narrow the read to one leg's events (MOTIR-9046); null reads the run's newest. */
+    cardId: string | null = null,
   ): Promise<Pick<DispatchRunEvent, 'data'> | null> {
     return tx.dispatchRunEvent.findFirst({
-      where: { dispatchRunId, kind },
+      where: { dispatchRunId, kind, ...(cardId === null ? {} : { dispatchRunCardId: cardId }) },
       orderBy: { seq: 'desc' },
       select: { data: true },
     });

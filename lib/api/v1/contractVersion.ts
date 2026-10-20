@@ -1083,5 +1083,15 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.73.0` after MOTIR-9029's
  *   `1.72.0`. If a sibling has taken it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.74.0` — MOTIR-9052 (Story MOTIR-8981) adds the optional nullable `repair.resume`
+ *   (`profile`, `sessionId`, `canResume`) to `getDispatchRun`: the profile and recorded
+ *   session of the card's last agent run, which an agent-door `fix` run opened with so
+ *   the CLI can resume that conversation.
+ *
+ *   Additive: one new optional response field.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.74.0` after MOTIR-9031's
+ *   `1.73.0`. If a sibling has taken it since, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.73.0';
+export const V1_CONTRACT_VERSION = '1.74.0';

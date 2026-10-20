@@ -3957,7 +3957,11 @@
       "savedTitle": "Configuración del agente alojado guardada",
       "savedDesc": "Las nuevas ejecuciones alojadas usan estos modelos.",
       "errorTitle": "No se pudo guardar",
-      "saveError": "Tu configuración del agente alojado no se guardó. Vuelve a intentarlo."
+      "saveError": "Tu configuración del agente alojado no se guardó. Vuelve a intentarlo.",
+      "autoFix": {
+        "label": "Corregir un pull request en rojo en el Agente propio del elemento de trabajo.",
+        "help": "Cuando un pull request se pone en rojo y la última ejecución del elemento de trabajo fue en un Agente con la sesión iniciada y en marcha, Motir inicia la corrección en ese Agente. Desactivado (el valor predeterminado), nada se inicia por sí solo."
+      }
     },
     "connectedApps": {
       "title": "Aplicaciones conectadas",
@@ -7304,6 +7308,43 @@
             "outOfCredits": {
               "body": "No se arrancó nada y no se cobró nada. Corregir con el Agente alojado vuelve a funcionar cuando la organización tenga créditos; también puedes repararlo desde tu terminal."
             }
+          }
+        },
+        "myAgent": {
+          "lead": "Corrígelo en tu propio Agente: <b>{agent}</b>, el Agente que usó la última ejecución de este elemento de trabajo.",
+          "door": {
+            "label": "Corregir en mi Agente",
+            "starting": "Iniciando la corrección…",
+            "why": "La corrección se ejecuta en el mismo Agente y en la misma rama, así que parte del contexto de la propia ejecución en lugar de uno en blanco."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> inició una corrección en <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "Iniciaste una corrección en <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "why": "Una corrección a la vez: esta ejecución mantiene la reparación hasta que termina, así que no se puede iniciar una segunda encima."
+          },
+          "refused": {
+            "busy": {
+              "title": "No se inició: ya hay una corrección en marcha en este elemento de trabajo.",
+              "body": "<b>{name}</b> la inició <when></when> — <run>{label}</run>. No se arrancó nada y no se cobró nada.",
+              "bodyYou": "La iniciaste <when></when> — <run>{label}</run>. No se arrancó nada y no se cobró nada."
+            },
+            "signedOut": {
+              "title": "No se inició: <b>{agent}</b> tiene la sesión cerrada.",
+              "body": "Inicia sesión en <b>{agent}</b> y vuelve a pulsar “Corregir en mi Agente”. <link>Abre el Agente</link> para iniciar sesión con <cmd>{cmd}</cmd>. No se arrancó nada y no se cobró nada."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> no pudo reanudar la sesión de ejecución de este elemento de trabajo, así que la corrección inició una sesión nueva en la misma rama (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "Los pull requests de este elemento de trabajo están ahora en verde, así que no se inició ninguna corrección."
+          },
+          "gaveUp": {
+            "note": "La última corrección en <b>{agent}</b> se rindió tras {attempts, plural, one {# intento} other {# intentos}} <when></when>. Se puede volver a pulsar “Corregir en mi Agente”.",
+            "noteNoCount": "La última corrección en <b>{agent}</b> se rindió <when></when>. Se puede volver a pulsar “Corregir en mi Agente”."
+          },
+          "modal": {
+            "lead": "Esta ejecución terminó con un pull request en rojo. Corrígelo en el mismo Agente, sin copiar el fallo a uno nuevo."
           }
         }
       },

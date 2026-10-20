@@ -1,4 +1,5 @@
 import type { PersistentTerminalConfig } from '@motir/orchestrator';
+import type { DispatchCommand } from '@/generated/prisma/client';
 import { AgentInstancesUnavailableError } from '@/lib/agentInstances/errors';
 import { deriveTerminalKey, terminalKeyId } from '@/lib/agentInstances/terminalKey';
 
@@ -153,8 +154,16 @@ export const AGENT_SIGN_IN_TIMEOUT_SECONDS = 10;
  * §1: the launch. The run id and the card key are its only arguments — neither
  * is a secret; the run's credentials travel on the exec's STDIN (§2), never here.
  */
-export function agentRunLaunchCommand(workItemKey: string, dispatchRunId: string): string[] {
-  return [...AS_NODE, 'run', workItemKey, '--run-id', dispatchRunId];
+export function agentRunLaunchCommand(
+  workItemKey: string,
+  dispatchRunId: string,
+  command: DispatchCommand = 'run',
+): string[] {
+  const base = [...AS_NODE, 'run', workItemKey, '--run-id', dispatchRunId];
+  // MOTIR-9045: only a `fix` or `continue` names its command. Every other value a
+  // run row can hold launches today's argv, so an image whose bundled CLI
+  // predates `--command` keeps starting ordinary runs.
+  return command === 'fix' || command === 'continue' ? [...base, '--command', command] : base;
 }
 
 /**

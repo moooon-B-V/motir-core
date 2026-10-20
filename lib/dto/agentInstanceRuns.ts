@@ -1,8 +1,11 @@
 import type {
   AgentInstanceState,
+  DispatchCommand,
+  DispatchRunStatus,
   AgentRunLauncher,
   AgentSignInState,
 } from '@/generated/prisma/client';
+import type { DispatchRunAgentInstanceDto } from '@/lib/dto/dispatchRuns';
 
 // The DTOs of STARTING A CARD'S RUN IN AN AGENT (Story MOTIR-6864 · MOTIR-7026,
 // `docs/decisions/agent-instance-run.md` §4) — what `POST
@@ -70,3 +73,69 @@ export interface AgentForCardDto {
 export interface AgentsForCardDto {
   agents: AgentForCardDto[];
 }
+
+/**
+ * A card's LAST run, read back for the "Fix in my agent" door and for the resume
+ * (MOTIR-8981 · MOTIR-9046): which agent it ran in, the session id it recorded and
+ * whether that agent's profile has a resume form. Three facts, not a decision —
+ * `sessionId: null` with `canResume: true` means "no id was recorded, a fresh agent
+ * on the same branch is the only route", and `canResume: false` means "this profile
+ * has no resume form at all".
+ */
+export interface CardRunResumeTargetDto {
+  id: string;
+  command: DispatchCommand;
+  status: DispatchRunStatus;
+  startedAt: string;
+  endedAt: string | null;
+  /** The agent the run executed in; null for a hosted or local run, or a removed agent. */
+  agent: DispatchRunAgentInstanceDto | null;
+  /** True exactly when that agent is the calling user's own. */
+  agentIsReaders: boolean;
+  /** The session id the card's leg recorded, or null. */
+  sessionId: string | null;
+  canResume: boolean;
+}
+
+export interface CardResumeTargetDto {
+  lastRun: CardRunResumeTargetDto | null;
+}
+
+/**
+ * THE "FIX IN MY AGENT" DOOR'S STATE for one card (Story MOTIR-8981 · MOTIR-9053).
+ * Read by the Development block's fix part and by an ended run's modal, so one
+ * server evaluation serves both mounts.
+ *
+ * `offered: false` is an ANSWER, never a permission problem: "there is nothing to fix
+ * here" is a state the door draws as nothing. `repair_open` carries the open fix run so
+ * the door can say who is fixing and link the run; `agent_unusable` carries the agent's
+ * own refusal verbatim.
+ */
+export type FixInMyAgentDoorDto =
+  | {
+      offered: true;
+      /** The agent the card's last run used, else the viewer's first usable one. */
+      agent: Pick<AgentForCardDto, 'id' | 'name' | 'profileId' | 'profileName' | 'state'>;
+    }
+  | {
+      offered: false;
+      reason:
+        | 'no_pull_request'
+        | 'green'
+        | 'not_ci'
+        | 'repair_open'
+        | 'no_agent'
+        | 'agent_unusable';
+      /** Set on `repair_open`: the open fix run and who holds it. */
+      run: {
+        id: string;
+        label: string;
+        startedAt: string;
+        holder: { id: string; name: string } | null;
+        byViewer: boolean;
+        /** The agent the fix runs in, when it is one of the viewer's own; else null. */
+        agentName: string | null;
+      } | null;
+      /** Set on `agent_unusable`. */
+      refusal: AgentRunAgentRefusal | null;
+    };

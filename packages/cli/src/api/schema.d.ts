@@ -2804,6 +2804,11 @@ export interface components {
                     baseRef: string | null;
                     headSha: string | null;
                 }[];
+                resume?: {
+                    profile: string;
+                    sessionId: string | null;
+                    canResume: boolean;
+                } | null;
                 findings: {
                     /** @enum {string} */
                     gate: "agent_review" | "pull_request_approval";
@@ -2897,6 +2902,11 @@ export interface components {
                         baseRef: string | null;
                         headSha: string | null;
                     }[];
+                    resume?: {
+                        profile: string;
+                        sessionId: string | null;
+                        canResume: boolean;
+                    } | null;
                     findings: {
                         /** @enum {string} */
                         gate: "agent_review" | "pull_request_approval";

@@ -3957,7 +3957,11 @@
       "savedTitle": "Configurações do agente hospedado salvas",
       "savedDesc": "As novas execuções hospedadas usam estes modelos.",
       "errorTitle": "Não foi possível salvar",
-      "saveError": "Suas configurações do agente hospedado não foram salvas. Tente novamente."
+      "saveError": "Suas configurações do agente hospedado não foram salvas. Tente novamente.",
+      "autoFix": {
+        "label": "Corrigir um pull request em vermelho no agente próprio do item de trabalho.",
+        "help": "Quando um pull request fica vermelho e a última execução do item de trabalho foi em um agente conectado e ativo, o Motir inicia a correção nesse agente. Desativado (o padrão), nada começa sozinho."
+      }
     },
     "connectedApps": {
       "title": "Apps conectados",
@@ -7304,6 +7308,43 @@
             "outOfCredits": {
               "body": "Nada foi iniciado e nada foi cobrado. Corrigir no agente hospedado volta a funcionar assim que a organização tiver créditos — ou repare pelo seu terminal."
             }
+          }
+        },
+        "myAgent": {
+          "lead": "Corrija no seu próprio agente: <b>{agent}</b>, o agente usado pela última execução deste item de trabalho.",
+          "door": {
+            "label": "Corrigir no meu agente",
+            "starting": "Iniciando a correção…",
+            "why": "A correção roda no mesmo agente e na mesma branch, então começa do contexto da própria execução em vez de um em branco."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> iniciou uma correção em <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "Você iniciou uma correção em <b>{agent}</b> <when></when> — <run>{label}</run>.",
+            "why": "Uma correção por vez: esta execução mantém o reparo até terminar, então uma segunda correção não pode começar por cima."
+          },
+          "refused": {
+            "busy": {
+              "title": "Não iniciada — já há uma correção em andamento neste item de trabalho.",
+              "body": "<b>{name}</b> a iniciou <when></when> — <run>{label}</run>. Nada foi inicializado e nada foi cobrado.",
+              "bodyYou": "Você a iniciou <when></when> — <run>{label}</run>. Nada foi inicializado e nada foi cobrado."
+            },
+            "signedOut": {
+              "title": "Não iniciada — o <b>{agent}</b> está desconectado.",
+              "body": "Conecte o <b>{agent}</b> e depois clique de novo em “Corrigir no meu agente”. <link>Abra o agente</link> para entrar com <cmd>{cmd}</cmd>. Nada foi inicializado e nada foi cobrado."
+            }
+          },
+          "fellBack": {
+            "notice": "O <b>{agent}</b> não conseguiu retomar a sessão de execução deste item de trabalho, então a correção iniciou uma nova sessão na mesma branch (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "Os pull requests deste item de trabalho estão verdes agora, então nenhuma correção foi iniciada."
+          },
+          "gaveUp": {
+            "note": "A última correção no <b>{agent}</b> desistiu <when></when> após {attempts, plural, one {# tentativa} other {# tentativas}}. É possível clicar de novo em “Corrigir no meu agente”.",
+            "noteNoCount": "A última correção no <b>{agent}</b> desistiu <when></when>. É possível clicar de novo em “Corrigir no meu agente”."
+          },
+          "modal": {
+            "lead": "Esta execução terminou com um pull request em vermelho. Corrija no mesmo agente, sem copiar a falha para um novo."
           }
         }
       },
