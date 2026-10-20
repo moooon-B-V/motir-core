@@ -166,6 +166,26 @@ describe('⚠️ the MOTIR-3152 shape — every node is BUILT, never cast', () =
   });
 });
 
+describe('the shared member read (MOTIR-9074)', () => {
+  it('builds the level from `readSet` and does not fetch for itself', async () => {
+    const readSet = vi.fn().mockResolvedValue(roadmap());
+    render(
+      <RunCanvasPane
+        run={run([leg()])}
+        projectKey="MOTIR"
+        onSelectWorkItem={vi.fn()}
+        reloadKey={0}
+        readSet={readSet}
+      />,
+    );
+    await act(async () => {});
+    const level = await captured!.loadLevel(null);
+    expect(readSet).toHaveBeenCalledTimes(1);
+    expect(fetchRoadmapLevel).not.toHaveBeenCalled();
+    expect(level.nodes).toHaveLength(2);
+  });
+});
+
 describe('⚠️ THE RUNNING EDGE — only from what is being worked, and only while it is', () => {
   it('marks the edge FROM the running work item to the one it blocks', async () => {
     const level = await levelFor([

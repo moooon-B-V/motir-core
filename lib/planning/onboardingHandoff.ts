@@ -45,16 +45,12 @@ export const HANDOFF_PARAM_NAMES = {
   /** The return address: the launch context, flattened. */
   returnKind: 'backKind',
   returnItem: 'backItem',
-  returnRepo: 'backRepo',
 } as const;
 
 /** The launch context, flattened onto a query the destination can read back. */
 export function handoffReturnParams(context: PlanningLaunchContext): [string, string][] {
   const out: [string, string][] = [[HANDOFF_PARAM_NAMES.returnKind, context.kind]];
   if (context.kind === 'work-item') out.push([HANDOFF_PARAM_NAMES.returnItem, context.itemKey]);
-  if (context.kind === 'convention-refine') {
-    out.push([HANDOFF_PARAM_NAMES.returnRepo, context.repoKey]);
-  }
   return out;
 }
 
@@ -65,10 +61,6 @@ export function readHandoffReturn(params: URLSearchParams): PlanningLaunchContex
   if (kind === 'work-item') {
     const itemKey = params.get(HANDOFF_PARAM_NAMES.returnItem);
     return itemKey ? { kind, itemKey } : null;
-  }
-  if (kind === 'convention-refine') {
-    const repoKey = params.get(HANDOFF_PARAM_NAMES.returnRepo);
-    return repoKey ? { kind, repoKey } : null;
   }
   return null;
 }
@@ -164,7 +156,6 @@ export function onboardingReturnContextFrom(params: URLSearchParams): InstallRet
       for (const [name, value] of pairs) {
         if (name === HANDOFF_PARAM_NAMES.returnKind) out.backKind = value;
         if (name === HANDOFF_PARAM_NAMES.returnItem) out.backItem = value;
-        if (name === HANDOFF_PARAM_NAMES.returnRepo) out.backRepo = value;
       }
     }
   }

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PLANNING_FRAME_STACKED_ROWS } from '@/components/planning/planningFrameRows';
-import { __resetPlanningRailWidthForTests } from '@/lib/hooks/usePlanningRailWidth';
+import { __resetPersistedPaneWidthsForTests } from '@/lib/hooks/usePersistedPaneWidth';
 import {
   defaultRailWidth,
   railBounds,
@@ -36,9 +36,7 @@ beforeAll(() => {
   Object.defineProperty(Element.prototype, 'clientWidth', {
     configurable: true,
     get() {
-      return (this as HTMLElement).dataset?.testid === 'planning-resizable-frame'
-        ? containerWidth
-        : 0;
+      return (this as HTMLElement).dataset?.testid === 'resizable-split' ? containerWidth : 0;
     },
   });
 
@@ -108,15 +106,15 @@ function renderSplit(props: { proposalPresent?: boolean } = {}) {
   );
 }
 
-const frame = () => screen.getByTestId('planning-resizable-frame');
-const divider = () => screen.getByTestId('planning-split-divider');
+const frame = () => screen.getByTestId('resizable-split');
+const divider = () => screen.getByTestId('split-divider');
 const railVar = () => frame().style.getPropertyValue('--rail-w');
 
 beforeEach(() => {
   containerWidth = CONTAINER;
   observers.clear();
   window.localStorage.clear();
-  __resetPlanningRailWidthForTests();
+  __resetPersistedPaneWidthsForTests();
 });
 afterEach(cleanup);
 
@@ -306,7 +304,7 @@ describe('the RESET when a plan is proposed', () => {
 describe('PERSISTENCE', () => {
   it('restores a stored width, CLAMPED into the current container', () => {
     window.localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, '900');
-    __resetPlanningRailWidthForTests();
+    __resetPersistedPaneWidthsForTests();
     renderSplit();
     resizeTo(1440); // 900 is above this container's 720 maximum
     expect(railVar()).toBe('720px');
@@ -314,7 +312,7 @@ describe('PERSISTENCE', () => {
 
   it('treats a corrupt stored value as never-dragged rather than as a width', () => {
     window.localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, 'not-a-number');
-    __resetPlanningRailWidthForTests();
+    __resetPersistedPaneWidthsForTests();
     renderSplit();
     expect(railVar()).toBe('clamp(352px, 33.333%, 50%)');
   });
@@ -351,7 +349,7 @@ describe('the NARROW viewport', () => {
   it('renders NO divider below `md` — absent, not hidden', () => {
     renderSplit();
     resizeTo(720);
-    expect(screen.queryByTestId('planning-split-divider')).toBeNull();
+    expect(screen.queryByTestId('split-divider')).toBeNull();
   });
 
   it('gives the STACK an explicit row template, and hands the split back its own rows at `md`', () => {
@@ -360,7 +358,7 @@ describe('the NARROW viewport', () => {
     // (MOTIR-6276). This pins the two halves of the class that makes it true: the
     // `fr` rows below the breakpoint, and their reset above it.
     renderSplit();
-    const frame = screen.getByTestId('planning-resizable-frame');
+    const frame = screen.getByTestId('resizable-split');
     expect(frame.className).toContain('grid-rows-[minmax(0,3fr)_minmax(12rem,2fr)]');
     expect(frame.className).toContain('md:grid-rows-none');
   });
@@ -371,18 +369,18 @@ describe('the NARROW viewport', () => {
     fireEvent.keyDown(divider(), { key: 'End' });
     expect(window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY)).toBe('720');
     resizeTo(700);
-    expect(screen.queryByTestId('planning-split-divider')).toBeNull();
+    expect(screen.queryByTestId('split-divider')).toBeNull();
     expect(window.localStorage.getItem(RAIL_WIDTH_STORAGE_KEY)).toBe('720');
     resizeTo(1440);
-    expect(screen.getByTestId('planning-split-divider')).toBeTruthy();
+    expect(screen.getByTestId('split-divider')).toBeTruthy();
   });
 });
 
 describe('the OPT-IN boundary — four other consumers keep the fixed frame', () => {
   it('renders the shipped fixed grid, and no divider, without `resizable`', () => {
     render(<PlanningWorkspace canvas={<div>canvas</div>} chat={<div>chat</div>} />);
-    expect(screen.queryByTestId('planning-resizable-frame')).toBeNull();
-    expect(screen.queryByTestId('planning-split-divider')).toBeNull();
+    expect(screen.queryByTestId('resizable-split')).toBeNull();
+    expect(screen.queryByTestId('split-divider')).toBeNull();
     // The two-column track `PlanDetail`, `GenerationFlow`, `DiscoveryOnboarding`
     // and `PlanningWorkspaceSkeleton` have always had at and above `md`.
     expect(document.querySelector('.md\\:grid-cols-\\[1fr_22rem\\]')).toBeTruthy();
@@ -401,7 +399,7 @@ describe('the OPT-IN boundary — four other consumers keep the fixed frame', ()
     expect(fixed.classList.contains('md:grid-cols-[1fr_22rem]')).toBe(true);
     unmount();
     renderSplit();
-    const resizable = screen.getByTestId('planning-resizable-frame');
+    const resizable = screen.getByTestId('resizable-split');
     for (const cls of PLANNING_FRAME_STACKED_ROWS.split(' ')) {
       expect(resizable.classList.contains(cls)).toBe(true);
     }
@@ -425,7 +423,7 @@ describe('the page-state contract', () => {
     // Asserted STRUCTURALLY rather than with a spy: the frame does not import
     // `next/navigation` at all, so there is no refresh it could call.
     const source = await import('node:fs').then((fs) =>
-      fs.readFileSync('components/planning/PlanningResizableFrame.tsx', 'utf8'),
+      fs.readFileSync('components/split/ResizableSplit.tsx', 'utf8'),
     );
     expect(source).not.toMatch(/next\/navigation/);
     expect(source).not.toMatch(/router\.refresh|revalidatePath/);

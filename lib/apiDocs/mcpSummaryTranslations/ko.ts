@@ -208,6 +208,12 @@ export const ko: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      '저장소 하나의 코딩 규칙 전문 — 파생된 것인지 사람이 편집한 것인지와 버전을 함께 제공. 그 저장소의 변경이 따르는 내용.',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       '디자인 작업 항목 하나의 승인된 디자인과 그 파일에 대한 단기 링크 — 없는 경우에는 다섯 가지 이유 중 어느 것인지를 알려 줍니다.',

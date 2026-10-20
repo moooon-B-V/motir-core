@@ -84,6 +84,11 @@ export const EXEMPT_TOOLS = {
     'derived convention, each section present / absent / unavailable) — a planning read ' +
     'assembled for an agent, the same reason `get_project_state` gives. No `/api/v1` ' +
     'operation returns it, and no REST client has asked for it (MOTIR-7793).',
+  get_coding_convention:
+    'Returns ONE repository\u2019s coding convention TEXT with its version and author (derived / ' +
+    'edited by), or a named `state` (absent / unavailable / repo_not_in_project) \u2014 a read of ' +
+    'motir-ai\u2019s convention store assembled for an agent about to write code. No `/api/v1` ' +
+    'operation returns a convention document, and no REST client has asked for one (MOTIR-9083).',
   read_file:
     'Returns one repository FILE\u2019s TEXT at a git ref, plus a named `outcome` (found / not_found / ' +
     'ref_not_found / too_large / binary / \u2026 / repo_not_in_project) \u2014 a read made against the ' +

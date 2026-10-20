@@ -43,7 +43,6 @@ const DOOR_CONTEXTS: PlanningLaunchContext[] = [
   { kind: 'roadmap' },
   { kind: 'work-item', itemKey: 'MOTIR-12' },
   { kind: 'work-item', itemKey: 'MOTIR-12', hasPlan: true },
-  { kind: 'convention-refine', repoKey: 'motir-core' },
 ];
 
 /** Every host address a door can sit on, including the two that carry a query
@@ -70,7 +69,6 @@ describe('seam · what a DOOR writes is what the OVERLAY reads', () => {
       expect(launch!.mode).toBe(resolvePlanningMode(context));
       expect(launch!.from).toBe(context.kind);
       expect(launch!.itemKey).toBe(context.kind === 'work-item' ? context.itemKey : null);
-      expect(launch!.repoKey).toBe(context.kind === 'convention-refine' ? context.repoKey : null);
     }
   });
 
@@ -108,14 +106,6 @@ describe('seam · an old /planning link still means what it meant', () => {
       mode: 'replan',
       itemKey: 'MOTIR-12',
     },
-    {
-      q: { mode: 'contextual', from: 'convention-refine', repo: 'motir-core' },
-      // The convention-refine host is `/code` since MOTIR-1768 — the audit is a
-      // section of the Code room, and the old address redirects into it.
-      path: '/code',
-      mode: 'contextual',
-      repoKey: 'motir-core',
-    },
     // A bare `/planning`, which the route accepted and defaulted.
     { q: {}, path: '/roadmap', mode: 'project' },
   ] as const;
@@ -128,7 +118,6 @@ describe('seam · an old /planning link still means what it meant', () => {
     expect(launch).not.toBeNull();
     expect(launch!.mode).toBe(row.mode);
     expect(launch!.itemKey).toBe('itemKey' in row ? row.itemKey : null);
-    expect(launch!.repoKey).toBe('repoKey' in row ? row.repoKey : null);
   });
 
   it('does not let a hand-edited OLD address smuggle a target through', () => {

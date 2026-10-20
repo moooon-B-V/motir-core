@@ -12,7 +12,7 @@ import {
 describe('the return context — nothing unread reaches an address', () => {
   const q = (s: string) => new URLSearchParams(s);
 
-  it('carries the five hand-off values when each reads back', () => {
+  it('carries the four hand-off values when each reads back', () => {
     expect(
       onboardingReturnContextFrom(
         q('via=onboard_existing_project&steps=connect,index&backKind=work-item&backItem=MOTIR-7'),
@@ -23,9 +23,8 @@ describe('the return context — nothing unread reaches an address', () => {
       backKind: 'work-item',
       backItem: 'MOTIR-7',
     });
-    expect(
-      onboardingReturnContextFrom(q('backKind=convention-refine&backRepo=acme/api')),
-    ).toStrictEqual({ backKind: 'convention-refine', backRepo: 'acme/api' });
+    // A kind the hand-off no longer writes reads back as nothing (MOTIR-9090).
+    expect(onboardingReturnContextFrom(q('backKind=retired&backRepo=acme/api'))).toStrictEqual({});
   });
 
   it('drops an outcome the routing verdict does not have', () => {

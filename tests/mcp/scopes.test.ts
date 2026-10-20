@@ -272,6 +272,8 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // token the billable planning submits; and the tool postdates the six
       // strings, so no stale row ever had it to lose.
       get_code_health: true,
+      // MOTIR-9083 — `get_coding_convention`, the same loss and the same reason.
+      get_coding_convention: true,
       // MOTIR-7861 — `read_file`, the same loss as `get_code_health`: a read filed
       // under `read` whose service asserts `ai:plan`, and a tool that postdates
       // the six strings.

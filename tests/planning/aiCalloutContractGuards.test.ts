@@ -69,7 +69,6 @@ const CONTEXTS: PlanningLaunchContext[] = [
   { kind: 'work-item', itemKey: 'MOTIR-1813' },
   { kind: 'work-item', itemKey: 'MOTIR-1813', hasPlan: true },
   { kind: 'roadmap' },
-  { kind: 'convention-refine', repoKey: 'motir-core' },
 ];
 
 /** Every message key the registry names, across every context, de-duplicated. */

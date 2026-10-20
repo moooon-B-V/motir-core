@@ -41,6 +41,10 @@ function surface(repoKey: string, derived = true): ConventionSurfaceDTO {
           version: 1,
           contentMd: `# ${repoKey} house rules`,
           provenance: [],
+          authorKind: 'derived',
+          editedByName: null,
+          editedByUserId: null,
+          pendingDerivedMd: null,
           createdAt: '2026-08-04T00:00:00.000Z',
         }
       : null,

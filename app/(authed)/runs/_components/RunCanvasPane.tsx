@@ -9,8 +9,8 @@ import {
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import type { RunLegBadge } from '@/components/planning/WorkItemNode';
 import type { DispatchRunDto } from '@/lib/dto/dispatchRuns';
-import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
-import { DISPOSITION_TONE, skipReasonMessage } from '@/lib/runs/timeline';
+import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
+import { runLegLabel } from '@/lib/runs/legLabel';
 
 // THE RUN'S SET, ON THE SHARED CANVAS (MOTIR-3895 · `design/runs/design-notes.md`
 // § The run MODAL).
@@ -35,6 +35,11 @@ export interface RunCanvasPaneProps {
   onSelectWorkItem: (workItemId: string | null) => void;
   /** Bumped by the modal when the run's dispositions have moved. */
   reloadKey: number;
+  /**
+   * The run's ONE shared member read (`useRunSetLevel`), so the List view and this
+   * canvas do not each fetch the same set. Absent, the canvas reads for itself.
+   */
+  readSet?: () => Promise<RoadmapLevelData>;
 }
 
 export function RunCanvasPane({
@@ -42,6 +47,7 @@ export function RunCanvasPane({
   projectKey,
   onSelectWorkItem,
   reloadKey,
+  readSet,
 }: RunCanvasPaneProps) {
   const t = useTranslations('runs');
 
@@ -61,12 +67,8 @@ export function RunCanvasPane({
     const map = new Map<string, RunLegBadge>();
     for (const leg of run.cards) {
       if (leg.workItemId === null) continue;
-      const skip =
-        leg.disposition === 'skipped' && leg.skipReason !== null
-          ? skipReasonMessage({ skipReason: leg.skipReason, manualGate: leg.manualGate })
-          : null;
-      const label = skip ? t(skip.key, skip.values) : t(`disposition.${leg.disposition}`);
-      map.set(leg.workItemId, { tone: DISPOSITION_TONE[leg.disposition], label });
+      const { tone, label } = runLegLabel(t, leg);
+      map.set(leg.workItemId, { tone, label });
     }
     return map;
   }, [run.cards, t]);
@@ -102,7 +104,8 @@ export function RunCanvasPane({
       // A scoped run's members are one container's children; `motir batch` and
       // `motir auto` take whatever was ready, across parents. The same `?ids=`
       // read serves all three, which is what makes this one code path.
-      const wi = await fetchRoadmapLevel(projectKey, null, 'project', undefined, false, memberIds);
+      const wi = await (readSet?.() ??
+        fetchRoadmapLevel(projectKey, null, 'project', undefined, false, memberIds));
       const level = buildWorkItemLevel(wi, { runLegs });
 
       // ⚠️ ONE SHARED SYNTHETIC PARENT, and it is load-bearing twice over.
@@ -129,7 +132,7 @@ export function RunCanvasPane({
 
       return { nodes, deps };
     },
-    [projectKey, memberIds, runLegs, runningIds],
+    [projectKey, memberIds, runLegs, runningIds, readSet],
   );
 
   const handleSelect = useCallback((id: string) => onSelectWorkItem(id), [onSelectWorkItem]);

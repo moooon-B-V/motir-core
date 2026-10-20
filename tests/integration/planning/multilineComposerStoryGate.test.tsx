@@ -364,6 +364,8 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
     'app/(admin)/admin/tenants/[orgId]/_components/ops/ReasonConfirmDialog.tsx',
     'app/(authed)/_components/ReportWidgetModal.tsx',
     'app/(authed)/backlog/_components/StartSprintDialog.tsx',
+    // The convention editor (MOTIR-9082): a fixed 14-row Markdown editor, per its design.
+    'app/(authed)/code/_components/ConventionPanel.tsx',
     'app/(authed)/filters/_components/EditFilterDialog.tsx',
     'app/(authed)/items/_components/SaveFilterDialog.tsx',
     'app/(authed)/triage/_components/TriageDetail.tsx',

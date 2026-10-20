@@ -733,6 +733,8 @@ export interface Problem {
   jobId?: string;
   /** Where a failed planning walk stopped (MOTIR-7909). Untrusted until parsed. */
   walkStop?: unknown;
+  /** Present only on a coding-convention save refused for a stale base (MOTIR-9080). */
+  conventionConflict?: { code: 'CONVENTION_VERSION_CONFLICT'; latestVersion: number };
 }
 
 // The raw GET /v1/jobs/:id wire body (contract §2.4). The client maps this into

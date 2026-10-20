@@ -141,6 +141,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-8143's story coverage floor (Story MOTIR-8136): the outage faces.
       'ci.yml:story-8136-coverage',
       'ci.yml:story-8684-coverage',
+      // MOTIR-9075's run-overlay-parity coverage lane (Story MOTIR-8982): the story gate
+      // reads real run rows and legs through the real service.
+      'ci.yml:story-8982-coverage',
       'ci.yml:test',
     ]);
   });

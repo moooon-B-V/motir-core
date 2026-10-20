@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **100 tools**.
+`initialize` handshake and registers **101 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5450,6 +5450,40 @@ than read as a soft state.
 **Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
 AMENDMENT 3). **Read-only**, closed-world: the graph is Motir's own.
+
+#### `get_coding_convention`
+
+**One repository's coding convention, in full.** A repository's own rules live in
+its Codebase coding convention (the card on the Code page), not in a file in its
+checkout. `get_code_health` carries a convention too, but as one line per
+repository inside a planning summary; this is the document itself, so a
+`motir run` prompt can point the agent here instead of at `CLAUDE.md`.
+
+**Input**
+
+| Field        | Type   | Required | Notes                                                                              |
+| ------------ | ------ | -------- | ---------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                        |
+| `repo`       | string | yes      | A repository in the project's set — bare name or `owner/name`, case-insensitively. |
+
+**Output.** The text result is headed by the repository, the version and whether
+the version was `derived` from the code or `edited by <name> on <date>`, followed
+by the convention document. `structuredContent.state` is one of these, every one
+a **non-error** result:
+
+| `state`               | Meaning                                                                           | Extra fields                                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `present`             | The current version.                                                              | `repoRef`, `version`, `authorKind`, `editedByName`, `editedByUserId`, `updatedAt`, `pendingDerived`, `contentMd` |
+| `absent`              | No convention has been derived or saved for the repository yet.                   | `repoRef`                                                                                                        |
+| `unavailable`         | motir-ai did not answer; this does not mean none is recorded.                     | `repoRef`, `code`                                                                                                |
+| `repo_not_in_project` | `repo` matches no repository in the set. Decided in core; motir-ai is not called. | `repo`, `repoSet`                                                                                                |
+
+`pendingDerived: true` means a re-derive produced a newer document that is parked
+beside a person's edited text; the text returned is still the one in force.
+
+**Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
+and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
+AMENDMENT 3). Every `motir run` token holds it. **Read-only**, closed-world.
 
 #### `skeleton`
 
