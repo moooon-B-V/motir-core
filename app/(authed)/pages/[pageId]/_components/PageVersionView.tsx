@@ -25,7 +25,7 @@ export interface PageVersionViewProps {
   pageId: string;
   number: number;
   /** `PageDto.projectId` — the project the version's work-item chips resolve in. */
-  projectId: string;
+  projectId?: string;
   viewerId: string;
   onClose: () => void;
   /** `GET …/versions/<n>` answered 404 `PAGE_VERSION_NOT_FOUND`: the version was pruned. */
