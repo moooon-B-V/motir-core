@@ -12333,6 +12333,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Run",
     "searchLabel": "Deze run doorzoeken",
     "gloss": "wat de agent heeft gedaan",
@@ -12408,8 +12410,9 @@
     "sectionPast": "Eerdere runs",
     "noneRunning": "Er draait niets.",
     "nonePast": "Er is nog geen run afgerond.",
-    "colCommand": "Opdracht",
-    "colScope": "Scope",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Gestart",
     "colStatus": "Status",
@@ -12457,6 +12460,10 @@
       "expired": {
         "title": "Buiten de bewaartermijn",
         "body": "Loginhoud wordt 30 dagen na een run verwijderd. Die van deze run is al verwijderd."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12797,7 +12804,10 @@
       "progressAria": "{done} van {total} stappen klaar",
       "progressAllDone": "{total} van {total} stappen klaar",
       "door": "Begeleid me"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Repository toevoegen",

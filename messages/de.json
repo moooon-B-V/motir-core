@@ -12333,6 +12333,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Lauf",
     "searchLabel": "Diesen Lauf durchsuchen",
     "gloss": "was der Agent getan hat",
@@ -12408,8 +12410,9 @@
     "sectionPast": "Vergangene Läufe",
     "noneRunning": "Es läuft nichts.",
     "nonePast": "Bisher ist kein Lauf abgeschlossen.",
-    "colCommand": "Befehl",
-    "colScope": "Umfang",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Gestartet",
     "colStatus": "Status",
@@ -12457,6 +12460,10 @@
       "expired": {
         "title": "Außerhalb der Aufbewahrungsfrist",
         "body": "Log-Inhalte werden 30 Tage nach einem Lauf gelöscht. Die dieses Laufs wurden bereits gelöscht."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12797,7 +12804,10 @@
       "progressAria": "{done} von {total} Schritten erledigt",
       "progressAllDone": "{total} von {total} Schritten erledigt",
       "door": "Führen Sie mich durch"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Repository hinzufügen",

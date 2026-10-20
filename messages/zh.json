@@ -12327,6 +12327,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "调整代理输出面板宽度",
     "title": "运行",
     "searchLabel": "搜索本次运行",
     "gloss": "智能体做了什么",
@@ -12402,8 +12404,9 @@
     "sectionPast": "历史运行",
     "noneRunning": "当前没有正在运行的任务。",
     "nonePast": "还没有已完成的运行。",
-    "colCommand": "命令",
-    "colScope": "范围",
+    "colTarget": "目标",
+    "openRunAria": "打开运行",
+    "targetOthers": "{count, plural, other {另有 # 个工作项}}",
     "colAgent": "智能体",
     "colStarted": "开始时间",
     "colStatus": "状态",
@@ -12451,6 +12454,10 @@
       "expired": {
         "title": "已超过保留期",
         "body": "日志正文会在运行 30 天后删除，这次的已被删除。"
+      },
+      "filtered": {
+        "title": "此工作项暂无日志",
+        "body": "此工作项尚未输出任何内容。取消选择即可查看整次运行。"
       }
     },
     "findings": {
@@ -12791,7 +12798,10 @@
       "progressAria": "已完成 {done}/{total} 步",
       "progressAllDone": "已完成 {total}/{total} 步",
       "door": "带我完成"
-    }
+    },
+    "viewList": "列表",
+    "viewCanvas": "画布",
+    "viewSwitchAria": "以此方式查看本次运行的工作项"
   },
   "repositoryPicker": {
     "add": "添加仓库",

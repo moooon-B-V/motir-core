@@ -347,6 +347,9 @@ describe('the header holds exactly one thing', () => {
       ...base,
       scopeWorkItemId: 'itm_parent',
       scopeLabel: 'PROD-42',
+      targetKey: 'PROD-42',
+      targetWorkItemId: 'itm_parent',
+      otherCardCount: 2,
       cardCount: 2,
       legs: {
         queued: 1,

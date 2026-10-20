@@ -13,7 +13,8 @@ import { useRequestWorkbenchReread } from '@/lib/workbench/workbenchReread';
 import { shallowReplace } from '@/lib/navigation/shallowUrl';
 import { OVERLAY_PARAM_NAMES } from '@/lib/planning/launcher';
 import { useTranslations } from 'next-intl';
-import { Map, X } from 'lucide-react';
+import { Map } from 'lucide-react';
+import { OverlayExitButton } from '@/components/ui/OverlayExitButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AuditCoverageBanner } from '@/components/planning/AuditCoverageBanner';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
@@ -1051,17 +1052,7 @@ function PlanWorkspaceHost({
               own top-left breadcrumb and top-right search/zoom overlays, so this
               sits ABOVE the canvas rather than over them. */}
           <div className="flex items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2">
-            <button
-              type="button"
-              onClick={close}
-              className="inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-            >
-              <X className="h-4 w-4 shrink-0" aria-hidden />
-              {t('close')}
-              <kbd className="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)">
-                {t('escKey')}
-              </kbd>
-            </button>
+            <OverlayExitButton onClose={close} label={t('close')} escLabel={t('escKey')} />
             <span className="truncate text-sm font-semibold text-(--el-text)">{projectName}</span>
           </div>
 
