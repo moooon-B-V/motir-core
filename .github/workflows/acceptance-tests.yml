@@ -401,11 +401,19 @@ jobs:
       legs: ${{ steps.gate.outputs.legs }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # A `merge_group` entry diffs `base_sha...head_sha` below, and the
+          # three-dot form needs the merge base, which a shallow clone lacks.
+          fetch-depth: 0
       - id: gate
         env:
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          # The queue entry names its own base and head (the same pair ci.yml's
+          # `changes` job reads, MOTIR-5124).
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
           # The lane's membership is whatever `playwright.acceptance.config.ts`
@@ -414,6 +422,7 @@ jobs:
           # NOT a member (it rides the main lane) — match the glob, not the word.
           COUNT=$(find tests/e2e -maxdepth 1 -name 'acceptance*.spec.ts' -type f | wc -l | tr -d ' ')
           echo "acceptance specs in the lane: ${COUNT}"
+          LANE_PATHS='^tests/e2e/acceptance[^/]*\.spec\.ts$|^\.github/workflows/acceptance-tests\.yml$|^playwright\.acceptance\.config\.ts$|^tests/e2e/_helpers/acceptance-(video|diagnostics)\.ts$'
           if [ "${EVENT_NAME}" = 'pull_request' ]; then
             # THE PATHS FILTER, moved here from `on:` (MOTIR-4257). Same five
             # entries, same meaning: a spec in the lane, the lane's workflow, its
@@ -438,14 +447,36 @@ jobs:
             # shape, and the two are one command apart.
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
               --paginate -q '.[].filename')
-            if printf '%s\n' "${CHANGED}" | grep -qE \
-              '^tests/e2e/acceptance[^/]*\.spec\.ts$|^\.github/workflows/acceptance-tests\.yml$|^playwright\.acceptance\.config\.ts$|^tests/e2e/_helpers/acceptance-(video|diagnostics)\.ts$'
+            if printf '%s\n' "${CHANGED}" | grep -qE "${LANE_PATHS}"
             then
               RUN=true
             else
               RUN=false
             fi
             echo "changed files: $(printf '%s\n' "${CHANGED}" | grep -c . || true)"
+          elif [ "${EVENT_NAME}" = 'merge_group' ] && [ "${COUNT}" -gt 0 ]; then
+            # THE QUEUE RUNS THE LANE ONLY FOR AN ENTRY THAT TOUCHES IT. The lane
+            # is a set of acceptance RECEIPTS (CLAUDE.md), ~148 specs on 6 legs
+            # at ~58-65 min per entry against ~34 min for the rest of the gate and
+            # a 60-min `check_response_timeout_minutes` -- so it was the long pole
+            # and the cause of the CI_TIMEOUT ejections. A spec/lane change already
+            # ran on its PR; the `push: main` baseline below still runs the whole
+            # lane on the merged result and is the detector for a composed-tree
+            # break. `Acceptance complete` still reports (green, no legs).
+            #
+            # FAIL OPEN: a payload without shas, or a diff that cannot be taken,
+            # runs the lane -- an unclassifiable entry is never silently skipped.
+            RUN=true
+            if [ -n "${MERGE_BASE_SHA:-}" ] && [ -n "${MERGE_HEAD_SHA:-}" ] \
+              && CHANGED=$(git diff --name-only "${MERGE_BASE_SHA}...${MERGE_HEAD_SHA}" 2>/dev/null) \
+              && [ -n "${CHANGED}" ]; then
+              if ! printf '%s\n' "${CHANGED}" | grep -qE "${LANE_PATHS}"; then
+                RUN=false
+              fi
+              echo "changed files: $(printf '%s\n' "${CHANGED}" | grep -c . || true)"
+            else
+              echo "::warning::No usable merge_group diff -- running the lane."
+            fi
           elif [ "${COUNT}" -gt 0 ]; then
             RUN=true
           else
