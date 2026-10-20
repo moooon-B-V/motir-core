@@ -1,5 +1,15 @@
 # Changelog — `@motir/cli`
 
+## 0.15.0
+
+### Minor Changes
+
+- 646dd3b: `motir fix` in your own agent now continues the card's last session (MOTIR-9052). When the card's last run was in the same agent and recorded a session, the repair resumes that conversation instead of starting a fresh agent, prints one line saying so, and falls back to a fresh agent once if the resume fails. A repair in your own agent now answers a red CI or a failed acceptance re-run as well as a review.
+
+### Patch Changes
+
+- 646dd3b: `motir auto`, `motir batch` and `motir fix` now repair a red pull request in the conversation that built the card (MOTIR-9059). Each card's own session is handed to its CI watch, so in a multi-card run card N's fix lands in card N's conversation; a card that recorded no session keeps today's fresh-agent fix.
+
 ## 0.14.0
 
 ### Minor Changes
