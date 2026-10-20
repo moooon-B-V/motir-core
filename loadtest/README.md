@@ -359,20 +359,37 @@ fly apps create motir-loadgen --org moooon
 
 **3.13 — its volume** (k6's point file is written there; the run command refuses
 a generator with nothing mounted at `/data`, `loadtest/run/generator.ts`
-`VOLUME_MOUNT`).
+`VOLUME_MOUNT`). `loadtest/generator/fly.loadgen.toml` mounts a volume named
+`loadgen_data` there, so create it under that name:
 
 ```sh
-fly volumes create <volume name> --region iad --size <GB> -a motir-loadgen
+fly volumes create loadgen_data --region iad --size 3 -a motir-loadgen
 ```
 
-**3.14 — its one machine,** from an image with k6 and `xk6-sse` built by
-`loadtest/k6/build.sh` at `/opt/loadtest/k6` (`REMOTE_K6`):
+**Check:** `fly volumes list -a motir-loadgen` shows `loadgen_data` in `iad`.
+
+**3.14 — its one machine.** The image recipe is `loadtest/generator/Dockerfile`: it builds
+the k6 and `xk6-sse` pair `loadtest/k6/versions.env` pins and puts it at
+`/opt/loadtest/k6` (`REMOTE_K6`). One command builds it on Fly's builder and deploys the
+machine, with the volume attached:
 
 ```sh
-fly machine run <generator image> --region iad --volume <volume name>:/data -a motir-loadgen
+loadtest/generator/deploy.sh
 ```
 
-**Check:** one machine in `iad`.
+It prints Fly's deploy log and ends with the machine id. A machine that already exists
+without the volume (the one MOTIR-8674 made by hand) cannot take it: destroy it first with
+`fly machine destroy <id> --force -a motir-loadgen`.
+
+**Check:** one machine in `iad`, and the binary and mount are in it:
+
+```sh
+fly ssh console -a motir-loadgen -C '/opt/loadtest/k6 version'
+fly ssh console -a motir-loadgen -C 'grep " /data " /proc/mounts'
+```
+
+The first lists `k6 v1.2.1` and `github.com/phymbert/xk6-sse v0.1.12`; the second prints the
+volume's device line.
 
 **3.15 — leave it stopped.**
 
