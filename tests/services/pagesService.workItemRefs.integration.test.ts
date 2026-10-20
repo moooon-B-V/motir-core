@@ -164,6 +164,12 @@ describe('pagesService.getPageVersion — workItemRefs (MOTIR-9138)', () => {
     const live = await item('Live one');
     const pageId = await pageWith(`See ${mention(live)}.`);
     const page = await pagesService.getPage(fx.ctx, { projectId: fx.projectId, pageId });
+    // A save inside the version window extends the version, so age them first
+    // to make the next save a version of its own.
+    await adminDb.pageVersion.updateMany({
+      where: { pageId },
+      data: { startedAt: new Date(0), savedAt: new Date(0) },
+    });
     await withWorkspaceContext(
       { userId: fx.ownerId, workspaceId: fx.workspaceId, projectId: fx.projectId },
       (tx) =>
@@ -175,14 +181,15 @@ describe('pagesService.getPageVersion — workItemRefs (MOTIR-9138)', () => {
         }),
     );
 
-    expect((await readVersion(fx.ctx, pageId, 1)).workItemRefs[live.id]).toMatchObject({
-      accessible: true,
-    });
-    const latest = await pagesService.listPageVersions(fx.ctx, {
+    const { items } = await pagesService.listPageVersions(fx.ctx, {
       projectId: fx.projectId,
       pageId,
     });
-    const current = latest.items.find((v) => v.isCurrent)!;
+    const current = items.find((v) => v.isCurrent)!;
+    const earlier = items.find((v) => !v.isCurrent)!;
+    expect((await readVersion(fx.ctx, pageId, earlier.number)).workItemRefs[live.id]).toMatchObject(
+      { accessible: true },
+    );
     expect((await readVersion(fx.ctx, pageId, current.number)).workItemRefs).toEqual({});
   });
 });
