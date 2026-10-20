@@ -13,6 +13,7 @@ import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { Locale } from '@/lib/i18n/locales';
+import type { WorkItemSections } from '@/lib/workItems/sections/registry';
 import type { WorkflowDto, StatusCategoryDto } from './workflows';
 import type { SprintBlockerDto } from './sprints';
 import type { RelationshipKind } from './workItemLinks';
@@ -1292,8 +1293,24 @@ export interface WorkItemProvenanceInput {
   implementation?: WorkItemImplementationProvenanceInput;
 }
 
+/**
+ * The `sections` input of a work-item write (Story MOTIR-9023 · MOTIR-9031): the
+ * card's sections as separate typed values, rendered into `descriptionMd` by the
+ * service. On an UPDATE it is a SPARSE patch at the section key — an omitted
+ * section is kept, an explicit `null` clears it, a list replaces the list. A
+ * write input only: nothing structured is stored and no read returns it.
+ */
+export type WorkItemSectionsInput = { [K in keyof WorkItemSections]?: WorkItemSections[K] | null };
+
 export interface CreateWorkItemInput {
   projectId: string;
+  /**
+   * Sections to render into `descriptionMd` (MOTIR-9031). Checked against the
+   * registry for `kind` × `type`; a missing, unknown or invalid section is
+   * `InvalidSectionsError`, and `sections` beside `descriptionMd` is
+   * `SectionsWithDescriptionError`. Omitted, `descriptionMd` is stored as sent.
+   */
+  sections?: WorkItemSectionsInput;
   /**
    * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
    * `language` for every text field written, `languages` per field (wins).
@@ -1510,6 +1527,12 @@ export interface CreateWorkItemLinkInput {
  * transitions the source to `user_edited`.
  */
 export interface UpdateWorkItemInput {
+  /**
+   * Sections to merge over the stored body and render into `descriptionMd`
+   * (MOTIR-9031), judged on the card's FINAL kind × type. See
+   * {@link WorkItemSectionsInput}. Refused beside `descriptionMd`.
+   */
+  sections?: WorkItemSectionsInput;
   /**
    * The language this write's text is in (Story MOTIR-7731 · MOTIR-8096):
    * `language` for every text field written, `languages` per field (wins).
@@ -1806,6 +1829,39 @@ export interface WorkItemValidityDto {
    * empty when no ancestor is blocked.
    */
   softBlocks: WorkItemSoftBlockDto[];
+  /**
+   * Per-card SECTION findings (MOTIR-9032) — the body PARSED against the section
+   * registry for the card's kind × type, one entry per not-done subtree card that
+   * misses a required section or carries one it cannot read. A SEPARATE advisory
+   * channel, **never a blocker**: `valid` and `blockers` are byte-identical
+   * whether or not this array is empty. Sorted by `item`; empty when every card
+   * reads clean.
+   */
+  sectionFindings: SectionFindingDto[];
+}
+
+/**
+ * One card's section finding (MOTIR-9032): what parsing its stored (or
+ * projected) body against the registry for its kind × type found missing.
+ * Advisory — see {@link WorkItemValidityDto.sectionFindings}.
+ */
+export interface SectionFindingDto {
+  /** The card's identifier (a real key, or the plan item's projected key). */
+  item: string;
+  /** The card's kind and type — the registry cell its body was read against. */
+  kind: string;
+  type: string | null;
+  /** `unstructured` — the body has no section headings at all (or is empty);
+   *  `incomplete` — it has some, and a required one is missing or unreadable. */
+  state: 'unstructured' | 'incomplete';
+  /** Required sections absent or empty, in registry order. */
+  missing: string[];
+  /** Sections found but unreadable into their shape, with why. */
+  invalid: { section: string; message: string }[];
+  /** Headings the body carries that the registry does not define for this cell. */
+  otherHeadings: string[];
+  /** The parser's diagnostics (`empty`, `no-headings`, `quoted-gutter`, …). */
+  signals: string[];
 }
 
 /** A `{ key, title }` reference to a work item, as a soft block names one. */

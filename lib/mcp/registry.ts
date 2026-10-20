@@ -116,6 +116,7 @@ import {
 } from './tools/codeGraphRead';
 import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
 import { LIST_FOLDERS_TOOL_NAME, registerListFolders } from './tools/listFolders';
+import { GET_SECTION_SETS_TOOL_NAME, registerGetSectionSets } from './tools/getSectionSets';
 import { CREATE_FOLDER_TOOL_NAME, registerCreateFolder } from './tools/createFolder';
 import { UPDATE_FOLDER_TOOL_NAME, registerUpdateFolder } from './tools/updateFolder';
 import { DELETE_FOLDER_TOOL_NAME, registerDeleteFolder } from './tools/deleteFolder';
@@ -259,6 +260,7 @@ export const MCP_TOOL_NAMES = [
   CODE_SEARCH_TOOL_NAME,
   SKELETON_TOOL_NAME,
   LIST_FOLDERS_TOOL_NAME,
+  GET_SECTION_SETS_TOOL_NAME,
   CREATE_FOLDER_TOOL_NAME,
   UPDATE_FOLDER_TOOL_NAME,
   DELETE_FOLDER_TOOL_NAME,
@@ -516,6 +518,8 @@ export function registerMcpTools(
   // folder service (MOTIR-5313). Placing a WORK ITEM in a folder is the work-item
   // tools' job (MOTIR-5413), not these.
   registerListFolders(target, resolveContext);
+  // Story MOTIR-9023's section registry read (MOTIR-9029) — project-less.
+  registerGetSectionSets(target, resolveContext);
   registerCreateFolder(target, resolveContext);
   registerUpdateFolder(target, resolveContext);
   registerDeleteFolder(target, resolveContext);

@@ -230,14 +230,21 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // to MCP_TOOL_NAMES without an entry here fails the suite by construction.
       expect(Object.keys(argFor).sort()).toEqual([...MCP_TOOL_NAMES].sort());
 
-      // Three tools are SELF-SCOPED — they act only within the CALLER's own
+      // Four tools are SELF-SCOPED — they act only within the CALLER's own
       // workspace and take no cross-tenant resource key, so they are
       // structurally incapable of reaching A's data: `whoami` returns the
       // caller's own identity, `list_projects` (MOTIR-1879) the caller's own
       // workspace's projects, and `complete_session` matches a session branch
       // inside the caller's (empty) workspace → a no-op, not a 404. The
       // 404-not-403 denial applies to every RESOURCE-TARGETING tool.
-      const SELF_SCOPED = new Set<McpToolName>(['whoami', 'list_projects', 'complete_session']);
+      // `get_section_sets` (MOTIR-9029) is a product contract, the same for every tenant: it
+      // reads no tenant data at all, so there is nothing for it to deny.
+      const SELF_SCOPED = new Set<McpToolName>([
+        'whoami',
+        'list_projects',
+        'complete_session',
+        'get_section_sets',
+      ]);
 
       const client = await connect(nonMemberToken);
       for (const name of MCP_TOOL_NAMES) {
@@ -577,6 +584,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // project; the three writes are `work_item:edit`-gated, and a folder id that
         // names nothing is a not-found, never a scope denial.
         list_folders: { projectKey: 'PROD' },
+        // MOTIR-9029 — the project-less section registry read: it executes for any token holding `project:browse`.
+        get_section_sets: {},
         create_folder: { projectKey: 'PROD', name: 'scoped folder' },
         update_folder: { projectKey: 'PROD', folderId: 'fld_scoped', name: 'scoped rename' },
         delete_folder: { projectKey: 'PROD', folderId: 'fld_scoped' },

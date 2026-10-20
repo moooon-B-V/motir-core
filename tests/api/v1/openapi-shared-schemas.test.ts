@@ -498,7 +498,9 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // 73 with MOTIR-8722's `…/discrepancy` (`recordDispatchRunDiscrepancy`) and `…/stop`
     // (`reportDispatchRunStop`), both `work_item:edit` — a run's own credential's doors for
     // what its agent cannot call over MCP.
-    expect(V1_OPERATIONS.length).toBe(73);
+    // 74 with MOTIR-9029's `GET /api/v1/section-sets` (`getSectionSets`, `project:browse`) —
+    // the section registry read, the same for every tenant.
+    expect(V1_OPERATIONS.length).toBe(74);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

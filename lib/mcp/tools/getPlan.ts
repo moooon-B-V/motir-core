@@ -11,6 +11,11 @@ import { toToolError, toolOk } from '../toolResult';
 import { derived } from '../payloads/define';
 import { planPayload, presentMcpPlan } from '../payloads/workLoop';
 import { firstLine } from '../obsolescence';
+import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
+import { parseSections, type ParsedBody } from '@/lib/workItems/sections/parse';
+import type { IssueType } from '@/lib/issues/parentRules';
+import type { SectionType } from '@/lib/workItems/sections/registry';
+import { includeSectionsField, PARSED_SECTIONS_DESCRIPTION } from '../parsedSections';
 import { GET_PLAN_STATUS_TOOL_NAME } from './expandItem';
 
 // `get_plan` (Story 7.9 · MOTIR-1837) — the plan read that returns WHAT was
@@ -57,6 +62,7 @@ const getPlanInputSchema = {
       'The plan id — as returned by an `expand_item` submit, by `get_plan_status`, or shown ' +
         'on the plan in Motir.',
     ),
+  includeSections: includeSectionsField,
 };
 
 /** The op markers the review surface uses: add / modify / remove. */
@@ -211,11 +217,21 @@ function modifySteps(item: PlanItemDto, marks?: ProposalMarkRefs): string {
   return ` · todos: ${what} (${replaces})`;
 }
 
+/** ` · sections missing: a, b` / ` · sections: complete` — only when the sections
+ *  view was asked for (MOTIR-9033), so an unasked line is unchanged. */
+function sectionsSuffix(parsed: ParsedBody | undefined): string {
+  if (!parsed) return '';
+  return parsed.missing.length > 0
+    ? ` · sections missing: ${parsed.missing.join(', ')}`
+    : ' · sections: complete';
+}
+
 /** One proposal as a single line — the op, what it targets, and its sizing. */
 function describeItem(
   item: PlanItemDto,
   placement?: ProposalPlacement,
   marks?: ProposalMarkRefs,
+  sections?: ReadonlyMap<string, ParsedBody>,
 ): string {
   const marker = OP_MARKER[item.op];
   if (item.op === 'add') {
@@ -229,7 +245,8 @@ function describeItem(
       repoPin(fields?.targetRepo) +
       steps(fields?.todos) +
       blockers(item.blockedByRefs) +
-      addSupersedes(item.supersedesRefs, marks)
+      addSupersedes(item.supersedesRefs, marks) +
+      sectionsSuffix(sections?.get(item.id))
     );
   }
   // The target by its KEY when the tree could be read (MOTIR-3191). `MOTIR-3181`
@@ -291,6 +308,7 @@ function renderProposals(
   items: PlanItemDto[],
   placements?: PlacementByPlanItemId,
   marks?: ProposalMarkRefs,
+  sections?: ReadonlyMap<string, ParsedBody>,
 ): string[] {
   const byId = new Map(items.map((item) => [item.id, item]));
   const childrenOf = new Map<string, PlanItemDto[]>();
@@ -315,7 +333,9 @@ function renderProposals(
     // path.
     if (rendered.has(item.id)) return;
     rendered.add(item.id);
-    lines.push(`${'  '.repeat(depth + 1)}${describeItem(item, placements?.get(item.id), marks)}`);
+    lines.push(
+      `${'  '.repeat(depth + 1)}${describeItem(item, placements?.get(item.id), marks, sections)}`,
+    );
     for (const child of childrenOf.get(item.id) ?? []) walk(child, depth + 1);
   };
 
@@ -362,6 +382,7 @@ export function summarizePlan(
   plan: PlanWithItemsDto,
   placements?: PlacementByPlanItemId,
   marks?: ProposalMarkRefs,
+  sections?: ReadonlyMap<string, ParsedBody>,
 ): string {
   const lines = [
     `Plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s).`,
@@ -381,7 +402,7 @@ export function summarizePlan(
   } else {
     lines.push(
       'Proposals (indented under their proposed parent):',
-      ...renderProposals(plan.items, placements, marks),
+      ...renderProposals(plan.items, placements, marks, sections),
     );
   }
 
@@ -467,7 +488,7 @@ async function resolveMarks(
 
 /** The adapter: read the plan through the service, summarize, return. */
 export async function runGetPlan(
-  args: { planId: string },
+  args: { planId: string; includeSections?: boolean },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   // The READER's door (MOTIR-6330): a plan outside the Plans room's scope for
@@ -478,9 +499,33 @@ export async function runGetPlan(
   // the same reading `/api/v1` presents beside `parentRef`.
   const folders = await planReviewService.resolveProposalFolders(plan, ctx);
   const marks = await resolveMarks(plan, ctx);
+  // The sections view (MOTIR-9033): every `add`'s proposed body parsed with the
+  // kind the plan doors default an unsaid kind to. `modify` / `remove` carry a
+  // patch on a card whose kind and type may sit outside it, so they are not parsed.
+  // Absent unless asked for; `items` are never touched.
+  const sections = args.includeSections
+    ? new Map<string, ParsedBody>(
+        plan.items
+          .filter((item) => item.op === 'add')
+          .map((item) => {
+            const fields = item.proposedFields;
+            return [
+              item.id,
+              parseSections(
+                fields?.descriptionMd,
+                (fields?.kind ?? DEFAULT_PROPOSED_KIND) as IssueType,
+                (fields?.type ?? null) as SectionType,
+              ),
+            ] as const;
+          }),
+      )
+    : undefined;
   return toolOk(
-    summarizePlan(plan, placements, marks),
-    derived(planPayload, presentMcpPlan(plan, folders)),
+    summarizePlan(plan, placements, marks, sections),
+    derived(planPayload, {
+      ...presentMcpPlan(plan, folders),
+      ...(sections ? { parsedSections: Object.fromEntries(sections) } : {}),
+    }),
   );
 }
 
@@ -514,7 +559,12 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'IMPORTANT: these are PROPOSALS, NOT work items. Nothing here exists in the tree: ' +
         'approving the plan in Motir is the only path from a proposal to a work item, and an ' +
         "`add`'s `workItemId` stays null until then. Do not report proposed items as created. " +
-        'A pure read.',
+        'A pure read.' +
+        PARSED_SECTIONS_DESCRIPTION.replace(
+          'to also receive `parsedSections` — the body parsed',
+          'to also receive `parsedSections` — a map keyed by plan item id, one entry per `add`, ' +
+            'each proposal’s body parsed',
+        ),
       inputSchema: getPlanInputSchema,
     },
     async (args, extra) => {

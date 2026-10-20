@@ -134,6 +134,13 @@ export async function PATCH(
     ...('descriptionMd' in patch
       ? { descriptionMd: typeof patch.descriptionMd === 'string' ? patch.descriptionMd : null }
       : {}),
+    // The card's SECTIONS INPUT (Story MOTIR-9023 · MOTIR-9030) — by PRESENCE and
+    // forwarded AS SENT, like `languages` below: a wrong-typed value is not
+    // coerced to "none", because dropping it would store the old body under a
+    // write the planner meant as sections. The service refuses a non-object, a
+    // missing / unknown / invalid section and the `descriptionMd` pairing
+    // (`applySectionsInput`) → 422 `INVALID_PROPOSAL` by the catch below.
+    ...('sections' in patch ? { sections: patch.sections as UpdateProposalInput['sections'] } : {}),
     ...('type' in patch ? { type: typeof patch.type === 'string' ? patch.type : null } : {}),
     ...('priority' in patch
       ? { priority: typeof patch.priority === 'string' ? patch.priority : null }

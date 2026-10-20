@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **99 tools**.
+`initialize` handshake and registers **100 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1050,10 +1050,11 @@ single named extension point enrichment lands on. Requires `project:browse`.
 Read one work item by identifier as the full issue-detail aggregate — the same
 shape the detail page reads.
 
-| Input           | Type   | Required | Notes                                                                                                              |
-| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                             |
-| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
+| Input             | Type    | Required | Notes                                                                                                                                                                 |
+| ----------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`             | string  | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                                |
+| `sessionBranch`   | string  | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`).                                                    |
+| `includeSections` | boolean | no       | Default `false`. `true` also returns `parsedSections` — the body parsed at read time into the registry's sections for the card's kind × type (MOTIR-9033). See below. |
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
 (description, status, priority, assignee, …), its parent, children, dependency
@@ -1066,6 +1067,16 @@ array of `{ linkId, item }`, `[]` when empty. The text block prints
 so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
 paid when there is something to read. The child rows do **not** carry it: this
 aggregate answers for one card, and the list reads answer per row.
+
+**`includeSections`** (MOTIR-9033) is an opt-in read of the body as sections.
+Unasked, the answer is byte-identical to before. Asked, the tool runs
+`parseSections` on the body it already read, with the card's kind and type, and
+returns `parsedSections: { sections, found, missing, invalid, signals }` beside the
+unchanged `item.descriptionMd`, plus one `Sections: found … · missing …` text line
+after `Readiness:`. It is computed at read time, never stored and never written back;
+a hand-written body with no headings is answered (its text comes back as `framing`,
+the required sections are `missing`, signal `no-headings`), never refused. With a
+`planId` it parses the projected target's own body, kind and type.
 
 The aggregate **declares** the item's OWN folder placement (MOTIR-5413) —
 `folderId` (the folder it is filed in) and `folderPath` (that folder's names,
@@ -1397,6 +1408,7 @@ epics included, so the agent surface can create one).
 | `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent. Mutually exclusive with `folderId`.                                                                                                                                                                  |
 | `folderId`           | string                                              | no       | A folder id (from [`list_folders`](#list_folders)) to FILE the new item into. Any kind may be filed, a subtask included. With `parentKey` → `PLACEMENT_CONFLICT`; unknown → `FOLDER_NOT_FOUND`; another project's → `CROSS_PROJECT_FOLDER`.                         |
 | `descriptionMd`      | string                                              | no       | Markdown description body.                                                                                                                                                                                                                                          |
+| `sections`           | object                                              | no       | The item's [sections](#get_section_sets) as named values — the door checks them for the kind × type, names a missing one (`INVALID_SECTIONS`) and renders them into `descriptionMd`. Never together with `descriptionMd` (`SECTIONS_AND_DESCRIPTION_CONFLICT`).     |
 | `priority`           | priority enum                                       | no       | Omit for the project default.                                                                                                                                                                                                                                       |
 | `storyPoints`        | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                                                                                                            |
 | `estimateMinutes`    | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                                                                                                         |
@@ -1430,6 +1442,21 @@ same service rules apply as on the patch path: `type`/`executor`/`difficulty` ar
 leaf-only (an epic/story kind is rejected), setting `type` without an explicit `executor`
 seeds it from the type default, and `targetRepo` is validated against this
 project's repository set.
+
+**`sections` — typed input over the free-text body** (MOTIR-9031). `descriptionMd`
+stays the one stored body and is always free text; `sections` is an optional way to
+WRITE it. The door checks the sections against the set for the item's kind × type
+(read it with [`get_section_sets`](#get_section_sets)), refuses a missing, unknown or
+malformed section **by name** with `INVALID_SECTIONS` (the message lists each), writes
+the headings itself and stores only the rendered text — nothing structured is stored,
+and no read returns `sections`. Sending `sections` and `descriptionMd` together is
+refused with `SECTIONS_AND_DESCRIPTION_CONFLICT`, and a write with `descriptionMd`
+alone is stored exactly as sent: never parsed, never refused for its shape. On
+`update_work_item` the stored body is read back into its sections first, so a partial
+`sections` changes only what it names, and it is judged on the item's `type` after the
+same write. The v1 API takes the same `sections` object on `POST …/work-items` and
+`PATCH …/work-items/{key}`; the refusal body carries a `sections` field with the
+`missing`, `unknown` and `invalid` names.
 
 **`targetRepo` — pinning the repo an item ships in** (MOTIR-1804). This is what
 makes _one subtask = one repo = one PR_ enforceable in the product rather than
@@ -2831,25 +2858,26 @@ The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected)
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
 
-| Input                | Type                                               | Required | Notes                                                                                                                                                  |
-| -------------------- | -------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `key`                | string                                             | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                 |
-| `title`              | string                                             | no       | New title.                                                                                                                                             |
-| `descriptionMd`      | string \| null                                     | no       | New description; `null` clears it.                                                                                                                     |
-| `explanationMd`      | string \| null                                     | no       | New explanation ("why"); `null` clears it.                                                                                                             |
-| `priority`           | `lowest…highest`                                   | no       | New priority.                                                                                                                                          |
-| `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                                       |
-| `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                                     |
-| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                                               |
-| `obsolescence`       | `"outdated" \| "deprecated"` \| null               | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind, on a FINISHED card only (else `OBSOLESCENCE_REQUIRES_FINISHED`); `null` clears it, always. |
-| `obsolescenceNoteMd` | string \| null                                     | no       | Why the item is marked; `null` clears it. Independent of the mark.                                                                                     |
-| `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                                            |
-| `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                                         |
-| `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                                               |
-| `targetRepos`        | string[]                                           | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                                  |
-| `targetRepositories` | string[]                                           | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above.                  |
-| `assigneeId`         | string \| null                                     | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                                       |
-| `dueDate`            | string (ISO-8601) \| null                          | no       | Due date; `null` clears it.                                                                                                                            |
+| Input                | Type                                               | Required | Notes                                                                                                                                                                                                                                                            |
+| -------------------- | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`                | string                                             | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                                                                                                                           |
+| `title`              | string                                             | no       | New title.                                                                                                                                                                                                                                                       |
+| `descriptionMd`      | string \| null                                     | no       | New description; `null` clears it.                                                                                                                                                                                                                               |
+| `sections`           | object                                             | no       | Named [sections](#get_section_sets) merged over the stored body (sparse: an omitted section is kept, `null` clears one, a list replaces the list), checked for the type AFTER this write and rendered into `descriptionMd`. Never together with `descriptionMd`. |
+| `explanationMd`      | string \| null                                     | no       | New explanation ("why"); `null` clears it.                                                                                                                                                                                                                       |
+| `priority`           | `lowest…highest`                                   | no       | New priority.                                                                                                                                                                                                                                                    |
+| `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                                                                                                                                                 |
+| `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                                                                                                                                               |
+| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                                                                                                                                                         |
+| `obsolescence`       | `"outdated" \| "deprecated"` \| null               | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind, on a FINISHED card only (else `OBSOLESCENCE_REQUIRES_FINISHED`); `null` clears it, always.                                                                                                           |
+| `obsolescenceNoteMd` | string \| null                                     | no       | Why the item is marked; `null` clears it. Independent of the mark.                                                                                                                                                                                               |
+| `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                                                                                                                                                      |
+| `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                                                                                                                                                   |
+| `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                                                                                                                                                         |
+| `targetRepos`        | string[]                                           | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                                                                                                                                            |
+| `targetRepositories` | string[]                                           | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above.                                                                                                                            |
+| `assigneeId`         | string \| null                                     | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                                                                                                                                                 |
+| `dueDate`            | string (ISO-8601) \| null                          | no       | Due date; `null` clears it.                                                                                                                                                                                                                                      |
 
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
 assignee, a `type`/`executor` on a non-leaf, a `difficulty` on a non-leaf
@@ -3026,6 +3054,28 @@ the whole work-item tree. The read is capped (the Move to… picker's cap), and
 row of `folders` is `{ id, parentFolderId, name, path }` and `path` is the
 folder's name and every ancestor's, root first (`["Parked", "2025"]`). The text
 summary is the indented tree.
+
+#### `get_section_sets`
+
+Which sections a work item of a given kind and type has, which of them are
+**required**, and the heading each renders under in the free-text description.
+A planner calls it before writing a card, instead of guessing and learning from a
+refusal. The sets are a product contract, the same for every tenant, so the tool
+takes **no `projectKey`**. It is the same descriptor `GET /api/v1/section-sets`
+returns and the one motir-ai builds its author tool from. Gated on
+`project:browse`, like `whoami`.
+
+| Input  | Type   | Required | Notes                                                                                          |
+| ------ | ------ | -------- | ---------------------------------------------------------------------------------------------- |
+| `kind` | string | no       | Only this kind's sets: `epic`, `story`, `task`, `subtask` or `bug`.                            |
+| `type` | string | no       | Only this type's sets, one cell per kind (a story and an epic have one set whatever the type). |
+
+**Output** — `structuredContent`: `{ version, sections, sets }`. `sections` maps
+each section name to its `heading` (`null` for the unheaded opening) and its value
+`shape`; `sets` has one `{ kind, type, sections: [{ name, required }] }` per cell
+asked for. The text summary lists each cell's required sections first, then the
+optional ones. A `kind` or `type` that names nothing is refused by name
+(`UNKNOWN_SECTION_CELL`), never answered with a default set.
 
 #### `create_folder`
 
@@ -3432,11 +3482,19 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
-`{ key, valid, blockers, invalidEdges, crossLevelEdges, advisories, softBlocks }`. When `valid` is `false`,
+`{ key, valid, blockers, invalidEdges, crossLevelEdges, advisories, softBlocks, sectionFindings }`. When `valid` is `false`,
 `blockers` lists each gated in-subtree item as
 `{ item, blockedBy, blockerStatus, blockerSprintId }` (the out-of-subtree,
 unsatisfied work gating it — always an item's OWN edge). An unknown /
 cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
+
+`sectionFindings` (MOTIR-9032) is a second **advisory** channel: each not-`done`
+subtree card whose body, parsed against the section registry for its kind × type,
+misses a required section or carries one it cannot read is reported as
+`{ item, state: "unstructured" | "incomplete", missing, invalid, otherHeadings, signals }`,
+sorted by `item`. It never changes `valid` (a VALID verdict states the count and says
+so), and with a `planId` the body is the projected one. Fix a finding by re-writing the
+card with `sections` (see `get_section_sets`).
 
 `softBlocks` (MOTIR-6354 / MOTIR-6368) is **never gating**: it lists every open
 `blocked_by` edge owned by one of the target's ANCESTORS (parent → … → root) — a
@@ -3819,9 +3877,16 @@ other tool keeps. Requires `project:browse`.
 Read a plan **with the proposals it bundles** — what the planning pass actually
 proposed, not just how many items it produced.
 
-| Input    | Type   | Required | Notes                                                                    |
-| -------- | ------ | -------- | ------------------------------------------------------------------------ |
-| `planId` | string | yes      | The plan id — from an `expand_item` submit, `get_plan_status`, or Motir. |
+| Input             | Type    | Required | Notes                                                                                                       |
+| ----------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `planId`          | string  | yes      | The plan id — from an `expand_item` submit, `get_plan_status`, or Motir.                                    |
+| `includeSections` | boolean | no       | Default `false`. `true` also returns `parsedSections`, keyed by plan item id, for every `add` (MOTIR-9033). |
+
+With `includeSections`, `structuredContent.parsedSections[<planItemId>]` holds each
+`add` proposal's body parsed at read time (`{ sections, found, missing, invalid,
+signals }`, the kind defaulting as the plan doors default it), and each `add` line
+ends ` · sections missing: …` or ` · sections: complete`. `modify` and `remove`
+proposals are not parsed, `items[]` is untouched, and an unasked call is unchanged.
 
 **Which one to reach for:** `get_plan_status` answers _"what became of the job I
 fired?"_ — a status, a count, and (while generating) whether the job died. It is
@@ -4869,6 +4934,11 @@ still reports that child edge, and re-wiring one end of an old bad edge makes it
 this plan's to fix. An old edge the plan touches nothing of is reported by
 `validate_work_item` without a `planId`, unchanged. The same narrowing applies to
 `validate_work_item` with a `planId`.
+
+`validate_plan` also returns `sectionFindings` (MOTIR-9032), the same advisory
+channel as on `validate_work_item`, over the cards the plan adds or modifies: the
+projected body parsed against the section registry, a missing required section
+named by `item`. It never changes `valid`.
 
 ```jsonc
 validate_plan({ planId })

@@ -186,6 +186,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
 
     // A no-op plan over the same target is valid.
@@ -208,6 +209,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
   });
 });
@@ -346,6 +348,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
 
     // Invalid: a new root add gated by a not-done cross-project item.
@@ -400,6 +403,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 });

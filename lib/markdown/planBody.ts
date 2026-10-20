@@ -58,10 +58,14 @@ function sectionOf(title: string): Section {
   return 'body';
 }
 
-/** The ref a context-refs bullet names: its first backtick-quoted span, else the
- *  bullet text up to the first dash/em-dash separator. */
+/** The ref a context-refs bullet names: the target of a leading Markdown link
+ *  (a chip's own path, whatever its label or why carries), else its first
+ *  backtick-quoted span, else the bullet text up to the first dash/em-dash
+ *  separator. */
 function refOfBullet(bulletText: string): string {
   const item = bulletText.trim();
+  const link = item.match(/^\[[^\]]*\]\(([^)\s]+)\)/);
+  if (link) return (link[1] ?? '').trim();
   const backtick = item.match(/`([^`]+)`/);
   return backtick ? (backtick[1] ?? '').trim() : (item.split(/\s[—–-]\s/)[0] ?? '').trim();
 }

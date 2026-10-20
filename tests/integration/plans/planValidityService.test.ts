@@ -22,6 +22,8 @@ import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '..
 import { adminDb } from '../../helpers/adminDb';
 import { seedBlockedBy } from '../../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../../helpers/db';
+import { renderSections } from '@/lib/workItems/sections/render';
+import { fixture as sectionsFixture } from '../../unit/workItems/sections/helpers/sectionFixture';
 
 /**
  * Drop the target locks an UN-DECIDED plan holds, so a fixture can build a
@@ -536,6 +538,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
         },
       ],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
 
     // The OTHER half: the same forest with epic B blocked_by epic A is VALID.
@@ -577,6 +580,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
 
     // Proof of the defect the forest rule fixes: iterating the SINGLE-subtree
@@ -689,6 +693,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -705,6 +710,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -745,6 +751,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -1156,6 +1163,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       rejections: [],
       invalidEdges: [],
       crossLevelEdges: [],
+      sectionFindings: expect.any(Array),
     });
   });
 });
@@ -1397,6 +1405,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -1429,6 +1438,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
+      sectionFindings: expect.any(Array),
     });
   });
 
@@ -2752,5 +2762,111 @@ describe('planValidityService.validateProjectedWorkItem — the CONTAINER-COVERA
       [second.identifier, 1],
       [second.identifier, 2],
     ]);
+  });
+});
+
+describe('planValidityService — SECTION findings parsed from the projected body (MOTIR-9032)', () => {
+  const structured = renderSections('task', 'code', sectionsFixture('task', 'code'));
+  const { scopeBoundary: _dropped, ...withoutScope } = sectionsFixture('task', 'code');
+  const incomplete = renderSections('task', 'code', withoutScope);
+
+  it('reports an `add` whose body is prose, names a missing section, and leaves `valid` alone', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    const plan = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Clean', kind: 'task', type: 'code', descriptionMd: structured },
+        },
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Prose',
+            kind: 'task',
+            type: 'code',
+            descriptionMd: 'Just prose.',
+          },
+        },
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Partial',
+            kind: 'task',
+            type: 'code',
+            descriptionMd: incomplete,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(res.valid).toBe(true);
+    const byItem = new Map(res.sectionFindings.map((f) => [f.item, f]));
+    expect(byItem.size).toBe(2);
+    const prose = byItem.get(`planItem:${itemIdByTitle(plan, 'Prose')}`);
+    expect(prose?.state).toBe('unstructured');
+    const partial = byItem.get(`planItem:${itemIdByTitle(plan, 'Partial')}`);
+    expect(partial).toMatchObject({ state: 'incomplete', missing: ['scopeBoundary'] });
+    expect(byItem.has(`planItem:${itemIdByTitle(plan, 'Clean')}`)).toBe(false);
+    expect(res.sectionFindings.map((f) => f.item)).toEqual(
+      [...res.sectionFindings.map((f) => f.item)].sort((a, b) => a.localeCompare(b)),
+    );
+  });
+
+  it('judges a `modify` by its PATCHED body, and never reports an untouched stored card', async () => {
+    const fx = await makeWorkItemFixture();
+    const touched = await mk(fx, 'Touched', 'task');
+    const untouched = await mk(fx, 'Untouched', 'task');
+    const planId = await freshPlan(fx);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: touched.id, patch: { descriptionMd: incomplete } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(res.sectionFindings.map((f) => f.item)).toEqual([touched.identifier]);
+    expect(res.sectionFindings[0]).toMatchObject({
+      state: 'incomplete',
+      missing: ['scopeBoundary'],
+    });
+    expect(res.sectionFindings.some((f) => f.item === untouched.identifier)).toBe(false);
+  });
+
+  it('a modify that FIXES a stored bare body clears the finding in the subtree verdict', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'task', story.id);
+    const planId = await freshPlan(fx);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: child.id, patch: { descriptionMd: structured } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const fixed = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(fixed.sectionFindings.some((f) => f.item === child.identifier)).toBe(false);
+
+    const emptyPlan = await freshPlan(fx);
+    await plansService.markPlanned(emptyPlan, fx.ctx);
+    const bare = await planValidityService.validateProjectedWorkItem(
+      emptyPlan,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(bare.sectionFindings.find((f) => f.item === child.identifier)?.state).toBe(
+      'unstructured',
+    );
+    expect(bare.valid).toBe(true);
   });
 });

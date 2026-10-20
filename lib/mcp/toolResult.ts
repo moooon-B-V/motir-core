@@ -44,6 +44,11 @@ import {
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
 import { InvalidActivityCursorError } from '@/lib/activity/errors';
+import {
+  InvalidSectionsError,
+  SectionsWithDescriptionError,
+  UnknownSectionCellError,
+} from '@/lib/workItems/sections/errors';
 import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
@@ -543,6 +548,19 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof CrossProjectSprintAssignmentError ||
     err instanceof BulkBatchTooLargeError
   ) {
+    return toolError(err.code, err.message);
+  }
+  // `get_section_sets` (MOTIR-9029): a `kind` / `type` that names no cell. The message
+  // names the value and lists the legal ones, so the agent corrects it — it is never
+  // answered with a default set.
+  if (err instanceof UnknownSectionCellError) {
+    return toolError(err.code, err.message);
+  }
+  // `create_work_item` / `update_work_item` with `sections` (MOTIR-9031): a missing,
+  // unknown or invalid section is refused BY NAME (the message lists each), and
+  // `sections` beside `descriptionMd` is refused before anything is written. Both
+  // are the caller's own input, fixable in one hop.
+  if (err instanceof InvalidSectionsError || err instanceof SectionsWithDescriptionError) {
     return toolError(err.code, err.message);
   }
   if (err instanceof FilterValidationError) {

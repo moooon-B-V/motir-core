@@ -106,6 +106,7 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import { applySectionsInput, hasSectionsInput } from '@/lib/plans/applySectionsInput';
 import {
   languageFor,
   mergeProposalLanguages,
@@ -1009,7 +1010,57 @@ function mergeProposedFields(
   const languages = mergeProposalLanguages(current.languages, input, input.languages);
   if (languages) next.languages = languages;
   else delete next.languages;
+  // The card's SECTIONS INPUT (Story MOTIR-9023 · MOTIR-9030) — after the scalar
+  // merge above, so it is judged on the MERGED kind × type, the same pattern
+  // `todos` and `difficulty` follow. Rendered into `descriptionMd` and never
+  // copied into `next`: nothing structured is stored. Sparse at the section key
+  // over the stored body, which `applySectionsInput` parses first. A write that
+  // sends no `sections` never reaches it and stores `descriptionMd` as sent.
+  if (hasSectionsInput(input)) {
+    next.descriptionMd = applySectionsInput({
+      sections: input.sections,
+      descriptionMd: input.descriptionMd,
+      currentBody: current.descriptionMd,
+      kind: next.kind ?? DEFAULT_PROPOSED_KIND,
+      type: next.type,
+      label: proposalLabel({ op: 'add', title: next.title }),
+    });
+  }
   return next;
+}
+
+/**
+ * Resolve every `add`'s sections INPUT into the `descriptionMd` it renders to,
+ * and strip the key (Story MOTIR-9023 · MOTIR-9030). Pure, run FIRST on the
+ * append so every later gate judges the proposal as it will be stored. A `modify`
+ * or `remove` carrying `sections` is refused by name: sections on a committed
+ * card belong to the work-item doors, not to a plan patch.
+ */
+function resolveProposalSections(p: ProposalInput): ProposalInput {
+  if (p.op !== 'add') {
+    const carried =
+      (p as { sections?: unknown }).sections !== undefined ||
+      (p.patch as { sections?: unknown } | null | undefined)?.sections !== undefined;
+    if (carried) {
+      throw new InvalidProposalError(
+        `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`sections\` belongs to an \`add\` — ` +
+          'sections on a committed card are written through `update_work_item`, not a plan proposal.',
+      );
+    }
+    return p;
+  }
+  const fields = p.proposedFields;
+  if (!fields || !hasSectionsInput(fields)) return p;
+  const { sections, ...rest } = fields;
+  const descriptionMd = applySectionsInput({
+    sections,
+    descriptionMd: rest.descriptionMd,
+    currentBody: undefined,
+    kind: rest.kind ?? DEFAULT_PROPOSED_KIND,
+    type: rest.type,
+    label: proposalLabel({ op: 'add', title: rest.title }),
+  });
+  return { ...p, proposedFields: { ...rest, descriptionMd } };
 }
 
 /**
@@ -5196,7 +5247,7 @@ export const plansService = {
    */
   async addProposals(
     planId: string,
-    proposals: ProposalInput[],
+    incoming: ProposalInput[],
     ctx: ServiceContext,
     opts: { revision?: boolean } = {},
   ): Promise<PlanWithItemsDto & { appendedItemIds: string[] }> {
@@ -5207,6 +5258,10 @@ export const plansService = {
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
     if (opts.revision) assertPlanProposalsEditable(plan);
     else if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
+    // The sections INPUT is rendered into each `add`'s `descriptionMd` and stripped
+    // BEFORE any gate below reads a proposal (MOTIR-9030), so every gate judges the
+    // proposal as it will be stored and `proposals` never carries a `sections` key.
+    const proposals = incoming.map(resolveProposalSections);
     proposals.forEach(validateProposal);
 
     // ⚠️ THE CLOSE'S OWN GATE, FOR THE ONE APPEND THAT HAS NO CLOSE LEFT
