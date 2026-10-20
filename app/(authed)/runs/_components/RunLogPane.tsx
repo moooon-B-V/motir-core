@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowDownToLine, CloudOff, Clock, Hourglass } from 'lucide-react';
+import { ArrowDownToLine, CloudOff, Clock, Hourglass, ListFilter } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { DispatchRunDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunInstant } from '@/lib/runs/runClock';
@@ -131,7 +131,7 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  const silence = whichSilence(run, runIsLive, lines.length);
+  const silence = whichSilence(run, runIsLive, lines.length, selectedWorkItemId !== null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -143,9 +143,13 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
             ref={bodyRef}
             onScroll={onScroll}
             data-testid="run-log-body"
-            // ⚠️ `min-w-0` on the scroller and `overflow-x-auto` on the LINE:
-            // a very long line scrolls inside the console, never the page.
-            className="min-h-0 min-w-0 flex-1 overflow-auto bg-(--el-surface) px-(--spacing-card-padding) py-2 font-mono text-[0.6875rem] leading-relaxed text-(--el-text-secondary)"
+            // ⚠️ A long line WRAPS inside the console — it is never clipped behind a
+            // scroller of its own and never scrolls the page sideways. The scroller
+            // states both axes (`overflow-y-auto overflow-x-hidden`), the body cell
+            // is the one shrinkable cell (`min-w-0 whitespace-pre-wrap wrap-anywhere`),
+            // and the gutter cells are `flex-none whitespace-nowrap`, so a wrapped
+            // continuation lands under the body's left edge: a hanging indent.
+            className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-(--el-surface) px-(--spacing-card-padding) py-2 font-mono text-[0.6875rem] leading-relaxed text-(--el-text-secondary)"
           >
             {dropped > 0 ? (
               <p className="pb-1 text-(--el-text-tertiary)" data-testid="run-log-truncated">
@@ -153,16 +157,23 @@ export function RunLogPane({ run, events, selectedWorkItemId }: RunLogPaneProps)
               </p>
             ) : null}
             {lines.map((ev) => (
-              <div key={ev.seq} className="flex gap-2 whitespace-pre">
-                <span className="flex-none text-(--el-text-tertiary)">
+              <div key={ev.seq} data-testid="run-log-line" className="flex gap-2">
+                <span className="flex-none whitespace-nowrap text-(--el-text-tertiary)">
                   {formatRunInstant(ev.createdAt, locale)}
                 </span>
                 {/* Unfiltered, every line names its SOURCE member; filtered to
                     one, the label is noise on every row and is dropped. */}
                 {selectedWorkItemId === null && keyOf(ev) !== null ? (
-                  <span className="flex-none text-(--el-accent-on-surface)">{keyOf(ev)}</span>
+                  <span className="flex-none whitespace-nowrap text-(--el-accent-on-surface)">
+                    {keyOf(ev)}
+                  </span>
                 ) : null}
-                <span className="min-w-0 overflow-x-auto text-(--el-text)">{ev.body}</span>
+                <span
+                  data-testid="run-log-line-body"
+                  className="min-w-0 whitespace-pre-wrap wrap-anywhere text-(--el-text)"
+                >
+                  {ev.body}
+                </span>
               </div>
             ))}
           </div>
@@ -220,7 +231,7 @@ function countAll(
   return n;
 }
 
-type SilenceKind = 'neverSent' | 'waiting' | 'expired';
+type SilenceKind = 'neverSent' | 'waiting' | 'expired' | 'filtered';
 
 /**
  * WHICH SILENCE — the decision the design's table exists to force.
@@ -236,15 +247,26 @@ function whichSilence(
   run: DispatchRunDto,
   runIsLive: boolean,
   rendered: number,
+  filteredOut = false,
 ): SilenceKind | null {
   if (rendered > 0) return null;
+  // The SELECTION admits no lines although the run has some: the reader chose a
+  // work item with nothing logged yet, which is not the run's silence.
+  if (filteredOut) return 'filtered';
   if (runIsLive) return 'waiting';
   const ageDays = (Date.now() - new Date(run.startedAt).getTime()) / 86_400_000;
   return ageDays > RETENTION_DAYS ? 'expired' : 'neverSent';
 }
 
 function Silence({ kind, t }: { kind: SilenceKind; t: ReturnType<typeof useTranslations> }) {
-  const Icon = kind === 'waiting' ? Hourglass : kind === 'expired' ? Clock : CloudOff;
+  const Icon =
+    kind === 'waiting'
+      ? Hourglass
+      : kind === 'expired'
+        ? Clock
+        : kind === 'filtered'
+          ? ListFilter
+          : CloudOff;
   return (
     <div
       className="flex flex-1 flex-col items-center justify-center gap-1.5 p-(--spacing-card-padding) text-center"

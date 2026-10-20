@@ -30,6 +30,15 @@ export type DispatchRunWithCards = Prisma.DispatchRunGetPayload<{
   };
 }>;
 
+/** A run as the INDEX reads it: the legs, plus the scope's own key. */
+export type DispatchRunListRow = Prisma.DispatchRunGetPayload<{
+  include: {
+    cards: true;
+    agentInstance: { select: { id: true; name: true; profileId: true } };
+    scope: { select: { identifier: true } };
+  };
+}>;
+
 /**
  * The agent a run executed in (MOTIR-7023, `agent-instance-run.md` §5), as the
  * run's reads carry it — the name and the profile the run section and the run
@@ -47,6 +56,13 @@ const AGENT_INSTANCE_REF = { select: { id: true, name: true, profileId: true } }
 const WITH_CARDS = {
   cards: { orderBy: { position: 'asc' } },
   agentInstance: AGENT_INSTANCE_REF,
+} as const;
+
+/** The list reads only: the scope's identifier rides the same `findMany`, so the
+ *  index can name a run by its target without a second query. */
+const WITH_CARDS_AND_SCOPE = {
+  ...WITH_CARDS,
+  scope: { select: { identifier: true } },
 } as const;
 
 /** A RUNNING run in one agent — the active-run read by agent (§5). */
@@ -766,7 +782,7 @@ export const dispatchRunRepository = {
     scopeWorkItemId: string,
     { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
     tx: Prisma.TransactionClient,
-  ): Promise<DispatchRunWithCards[]> {
+  ): Promise<DispatchRunListRow[]> {
     return tx.dispatchRun.findMany({
       where: {
         scopeWorkItemId,
@@ -774,7 +790,7 @@ export const dispatchRunRepository = {
         ...startedBy(createdById),
         ...notTouching(withheldWorkItemIds),
       },
-      include: WITH_CARDS,
+      include: WITH_CARDS_AND_SCOPE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -793,7 +809,7 @@ export const dispatchRunRepository = {
     projectId: string,
     { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
     tx: Prisma.TransactionClient,
-  ): Promise<DispatchRunWithCards[]> {
+  ): Promise<DispatchRunListRow[]> {
     return tx.dispatchRun.findMany({
       where: {
         projectId,
@@ -801,7 +817,7 @@ export const dispatchRunRepository = {
         ...startedBy(createdById),
         ...notTouching(withheldWorkItemIds),
       },
-      include: WITH_CARDS,
+      include: WITH_CARDS_AND_SCOPE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

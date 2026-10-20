@@ -12330,6 +12330,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "実行",
     "searchLabel": "この実行を検索",
     "gloss": "エージェントが行ったこと",
@@ -12405,8 +12407,9 @@
     "sectionPast": "過去の実行",
     "noneRunning": "実行中のものはありません。",
     "nonePast": "まだ完了した実行はありません。",
-    "colCommand": "コマンド",
-    "colScope": "スコープ",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, other {and # more work items}}",
     "colAgent": "エージェント",
     "colStarted": "開始",
     "colStatus": "ステータス",
@@ -12454,6 +12457,10 @@
       "expired": {
         "title": "保持期間を過ぎています",
         "body": "ログ本文は実行から 30 日後に削除されます。この実行のログ本文は削除済みです。"
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12794,7 +12801,10 @@
       "progressAria": "{total} 手順中 {done} 手順完了",
       "progressAllDone": "{total} 手順中 {total} 手順完了",
       "door": "ガイドしてもらう"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "リポジトリを追加",

@@ -232,10 +232,41 @@ export function toDispatchRunLegCounts(cards: DispatchRunCard[]): DispatchRunLeg
  * a leg's key: the index says how a run came out, and the run view says which
  * cards it came out that way on.
  */
+/**
+ * What a run was FOR — the key, the id that makes it a door, and the count
+ * behind `+N` — chosen in ONE place so the key and the id always come from the
+ * same branch: the scope work item; else the stored label (the scope is gone,
+ * or the CLI named a sprint), which is text and never a link; else the first
+ * leg. `otherCardCount` is the legs whose key differs from the target's, so a
+ * scope that is none of its legs counts them all.
+ */
+function runTargetOf(
+  scope: { identifier: string } | null | undefined,
+  scopeLabel: string | null,
+  scopeWorkItemId: string | null,
+  cards: DispatchRunCard[],
+): Pick<DispatchRunListItemDto, 'targetKey' | 'targetWorkItemId' | 'otherCardCount'> {
+  const first = cards[0];
+  const target =
+    scope && scopeWorkItemId
+      ? { key: scope.identifier, workItemId: scopeWorkItemId }
+      : scopeLabel
+        ? { key: scopeLabel, workItemId: null }
+        : first?.workItemKey
+          ? { key: first.workItemKey, workItemId: first.workItemId }
+          : null;
+  return {
+    targetKey: target?.key ?? null,
+    targetWorkItemId: target?.workItemId ?? null,
+    otherCardCount: target ? cards.filter((card) => card.workItemKey !== target.key).length : 0,
+  };
+}
+
 export function toDispatchRunListItemDto(
   row: DispatchRun & {
     cards: DispatchRunCard[];
     agentInstance?: DispatchRunAgentInstanceRow | null;
+    scope?: { identifier: string } | null;
   },
 ): DispatchRunListItemDto {
   return {
@@ -254,6 +285,7 @@ export function toDispatchRunListItemDto(
     agentInstance: toDispatchRunAgentInstanceDto(row.agentInstance),
     cardCount: row.cards.length,
     legs: toDispatchRunLegCounts(row.cards),
+    ...runTargetOf(row.scope, row.scopeLabel, row.scopeWorkItemId, row.cards),
   };
 }
 

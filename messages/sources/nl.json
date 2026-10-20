@@ -9690,6 +9690,8 @@
   "myAgents.boot.row.terminalCheck": "Checking the terminal…",
   "myAgents.boot.row.ready": "Getting ready…",
   "myAgents.boot.terminalClosed": "The terminal stays closed until the agent is running.",
+  "runs.escKey": "Esc",
+  "runs.logDividerAria": "Resize the agent output pane",
   "runs.title": "Run",
   "runs.searchLabel": "Search this run",
   "runs.gloss": "what the agent did",
@@ -9751,8 +9753,9 @@
   "runs.sectionPast": "Past runs",
   "runs.noneRunning": "Nothing is running.",
   "runs.nonePast": "No run has finished yet.",
-  "runs.colCommand": "Command",
-  "runs.colScope": "Scope",
+  "runs.colTarget": "Target",
+  "runs.openRunAria": "Open run",
+  "runs.targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
   "runs.colAgent": "Agent",
   "runs.colStarted": "Started",
   "runs.colStatus": "Status",
@@ -11408,5 +11411,10 @@
   "titleTranslation.noCredit": "Titles stay in their original language because your organization has no credit left.",
   "titleTranslation.pendingMark": "Translating",
   "titleTranslation.showOriginal": "Show original",
-  "titleTranslation.showTranslation": "Show translation"
+  "titleTranslation.showTranslation": "Show translation",
+  "runs.viewList": "List",
+  "runs.viewCanvas": "Canvas",
+  "runs.viewSwitchAria": "Show this run's work items as",
+  "runs.logSilence.filtered.title": "Nothing logged for this work item",
+  "runs.logSilence.filtered.body": "This work item has not printed anything yet. Clear the selection to see the whole run."
 }

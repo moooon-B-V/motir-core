@@ -438,6 +438,11 @@ export type DispatchRunLegCountsDto = Record<DispatchCardDisposition, number>;
  * needs is *how it came out*: "9 of 11 implemented, 1 skipped, 1 not reached".
  * The counts come from the same include the query already makes, so the page
  * costs one query however many runs it holds.
+ *
+ * The one thing derived FROM those cards in place of shipping them is the run's
+ * TARGET — `targetKey`, `targetWorkItemId` and `otherCardCount` — which is what
+ * the index names a run by. The run's full set stays readable in the overlay
+ * where somebody deliberately opened it.
  */
 export interface DispatchRunListItemDto {
   id: string;
@@ -463,6 +468,30 @@ export interface DispatchRunListItemDto {
   /** How many cards this run owned. Zero is a real answer, not an error. */
   cardCount: number;
   legs: DispatchRunLegCountsDto;
+  /**
+   * What the run was FOR, as a key: the scope work item's identifier; else, when
+   * the scope is gone, the stored label AS TEXT; else the first leg's key. Null
+   * only for a run with no subject at all (`auto` with no legs and no scope).
+   *
+   * ⚠️ NOT `scopeLabel`: every shipped writer of a container run stores the
+   * work item's TITLE there, so a column fed from it would show a title and its
+   * link would open `/items/<title>`.
+   */
+  targetKey: string | null;
+  /**
+   * The id that decides whether {@link targetKey} is a door. Picked in the SAME
+   * branch as the key (scope → the scope's id, stored label → null, first leg →
+   * that leg's id), so a key can never link to another branch's work item. Null
+   * means render the key as text: there is nothing to open.
+   */
+  targetWorkItemId: string | null;
+  /**
+   * The legs whose key differs from {@link targetKey} — the `+N`. Never
+   * `cardCount - 1`: a run scoped to a container over three children needs 3,
+   * a run of three legs whose first is its own target needs 2, and `cardCount`
+   * is 3 both times. Zero means no `+N`.
+   */
+  otherCardCount: number;
   /**
    * The skipped legs still waiting on a person (MOTIR-7477), for this reader.
    * Absent on a row built without the gate read — every leg then counts as
