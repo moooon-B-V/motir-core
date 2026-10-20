@@ -66,6 +66,29 @@ describe('commandWords', () => {
   it('sees a command inside $( ) and backticks', () => {
     expect(commandWords('echo "$(gh api x)"').sort()).toEqual(['echo', 'gh']);
   });
+
+  // MOTIR-9126: a quoted jq program is an ARGUMENT, not a pipeline. Splitting it
+  // made motir-ai#778's sweep line read as six new executables.
+  it('does not split a separator inside single or double quotes', () => {
+    const sweep =
+      'idle=$(jq --argjson s "$LONG_IDLE_SECONDS" \'[.[] | select(.state == "suspended" and ((.updated_at // "") != "") and ((.updated_at | sub("\\\\.[0-9]+"; "") | fromdateiso8601? // now) < (now - $s)))] | length\' machines.json)';
+    expect(commandWords(sweep)).toEqual(['jq']);
+    expect(commandWords('echo "a | b; c && d (e)"')).toEqual(['echo']);
+    expect(commandWords("awk '{ print $1 }' f | sort -u").sort()).toEqual(['awk', 'sort']);
+    expect(commandWords('TITLE="chore(catalog): refresh the snapshot"')).toEqual([]);
+    expect(commandWords('MSG="a b" gh pr create')).toEqual(['gh']);
+  });
+
+  it('still sees $( ) and backticks inside double quotes, and nothing after them', () => {
+    expect(commandWords('echo "x $(gh api y | jq .z) tail"').sort()).toEqual(['echo', 'gh', 'jq']);
+    expect(commandWords('echo "x `git rev-parse HEAD` tail"').sort()).toEqual(['echo', 'git']);
+    expect(commandWords("echo '$(not run)'")).toEqual(['echo']);
+  });
+
+  it('reads a subshell, and a quoted string that spans lines', () => {
+    expect(commandWords('(cd x && make) || exit 1').sort()).toEqual(['cd', 'exit', 'make']);
+    expect(commandWords("jq '\n  .a | select(.b)\n' f\ncurl x").sort()).toEqual(['curl', 'jq']);
+  });
 });
 
 describe('workflowFingerprint', () => {
@@ -124,6 +147,12 @@ describe('workflowFingerprint', () => {
 
   it('moves for a new shell', () => {
     expect(fp(ci('      - run: print(1)\n        shell: python3 {0}'))).not.toBe(fp(ci()));
+  });
+
+  it('does not read a non-shell body as commands, so editing it does not move', () => {
+    const py = (body: string) => ci(`      - run: ${body}\n        shell: python3 {0}`);
+    expect(fp(py('print(1) | x'))).toBe(fp(py('import json; json.dumps(2)')));
+    expect(fp(ci('      - run: gh x\n        shell: bash'))).not.toBe(fp(ci()));
   });
 
   it('moves when a reusable workflow is called', () => {
