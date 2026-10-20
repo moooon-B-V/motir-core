@@ -7947,7 +7947,6 @@
       "replan": "Aperto per modificare il piano esistente di {project}.",
       "contextual": "Aperto nel contesto di {project}.",
       "contextualItem": "Aperto nel contesto di {item}.",
-      "conventionRefine": "Aperto per perfezionare la convenzione di codice di {repo}.",
       "roadmap": "Aperto dalla roadmap.",
       "followUp": "Aperto per pianificare il seguito di {choice}, su {item}.",
       "followUpProject": "Aperto su {project} per pianificare il seguito di {choice}."
@@ -8362,13 +8361,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · modificata",
+      "bylineDerived": "Derivata dal codice",
+      "bylineEdited": "Modificata da {name} · {date}",
+      "bylineEditedUnknown": "Modificata da un membro del team · {date}",
+      "edit": "Modifica",
+      "writeFirst": "Scrivi la convenzione",
+      "editFieldLabel": "Convenzione (Markdown)",
+      "editingVersion": "Modifica di v{version}",
+      "saveCreates": "Il salvataggio crea v{next}. {count} / {max} caratteri.",
+      "editHelper": "Ogni nuovo prompt per questo repository legge il testo salvato. Una versione derivata più recente non lo sostituisce mai.",
+      "save": "Salva",
+      "cancel": "Annulla",
+      "saving": "Salvataggio…",
+      "saveFailed": "Impossibile salvare la convenzione. Il tuo testo è ancora qui: riprova.",
+      "tooLong": "La convenzione supera i {max} caratteri. Accorciala per salvare.",
+      "blank": "Scrivi qualcosa da salvare.",
+      "conflictTitle": "Qualcuno ha salvato una versione più recente",
+      "conflictBody": "{name} ha salvato v{latest} il {date} mentre modificavi v{base}. Le tue modifiche non sono state salvate.",
+      "conflictLoadTheirs": "Carica la sua versione",
+      "conflictKeepMine": "Tieni la mia come copia",
+      "conflictCopyLabel": "Il tuo testo: copialo, poi carica l’altra versione",
+      "conflictCopyHint": "Copia di sola lettura. Caricando la sua versione questo editor si chiude.",
+      "copy": "Copia negli appunti",
+      "pendingTitle": "Una versione più recente è stata derivata dal codice",
+      "pendingBody": "Una nuova verifica il {date} ha prodotto una versione derivata. Non è in uso: lo è il testo qui sotto. Non cambia nulla finché non lo modifichi.",
+      "pendingCompare": "Confronta affiancate",
+      "pendingInUse": "In uso · v{version} modificata",
+      "pendingWaiting": "In attesa · derivata",
+      "emptyWriteBody": "Per questo repository non è ancora stata derivata alcuna regola di convenzione. Scrivi qui la prima versione oppure attendi che Motir ne derivi una dal tuo codice.",
       "emptyTitle": "Ancora nessuna convenzione",
       "emptyDescription": "Motir ricava una convenzione di codice dal tuo codice una volta collegato un repository. Rivedila qui.",
       "defaultRepo": "Codice",
       "noRules": "Non sono ancora state ricavate regole di convenzione per questo repository.",
       "versionDerived": "v{version} · ricavata",
-      "bannerDerivedTitle": "Ricavata dal tuo codice: usata automaticamente",
-      "bannerDerivedBody": "Questa convenzione è ricavata dal tuo codebase e inserita in ogni prompt per il nuovo codice. Per perfezionarla, usa la voce Perfeziona con Motir qui sopra per aprire la chat con l’AI.",
       "provenanceTitle": "Provenienza delle regole",
       "provenanceLegend": "Adottata: il tuo codice lo fa già, l’abbiamo documentato. Proposta: il tuo codice non diceva nulla o era incoerente, quindi è stata inserita un’impostazione predefinita del clean code.",
       "provenance": {
@@ -12333,6 +12359,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Esecuzione",
     "searchLabel": "Cerca in questa esecuzione",
     "gloss": "cosa ha fatto l’agente",
@@ -12408,8 +12436,9 @@
     "sectionPast": "Esecuzioni passate",
     "noneRunning": "Non c’è nulla in esecuzione.",
     "nonePast": "Nessuna esecuzione è ancora terminata.",
-    "colCommand": "Comando",
-    "colScope": "Ambito",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agente",
     "colStarted": "Avviata",
     "colStatus": "Stato",
@@ -12457,6 +12486,10 @@
       "expired": {
         "title": "Oltre il periodo di conservazione",
         "body": "Il contenuto dei log viene eliminato 30 giorni dopo un’esecuzione. Quello di questa è già stato eliminato."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12797,7 +12830,10 @@
       "progressAria": "{done} di {total} passaggi completati",
       "progressAllDone": "{total} di {total} passaggi completati",
       "door": "Guidami"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Aggiungi repository",

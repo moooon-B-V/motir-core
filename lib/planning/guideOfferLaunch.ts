@@ -44,7 +44,6 @@ export const PROJECT_FALLBACK_LAUNCH: PlanningLaunch = {
   mode: 'project',
   from: 'project',
   itemKey: null,
-  repoKey: null,
 };
 
 /** The prefix of the page-level claim the one-time send is held under. */
@@ -94,7 +93,6 @@ export function guideWorkspaceLaunch(seed: GuideSeedLoad | null): PlanningLaunch
     mode: 'contextual',
     from: 'work-item',
     itemKey: seed.anchorKey,
-    repoKey: null,
     ...(seed.kind === 'resume' ? { sessionId: seed.sessionId } : {}),
   };
 }

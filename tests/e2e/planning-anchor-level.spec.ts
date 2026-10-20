@@ -318,7 +318,7 @@ test('below the split breakpoint the panes STACK and the canvas keeps a real hei
   await page.goto(anchoredHref(seed.subtaskKey));
   await arrived;
 
-  const frame = workspace(page).getByTestId('planning-resizable-frame');
+  const frame = workspace(page).getByTestId('resizable-split');
   const viewport = workspace(page).getByTestId('planning-canvas');
   const anchorNode = canvasNode(page, seed.subtaskTitle);
   await expect(anchorNode).toBeAttached();

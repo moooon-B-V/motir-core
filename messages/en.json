@@ -7947,7 +7947,6 @@
       "replan": "Opened to change {project}'s existing plan.",
       "contextual": "Opened in context on {project}.",
       "contextualItem": "Opened in the context of {item}.",
-      "conventionRefine": "Opened to refine {repo}'s coding convention.",
       "roadmap": "Opened from the roadmap.",
       "followUp": "Opened to plan the follow-up to {choice}, on {item}.",
       "followUpProject": "Opened on {project} to plan the follow-up to {choice}."
@@ -8362,13 +8361,40 @@
       }
     },
     "convention": {
+      "versionEdited": "v{version} · edited",
+      "bylineDerived": "Derived from the code",
+      "bylineEdited": "Edited by {name} · {date}",
+      "bylineEditedUnknown": "Edited by a team member · {date}",
+      "edit": "Edit",
+      "writeFirst": "Write the convention",
+      "editFieldLabel": "Convention (Markdown)",
+      "editingVersion": "Editing v{version}",
+      "saveCreates": "Saving creates v{next}. {count} / {max} characters.",
+      "editHelper": "Every new prompt for this repository reads the saved text. A newer derived version never replaces it.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "saveFailed": "Couldn’t save the convention. Your text is still here — try again.",
+      "tooLong": "The convention is over {max} characters. Shorten it to save.",
+      "blank": "Write something to save.",
+      "conflictTitle": "Someone saved a newer version",
+      "conflictBody": "{name} saved v{latest} on {date} while you were editing v{base}. Your changes have not been saved.",
+      "conflictLoadTheirs": "Load their version",
+      "conflictKeepMine": "Keep mine as a copy",
+      "conflictCopyLabel": "Your text — copy it, then load theirs",
+      "conflictCopyHint": "Read-only copy. Loading their version closes this editor.",
+      "copy": "Copy to clipboard",
+      "pendingTitle": "A newer version was derived from the code",
+      "pendingBody": "A re-audit on {date} produced a derived version. It is not in use — the text below is. Nothing changes unless you edit.",
+      "pendingCompare": "Compare side by side",
+      "pendingInUse": "In use · v{version} edited",
+      "pendingWaiting": "Waiting · derived",
+      "emptyWriteBody": "No convention rules have been derived yet for this repo. Write the first version here, or wait for Motir to derive one from your code.",
       "emptyTitle": "No convention yet",
       "emptyDescription": "Motir derives a coding convention from your code once a repo is connected. Review it here.",
       "defaultRepo": "Code",
       "noRules": "No convention rules have been derived yet for this repo.",
       "versionDerived": "v{version} · derived",
-      "bannerDerivedTitle": "Derived from your code — auto-used",
-      "bannerDerivedBody": "This convention is derived from your codebase and injected into every prompt for new code. To refine it, use the Refine with Motir entry above to open the AI chat.",
       "provenanceTitle": "Rule provenance",
       "provenanceLegend": "Adopted — your code already does this, we documented it. Proposed — your code was silent or inconsistent, a clean-code default placed here.",
       "provenance": {
@@ -12333,6 +12359,8 @@
     }
   },
   "runs": {
+    "escKey": "Esc",
+    "logDividerAria": "Resize the agent output pane",
     "title": "Run",
     "searchLabel": "Search this run",
     "gloss": "what the agent did",
@@ -12408,8 +12436,9 @@
     "sectionPast": "Past runs",
     "noneRunning": "Nothing is running.",
     "nonePast": "No run has finished yet.",
-    "colCommand": "Command",
-    "colScope": "Scope",
+    "colTarget": "Target",
+    "openRunAria": "Open run",
+    "targetOthers": "{count, plural, one {and # more work item} other {and # more work items}}",
     "colAgent": "Agent",
     "colStarted": "Started",
     "colStatus": "Status",
@@ -12457,6 +12486,10 @@
       "expired": {
         "title": "Past the retention window",
         "body": "Log bodies are deleted 30 days after a run. This one’s have been."
+      },
+      "filtered": {
+        "title": "Nothing logged for this work item",
+        "body": "This work item has not printed anything yet. Clear the selection to see the whole run."
       }
     },
     "findings": {
@@ -12797,7 +12830,10 @@
       "progressAria": "{done} of {total} steps done",
       "progressAllDone": "{total} of {total} steps done",
       "door": "Guide me through"
-    }
+    },
+    "viewList": "List",
+    "viewCanvas": "Canvas",
+    "viewSwitchAria": "Show this run's work items as"
   },
   "repositoryPicker": {
     "add": "Add repository",

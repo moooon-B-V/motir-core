@@ -3343,6 +3343,22 @@ export default defineConfig({
         'loadtest/report/report.ts',
         'loadtest/report/scaleOut.ts',
         'loadtest/report/thresholds.ts',
+        // Story MOTIR-8982 · MOTIR-9075 — the run overlay's split, exit button, List
+        // pane and leg label (the files the story CREATED). REPORTED here; each is
+        // gated PER FILE in `vitest.coverage.runs-overlay-parity.config.ts` at the
+        // reading MEASURED 2026-10-19 over that lane's suites: every file 100 on all
+        // four metrics except `ResizableSplit.tsx` (91.86 / 80.89 / 93.33 / 98.09)
+        // and `usePersistedPaneWidth.ts` (92.45 / 77.27 / 93.33 / 95.23), whose
+        // uncovered branches are environment guards. Wildcard-safe: no literal
+        // `(authed)`.
+        'components/split/ResizableSplit.tsx',
+        'components/split/SplitDivider.tsx',
+        'lib/hooks/usePersistedPaneWidth.ts',
+        'components/ui/OverlayExitButton.tsx',
+        'app/**/runs/_components/runFrameRows.ts',
+        'lib/runs/legLabel.ts',
+        'app/**/runs/_components/RunSetListPane.tsx',
+        'app/**/runs/_components/useRunSetLevel.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates

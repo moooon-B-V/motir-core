@@ -46,8 +46,6 @@ export type PlanningMode =
  *   the first time. Same shape as the project context's `hasPlan`, one level
  *   down; omitted (the coarse case) it degrades to the contextual default.
  * - `roadmap` — the Board↔Roadmap surface.
- * - `convention-refine` — refine a coding convention in the universal chat
- *   (MOTIR-1663: the Code-health page's "Refine with Motir" entry).
  * - `refused-gate` — open the planner SEEDED from a decided gate (story
  *   MOTIR-6068 · MOTIR-6210; `approval-gates.md` §10f). The name predates the
  *   pick and is kept because every shipped link carries it: since MOTIR-6435 it
@@ -74,7 +72,6 @@ export type PlanningLaunchContext =
       startTurn?: boolean;
     }
   | { kind: 'roadmap' }
-  | { kind: 'convention-refine'; repoKey: string }
   | { kind: 'refused-gate'; gateId: string }
   /** A guide's RE-PLAN OFFER (Story MOTIR-8684 · MOTIR-8693): `plan=contextual&planFrom=
    *  guide-offer&planOffer=<turnId>`. It carries the offer's turn id and nothing else —
@@ -151,8 +148,6 @@ export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMod
       return context.hasPlan ? 'replan' : 'contextual';
     case 'roadmap':
       return 'roadmap';
-    case 'convention-refine':
-      return 'contextual';
     // The ADDRESS's mode only. The seed is not known until the overlay reads it,
     // and the overlay resolves the workspace's real mode from the seed's
     // `intent`: `replan` for a refusal, a forward launch for a pick (MOTIR-6435).
@@ -199,7 +194,6 @@ const PLANNING_ORIGINS: readonly PlanningOrigin[] = [
   'project',
   'work-item',
   'roadmap',
-  'convention-refine',
   'refused-gate',
   'guide-offer',
   'guide',
@@ -216,8 +210,6 @@ export interface PlanningLaunch {
   from: PlanningOrigin;
   /** The `work-item` origin's target key, when carried. */
   itemKey: string | null;
-  /** The `convention-refine` origin's repo key, when carried. */
-  repoKey: string | null;
   /** A named session to reopen (`planSession`), when carried (MOTIR-6024). */
   sessionId?: string | null;
   /** Where that named session was reopened FROM (`planVia`, MOTIR-6037) — present only
@@ -272,7 +264,6 @@ export function parsePlanningLaunch(searchParams: Record<string, RawParam>): Pla
     // Only the origin that WRITES the param may carry it back, so a hand-edited
     // `?from=roadmap&item=X` can't smuggle a target into a non-item mode.
     itemKey: from === 'work-item' ? first(searchParams['item']) : null,
-    repoKey: from === 'convention-refine' ? first(searchParams['repo']) : null,
   };
 }
 
@@ -320,8 +311,6 @@ export const OVERLAY_PARAM_NAMES = {
   origin: 'planFrom',
   /** the anchor work-item key; written ONLY for a `work-item` origin. */
   item: 'planItem',
-  /** the repository key; written ONLY for a `convention-refine` origin. */
-  repo: 'planRepo',
   /**
    * A NAMED planning session to reopen (MOTIR-6024; AMENDMENT 17 §2) — what a
    * Plans row writes. Read only for a `project` or `work-item` origin, and it
@@ -404,7 +393,6 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
   if (context.kind === 'work-item' || context.kind === 'guide') {
     params.set(OVERLAY_PARAM_NAMES.item, context.itemKey);
   }
-  if (context.kind === 'convention-refine') params.set(OVERLAY_PARAM_NAMES.repo, context.repoKey);
   if (context.kind === 'refused-gate') params.set(OVERLAY_PARAM_NAMES.gate, context.gateId);
   if (context.kind === 'guide-offer')
     params.set(OVERLAY_PARAM_NAMES.guideOffer, context.guideTurnId);
@@ -482,7 +470,6 @@ export function planningHostPathFor(context: PlanningLaunchContext): string {
   if (context.kind === 'work-item' || context.kind === 'guide') {
     return `/items/${encodeURIComponent(context.itemKey)}`;
   }
-  if (context.kind === 'convention-refine') return '/code';
   return '/roadmap';
 }
 
@@ -535,7 +522,7 @@ function readParam(params: PlanningOverlayParams, name: string): RawParam {
  * `parsePlanningLaunch` produces — an absent or unrecognised value degrades to
  * the coarse project default rather than erroring, because this is parsed from a
  * user-editable URL — including the anti-smuggling rule: `itemKey` survives only
- * for a `work-item` origin and `repoKey` only for `convention-refine`, so a
+ * for a `work-item` origin, so a
  * hand-edited `?plan=project&planFrom=roadmap&planItem=MOTIR-1` opens the project
  * conversation and carries no target.
  */
@@ -549,12 +536,11 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
   if (parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)) === 'guide') {
     const itemKey = first(readParam(params, OVERLAY_PARAM_NAMES.item));
     return itemKey
-      ? { mode: 'guide', from: 'guide', itemKey, repoKey: null }
+      ? { mode: 'guide', from: 'guide', itemKey }
       : {
           mode: DEFAULT_PLANNING_MODE,
           from: DEFAULT_PLANNING_ORIGIN,
           itemKey: null,
-          repoKey: null,
         };
   }
   const from = parsePlanningOrigin(readParam(params, OVERLAY_PARAM_NAMES.origin));
@@ -565,7 +551,7 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
   // Read only WITH a named session; anything that names no entrance is the Plans page.
   const viaRaw = sessionId ? first(readParam(params, OVERLAY_PARAM_NAMES.via)) : null;
   const via = PLANNING_ENTRANCES.find((entrance) => entrance === viaRaw) ?? null;
-  // The gate rides ONLY its own origin, like `planItem` and `planRepo` do.
+  // The gate rides ONLY its own origin, like `planItem` does.
   const gateId =
     from === 'refused-gate' ? first(readParam(params, OVERLAY_PARAM_NAMES.gate)) : null;
   const guideTurnId =
@@ -581,8 +567,6 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     mode: parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)),
     from,
     itemKey,
-    repoKey:
-      from === 'convention-refine' ? first(readParam(params, OVERLAY_PARAM_NAMES.repo)) : null,
     // Only the two origins a Plans row writes may carry a named session, and the
     // key is present only when it does — every other launch reads as before.
     ...(sessionId ? { sessionId } : {}),

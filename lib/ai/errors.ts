@@ -358,7 +358,21 @@ export function jobErrorFromProblem(p: Problem): MotirAiError {
   return errorFromProblem(p);
 }
 
+// A coding-convention save over a version that moved (409 `conflict` carrying the
+// `conventionConflict` extension member, motir-ai MOTIR-9080). The editor loaded
+// version N and N+1 landed first; nothing was written. Not retryable as sent.
+export class MotirAiConventionConflictError extends MotirAiError {
+  readonly code = 'MOTIR_AI_CONVENTION_CONFLICT' as const;
+  constructor(readonly latestVersion: number) {
+    super(`motir-ai refused the convention save: the convention is at v${latestVersion}`);
+    this.name = 'MotirAiConventionConflictError';
+  }
+}
+
 export function errorFromProblem(p: Problem): MotirAiError {
+  if (p.conventionConflict?.code === 'CONVENTION_VERSION_CONFLICT') {
+    return new MotirAiConventionConflictError(p.conventionConflict.latestVersion);
+  }
   switch (p.code) {
     case 'service_unauthorized':
     case 'token_expired':

@@ -14,6 +14,7 @@ import { linkAllWorkspaceReposIntoProject } from './fixtures/codeContextFixtures
 // write path is removed per MOTIR-1660/1663 (derived + auto-used, read-only).
 const getCodeAuditMock = vi.fn<(q: unknown) => Promise<RawCodeAuditSurface>>();
 const getConventionMock = vi.fn<(q: unknown) => Promise<RawConventionSurface>>();
+const putConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
 const refreshCodeAuditMock =
   vi.fn<
     (t: unknown, c: unknown, a: unknown) => Promise<{ auditJobId: string; conventionJobId: string }>
@@ -21,6 +22,7 @@ const refreshCodeAuditMock =
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getCodeAudit: (q: unknown) => getCodeAuditMock(q),
   getConvention: (q: unknown) => getConventionMock(q),
+  putConvention: (i: unknown) => putConventionMock(i),
   refreshCodeAudit: (t: unknown, c: unknown, a: unknown) => refreshCodeAuditMock(t, c, a),
 }));
 
@@ -30,8 +32,14 @@ const { workspacesService } = await import('@/lib/services/workspacesService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
 const { PermissionDeniedError, ProjectNotFoundError } = await import('@/lib/projects/errors');
-const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
-const { EmptyRepoScopeError, UnknownRepoScopeError } = await import('@/lib/codeHealth/errors');
+const { MotirAiUnavailableError, MotirAiConventionConflictError } = await import('@/lib/ai/errors');
+const {
+  ConventionBlankError,
+  ConventionTooLongError,
+  ConventionVersionConflictError,
+  EmptyRepoScopeError,
+  UnknownRepoScopeError,
+} = await import('@/lib/codeHealth/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 
 // ⚠️ These fixtures are motir-ai's REAL `GET /v1/convention` body — the producer's
@@ -151,6 +159,7 @@ beforeEach(async () => {
   await truncateAuthTables();
   getCodeAuditMock.mockReset();
   getConventionMock.mockReset();
+  putConventionMock.mockReset();
   refreshCodeAuditMock.mockReset();
 });
 
@@ -202,10 +211,16 @@ describe('aiConventionService — project-admin gate', () => {
     // Assert on KEYS, not on a serialized substring — `proposed` survives as a
     // provenance VALUE (adopted vs proposed), which is a different axis entirely.
     expect(Object.keys(dto).sort()).toEqual(['convention', 'nextCursor', 'repoKey', 'versions']);
+    // `authorKind` / `editedByUserId` / `pendingDerivedMd` are the editable
+    // convention's fields (MOTIR-9080), not the retired approve lifecycle.
     expect(Object.keys(dto.convention!).sort()).toEqual([
+      'authorKind',
       'contentMd',
       'createdAt',
+      'editedByName',
+      'editedByUserId',
       'id',
+      'pendingDerivedMd',
       'provenance',
       'repoKey',
       'version',
@@ -883,5 +898,115 @@ describe('aiConventionService — project-admin gate', () => {
     await expect(
       aiConventionService.getAudit(project.id, { userId: owner.id, workspaceId: workspace.id }),
     ).rejects.toBeInstanceOf(MotirAiUnavailableError);
+  });
+});
+
+// MOTIR-9082 — a person's save of one repository's convention.
+describe('aiConventionService.saveConvention', () => {
+  const INPUT = { repoKey: 'acme/web', contentMd: '# Our rules\n\n- Route first.', baseVersion: 2 };
+
+  it('writes through motir-ai as the actor, then answers the re-read surface with the editor named', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const saved = rawConvention({
+      version: 3,
+      authorKind: 'edited',
+      editedByUserId: owner.id,
+      contentMd: INPUT.contentMd,
+    });
+    putConventionMock.mockResolvedValue(saved);
+    getConventionMock.mockResolvedValue(
+      rawConventionSurface({ convention: saved, versions: [saved] }),
+    );
+
+    const dto = await aiConventionService.saveConvention(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      INPUT,
+    );
+
+    expect(putConventionMock).toHaveBeenCalledWith({
+      coreWorkspaceId: workspace.id,
+      coreProjectId: project.id,
+      repoKey: 'acme/web',
+      contentMd: INPUT.contentMd,
+      editedByUserId: owner.id,
+      baseVersion: 2,
+    });
+    expect(dto.convention?.version).toBe(3);
+    expect(dto.convention?.authorKind).toBe('edited');
+    expect(dto.convention?.editedByName).toBe(owner.name);
+    expect(dto.repoKey).toBe('acme/web');
+  });
+
+  it('refuses a member without ai:configure and never calls motir-ai', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+
+    await expect(
+      aiConventionService.saveConvention(
+        project.id,
+        { userId: member.id, workspaceId: workspace.id },
+        INPUT,
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(putConventionMock).not.toHaveBeenCalled();
+  });
+
+  it('turns a stale base into a typed conflict carrying what won, and writes nothing more', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const winner = rawConvention({
+      version: 4,
+      authorKind: 'edited',
+      editedByUserId: owner.id,
+    });
+    putConventionMock.mockRejectedValue(new MotirAiConventionConflictError(4));
+    getConventionMock.mockResolvedValue(
+      rawConventionSurface({ convention: winner, versions: [winner] }),
+    );
+
+    const err = await aiConventionService
+      .saveConvention(project.id, { userId: owner.id, workspaceId: workspace.id }, INPUT)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ConventionVersionConflictError);
+    const conflict = err as InstanceType<typeof ConventionVersionConflictError>;
+    expect(conflict.latestVersion).toBe(4);
+    expect(conflict.latest.convention?.editedByName).toBe(owner.name);
+    expect(putConventionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets any other motir-ai failure through untouched', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    putConventionMock.mockRejectedValue(new MotirAiUnavailableError('down'));
+
+    await expect(
+      aiConventionService.saveConvention(
+        project.id,
+        { userId: owner.id, workspaceId: workspace.id },
+        INPUT,
+      ),
+    ).rejects.toBeInstanceOf(MotirAiUnavailableError);
+  });
+
+  it('refuses a blank or an over-long body before motir-ai is called', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const ctx = { userId: owner.id, workspaceId: workspace.id };
+
+    await expect(
+      aiConventionService.saveConvention(project.id, ctx, { ...INPUT, contentMd: '  \n ' }),
+    ).rejects.toBeInstanceOf(ConventionBlankError);
+    await expect(
+      aiConventionService.saveConvention(project.id, ctx, {
+        ...INPUT,
+        contentMd: 'x'.repeat(65_537),
+      }),
+    ).rejects.toBeInstanceOf(ConventionTooLongError);
+    expect(putConventionMock).not.toHaveBeenCalled();
   });
 });

@@ -83,7 +83,7 @@ const TOLERANCE_PX = 1;
 // ── Locators ─────────────────────────────────────────────────────────────────
 
 const workspace = (page: Page) => page.getByRole('dialog', { name: /plan/i });
-const frame = (page: Page) => workspace(page).getByTestId('planning-resizable-frame');
+const frame = (page: Page) => workspace(page).getByTestId('resizable-split');
 const divider = (page: Page) =>
   workspace(page).getByRole('separator', { name: en.planningWorkspace.dividerAria });
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });

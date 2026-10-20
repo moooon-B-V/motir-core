@@ -124,6 +124,7 @@ describe('permissionDenial — pure decision over the whole registry', () => {
         'code_search',
         'expand_item',
         'get_code_health',
+        'get_coding_convention',
         'open_plan_session',
         'read_file',
         'submit_plan_session',

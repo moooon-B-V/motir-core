@@ -212,6 +212,12 @@ export const pl: McpSummaryTranslations = {
     source:
       "Each repository's index state, latest code-health audit summary and derived coding convention — what the hosted planner reads.",
   },
+  get_coding_convention: {
+    summary:
+      'Pełna konwencja kodowania jednego repozytorium – wyprowadzona lub zredagowana przez osobę, z numerem wersji – to, czego trzyma się zmiana w tym repozytorium.',
+    source:
+      "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
+  },
   get_design: {
     summary:
       'ZATWIERDZONY projekt jednego elementu roboczego z projektem, z krótkotrwałymi linkami do jego plików — albo informacja, który z pięciu powodów sprawia, że go nie ma.',
