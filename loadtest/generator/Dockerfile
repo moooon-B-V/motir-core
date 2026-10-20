@@ -19,7 +19,11 @@ ARG K6_VERSION=v1.2.1
 ARG XK6_SSE_MODULE=github.com/phymbert/xk6-sse
 ARG XK6_SSE_VERSION=v0.1.12
 USER root
-RUN xk6 build "${K6_VERSION}" --with "${XK6_SSE_MODULE}@${XK6_SSE_VERSION}" \
+# A build arg is in the environment of every RUN below it, and xk6 binds a `K6_VERSION` env var to its
+# `--k6-version` flag, then refuses a version given as both flag and argument (MOTIR-9125). The shell
+# expands "${K6_VERSION}" before `env` runs, so the version arrives once, as the argument, the same
+# way loadtest/k6/build.sh passes it.
+RUN env -u K6_VERSION xk6 build "${K6_VERSION}" --with "${XK6_SSE_MODULE}@${XK6_SSE_VERSION}" \
       --os linux --arch amd64 --output /k6
 
 FROM --platform=linux/amd64 debian:bookworm-slim

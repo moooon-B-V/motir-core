@@ -22,6 +22,17 @@ describe('the load-test generator image recipe (MOTIR-9116)', () => {
     }
   });
 
+  // xk6 binds a K6_VERSION env var to its --k6-version flag and refuses a version given as both flag
+  // and argument. `ARG K6_VERSION` puts the var in the RUN's environment, so a positional version
+  // must come with the var unset (MOTIR-9125).
+  it('never hands xk6 the k6 version twice', () => {
+    const build = dockerfile.match(/^RUN .*\bxk6 build\b.*$/m)?.[0];
+    expect(build).toBeDefined();
+    if (build!.includes('"${K6_VERSION}"')) {
+      expect(build).toMatch(/\benv -u K6_VERSION xk6 build\b/);
+    }
+  });
+
   it('places the binary where the run command looks for it', () => {
     expect(dockerfile).toContain(`COPY --from=k6 /k6 ${REMOTE_K6}`);
   });
