@@ -25,12 +25,12 @@ import {
   recordIndexFailedRun,
   recordIndexRunning,
   seedConnectedRepos,
+  type IndexSeedRepo,
 } from './_helpers/migrate-index-seed';
 
 test.describe.configure({ timeout: 180_000 });
 
-const [STOREFRONT] = E2E_INDEX_REPOS;
-const STOREFRONT_REF = indexRepoRef(STOREFRONT);
+const [STOREFRONT, BILLING_API] = E2E_INDEX_REPOS;
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -62,8 +62,8 @@ async function waitForIndexStatus(
   return (await res.json()) as MigrateIndexStatusDto;
 }
 
-const repoStatus = (s: MigrateIndexStatusDto) =>
-  s.repos.find((r) => r.repoRef === STOREFRONT_REF)?.status;
+const repoStatus = (s: MigrateIndexStatusDto, repo: IndexSeedRepo = STOREFRONT) =>
+  s.repos.find((r) => r.repoRef === indexRepoRef(repo))?.status;
 
 // The chip is client state, drawn only after the run's first status read, so it
 // has no streamed or outgoing copy; `.first()` resolves the one there is. Its
@@ -71,15 +71,15 @@ const repoStatus = (s: MigrateIndexStatusDto) =>
 const indicator = (page: Page) => page.getByTestId('migrate-index-indicator').first();
 const detail = (page: Page, locale: Locale = 'en') =>
   page.getByRole('dialog', { name: msg(locale, 'onboardingMigrate.index.heading') });
-const detailRow = (page: Page, locale: Locale = 'en') =>
+const detailRow = (page: Page, locale: Locale = 'en', repo: IndexSeedRepo = STOREFRONT) =>
   detail(page, locale).locator(
-    `[data-testid="migrate-index-detail-repo"][data-repo-ref="${STOREFRONT_REF}"]`,
+    `[data-testid="migrate-index-detail-repo"][data-repo-ref="${indexRepoRef(repo)}"]`,
   );
 const enterButton = (page: Page, locale: Locale) =>
   page.getByRole('button', { name: msg(locale, 'onboardingMigrate.enter.cta') });
 
 /**
- * Sign up (in `locale`), connect ONE repository whose index is `index`, and walk
+ * Sign up (in `locale`), connect ONE repository (`repo`) whose index is `index`, and walk
  * the wizard to the Import step: Start → Connect → Index → Import. Asserts on
  * the way that Index does not hold the person: its Next opens on the first read
  * while the index is still `index`. Returns the workspace and the run.
@@ -88,6 +88,7 @@ async function reachImportStep(
   page: Page,
   index: IndexState,
   locale: Locale = 'en',
+  repo: IndexSeedRepo = STOREFRONT,
 ): Promise<{ workspaceId: string; runId: string }> {
   const email = `e2e-nonblocking-${locale}-${index}-${Date.now()}@example.com`;
   await signUp(page, email);
@@ -97,12 +98,12 @@ async function reachImportStep(
   const workspaceId = ws.id;
   if (locale !== 'en') await adminDb.user.update({ where: { email }, data: { locale } });
 
-  await seedConnectedRepos(workspaceId, [STOREFRONT]);
+  await seedConnectedRepos(workspaceId, [repo]);
   const runRow =
     index === 'running'
       ? await recordIndexRunning(workspaceId)
-      : await recordIndexFailedRun(workspaceId, STOREFRONT_REF);
-  await claimIndexRun(workspaceId, STOREFRONT, runRow);
+      : await recordIndexFailedRun(workspaceId, indexRepoRef(repo));
+  await claimIndexRun(workspaceId, repo, runRow);
 
   await page.goto('/onboarding/migrate');
   await page.getByRole('radio', { name: /Invoicer/ }).check();
@@ -132,7 +133,7 @@ async function reachImportStep(
   // Index is not a stop: the first read lists the repository still unfinished,
   // and Next is open anyway.
   const first = await waitForIndexStatus(page, (s) => s.total === 1);
-  expect(repoStatus(first)).toBe(index === 'running' ? 'indexing' : 'failed');
+  expect(repoStatus(first, repo)).toBe(index === 'running' ? 'indexing' : 'failed');
   expect(first.allIndexed).toBe(false);
   const next = page.getByRole('button', { name: msg(locale, 'onboardingMigrate.index.next') });
   await expect(next).toBeEnabled();
@@ -213,30 +214,37 @@ test('walks past a running index to Import, shows the indicator, and enters Moti
 
 // ── 5 · a failed index, Enter Motir still open, and the retry ───────────────
 
+// Pressing Retry enqueues a REAL `system.code-graph-index` job, which the e2e
+// worker keeps running after the next `beforeEach` truncates the ledger, and whose
+// claim writes every `github_repo` row of that owner/name across workspaces. So
+// this case indexes a repository (`billing-api`) no other case in the file uses,
+// and a job that outlives it cannot move a later case's `storefront` claim.
 test('a failed index reads failed with a retry, and Enter Motir stays enabled', async ({
   page,
 }) => {
-  await reachImportStep(page, 'failed');
+  await reachImportStep(page, 'failed', 'en', BILLING_API);
 
   await expect(indicator(page)).toHaveAttribute('data-state-summary', 'failed');
   await expect(enterButton(page, 'en')).toBeEnabled();
 
   await indicator(page).click();
-  await expect(detailRow(page)).toHaveAttribute('data-status', 'failed');
-  await expect(detailRow(page)).toContainText(msg('en', 'onboardingMigrate.indexing.rowFailed'));
+  await expect(detailRow(page, 'en', BILLING_API)).toHaveAttribute('data-status', 'failed');
+  await expect(detailRow(page, 'en', BILLING_API)).toContainText(
+    msg('en', 'onboardingMigrate.indexing.rowFailed'),
+  );
 
   const retried = page.waitForResponse((r) => isPost(r, '/index-retry'));
   const nextRead = page.waitForResponse(isIndexStatus);
-  await detailRow(page)
+  await detailRow(page, 'en', BILLING_API)
     .getByRole('button', { name: msg('en', 'planningWorkspace.indexing.retry') })
     .click();
   const resp = await retried;
   expect(resp.status()).toBe(200);
-  expect(await resp.json()).toEqual({ repoRef: STOREFRONT_REF, status: 'queued' });
+  expect(await resp.json()).toEqual({ repoRef: indexRepoRef(BILLING_API), status: 'queued' });
   // The read the retry triggers is the one it is recorded against.
   const after = (await (await nextRead).json()) as MigrateIndexStatusDto;
-  expect(repoStatus(after)).toBe('queued');
-  await expect(detailRow(page)).toHaveAttribute('data-status', 'queued');
+  expect(repoStatus(after, BILLING_API)).toBe('queued');
+  await expect(detailRow(page, 'en', BILLING_API)).toHaveAttribute('data-status', 'queued');
   await expect(enterButton(page, 'en')).toBeEnabled();
 });
 
