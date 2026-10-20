@@ -95,10 +95,16 @@ export function reasonCodeFromError(
     // core it could not make, a precondition it would not plan past — and no model
     // may ever have been called. Reading it as `model_unavailable` sent a person to
     // wait on a healthy provider. `getJob` maps that problem to MotirAiJobFailedError.
+    //
+    // The same holds for a terminal job whose problem is `validation_error` (any 4xx),
+    // which `getJob` maps to MotirAiBadRequestError (MOTIR-9127): motir-ai's handler
+    // refused the job — a read token that expired in the queue — and no model was
+    // called. Every caller hands this map a FAILED job's error; a refused submit
+    // throws before any job exists and never reaches it.
     case 'MOTIR_AI_JOB_FAILED':
+    case 'MOTIR_AI_BAD_REQUEST':
       return 'job_failed';
     case 'MOTIR_AI_UNAVAILABLE':
-    case 'MOTIR_AI_BAD_REQUEST':
       return 'model_unavailable';
     default:
       return 'internal';
