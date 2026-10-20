@@ -850,12 +850,29 @@ export function WorkbenchList({
   // would show a card in a tab it is no longer in with nothing to explain why.
   const resetKey = `${tab}:${pagination.page}`;
   const live = useLiveRows(rows, resetKey, (row) => row.id);
-  // The sessions take the SAME held-row rule (§ 35.5): a Resumed entry stays until the next load.
+  // The sessions take § 26's held-row rule for a session that LEFT on its own (ended
+  // elsewhere): it stays until the next load. A session RESUMED here is the exception —
+  // § 37: "the row clears when the attempt starts" (MOTIR-9122). Its Resume asks for a
+  // re-read, and the read that no longer lists it drops it rather than holding it, which
+  // is § 35.5's rule for a gated run, not for a session.
   const liveSessions = useLiveRows(
     planningSessions,
     `${resetKey}:sessions`,
     (entry) => entry.sessionId,
   );
+  const [resumedSessionIds, setResumedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
+  const sessionRows = useMemo(
+    () =>
+      liveSessions.rows.filter(
+        (entry) =>
+          !(liveSessions.heldIds.has(entry.sessionId) && resumedSessionIds.has(entry.sessionId)),
+      ),
+    [liveSessions.rows, liveSessions.heldIds, resumedSessionIds],
+  );
+  const onSessionResumed = (sessionId: string) => {
+    setResumedSessionIds((ids) => new Set(ids).add(sessionId));
+    reread();
+  };
   // THE GROUPED TABS (§ 36.7, § 26 unchanged). The heads above take today's rule: an
   // arrival is marked, a row that leaves is kept in place unmarked until the next load —
   // so a group whose last member left is held WHOLE. The members take the same rule one
@@ -873,7 +890,7 @@ export function WorkbenchList({
   const listRef = useRef<HTMLDivElement>(null);
   useHoldReaderPlace(
     listRef,
-    [...liveSessions.rows.map((e) => e.sessionId), ...live.rows.map((r) => r.id)]
+    [...sessionRows.map((e) => e.sessionId), ...live.rows.map((r) => r.id)]
       .concat(liveMembers.rows.map((e) => e.row.id))
       .join(','),
   );
@@ -881,7 +898,7 @@ export function WorkbenchList({
   // These tabs hold nothing (see the note above), so `live.rows` empties exactly
   // when the server's does — the branch reads the live set anyway, so the two
   // lists answer *am I empty?* the same way.
-  if (live.rows.length === 0 && liveSessions.rows.length === 0) return <>{empty}</>;
+  if (live.rows.length === 0 && sessionRows.length === 0) return <>{empty}</>;
 
   // CONTINUE HOSTED ON A DEAD-RUN ROW (§ 31, MOTIR-6882). The page makes ONE models
   // request however many rows place the control — and NONE when no row does, so a
@@ -929,15 +946,16 @@ export function WorkbenchList({
       <div role="table" aria-label={label} className="w-full text-sm">
         {/* The column header is hidden below `md`, where there are no columns
             to head — the stacked row labels itself. */}
-        {liveSessions.rows.length > 0 ? (
+        {sessionRows.length > 0 ? (
           <div role="rowgroup" data-testid="to-resume-sessions">
-            {liveSessions.rows.map((entry) => (
+            {sessionRows.map((entry) => (
               <PlanningSessionResumeEntry
                 key={entry.sessionId}
                 entry={entry}
                 arrived={liveSessions.arrivedIds.has(entry.sessionId)}
                 held={liveSessions.heldIds.has(entry.sessionId)}
                 onSettled={reread}
+                onResumed={onSessionResumed}
               />
             ))}
           </div>
