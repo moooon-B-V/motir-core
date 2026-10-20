@@ -526,7 +526,8 @@ export async function releaseUnresumableAttempt(
     async (tx) => {
       const latestPlanId = await planRepository.findLatestIdBySession(sessionId, tx);
       if (latestPlanId) await planRepository.lockById(latestPlanId, tx);
-      if (!(await planChangeSessionRepository.lockById(sessionId, tx))) return { released: false };
+      // A row that vanished takes no lock and reads back as nothing: the re-check refuses it.
+      await planChangeSessionRepository.lockById(sessionId, tx);
       const fresh = await planChangeSessionRepository.findById(sessionId, workspaceId, tx);
       if (!fresh || fresh.endedAt || !fresh.failedAt || fresh.failureResumable !== false) {
         return { released: false };
@@ -883,6 +884,7 @@ export const planSessionEndService = {
   endSessionForFailedJob,
   endSessionForAbandonedPlan,
   settleFailedJob,
+  releaseUnresumableAttempt,
   releaseRevisionForFailedJob,
   releaseLapsedRevision,
   releaseLapsedRevisions,

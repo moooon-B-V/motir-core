@@ -229,3 +229,35 @@ describe('a RESUMABLE failure is unchanged', () => {
     expect(dto.failedWaiting).toBe('resume');
   });
 });
+
+describe('releaseUnresumableAttempt — the re-check under the locks (MOTIR-9121)', () => {
+  it('an unknown session releases nothing', T, async () => {
+    expect(
+      await planSessionEndService.releaseUnresumableAttempt('no-such-session', fx.workspaceId),
+    ).toEqual({ released: false });
+  });
+
+  it('a session that is not recorded as unresumable keeps its attempt', T, async () => {
+    const a = await attempt();
+    // Still running: no failure at all.
+    expect(
+      await planSessionEndService.releaseUnresumableAttempt(a.sessionId, fx.workspaceId),
+    ).toEqual({ released: false });
+    // Failed, but resumable.
+    await settle(a.jobId, true);
+    expect(
+      await planSessionEndService.releaseUnresumableAttempt(a.sessionId, fx.workspaceId),
+    ).toEqual({ released: false });
+    expect((await planRow(a.planId)).status).toBe('generating');
+    expect(await locksOf(a.sessionId, a.planId)).toBeGreaterThan(0);
+  });
+
+  it('a second release finds nothing held and changes nothing', T, async () => {
+    const a = await attempt();
+    await settle(a.jobId, false);
+    expect(
+      await planSessionEndService.releaseUnresumableAttempt(a.sessionId, fx.workspaceId),
+    ).toEqual({ released: true });
+    await expectReleased(a);
+  });
+});

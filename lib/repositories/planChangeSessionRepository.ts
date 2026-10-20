@@ -68,10 +68,13 @@ function failedOpenForOwnerWhere(args: {
     // A failure that cannot be resumed and has no plan waiting beside it asks nothing of its
     // person (MOTIR-9121): its attempt was released when it was recorded, and the session's
     // next turn simply plans again. Listing it would offer an entry with nothing to press.
-    NOT: {
-      failureResumable: false,
-      plans: { none: { status: { in: ['generating', 'planned', 'stale'] } } },
-    },
+    // ⚠️ Spelled as an OR, never `NOT { failureResumable: false, … }`: on a NULL (unknown)
+    // verdict that NOT evaluates to NULL and drops every failure recorded before the column.
+    OR: [
+      { failureResumable: null },
+      { failureResumable: true },
+      { plans: { some: { status: { in: ['generating', 'planned', 'stale'] } } } },
+    ],
   };
 }
 
