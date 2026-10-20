@@ -8257,7 +8257,9 @@
       "onlyStarter": "Alleen {name} of een projectmanager kan dit hervatten.",
       "onlyStarterAnon": "Alleen de persoon die dit startte of een projectmanager kan het hervatten.",
       "failureLine": "Je laatste wijziging aan dit plan kon niet worden doorgevoerd · {when}",
-      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}"
+      "failureLineAgain": "Je laatste wijziging kon opnieuw niet worden doorgevoerd · {when}",
+      "failureLinePlanAgain": "Deze poging kon niet worden voortgezet · {when}. Je volgende bericht plant opnieuw.",
+      "failureLinePlanAgainAgain": "Deze poging kon opnieuw niet worden voortgezet · {when}. Je volgende bericht plant opnieuw."
     },
     "grill": {
       "control": {

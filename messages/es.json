@@ -8257,7 +8257,9 @@
       "onlyStarter": "Solo {name} o un responsable del proyecto puede reanudarlo.",
       "onlyStarterAnon": "Solo la persona que lo inició o un responsable del proyecto puede reanudarlo.",
       "failureLine": "No se pudo hacer tu último cambio en este plan · {when}",
-      "failureLineAgain": "Tu último cambio no se pudo hacer de nuevo · {when}"
+      "failureLineAgain": "Tu último cambio no se pudo hacer de nuevo · {when}",
+      "failureLinePlanAgain": "No se pudo continuar este intento · {when}. Tu próximo mensaje lo vuelve a planificar.",
+      "failureLinePlanAgainAgain": "Este intento no se pudo continuar de nuevo · {when}. Tu próximo mensaje lo vuelve a planificar."
     },
     "grill": {
       "control": {

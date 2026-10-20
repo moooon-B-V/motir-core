@@ -189,6 +189,51 @@ describe("situation 2 — an OPEN session failed beside a waiting plan ('reply')
   });
 });
 
+// MOTIR-9121 — motir-ai said the attempt cannot be resumed and nothing waits beside it: its
+// cards were given back, so the same line says the next message plans again — no Resume, and
+// an open composer.
+const planAgain = (over: Partial<PlanSessionFailureDto> = {}) =>
+  session({
+    failure: { ...FAILURE, resumable: false, ...over },
+    failedWaiting: 'reply',
+    waitingPlan: null,
+  });
+
+describe('an attempt that cannot be resumed, with nothing waiting (MOTIR-9121)', () => {
+  it('draws the plan-again line, no Resume, and an ENABLED composer', () => {
+    renderRail({ session: planAgain(), errorCode: 'FAILED' });
+    const line = screen.getByTestId('planning-failure-line');
+    expect(line.textContent).toMatch(/^This attempt could not be continued · /);
+    expect(line.textContent).toMatch(/Your next message plans it again\.$/);
+    expect(screen.queryByTestId('planning-resume')).toBeNull();
+    expect(screen.queryByTestId('planning-failed-waiting')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false);
+  });
+
+  it('a newer failure reads *again*', () => {
+    const { rerender } = renderRail({ session: planAgain() });
+    rerender(
+      <PlanChangeRail
+        launch={LAUNCH}
+        projectName="Acme"
+        state={{ ...BASE, session: planAgain({ failedAt: '2026-07-27T12:00:00.000Z' }) }}
+        index={indexPlanReview(null)}
+        targets={[]}
+        {...handlers}
+      />,
+    );
+    expect(screen.getByTestId('planning-failure-line').textContent).toMatch(
+      /^This attempt could not be continued again · /,
+    );
+  });
+
+  it('renders in Chinese', () => {
+    renderRail({ session: planAgain() }, 'zh');
+    expect(screen.getByTestId('planning-failure-line').textContent).toMatch(/^这次尝试无法继续 · /);
+  });
+});
+
 describe('the failed WALK beside a waiting plan (panel 6)', () => {
   it('keeps Resume and the held composer, and names the waiting plan through the one door', () => {
     renderRail({ session: walk() });

@@ -742,6 +742,8 @@ export interface RawJobResponse {
   status: JobStatus;
   result: ResultEnvelope | null;
   error: Problem | null;
+  /** Present on a failed planning job only (MOTIR-9121). */
+  resumable?: unknown;
 }
 
 // An SSE frame from GET /v1/jobs/:id/stream (contract §2.4): `event` is

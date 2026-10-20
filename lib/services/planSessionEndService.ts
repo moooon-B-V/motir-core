@@ -483,6 +483,76 @@ export async function recordFailureWithin(
   return 'recorded';
 }
 
+/**
+ * AN ATTEMPT THAT CANNOT BE RESUMED HOLDS NOTHING (MOTIR-9121). motir-ai said the failed job
+ * has no settled conversation to continue from, so it refuses every Resume of it — and a
+ * failed-waiting session keeps its `generating` plan and its held cards precisely so that a
+ * Resume can continue them. With no Resume possible that hold is a trap: the card sits at
+ * Planning, spared by every sweep as "a person is coming back", and the person can do nothing.
+ *
+ * So the attempt is given up the way the end operation gives up a `generating` plan: the plan
+ * is declined `abandoned` and every target the plan and the session hold goes back to the
+ * status it was parked from. The session itself STAYS OPEN with its failure record
+ * (`failureResumable: false`): the overlay says the attempt could not be continued, To resume
+ * does not list it, and the next turn plans again (`classifyFailedWaitingTurn` → `continue`),
+ * clearing the record as it binds.
+ *
+ * Called AFTER the record commits, by the three places that learn an attempt is not resumable
+ * (the relay's settle, the abandoned-plan sweep, a refused Resume), in its OWN transaction bound
+ * like {@link endSession}'s — the session's project, signed by its starter, else the
+ * workspace's stand-in manager — and re-checked under the plan lock then the session lock: a
+ * session that ended, was resumed or failed again meanwhile is left as it is. Idempotent: a
+ * second call finds nothing held.
+ */
+export async function releaseUnresumableAttempt(
+  sessionId: string,
+  workspaceId: string,
+): Promise<{ released: boolean }> {
+  const located = await withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const session = await planChangeSessionRepository.findById(sessionId, workspaceId, tx);
+    if (!session) return null;
+    const signer =
+      session.createdById ??
+      (await workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx))
+        ?.userId ??
+      null;
+    return { session, signer };
+  });
+  if (!located?.signer) return { released: false };
+  const { session, signer } = located;
+  const actor = { userId: signer, workspaceId };
+  return withWorkspaceContext(
+    { userId: signer, workspaceId, projectId: session.projectId },
+    async (tx) => {
+      const latestPlanId = await planRepository.findLatestIdBySession(sessionId, tx);
+      if (latestPlanId) await planRepository.lockById(latestPlanId, tx);
+      if (!(await planChangeSessionRepository.lockById(sessionId, tx))) return { released: false };
+      const fresh = await planChangeSessionRepository.findById(sessionId, workspaceId, tx);
+      if (!fresh || fresh.endedAt || !fresh.failedAt || fresh.failureResumable !== false) {
+        return { released: false };
+      }
+      const plan = latestPlanId
+        ? await planRepository.findById(latestPlanId, workspaceId, tx)
+        : null;
+      if (plan && plan.status === 'generating' && plan.sourceJobId === fresh.failedJobId) {
+        await planRepository.update(
+          plan.id,
+          {
+            status: 'declined',
+            decidedAt: fresh.failedAt,
+            decidedById: null,
+            decisionReason: 'abandoned',
+          },
+          tx,
+        );
+        await planTargetLockService.releaseForPlanWithin(plan.id, actor, tx, { system: true });
+      }
+      await planTargetLockService.releaseForSessionWithin(sessionId, actor, tx, { system: true });
+      return { released: true };
+    },
+  );
+}
+
 /** What a settled failure came to. */
 export interface SettleFailedJobResult {
   /** `released`: a failed or canceled REVISION gave its lease back and no failure was
@@ -511,7 +581,12 @@ export interface SettleFailedJobDeps {
   readJob?: (
     jobId: string,
     coreProjectId: string,
-  ) => Promise<Omit<FailedJobFacts, 'lostMachine'> & { lostMachine?: boolean }>;
+  ) => Promise<
+    Omit<FailedJobFacts, 'lostMachine' | 'resumable'> & {
+      lostMachine?: boolean;
+      resumable?: boolean | null;
+    }
+  >;
 }
 
 /**
@@ -571,11 +646,25 @@ export async function settleFailedJob(
     walkStop: job?.walkStop ?? null,
     lastPosition: input.lastPosition ?? null,
     error: job?.error ?? null,
+    resumable: job?.resumable ?? null,
   });
   const outcome = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     recordFailureWithin(tx, session.id, ctx.workspaceId, record, { onlyLastJobId: jobId }),
   );
   if (outcome === 'recorded') {
+    // NOTHING TO RESUME (MOTIR-9121): give the attempt's cards back before the relay's
+    // terminal frame, so the overlay's re-read already sees a session that plans again. No
+    // automatic resume either — it would be refused for the same reason.
+    if (record.failureResumable === false) {
+      await releaseUnresumableAttempt(session.id, ctx.workspaceId);
+      return {
+        settled: 'recorded',
+        sessionId: session.id,
+        arm: 'session',
+        lostMachine,
+        autoResume: null,
+      };
+    }
     // AWAITED before returning, so by the time the relay sends its terminal frame the session
     // is already re-bound and no longer failed.
     const autoResume = lostMachine
@@ -649,6 +738,7 @@ async function settleFailedRevision(
         walkStop: job?.walkStop ?? null,
         lastPosition: input.lastPosition ?? null,
         error: job?.error ?? null,
+        resumable: job?.resumable ?? null,
       })
     : null;
 
@@ -726,6 +816,7 @@ async function readFailedJob(jobId: string, coreProjectId: string): Promise<Fail
     error: view.error,
     walkStop: view.walkStop ?? null,
     lostMachine: view.lostMachine ?? false,
+    resumable: view.resumable ?? null,
   };
 }
 

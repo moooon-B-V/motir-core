@@ -8257,7 +8257,9 @@
       "onlyStarter": "Seul·e {name} ou un responsable de projet peut la reprendre.",
       "onlyStarterAnon": "Seule la personne qui l’a démarrée ou un responsable de projet peut la reprendre.",
       "failureLine": "Votre dernière modification de ce plan n’a pas pu être effectuée · {when}",
-      "failureLineAgain": "Votre dernière modification n’a de nouveau pas pu être effectuée · {when}"
+      "failureLineAgain": "Votre dernière modification n’a de nouveau pas pu être effectuée · {when}",
+      "failureLinePlanAgain": "Cette tentative n’a pas pu être poursuivie · {when}. Votre prochain message relance la planification.",
+      "failureLinePlanAgainAgain": "Cette tentative n’a de nouveau pas pu être poursuivie · {when}. Votre prochain message relance la planification."
     },
     "grill": {
       "control": {

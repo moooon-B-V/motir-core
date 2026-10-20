@@ -334,6 +334,39 @@ describe('getJob — the lost-machine fact (MOTIR-8304)', () => {
   });
 });
 
+describe('getJob — the resumable verdict (MOTIR-9121)', () => {
+  const failed = (extra: Record<string, unknown>) =>
+    jsonResponse({
+      jobId: 'job_1',
+      status: 'failed',
+      result: null,
+      error: {
+        type: 't',
+        title: 'Validation failed',
+        status: 400,
+        code: 'validation_error',
+        detail: 'd',
+        jobId: 'job_1',
+      },
+      ...extra,
+    });
+
+  it.each([true, false])('passes motir-ai’s `resumable: %s` through', async (resumable) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failed({ resumable })));
+    expect((await getJob('job_1', 'pj_1')).resumable).toBe(resumable);
+  });
+
+  it('a motir-ai that does not say leaves it absent — unknown, never false', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failed({})));
+    expect(Object.keys(await getJob('job_1', 'pj_1'))).not.toContain('resumable');
+  });
+
+  it('a value that is not a boolean reads as unknown', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(failed({ resumable: 'no' })));
+    expect(Object.keys(await getJob('job_1', 'pj_1'))).not.toContain('resumable');
+  });
+});
+
 describe('getPreplanState', () => {
   const query = { coreWorkspaceId: 'ws_1', coreProjectId: 'pj_1' };
 

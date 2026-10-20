@@ -8251,7 +8251,9 @@
       "onlyStarter": "{name} 님 또는 프로젝트 관리자만 재개할 수 있습니다.",
       "onlyStarterAnon": "시작한 사람 또는 프로젝트 관리자만 재개할 수 있습니다.",
       "failureLine": "이 계획에 대한 마지막 변경을 반영하지 못했습니다 · {when}",
-      "failureLineAgain": "마지막 변경을 다시 반영하지 못했습니다 · {when}"
+      "failureLineAgain": "마지막 변경을 다시 반영하지 못했습니다 · {when}",
+      "failureLinePlanAgain": "이 시도를 계속하지 못했습니다 · {when}. 다음 메시지로 다시 계획합니다.",
+      "failureLinePlanAgainAgain": "이 시도를 다시 계속하지 못했습니다 · {when}. 다음 메시지로 다시 계획합니다."
     },
     "grill": {
       "control": {

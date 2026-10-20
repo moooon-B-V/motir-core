@@ -2985,6 +2985,18 @@ export function usePlanChangeConversation({
             if (err instanceof PlanEditsClientError) {
               const code = err.isOutOfCredits ? 'MOTIR_AI_OUT_OF_CREDITS' : (err.code ?? 'FAILED');
               if (mountedRef.current) setState((s) => ({ ...s, resumeError: code }));
+              // NOTHING TO RESUME (MOTIR-9121): the server has just recorded the attempt as one
+              // that cannot be resumed and given its cards back, so the session row now says so.
+              // Adopt it, and the rail draws the plan-again line with an open composer instead of
+              // offering the same refused Resume again.
+              if (code === 'PLAN_NOT_RESUMABLE') {
+                void getPlanChangeSession(session.id)
+                  .then((read) => {
+                    if (!mountedRef.current) return;
+                    setState((s) => (s.session?.id === read.id ? { ...s, session: read } : s));
+                  })
+                  .catch(() => {});
+              }
             }
             throw err;
           }

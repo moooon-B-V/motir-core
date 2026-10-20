@@ -81,6 +81,7 @@ describe('failureRecordFrom', () => {
       failureStopPhase: 'author',
       failureStopRef: 'planItem:abc',
       failureStopTitle: 'Export a report',
+      failureResumable: null,
     });
   });
 
@@ -107,6 +108,14 @@ describe('failureRecordFrom', () => {
       failureStopTitle: null,
       failureDetail: null,
     });
+  });
+
+  it('carries motir-ai’s resumable verdict onto the record, and unknown as null (MOTIR-9121)', () => {
+    const b = { ...base, walkStop: null };
+    expect(failureRecordFrom({ ...b, resumable: false }).failureResumable).toBe(false);
+    expect(failureRecordFrom({ ...b, resumable: true }).failureResumable).toBe(true);
+    expect(failureRecordFrom({ ...b, resumable: null }).failureResumable).toBeNull();
+    expect(failureRecordFrom(b).failureResumable).toBeNull();
   });
 
   it('records a plan with NO job as internal with no job and no stop point (MOTIR-8132)', () => {

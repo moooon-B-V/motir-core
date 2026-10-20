@@ -6654,6 +6654,8 @@
   "planningWorkspace.waiting.onlyStarterAnon": "Only the person who started this or a project manager can resume it.",
   "planningWorkspace.waiting.failureLine": "Your last change to this plan could not be made · {when}",
   "planningWorkspace.waiting.failureLineAgain": "Your last change could not be made again · {when}",
+  "planningWorkspace.waiting.failureLinePlanAgain": "This attempt could not be continued · {when}. Your next message plans it again.",
+  "planningWorkspace.waiting.failureLinePlanAgainAgain": "This attempt could not be continued again · {when}. Your next message plans it again.",
   "planningWorkspace.grill.control.label": "Grill me",
   "planningWorkspace.grill.control.helpName": "What is Grill me?",
   "planningWorkspace.grill.control.popover.title": "Grill me",

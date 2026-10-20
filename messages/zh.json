@@ -8251,7 +8251,9 @@
       "onlyStarter": "只有 {name} 或项目管理员可以继续它。",
       "onlyStarterAnon": "只有发起者或项目管理员可以继续它。",
       "failureLine": "你上一次对这个计划的修改没能完成 · {when}",
-      "failureLineAgain": "你上一次的修改再次没能完成 · {when}"
+      "failureLineAgain": "你上一次的修改再次没能完成 · {when}",
+      "failureLinePlanAgain": "这次尝试无法继续 · {when}。你的下一条消息会重新规划。",
+      "failureLinePlanAgainAgain": "这次尝试再次无法继续 · {when}。你的下一条消息会重新规划。"
     },
     "grill": {
       "control": {

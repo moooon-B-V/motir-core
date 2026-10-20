@@ -396,6 +396,9 @@ export async function getJob(jobId: string, coreProjectId: string): Promise<JobV
     // Read from the RAW problem: once mapped, an abandoned job's error is the same
     // `MotirAiUnavailableError` an outage produces (MOTIR-8304).
     lostMachine: body.status === 'failed' && body.error?.code === AI_JOB_ABANDONED_PROBLEM_CODE,
+    // motir-ai's own verdict on a failed planning job (MOTIR-9121); anything that is not a
+    // boolean reads as "did not say", never as `false`.
+    ...(typeof body.resumable === 'boolean' ? { resumable: body.resumable } : {}),
   };
 }
 
