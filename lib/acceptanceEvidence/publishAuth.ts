@@ -1,3 +1,4 @@
+import { findOwningReceiptParent } from '@/lib/acceptanceEvidence/receiptOwner';
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
 import { ACCEPTANCE_PUBLISH_PERMISSION } from '@/lib/tokens/grant';
@@ -34,8 +35,9 @@ import {
  * `Response` (finding #44 — a hidden / cross-workspace / missing item reads 404,
  * never 403).
  *
- * Acceptance evidence is a STORY-level artifact (Principle #18 — review at the
- * Story level). When the CI caller passes a non-story LEAF (a subtask / bug /
+ * Acceptance evidence is a RUNNABLE-CONTAINER artifact (Principle #18 — review at
+ * the Story level; MOTIR-9209 extends the owner to a bug / task that has children
+ * and is run as a parent — see `receiptOwner.ts`). When the CI caller passes a non-story LEAF (a subtask / bug /
  * task PR key — the PR-title status-sync convention leaves the subtask's own
  * `MOTIR-<id>`, MOTIR-1684), resolve UP to its parent STORY so the video
  * attaches to the story, not the leaf. A story key resolves to itself. This is
@@ -79,13 +81,10 @@ export async function resolveAcceptanceStory(
  * can ask the same question without a cast.
  */
 export async function findOwningStoryParent(
-  item: { kind: string; parentId: string | null },
+  item: { id: string; kind: string; parentId: string | null },
   ctx: { userId: string; workspaceId: string },
 ): Promise<WorkItem | null> {
-  if (item.kind === 'story' || !item.parentId) return null;
-  const parentId = item.parentId;
-  const parent = await withWorkspaceContext(ctx, (tx) => workItemRepository.findById(parentId, tx));
-  return parent && parent.kind === 'story' ? parent : null;
+  return findOwningReceiptParent(item as Pick<WorkItem, 'id' | 'kind' | 'parentId'>, ctx);
 }
 
 export interface AcceptancePublishGate {
