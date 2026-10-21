@@ -34,6 +34,7 @@ import {
 } from '@/lib/issues/obsolescence';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
+import { repoSetCompletionService } from './repoSetCompletionService';
 import {
   workItemRepository,
   type WorkItemCreateInput,
@@ -1620,6 +1621,44 @@ async function latchCiGreen(
 }
 
 /**
+ * Re-run the repository-SET completion gate after an edit CHANGED an item's
+ * repository set (MOTIR-9235).
+ *
+ * The merge comment `changeRequestStatusSync` posts on a held card tells the
+ * person to remove a repository the work does not ship in — and until this
+ * existed, doing so changed nothing: the gate runs on a DELIVERY, and an edit is
+ * not one, so the card waited for an operator to run
+ * `pnpm db:reevaluate:repo-set` against production. This asks the same question
+ * at the moment the answer changed, through the module that owns it, so no rule
+ * is restated here: an empty set, an open linked pull request and an undecided
+ * plan hold all still keep the item where it is.
+ *
+ * Returns the item as it stands afterwards — re-read only when it moved, so the
+ * caller's answer names the status the edit led to rather than the one it left.
+ *
+ * ⚠️ BEST-EFFORT, POST-COMMIT, and never able to fail the edit it follows — the
+ * same contract as `latchCiGreen` above: the set is already written, and an
+ * item this misses is one the operator re-check still reaches.
+ */
+async function reevaluateRepoSetCompletion(
+  dto: WorkItemDto,
+  ctx: ServiceContext,
+): Promise<WorkItemDto> {
+  try {
+    const verdict = await repoSetCompletionService.reevaluateItem(dto.id);
+    if (verdict.outcome !== 'transitioned') return dto;
+    const moved = await readWorkItem(dto.id, ctx);
+    return moved ? toWorkItemDto(moved) : dto;
+  } catch (err) {
+    console.error('[workItemsService] the repository-set re-check failed; the item stays put', {
+      workItemId: dto.id,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+    return dto;
+  }
+}
+
+/**
  * The work items a newly-filed bug POINTS AT, in the order Q3 gives them
  * (MOTIR-3981, `run-findings-protocol.md` Q3/Q5).
  *
@@ -2690,6 +2729,9 @@ export const workItemsService = {
     }
 
     const result = await withWorkspaceContext(ctx, async (tx) => {
+      // Set where the references are rewritten below; read by the post-commit
+      // repository-set completion re-check (MOTIR-9235).
+      let repoRefsChanged = false;
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
@@ -3050,6 +3092,7 @@ export const workItemsService = {
         if (!sameRepoSet(nextRepoPins.refs, currentRefs)) {
           await writeRepoRefs(id, ctx.workspaceId, nextRepoPins.refs, tx);
           await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+          repoRefsChanged = true;
         }
       }
 
@@ -3065,6 +3108,7 @@ export const workItemsService = {
           revisionId: null,
           addedDescMentionIds: [],
           changedFieldIds: [] as string[],
+          repoSetChanged: repoRefsChanged,
         };
       }
 
@@ -3210,6 +3254,10 @@ export const workItemsService = {
         movedBetween: parentChanged
           ? { previousParentId: current.parentId, newParentId: nextParentId }
           : null,
+        // Either half of the set moved — the names or the references the gate
+        // resolves through (`resolveExpectedRepos`) — for the post-commit
+        // completion re-check (MOTIR-9235).
+        repoSetChanged: repoRefsChanged || diff.targetRepos !== undefined,
       };
     });
 
@@ -3296,6 +3344,14 @@ export const workItemsService = {
         });
       }
     }
+
+    // ── Repository-set completion, edit trigger (Bug MOTIR-9235) ───────────
+    //
+    // The completion gate runs on a delivery, so an item held for a repository
+    // that never had work to ship stayed held after the person removed that
+    // repository — the very step the merge comment tells them to take. After the
+    // commit, so the gate reads the set this edit wrote.
+    if (result.repoSetChanged) return reevaluateRepoSetCompletion(result.dto, ctx);
 
     return result.dto;
   },
