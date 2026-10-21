@@ -9,7 +9,7 @@ import { declareSeam, mailboxRows, planRun, postPause, submitsOf } from './_help
 import en from '@/messages/en.json';
 
 // Acceptance E2E — planning that cannot search a target repository's code STOPS, as a
-// person sees it (Subtask MOTIR-9171, Story MOTIR-9165).
+// person sees it (Subtask MOTIR-9171, bug MOTIR-9165; the receipt attaches to Story MOTIR-7990, since a receipt needs a story).
 //
 // Runs under `playwright.acceptance.config.ts` (MOTIR_CLOUD + `video: 'on'`) — the lane
 // where the planning overlay mounts at all. `acceptanceStory()` pins the clip to the story.
@@ -116,7 +116,7 @@ test('A. a change asked for over unsearchable code plans nothing and says which 
   beat,
   acceptanceStory,
 }) => {
-  acceptanceStory('MOTIR-9165');
+  acceptanceStory('MOTIR-7990');
   writeFileSync(
     process.env['MOTIR_AI_JOBS_FIXTURE_PATH']!,
     JSON.stringify(
@@ -207,7 +207,7 @@ test('B. a run that meets unsearchable code pauses, links to the Codebase page, 
   beat,
   acceptanceStory,
 }) => {
-  acceptanceStory('MOTIR-9165');
+  acceptanceStory('MOTIR-7990');
   const seed = await seedAiAugmentReplan(`code-unsearchable-b-${Date.now()}@example.com`);
   await markProjectOnboarded(seed.projectId);
   await stubAiAccess(page);
