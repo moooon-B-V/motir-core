@@ -7951,7 +7951,7 @@
       "listLabel": "无法搜索的仓库",
       "resume": "重新检查并继续",
       "stillBlocked": "刚刚检查过：{repo} 仍然无法搜索，当前状态为{state}。",
-      "keptRecord": "保留目前的提议 — {count} 个工作项。继续规划之前不会再添加。",
+      "keptRecord": "保留目前的提议 — {count, plural, other {# 个工作项}}。继续规划之前不会再添加。",
       "states": {
         "never_indexed": {
           "chip": "从未建立索引",
