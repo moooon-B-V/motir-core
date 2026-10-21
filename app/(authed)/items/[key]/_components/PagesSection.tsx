@@ -286,6 +286,7 @@ export function PagesSection({
   const [unlinkFailed, setUnlinkFailed] = useState<string | null>(null);
   const [unlinkedLive, setUnlinkedLive] = useState<string | null>(null);
   const doorRef = useRef<HTMLButtonElement>(null);
+  const refocusDoor = useRef(false);
   // Sequence guard: a response that is no longer the latest request's never
   // clobbers newer state (CLAUDE.md § the app side).
   const seq = useRef(0);
@@ -348,9 +349,16 @@ export function PagesSection({
   function closeForm() {
     setFormOpen(false);
     setFormWriting(false);
-    // Focus returns to the door once it has re-rendered as "Link page".
-    requestAnimationFrame(() => doorRef.current?.focus());
+    // Focus returns to the door once it has re-rendered as "Link page" — the effect
+    // below runs after that commit; a frame callback can fire before it.
+    refocusDoor.current = true;
   }
+
+  useEffect(() => {
+    if (formOpen || !refocusDoor.current) return;
+    refocusDoor.current = false;
+    doorRef.current?.focus();
+  }, [formOpen]);
 
   function onLinked(page: PageMentionCandidateDto) {
     // Local mutation only: the loaded pages and the cursor survive, and the
