@@ -1,0 +1,3311 @@
+<!doctype html>
+<!-- DELTA 2026-10-21 (MOTIR-8988): the larger credit pool plan on Billing & plans. Amends billing.mock.html; that file is a record and is not edited. -->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · BILLING, delta — the larger credit pool plan (MOTIR-8988)</title>
+    <!--
+      DESIGN ASSET (HTML mockup, DELTA) — subtask MOTIR-8988, story MOTIR-8986.
+      A DELTA. It amends design/billing/billing.mock.html, the Motir AI plans view (panel 5) ONLY.
+      The earlier mock is a record and is not edited. No plan-delivery delta for the ladder story
+      is in design/billing/ at run time (listed 2026-10-21), so this file's row drawing is the only one.
+
+      IT COMPOSES, and defines no new grammar: the shipped PlanCard grammar and measurements
+      (BillingClient.tsx: flex column, min-width 10rem, --radius-card, --spacing-card-padding,
+      --shadow-card, accent border when current or recommended, the action pinned at the bottom),
+      the row (items-stretch, gap 12px, snap-x, overflow-x auto), the card / button / pill / token
+      block the deltas in this area carry (copied from billing--calculator--categories.mock.html),
+      the cadence Segmented with its save badge, the free-trial strip slot above the row, the top-up
+      card below it, and the dashed notice block.
+
+      The row's cadence control DEFAULTS TO ANNUAL, so the arrival (panel 2) is drawn at annual.
+      Every string the larger plan adds is a KEY of the words card (MOTIR-8993), drawn as a dashed
+      slot naming that key; this asset writes no wording. EVERY NUMBER IS ILLUSTRATIVE (the rungs
+      are MOTIR-8987's record and lib/billing/catalog.ts).
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+        /* added by this delta — the package theme.css values for tokens the base predates */
+        --color-hairline: #e5e3df;
+        --el-overlay-scrim: #00000066;
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-input-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        /* added by this delta — the package theme.css values the Segmented primitive reads */
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --color-warning: #f08c3a;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+        --color-hairline: #2a2a2a;
+        --el-overlay-scrim: #000000a6;
+      }
+      /* re-emitted so a nested data-theme='dark' scope (panel 12) recomputes Tier 3 (MOTIR-3592) */
+      [data-theme='dark'] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-overlay-scrim: #00000066;
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-input-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .panel-label code,
+      .panel-label b {
+        text-transform: none;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .cap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+        line-height: 1.45;
+      }
+      /* the source label every figure carries (board annotation, not product copy) */
+      .srcl {
+        display: block;
+        margin-top: 3px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+      .grid-2,
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .grid-2.top,
+      .grid-3.top {
+        align-items: start;
+      }
+      .sub8 {
+        margin-top: 24px;
+      }
+      @media (max-width: 900px) {
+        .grid-2,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .clist {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .clist li {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+      }
+      .clist svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-success);
+      }
+
+      /* ── Page shell — the billing views' header grammar (PlansView) ────────── */
+      .page {
+        padding: 28px 28px 32px;
+      }
+      .vhead {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .backlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        width: fit-content;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .backlink svg {
+        width: 14px;
+        height: 14px;
+      }
+      .crumb {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .vtitle {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .vsub {
+        margin: 0;
+        max-width: 64ch;
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .card-body {
+        padding: 16px var(--spacing-card-padding) 18px;
+      }
+      .card-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        padding: 12px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .fnote {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Pills (components/ui/Pill — hue in the tint BG + --el-text-strong) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-tier {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-topup {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-active,
+      .pill-save {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn[aria-busy='true'] {
+        opacity: 0.8;
+        cursor: progress;
+      }
+      .spin {
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        flex: none;
+      }
+
+      /* ── Segmented (packages/design-system Segmented) ─────────────────────── */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-tabnav-track);
+        max-width: 100%;
+        flex-wrap: wrap;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: calc(var(--radius-btn) - 2px);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg-opt.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-opt[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        text-decoration: line-through;
+      }
+      .cadrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 18px;
+      }
+      .cadrow .srcl {
+        margin-top: 0;
+      }
+
+      /* ── The plans view (S1) — the shipped strip, intro, and plan-card row ── */
+      .strip {
+        margin-top: 18px;
+      }
+      .striprow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding-top: 14px;
+        padding-bottom: 14px;
+      }
+      .striprow .btn {
+        margin-left: auto;
+      }
+      .stript {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .intro {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+        margin-top: 20px;
+      }
+      .introt {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .calclink {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .calclink svg {
+        width: 15px;
+        height: 15px;
+      }
+      /* board marker only: outlines what this delta adds */
+      .is-new {
+        outline: 2px dashed var(--el-highlight);
+        outline-offset: 5px;
+        border-radius: var(--radius-control);
+      }
+      .ai-grid {
+        display: flex;
+        gap: 12px;
+        margin-top: 18px;
+        overflow: hidden;
+        max-height: 150px;
+      }
+      .plan {
+        flex: 1 0 0;
+        min-width: 158px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+        background: var(--el-page-bg);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .plan.cur {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 1px var(--el-accent);
+      }
+      .pn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .price {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .amt {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .per {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .alot {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .seatl {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .seatl svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-accent-on-surface);
+      }
+
+      /* ── The Calculator view ─────────────────────────────────────────────── */
+      .calc {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+        align-items: start;
+        margin-top: 18px;
+      }
+      .calc.one {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      @media (max-width: 760px) {
+        .calc {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .fstack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .flabel {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .help,
+      .hint {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* the range — two Inputs (FormField + Input) */
+      .range {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+      }
+      .rbox {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
+      }
+      .rlab {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .dash {
+        padding-bottom: 12px;
+        color: var(--el-text-secondary);
+      }
+      .inp {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .inp.err {
+        border-color: var(--el-danger);
+      }
+      .inp.ro {
+        border-style: dashed;
+      }
+      .ph {
+        color: var(--el-text-muted);
+      }
+      .val {
+        font-variant-numeric: tabular-nums;
+      }
+      .ferr {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-danger-on-surface);
+      }
+      .ferr svg,
+      .catnote svg,
+      .dropnote svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+      }
+      /* a lane — one {category, modelIds} selection */
+      .lane {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .lane-h {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .lname {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lhelp {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* models — TopupCard's role="group" of aria-pressed buttons (multi-select) */
+      .mgroup {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .mbtn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        text-align: left;
+        cursor: pointer;
+      }
+      .mbtn.on {
+        border-color: var(--el-accent);
+        background: var(--el-surface);
+      }
+      .mbtn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .mid {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .mprov {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .catnote {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .dropnote {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 0;
+        padding: 8px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-strong);
+      }
+      .asknote {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .asknote svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      /* loading treatment — skeleton bars carry no text */
+      .skel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 4px 0 12px;
+      }
+      .skrow {
+        display: flex;
+        gap: 8px;
+      }
+      .sk {
+        display: block;
+        height: 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .sk.tall {
+        height: 30px;
+      }
+      .sk.segsk {
+        width: 260px;
+        height: var(--height-control);
+      }
+      .sk.chip {
+        width: 120px;
+        height: 44px;
+      }
+      .w40 {
+        width: 40%;
+      }
+      .w50 {
+        width: 50%;
+      }
+      .w60 {
+        width: 60%;
+      }
+      .w70 {
+        width: 70%;
+      }
+      .w80 {
+        width: 80%;
+      }
+      /* S6 — the categories read failed: one dashed notice where the pickers stand */
+      .catfail {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 16px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .catfail > svg {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .cft,
+      .ut {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .cfd {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+
+      /* the result */
+      .rph {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 36px 16px;
+        text-align: center;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .rph svg {
+        width: 28px;
+        height: 28px;
+        color: var(--el-text-faint);
+      }
+      .rph p {
+        margin: 0;
+        max-width: 36ch;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .res {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .fig {
+        min-width: 0;
+      }
+      .rlabel {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .famt {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .funit {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--el-text-secondary);
+      }
+      .perit {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .recplan {
+        padding: 14px;
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .recrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .rprice .amt {
+        font-size: 24px;
+      }
+      .oneplan {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lrow {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .lrow > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-text-secondary);
+      }
+      .lrow .rlabel {
+        margin-bottom: 2px;
+      }
+      .lval {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .lrow.seat > svg {
+        color: var(--el-accent-on-surface);
+      }
+      .lrow.seat.off > svg {
+        color: var(--el-text-secondary);
+      }
+      .ceil,
+      .upline,
+      .unav {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .ceil p,
+      .upline p {
+        margin: 0;
+      }
+      .ceil > svg,
+      .upline > svg,
+      .unav > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+      }
+      .ceil {
+        background: var(--el-tint-yellow);
+      }
+      .ceil > svg {
+        color: var(--el-warning);
+      }
+      .upline {
+        background: var(--el-tint-sky);
+      }
+      /* S14 — the engine's own "unavailable" answer: peach, a clock, a retry */
+      .unav {
+        background: var(--el-tint-peach);
+        padding: 18px;
+      }
+      .unav > svg {
+        width: 20px;
+        height: 20px;
+      }
+      .ud {
+        margin: 0 0 10px;
+      }
+      .retained {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 12px 0 0;
+      }
+      .retained svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .mini-res {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        padding: 10px 14px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .mini-res svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+      }
+      /* S15 — ErrorState / S16 — the shipped member gate (EmptyState) */
+      .errstate,
+      .gate {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 36px var(--spacing-card-padding);
+        text-align: center;
+      }
+      .erric,
+      .gateic {
+        display: inline-flex;
+        width: 48px;
+        height: 48px;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-danger-on-surface);
+      }
+      .gateic {
+        color: var(--el-accent-on-surface);
+      }
+      .erric svg,
+      .gateic svg {
+        width: 44px;
+        height: 44px;
+      }
+      .et {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ed {
+        margin: 0 0 6px;
+        max-width: 48ch;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .rolec {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .mini-cta {
+        margin-top: 4px;
+      }
+      .aside {
+        padding: 16px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+
+      /* narrow frame */
+      .phones {
+        display: flex;
+        justify-content: center;
+      }
+      .phone {
+        width: 375px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .phone-in {
+        padding: 16px;
+      }
+      .phone .vtitle {
+        font-size: 24px;
+      }
+      /* ── additions for the category set (all --el-* / shape tokens) ───────────── */
+      .cset {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .cbtn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        flex: 1 1 160px;
+        min-width: 0;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        text-align: left;
+        cursor: pointer;
+        color: var(--el-text);
+      }
+      .cbtn.on {
+        border-color: var(--el-accent);
+        background: var(--el-surface);
+      }
+      .cbtn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .cbtn .cname {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .cbtn .cex {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+      .cbtn .cex b {
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .cbtn .cnone {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .cset-skel .cbtn {
+        cursor: default;
+      }
+      .splitbox {
+        padding: 12px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .splitbox p {
+        margin: 0;
+      }
+      .splitrow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        margin-top: 8px;
+      }
+      .splitrow .pill {
+        text-transform: none;
+      }
+      .estword {
+        margin: 6px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .poolnote {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .poolnote p {
+        margin: 0;
+      }
+      .poolnote > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+      }
+      .recplan.larger {
+        border-style: dashed;
+      }
+      .tag {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .neighbours {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      @media (max-width: 960px) {
+        .neighbours {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ── Added by this delta (MOTIR-8988): the plan row at the shipped PlanCard grammar ── */
+      .lp-row {
+        display: flex;
+        align-items: stretch;
+        gap: 12px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        padding-bottom: 6px;
+      }
+      .lp-card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1 0 0;
+        min-width: 10rem;
+        scroll-snap-align: start;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .lp-card.accent {
+        border-color: var(--el-accent);
+      }
+      .lp-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .lp-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lp-use {
+        min-height: 2.75rem;
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-price {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        color: var(--el-text);
+      }
+      .lp-sub {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-alot {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .lp-ladder {
+        margin: 0;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .lp-seat {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-act {
+        margin-top: auto;
+        padding-top: 4px;
+      }
+      .lp-act .btn {
+        width: 100%;
+      }
+      /* a string slot owned by the words card (MOTIR-8993): the KEY, never wording */
+      .lp-slot {
+        display: block;
+        margin: 0;
+        padding: 6px 8px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .lp-notice {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 0 0 12px;
+        padding: 10px 12px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .lp-reason {
+        margin: 0 0 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lp-strip {
+        margin: 0 0 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .lp-topup {
+        margin-top: 16px;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .lp-cad {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0 0 12px;
+      }
+      .lp-h {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lp-skel {
+        height: 220px;
+        flex: 1 0 0;
+        min-width: 10rem;
+        border-radius: var(--radius-card);
+        background: var(--el-muted);
+      }
+      .lp-narrow {
+        max-width: 400px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Billing &amp; plans, delta — the larger credit pool plan (MOTIR-8988)</h1>
+        <p>
+          Amends <code>billing.mock.html</code>'s plans view only. The larger pool is one more card
+          at the end of the shipped row, offered only from an estimate. Twelve states (panel 2
+          carries a 2b neighbour): no estimate · offered · upgrade · current · two NOT-AN-OFFER
+          absences · read-only · cadence · refused · loading · read fails · narrow + dark. Dashed
+          mono slots are the words card's keys (MOTIR-8993). <b>Every figure is illustrative.</b>
+        </p>
+      </div>
+      <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
+    </div>
+    <div class="panel-label">
+      1 · No estimate in context — the plans view opened cold. Four standing rungs, the catalogue
+      default (Pro) carries <b>Recommended</b>, no larger card, no caption.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-strip">The free-trial strip (shipped) — 300 credits · one-time</div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              </div>
+            </div>
+            <div class="lp-card accent">
+              <div class="lp-top">
+                <span class="lp-name">Pro</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pro</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      2 · Offered — the arrival. Estimate high end above the ladder top, no live plan: the row ends
+      with the larger pool, which carries the <b>only</b> Recommended pill. Drawn at the row
+      default, annual.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-strip">The free-trial strip (shipped) — 300 credits · one-time</div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              </div>
+            </div>
+            <div class="lp-card accent is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">
+                <span class="srcl"
+                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                >
+              </p>
+              <div>
+                <span class="lp-price">$267 / mo</span>
+                <p class="lp-sub">billed annually · $3,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,480/yr</span
+                >
+              </div>
+              <span class="lp-slot">billing.plans.larger.priceEstimate</span
+              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <span class="lp-slot"
+                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
+                with the estimate</span
+              ><span class="srcl"
+                >the caption takes the ladder-line slot; no ladder line on this card</span
+              >
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
+                ><span class="srcl">starts Checkout · quantity 1</span>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      2b · The same arrival at a rung that IS a whole multiple of the rung below (120,000 = 2 × Max
+      ×2): the caption still replaces the ladder line, so the suppression follows the caption, not
+      the multiple.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              </div>
+            </div>
+            <div class="lp-card accent is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 120,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">
+                <span class="srcl"
+                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                >
+              </p>
+              <div>
+                <span class="lp-price">$400 / mo</span>
+                <p class="lp-sub">billed annually · $4,800 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $2,040/yr</span
+                >
+              </div>
+              <span class="lp-slot">billing.plans.larger.priceEstimate</span
+              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
+              <p class="lp-alot">120,000 credits / mo</p>
+              <span class="lp-slot"
+                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
+                with the estimate</span
+              ><span class="srcl"
+                >the caption takes the ladder-line slot; no ladder line on this card</span
+              >
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pool 120,000</button
+                ><span class="srcl">starts Checkout · quantity 1</span>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      3 · Upgrade — the same estimate, the org holds a smaller live plan (Standard): the larger card
+      carries the shipped change-of-plan control in the action slot, not a checkout.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card accent">
+              <div class="lp-top">
+                <span class="lp-name">Standard</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Current</span
+                >
+              </div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled>Current plan</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Upgrade to Pro</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Upgrade to Max</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Upgrade to Max ×2</button>
+              </div>
+            </div>
+            <div class="lp-card accent is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">
+                <span class="srcl"
+                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                >
+              </p>
+              <div>
+                <span class="lp-price">$267 / mo</span>
+                <p class="lp-sub">billed annually · $3,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,480/yr</span
+                >
+              </div>
+              <span class="lp-slot">billing.plans.larger.priceEstimate</span
+              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <span class="lp-slot"
+                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
+                with the estimate</span
+              ><span class="srcl"
+                >the caption takes the ladder-line slot; no ladder line on this card</span
+              >
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
+                ><span class="srcl">the shipped change-of-plan control — no checkout</span>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      4 · Current — the org holds the larger pool the estimate derives (or a larger one). The held
+      card renders LAST, marked Current, with the held caption; no checkout control anywhere; no
+      other larger pool is drawn.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"></div>
+            </div>
+            <div class="lp-card accent is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Current</span
+                >
+              </div>
+              <p class="lp-use">
+                <span class="srcl"
+                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                >
+              </p>
+              <div>
+                <span class="lp-price">$267 / mo</span>
+                <p class="lp-sub">billed annually · $3,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,480/yr</span
+                >
+              </div>
+              <span class="lp-slot">billing.plans.larger.priceEstimate</span
+              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <span class="lp-slot">billing.plans.larger.captionCurrent</span
+              ><span class="srcl"
+                >the caption takes the ladder-line slot; no ladder line on this card</span
+              >
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled>Current plan</button>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      5 · NOT AN OFFER — the regular ladder covers the estimate (high end ≤ 60,000). The larger card
+      is ABSENT; no notice above the row; the sentence this owner needs is on the Calculator answer,
+      one surface away.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              </div>
+            </div>
+            <div class="lp-card accent">
+              <div class="lp-top">
+                <span class="lp-name">Pro</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pro</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      6 · NOT AN OFFER — the estimate is past the top band (high end above 250,000). The larger card
+      is ABSENT; ONE notice in the slot above the row carries the words card key; Max ×2 is the last
+      plan sold and the top-up card below is the remaining reach.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-notice is-new">
+            <span class="lp-slot"
+              >billing.plans.larger.aboveBand · {excess} 40,000 — the words card's key (MOTIR-8993);
+              this asset writes no wording</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              </div>
+            </div>
+            <div class="lp-card accent">
+              <div class="lp-top">
+                <span class="lp-name">Pro</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pro</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      7 · Read-only manager — an admin who may view but not buy: the larger card in full, its action
+      disabled and described by the shipped disabled-reason line; the caption still renders.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <p class="lp-reason" id="lp-reason">
+            Only owners and admins can change the plan<span class="srcl"
+              >billing.plans.upgrade.disabledReason · aria-describedby on every disabled
+              action</span
+            >
+          </p>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
+                  Choose Standard
+                </button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
+                  Choose Pro
+                </button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
+                  Choose Max
+                </button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm" disabled aria-describedby="lp-reason">
+                  Choose Max ×2
+                </button>
+              </div>
+            </div>
+            <div class="lp-card accent is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">
+                <span class="srcl"
+                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                >
+              </p>
+              <div>
+                <span class="lp-price">$267 / mo</span>
+                <p class="lp-sub">billed annually · $3,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,480/yr</span
+                >
+              </div>
+              <span class="lp-slot">billing.plans.larger.priceEstimate</span
+              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <span class="lp-slot"
+                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
+                with the estimate</span
+              ><span class="srcl"
+                >the caption takes the ladder-line slot; no ladder line on this card</span
+              >
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm" disabled aria-describedby="lp-reason">
+                  Upgrade to Pool 80,000</button
+                ><span class="srcl">starts Checkout · quantity 1</span>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      8 · Cadence switched — Monthly. The same derived pool, re-priced in the shipped price-block
+      shape; the basis line follows the cadence. (Panel 2 is the annual default.)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt on">Monthly</button><button class="seg-opt">Annual</button>
+            </div>
+          </div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$25 / mo</span>
+                <p class="lp-sub">$300 / yr · Save $100 with annual</p>
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$75 / mo</span>
+                <p class="lp-sub">$900 / yr · Save $300 with annual</p>
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$150 / mo</span>
+                <p class="lp-sub">$1,800 / yr · Save $600 with annual</p>
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$300 / mo</span>
+                <p class="lp-sub">$3,600 / yr · Save $1,200 with annual</p>
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              </div>
+            </div>
+            <div class="lp-card accent is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">
+                <span class="srcl"
+                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                >
+              </p>
+              <div>
+                <span class="lp-price">$390 / mo</span>
+                <p class="lp-sub">$4,680 / yr · Save $1,480 with annual</p>
+              </div>
+              <span class="lp-slot">billing.plans.larger.priceEstimate</span
+              ><span class="lp-slot">billing.plans.larger.basis.monthly · {plan} Max ×2</span>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <span class="lp-slot"
+                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
+                with the estimate</span
+              ><span class="srcl"
+                >the caption takes the ladder-line slot; no ladder line on this card</span
+              >
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
+                ><span class="srcl">starts Checkout · quantity 1</span>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      9 · Purchase refused — the buy was pressed and the boundary refused: ONE notice above the row
+      carries the sentence the refusal code selects; the offer stays drawn unchanged; no toast. (The
+      target; today the island toasts.)
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+          <div class="lp-cad">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+            </div>
+            <span
+              class="pill"
+              style="
+                background: var(--el-tint-mint);
+                color: var(--el-text-strong);
+                border-color: transparent;
+              "
+              >Save ~33%</span
+            >
+          </div>
+          <div class="lp-notice is-new">
+            <span class="lp-slot"
+              >billing.plans.larger.refused.{atOrBelowCeiling | notForSale | offerExpired |
+              quantity} — chosen by the refusal code (MOTIR-8997 maps code → key)</span
+            >
+          </div>
+          <div class="lp-row">
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Standard</span></div>
+              <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+              <div>
+                <span class="lp-price">$17 / mo</span>
+                <p class="lp-sub">billed annually · $200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $100/yr</span
+                >
+              </div>
+              <p class="lp-alot">5,000 credits / mo</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Standard</button>
+              </div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Pro</span></div>
+              <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+              <div>
+                <span class="lp-price">$50 / mo</span>
+                <p class="lp-sub">billed annually · $600 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $300/yr</span
+                >
+              </div>
+              <p class="lp-alot">15,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Pro</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max</span></div>
+              <p class="lp-use">billing.plans.tiers.max.useCase</p>
+              <div>
+                <span class="lp-price">$100 / mo</span>
+                <p class="lp-sub">billed annually · $1,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $600/yr</span
+                >
+              </div>
+              <p class="lp-alot">30,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act"><button class="btn btn-secondary btn-sm">Choose Max</button></div>
+            </div>
+            <div class="lp-card">
+              <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+              <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+              <div>
+                <span class="lp-price">$200 / mo</span>
+                <p class="lp-sub">billed annually · $2,400 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,200/yr</span
+                >
+              </div>
+              <p class="lp-alot">60,000 credits / mo</p>
+              <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+              </div>
+            </div>
+            <div class="lp-card accent is-new">
+              <div class="lp-top">
+                <span class="lp-name">Pool 80,000</span
+                ><span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-lavender);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Recommended</span
+                >
+              </div>
+              <p class="lp-use">
+                <span class="srcl"
+                  >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                >
+              </p>
+              <div>
+                <span class="lp-price">$267 / mo</span>
+                <p class="lp-sub">billed annually · $3,200 / yr</p>
+                <span
+                  class="pill"
+                  style="
+                    background: var(--el-tint-mint);
+                    color: var(--el-text-strong);
+                    border-color: transparent;
+                  "
+                  >Save $1,480/yr</span
+                >
+              </div>
+              <span class="lp-slot">billing.plans.larger.priceEstimate</span
+              ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
+              <p class="lp-alot">80,000 credits / mo</p>
+              <span class="lp-slot"
+                >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it moves
+                with the estimate</span
+              ><span class="srcl"
+                >the caption takes the ladder-line slot; no ladder line on this card</span
+              >
+              <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+              <div class="lp-act">
+                <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
+                ><span class="srcl">starts Checkout · quantity 1</span>
+              </div>
+            </div>
+          </div>
+          <div class="lp-topup">
+            <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+              >the shipped top-up card, unchanged</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      10 · Loading — the shipped billing skeleton. The larger card adds no skeleton of its own; the
+      row is never drawn half-arrived.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <span class="crumb">Organization · Acme · Motir AI</span>
+            <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+          </header>
+          <div class="lp-row" style="margin-top: 16px">
+            <div class="lp-skel" aria-hidden="true"></div>
+            <div class="lp-skel" aria-hidden="true"></div>
+            <div class="lp-skel" aria-hidden="true"></div>
+            <div class="lp-skel" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      11 · Read fails — the shipped fail-closed error. No partial catalogue, no larger card beside a
+      failed read.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="lp-notice">
+            <span
+              >We couldn't load billing. Try again.<span class="srcl"
+                >the shipped fail-closed error state — no plan row, no larger card beside it</span
+              ></span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      12 · Narrow (~400px) and dark — the row scrolls horizontally and never wraps; the larger card
+      is last and reached by scrolling; the caption wraps without clipping. Use “Toggle dark” for
+      the dark board.
+    </div>
+    <div class="panel">
+      <div data-theme="dark" style="background: var(--el-page-bg); padding: 16px">
+        <div class="stage">
+          <div class="page lp-narrow">
+            <header class="vhead">
+              <span class="crumb">Organization · Acme · Motir AI</span>
+              <h2 class="vtitle">Motir AI — plans &amp; subscription</h2>
+            </header>
+            <p class="lp-h" style="margin-top: 16px">Choose your plan</p>
+            <div class="lp-cad">
+              <div class="seg" role="group" aria-label="Billing cadence">
+                <button class="seg-opt">Monthly</button><button class="seg-opt on">Annual</button>
+              </div>
+              <span
+                class="pill"
+                style="
+                  background: var(--el-tint-mint);
+                  color: var(--el-text-strong);
+                  border-color: transparent;
+                "
+                >Save ~33%</span
+              >
+            </div>
+            <div class="lp-row">
+              <div class="lp-card">
+                <div class="lp-top"><span class="lp-name">Standard</span></div>
+                <p class="lp-use">billing.plans.tiers.standard.useCase</p>
+                <div>
+                  <span class="lp-price">$17 / mo</span>
+                  <p class="lp-sub">billed annually · $200 / yr</p>
+                  <span
+                    class="pill"
+                    style="
+                      background: var(--el-tint-mint);
+                      color: var(--el-text-strong);
+                      border-color: transparent;
+                    "
+                    >Save $100/yr</span
+                  >
+                </div>
+                <p class="lp-alot">5,000 credits / mo</p>
+                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+                <div class="lp-act">
+                  <button class="btn btn-secondary btn-sm">Choose Standard</button>
+                </div>
+              </div>
+              <div class="lp-card">
+                <div class="lp-top"><span class="lp-name">Pro</span></div>
+                <p class="lp-use">billing.plans.tiers.pro.useCase</p>
+                <div>
+                  <span class="lp-price">$50 / mo</span>
+                  <p class="lp-sub">billed annually · $600 / yr</p>
+                  <span
+                    class="pill"
+                    style="
+                      background: var(--el-tint-mint);
+                      color: var(--el-text-strong);
+                      border-color: transparent;
+                    "
+                    >Save $300/yr</span
+                  >
+                </div>
+                <p class="lp-alot">15,000 credits / mo</p>
+                <p class="lp-ladder" data-testid="plan-ladder">3× Standard the rung below</p>
+                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+                <div class="lp-act">
+                  <button class="btn btn-secondary btn-sm">Choose Pro</button>
+                </div>
+              </div>
+              <div class="lp-card">
+                <div class="lp-top"><span class="lp-name">Max</span></div>
+                <p class="lp-use">billing.plans.tiers.max.useCase</p>
+                <div>
+                  <span class="lp-price">$100 / mo</span>
+                  <p class="lp-sub">billed annually · $1,200 / yr</p>
+                  <span
+                    class="pill"
+                    style="
+                      background: var(--el-tint-mint);
+                      color: var(--el-text-strong);
+                      border-color: transparent;
+                    "
+                    >Save $600/yr</span
+                  >
+                </div>
+                <p class="lp-alot">30,000 credits / mo</p>
+                <p class="lp-ladder" data-testid="plan-ladder">2× Pro the rung below</p>
+                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+                <div class="lp-act">
+                  <button class="btn btn-secondary btn-sm">Choose Max</button>
+                </div>
+              </div>
+              <div class="lp-card">
+                <div class="lp-top"><span class="lp-name">Max ×2</span></div>
+                <p class="lp-use">billing.plans.tiers.max_x2.useCase</p>
+                <div>
+                  <span class="lp-price">$200 / mo</span>
+                  <p class="lp-sub">billed annually · $2,400 / yr</p>
+                  <span
+                    class="pill"
+                    style="
+                      background: var(--el-tint-mint);
+                      color: var(--el-text-strong);
+                      border-color: transparent;
+                    "
+                    >Save $1,200/yr</span
+                  >
+                </div>
+                <p class="lp-alot">60,000 credits / mo</p>
+                <p class="lp-ladder" data-testid="plan-ladder">2× Max the rung below</p>
+                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+                <div class="lp-act">
+                  <button class="btn btn-secondary btn-sm">Choose Max ×2</button>
+                </div>
+              </div>
+              <div class="lp-card accent is-new">
+                <div class="lp-top">
+                  <span class="lp-name">Pool 80,000</span
+                  ><span
+                    class="pill"
+                    style="
+                      background: var(--el-tint-lavender);
+                      color: var(--el-text-strong);
+                      border-color: transparent;
+                    "
+                    >Recommended</span
+                  >
+                </div>
+                <p class="lp-use">
+                  <span class="srcl"
+                    >name = catalog data (MOTIR-8990): it states the monthly pool</span
+                  >
+                </p>
+                <div>
+                  <span class="lp-price">$267 / mo</span>
+                  <p class="lp-sub">billed annually · $3,200 / yr</p>
+                  <span
+                    class="pill"
+                    style="
+                      background: var(--el-tint-mint);
+                      color: var(--el-text-strong);
+                      border-color: transparent;
+                    "
+                    >Save $1,480/yr</span
+                  >
+                </div>
+                <span class="lp-slot">billing.plans.larger.priceEstimate</span
+                ><span class="lp-slot">billing.plans.larger.basis.annual · {plan} Max ×2</span>
+                <p class="lp-alot">80,000 credits / mo</p>
+                <span class="lp-slot"
+                  >billing.plans.larger.caption · {low} 61,000 · {high} 74,000 — an estimate; it
+                  moves with the estimate</span
+                ><span class="srcl"
+                  >the caption takes the ladder-line slot; no ladder line on this card</span
+                >
+                <p class="lp-seat">+ 1 Motir seat · work items uncapped</p>
+                <div class="lp-act">
+                  <button class="btn btn-primary btn-sm">Upgrade to Pool 80,000</button
+                  ><span class="srcl">starts Checkout · quantity 1</span>
+                </div>
+              </div>
+            </div>
+            <div class="lp-topup">
+              <b>Top up credits</b> — 1,000 credits for $5 · 1× / 5× / 10×<span class="srcl"
+                >the shipped top-up card, unchanged</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      function toggleTheme() {
+        const h = document.documentElement;
+        h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+      }
+    </script>
+  </body>
+</html>
