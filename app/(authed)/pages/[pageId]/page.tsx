@@ -63,7 +63,8 @@ import { PageView } from './_components/PageView';
 type Params = { params: Promise<{ pageId: string }> };
 
 /** The signed-in member's scope on their active project, resolved once per request. */
-const loadScope = cache(async () => pageScope(await memberPageContext()));
+const loadContext = cache(memberPageContext);
+const loadScope = cache(async () => pageScope(await loadContext()));
 
 /** Read the page as the signed-in member, or `null` for every not-found case. */
 const loadPage = cache(
@@ -163,6 +164,10 @@ export default async function PageAtItsAddress({ params }: Params) {
   if (!read.loaded) notFound();
   const { page, viewerId } = read.loaded;
   const scope = await loadScope();
+  // `work_item:edit`, for the Linked work items strip (MOTIR-9200): its own value, so
+  // the strip can paint before its read answers. `page.canEdit` is `page:edit`.
+  const canLinkWorkItems =
+    page.archivedAt === null && (await (await loadContext()).permissions()).has('work_item:edit');
   // An archived ROOT's banner says how many sub-pages left with it (MOTIR-7423);
   // read after the gate, and only for that case. A sub-page's banner names its
   // root instead, and a live page needs no count until someone asks to archive it.
@@ -197,6 +202,7 @@ export default async function PageAtItsAddress({ params }: Params) {
             title: page.title,
             bodyState: page.bodyState,
             canEdit: page.canEdit,
+            canLinkWorkItems,
             projectId: page.projectId,
             workItemRefs: page.workItemRefs,
             parentTitle: trail?.pages.at(-1)?.title ?? null,

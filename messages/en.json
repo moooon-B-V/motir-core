@@ -14774,6 +14774,30 @@
     "mention": {
       "unavailable": "Unavailable work item",
       "unavailableTitle": "This work item was deleted, or you can’t see it."
+    },
+    "links": {
+      "title": "Linked work items",
+      "listAria": "Work items linked by hand",
+      "link": "Link work item",
+      "unlinkAria": "Unlink {key}",
+      "empty": "No work items linked by hand yet.",
+      "loading": "Loading linked work items…",
+      "readFailed": "Couldn’t load linked work items.",
+      "showMore": "Show more",
+      "loadMoreFailed": "Couldn’t load the rest of the linked work items.",
+      "unavailable": "Unavailable",
+      "unavailableTitle": "This work item isn’t available to you.",
+      "pickerLabel": "Work items in this project",
+      "typeToSearch": "Type at least {min} characters to search.",
+      "searching": "Searching…",
+      "noResults": "No work items match.",
+      "moreMatch": "More work items match — keep typing to narrow.",
+      "searchFailed": "Couldn’t search work items.",
+      "alreadyLinked": "That work item is already linked to this page.",
+      "writeFailed": "Couldn’t link that work item. Try again.",
+      "refused": "You can’t change this page’s links.",
+      "gone": "That work item no longer exists.",
+      "unlinkFailed": "Couldn’t unlink that work item. Try again."
     }
   },
   "sharpen": {
