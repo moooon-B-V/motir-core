@@ -382,6 +382,8 @@ export interface ContinueFromForPrompt {
   resume?: {
     /** The gates now approved — the work they released is what to build. */
     approved: { key: string; kind: string }[];
+    /** Gates answered "changes requested" (MOTIR-9185): read the reason, redo that work. */
+    changesRequested?: { key: string; kind: string }[];
     /** The gates it stopped on that still wait (or were sent back). */
     stillWaiting: { key: string; kind: string; state: string }[];
   } | null;
@@ -1667,6 +1669,13 @@ function resumeSection(
     `  The previous run (${cf.deadRunId}) was run by ${cf.dispatcherName ?? 'somebody no longer resolvable'}.`,
     '  It stopped because the rest of its work waited on these approval gates, and',
     `  these are now approved: ${resume.approved.length > 0 ? resume.approved.map(gate).join(', ') : 'none were recorded'}.`,
+    ...(resume.changesRequested && resume.changesRequested.length > 0
+      ? [
+          `  Changes were requested on: ${resume.changesRequested.map(gate).join(', ')}.`,
+          "  Read each one's reason (the CHANGES REQUESTED section, or get_approval_gate)",
+          '  and redo that work; it is decided, not waiting.',
+        ]
+      : []),
     ...(resume.stillWaiting.length > 0
       ? [
           `  Still waiting: ${resume.stillWaiting.map((g) => `${gate(g)} — ${g.state}`).join(', ')}.`,
