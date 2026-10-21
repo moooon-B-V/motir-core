@@ -445,6 +445,7 @@ describe('the pause bookkeeping NEVER fails a run (MOTIR-4544 top-up)', () => {
     const counts = await withSystemContext(async (tx) => [
       await githubRepoRepository.markIndexPaused(
         'no-slash',
+        'org-any',
         { reason: 'paused_index_no_credit' },
         tx,
       ),

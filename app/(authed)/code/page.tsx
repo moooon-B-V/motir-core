@@ -107,7 +107,7 @@ export default async function CodePage({
   // opened Health. The whole point of the planning banner's deep link ("Review
   // code health", in ONE click) died there, and it is invisible from inside the
   // page: the Health body IS in the DOM, just `hidden`.
-  searchParams: Promise<{ section?: string }>;
+  searchParams: Promise<{ section?: string; repo?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -172,11 +172,13 @@ export default async function CodePage({
     }
   }
 
+  const query = await searchParams;
+
   return (
     <div className="flex flex-col gap-6">
       <Header title={t('title')} subtitle={t('subtitle')} />
       <CodeSections
-        initialSection={sectionFromParam((await searchParams).section)}
+        initialSection={sectionFromParam(query.section)}
         label={t('sectionsLabel')}
         repositoriesLabel={t('tabs.repositories')}
         healthLabel={t('tabs.health')}
@@ -193,6 +195,7 @@ export default async function CodePage({
               initialSelectedAudit={selectedAudit}
               initialConventions={conventions}
               canConfigure={canConfigure}
+              initialConventionRepo={query.repo ?? null}
             />
           )
         }
