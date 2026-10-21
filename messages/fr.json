@@ -14679,7 +14679,11 @@
         "workItem": "Élément de travail",
         "workItemLabel": "Mentionner un élément de travail",
         "workItemTip": "Mentionner un élément de travail — ou tapez @ dans le texte",
-        "workItemInCode": "Les éléments de travail ne peuvent pas être mentionnés dans un bloc de code"
+        "workItemInCode": "Les éléments de travail ne peuvent pas être mentionnés dans un bloc de code",
+        "embedWorkItem": "Intégrer un élément de travail",
+        "embedWorkItemLabel": "Intégrer un élément de travail sous forme de carte",
+        "embedWorkItemTip": "Intégrer un élément de travail sous forme de carte",
+        "embedWorkItemInCode": "Une carte ne peut pas être placée dans un bloc de code"
       },
       "table": {
         "addRow": "+ Ligne",
@@ -14846,6 +14850,24 @@
     "mention": {
       "unavailable": "Élément de travail indisponible",
       "unavailableTitle": "Cet élément de travail a été supprimé, ou vous ne pouvez pas le voir."
+    },
+    "embed": {
+      "unavailable": "Élément de travail indisponible",
+      "unavailableTitle": "Cet élément de travail a été supprimé, ou vous ne pouvez pas le voir.",
+      "noStatus": "Aucun statut",
+      "unassigned": "Non assigné",
+      "archived": "Archivé",
+      "typeLabel": "Type : {type}",
+      "cardLabel": "Élément de travail {key}",
+      "open": "Ouvrir l’élément de travail",
+      "menu": "Options de la carte",
+      "toMention": "Afficher comme mention en ligne",
+      "toCard": "Afficher comme carte",
+      "remove": "Supprimer la carte",
+      "insertAs": "Insérer comme",
+      "insertMention": "Mention en ligne",
+      "insertCard": "Carte",
+      "insertHint": "Tab pour changer · Entrée pour insérer"
     }
   },
   "sharpen": {

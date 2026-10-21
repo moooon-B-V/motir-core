@@ -156,6 +156,8 @@ describe('state A — the findings report', () => {
           kind: 'story',
           archived: false,
           status: { key: 'done', label: 'Done', category: 'done' },
+          type: null,
+          assignee: null,
           accessible: true,
         },
       },

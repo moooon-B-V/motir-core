@@ -35,6 +35,24 @@ export interface WorkItemPickerProps<C extends WorkItemCandidate> {
   /** The listbox's name — `pages.editor.toolbar.workItemLabel`. */
   label: string;
   messages: PageEditorMessages['mention'];
+  /**
+   * The insert-as band (MOTIR-9182). Absent → today's picker: no band, no `Tab`.
+   * Given → a footer band under the results; `Tab` and a segment's mousedown
+   * switch the placement, and a pick commits the placement's own form.
+   */
+  band?: PickerBand<C>;
+}
+
+/** The picker's insert-as band — one optional prop group. */
+export interface PickerBand<C extends WorkItemCandidate> {
+  placement: 'mention' | 'card';
+  onPlacementChange: (placement: 'mention' | 'card') => void;
+  /** Commit a candidate as a card (the mention form is `onPick`). */
+  onPickEmbed: (candidate: C) => void;
+  messages: Pick<
+    PageEditorMessages['embed'],
+    'insertAs' | 'insertMention' | 'insertCard' | 'insertHint'
+  >;
 }
 
 type Result<C> = { key: string; ok: true; items: C[] } | { key: string; ok: false };
@@ -52,6 +70,7 @@ export function WorkItemPicker<C extends WorkItemCandidate>({
   onPick,
   label,
   messages,
+  band,
 }: WorkItemPickerProps<C>) {
   const idBase = useId();
   const trimmed = query.trim();
@@ -100,7 +119,13 @@ export function WorkItemPicker<C extends WorkItemCandidate>({
 
   // The suggestion keeps focus in the editor and hands ↑ / ↓ / Enter to the
   // listbox as an event (`PICKER_KEY_EVENT`); the latest handler answers it.
+  const commit = (candidate: C) =>
+    band?.placement === 'card' ? band.onPickEmbed(candidate) : onPick(candidate);
   const onKey = (key: string) => {
+    if (key === 'Tab') {
+      if (band) band.onPlacementChange(band.placement === 'card' ? 'mention' : 'card');
+      return;
+    }
     if (failed) {
       // The one option is already the active one; Enter retries.
       if (key === 'Enter') retry();
@@ -108,7 +133,7 @@ export function WorkItemPicker<C extends WorkItemCandidate>({
     }
     if (key === 'Enter') {
       const picked = items[active];
-      if (picked) onPick(picked);
+      if (picked) commit(picked);
       return;
     }
     if (items.length === 0) return;
@@ -180,7 +205,7 @@ export function WorkItemPicker<C extends WorkItemCandidate>({
         onMouseEnter={() => setActiveId(candidate.id)}
         onMouseDown={(event) => {
           event.preventDefault();
-          onPick(candidate);
+          commit(candidate);
         }}
         className={index === active ? `${ROW} bg-(--el-surface)` : ROW}
       >
@@ -189,19 +214,62 @@ export function WorkItemPicker<C extends WorkItemCandidate>({
     ));
   }
 
-  return (
+  const CHROME =
+    'z-50 w-max max-w-[22rem] rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1 leading-[1.4] shadow-(--shadow-elevated)';
+  const listbox = (
     <div
       ref={listboxRef}
       data-mention-picker
+      data-mention-band={band ? '' : undefined}
       role="listbox"
       aria-label={label}
       aria-activedescendant={activeDescendant}
-      className="z-50 w-max max-w-[22rem] rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1 leading-[1.4] shadow-(--shadow-elevated)"
+      className={band ? undefined : CHROME}
     >
       <p className="px-(--spacing-control-x) pt-1.5 pb-1 font-mono text-[10px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
         {messages.workItems}
       </p>
       {body}
+    </div>
+  );
+  if (!band) return listbox;
+
+  const segment = (value: 'mention' | 'card', text: string) => (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={band.placement === value}
+      // mousedown, not click: the editor keeps its focus and the `@query`.
+      onMouseDown={(event) => {
+        event.preventDefault();
+        band.onPlacementChange(value);
+      }}
+      className={`rounded-(--radius-control) px-(--spacing-control-x-8) py-(--spacing-control-y-2) text-xs ${
+        band.placement === value
+          ? 'bg-(--el-surface) font-semibold text-(--el-text)'
+          : 'text-(--el-text-secondary)'
+      }`}
+    >
+      {text}
+    </button>
+  );
+  return (
+    <div className={CHROME}>
+      {listbox}
+      <div className="mt-1 flex items-center justify-between gap-3 border-t border-(--el-border) px-(--spacing-control-x) pt-1.5 pb-0.5">
+        <div
+          role="radiogroup"
+          aria-label={band.messages.insertAs}
+          className="flex items-center gap-1"
+        >
+          <span aria-hidden className="mr-1 text-xs text-(--el-text-secondary)">
+            {band.messages.insertAs}
+          </span>
+          {segment('mention', band.messages.insertMention)}
+          {segment('card', band.messages.insertCard)}
+        </div>
+        <span className="text-[11px] text-(--el-text-secondary)">{band.messages.insertHint}</span>
+      </div>
     </div>
   );
 }

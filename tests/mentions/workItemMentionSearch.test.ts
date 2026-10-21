@@ -3,7 +3,6 @@ import {
   searchWorkItemMentions,
   toWorkItemMentionCandidate,
 } from '@/lib/mentions/workItemMentionSearch';
-import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 
 // The picker's client fetcher (Subtask 5.8.5) and its one-project narrowing
 // (MOTIR-7572): the URL it asks, and that `projectId` rides along only when given.
@@ -54,7 +53,9 @@ describe('searchWorkItemMentions', () => {
         title: 'T',
         kind: 'task',
         status,
-      } as WorkItemSummaryDto).status;
+        type: null,
+        assignee: null,
+      }).status;
     expect(row('in_progress')).toEqual({
       label: 'In Progress',
       tone: 'in-progress',

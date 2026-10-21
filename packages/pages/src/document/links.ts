@@ -8,8 +8,9 @@ import type { DerivedPageLink } from '../store';
 
 /**
  * One link per distinct `(workItemId, source)` the body names, in document
- * order. Today the only producer is the `workItemMention` node (`mention`); a
- * body with none returns `[]`.
+ * order: a `workItemMention` node derives a `mention`, a `workItemEmbed` node an
+ * `embed`, so one item both mentioned and embedded yields both entries. A body
+ * with none returns `[]`.
  */
 export function extractLinks(json: JSONContent): DerivedPageLink[] {
   const links: DerivedPageLink[] = [];
@@ -20,6 +21,13 @@ export function extractLinks(json: JSONContent): DerivedPageLink[] {
       if (typeof id === 'string' && id.length > 0 && !seen.has(`mention:${id}`)) {
         seen.add(`mention:${id}`);
         links.push({ workItemId: id, source: 'mention' });
+      }
+    }
+    if (node.type === 'workItemEmbed') {
+      const id = node.attrs?.id;
+      if (typeof id === 'string' && id.length > 0 && !seen.has(`embed:${id}`)) {
+        seen.add(`embed:${id}`);
+        links.push({ workItemId: id, source: 'embed' });
       }
     }
     node.content?.forEach(visit);

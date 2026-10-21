@@ -21,8 +21,9 @@ import { StarterKit } from '@tiptap/starter-kit';
 // It cannot import that file: the package may not import `@/…`.
 
 /**
- * The `motir:` href payload — a work-item cuid, non-empty. It is the same
- * character set the app's `WORKITEM_TOKEN_RE` / `WORKITEM_HREF_RE`
+ * The `motir:` payload — a work-item cuid, non-empty — shared by both node
+ * kinds that name a work item: the inline mention (`[KEY](motir:<id>)`) and the
+ * block embed (`![KEY](motir:<id>)`). It is the same character set the app's `WORKITEM_TOKEN_RE` / `WORKITEM_HREF_RE`
  * (`lib/mentions/workItemRefs.ts`) accept, restated because the package may
  * not import the app.
  */
@@ -105,6 +106,70 @@ export const WorkItemMention = Node.create({
   },
 });
 
+/**
+ * An EMBED of a work item (Story MOTIR-7566 · MOTIR-9180): the mention's block
+ * twin, drawn as a card. It stores the work item's `id` and the `label` (its key
+ * when inserted) and NOTHING else — the five facts a card shows (key, title,
+ * type, status, assignee) are resolved per reader when the page is read, never
+ * copied into the body. Its markdown is `![KEY](motir:<id>)` on a line of its
+ * own (`markdown.ts`): `Image` takes uploads only, so a `motir:` image has no
+ * other meaning in this dialect. A body write derives an `embed` link from every
+ * one (`links.ts`). Headless: the page editor gives it a card node view.
+ */
+function embedAttrs(
+  src: string,
+  element: HTMLElement,
+): false | { id: string; label: string | null } {
+  return mentionAttrs(src, element);
+}
+
+export const WorkItemEmbed = Node.create({
+  name: 'workItemEmbed',
+  group: 'block',
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      id: { default: null, rendered: false },
+      label: { default: null, rendered: false },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-type="workItemEmbed"][data-work-item-id]',
+        getAttrs: (element) =>
+          embedAttrs(`motir:${(element as HTMLElement).dataset.workItemId}`, element),
+      },
+      // Higher than `Image`'s rule, so a pasted `motir:` image is a card and not
+      // an image whose src no upload can produce.
+      {
+        tag: 'img[src^="motir:"]',
+        priority: 1000,
+        getAttrs: (element) => embedAttrs(String(element.getAttribute('src')), element),
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    const label = (node.attrs.label as string | null) ?? (node.attrs.id as string | null) ?? '';
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, {
+        'data-type': 'workItemEmbed',
+        'data-work-item-id': node.attrs.id as string,
+      }),
+      label,
+    ];
+  },
+
+  renderText({ node }) {
+    return (node.attrs.label as string | null) ?? (node.attrs.id as string | null) ?? '';
+  },
+});
+
 export function pageExtensions(): Extensions {
   return [
     StarterKit.configure({
@@ -137,5 +202,6 @@ export function pageExtensions(): Extensions {
     TableHeader,
     TableCell,
     WorkItemMention,
+    WorkItemEmbed,
   ];
 }

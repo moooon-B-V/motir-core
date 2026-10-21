@@ -38,6 +38,8 @@ const REFS: WorkItemRefMap = {
     kind: 'task',
     archived: false,
     status: null,
+    type: null,
+    assignee: null,
   },
 };
 

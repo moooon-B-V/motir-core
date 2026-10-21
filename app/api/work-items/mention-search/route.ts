@@ -9,7 +9,7 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // pg_trgm, workspace + Story-6.4-browsable-project scoped, bounded read the
 // link/blocker pickers already ride): it reads the active-workspace context,
 // runs the search capped at MENTION_SEARCH_LIMIT, and returns the matching
-// `WorkItemSummaryDto` rows.
+// `WorkItemMentionCandidateDto` rows (summary + type + assignee).
 //
 // No `db` / no `$transaction` / no business logic here (CLAUDE.md 4-layer rule).
 // The service already short-circuits a short/empty/whitespace query to `[]` with
@@ -32,7 +32,7 @@ export async function GET(req: Request): Promise<Response> {
   const params = new URL(req.url).searchParams;
   const q = params.get('q') ?? '';
   const projectId = params.get('projectId') || undefined;
-  const results = await workItemsService.quickSearch(q, ctx, {
+  const results = await workItemsService.searchMentionCandidates(q, ctx, {
     limit: MENTION_SEARCH_LIMIT,
     projectId,
   });

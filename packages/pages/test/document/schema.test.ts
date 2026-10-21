@@ -22,6 +22,7 @@ describe('pageSchema', () => {
       'taskItem',
       'taskList',
       'text',
+      'workItemEmbed',
       'workItemMention',
     ]);
   });
@@ -62,6 +63,7 @@ describe('pageSchema', () => {
       'tableHeader',
       'tableCell',
       'workItemMention',
+      'workItemEmbed',
     ]);
   });
 });

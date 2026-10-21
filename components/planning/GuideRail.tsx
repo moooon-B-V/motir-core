@@ -154,6 +154,9 @@ export function GuideRail({
     kind: card.kind,
     archived: false,
     status: null,
+    // Only a key and a title reached this chip — not carried, not "none".
+    type: null,
+    assignee: null,
   };
 
   // Follow the newest line while the reader is at the bottom.

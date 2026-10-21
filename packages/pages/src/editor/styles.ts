@@ -65,4 +65,65 @@ export const PAGE_EDITOR_CSS = `
   cursor: default;
 }
 .motir-page-editor .motir-prose .wi-chip .wi-label { color: var(--el-text-secondary); text-decoration: line-through; }
+
+.motir-page-editor .motir-prose .motir-wi-embed { position: relative; margin: 12px 0; }
+.motir-page-editor .motir-prose .motir-wi-embed.ProseMirror-selectednode .wi-card-frame {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 1px;
+  border-radius: var(--radius-card);
+}
+.motir-page-editor .motir-prose .wi-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--spacing-card-padding-12) var(--spacing-card-padding-16);
+  border: 1px solid var(--el-border);
+  border-radius: var(--radius-card);
+  background: var(--el-card);
+  color: var(--el-text);
+  text-decoration: none;
+}
+.motir-page-editor .motir-prose a.wi-card:hover { background: var(--el-surface-soft); }
+.motir-page-editor .motir-prose a.wi-card:hover .wi-title { text-decoration: underline; }
+.motir-page-editor .motir-prose .wi-card .wi-key { font-family: var(--font-mono, monospace); color: var(--el-text-identifier); }
+.motir-page-editor .motir-prose .wi-card .wi-title { color: var(--el-text-strong); font-weight: 600; }
+.motir-page-editor .motir-prose .wi-card.is-archived { background: var(--el-surface-soft); }
+.motir-page-editor .motir-prose .wi-card.is-unavailable {
+  border-style: dashed;
+  color: var(--el-text-secondary);
+  cursor: default;
+}
+.motir-page-editor .motir-prose .wi-card-cluster {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: none;
+  gap: 2px;
+}
+.motir-page-editor .motir-prose .motir-wi-embed:hover .wi-card-cluster,
+.motir-page-editor .motir-prose .motir-wi-embed:focus-within .wi-card-cluster,
+.motir-page-editor .motir-prose .motir-wi-embed.ProseMirror-selectednode .wi-card-cluster { display: flex; }
+.motir-page-editor .motir-prose .wi-card-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  min-width: 11rem;
+  padding: 4px;
+  border: 1px solid var(--el-border);
+  border-radius: var(--radius-card);
+  background: var(--el-page-bg);
+  box-shadow: var(--shadow-elevated);
+}
+.motir-page-editor .motir-prose .wi-card-convert {
+  margin-left: 4px;
+  vertical-align: middle;
+  visibility: hidden;
+}
+.motir-page-editor .motir-prose .motir-wi-mention:hover .wi-card-convert,
+.motir-page-editor .motir-prose .motir-wi-mention:focus-within .wi-card-convert,
+.motir-page-editor .motir-prose .motir-wi-mention.ProseMirror-selectednode .wi-card-convert { visibility: visible; }
+@media (max-width: 639px) {
+  .motir-page-editor .motir-prose .wi-card { flex-wrap: wrap; }
+}
 `;

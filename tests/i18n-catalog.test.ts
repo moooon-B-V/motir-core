@@ -212,6 +212,20 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — the tenant page’s Fleet card, which shows the last stop’s reason',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — the tenant page’s Fleet card, whose counts were re-read',
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
   },
   zh: {
     'platformAdmin.monitoring.subtitle':
@@ -220,6 +234,20 @@ const CARD_SENSE_ALLOWLIST: Record<'en' | 'zh', Record<string, string>> = {
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
     'platformAdmin.tenant.fleet.error.failedBody':
       'UI panel — 此卡片 is the tenant page’s Fleet card, not a work item',
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
   },
 };
 
@@ -604,6 +632,20 @@ function containsBannedWord(locale: Locale, value: string, word: string): boolea
 // `问题` (a problem — and the imported tracker's or Sentry's own "issue").
 const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
   zh: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'email.enterpriseRequestReceived.noNeeds':
       'question — an optional question on the Enterprise contact form, not a work item',
     'device.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
@@ -844,21 +886,75 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'oauthConsent.errors.unexpected': 'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
   },
   ja: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
     'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
     'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
   },
   ko: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
     'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
     'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
   },
   de: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
   },
   fr: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'email.enterpriseRequestReceived.subject':
       "Enterprise sales request — the contact-sales feature's own noun, not a work item",
     'email.enterpriseRequestReceived.openRequest':
@@ -954,27 +1050,87 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
     'oauthConsent.signIn.foot': 'to ask / a request (ordinary verb or noun) — not a work item',
   },
   es: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
     'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
     'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
   },
   it: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'settings.publicAddress.subdomain.open': 'browser tab — "open in a new tab"',
     'workbench.group.count': 'UI tab — a Workbench tab, "on this tab" (MOTIR-8016)',
     'workbench.group.context': 'UI tab — a Workbench tab, "not on this tab" (MOTIR-8016)',
   },
   nl: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'settings.account.notifications.helper': 'a notification — the notification sense of "melding"',
     'notifications.summary.genericNoKey': 'a notification — the notification sense of "melding"',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
   },
   pt: {
+    'pages.editor.toolbar.embedWorkItemLabel':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemTip':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.menu':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.toCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.remove':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
     'orgAdmin.seat.addSub': 'payment card — the card on file Stripe charges',
     'orgAdmin.seat.pastDueNote': 'payment card — the card on file Stripe charges',
     'billing.pastDue.banner': 'payment card — the card on file Stripe charges',
     'onboarding.landing.heroHint': 'payment card — the card on file Stripe charges',
     'platformAdmin.monitoring.subtitle': 'UI panel — each monitoring tile, not a work item',
+  },
+  pl: {
+    'pages.editor.toolbar.embedWorkItemInCode':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
+    'pages.embed.insertCard':
+      'UI panel — the embedded work-item card is the block that DISPLAYS the item, not the item itself (MOTIR-9179)',
   },
 };
 

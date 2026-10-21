@@ -546,6 +546,8 @@ describe('Unified @ picker — People + Work items (component, 5.8.5)', () => {
       title: 'Issue-tree generation',
       kind: 'story',
       status: { label: 'To Do', tone: 'planned' },
+      type: null,
+      assignee: null,
     },
     {
       id: 'wi_1404',
@@ -553,6 +555,8 @@ describe('Unified @ picker — People + Work items (component, 5.8.5)', () => {
       title: 'Render — live chip',
       kind: 'subtask',
       status: { label: 'Blocked', tone: 'warning' },
+      type: null,
+      assignee: null,
     },
   ];
 

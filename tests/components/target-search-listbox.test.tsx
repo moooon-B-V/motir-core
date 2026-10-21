@@ -14,7 +14,15 @@ import type { WorkItemMentionCandidate } from '@/components/ui/markdownEditorMen
 afterEach(cleanup);
 
 function row(id: string, status: WorkItemMentionCandidate['status']): WorkItemMentionCandidate {
-  return { id, identifier: `MOTIR-${id}`, title: `Item ${id}`, kind: 'task', status };
+  return {
+    id,
+    identifier: `MOTIR-${id}`,
+    title: `Item ${id}`,
+    kind: 'task',
+    status,
+    type: null,
+    assignee: null,
+  };
 }
 
 function renderListbox(

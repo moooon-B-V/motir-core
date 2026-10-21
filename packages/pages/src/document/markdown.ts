@@ -211,13 +211,34 @@ function markWorkItemMentions(tokens: Token[]): void {
   }
 }
 
+/**
+ * Re-type a LIFTED block `image` whose `src` is a `motir:<id>` payload into ONE
+ * `work_item_embed` token (MOTIR-9180). It runs AFTER `liftImages`, which finds
+ * its subject by `type === 'image'`: re-typing earlier would leave a block node
+ * inside a paragraph. A card written mid-sentence therefore comes out as a block
+ * of its own, with the text either side kept in paragraphs, as any image does.
+ * Any other image is untouched.
+ */
+function markWorkItemEmbeds(tokens: Token[]): Token[] {
+  return tokens.map((token) => {
+    if (token.type !== 'image') return token;
+    const match = WORK_ITEM_MENTION_HREF_RE.exec(token.attrGet('src') ?? '');
+    if (!match) return token;
+    const embed = new TokenClass('work_item_embed', '', 0);
+    embed.block = true;
+    embed.attrSet('id', match[1]!);
+    embed.attrSet('label', token.children?.[0]?.content ?? '');
+    return embed;
+  });
+}
+
 /** markdown-it, then the four token passes that bring it to the page schema. */
 const pageTokenizer = {
   parse(source: string, env: unknown): Token[] {
     const tokens = markdownIt.parse(source, env);
     markTaskLists(tokens);
     markWorkItemMentions(tokens);
-    return liftImages(wrapTableCells(tokens));
+    return markWorkItemEmbeds(liftImages(wrapTableCells(tokens)));
   },
 } as unknown as ConstructorParameters<typeof MarkdownParser>[1];
 
@@ -272,6 +293,10 @@ const pageMarkdownParser = new MarkdownParser(pageSchema, pageTokenizer, {
   code_inline: { mark: 'code', noCloseToken: true },
   work_item_mention: {
     node: 'workItemMention',
+    getAttrs: (tok) => ({ id: tok.attrGet('id'), label: tok.attrGet('label') || null }),
+  },
+  work_item_embed: {
+    node: 'workItemEmbed',
     getAttrs: (tok) => ({ id: tok.attrGet('id'), label: tok.attrGet('label') || null }),
   },
 });
@@ -372,6 +397,14 @@ const pageMarkdownSerializer: MarkdownSerializer = new MarkdownSerializer(
       state.write(
         `[${(node.attrs.label as string | null) ?? ''}](motir:${node.attrs.id as string})`,
       );
+    },
+    // The block twin of the mention: image syntax with a `motir:` src, always a
+    // line of its own (MOTIR-9180).
+    workItemEmbed: (state, node) => {
+      state.write(
+        `![${(node.attrs.label as string | null) ?? ''}](motir:${node.attrs.id as string})`,
+      );
+      state.closeBlock(node);
     },
     text: defaults.text!,
   },

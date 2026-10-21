@@ -12,6 +12,7 @@ import {
   ListChecks,
   ListOrdered,
   Quote,
+  Rows3,
   Strikethrough,
   Table as TableIcon,
   type LucideIcon,
@@ -70,6 +71,11 @@ export interface PageEditorToolbarProps {
   onMentionWorkItem?: () => void;
   /** Whether the work-item picker is open — the button's `aria-expanded`. */
   mentionOpen?: boolean;
+  /**
+   * Opens the same picker in card placement (MOTIR-9182). The **Embed work item**
+   * button is drawn only when it is passed.
+   */
+  onEmbedWorkItem?: () => void;
   /** Rendered at the trailing end — the save indicator. */
   trailing?: ReactNode;
 }
@@ -80,6 +86,7 @@ export function PageEditorToolbar({
   onInsertImage,
   onMentionWorkItem,
   mentionOpen = false,
+  onEmbedWorkItem,
   trailing,
 }: PageEditorToolbarProps) {
   const t = messages.toolbar;
@@ -237,6 +244,21 @@ export function PageEditorToolbar({
         >
           <CircleDot className="h-3.5 w-3.5" aria-hidden />
           {t.workItem}
+        </button>
+      ) : null}
+      {onEmbedWorkItem ? (
+        <button
+          type="button"
+          aria-label={t.embedWorkItemLabel}
+          aria-haspopup="listbox"
+          aria-expanded={mentionOpen}
+          title={inCodeBlock ? t.embedWorkItemInCode : t.embedWorkItemTip}
+          disabled={inCodeBlock}
+          onClick={onEmbedWorkItem}
+          className={`${TEXT_BUTTON} gap-1.5 disabled:cursor-not-allowed disabled:text-(--el-text-faint) disabled:hover:bg-transparent`}
+        >
+          <Rows3 className="h-3.5 w-3.5" aria-hidden />
+          {t.embedWorkItem}
         </button>
       ) : null}
       {inTable ? (

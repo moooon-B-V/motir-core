@@ -14679,7 +14679,11 @@
         "workItem": "Werkitem",
         "workItemLabel": "Een werkitem vermelden",
         "workItemTip": "Een werkitem vermelden — of typ @ in de tekst",
-        "workItemInCode": "Werkitems kunnen niet in een codeblok worden vermeld"
+        "workItemInCode": "Werkitems kunnen niet in een codeblok worden vermeld",
+        "embedWorkItem": "Werkitem insluiten",
+        "embedWorkItemLabel": "Een werkitem als kaart insluiten",
+        "embedWorkItemTip": "Een werkitem als kaart insluiten",
+        "embedWorkItemInCode": "Een kaart kan niet in een codeblok staan"
       },
       "table": {
         "addRow": "+ Rij",
@@ -14846,6 +14850,24 @@
     "mention": {
       "unavailable": "Niet-beschikbaar werkitem",
       "unavailableTitle": "Dit werkitem is verwijderd, of je kunt het niet zien."
+    },
+    "embed": {
+      "unavailable": "Niet-beschikbaar werkitem",
+      "unavailableTitle": "Dit werkitem is verwijderd, of je kunt het niet zien.",
+      "noStatus": "Geen status",
+      "unassigned": "Niet toegewezen",
+      "archived": "Gearchiveerd",
+      "typeLabel": "Type: {type}",
+      "cardLabel": "Werkitem {key}",
+      "open": "Werkitem openen",
+      "menu": "Kaartopties",
+      "toMention": "Tonen als vermelding in de tekst",
+      "toCard": "Tonen als kaart",
+      "remove": "Kaart verwijderen",
+      "insertAs": "Invoegen als",
+      "insertMention": "Vermelding in de tekst",
+      "insertCard": "Kaart",
+      "insertHint": "Tab om te wisselen · Enter om in te voegen"
     }
   },
   "sharpen": {

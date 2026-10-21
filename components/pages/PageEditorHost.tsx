@@ -9,6 +9,7 @@ import {
   type PageEditorMessages,
   type SaveStatus,
 } from '@motir/pages';
+import { WorkItemEmbedCard } from '@/components/pages/WorkItemEmbedCard';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import {
   WorkItemMentionRow,
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/markdownEditorMentions';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useOptionalTheme } from '@/lib/contexts/theme-context';
-import type { WorkItemKindDto, WorkItemRefMap } from '@/lib/dto/workItems';
+import type { WorkItemKindDto, WorkItemRefMap, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { searchWorkItemMentions } from '@/lib/mentions/workItemMentionSearch';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import '@/components/ui/markdown-editor.css';
@@ -124,6 +125,7 @@ function usePageEditorMessages(): PageEditorMessages {
   const tMarkdown = useTranslations('markdownEditor');
   const tArchive = useTranslations('pages.archive.refusal');
   const tMention = useTranslations('pages.mention');
+  const tEmbed = useTranslations('pages.embed');
   return useMemo(
     () => ({
       bodyLabel: t('bodyLabel'),
@@ -149,6 +151,10 @@ function usePageEditorMessages(): PageEditorMessages {
         workItemLabel: t('toolbar.workItemLabel'),
         workItemTip: t('toolbar.workItemTip'),
         workItemInCode: t('toolbar.workItemInCode'),
+        embedWorkItem: t('toolbar.embedWorkItem'),
+        embedWorkItemLabel: t('toolbar.embedWorkItemLabel'),
+        embedWorkItemTip: t('toolbar.embedWorkItemTip'),
+        embedWorkItemInCode: t('toolbar.embedWorkItemInCode'),
       },
       table: {
         addRow: t('table.addRow'),
@@ -184,13 +190,31 @@ function usePageEditorMessages(): PageEditorMessages {
         unavailable: tMention('unavailable'),
         unavailableTitle: tMention('unavailableTitle'),
       },
+      embed: {
+        unavailable: tEmbed('unavailable'),
+        unavailableTitle: tEmbed('unavailableTitle'),
+        noStatus: tEmbed('noStatus'),
+        unassigned: tEmbed('unassigned'),
+        archived: tEmbed('archived'),
+        typeLabel: (type: string) => tEmbed('typeLabel', { type }),
+        cardLabel: (key: string) => tEmbed('cardLabel', { key }),
+        open: tEmbed('open'),
+        menu: tEmbed('menu'),
+        toMention: tEmbed('toMention'),
+        toCard: tEmbed('toCard'),
+        remove: tEmbed('remove'),
+        insertAs: tEmbed('insertAs'),
+        insertMention: tEmbed('insertMention'),
+        insertCard: tEmbed('insertCard'),
+        insertHint: tEmbed('insertHint'),
+      },
       archived: {
         title: tArchive('editingArchived'),
         body: tArchive('editingArchivedBody'),
         reload: tArchive('reload'),
       },
     }),
-    [t, tMarkdown, tArchive, tMention],
+    [t, tMarkdown, tArchive, tMention, tEmbed],
   );
 }
 
@@ -203,6 +227,7 @@ export function renderPageWorkItemChip(view: AvailableWorkItemRefView) {
   const summary = {
     ...view,
     kind: view.kind as WorkItemKindDto,
+    type: view.type as WorkItemTypeDto | null,
     status: view.status ? { ...view.status, key: view.status.key ?? '' } : null,
   };
   const tip = view.status ? `${view.title} · ${view.status.label}` : view.title;
@@ -213,6 +238,16 @@ export function renderPageWorkItemChip(view: AvailableWorkItemRefView) {
       </span>
     </Tooltip>
   );
+}
+
+/** A page's embedded card, live or archived: the app's card under the package's frame. */
+export function renderPageWorkItemCard(view: AvailableWorkItemRefView) {
+  return <WorkItemEmbedCard view={view} />;
+}
+
+/** The read-only card's anchor target — the item's page, for a ⌘-click or a new tab. */
+export function pageWorkItemHref(view: AvailableWorkItemRefView): string {
+  return `/items/${encodeURIComponent(view.identifier)}`;
 }
 
 /** One picker row: `MentionList`'s work-item row. */
@@ -346,6 +381,8 @@ export function PageEditorHost({
       searchWorkItems={searchWorkItems}
       workItemRefs={workItemRefs}
       renderWorkItemChip={renderPageWorkItemChip}
+      renderWorkItemCard={renderPageWorkItemCard}
+      workItemHref={pageWorkItemHref}
       renderPickerRow={renderPageMentionRow}
       onOpenWorkItem={onOpenWorkItem}
     />

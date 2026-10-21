@@ -25,6 +25,13 @@ import { SaveIndicator } from './SaveIndicator';
 import { PAGE_EDITOR_CSS } from './styles';
 import { WorkItemPicker, defaultPickerRow } from './WorkItemPicker';
 import {
+  EmbedCardContext,
+  EmbedCommands,
+  defaultEmbedCard,
+  workItemEmbedWithCard,
+  type EmbedCardContextValue,
+} from './workItemEmbed';
+import {
   MentionChipContext,
   candidateView,
   defaultChip,
@@ -109,6 +116,10 @@ export interface PageEditorProps<C extends WorkItemCandidate = WorkItemCandidate
   renderWorkItemChip?: (view: AvailableWorkItemRefView) => ReactNode;
   /** Draws one picker row's content; the option around it is the package's. */
   renderPickerRow?: (candidate: C, active: boolean) => ReactNode;
+  /** Draws a live or archived embedded card; the unavailable card is the package's. */
+  renderWorkItemCard?: (view: AvailableWorkItemRefView) => ReactNode;
+  /** Where the read-only card's anchor points, for a ⌘-click or a new tab. */
+  workItemHref?: (view: AvailableWorkItemRefView) => string;
   /**
    * A plain click on a live chip in the read-only page, when the chip the host
    * rendered did not open the item itself.
@@ -147,6 +158,8 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
   searchWorkItems,
   workItemRefs = NO_REFS,
   renderWorkItemChip = defaultChip,
+  renderWorkItemCard = defaultEmbedCard,
+  workItemHref,
   renderPickerRow = defaultPickerRow,
   onOpenWorkItem,
 }: PageEditorProps<C>) {
@@ -209,6 +222,12 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
   // doors exist only on an editable page with a search wired; the extension list
   // is fixed per editor, so that is read once, at mount.
   const [mentionEnabled] = useState(() => editable && searchWorkItems !== undefined);
+  // The card door exists when the composed list carries the card node too.
+  const [embedEnabled] = useState(
+    () => mentionEnabled && pageExtensions().some((e) => e.name === 'workItemEmbed'),
+  );
+  // Which form the open picker will place; the door that opened it sets the start.
+  const [placement, setPlacement] = useState<'mention' | 'card'>('mention');
   const [suggestion, setSuggestion] = useState<
     (MentionSuggestionState & { position?: { left: number; top: number } }) | null
   >(null);
@@ -222,8 +241,13 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
     extensions: [
       // The document's list, its mention node given the live chip.
       ...pageExtensions().map((extension) =>
-        extension.name === 'workItemMention' ? workItemMentionWithChip() : extension,
+        extension.name === 'workItemMention'
+          ? workItemMentionWithChip()
+          : extension.name === 'workItemEmbed'
+            ? workItemEmbedWithCard()
+            : extension,
       ),
+      ...(editable ? [EmbedCommands] : []),
       // Read at creation only, like the rest of these options.
       ...(mentionEnabled
         ? [
@@ -243,7 +267,12 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
                       : undefined,
                 });
               },
-              onClose: () => setSuggestion(null),
+              onClose: () => {
+                setSuggestion(null);
+                // The next opening starts in mention placement unless the toolbar's
+                // Embed control asks for the card.
+                setPlacement('mention');
+              },
               onInsert: (candidate) =>
                 setPickedRefs((prev) => ({ ...prev, [candidate.id]: candidateView(candidate) })),
             }),
@@ -292,6 +321,13 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
     if (editor) openMentionTrigger(editor);
   }, [editor]);
 
+  const onEmbedWorkItem = useCallback(() => {
+    if (!editor) return;
+    // This door starts the picker in card placement; the band can still switch it.
+    setPlacement('card');
+    openMentionTrigger(editor);
+  }, [editor]);
+
   const chipContext = useMemo<MentionChipContextValue>(
     () => ({
       lookup: (id) => pickedRefs[id] ?? workItemRefs[id],
@@ -299,8 +335,37 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
       messages: messages.mention,
       editable,
       onOpen: onOpenWorkItem,
+      toCardLabel: embedEnabled ? messages.embed.toCard : undefined,
     }),
-    [pickedRefs, workItemRefs, renderWorkItemChip, messages.mention, editable, onOpenWorkItem],
+    [
+      pickedRefs,
+      workItemRefs,
+      renderWorkItemChip,
+      messages.mention,
+      messages.embed.toCard,
+      embedEnabled,
+      editable,
+      onOpenWorkItem,
+    ],
+  );
+  const cardContext = useMemo<EmbedCardContextValue>(
+    () => ({
+      lookup: (id) => pickedRefs[id] ?? workItemRefs[id],
+      renderCard: renderWorkItemCard,
+      messages: messages.embed,
+      editable,
+      onOpen: onOpenWorkItem,
+      hrefFor: workItemHref,
+    }),
+    [
+      pickedRefs,
+      workItemRefs,
+      renderWorkItemCard,
+      messages.embed,
+      editable,
+      onOpenWorkItem,
+      workItemHref,
+    ],
   );
 
   const onFileChange = useCallback(
@@ -346,6 +411,7 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
           messages={messages}
           onInsertImage={onPickImage}
           onMentionWorkItem={mentionEnabled ? onMentionWorkItem : undefined}
+          onEmbedWorkItem={embedEnabled ? onEmbedWorkItem : undefined}
           mentionOpen={suggestion !== null}
           trailing={<SaveIndicator status={status} messages={messages.status} />}
         />
@@ -387,7 +453,9 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
       ) : null}
       <div data-mention-anchor className="relative pt-4 pb-2">
         <MentionChipContext.Provider value={chipContext}>
-          {editor ? <EditorContent editor={editor} /> : null}
+          <EmbedCardContext.Provider value={cardContext}>
+            {editor ? <EditorContent editor={editor} /> : null}
+          </EmbedCardContext.Provider>
         </MentionChipContext.Provider>
         {suggestion && searchWorkItems ? (
           <div className="absolute z-50" style={suggestion.position}>
@@ -398,6 +466,16 @@ export function PageEditor<C extends WorkItemCandidate = WorkItemCandidate>({
               onPick={suggestion.pick}
               label={messages.toolbar.workItemLabel}
               messages={messages.mention}
+              band={
+                embedEnabled
+                  ? {
+                      placement,
+                      onPlacementChange: setPlacement,
+                      onPickEmbed: suggestion.pickEmbed,
+                      messages: messages.embed,
+                    }
+                  : undefined
+              }
             />
           </div>
         ) : null}

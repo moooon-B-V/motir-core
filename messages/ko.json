@@ -14673,7 +14673,11 @@
         "workItem": "작업 항목",
         "workItemLabel": "작업 항목 멘션",
         "workItemTip": "작업 항목 멘션 — 또는 본문에 @ 입력",
-        "workItemInCode": "코드 블록 안에서는 작업 항목을 멘션할 수 없습니다"
+        "workItemInCode": "코드 블록 안에서는 작업 항목을 멘션할 수 없습니다",
+        "embedWorkItem": "작업 항목 삽입",
+        "embedWorkItemLabel": "작업 항목을 카드로 삽입",
+        "embedWorkItemTip": "작업 항목을 카드로 삽입",
+        "embedWorkItemInCode": "코드 블록 안에는 카드를 넣을 수 없습니다"
       },
       "table": {
         "addRow": "+ 행",
@@ -14840,6 +14844,24 @@
     "mention": {
       "unavailable": "사용할 수 없는 작업 항목",
       "unavailableTitle": "이 작업 항목은 삭제되었거나 볼 수 없습니다."
+    },
+    "embed": {
+      "unavailable": "사용할 수 없는 작업 항목",
+      "unavailableTitle": "이 작업 항목은 삭제되었거나 볼 수 없습니다.",
+      "noStatus": "상태 없음",
+      "unassigned": "담당자 없음",
+      "archived": "보관됨",
+      "typeLabel": "유형: {type}",
+      "cardLabel": "작업 항목 {key}",
+      "open": "작업 항목 열기",
+      "menu": "카드 옵션",
+      "toMention": "인라인 멘션으로 표시",
+      "toCard": "카드로 표시",
+      "remove": "카드 제거",
+      "insertAs": "삽입 형식",
+      "insertMention": "인라인 멘션",
+      "insertCard": "카드",
+      "insertHint": "Tab으로 전환 · Enter로 삽입"
     }
   },
   "sharpen": {

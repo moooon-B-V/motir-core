@@ -2,14 +2,14 @@ import type {
   WorkItemMentionCandidate,
   WorkItemMentionStatusTone,
 } from '@/components/ui/markdownEditorMentions';
-import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type { WorkItemMentionCandidateDto } from '@/lib/dto/workItems';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 
 // The client-side fetcher behind the unified `@` picker's "Work items" section
 // (Story 5.8 · Subtask 5.8.5). It calls the workspace-scoped candidate read
 // `GET /api/work-items/mention-search?q=<text>` (5.8.4 — a thin transport over
 // `workItemsService.quickSearch`, browsable-project scoped, capped) and maps the
-// returned `WorkItemSummaryDto` rows into the picker's row shape. The session /
+// returned `WorkItemMentionCandidateDto` rows into the picker's row shape. The session /
 // active-workspace scope is implicit (same-origin cookies), so the SAME fetcher
 // serves every host surface (the description / edit-form editors + the comment
 // composer) — the data source stays out of the editor primitive.
@@ -52,13 +52,17 @@ function deriveStatus(statusKey: string): WorkItemMentionCandidate['status'] {
 }
 
 /** Map one summary row into the picker candidate (type icon · key · title · Pill). */
-export function toWorkItemMentionCandidate(row: WorkItemSummaryDto): WorkItemMentionCandidate {
+export function toWorkItemMentionCandidate(
+  row: WorkItemMentionCandidateDto,
+): WorkItemMentionCandidate {
   return {
     id: row.id,
     identifier: row.identifier,
     title: row.title,
     kind: row.kind,
     status: deriveStatus(row.status),
+    type: row.type,
+    assignee: row.assignee,
   };
 }
 
@@ -89,6 +93,6 @@ export async function searchWorkItemMentions(
     if (opts.throwOnError) throw new Error(`Work-item search failed with HTTP ${res.status}`);
     return [];
   }
-  const rows = (await res.json()) as WorkItemSummaryDto[];
+  const rows = (await res.json()) as WorkItemMentionCandidateDto[];
   return rows.map(toWorkItemMentionCandidate);
 }

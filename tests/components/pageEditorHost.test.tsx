@@ -40,6 +40,8 @@ const REFS: WorkItemRefMap = {
     kind: 'task',
     archived: false,
     status: { key: 'done', label: 'Done', category: 'done' },
+    type: null,
+    assignee: null,
   },
   ckOld: {
     accessible: true,
@@ -49,6 +51,8 @@ const REFS: WorkItemRefMap = {
     kind: 'task',
     archived: true,
     status: null,
+    type: null,
+    assignee: null,
   },
   ckHidden: { accessible: false, id: 'ckHidden' },
 };
@@ -176,6 +180,8 @@ describe('the chips read PageDto.workItemRefs', () => {
       kind: 'task',
       archived: false,
       status: null,
+      type: null,
+      assignee: null,
     });
     expect((chip as { props: { content: string } }).props.content).toBe('No status');
     const withStatus = renderPageWorkItemChip({
@@ -186,6 +192,8 @@ describe('the chips read PageDto.workItemRefs', () => {
       kind: 'task',
       archived: false,
       status: { label: 'To Do', category: 'todo' },
+      type: null,
+      assignee: null,
     });
     expect((withStatus as { props: { content: string } }).props.content).toBe('Has status · To Do');
   });

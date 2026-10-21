@@ -14700,7 +14700,11 @@
         "workItem": "Work item",
         "workItemLabel": "Mention a work item",
         "workItemTip": "Mention a work item — or type @ in the text",
-        "workItemInCode": "Work items can’t be mentioned inside a code block"
+        "workItemInCode": "Work items can’t be mentioned inside a code block",
+        "embedWorkItem": "Embed work item",
+        "embedWorkItemLabel": "Embed a work item as a card",
+        "embedWorkItemTip": "Embed a work item as a card",
+        "embedWorkItemInCode": "A card can’t go in a code block"
       },
       "table": {
         "addRow": "+ Row",
@@ -14867,6 +14871,24 @@
     "mention": {
       "unavailable": "Unavailable work item",
       "unavailableTitle": "This work item was deleted, or you can’t see it."
+    },
+    "embed": {
+      "unavailable": "Work item unavailable",
+      "unavailableTitle": "This work item was deleted, or you can’t view it",
+      "noStatus": "No status",
+      "unassigned": "Unassigned",
+      "archived": "Archived",
+      "typeLabel": "Type: {type}",
+      "cardLabel": "Work item {key}",
+      "open": "Open work item",
+      "menu": "Card options",
+      "toMention": "Show as inline mention",
+      "toCard": "Show as card",
+      "remove": "Remove card",
+      "insertAs": "Insert as",
+      "insertMention": "Inline mention",
+      "insertCard": "Card",
+      "insertHint": "Tab to switch · Enter to insert"
     },
     "links": {
       "title": "Linked work items",

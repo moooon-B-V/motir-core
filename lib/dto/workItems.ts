@@ -371,8 +371,48 @@ export type WorkItemRefSummaryDto =
       kind: WorkItemKindDto;
       archived: boolean;
       status: WorkItemRefStatusDto | null;
+      /**
+       * The work item's NATURE — `null` for what carries none (an epic, a story,
+       * an untyped leaf), never "not loaded". The two client-built summaries that
+       * hold only a key and a title (`GuideRail`, `PlanChangeRail`) are the only
+       * place a `null` here means "not carried".
+       */
+      type: WorkItemTypeDto | null;
+      /** The assignee's display, or `null` for an unassigned item (see {@link WorkItemRefAssigneeDto}). */
+      assignee: WorkItemRefAssigneeDto | null;
     }
   | { accessible: false; id: string };
+
+/**
+ * An assignee as a reference summary carries them: enough to draw a name and an
+ * avatar, resolved server-side so a page reader needs no member directory. On the
+ * member path `name` is `null` when the member has none (the renderer picks its
+ * fallback); on the Visitor path it is `personName`'s label and `image` is `null`
+ * meaning WITHHELD, not "no avatar" (MOTIR-6646).
+ */
+export interface WorkItemRefAssigneeDto {
+  id: string;
+  name: string | null;
+  image: string | null;
+}
+
+/**
+ * One row of the `@` / page-embed picker's candidate read
+ * (`GET /api/work-items/mention-search`). Its own wire shape rather than a
+ * widened {@link WorkItemSummaryDto}: that is a row mapper handed no join, so an
+ * assignee field on it would be `null` on every board and backlog read — a
+ * `null` that says "not loaded" where `null` already means "unassigned".
+ * `status` is the raw key; the client derives its provisional Pill from it.
+ */
+export interface WorkItemMentionCandidateDto {
+  id: string;
+  identifier: string;
+  title: string;
+  kind: WorkItemKindDto;
+  status: string;
+  type: WorkItemTypeDto | null;
+  assignee: WorkItemRefAssigneeDto | null;
+}
 
 /**
  * A body/title's resolved work-item references, keyed by the work-item id (the

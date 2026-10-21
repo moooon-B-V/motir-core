@@ -184,6 +184,10 @@ export default defineConfig({
       'tests/components/pages-index.test.tsx',
       // A page mentions a work item (Story MOTIR-5747 · MOTIR-7574): the host's binding.
       'tests/components/pageEditorHost.test.tsx',
+      // A page embeds a work item as a card (Story MOTIR-7566 · MOTIR-9182 · MOTIR-9183):
+      // the host's card, and the read gate over the real doors.
+      'tests/components/work-item-embed-card.test.tsx',
+      'tests/integration/pages/embedStoryGate.test.ts',
       // A decision may be a page (Story MOTIR-5761 · MOTIR-7441): the story gate, then each
       // card's own suite over the files above.
       'tests/integration/decisionPageStoryGate.test.ts',
