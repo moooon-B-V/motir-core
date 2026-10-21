@@ -14577,7 +14577,11 @@
         "workItem": "Arbeitselement",
         "workItemLabel": "Arbeitselement erwähnen",
         "workItemTip": "Arbeitselement erwähnen — oder @ im Text eingeben",
-        "workItemInCode": "In einem Codeblock können keine Arbeitselemente erwähnt werden"
+        "workItemInCode": "In einem Codeblock können keine Arbeitselemente erwähnt werden",
+        "embedWorkItem": "Arbeitselement einbetten",
+        "embedWorkItemLabel": "Arbeitselement als Karte einbetten",
+        "embedWorkItemTip": "Arbeitselement als Karte einbetten",
+        "embedWorkItemInCode": "In einem Codeblock ist keine Karte möglich"
       },
       "table": {
         "addRow": "+ Zeile",
@@ -14744,6 +14748,24 @@
     "mention": {
       "unavailable": "Nicht verfügbares Arbeitselement",
       "unavailableTitle": "Dieses Arbeitselement wurde gelöscht, oder Sie können es nicht sehen."
+    },
+    "embed": {
+      "unavailable": "Nicht verfügbares Arbeitselement",
+      "unavailableTitle": "Dieses Arbeitselement wurde gelöscht, oder Sie können es nicht sehen.",
+      "noStatus": "Kein Status",
+      "unassigned": "Nicht zugewiesen",
+      "archived": "Archiviert",
+      "typeLabel": "Typ: {type}",
+      "cardLabel": "Arbeitselement {key}",
+      "open": "Arbeitselement öffnen",
+      "menu": "Karten-Optionen",
+      "toMention": "Als Inline-Erwähnung anzeigen",
+      "toCard": "Als Karte anzeigen",
+      "remove": "Karte entfernen",
+      "insertAs": "Einfügen als",
+      "insertMention": "Inline-Erwähnung",
+      "insertCard": "Karte",
+      "insertHint": "Tab zum Wechseln · Enter zum Einfügen"
     }
   },
   "sharpen": {

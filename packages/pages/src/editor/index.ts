@@ -16,3 +16,14 @@ export type {
   WorkItemRefView,
   WorkItemStatusCategory,
 } from './workItemMention';
+export {
+  EmbedCardContext,
+  EmbedCommands,
+  WorkItemEmbedView,
+  convertEmbedToMention,
+  convertMentionToEmbed,
+  defaultEmbedCard,
+  insertWorkItemEmbed,
+  workItemEmbedWithCard,
+  type EmbedCardContextValue,
+} from './workItemEmbed';

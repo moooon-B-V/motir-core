@@ -14571,7 +14571,11 @@
         "workItem": "工作项",
         "workItemLabel": "提及工作项",
         "workItemTip": "提及工作项 — 或在正文中输入 @",
-        "workItemInCode": "代码块中不能提及工作项"
+        "workItemInCode": "代码块中不能提及工作项",
+        "embedWorkItem": "嵌入工作项",
+        "embedWorkItemLabel": "将工作项嵌入为卡片",
+        "embedWorkItemTip": "将工作项嵌入为卡片",
+        "embedWorkItemInCode": "代码块中不能放置卡片"
       },
       "table": {
         "addRow": "+ 行",
@@ -14738,6 +14742,24 @@
     "mention": {
       "unavailable": "不可用的工作项",
       "unavailableTitle": "该工作项已删除，或你无权查看。"
+    },
+    "embed": {
+      "unavailable": "工作项不可用",
+      "unavailableTitle": "该工作项已被删除，或你无权查看",
+      "noStatus": "无状态",
+      "unassigned": "未分配",
+      "archived": "已归档",
+      "typeLabel": "类型：{type}",
+      "cardLabel": "工作项 {key}",
+      "open": "打开工作项",
+      "menu": "卡片选项",
+      "toMention": "显示为行内提及",
+      "toCard": "显示为卡片",
+      "remove": "移除卡片",
+      "insertAs": "插入为",
+      "insertMention": "行内提及",
+      "insertCard": "卡片",
+      "insertHint": "按 Tab 切换 · 按 Enter 插入"
     }
   },
   "sharpen": {

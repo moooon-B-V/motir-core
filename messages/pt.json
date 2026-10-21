@@ -14577,7 +14577,11 @@
         "workItem": "Item de trabalho",
         "workItemLabel": "Mencionar um item de trabalho",
         "workItemTip": "Mencione um item de trabalho — ou digite @ no texto",
-        "workItemInCode": "Itens de trabalho não podem ser mencionados dentro de um bloco de código"
+        "workItemInCode": "Itens de trabalho não podem ser mencionados dentro de um bloco de código",
+        "embedWorkItem": "Incorporar item de trabalho",
+        "embedWorkItemLabel": "Incorporar um item de trabalho como cartão",
+        "embedWorkItemTip": "Incorporar um item de trabalho como cartão",
+        "embedWorkItemInCode": "Um cartão não pode ficar dentro de um bloco de código"
       },
       "table": {
         "addRow": "+ Linha",
@@ -14744,6 +14748,24 @@
     "mention": {
       "unavailable": "Item de trabalho indisponível",
       "unavailableTitle": "Este item de trabalho foi excluído, ou você não pode vê-lo."
+    },
+    "embed": {
+      "unavailable": "Item de trabalho indisponível",
+      "unavailableTitle": "Este item de trabalho foi excluído, ou você não pode vê-lo.",
+      "noStatus": "Sem status",
+      "unassigned": "Sem responsável",
+      "archived": "Arquivado",
+      "typeLabel": "Tipo: {type}",
+      "cardLabel": "Item de trabalho {key}",
+      "open": "Abrir item de trabalho",
+      "menu": "Opções do cartão",
+      "toMention": "Mostrar como menção em linha",
+      "toCard": "Mostrar como cartão",
+      "remove": "Remover cartão",
+      "insertAs": "Inserir como",
+      "insertMention": "Menção em linha",
+      "insertCard": "Cartão",
+      "insertHint": "Tab para alternar · Enter para inserir"
     }
   },
   "sharpen": {

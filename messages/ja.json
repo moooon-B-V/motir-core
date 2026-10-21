@@ -14574,7 +14574,11 @@
         "workItem": "作業項目",
         "workItemLabel": "作業項目をメンション",
         "workItemTip": "作業項目をメンション — またはテキストに @ を入力",
-        "workItemInCode": "コードブロック内では作業項目をメンションできません"
+        "workItemInCode": "コードブロック内では作業項目をメンションできません",
+        "embedWorkItem": "作業項目を埋め込む",
+        "embedWorkItemLabel": "作業項目をカードとして埋め込む",
+        "embedWorkItemTip": "作業項目をカードとして埋め込む",
+        "embedWorkItemInCode": "コードブロック内にカードは置けません"
       },
       "table": {
         "addRow": "+ 行",
@@ -14741,6 +14745,24 @@
     "mention": {
       "unavailable": "利用できない作業項目",
       "unavailableTitle": "この作業項目は削除されたか、あなたには表示されません。"
+    },
+    "embed": {
+      "unavailable": "利用できない作業項目",
+      "unavailableTitle": "この作業項目は削除されたか、あなたには表示されません。",
+      "noStatus": "ステータスなし",
+      "unassigned": "未割り当て",
+      "archived": "アーカイブ済み",
+      "typeLabel": "種別：{type}",
+      "cardLabel": "作業項目 {key}",
+      "open": "作業項目を開く",
+      "menu": "カードのオプション",
+      "toMention": "インラインのメンションとして表示",
+      "toCard": "カードとして表示",
+      "remove": "カードを削除",
+      "insertAs": "挿入形式",
+      "insertMention": "インラインのメンション",
+      "insertCard": "カード",
+      "insertHint": "Tab で切り替え · Enter で挿入"
     }
   },
   "sharpen": {

@@ -201,7 +201,12 @@ describe('the toolbar door', () => {
     const labels = within(toolbar)
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label'));
-    expect(labels.slice(-3)).toEqual(['Insert image', 'Insert table', 'Mention a work item']);
+    expect(labels.slice(-4)).toEqual([
+      'Insert image',
+      'Insert table',
+      'Mention a work item',
+      'Embed a work item as a card',
+    ]);
     const button = within(toolbar).getByRole('button', { name: 'Mention a work item' });
     expect(button.textContent).toBe('Work item');
     expect(button.getAttribute('aria-haspopup')).toBe('listbox');
@@ -408,7 +413,7 @@ describe('the picker — every state', () => {
     });
     const h = await mount();
     await h.type(' @ab');
-    const frame = h.picker()!.parentElement!;
+    const frame = h.picker()!.closest<HTMLElement>('.absolute')!;
     expect(frame.style.left).toBe('40px');
     expect(frame.style.top).toBe('24px');
     rect.mockRestore();

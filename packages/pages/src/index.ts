@@ -36,4 +36,13 @@ export {
   type WorkItemCandidate,
   type WorkItemRefView,
   type WorkItemStatusCategory,
+  type EmbedCardContextValue,
+  EmbedCardContext,
+  EmbedCommands,
+  WorkItemEmbedView,
+  convertEmbedToMention,
+  convertMentionToEmbed,
+  defaultEmbedCard,
+  insertWorkItemEmbed,
+  workItemEmbedWithCard,
 } from './editor';

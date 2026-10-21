@@ -2,8 +2,10 @@ import { createContext, useContext, type MouseEvent, type ReactNode } from 'reac
 import { Extension, type Editor } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
+import { Rows3 } from 'lucide-react';
 import { Suggestion, type SuggestionProps } from '@tiptap/suggestion';
 import { WorkItemMention } from '../document/extensions';
+import { insertWorkItemEmbed } from './workItemEmbed';
 import type { PageEditorMessages } from './messages';
 
 // MENTION A WORK ITEM in the page editor (Story MOTIR-5747 · MOTIR-7574), to
@@ -121,6 +123,11 @@ export interface MentionChipContextValue {
   editable: boolean;
   /** A plain click on a read-only chip the rendered chip did not handle itself. */
   onOpen?: (id: string) => void;
+  /**
+   * The accessible name of the chip's **Show as card** control (MOTIR-9182).
+   * Given → an editable chip draws the control beside itself; absent → none.
+   */
+  toCardLabel?: string;
 }
 
 export const MentionChipContext = createContext<MentionChipContextValue | null>(null);
@@ -143,7 +150,11 @@ function isPlainClick(event: MouseEvent): boolean {
 export const MENTION_VIEW_CLASS = 'motir-wi-mention';
 
 /** The React node view: the live chip, or the unavailable one. */
-export function WorkItemChipView({ node }: Pick<NodeViewProps, 'node'>) {
+export function WorkItemChipView({
+  node,
+  editor,
+  getPos,
+}: Pick<NodeViewProps, 'node'> & Partial<Pick<NodeViewProps, 'editor' | 'getPos'>>) {
   const ctx = useContext(MentionChipContext);
   const id = String(node.attrs.id ?? '');
   const view = ctx?.lookup(id);
@@ -154,6 +165,8 @@ export function WorkItemChipView({ node }: Pick<NodeViewProps, 'node'>) {
   // the chip's own link sees it.
   const onClickCapture = (event: MouseEvent) => {
     if (!ctx?.editable) return;
+    // The **Show as card** control beside the chip is let through.
+    if ((event.target as Element).closest('[data-embed-convert]')) return;
     event.preventDefault();
     event.stopPropagation();
   };
@@ -183,6 +196,24 @@ export function WorkItemChipView({ node }: Pick<NodeViewProps, 'node'>) {
           <span className="wi-label">{ctx?.messages.unavailable}</span>
         </span>
       )}
+      {ctx?.editable && ctx.toCardLabel && editor ? (
+        // Beside the chip, never inside it (a link does not nest a button).
+        <button
+          type="button"
+          data-embed-convert
+          className="wi-card-convert"
+          aria-label={ctx.toCardLabel}
+          title={ctx.toCardLabel}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const pos = getPos?.();
+            if (typeof pos !== 'number') return;
+            editor.chain().focus().setNodeSelection(pos).convertMentionToEmbed().run();
+          }}
+        >
+          <Rows3 className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      ) : null}
     </NodeViewWrapper>
   );
 }
@@ -211,6 +242,8 @@ export interface MentionSuggestionState {
   anchor: Element | null;
   /** Insert the picked candidate in place of the `@query`. */
   pick: (candidate: WorkItemCandidate) => void;
+  /** Insert the picked candidate as a block card instead (MOTIR-9182). */
+  pickEmbed: (candidate: WorkItemCandidate) => void;
 }
 
 export interface MentionSuggestionWiring {
@@ -229,12 +262,15 @@ export interface MentionSuggestionWiring {
  */
 export const PICKER_KEY_EVENT = 'motir-work-item-picker-key';
 const PICKER_KEYS = new Set(['ArrowUp', 'ArrowDown', 'Enter']);
+/** `Tab` switches the insert-as band, so it is forwarded only to a picker that has one. */
+const BAND_KEY = 'Tab';
 
 /** Hand `key` to the picker open beside `editorDom`; `true` when there is one. */
 function forwardToPicker(editorDom: Element, key: string): boolean {
-  if (!PICKER_KEYS.has(key)) return false;
+  if (!PICKER_KEYS.has(key) && key !== BAND_KEY) return false;
   const picker = editorDom.closest('[data-mention-anchor]')?.querySelector('[data-mention-picker]');
   if (!picker) return false;
+  if (key === BAND_KEY && !picker.hasAttribute('data-mention-band')) return false;
   picker.dispatchEvent(new CustomEvent(PICKER_KEY_EVENT, { detail: key }));
   return true;
 }
@@ -296,6 +332,11 @@ export function workItemSuggestion(wiring: MentionSuggestionWiring) {
                 rect: measure(props),
                 anchor: props.editor.view.dom.closest('[data-mention-anchor]'),
                 pick: (candidate) => props.command(candidate),
+                pickEmbed: (candidate) => {
+                  if (insertWorkItemEmbed(props.editor, props.range, candidate)) {
+                    wiring.onInsert(candidate);
+                  }
+                },
               });
             return {
               onStart: report,

@@ -14577,7 +14577,11 @@
         "workItem": "Element roboczy",
         "workItemLabel": "Wspomnij element roboczy",
         "workItemTip": "Wspomnij element roboczy — lub wpisz @ w tekście",
-        "workItemInCode": "Nie można wspominać elementów roboczych w bloku kodu"
+        "workItemInCode": "Nie można wspominać elementów roboczych w bloku kodu",
+        "embedWorkItem": "Osadź element roboczy",
+        "embedWorkItemLabel": "Osadź element roboczy jako kartę",
+        "embedWorkItemTip": "Osadź element roboczy jako kartę",
+        "embedWorkItemInCode": "Karta nie może znajdować się w bloku kodu"
       },
       "table": {
         "addRow": "+ Wiersz",
@@ -14744,6 +14748,24 @@
     "mention": {
       "unavailable": "Niedostępny element roboczy",
       "unavailableTitle": "Ten element roboczy został usunięty lub nie masz do niego dostępu."
+    },
+    "embed": {
+      "unavailable": "Niedostępny element roboczy",
+      "unavailableTitle": "Ten element roboczy został usunięty lub nie masz do niego dostępu.",
+      "noStatus": "Brak statusu",
+      "unassigned": "Nieprzypisany",
+      "archived": "Zarchiwizowany",
+      "typeLabel": "Typ: {type}",
+      "cardLabel": "Element roboczy {key}",
+      "open": "Otwórz element roboczy",
+      "menu": "Opcje karty",
+      "toMention": "Pokaż jako wzmiankę w tekście",
+      "toCard": "Pokaż jako kartę",
+      "remove": "Usuń kartę",
+      "insertAs": "Wstaw jako",
+      "insertMention": "Wzmianka w tekście",
+      "insertCard": "Karta",
+      "insertHint": "Tab, aby przełączyć · Enter, aby wstawić"
     }
   },
   "sharpen": {

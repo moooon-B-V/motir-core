@@ -14577,7 +14577,11 @@
         "workItem": "Elemento di lavoro",
         "workItemLabel": "Menziona un elemento di lavoro",
         "workItemTip": "Menziona un elemento di lavoro — oppure digita @ nel testo",
-        "workItemInCode": "Gli elementi di lavoro non possono essere menzionati in un blocco di codice"
+        "workItemInCode": "Gli elementi di lavoro non possono essere menzionati in un blocco di codice",
+        "embedWorkItem": "Incorpora elemento di lavoro",
+        "embedWorkItemLabel": "Incorpora un elemento di lavoro come scheda",
+        "embedWorkItemTip": "Incorpora un elemento di lavoro come scheda",
+        "embedWorkItemInCode": "Una scheda non può stare in un blocco di codice"
       },
       "table": {
         "addRow": "+ Riga",
@@ -14744,6 +14748,24 @@
     "mention": {
       "unavailable": "Elemento di lavoro non disponibile",
       "unavailableTitle": "Questo elemento di lavoro è stato eliminato, oppure non puoi vederlo."
+    },
+    "embed": {
+      "unavailable": "Elemento di lavoro non disponibile",
+      "unavailableTitle": "Questo elemento di lavoro è stato eliminato, oppure non puoi vederlo.",
+      "noStatus": "Nessuno stato",
+      "unassigned": "Non assegnato",
+      "archived": "Archiviato",
+      "typeLabel": "Tipo: {type}",
+      "cardLabel": "Elemento di lavoro {key}",
+      "open": "Apri elemento di lavoro",
+      "menu": "Opzioni della scheda",
+      "toMention": "Mostra come menzione in linea",
+      "toCard": "Mostra come scheda",
+      "remove": "Rimuovi scheda",
+      "insertAs": "Inserisci come",
+      "insertMention": "Menzione in linea",
+      "insertCard": "Scheda",
+      "insertHint": "Tab per cambiare · Invio per inserire"
     }
   },
   "sharpen": {

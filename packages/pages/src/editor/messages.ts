@@ -54,6 +54,14 @@ export interface PageEditorMessages {
     workItemTip: string;
     /** `pages.editor.toolbar.workItemInCode` — its tooltip while disabled in a code block. */
     workItemInCode: string;
+    /** `pages.editor.toolbar.embedWorkItem` — the Embed work item button's visible label (MOTIR-9182). */
+    embedWorkItem: string;
+    /** `pages.editor.toolbar.embedWorkItemLabel` — its `aria-label`, and the picker's in card placement. */
+    embedWorkItemLabel: string;
+    /** `pages.editor.toolbar.embedWorkItemTip` — its tooltip. */
+    embedWorkItemTip: string;
+    /** `pages.editor.toolbar.embedWorkItemInCode` — its tooltip while disabled in a code block. */
+    embedWorkItemInCode: string;
   };
   /** `pages.editor.table.*` — the group shown while the caret is in a table. */
   table: {
@@ -90,6 +98,44 @@ export interface PageEditorMessages {
     unavailable: string;
     /** `pages.mention.unavailableTitle` — that chip's tooltip. */
     unavailableTitle: string;
+  };
+  /**
+   * The embedded work-item card (Story MOTIR-7566 · MOTIR-9182), to
+   * `design/pages/design-notes.md` § _Embed a work item_ — `pages.embed.*`.
+   */
+  embed: {
+    /** `pages.embed.unavailable` — the card of a deleted or unreadable item. */
+    unavailable: string;
+    /** `pages.embed.unavailableTitle` — that card's tooltip. */
+    unavailableTitle: string;
+    /** `pages.embed.noStatus` — the status slot of an item whose status no longer resolves. */
+    noStatus: string;
+    /** `pages.embed.unassigned`. */
+    unassigned: string;
+    /** `pages.embed.archived`. */
+    archived: string;
+    /** `pages.embed.typeLabel`, with the type's own name filled in. */
+    typeLabel: (type: string) => string;
+    /** `pages.embed.cardLabel`, with the key filled in — the edit card's accessible name. */
+    cardLabel: (key: string) => string;
+    /** `pages.embed.open`. */
+    open: string;
+    /** `pages.embed.menu`. */
+    menu: string;
+    /** `pages.embed.toMention`. */
+    toMention: string;
+    /** `pages.embed.toCard`. */
+    toCard: string;
+    /** `pages.embed.remove`. */
+    remove: string;
+    /** `pages.embed.insertAs` — the picker band's label. */
+    insertAs: string;
+    /** `pages.embed.insertMention` — the band's first segment. */
+    insertMention: string;
+    /** `pages.embed.insertCard` — the band's second segment. */
+    insertCard: string;
+    /** `pages.embed.insertHint`. */
+    insertHint: string;
   };
   /** `pages.editor.status.*` — the save indicator. */
   status: {
