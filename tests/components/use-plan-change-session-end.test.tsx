@@ -486,6 +486,7 @@ describe('the CARRY — the first send on an ended session whose plan waits', ()
       expect.anything(),
       expect.anything(),
       expect.anything(),
+      expect.anything(),
     );
     expect(result.current.state.planId).toBe('plan_w');
     expect(result.current.state.takenBackWaitingPlanId ?? null).toBeNull();

@@ -351,6 +351,7 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
     );
     expect(stream).not.toHaveBeenCalled();
   });
@@ -560,6 +561,110 @@ describe('usePlanChangeConversation — the stream is not the run (MOTIR-7985)',
     expect(result.current.state.phase).toBe('review');
     // seq 1 arrived twice across the two subscriptions; the rail tells it once.
     expect(result.current.state.acts.filter((a) => a.kind === 'proposed')).toHaveLength(2);
+  });
+
+  // A stream whose read THROWS under a run (MOTIR-9186): it delivers `frames`, then
+  // reports the lost connection through `onLost` the way `consumeStream` does.
+  function lostAfter(frames: Array<[string, unknown]>) {
+    return async (
+      _jobId: string,
+      _signal: AbortSignal,
+      _onError: (code: string | null) => void,
+      _onDone: () => void,
+      onFrame?: (event: string, data: unknown) => void,
+      onLost?: () => void,
+    ) => {
+      for (const [event, data] of frames) onFrame?.(event, data);
+      onLost?.();
+    };
+  }
+
+  it('a LOST connection under a running job subscribes again, with no failure line (MOTIR-9186)', async () => {
+    stream
+      .mockImplementationOnce(lostAfter([status('running'), searched(1)]))
+      .mockImplementationOnce(
+        streamOf([status('running'), searched(1), searched(2), status('succeeded')]),
+      );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.acts.filter((a) => a.kind === 'proposed')).toHaveLength(2);
+  });
+
+  it('a connection lost BEFORE any status frame still subscribes again (MOTIR-9186)', async () => {
+    stream
+      .mockImplementationOnce(lostAfter([]))
+      .mockImplementationOnce(streamOf([status('running'), status('succeeded')]));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.phase).toBe('review');
+  });
+
+  it('a job that FAILED while the connection was down shows the failure (MOTIR-9186)', async () => {
+    fetchReview.mockResolvedValue(planReview([]));
+    stream
+      .mockImplementationOnce(lostAfter([status('running'), searched(1)]))
+      .mockImplementationOnce(streamOf([status('running'), status('failed')]));
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(result.current.state.errorCode).toBe('FAILED');
+  });
+
+  it('the ANCHORED stream follows a lost connection the same way (MOTIR-9186)', async () => {
+    streamAnchored
+      .mockImplementationOnce(
+        async (
+          _anchor: string,
+          _job: string,
+          _signal: AbortSignal,
+          _onError: unknown,
+          _onDone: unknown,
+          onFrame?: (event: string, data: unknown) => void,
+          onLost?: () => void,
+        ) => {
+          onFrame?.('status', { jobId: 'job-1', status: 'running' });
+          onLost?.();
+        },
+      )
+      .mockImplementationOnce(
+        async (
+          _anchor: string,
+          _job: string,
+          _signal: AbortSignal,
+          _onError: unknown,
+          onDone: () => void,
+          onFrame?: (event: string, data: unknown) => void,
+        ) => {
+          onFrame?.('status', { jobId: 'job-1', status: 'succeeded' });
+          onDone();
+        },
+      );
+    const { result } = await mountedAnchored();
+
+    await act(async () => {
+      await result.current.send('Split this story.');
+    });
+
+    expect(streamAnchored).toHaveBeenCalledTimes(2);
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.phase).toBe('review');
   });
 
   it('a job that FAILED shows the failure, never "nothing came back"', async () => {

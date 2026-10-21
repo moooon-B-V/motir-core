@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { InvalidProposalError } from '@/lib/plans/errors';
 import {
+  assertBodyRefsResolve,
   findMalformedIntraPlanRefs,
+  findUnresolvedIntraPlanRefIds,
   validateProposedBodyRefs,
 } from '@/lib/plans/validateProposedBodyRefs';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
@@ -138,6 +140,52 @@ describe('validateProposedBodyRefs', () => {
           { descriptionMd: '[a](motir-ref:planItem:x1)', explanationMd: 'why' },
           'P',
         ),
+      ),
+    ).toBeNull();
+  });
+});
+
+// Bug MOTIR-9175 — a well-formed link whose id names no proposal on the plan.
+describe('findUnresolvedIntraPlanRefIds / assertBodyRefsResolve', () => {
+  const plan = new Set(['pi_a', 'pi_b']);
+
+  it('returns the ids the plan does not hold, first-seen order, deduplicated', () => {
+    expect(
+      findUnresolvedIntraPlanRefIds(
+        '[a](motir-ref:planItem:pi_a) [x](motir-ref:planItem:pi_x) [y](motir-ref:planItem:pi_y) [x2](motir-ref:planItem:pi_x)',
+        plan,
+      ),
+    ).toEqual(['pi_x', 'pi_y']);
+  });
+
+  it('does not check a link inside a fenced block or an inline code span', () => {
+    const text =
+      'Syntax `[x](motir-ref:planItem:pi_x)`.\n\n```\n[y](motir-ref:planItem:pi_y)\n```\n';
+    expect(findUnresolvedIntraPlanRefIds(text, plan)).toEqual([]);
+  });
+
+  it('refuses with INVALID_PROPOSAL naming the id and the field, on either body', () => {
+    for (const field of ['descriptionMd', 'explanationMd'] as const) {
+      const err = refusal(() =>
+        assertBodyRefsResolve(
+          { [field]: 'See [x](motir-ref:planItem:pi_x).' },
+          plan,
+          'Proposal "X"',
+        ),
+      );
+      expect(err).not.toBeNull();
+      expect(err!.code).toBe('INVALID_PROPOSAL');
+      expect(err!.message).toContain('Proposal "X"');
+      expect(err!.message).toContain(field);
+      expect(err!.message).toContain('planItem:pi_x');
+    }
+  });
+
+  it('passes absent bodies and links that resolve', () => {
+    expect(refusal(() => assertBodyRefsResolve({}, plan, 'P'))).toBeNull();
+    expect(
+      refusal(() =>
+        assertBodyRefsResolve({ descriptionMd: '[a](motir-ref:planItem:pi_a)' }, plan, 'P'),
       ),
     ).toBeNull();
   });
