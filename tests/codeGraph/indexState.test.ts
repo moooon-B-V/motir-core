@@ -340,6 +340,19 @@ describe('END TO END, against real Postgres — the four states as the inventory
     const stillClaimed = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoRowId } });
     expect(stillClaimed.indexingRunId).toBe(run.id);
     expect(stillClaimed.indexedHeadSha).toBeNull();
+
+    // …and neither does pausing the other organisation's indexing, which nulls the claim.
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexPaused(
+        REPO_REF,
+        other.workspace.organizationId,
+        { reason: 'paused_index_no_credit' },
+        tx,
+      ),
+    );
+    const afterPause = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoRowId } });
+    expect(afterPause.indexingRunId).toBe(run.id);
+    expect(afterPause.indexPausedReason).toBeNull();
   });
 
   it('⚠️ A CRASHED run does NOT strand the row on `Indexing…` for ever', async () => {

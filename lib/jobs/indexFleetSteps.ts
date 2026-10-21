@@ -290,7 +290,7 @@ export async function runIndexFleetSteps(
     askIndexAllowanceUnlessBooted(ctx, services, target),
   );
   if (!allowance.proceed) {
-    await pauseIndexingRepo(target.repoRef, allowance.reason);
+    await pauseIndexingRepo(target.repoRef, target.organizationId, allowance.reason);
     return { indexed: false, reason: allowance.reason };
   }
   await liftIndexingPause(target.repoRef);
@@ -326,7 +326,7 @@ export async function runIndexFleetSteps(
   // made. The catch-up sweep (MOTIR-5290) re-asks paused repositories, so an
   // organisation that takes a plan resumes without anyone re-dispatching it.
   if ('planRefused' in dispatched) {
-    await pauseIndexingRepo(target.repoRef, AI_PLAN_INDEX_PAUSE_REASON);
+    await pauseIndexingRepo(target.repoRef, target.organizationId, AI_PLAN_INDEX_PAUSE_REASON);
     return { indexed: false, reason: AI_PLAN_INDEX_PAUSE_REASON };
   }
   const { coreTimings, indexModes } = dispatched;
@@ -691,9 +691,15 @@ export async function askIndexAllowanceUnlessBooted(
 /** Record a hard-stop pause on the repository (MOTIR-4593). Never throws: the
  *  run's own `indexed: false` verdict still carries the reason if this write
  *  fails. */
-async function pauseIndexingRepo(repoRef: string, reason: string): Promise<void> {
+async function pauseIndexingRepo(
+  repoRef: string,
+  organizationId: string,
+  reason: string,
+): Promise<void> {
   try {
-    await withSystemContext((tx) => githubRepoRepository.markIndexPaused(repoRef, { reason }, tx));
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexPaused(repoRef, organizationId, { reason }, tx),
+    );
   } catch (err) {
     console.error('[index-fleet] could not record the index pause', repoRef, err);
   }

@@ -361,16 +361,22 @@ export const githubRepoRepository = {
   /** Record that indexing is PAUSED for a repository by a hard stop of its
    *  organisation's internal index allowance (MOTIR-4593), and release any claim —
    *  a refused dispatch booted nothing, so no run is in flight for it. The
-   *  `indexedHeadSha` is untouched: the graph that exists is still the graph. */
+   *  `indexedHeadSha` is untouched: the graph that exists is still the graph.
+   *
+   *  ⚠️ SCOPED TO THE ORGANISATION (MOTIR-9177), like {@link markIndexStarted}: this
+   *  write nulls `indexingRunId`, and unscoped it released every other tenant's
+   *  claim on the same `owner/name`, turning their failed repository back into
+   *  `queued`. */
   async markIndexPaused(
     repoRef: string,
+    organizationId: string,
     args: { reason: string; at?: Date },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const [owner, name] = splitRepoRef(repoRef);
     if (!owner) return 0;
     const result = await tx.githubRepo.updateMany({
-      where: { owner, name },
+      where: { owner, name, organizationId },
       data: {
         indexPausedReason: args.reason,
         indexPausedAt: args.at ?? new Date(),
