@@ -1930,8 +1930,11 @@ A run that **stopped at a gate** (closed `gated`) is not dead, but it is resumed
 through this same claim once a gate it stopped on is approved (MOTIR-7708): the
 answer is `claimed` with `resumesGated: true` and the approved `gates`, on the
 gated run's own branch. While every gate still waits the answer is
-`gate_awaiting`; when they were answered but none approved it is
-`gate_sent_back`. Both name the `gates`.
+`gate_awaiting`; when they were declined or overturned and none approved it is
+`gate_sent_back`. Both name the `gates`. A gate answered **changes requested** is
+decided and carries a reason, so it releases the run like an approval does
+(MOTIR-9185): the claim succeeds, the `gates` include it with that state, and the
+CONTINUE prompt tells the agent to read the reason and redo the work.
 
 ##### `touch_work_item_continue`
 

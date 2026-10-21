@@ -460,7 +460,7 @@ async function evaluate(
   if (held !== null) {
     return {
       kind: 'resumable',
-      gates: held.released,
+      gates: [...held.released, ...held.changesRequested],
       run,
       lapsed: false,
       branch,

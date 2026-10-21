@@ -90,8 +90,8 @@ export async function deriveResumeState(
   if (!run || run.status !== 'succeeded' || run.stopReason !== 'gated') return NOTHING_TO_RESUME;
 
   const { verdict } = await readHeldGateVerdict(run.id, tx);
-  // Sent back stays waiting: a refusal releases nothing, and the entry says so
-  // (MOTIR-7712).
+  // Declined / overturned stay waiting; a gate answered "changes requested" is
+  // decided and releases the run to redo the work (MOTIR-9185).
   return {
     resumeState: verdict === 'released' ? 'ready_to_resume' : 'waiting_on_gate',
     resumeRunId: run.id,
@@ -115,8 +115,11 @@ export interface HeldGateRef {
  * - `released` — at least one is approved (a decision chosen, a direction
  *   confirmed, manual work marked done all write `approved`), or the run recorded
  *   none: there is work to resume.
- * - `sent_back` — none approved, and at least one was refused (changes requested,
- *   declined, overturned): resuming would build on an answer nobody gave.
+ * - `released` ALSO holds when a gate was answered "changes requested" (MOTIR-9185):
+ *   that is a decided gate carrying a reason, so the run resumes to read it and redo
+ *   the work, as a fresh run does from `latestRefusal`. No replan is needed.
+ * - `sent_back` — none approved or changes-requested, and at least one was declined
+ *   or overturned: resuming would build on an answer nobody gave.
  * - `awaiting` — every one is still waiting on its person.
  *
  * ONE reading, shared by the To resume column and the continue claim, so the
@@ -128,16 +131,20 @@ export async function readHeldGateVerdict(
 ): Promise<{
   verdict: 'released' | 'sent_back' | 'awaiting';
   released: HeldGateRef[];
+  changesRequested: HeldGateRef[];
   sentBack: HeldGateRef[];
   waiting: HeldGateRef[];
 }> {
   const held = await dispatchRunHeldGateRepository.listByRun(runId, tx);
   const released: HeldGateRef[] = [];
+  const changesRequested: HeldGateRef[] = [];
   const sentBack: HeldGateRef[] = [];
   const waiting: HeldGateRef[] = [];
   // A `gated` close that found no awaiting gate (it was decided in the same minute)
   // has nothing left to wait on (MOTIR-7703).
-  if (held.length === 0) return { verdict: 'released', released, sentBack, waiting };
+  if (held.length === 0) {
+    return { verdict: 'released', released, changesRequested, sentBack, waiting };
+  }
   const cards = await workItemRepository.findByIds([...new Set(held.map((r) => r.workItemId))], tx);
   const keyOf = new Map(cards.map((card) => [card.id, card.identifier]));
   const seen = new Set<string>();
@@ -159,14 +166,20 @@ export async function readHeldGateVerdict(
       state: latest?.state ?? 'awaiting',
     };
     if (ref.state === 'approved') released.push(ref);
+    else if (ref.state === 'changes_requested') changesRequested.push(ref);
     else if (SENT_BACK.has(ref.state)) sentBack.push(ref);
     else waiting.push(ref);
   }
-  const verdict = released.length > 0 ? 'released' : sentBack.length > 0 ? 'sent_back' : 'awaiting';
-  return { verdict, released, sentBack, waiting };
+  const verdict =
+    released.length > 0 || changesRequested.length > 0
+      ? 'released'
+      : sentBack.length > 0
+        ? 'sent_back'
+        : 'awaiting';
+  return { verdict, released, changesRequested, sentBack, waiting };
 }
 
-const SENT_BACK = new Set<ApprovalGateState>(['changes_requested', 'declined', 'overturned']);
+const SENT_BACK = new Set<ApprovalGateState>(['declined', 'overturned']);
 
 /**
  * RECOMPUTE one card's stored `resumeState` / `resumeRunId`, and write them if they

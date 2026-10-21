@@ -471,7 +471,7 @@ describe('what the agent reads — each outcome said as an instruction', () => {
     const fx = await makeWorkItemFixture();
     const gatedCard = async (
       title: string,
-      state: 'awaiting' | 'changes_requested' | 'approved' | null,
+      state: 'awaiting' | 'changes_requested' | 'declined' | 'approved' | null,
     ) => {
       const card = await createTestWorkItem(fx, { kind: 'task', title });
       await setStatus(card.id, 'in_progress');
@@ -526,9 +526,13 @@ describe('what the agent reads — each outcome said as an instruction', () => {
     expect(text(await runClaimWorkItemContinue({ key: waiting.identifier }, fx.ctx))).toContain(
       `still waiting for approval (${waiting.identifier} design_result (awaiting))`,
     );
-    const sentBack = await gatedCard('sent back', 'changes_requested');
+    const sentBack = await gatedCard('sent back', 'declined');
     expect(text(await runClaimWorkItemContinue({ key: sentBack.identifier }, fx.ctx))).toContain(
       'was sent back, not approved',
+    );
+    const changes = await gatedCard('changes requested', 'changes_requested');
+    expect(text(await runClaimWorkItemContinue({ key: changes.identifier }, fx.ctx))).toContain(
+      `Changes were requested on ${changes.identifier} design_result`,
     );
     const approved = await gatedCard('approved', 'approved');
     const resumed = text(await runClaimWorkItemContinue({ key: approved.identifier }, fx.ctx));
