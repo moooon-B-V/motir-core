@@ -329,7 +329,8 @@ describe('billing boundary contract — getAiAccess folds usage tier/balance + s
 // motir-ai's PRODUCER DTOs, copied field for field from
 // motir-ai/src/services/calculatorService.ts (CalculatorEstimateDto,
 // CalculatorEmptyCategoryDto, CalculatorCategoriesDto) and
-// src/billing/calculatorTypes.ts (CalculatorTopUpAmount, CalculatorCeiling). The
+// src/billing/calculatorTypes.ts (CalculatorTopUpAmount, CalculatorSplit,
+// CalculatorCeiling) at contract version 2 (MOTIR-9002 · MOTIR-9004). The
 // two-way assignability below makes a rename on motir-core's side a compile
 // error; a rename on motir-ai's side is a review-forcing edit of this mirror.
 
@@ -348,18 +349,21 @@ interface EngineEstimateDto {
   cadence: EngineCadence;
   credits: { low: number; high: number };
   perItemCredits: Record<EngineLane, number>;
-  models: Record<EngineLane, string[]>;
-  droppedModelIds: Record<EngineLane, string[]>;
+  split: { count: number; categories: { key: string; weight: number; models: string[] }[] };
   recommendation: { planKey: string | null; planName: string | null; monthlyPriceUsd: number };
   topUp: { low: EngineTopUpAmount; high: EngineTopUpAmount };
-  ceiling: { credits: number | null; exceeded: boolean; excessCredits: number };
+  ceiling: {
+    credits: number | null;
+    exceeded: boolean;
+    excessCredits: number;
+    outcome: 'within_ladder' | 'larger_pool' | 'top_ups_only';
+  };
 }
 interface EngineEmptyCategoryDto {
   version: number;
   kind: 'empty_category';
   categoryRuleVersion: string;
-  lanes: EngineLane[];
-  droppedModelIds: Record<EngineLane, string[]>;
+  categories: string[];
 }
 interface EngineCategoriesDto {
   version: number;
@@ -377,33 +381,37 @@ const EMPTY_MIRROR: Exact<EngineEmptyCategoryDto, CalculatorEmptyCategoryDTO> = 
 const CATEGORIES_MIRROR: Exact<EngineCategoriesDto, CalculatorCategoriesDTO> = true;
 
 const ESTIMATE_CONTRACT: EngineEstimateDto = {
-  version: 1,
+  version: 2,
   kind: 'estimate',
   profilesVersion: 'profiles-contract',
   categoryRuleVersion: 'rule-contract',
   cadence: 'annual',
   credits: { low: 300, high: 2400 },
   perItemCredits: { planning: 10, running: 20 },
-  models: { planning: ['p-1'], running: ['r-1', 'r-2'] },
-  droppedModelIds: { planning: [], running: [] },
+  split: {
+    count: 2,
+    categories: [
+      { key: 'band-1', weight: 0.5, models: ['p-1'] },
+      { key: 'band-2', weight: 0.5, models: ['r-1', 'r-2'] },
+    ],
+  },
   recommendation: { planKey: 'key-contract', planName: 'Name Contract', monthlyPriceUsd: 7 },
   topUp: {
     low: { units: 0, credits: 0, priceUsd: 0 },
     high: { units: 1, credits: 1000, priceUsd: 5 },
   },
-  ceiling: { credits: 4000, exceeded: false, excessCredits: 0 },
+  ceiling: { credits: 4000, exceeded: false, excessCredits: 0, outcome: 'within_ladder' },
 };
 
 const EMPTY_CONTRACT: EngineEmptyCategoryDto = {
-  version: 1,
+  version: 2,
   kind: 'empty_category',
   categoryRuleVersion: 'rule-contract',
-  lanes: ['planning'],
-  droppedModelIds: { planning: ['p-1'], running: [] },
+  categories: ['band-2'],
 };
 
 const CATEGORIES_CONTRACT: EngineCategoriesDto = {
-  version: 1,
+  version: 2,
   categoryRuleVersion: 'rule-contract',
   modelsReadAt: '2026-10-15T00:00:00.000Z',
   cadences: ['annual', 'monthly'],
@@ -416,8 +424,7 @@ const CATEGORIES_CONTRACT: EngineCategoriesDto = {
 
 const CALCULATOR_REQUEST = {
   itemsPerMonth: { low: 10, high: 40 },
-  planning: { category: 'band-1', modelIds: ['p-1'] },
-  running: { category: 'band-1', modelIds: ['p-1'] },
+  categories: ['band-1', 'band-2'],
   cadence: 'annual' as const,
 };
 
@@ -466,7 +473,7 @@ describe('billing boundary contract — the public calculator through the real c
     );
   });
 
-  it('the request is the engine’s four keys and nothing else', async () => {
+  it('the request is the engine’s three keys and nothing else', async () => {
     const { organizationId, owner } = await makeOrg();
     answer(200, ESTIMATE_CONTRACT);
     await billingService.estimateCalculator({
@@ -475,7 +482,7 @@ describe('billing boundary contract — the public calculator through the real c
       body: CALCULATOR_REQUEST,
     });
     const sent = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)) as Record<string, unknown>;
-    expect(Object.keys(sent).sort()).toEqual(['cadence', 'itemsPerMonth', 'planning', 'running']);
+    expect(Object.keys(sent).sort()).toEqual(['cadence', 'categories', 'itemsPerMonth']);
   });
 
   it('the strict-key refusal: an unknown key is refused by name and never sent', async () => {
@@ -513,7 +520,7 @@ describe('billing boundary contract — the public calculator through the real c
     // motir-ai renames ceiling.excessCredits → ceiling.excess.
     answer(200, {
       ...ESTIMATE_CONTRACT,
-      ceiling: { credits: 4000, exceeded: false, excess: 0 },
+      ceiling: { credits: 4000, exceeded: false, excess: 0, outcome: 'within_ladder' },
     });
     await expect(
       billingService.estimateCalculator({

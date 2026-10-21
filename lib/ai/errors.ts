@@ -338,7 +338,7 @@ export class CalculatorUnavailableError extends MotirAiError {
 
 // A calculator request refused as sent — by motir-core's own schema before the
 // boundary, or by the engine's `validation_error`. `field` names the offending
-// input when it is known (`itemsPerMonth.low`, `planning.modelIds`, `quantity`).
+// input when it is known (`itemsPerMonth.low`, `categories.0`, `quantity`).
 export class CalculatorRequestRefusedError extends MotirAiError {
   readonly code = 'CALCULATOR_REQUEST_INVALID' as const;
   constructor(
@@ -363,14 +363,14 @@ export function calculatorUnavailableOf(p: Problem): CalculatorUnavailableError 
 /**
  * The engine's refusal of a calculator request, or `null`. The field is read off
  * the engine's own wording — `unknown field '<name>'`, or a detail opening with
- * the dotted field it names — and is `null` when the wording names none.
+ * the dotted field it names (an index segment such as `categories.0` included) — and is `null` when the wording names none.
  */
 export function calculatorRefusalOf(p: Problem): CalculatorRequestRefusedError | null {
   if (p.code !== 'validation_error') return null;
   const detail = p.detail ?? p.title;
   const field =
     /^unknown field '([^']+)'/.exec(detail)?.[1] ??
-    /^([a-zA-Z]+(?:\.[a-zA-Z]+)*) (?:must|is) /.exec(detail)?.[1] ??
+    /^([a-zA-Z]+(?:\.[a-zA-Z0-9]+)*) (?:must|is) /.exec(detail)?.[1] ??
     null;
   return new CalculatorRequestRefusedError(field, detail);
 }

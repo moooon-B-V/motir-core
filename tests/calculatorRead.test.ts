@@ -68,28 +68,31 @@ const ESTIMATE: CalculatorEstimateDTO = {
   cadence: 'monthly',
   credits: { low: 1234, high: 5678 },
   perItemCredits: { planning: 12.5, running: 30.25 },
-  models: { planning: ['model-a1'], running: ['model-b1', 'model-b2'] },
-  droppedModelIds: { planning: [], running: ['model-b3'] },
+  split: {
+    count: 2,
+    categories: [
+      { key: 'band-a', weight: 0.5, models: ['model-a1'] },
+      { key: 'band-b', weight: 0.5, models: ['model-b1', 'model-b2'] },
+    ],
+  },
   recommendation: { planKey: 'plan-fixture', planName: 'Plan Fixture', monthlyPriceUsd: 42 },
   topUp: {
     low: { units: 0, credits: 0, priceUsd: 0 },
     high: { units: 3, credits: 3000, priceUsd: 15 },
   },
-  ceiling: { credits: 99999, exceeded: false, excessCredits: 0 },
+  ceiling: { credits: 99999, exceeded: false, excessCredits: 0, outcome: 'within_ladder' },
 };
 
 const EMPTY_CATEGORY: CalculatorEmptyCategoryDTO = {
   version: 1,
   kind: 'empty_category',
   categoryRuleVersion: 'rule-fixture',
-  lanes: ['running'],
-  droppedModelIds: { planning: [], running: ['model-b1'] },
+  categories: ['band-empty'],
 };
 
 const REQUEST = {
   itemsPerMonth: { low: 10, high: 40 },
-  planning: { category: 'band-a', modelIds: ['model-a1'] },
-  running: { category: 'band-b', modelIds: ['model-b1', 'model-b2'] },
+  categories: ['band-a', 'band-b'],
   cadence: 'monthly',
 };
 
@@ -293,7 +296,7 @@ describe('POST …/calculator/estimate — the answers', () => {
     expect(await res.json()).toStrictEqual(ESTIMATE);
   });
 
-  it('sends exactly the four keys — no organization id, no quantity — once', async () => {
+  it('sends exactly the three keys — no organization id, no quantity, no model — once', async () => {
     const { organizationId, owner } = await makeOrg();
     signInAs(owner);
     fetchMock.mockResolvedValueOnce(json(200, ESTIMATE));
@@ -319,6 +322,44 @@ describe('POST …/calculator/estimate — the answers', () => {
     });
   });
 
+  it.each([
+    ['one category', ['band-a']],
+    ['two categories', ['band-a', 'band-b']],
+    ['three categories', ['band-a', 'band-b', 'band-c']],
+  ])('%s reach the engine as exactly itemsPerMonth, categories and cadence', async (_n, cats) => {
+    const { organizationId, owner } = await makeOrg();
+    signInAs(owner);
+    fetchMock.mockResolvedValueOnce(json(200, ESTIMATE));
+
+    const res = await postEstimate(organizationId, { ...REQUEST, categories: cats });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toStrictEqual(ESTIMATE);
+    const sent = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)) as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual(['cadence', 'categories', 'itemsPerMonth']);
+    expect(sent['categories']).toStrictEqual(cats);
+  });
+
+  it('accepts a category key no fixture names — the set is open', async () => {
+    const { organizationId, owner } = await makeOrg();
+    signInAs(owner);
+    fetchMock.mockResolvedValueOnce(json(200, ESTIMATE));
+    const res = await postEstimate(organizationId, { ...REQUEST, categories: ['a-new-band'] });
+    expect(res.status).toBe(200);
+  });
+
+  it('a recommendation naming a plan this repo does not sell crosses unchanged', async () => {
+    const { organizationId, owner } = await makeOrg();
+    signInAs(owner);
+    const larger = {
+      ...ESTIMATE,
+      recommendation: { planKey: 'pool_x', planName: 'Pool X', monthlyPriceUsd: 700 },
+      ceiling: { ...ESTIMATE.ceiling, exceeded: true, excessCredits: 10, outcome: 'larger_pool' },
+    };
+    fetchMock.mockResolvedValueOnce(json(200, larger));
+    const res = await postEstimate(organizationId, REQUEST);
+    expect(await res.json()).toStrictEqual(larger);
+  });
+
   it('the engine’s empty_category answer is a 200, never a 4xx and never a number', async () => {
     const { organizationId, owner } = await makeOrg();
     signInAs(owner);
@@ -342,32 +383,39 @@ describe('POST …/calculator/estimate — the answers', () => {
 
 describe('POST …/calculator/estimate — a refused body never reaches the engine', () => {
   const cases: Array<[string, unknown, string]> = [
-    ['a missing planning lane', { ...REQUEST, planning: undefined }, 'planning'],
+    ['no categories', { ...REQUEST, categories: undefined }, 'categories'],
+    ['an empty categories list', { ...REQUEST, categories: [] }, 'categories'],
     [
-      'an empty-string category',
-      { ...REQUEST, planning: { category: '', modelIds: ['model-a1'] } },
-      'planning.category',
+      'four categories',
+      { ...REQUEST, categories: ['band-a', 'band-b', 'band-c', 'band-d'] },
+      'categories',
     ],
-    [
-      'an empty modelIds',
-      { ...REQUEST, running: { category: 'band-b', modelIds: [] } },
-      'running.modelIds',
-    ],
+    ['a duplicate category', { ...REQUEST, categories: ['band-a', 'band-a'] }, 'categories'],
+    ['a blank category key', { ...REQUEST, categories: ['band-a', '  '] }, 'categories.1'],
+    ['an empty-string category key', { ...REQUEST, categories: [''] }, 'categories.0'],
     [
       'a non-integer end',
       { ...REQUEST, itemsPerMonth: { low: 1.5, high: 4 } },
       'itemsPerMonth.low',
     ],
     ['a negative end', { ...REQUEST, itemsPerMonth: { low: 1, high: -4 } }, 'itemsPerMonth.high'],
+    ['a missing end', { ...REQUEST, itemsPerMonth: { low: 1 } }, 'itemsPerMonth.high'],
     ['low > high', { ...REQUEST, itemsPerMonth: { low: 50, high: 4 } }, 'itemsPerMonth.low'],
     ['a cadence outside annual | monthly', { ...REQUEST, cadence: 'weekly' }, 'cadence'],
     ['an unknown key: quantity', { ...REQUEST, quantity: 2 }, 'quantity'],
     ['an unknown key: seats', { ...REQUEST, seats: 4 }, 'seats'],
+    // The replaced two-lane shape is refused by name, not tolerated.
     [
-      'an unknown key inside a lane',
-      { ...REQUEST, planning: { ...REQUEST.planning, organizationId: 'x' } },
-      'planning.organizationId',
+      'the replaced shape: planning',
+      { ...REQUEST, planning: { category: 'band-a', modelIds: ['model-a1'] } },
+      'planning',
     ],
+    [
+      'the replaced shape: running',
+      { ...REQUEST, running: { category: 'band-b', modelIds: ['model-b1'] } },
+      'running',
+    ],
+    ['the replaced shape: modelIds', { ...REQUEST, modelIds: ['model-a1'] }, 'modelIds'],
   ];
 
   it.each(cases)('%s → 400 naming the field', async (_name, body, field) => {
@@ -414,11 +462,11 @@ describe('POST …/calculator/estimate — the engine’s refusals, kept distinc
 
   it('its own validation_error → 400 CALCULATOR_REQUEST_INVALID, never the blanket 502', async () => {
     const out = await ask(
-      problem(400, 'validation_error', 'planning.category must be one of: band-a, band-b'),
+      problem(400, 'validation_error', 'categories.0 must be one of: band-a, band-b'),
     );
     expect(out).toMatchObject({
       status: 400,
-      body: { code: 'CALCULATOR_REQUEST_INVALID', field: 'planning.category' },
+      body: { code: 'CALCULATOR_REQUEST_INVALID', field: 'categories.0' },
     });
   });
 

@@ -413,7 +413,7 @@ export interface EnterpriseRequestFormContextDTO {
 /** The bounds the engine's request parser enforces (`src/calculatorRequest.ts`). */
 export const CALCULATOR_REQUEST_LIMITS = {
   maxItemsPerMonth: 1_000_000,
-  maxModelsPerLane: 10,
+  maxCategories: 3,
 } as const;
 
 export const CALCULATOR_CADENCES = ['annual', 'monthly'] as const;
@@ -421,18 +421,15 @@ export type CalculatorCadence = (typeof CALCULATOR_CADENCES)[number];
 
 export type CalculatorLane = 'planning' | 'running';
 
+export type CalculatorCeilingOutcome = 'within_ladder' | 'larger_pool' | 'top_ups_only';
+
 const calculatorCount = z.number().int().min(0).max(CALCULATOR_REQUEST_LIMITS.maxItemsPerMonth);
 
-const calculatorLaneSchema = z
-  .object({
-    category: z.string().trim().min(1),
-    modelIds: z
-      .array(z.string().trim().min(1))
-      .min(1)
-      .max(CALCULATOR_REQUEST_LIMITS.maxModelsPerLane)
-      .refine((ids) => new Set(ids).size === ids.length, { message: 'model ids must be unique' }),
-  })
-  .strict();
+const calculatorCategoriesSchema = z
+  .array(z.string().trim().min(1))
+  .min(1)
+  .max(CALCULATOR_REQUEST_LIMITS.maxCategories)
+  .refine((keys) => new Set(keys).size === keys.length, { message: 'categories must be unique' });
 
 /**
  * The estimate request — STRICT, as the engine's parser is: an unknown key (a
@@ -448,15 +445,14 @@ export const calculatorEstimateRequestSchema = z
         message: 'itemsPerMonth.low must not exceed itemsPerMonth.high',
         path: ['low'],
       }),
-    planning: calculatorLaneSchema,
-    running: calculatorLaneSchema,
+    categories: calculatorCategoriesSchema,
     cadence: z.enum(CALCULATOR_CADENCES).default('annual'),
   })
   .strict();
 
 /** What the browser may send (cadence optional). */
 export type CalculatorEstimateRequestInput = z.input<typeof calculatorEstimateRequestSchema>;
-/** What motir-core forwards to the engine — exactly these four keys. */
+/** What motir-core forwards to the engine — exactly these three keys. */
 export type CalculatorEstimateRequestDTO = z.output<typeof calculatorEstimateRequestSchema>;
 
 /** The categories the pickers offer — a band with an EMPTY `models` is listed on purpose. */
@@ -476,6 +472,16 @@ export interface CalculatorTopUpAmountDTO {
   priceUsd: number;
 }
 
+/**
+ * What the estimate was computed over: the picked categories and the share each
+ * carries (equal across them), with the models each serves as EXAMPLES — never an
+ * input. The surface prints the split from this, with no share arithmetic of its own.
+ */
+export interface CalculatorSplitDTO {
+  count: number;
+  categories: { key: string; weight: number; models: string[] }[];
+}
+
 export interface CalculatorEstimateDTO {
   version: number;
   kind: 'estimate';
@@ -484,21 +490,25 @@ export interface CalculatorEstimateDTO {
   cadence: CalculatorCadence;
   credits: { low: number; high: number };
   perItemCredits: Record<CalculatorLane, number>;
-  models: Record<CalculatorLane, string[]>;
-  droppedModelIds: Record<CalculatorLane, string[]>;
+  split: CalculatorSplitDTO;
   recommendation: { planKey: string | null; planName: string | null; monthlyPriceUsd: number };
   topUp: { low: CalculatorTopUpAmountDTO; high: CalculatorTopUpAmountDTO };
-  /** The largest pool on this cadence; `credits` null when none is offered. */
-  ceiling: { credits: number | null; exceeded: boolean; excessCredits: number };
+  /** The largest REGULAR pool on this cadence; `credits` null when none is offered. */
+  ceiling: {
+    credits: number | null;
+    exceeded: boolean;
+    excessCredits: number;
+    /** Where the high end lands: inside the ladder, on a larger pool, or on top-ups alone. */
+    outcome: CalculatorCeilingOutcome;
+  };
 }
 
-/** A lane whose selection has no live model left — the engine gives no number. */
+/** Picked categories with no live model — the engine gives no number. */
 export interface CalculatorEmptyCategoryDTO {
   version: number;
   kind: 'empty_category';
   categoryRuleVersion: string;
-  lanes: CalculatorLane[];
-  droppedModelIds: Record<CalculatorLane, string[]>;
+  categories: string[];
 }
 
 export type CalculatorAnswerDTO = CalculatorEstimateDTO | CalculatorEmptyCategoryDTO;

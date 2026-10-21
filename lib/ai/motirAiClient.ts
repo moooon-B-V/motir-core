@@ -811,7 +811,7 @@ export async function getBillingHistory(
 // Both routes are public on motir-ai's side (no bearer needed); they go through
 // this seam anyway, so the calculator shares the boundary's one deadline and one
 // problem taxonomy (the service token rides along and is ignored there). The
-// request carries exactly the engine's four keys — no organization id, no
+// request carries exactly the engine's three keys — no organization id, no
 // quantity — and nothing is cached: the engine owns the live model list.
 //
 // Each answer is SHAPE-VALIDATED, never cast: a body missing a field the view
@@ -856,8 +856,7 @@ export async function estimateCalculator(
     method: 'POST',
     body: JSON.stringify({
       itemsPerMonth: { low: request.itemsPerMonth.low, high: request.itemsPerMonth.high },
-      planning: { category: request.planning.category, modelIds: request.planning.modelIds },
-      running: { category: request.running.category, modelIds: request.running.modelIds },
+      categories: [...request.categories],
       cadence: request.cadence,
     }),
   });
@@ -888,6 +887,17 @@ function perLane(v: unknown, test: (x: unknown) => boolean): boolean {
 }
 function isTopUpAmount(v: unknown): boolean {
   return isObj(v) && isNum(v['units']) && isNum(v['credits']) && isNum(v['priceUsd']);
+}
+
+function isSplit(v: unknown): boolean {
+  return (
+    isObj(v) &&
+    isNum(v['count']) &&
+    Array.isArray(v['categories']) &&
+    v['categories'].every(
+      (c) => isObj(c) && isStr(c['key']) && isNum(c['weight']) && isStrList(c['models']),
+    )
+  );
 }
 
 function isCalculatorCategories(v: unknown): v is CalculatorCategoriesDTO {
@@ -922,8 +932,7 @@ function isCalculatorEstimate(v: unknown): v is CalculatorEstimateDTO {
     isNum(credits['low']) &&
     isNum(credits['high']) &&
     perLane(v['perItemCredits'], isNum) &&
-    perLane(v['models'], isStrList) &&
-    perLane(v['droppedModelIds'], isStrList) &&
+    isSplit(v['split']) &&
     isObj(rec) &&
     (rec['planKey'] === null || isStr(rec['planKey'])) &&
     (rec['planName'] === null || isStr(rec['planName'])) &&
@@ -934,7 +943,10 @@ function isCalculatorEstimate(v: unknown): v is CalculatorEstimateDTO {
     isObj(ceiling) &&
     (ceiling['credits'] === null || isNum(ceiling['credits'])) &&
     typeof ceiling['exceeded'] === 'boolean' &&
-    isNum(ceiling['excessCredits'])
+    isNum(ceiling['excessCredits']) &&
+    (ceiling['outcome'] === 'within_ladder' ||
+      ceiling['outcome'] === 'larger_pool' ||
+      ceiling['outcome'] === 'top_ups_only')
   );
 }
 
@@ -944,9 +956,7 @@ function isCalculatorEmptyCategory(v: unknown): v is CalculatorEmptyCategoryDTO 
     v['kind'] === 'empty_category' &&
     isNum(v['version']) &&
     isStr(v['categoryRuleVersion']) &&
-    Array.isArray(v['lanes']) &&
-    v['lanes'].every((l) => l === 'planning' || l === 'running') &&
-    perLane(v['droppedModelIds'], isStrList)
+    isStrList(v['categories'])
   );
 }
 

@@ -1,8 +1,44 @@
-import type {
-  CalculatorCategoriesDTO,
-  CalculatorEstimateDTO,
-  CalculatorEstimateRequestDTO,
-} from '@/lib/dto/billing';
+// MOTIR-9004: the recording below answers the replaced two-lane question
+// (`planning` / `running` selections, `models`, `droppedModelIds`), so it can no
+// longer be typed against the category DTOs. The annotations are local types that
+// describe the recording; not one recorded byte changes. Re-taking it on the
+// category contract is the pinned-vector re-recording's (MOTIR-9005).
+interface RecordedLane {
+  category: string;
+  modelIds: string[];
+}
+interface RecordedRequest {
+  itemsPerMonth: { low: number; high: number };
+  planning: RecordedLane;
+  running: RecordedLane;
+  cadence: 'annual' | 'monthly';
+}
+type PerLane<T> = { planning: T; running: T };
+interface RecordedEstimate {
+  version: number;
+  kind: 'estimate';
+  profilesVersion: string;
+  categoryRuleVersion: string;
+  cadence: 'annual' | 'monthly';
+  credits: { low: number; high: number };
+  perItemCredits: PerLane<number>;
+  models: PerLane<string[]>;
+  droppedModelIds: PerLane<string[]>;
+  recommendation: { planKey: string | null; planName: string | null; monthlyPriceUsd: number };
+  topUp: {
+    low: { units: number; credits: number; priceUsd: number };
+    high: { units: number; credits: number; priceUsd: number };
+  };
+  ceiling: { credits: number | null; exceeded: boolean; excessCredits: number };
+}
+interface RecordedCategories {
+  version: number;
+  categoryRuleVersion: string;
+  modelsReadAt: string;
+  cadences: ('annual' | 'monthly')[];
+  defaultCadence: 'annual' | 'monthly';
+  categories: { key: string; models: { id: string; provider: string }[] }[];
+}
 
 // THE PINNED CROSS-SURFACE ESTIMATE VECTOR (Story MOTIR-8381 · MOTIR-8642).
 //
@@ -25,7 +61,7 @@ import type {
 //     https://motir-ai.fly.dev/v1/public/calculator/estimate
 
 /** The shared input: one items-per-month range, one selection per lane, one cadence. */
-export const PINNED_CALCULATOR_REQUEST: CalculatorEstimateRequestDTO = {
+export const PINNED_CALCULATOR_REQUEST: RecordedRequest = {
   itemsPerMonth: { low: 20, high: 60 },
   planning: { category: 'flagship', modelIds: ['claude-sonnet-5-5'] },
   running: { category: 'balanced', modelIds: ['gpt-5-mini'] },
@@ -37,7 +73,7 @@ export const PINNED_ESTIMATE_RAW_BODY =
   '{"version":1,"kind":"estimate","profilesVersion":"2026-10-12.1","categoryRuleVersion":"2026-10-14.1","cadence":"annual","credits":{"low":26789,"high":160730},"perItemCredits":{"planning":656.1316818900001,"running":683.28},"models":{"planning":["claude-sonnet-5-5"],"running":["gpt-5-mini"]},"droppedModelIds":{"planning":[],"running":[]},"recommendation":{"planKey":"max_x2","planName":"Max ×2","monthlyPriceUsd":200},"topUp":{"low":{"units":0,"credits":0,"priceUsd":0},"high":{"units":101,"credits":101000,"priceUsd":505}},"ceiling":{"credits":60000,"exceeded":true,"excessCredits":100730}}';
 
 /** The same answer as a value — must deep-equal `JSON.parse(PINNED_ESTIMATE_RAW_BODY)`. */
-export const PINNED_ESTIMATE_ANSWER: CalculatorEstimateDTO = {
+export const PINNED_ESTIMATE_ANSWER: RecordedEstimate = {
   version: 1,
   kind: 'estimate',
   profilesVersion: '2026-10-12.1',
@@ -61,7 +97,7 @@ export const PINNED_CATEGORIES_RAW_BODY =
 
 export const PINNED_CATEGORIES_ANSWER = JSON.parse(
   PINNED_CATEGORIES_RAW_BODY,
-) as CalculatorCategoriesDTO;
+) as RecordedCategories;
 
 /** Where, when and on which engine versions the answer was taken. */
 export const PINNED_VECTOR_BASIS = {

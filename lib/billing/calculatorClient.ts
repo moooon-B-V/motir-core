@@ -1,0 +1,85 @@
+import type {
+  CalculatorAnswerDTO,
+  CalculatorCadence,
+  CalculatorCategoriesDTO,
+} from '@/lib/dto/billing';
+
+// The browser side of the Billing & plans Calculator (Story MOTIR-8381 · MOTIR-9004):
+// the categories read and the estimate over
+// /api/organizations/[orgId]/billing/calculator/{categories,estimate}. Every outcome
+// the server can give is folded into a closed union, so the view switches on a
+// `kind` and never renders a server `error` string. The one place the two paths
+// appear in client code.
+//
+// Type-only imports: neither zod nor a server-only module reaches the client
+// bundle through this file.
+
+export interface CalculatorEstimateInput {
+  itemsPerMonth: { low: number; high: number };
+  /** One to three category keys — no model is ever chosen. */
+  categories: string[];
+  cadence?: CalculatorCadence;
+}
+
+export type CalculatorOutcome<T> =
+  /** 200 — the engine's body unaltered (an estimate or its `empty_category`). */
+  | { kind: 'answer'; value: T }
+  /** 400 CALCULATOR_REQUEST_INVALID — `field` when the door named one. */
+  | { kind: 'refused'; field: string | null }
+  /** 503 CALCULATOR_UNAVAILABLE — the engine cannot estimate right now: ask again. */
+  | { kind: 'unavailable' }
+  /** Anything else: a boundary failure, a non-JSON body, a transport error. */
+  | { kind: 'failed' };
+
+async function call<T>(
+  orgId: string,
+  path: string,
+  init: RequestInit,
+  fetchImpl: typeof fetch,
+): Promise<CalculatorOutcome<T>> {
+  let res: Response;
+  try {
+    res = await fetchImpl(`/api/organizations/${encodeURIComponent(orgId)}/billing/${path}`, {
+      ...init,
+      cache: 'no-store',
+    });
+  } catch {
+    return { kind: 'failed' };
+  }
+  const body: unknown = await res.json().catch(() => null);
+  const obj = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+  if (res.ok) return obj ? { kind: 'answer', value: obj as T } : { kind: 'failed' };
+  if (obj?.['code'] === 'CALCULATOR_REQUEST_INVALID') {
+    return { kind: 'refused', field: typeof obj['field'] === 'string' ? obj['field'] : null };
+  }
+  if (obj?.['code'] === 'CALCULATOR_UNAVAILABLE') return { kind: 'unavailable' };
+  return { kind: 'failed' };
+}
+
+export function fetchCalculatorCategories(
+  orgId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CalculatorOutcome<CalculatorCategoriesDTO>> {
+  return call(orgId, 'calculator/categories', { method: 'GET' }, fetchImpl);
+}
+
+export function fetchCalculatorEstimate(
+  orgId: string,
+  input: CalculatorEstimateInput,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CalculatorOutcome<CalculatorAnswerDTO>> {
+  return call(
+    orgId,
+    'calculator/estimate',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemsPerMonth: input.itemsPerMonth,
+        categories: input.categories,
+        ...(input.cadence ? { cadence: input.cadence } : {}),
+      }),
+    },
+    fetchImpl,
+  );
+}
