@@ -187,7 +187,7 @@ const requirementField = z
       .describe(
         'What you concluded that nobody confirmed, as a LIST — one entry per recommendation, ' +
           'each a self-contained sentence (a bare string, or `{ id?, text }` when you want ' +
-          'to name it). Each one can then be confirmed or overturned on its own. [] says you ' +
+          'to name it). Each one can then be confirmed or overturned on its own. [] or "" says you ' +
           'concluded nothing (see `scopeEdge`). A single string is accepted and is read as ' +
           'ONE recommendation — it is never split.',
       ),
