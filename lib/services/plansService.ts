@@ -124,7 +124,10 @@ import {
 } from '@/lib/plans/validateProposedObsolescence';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
-import { validateProposedBodyRefs } from '@/lib/plans/validateProposedBodyRefs';
+import {
+  assertBodyRefsResolve,
+  validateProposedBodyRefs,
+} from '@/lib/plans/validateProposedBodyRefs';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
@@ -4530,6 +4533,18 @@ async function applyAddProposalEdit(
     next,
     proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
   );
+  // ...and the links THIS edit writes must name a proposal on the plan (bug
+  // MOTIR-9175). Only the bodies the edit sets are judged, so a proposal that
+  // inherited a dangling link can still be repaired by an unrelated edit.
+  assertBodyRefsResolve(
+    { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
+    new Set(
+      (await planItemRepository.findByPlan(fresh.id, tx))
+        .filter((i) => i.op === 'add')
+        .map((i) => i.id),
+    ),
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+  );
   // And a RE-KIND, held to what the new kind owes (bug MOTIR-8192 ·
   // AMENDMENT 25 §4) — the deepen and both review edits can change `kind`,
   // and none of them re-ran the kind-parent grammar before.
@@ -5467,6 +5482,24 @@ export const plansService = {
               proposals.map(refCarrier),
               resolvable,
               (ref, proposal) => new UnresolvedPlanRefError(ref, proposal),
+            );
+          }
+
+          // The bodies' `motir-ref:planItem:<id>` LINKS, resolved the same way
+          // (bug MOTIR-9175): a well-formed link to an id the plan does not hold
+          // is refused here rather than shipped as dead text at approve. Same
+          // resolvable set as the structural refs above, so the two cannot
+          // disagree about what "on the plan" means.
+          const resolvableBodyRefIds = new Set(
+            existing.filter((i) => i.op === 'add').map((i) => i.id),
+          );
+          for (const p of proposals) {
+            const bodies = p.op === 'add' ? p.proposedFields : p.op === 'modify' ? p.patch : null;
+            if (!bodies) continue;
+            assertBodyRefsResolve(
+              bodies,
+              resolvableBodyRefIds,
+              proposalLabel({ op: p.op, workItemId: p.workItemId, title: p.proposedFields?.title }),
             );
           }
 
@@ -6687,6 +6720,13 @@ export const plansService = {
             next,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
+          // ...and the links the correction writes must name a proposal on the plan
+          // (bug MOTIR-9175), judged on the bodies it sets.
+          assertBodyRefsResolve(
+            { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
+            new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+          );
           // A RE-KIND, held to what the new kind owes (bug MOTIR-8192 ·
           // AMENDMENT 25 §4): no leaf field on a container, and a placement the
           // plan's own tree admits — judged with this correction's parentRef.
@@ -6786,6 +6826,11 @@ export const plansService = {
             // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
             validateProposedBodyRefs(
               input.patch ?? {},
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
+            assertBodyRefsResolve(
+              input.patch ?? {},
+              new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
               proposalLabel({ op: item.op, workItemId: item.workItemId }),
             );
             // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
