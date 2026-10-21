@@ -55,6 +55,7 @@ import {
   QueuedLabel,
 } from '@/components/planning/MidRunTurn';
 import { PauseThread } from '@/components/planning/RunPause';
+import { CodeUnsearchableBanner } from '@/components/planning/CodeUnsearchableBanner';
 import { isOpenUnclear, pauseAnchorIndex, pauseOf, pauseOwnedIds } from '@/lib/planning/runPause';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
@@ -339,7 +340,7 @@ export interface PlanChangeRailProps {
    * ANSWER the planner's mid-run pause (MOTIR-8010): *Start over* / *Keep going* on
    * a re-plan offer. Optional: absent, the offer's buttons do nothing.
    */
-  onAnswerRunPause?: (choice: 'start_over' | 'apply') => void;
+  onAnswerRunPause?: (choice: 'start_over' | 'apply' | 'resume') => void;
   /** "N earlier notes" (MOTIR-8064): page earlier narration sentences in. */
   onShowEarlierNarration?: () => void;
 }
@@ -407,6 +408,7 @@ export function PlanChangeRail({
   // …and it is REWRITING the plan in hand rather than writing a first one.
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
+  const tcs = useTranslations('planningWorkspace.codeUnsearchable');
   const ts = useTranslations('planningWorkspace.session');
   // The Planning tab's own copy (§ 36.13) — its reopened line, nothing else.
   const tWorkbenchPlanning = useTranslations('workbench.planning');
@@ -441,14 +443,66 @@ export function PlanChangeRail({
   const pauseReplyEntry = runPause?.mailboxEntryId
     ? (state.queued.find((q) => q.id === runPause.mailboxEntryId) ?? null)
     : null;
+  // THE CODE-STOP BANNER (MOTIR-9170). Its pause is drawn by the banner, not by `PauseThread`.
+  // A pause the person resumed is remembered, so a NEW code stop after it reads as the
+  // re-check's answer ("Checked just now: … still can't be searched").
+  const [resumedCodePause, setResumedCodePause] = useState<string | null>(null);
+  if (
+    runPause?.kind === 'code_unsearchable' &&
+    runPause.answer === 'resumed' &&
+    resumedCodePause !== runPause.id
+  ) {
+    setResumedCodePause(runPause.id);
+  }
+  const codeStop =
+    runPause?.kind === 'code_unsearchable' && runPause.answer === null ? runPause : null;
+  const keptCount = index?.counts.added ?? 0;
   const pauseBlock = runPause ? (
-    <PauseThread
-      pause={runPause}
-      pending={Boolean(state.answeringPause)}
-      onAnswer={(choice) => onAnswerRunPause?.(choice)}
-      replyEntry={pauseReplyEntry}
-      refusalCode={state.pauseAnswerRefusal?.code ?? null}
-    />
+    runPause.kind === 'code_unsearchable' ? (
+      <>
+        {runPause.answer === 'resumed' ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="code-unsearchable-resumed"
+          >
+            {tc('answeredMarker')}
+          </p>
+        ) : null}
+        {codeStop ? (
+          <>
+            {keptCount > 0 ? (
+              <p
+                className="text-center text-xs text-(--el-text-secondary)"
+                data-testid="code-unsearchable-record"
+              >
+                {tcs('keptRecord', { count: keptCount })}
+              </p>
+            ) : null}
+            <CodeUnsearchableBanner
+              repos={codeStop.repos ?? []}
+              where="walk"
+              onResume={() => onAnswerRunPause?.('resume')}
+              resuming={Boolean(state.answeringPause)}
+              stillBlocked={
+                resumedCodePause !== null && resumedCodePause !== codeStop.id
+                  ? ([...(codeStop.repos ?? [])].sort((a, b) =>
+                      a.repoRef.localeCompare(b.repoRef),
+                    )[0] ?? null)
+                  : null
+              }
+            />
+          </>
+        ) : null}
+      </>
+    ) : (
+      <PauseThread
+        pause={runPause}
+        pending={Boolean(state.answeringPause)}
+        onAnswer={(choice) => onAnswerRunPause?.(choice)}
+        replyEntry={pauseReplyEntry}
+        refusalCode={state.pauseAnswerRefusal?.code ?? null}
+      />
+    )
   ) : null;
   const pauseAnchor = runPause ? pauseAnchorIndex(turns, runPause) : -1;
   // THE PAUSED STATE: an unanswered pause, or a reply the run has not read yet.
@@ -1027,6 +1081,9 @@ export function PlanChangeRail({
               </>
             ) : null}
             {i === pauseAnchor ? pauseBlock : null}
+            {turn.codeUnsearchable && turn.codeUnsearchable.length > 0 ? (
+              <CodeUnsearchableBanner repos={turn.codeUnsearchable} where="conversation" />
+            ) : null}
             {/* THE STALE ANSWER (design state 10), under the turn it answers. */}
             {staleTurnShown && turn.id === stale?.turnId ? staleNotice : null}
           </Fragment>

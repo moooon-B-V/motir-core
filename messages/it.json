@@ -7943,7 +7943,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "L’esecuzione è terminata prima che la tua risposta la raggiungesse.",
             "generic": "La tua risposta non ha raggiunto l’esecuzione."
-          }
+          },
+          "waitingResume": "In attesa che tu controlli il codice e prosegua."
         },
         "answeringMarker": "Risposta a margine: l’esecuzione prosegue.",
         "answeredAside": "Risposta data a margine: non è stato inviato nulla all’esecuzione.",
@@ -8006,6 +8007,41 @@
       "planBody": "Al momento non riesco a leggere il tuo codice, quindi non ho modificato il tuo piano. Motir se ne sta occupando.",
       "planMarker": "Non è stato scritto nulla — il tuo piano è invariato.",
       "askNotice": "Non sono riuscito a leggere il tuo codice per questa risposta. Considera non confermato tutto ciò che qui riguarda il codice."
+    },
+    "codeUnsearchable": {
+      "title": "Pianificazione in pausa: Motir non riesce ancora a cercare nel tuo codice",
+      "introWalk": "Pianificare senza cercare nel codice significherebbe andare a tentoni, quindi Motir si è fermato qui. Sistema il repository qui sotto, poi continua.",
+      "introConversation": "Pianificare senza cercare nel codice significherebbe andare a tentoni, quindi non è stato pianificato nulla. Sistema il repository qui sotto, poi invia un messaggio per riprovare.",
+      "listLabel": "Repository in cui non si può cercare",
+      "resume": "Ricontrolla e continua",
+      "stillBlocked": "Controllato poco fa: in {repo} non si può ancora cercare. Ora risulta {state}.",
+      "keptRecord": "Mantenuto come proposto finora — {count, plural, one {# elemento di lavoro} other {# elementi di lavoro}}. Non viene aggiunto altro finché la pianificazione non riprende.",
+      "states": {
+        "never_indexed": {
+          "chip": "Mai indicizzato",
+          "line": "Non è ancora stato indicizzato nulla."
+        },
+        "indexing": {
+          "chip": "Indicizzazione in corso",
+          "line": "Il primo indice è ancora in costruzione, quindi non c’è ancora codice in cui cercare."
+        },
+        "refresh_failing": {
+          "chip": "L’indicizzazione continua a fallire",
+          "line": "Gli ultimi tentativi di indicizzazione non sono riusciti."
+        },
+        "paused": {
+          "chip": "Indicizzazione in pausa",
+          "line": "L’indicizzazione è in pausa per questo progetto."
+        },
+        "provider_unsupported": {
+          "chip": "Host non supportato",
+          "line": "Motir non può indicizzare i repository su questo host."
+        },
+        "unavailable": {
+          "chip": "Ricerca nel codice non disponibile",
+          "line": "Poco fa non è stato possibile leggere il codice."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Elementi di lavoro",

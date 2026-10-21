@@ -7943,7 +7943,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "Der Lauf war beendet, bevor Ihre Antwort ihn erreicht hat.",
             "generic": "Ihre Antwort hat den Lauf nicht erreicht."
-          }
+          },
+          "waitingResume": "Wartet darauf, dass Sie den Code prüfen und fortfahren."
         },
         "answeringMarker": "Antwort nebenbei – der Lauf geht weiter.",
         "answeredAside": "Nebenbei beantwortet – an den Lauf wurde nichts gesendet.",
@@ -8006,6 +8007,41 @@
       "planBody": "Ich kann deinen Code gerade nicht lesen und habe deshalb deinen Plan nicht geändert. Motir kümmert sich darum.",
       "planMarker": "Es wurde nichts geschrieben — dein Plan ist unverändert.",
       "askNotice": "Ich konnte deinen Code für diese Antwort nicht lesen. Behandle alles, was hier über den Code steht, als unbestätigt."
+    },
+    "codeUnsearchable": {
+      "title": "Planung angehalten: Motir kann Ihren Code noch nicht durchsuchen",
+      "introWalk": "Ohne Codesuche wäre die Planung reine Raterei, deshalb hat Motir hier angehalten. Beheben Sie das Problem beim unten genannten Repository und fahren Sie dann fort.",
+      "introConversation": "Ohne Codesuche wäre die Planung reine Raterei, deshalb wurde nichts geplant. Beheben Sie das Problem beim unten genannten Repository und senden Sie dann eine Nachricht, um es erneut zu versuchen.",
+      "listLabel": "Repositories, die nicht durchsucht werden können",
+      "resume": "Erneut prüfen und fortfahren",
+      "stillBlocked": "Gerade geprüft: {repo} lässt sich weiterhin nicht durchsuchen. Aktueller Status: {state}.",
+      "keptRecord": "Bisher wie vorgeschlagen übernommen — {count, plural, one {# Arbeitselement} other {# Arbeitselemente}}. Es wird nichts hinzugefügt, bis die Planung fortgesetzt wird.",
+      "states": {
+        "never_indexed": {
+          "chip": "Nie indexiert",
+          "line": "Dafür wurde noch nichts indexiert."
+        },
+        "indexing": {
+          "chip": "Indexierung läuft",
+          "line": "Der erste Index wird noch erstellt, daher gibt es noch keinen Code zum Durchsuchen."
+        },
+        "refresh_failing": {
+          "chip": "Indexierung schlägt wiederholt fehl",
+          "line": "Die letzten Indexierungsversuche sind fehlgeschlagen."
+        },
+        "paused": {
+          "chip": "Indexierung pausiert",
+          "line": "Die Indexierung ist für dieses Projekt pausiert."
+        },
+        "provider_unsupported": {
+          "chip": "Host nicht unterstützt",
+          "line": "Motir kann Repositories auf diesem Host nicht indexieren."
+        },
+        "unavailable": {
+          "chip": "Codesuche nicht verfügbar",
+          "line": "Der Code konnte gerade nicht gelesen werden."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Arbeitselemente",

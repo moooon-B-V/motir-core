@@ -14,6 +14,10 @@ import {
   PlanChangeRunPauseTurnMismatchError,
   PlanChangeSessionNotFoundError,
 } from '@/lib/planChange/errors';
+import {
+  parseCodeUnsearchableRepos,
+  type CodeUnsearchableRepo,
+} from '@/lib/planning/codeUnsearchable';
 import { PLANNER_QUESTION_MAX_CHARS } from '@/lib/planning/plannerTurn';
 import { planChangeMailboxRepository } from '@/lib/repositories/planChangeMailboxRepository';
 import { planChangeRunPauseRepository } from '@/lib/repositories/planChangeRunPauseRepository';
@@ -37,6 +41,11 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 //   * `replan`  — it OFFERS a one-click START OVER. YES is the shipped `restart`
 //     mailbox turn; NO is a `fold` turn marked `declines_pause_id` that tells the
 //     walk to apply the change to the work items already written.
+//   * `code_unsearchable` — a TARGET repository's code cannot be SEARCHED (never
+//     indexed, indexing for the first time, refreshes failing or paused; MOTIR-9165).
+//     The pause names each blocked repository and why. It takes no text and no
+//     button but one: the person resumes the walk once the code can be searched,
+//     and the run re-checks on receipt (motir-ai's side).
 //   * `unclear` — it ASKS what was meant. The person's reply is a `fold` turn
 //     marked `answers_pause_id`, ruled again as any change. No planning bug is filed.
 //
@@ -66,11 +75,17 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 export const PAUSE_DECLINE_INSTRUCTION =
   'The person declined to start over. Apply this change to the work items already written, removing cards where the change requires it:';
 
+/** The fixed body a RESUME delivers (MOTIR-9167). The run reads the pause the entry
+ *  answers (`answersQuestion`), not these words; they are the non-empty fallback every
+ *  mailbox turn carries, and they are the person's decision, not the planner's text. */
+export const PAUSE_RESUME_TEXT =
+  'Resume planning: the code can be searched now. Check the target repositories again and continue.';
+
 const REPLAN_REASON_MAX_CHARS = 500;
 const REPLY_MAX_CHARS = 20_000;
 
-export type PauseKindInput = 'replan' | 'unclear';
-export type PauseChoice = 'start_over' | 'apply' | 'reply';
+export type PauseKindInput = 'replan' | 'unclear' | 'code_unsearchable';
+export type PauseChoice = 'start_over' | 'apply' | 'reply' | 'resume';
 
 export interface RecordPauseInput {
   jobId: string;
@@ -78,6 +93,8 @@ export interface RecordPauseInput {
   changeTurnIds: readonly string[];
   reason?: string | null;
   question?: string | null;
+  /** The blocked target repositories — required, and only, on `code_unsearchable`. */
+  repos?: unknown;
   idempotencyKey: string;
 }
 
@@ -105,7 +122,12 @@ export type AnswerPauseResult =
       pause: PlanChangeRunPauseDto;
     };
 
-const CHOICE_ANSWER = { start_over: 'start_over', apply: 'apply', reply: 'replied' } as const;
+const CHOICE_ANSWER = {
+  start_over: 'start_over',
+  apply: 'apply',
+  reply: 'replied',
+  resume: 'resumed',
+} as const;
 
 function ctxOf(pctx: MailboxContext) {
   return { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId };
@@ -119,9 +141,27 @@ function nonBlank(value: unknown): string | null {
 function assertRecordShape(input: RecordPauseInput): {
   reason: string | null;
   question: string | null;
+  repos: CodeUnsearchableRepo[] | null;
 } {
   const reason = nonBlank(input.reason);
   const question = nonBlank(input.question);
+  const repos = input.repos === undefined || input.repos === null ? null : parseRepos(input.repos);
+  if (input.kind !== 'code_unsearchable' && input.repos !== undefined && input.repos !== null) {
+    throw new PlanChangeRunPauseShapeError(`a ${input.kind} pause takes no \`repos\``);
+  }
+  if (input.kind === 'code_unsearchable') {
+    if (!repos) {
+      throw new PlanChangeRunPauseShapeError(
+        'a code_unsearchable pause needs a non-empty `repos` list of { repoRef, state }',
+      );
+    }
+    if (reason)
+      throw new PlanChangeRunPauseShapeError('a code_unsearchable pause takes no `reason`');
+    if (question) {
+      throw new PlanChangeRunPauseShapeError('a code_unsearchable pause takes no `question`');
+    }
+    return { reason: null, question: null, repos };
+  }
   if (input.kind === 'replan') {
     if (!reason) throw new PlanChangeRunPauseShapeError('a replan pause needs a `reason`');
     if (question) throw new PlanChangeRunPauseShapeError('a replan pause takes no `question`');
@@ -133,7 +173,7 @@ function assertRecordShape(input: RecordPauseInput): {
     if (input.changeTurnIds.length === 0) {
       throw new PlanChangeRunPauseShapeError('a replan pause names the change turns it is about');
     }
-    return { reason, question: null };
+    return { reason, question: null, repos: null };
   }
   if (input.kind === 'unclear') {
     if (!question) throw new PlanChangeRunPauseShapeError('an unclear pause needs a `question`');
@@ -143,13 +183,26 @@ function assertRecordShape(input: RecordPauseInput): {
         `\`question\` is over ${PLANNER_QUESTION_MAX_CHARS} characters`,
       );
     }
-    return { reason: null, question };
+    return { reason: null, question, repos: null };
   }
-  throw new PlanChangeRunPauseShapeError('`kind` must be `replan` or `unclear`');
+  throw new PlanChangeRunPauseShapeError(
+    '`kind` must be `replan`, `unclear` or `code_unsearchable`',
+  );
+}
+
+function parseRepos(value: unknown): CodeUnsearchableRepo[] {
+  const repos = parseCodeUnsearchableRepos(value);
+  if (!repos) {
+    throw new PlanChangeRunPauseShapeError(
+      '`repos` must be a non-empty list of { repoRef, state }, each state one of never_indexed, indexing, refresh_failing, paused, provider_unsupported, unavailable',
+    );
+  }
+  return repos;
 }
 
 function assertChoiceFits(kind: string, choice: PauseChoice, text: string | null): void {
   if (kind === 'replan' && (choice === 'start_over' || choice === 'apply')) return;
+  if (kind === 'code_unsearchable' && choice === 'resume') return;
   if (kind === 'unclear' && choice === 'reply') {
     if (!text) throw new PlanChangeRunPauseShapeError('a reply needs non-blank `text`');
     if (text.length > REPLY_MAX_CHARS) {
@@ -172,7 +225,7 @@ export const planChangeRunPauseService = {
     if (!input.idempotencyKey) {
       throw new PlanChangeRunPauseShapeError('`idempotencyKey` is required');
     }
-    const { reason, question } = assertRecordShape(input);
+    const { reason, question, repos } = assertRecordShape(input);
     // The thread that is RUNNING this job (the mailbox mismatch error otherwise).
     const { sessionId } = await requireThreadForJob(input.jobId, mctx);
 
@@ -231,6 +284,7 @@ export const planChangeRunPauseService = {
           changeTurnIds: ids,
           reason,
           question,
+          ...(repos ? { unsearchableRepos: repos.map((r) => ({ ...r })) } : {}),
           idempotencyKey: input.idempotencyKey,
         },
         tx,
@@ -311,7 +365,9 @@ export const planChangeRunPauseService = {
           disposition: input.choice === 'start_over' ? 'restart' : 'fold',
           restartTarget: null,
           ...(input.choice === 'apply' ? { declinesPauseId: claimed.id } : {}),
-          ...(input.choice === 'reply' ? { answersPauseId: claimed.id } : {}),
+          ...(input.choice === 'reply' || input.choice === 'resume'
+            ? { answersPauseId: claimed.id }
+            : {}),
         },
         pctx,
       );
@@ -403,6 +459,7 @@ async function bodyFor(
     if (!text) throw new EmptyPlanChangeTurnError();
     return text;
   }
+  if (choice === 'resume') return PAUSE_RESUME_TEXT;
   const rows = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
     planChangeMailboxRepository.findTurnsByIds(
       pause.changeTurnIds,

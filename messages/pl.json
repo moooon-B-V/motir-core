@@ -7943,7 +7943,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "Uruchomienie zakończyło się, zanim dotarła do niego odpowiedź.",
             "generic": "Odpowiedź nie dotarła do uruchomienia."
-          }
+          },
+          "waitingResume": "Czekam, aż sprawdzisz kod i będziesz kontynuować."
         },
         "answeringMarker": "Odpowiedź na boku — uruchomienie trwa dalej.",
         "answeredAside": "Odpowiedziano na boku — nic nie zostało wysłane do uruchomienia.",
@@ -8006,6 +8007,41 @@
       "planBody": "Teraz nie mogę odczytać Twojego kodu, więc nie zmieniłem planu. Motir się tym zajmuje.",
       "planMarker": "Nic nie zostało zapisane — Twój plan pozostaje bez zmian.",
       "askNotice": "Nie udało mi się odczytać Twojego kodu na potrzeby tej odpowiedzi. Wszystko, co tu napisano o kodzie, traktuj jako niepotwierdzone."
+    },
+    "codeUnsearchable": {
+      "title": "Planowanie wstrzymane: Motir nie może jeszcze przeszukać Twojego kodu",
+      "introWalk": "Planowanie bez przeszukania kodu byłoby zgadywaniem, więc Motir zatrzymał się w tym miejscu. Napraw poniższe repozytorium, a potem kontynuuj.",
+      "introConversation": "Planowanie bez przeszukania kodu byłoby zgadywaniem, więc nic nie zaplanowano. Napraw poniższe repozytorium, a potem wyślij wiadomość, aby spróbować ponownie.",
+      "listLabel": "Repozytoria, których nie można przeszukać",
+      "resume": "Sprawdź ponownie i kontynuuj",
+      "stillBlocked": "Przed chwilą sprawdzono: {repo} nadal nie można przeszukać. Obecny stan: {state}.",
+      "keptRecord": "Zachowano w kształcie dotychczasowej propozycji — {count, plural, one {# element roboczy} few {# elementy robocze} many {# elementów roboczych} other {# elementu roboczego}}. Nic więcej nie zostanie dodane, dopóki planowanie nie zostanie wznowione.",
+      "states": {
+        "never_indexed": {
+          "chip": "Nigdy nie indeksowano",
+          "line": "Nic jeszcze nie zaindeksowano."
+        },
+        "indexing": {
+          "chip": "Trwa indeksowanie",
+          "line": "Pierwszy indeks wciąż powstaje, więc nie ma jeszcze kodu do przeszukania."
+        },
+        "refresh_failing": {
+          "chip": "Indeksowanie wciąż się nie udaje",
+          "line": "Ostatnie próby zaindeksowania nie powiodły się."
+        },
+        "paused": {
+          "chip": "Indeksowanie wstrzymane",
+          "line": "Indeksowanie jest wstrzymane dla tego projektu."
+        },
+        "provider_unsupported": {
+          "chip": "Host nieobsługiwany",
+          "line": "Motir nie może indeksować repozytoriów na tym hoście."
+        },
+        "unavailable": {
+          "chip": "Wyszukiwanie w kodzie niedostępne",
+          "line": "Przed chwilą nie udało się odczytać kodu."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Elementy robocze",

@@ -7958,7 +7958,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "运行在你的回答送达之前已经结束。",
             "generic": "你的回答没有送达运行。"
-          }
+          },
+          "waitingResume": "等待你检查代码后继续。"
         },
         "answeringMarker": "正在一旁回答 —— 运行照常继续。",
         "answeredAside": "已在一旁回答 —— 没有发送给运行中的规划。",
@@ -8021,6 +8022,41 @@
       "planBody": "我现在无法读取你的代码，因此没有更改你的计划。Motir 正在处理。",
       "planMarker": "未写入任何内容——你的计划保持不变。",
       "askNotice": "这次回答中我无法读取你的代码。请将此处关于代码的任何内容视为未经确认。"
+    },
+    "codeUnsearchable": {
+      "title": "规划已暂停：Motir 暂时无法搜索你的代码",
+      "introWalk": "不搜索代码就规划只能靠猜测，所以 Motir 在此停下。请先处理下面的仓库，然后继续。",
+      "introConversation": "不搜索代码就规划只能靠猜测，所以尚未规划。请先处理下面的仓库，然后发送消息重试。",
+      "listLabel": "无法搜索的仓库",
+      "resume": "重新检查并继续",
+      "stillBlocked": "刚刚检查过：{repo} 仍然无法搜索，当前状态为{state}。",
+      "keptRecord": "保留目前的提议 — {count, plural, other {# 个工作项}}。继续规划之前不会再添加。",
+      "states": {
+        "never_indexed": {
+          "chip": "从未建立索引",
+          "line": "尚未为它建立任何索引。"
+        },
+        "indexing": {
+          "chip": "正在建立索引",
+          "line": "首次索引仍在进行，暂时没有可搜索的代码。"
+        },
+        "refresh_failing": {
+          "chip": "索引持续失败",
+          "line": "最近几次建立索引都失败了。"
+        },
+        "paused": {
+          "chip": "索引已暂停",
+          "line": "此项目的索引已暂停。"
+        },
+        "provider_unsupported": {
+          "chip": "不支持该托管平台",
+          "line": "Motir 无法为该平台上的仓库建立索引。"
+        },
+        "unavailable": {
+          "chip": "暂时无法搜索代码",
+          "line": "刚才无法读取代码。"
+        }
+      }
     },
     "targets": {
       "sectionLabel": "工作项",

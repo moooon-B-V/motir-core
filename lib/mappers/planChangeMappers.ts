@@ -18,6 +18,7 @@ import type {
 import { isAwaitingPerson, isFailedWaiting } from '@/lib/planChange/sessionWaitingState';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { readGuideTurnRecord } from '@/lib/ai/guideWorkItem';
+import { parseCodeUnsearchableRepos } from '@/lib/planning/codeUnsearchable';
 
 // Prisma rows → API DTOs for the plan-change conversation (Story 7.30 ·
 // MOTIR-1728). The single place the persisted enum narrows to its string union
@@ -61,6 +62,7 @@ export function toPlanChangeRunPauseDto(
     changeTurnIds: row.changeTurnIds,
     reason: row.reason,
     question: row.question,
+    repos: parseCodeUnsearchableRepos(row.unsearchableRepos),
     createdAt: row.createdAt.toISOString(),
     answer: row.answer as PlanChangeRunPauseDto['answer'],
     answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
@@ -90,6 +92,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     attachmentIds: row.attachmentIds,
     confirm: (row.confirm as PlanChangeTurnConfirmDto | null) ?? null,
     codeUnreadable: (row.codeUnreadable as PlanChangeTurnOutageDto | null) ?? null,
+    codeUnsearchable: parseCodeUnsearchableRepos(row.codeUnsearchable),
     runJobId: row.runJobId,
     forwardOffer: row.forwardOffer,
     forwarded: row.forwardedEntryId ? { mailboxEntryId: row.forwardedEntryId } : null,

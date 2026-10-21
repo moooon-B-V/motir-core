@@ -46,6 +46,22 @@ export type PlanChangeTurnConfirmDto = 'new_session';
  *  `declined` wrote no plan, `answered` answered without the code. */
 export type PlanChangeTurnOutageDto = 'declined' | 'answered';
 
+/** A target repository whose code motir-ai could not SEARCH, and why (Story
+ *  MOTIR-9165 · MOTIR-9167). Wire form of `CodeUnsearchableRepo`. */
+export interface CodeUnsearchableRepoDto {
+  /** `owner/name`. */
+  repoRef: string;
+  state: CodeUnsearchableStateDto;
+}
+
+export type CodeUnsearchableStateDto =
+  | 'never_indexed'
+  | 'indexing'
+  | 'refresh_failing'
+  | 'paused'
+  | 'provider_unsupported'
+  | 'unavailable';
+
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
  *  it); `authorId` only on a `user` turn (and null once that user is deleted). */
@@ -58,14 +74,20 @@ export type PlanChangeTurnOutageDto = 'declined' | 'answered';
 export interface PlanChangeRunPauseDto {
   id: string;
   jobId: string;
-  kind: 'replan' | 'unclear';
+  kind: 'replan' | 'unclear' | 'code_unsearchable';
   /** The mailbox entry ids of the change turns the pause is about. */
   changeTurnIds: string[];
   reason: string | null;
   question: string | null;
+  /**
+   * The blocked target repositories and why their code cannot be searched
+   * (MOTIR-9167) — set on a `code_unsearchable` pause, null on the other two kinds
+   * and on every pause recorded before the kind existed.
+   */
+  repos?: CodeUnsearchableRepoDto[] | null;
   createdAt: string;
   /** Null while open. */
-  answer: 'start_over' | 'apply' | 'replied' | null;
+  answer: 'start_over' | 'apply' | 'replied' | 'resumed' | null;
   answeredAt: string | null;
   /** The person's reply, verbatim, on `replied` only. */
   replyText: string | null;
@@ -181,6 +203,13 @@ export interface PlanChangeTurnDto {
    * is.
    */
   codeUnreadable?: PlanChangeTurnOutageDto | null;
+  /**
+   * The target repositories whose code could not be SEARCHED, on the `assistant` turn
+   * of a conversation that stopped for that reason before any planning job opened
+   * (MOTIR-9167). Null on every other turn. Optional for the reason {@link anchorKey}
+   * is.
+   */
+  codeUnsearchable?: CodeUnsearchableRepoDto[] | null;
   /**
    * The planning job that was RUNNING when this `user` turn was typed (MOTIR-7996).
    * Present on a MID-RUN turn, which was answered by an `ask_project` job carrying

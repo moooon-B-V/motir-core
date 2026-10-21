@@ -7943,7 +7943,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "La ejecución terminó antes de que le llegara tu respuesta.",
             "generic": "Tu respuesta no llegó a la ejecución."
-          }
+          },
+          "waitingResume": "Esperando a que revises el código y continúes."
         },
         "answeringMarker": "Respondiendo aparte: la ejecución continúa.",
         "answeredAside": "Respondido aparte: no se envió nada a la ejecución.",
@@ -8006,6 +8007,41 @@
       "planBody": "Ahora mismo no puedo leer tu código, así que no he cambiado tu plan. Motir se está ocupando.",
       "planMarker": "No se escribió nada: tu plan no ha cambiado.",
       "askNotice": "No pude leer tu código para esta respuesta. Trata como no confirmado todo lo que se diga aquí sobre el código."
+    },
+    "codeUnsearchable": {
+      "title": "Planificación en pausa: Motir aún no puede buscar en tu código",
+      "introWalk": "Planificar sin buscar en el código sería adivinar, así que Motir se detuvo aquí. Arregla el repositorio de abajo y continúa.",
+      "introConversation": "Planificar sin buscar en el código sería adivinar, así que no se planificó nada. Arregla el repositorio de abajo y envía un mensaje para intentarlo de nuevo.",
+      "listLabel": "Repositorios en los que no se puede buscar",
+      "resume": "Comprobar de nuevo y continuar",
+      "stillBlocked": "Comprobado hace un momento: sigue sin poder buscarse en {repo}. Ahora muestra {state}.",
+      "keptRecord": "Se mantiene lo propuesto hasta ahora — {count, plural, one {# elemento de trabajo} other {# elementos de trabajo}}. No se añade nada más hasta que continúe la planificación.",
+      "states": {
+        "never_indexed": {
+          "chip": "Nunca indexado",
+          "line": "Todavía no se ha indexado nada."
+        },
+        "indexing": {
+          "chip": "Indexación en curso",
+          "line": "El primer índice sigue en marcha, así que aún no hay código en el que buscar."
+        },
+        "refresh_failing": {
+          "chip": "La indexación sigue fallando",
+          "line": "Los últimos intentos de indexarlo fallaron."
+        },
+        "paused": {
+          "chip": "Indexación en pausa",
+          "line": "La indexación está en pausa para este proyecto."
+        },
+        "provider_unsupported": {
+          "chip": "Host no compatible",
+          "line": "Motir no puede indexar repositorios en este host."
+        },
+        "unavailable": {
+          "chip": "Búsqueda de código no disponible",
+          "line": "No se pudo leer el código hace un momento."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Elementos de trabajo",

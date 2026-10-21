@@ -7964,7 +7964,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "The run ended before your answer reached it.",
             "generic": "Your answer did not reach the run."
-          }
+          },
+          "waitingResume": "Waiting for you to check the code and continue."
         },
         "answeringMarker": "Answering on the side — the run keeps going.",
         "answeredAside": "Answered on the side — nothing was sent to the run.",
@@ -8027,6 +8028,41 @@
       "planBody": "I can't read your code right now, so I haven't changed your plan. Motir is on it.",
       "planMarker": "Nothing was written — your plan is unchanged.",
       "askNotice": "I couldn't read your code for this answer. Treat anything about the code here as unconfirmed."
+    },
+    "codeUnsearchable": {
+      "title": "Planning is on hold: Motir can’t search your code yet",
+      "introWalk": "Planning without searching the code would be guesswork, so Motir stopped here. Fix the repository below, then continue.",
+      "introConversation": "Planning without searching the code would be guesswork, so nothing was planned. Fix the repository below, then send a message to try again.",
+      "listLabel": "Repositories that can’t be searched",
+      "resume": "Check again and continue",
+      "stillBlocked": "Checked just now: {repo} still can’t be searched. It now shows {state}.",
+      "keptRecord": "Kept as proposed so far — {count, plural, one {# work item} other {# work items}}. Nothing more is added until planning continues.",
+      "states": {
+        "never_indexed": {
+          "chip": "Never indexed",
+          "line": "Nothing has been indexed for it yet."
+        },
+        "indexing": {
+          "chip": "Indexing in progress",
+          "line": "The first index is still running, so there is no code to search yet."
+        },
+        "refresh_failing": {
+          "chip": "Indexing keeps failing",
+          "line": "The last attempts to index it failed."
+        },
+        "paused": {
+          "chip": "Indexing is paused",
+          "line": "Indexing is paused for this project."
+        },
+        "provider_unsupported": {
+          "chip": "Host not supported",
+          "line": "Motir can’t index repositories on this host."
+        },
+        "unavailable": {
+          "chip": "Code search unavailable",
+          "line": "The code couldn’t be read just now."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Work items",

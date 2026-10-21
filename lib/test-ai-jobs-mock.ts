@@ -207,6 +207,13 @@ export interface PlanJobOutcome {
    */
   codeUnreadable?: boolean;
   /**
+   * The run STOPPED before planning because a TARGET repository's code cannot be SEARCHED
+   * (Story MOTIR-9165 · MOTIR-9171): `result` is motir-ai's pre-planning envelope — an
+   * empty delta and `codeUnsearchable: { repos }`, no `turn`. Wins over `turn` when both
+   * are declared.
+   */
+  codeUnsearchable?: Array<{ repoRef: string; state: string }>;
+  /**
    * The problem a FAILED run settles with (Story MOTIR-8301 · MOTIR-8311). Absent ⇒
    * `ai_job_failed`, the handler's own rejection, so every existing reply is
    * byte-identical. `ai_job_abandoned` is motir-ai's REAPER problem — the machine
@@ -917,10 +924,14 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                     {
                       codeUnreadable: CODE_UNREADABLE_SIGNAL,
                     }
-                  : kind === 'plan' && planOutcomeAt(index).turn
-                    ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
-                      { turn: planOutcomeAt(index).turn }
-                    : {};
+                  : kind === 'plan' && planOutcomeAt(index).codeUnsearchable
+                    ? // The STOP on a target repository whose code cannot be searched (MOTIR-9171):
+                      // no plan, no turn — only the blocked list, as motir-ai's envelope shapes it.
+                      { codeUnsearchable: { repos: planOutcomeAt(index).codeUnsearchable } }
+                    : kind === 'plan' && planOutcomeAt(index).turn
+                      ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
+                        { turn: planOutcomeAt(index).turn }
+                      : {};
       const settled: Record<string, unknown> = { status: 'succeeded', result };
       return { statusCode: 200, data: settled, responseOptions: json };
     })
