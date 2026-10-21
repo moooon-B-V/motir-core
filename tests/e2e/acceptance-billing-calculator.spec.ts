@@ -526,7 +526,12 @@ test.describe('The Calculator on Billing & plans', () => {
         await openTab(page);
         await expect(pickerButton(page, emptied)).toBeDisabled();
         await expect(pickerButton(page, emptied)).toContainText(t('calculator.categories.empty'));
-        await expect(pickerButton(page, first!)).not.toContainText(withdrawn);
+        // A whole entry of the example list, not a substring: `glm-5.3-flash` is a prefix of
+        // `glm-5.3-flashx`, which stays listed.
+        const asListedModel = new RegExp(
+          `(^|[\\s,])${withdrawn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(,|$)`,
+        );
+        await expect(pickerButton(page, first!)).not.toContainText(asListedModel);
         await fillRange(page, '2', '5');
         await pickOnly(page, [first!, second!]);
         const res = await ask(page);
