@@ -41,3 +41,10 @@ export interface WorkItemPagesDto {
   rows: WorkItemPageLinkRowDto[];
   nextCursor: string | null;
 }
+
+/** The pair a hand-link write answers with (MOTIR-9197); the section's row is the read's to compose. */
+export interface PageLinkPairDto {
+  pageId: string;
+  workItemId: string;
+  source: 'manual';
+}

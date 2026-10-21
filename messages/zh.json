@@ -1837,6 +1837,7 @@
       "explanationMd": "说明",
       "explanationSource": "说明来源",
       "archivedAt": "归档",
+      "pageLinks": "页面",
       "labels": "{count, plural, other {标签}}",
       "components": "{count, plural, other {模块}}",
       "todos": "{count, plural, other {步骤}}"

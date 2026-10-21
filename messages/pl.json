@@ -1837,6 +1837,7 @@
       "explanationMd": "Wyjaśnienie",
       "explanationSource": "Źródło wyjaśnienia",
       "archivedAt": "Zarchiwizowano",
+      "pageLinks": "Strona",
       "labels": "{count, plural, one {Etykieta} few {Etykiety} many {Etykiety} other {Etykiety}}",
       "components": "{count, plural, one {Komponent} few {Komponenty} many {Komponenty} other {Komponenty}}",
       "todos": "{count, plural, one {Krok} few {Kroki} many {Kroki} other {Kroki}}"

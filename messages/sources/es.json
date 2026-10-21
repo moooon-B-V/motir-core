@@ -1493,6 +1493,7 @@
   "activity.fields.explanationMd": "Explanation",
   "activity.fields.explanationSource": "Explanation source",
   "activity.fields.archivedAt": "Archived",
+  "activity.fields.pageLinks": "Page",
   "activity.fields.labels": "{count, plural, one {Label} other {Labels}}",
   "activity.fields.components": "{count, plural, one {Component} other {Components}}",
   "activity.fields.todos": "{count, plural, one {Step} other {Steps}}",

@@ -1837,6 +1837,7 @@
       "explanationMd": "理由",
       "explanationSource": "理由の出所",
       "archivedAt": "アーカイブ",
+      "pageLinks": "ページ",
       "labels": "{count, plural, other {ラベル}}",
       "components": "{count, plural, other {コンポーネント}}",
       "todos": "{count, plural, other {手順}}"

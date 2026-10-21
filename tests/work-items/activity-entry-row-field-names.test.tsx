@@ -34,6 +34,8 @@ function sampleValue(key: string): unknown {
   if (['todos', 'attachments', 'labels', 'components'].includes(key)) {
     return { added: [{ name: 'one' }] };
   }
+  // The hand-made page links (MOTIR-9197): `{ pageId, title }` per element.
+  if (key === 'pageLinks') return { added: [{ pageId: 'p1', title: 'Runbook' }] };
   if (key === 'links') return { added: [{ toId: 'w2', kind: 'blocks' }] };
   return { from: 'a', to: 'b' };
 }
@@ -80,6 +82,8 @@ describe('ActivityEntryRow — the changed field is named by its label (MOTIR-61
     ['targetRepos', 'Repositories', '仓库'],
     ['folderId', 'Folder', '文件夹'],
     ['todos', 'Step', '步骤'],
+    // The hand-made page links (MOTIR-9197).
+    ['pageLinks', 'Page', '页面'],
     // The obsolescence mark and its note (MOTIR-6579).
     ['obsolescence', 'Obsolescence', '失效状态'],
     ['obsolescenceNoteMd', 'Obsolescence note', '失效说明'],
@@ -88,6 +92,17 @@ describe('ActivityEntryRow — the changed field is named by its label (MOTIR-61
     expect(part).toBeDefined();
     expect(renderedFieldName(part!, enMessages)).toBe(en);
     expect(renderedFieldName(part!, zhMessages)).toBe(zh);
+  });
+
+  it('a hand-linked page reads as one collection part naming the page title', () => {
+    const parts = buildEntryParts(
+      'updated',
+      { pageLinks: { added: [{ pageId: 'p1', title: 'Runbook' }] } },
+      resolvers,
+    );
+    expect(parts).toEqual([
+      { kind: 'collection', field: 'pageLinks', op: 'added', items: ['Runbook'] },
+    ]);
   });
 
   it('fields that were already named are unchanged', () => {

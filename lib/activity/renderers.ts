@@ -439,6 +439,9 @@ const REGISTRY: Record<string, RegistryEntry> = {
   // `{ added: [{ id, text }] }`, which is what makes the history read the same
   // whichever door the rows came through.
   todos: collectionField(),
+  // The hand-made page links of a work item (MOTIR-9197): `{ added | removed:
+  // [{ pageId, title }] }`, the page's title as it was at write time.
+  pageLinks: collectionField(),
   attachments: collectionField(),
   labels: collectionField(),
   components: collectionField(),

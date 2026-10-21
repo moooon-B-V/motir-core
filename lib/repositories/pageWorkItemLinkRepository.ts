@@ -72,6 +72,20 @@ export interface WorkItemPageLinkRecord {
   parentPageTitle: string | null;
 }
 
+/**
+ * One HAND-MADE row (`source: 'manual'`, MOTIR-9197). Deliberately WITHOUT
+ * `source`: the source is fixed by the method, so a derived family cannot be
+ * nominated through this door and `manual` cannot be nominated through
+ * `createDerived`'s.
+ */
+export interface ManualPageLinkInsert {
+  workspaceId: string;
+  projectId: string;
+  pageId: string;
+  workItemId: string;
+  createdById: string;
+}
+
 /** The last page a page of the read served — the `(updated_at, id)` it seeks after. */
 export interface WorkItemPagesSeek {
   updatedAt: Date;
@@ -161,6 +175,38 @@ export const pageWorkItemLinkRepository = {
     const result = await tx.pageWorkItemLink.createMany({
       data: [...rows],
       skipDuplicates: true,
+    });
+    return result.count;
+  },
+
+  /**
+   * Writes the hand link of one pair (MOTIR-9197). The table's key is
+   * `(page_id, work_item_id, source)`, so a pair that is also mentioned or
+   * embedded does not suppress it; `skipDuplicates` turns a second `manual`
+   * row into a count of 0 — the caller's "already linked" — rather than a unique
+   * violation, which would abort the enclosing transaction and take the
+   * revision row with it.
+   */
+  async createManual(input: ManualPageLinkInsert, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.pageWorkItemLink.createMany({
+      data: [{ ...input, source: 'manual' }],
+      skipDuplicates: true,
+    });
+    return result.count;
+  },
+
+  /**
+   * Deletes the hand link of one pair (MOTIR-9197). Its `where` names
+   * `manual`, so a mention, an embed or an item-derived row of the same pair is
+   * never matched.
+   */
+  async deleteManual(
+    pageId: string,
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.pageWorkItemLink.deleteMany({
+      where: { pageId, workItemId, source: 'manual' },
     });
     return result.count;
   },
