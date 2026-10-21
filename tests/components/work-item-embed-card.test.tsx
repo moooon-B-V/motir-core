@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
-import type { AvailableWorkItemRefView } from '@motir/pages';
+import type { ComponentProps } from 'react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { WorkItemEmbedCard } from '@/components/pages/WorkItemEmbedCard';
 import { pageWorkItemHref } from '@/components/pages/PageEditorHost';
 
 // The app's embedded work-item card (MOTIR-9182): the five facts, the archived
 // treatment, and the stated words for an unassigned item and a missing status.
+
+// Derived from the component: `@motir/pages` is imported only from its composition root.
+type AvailableWorkItemRefView = ComponentProps<typeof WorkItemEmbedCard>['view'];
 
 const VIEW: AvailableWorkItemRefView = {
   accessible: true,
