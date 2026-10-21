@@ -175,11 +175,14 @@ describe('CodeHealthClient — per-repo reads (MOTIR-2123)', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Convention' }));
     });
 
-    expect(screen.getByText('moooon/motir-ai')).toBeTruthy();
-    expect(screen.getByText('moooon/motir-gateway')).toBeTruthy();
+    // The repository name is split across a muted owner and a strong name, so a
+    // card is found by its header's key rather than by text.
+    const card = (repo: string) => document.querySelector(`button[data-card-key="${repo}"]`);
+    expect(card('moooon/motir-ai')).toBeTruthy();
+    expect(card('moooon/motir-gateway')).toBeTruthy();
     // The repo with nothing derived yet renders no card — and does NOT suppress
     // the two that do have one (the whole point of the per-repo filter).
-    expect(screen.queryByText('moooon/motir-core')).toBeNull();
+    expect(card('moooon/motir-core')).toBeNull();
   });
 
   it('a re-audit POSTs /refresh exactly once, however many times the poll re-reads', async () => {
