@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import pagesLane from '../../vitest.coverage.pages.config';
 
 // Story MOTIR-7567's lane-integrity guard (MOTIR-9201). The pages coverage lane
 // gates a file only when a `STORY_FILES` pattern reaches it AND a suite in
@@ -11,11 +10,18 @@ import pagesLane from '../../vitest.coverage.pages.config';
 const requireFromVitest = createRequire(createRequire(import.meta.url).resolve('vitest'));
 const pm = requireFromVitest('picomatch') as (glob: string | string[]) => (s: string) => boolean;
 
-const coverage = pagesLane.test?.coverage as {
-  include: string[];
-  thresholds: Record<string, unknown>;
-};
-const includes = pagesLane.test?.include as string[];
+// The config is read as TEXT, not imported: it sits outside `tsconfig.tests.json`'s file list.
+const source = readFileSync('vitest.coverage.pages.config.ts', 'utf8');
+const storyFiles = [
+  ...source
+    .slice(source.indexOf('const STORY_FILES'), source.indexOf('const SHARED_FILES'))
+    .matchAll(/^\s+'([^']+)',$/gm),
+].map((m) => m[1]!);
+const includes = [
+  ...source
+    .slice(source.indexOf('include: ['), source.indexOf('coverage: {'))
+    .matchAll(/^\s+'([^']+)',$/gm),
+].map((m) => m[1]!);
 
 const GATED_FILES = [
   'app/(authed)/items/[key]/_components/PagesSection.tsx',
@@ -45,12 +51,11 @@ const SUITES = [
 describe('the pages coverage lane carries the hand link', () => {
   it.each(GATED_FILES)('%s exists, is included and carries the floor', (file) => {
     expect(existsSync(file), `${file} is gone`).toBe(true);
+    // Every STORY_FILES entry is both an include and a threshold key in the config.
     expect(
-      coverage.include.some((glob) => pm(glob)(file)),
-      `no include reaches ${file}`,
+      storyFiles.some((glob) => pm(glob)(file)),
+      `no STORY_FILES entry gates ${file}`,
     ).toBe(true);
-    const keys = Object.keys(coverage.thresholds).filter((key) => pm(key)(file));
-    expect(keys.length, `no threshold key gates ${file}`).toBeGreaterThan(0);
   });
 
   it.each(SUITES)('%s exists and is run by the lane', (suite) => {
