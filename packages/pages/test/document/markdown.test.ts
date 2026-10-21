@@ -185,3 +185,79 @@ describe('the work-item mention (MOTIR-7570)', () => {
     expect(roundTrip(nested)).toBe(nested);
   });
 });
+
+describe('the work-item embed (MOTIR-9180)', () => {
+  const line = '![MOTIR-1](motir:ckaaaa)';
+  const embed = { type: 'workItemEmbed', attrs: { id: 'ckaaaa', label: 'MOTIR-1' } };
+
+  it('parses a lone line into one block workItemEmbed and no image, and writes it back', () => {
+    const doc = parseMarkdown(line);
+    expect(doc.toJSON()).toEqual({ type: 'doc', content: [embed] });
+    expect(JSON.stringify(doc.toJSON())).not.toContain('"image"');
+    expect(serializeMarkdown(doc)).toBe(line);
+  });
+
+  it('is a fixed point alone, between paragraphs, in a list item and in a table cell', () => {
+    for (const md of [
+      line,
+      `before\n\n${line}\n\nafter`,
+      `- item\n\n  ${line}`,
+      `| a |\n| --- |\n| ${line} |`,
+    ]) {
+      const once = roundTrip(md);
+      expect(once).toBe(md);
+      expect(parseMarkdown(once).toJSON()).toEqual(parseMarkdown(md).toJSON());
+    }
+  });
+
+  it('splits a card written mid-line into paragraph, card, paragraph', () => {
+    const doc = parseMarkdown(`see ${line} here`);
+    expect(doc.childCount).toBe(3);
+    expect(doc.child(0).type.name).toBe('paragraph');
+    expect(doc.child(1).type.name).toBe('workItemEmbed');
+    expect(doc.child(2).type.name).toBe('paragraph');
+    expect(doc.child(0).textContent).toBe('see ');
+    expect(doc.child(2).textContent).toBe(' here');
+  });
+
+  // A list item's schema is `paragraph block*`, so a card that STARTS an item gets
+  // the empty paragraph ProseMirror fills in first — as an image does today.
+  it('settles a card that starts a list item exactly as an image does', () => {
+    const asImage = roundTrip('- ![MOTIR-1](https://example.com/a.png)');
+    const asCard = roundTrip(`- ${line}`);
+    expect(asCard).toBe(asImage.replace('https://example.com/a.png', 'motir:ckaaaa'));
+    // The card survives that form: a card, in a list, on both sides.
+    expect(JSON.stringify(parseMarkdown(asCard).toJSON())).toContain('"workItemEmbed"');
+  });
+
+  it('keeps an empty alt as a null label and round-trips it', () => {
+    expect(parseMarkdown('![](motir:ckaaaa)').child(0).attrs).toEqual({
+      id: 'ckaaaa',
+      label: null,
+    });
+    expect(roundTrip('![](motir:ckaaaa)')).toBe('![](motir:ckaaaa)');
+  });
+
+  it('leaves every payload that is not a motir: id a plain image', () => {
+    for (const md of [
+      '![pic](https://example.com/a.png)',
+      '![x](motir:)',
+      '![x](motir:has%20space)',
+      '![x](motir:bad.char)',
+    ]) {
+      const doc = parseMarkdown(md);
+      expect(doc.child(0).type.name).toBe('image');
+    }
+  });
+
+  it('stores only id and label, and a card adds no characters to the plain text', () => {
+    expect(Object.keys(parseMarkdown(line).child(0).attrs).sort()).toEqual(['id', 'label']);
+    const text = (md: string) => {
+      const doc = parseMarkdown(md);
+      return doc.textBetween(0, doc.content.size, '\n', () => '');
+    };
+    const withCard = text(`a\n\n${line}`);
+    const without = text('a');
+    expect(withCard.trim()).toBe(without.trim());
+  });
+});

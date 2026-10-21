@@ -491,6 +491,22 @@ describe('restore derives the RESTORED body’s links (MOTIR-7570)', () => {
     });
   });
 
+  it('re-derives an embed from the restored body', async () => {
+    const page = await createPage(store, clock, scope);
+    advance(MINUTE);
+    await write(page.id, 'A', '![MOTIR-9](motir:ckrestored000000000000009)');
+    advance(11 * MINUTE);
+    await write(page.id, 'A', 'Card removed.');
+    advance(MINUTE);
+
+    await restorePageVersion(store, clock, { pageId: page.id, number: 1, actorId: 'B' });
+
+    expect(store.calls.at(-1)).toEqual({
+      method: 'replaceDerivedLinks',
+      args: [page.id, [{ workItemId: 'ckrestored000000000000009', source: 'embed' }], 'B'],
+    });
+  });
+
   it('a refused restore writes no links', async () => {
     const page = await createPage(store, clock, scope);
     const before = store.called('replaceDerivedLinks');

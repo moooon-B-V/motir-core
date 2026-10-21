@@ -731,4 +731,66 @@ describe('derived links (MOTIR-7570)', () => {
     ).rejects.toThrow();
     expect(store.called('replaceDerivedLinks')).toBe(0);
   });
+
+  describe('embeds (MOTIR-9180)', () => {
+    const card = `![MOTIR-1](motir:${A})`;
+    const embedOnly = [{ workItemId: A, source: 'embed' }];
+
+    it('savePageUpdate and savePageMarkdown hand the embed entry to the port', async () => {
+      const viaUpdate = await createPage(store, clock, scope);
+      await savePageUpdate(store, clock, {
+        pageId: viaUpdate.id,
+        actorId: 'u2',
+        update: markdownToUpdate(emptyState(), card),
+      });
+      expect(store.calls.at(-1)).toEqual({
+        method: 'replaceDerivedLinks',
+        args: [viaUpdate.id, embedOnly, 'u2'],
+      });
+
+      const viaMarkdown = await createPage(store, clock, scope);
+      await savePageMarkdown(store, clock, {
+        pageId: viaMarkdown.id,
+        actorId: 'agent',
+        markdown: card,
+        expectedRevision: 1,
+      });
+      expect(store.calls.at(-1)).toEqual({
+        method: 'replaceDerivedLinks',
+        args: [viaMarkdown.id, embedOnly, 'agent'],
+      });
+      // The card dropped: the set no longer holds it.
+      await savePageMarkdown(store, clock, {
+        pageId: viaMarkdown.id,
+        actorId: 'agent',
+        markdown: 'No card left.',
+        expectedRevision: 2,
+      });
+      expect(store.calls.at(-1)).toEqual({
+        method: 'replaceDerivedLinks',
+        args: [viaMarkdown.id, [], 'agent'],
+      });
+    });
+
+    it('a body holding a card and a chip for one item hands both entries', async () => {
+      const page = await createPage(store, clock, scope);
+      await savePageMarkdown(store, clock, {
+        pageId: page.id,
+        actorId: 'agent',
+        markdown: `chip [MOTIR-1](motir:${A})\n\n${card}`,
+        expectedRevision: 1,
+      });
+      expect(store.calls.at(-1)).toEqual({
+        method: 'replaceDerivedLinks',
+        args: [
+          page.id,
+          [
+            { workItemId: A, source: 'mention' },
+            { workItemId: A, source: 'embed' },
+          ],
+          'agent',
+        ],
+      });
+    });
+  });
 });
