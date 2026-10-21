@@ -1144,29 +1144,29 @@ The conflict is a warning, not a danger: nothing is lost (the person's text is o
 
 ### The panels
 
-| #   | state                  | what is drawn                                                                                                                                  |
-| --- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Collapsed              | Seven header rows, no body open. Repositories are told apart by name, version and state alone                                                  |
-| 2   | Page load              | No `?repo=`: the first repository is expanded                                                                                                  |
-| 3   | The transition         | Before and after: pressing motir-gateway's header collapses motir-core's card, and focus stays on the pressed header                           |
-| 4   | Edit                   | The expanded card in Edit, naming its repository four times, with the accent border and `Save to motir-core`                                   |
-| 5   | Draft kept             | Another card was expanded while one was in Edit: the first collapses to a header carrying the **Unsaved draft** marker                         |
-| 6   | Narrow viewport        | 360 px: the header wraps, nothing is truncated                                                                                                 |
-| 7   | Keyboard and a11y      | Structure, keys, focus, accessible name, announcements                                                                                         |
+| #   | state             | what is drawn                                                                                                          |
+| --- | ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | Collapsed         | Seven header rows, no body open. Repositories are told apart by name, version and state alone                          |
+| 2   | Page load         | No `?repo=`: the first repository is expanded                                                                          |
+| 3   | The transition    | Before and after: pressing motir-gateway's header collapses motir-core's card, and focus stays on the pressed header   |
+| 4   | Edit              | The expanded card in Edit, naming its repository four times, with the accent border and `Save to motir-core`           |
+| 5   | Draft kept        | Another card was expanded while one was in Edit: the first collapses to a header carrying the **Unsaved draft** marker |
+| 6   | Narrow viewport   | 360 px: the header wraps, nothing is truncated                                                                         |
+| 7   | Keyboard and a11y | Structure, keys, focus, accessible name, announcements                                                                 |
 
 ### The header row (always visible)
 
 One `<button>` spans the row: chevron · repository `owner/name` (the name in `--el-text-strong`, the owner in `--el-text-secondary`, so the part that differs is the part that reads) · version pill · byline · markers.
 
-| element | copy | role |
-| --- | --- | --- |
-| version pill, derived | `v{version} · derived` | `Pill`, tint `--el-tint-lavender`, ink `--el-text-strong` |
-| version pill, edited | `v{version} · edited` | `Pill`, tint `--el-tint-sky`, ink `--el-text-strong` |
-| no convention | `No convention yet` | `Pill`, `--el-chip-bg`, ink `--el-text-secondary` |
-| byline | `Derived from the code` · `Edited by {name} · {date}` | `--el-text-secondary` |
+| element                | copy                                                                                    | role                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| version pill, derived  | `v{version} · derived`                                                                  | `Pill`, tint `--el-tint-lavender`, ink `--el-text-strong`                                               |
+| version pill, edited   | `v{version} · edited`                                                                   | `Pill`, tint `--el-tint-sky`, ink `--el-text-strong`                                                    |
+| no convention          | `No convention yet`                                                                     | `Pill`, `--el-chip-bg`, ink `--el-text-secondary`                                                       |
+| byline                 | `Derived from the code` · `Edited by {name} · {date}`                                   | `--el-text-secondary`                                                                                   |
 | pending-derived marker | `Newer derived waiting` (new key `convention.markerPending`; zh `有新的提取版本待处理`) | `Pill`, tint `--el-tint-yellow`, ink `--el-text-strong`; shown only when a parked derived version waits |
-| draft marker | `Unsaved draft` (new key `convention.markerDraft`; zh `有未保存的草稿`) | `Pill`, tint `--el-tint-peach`, ink `--el-text-strong`; shown only on a collapsed card holding a draft |
-| editing marker | `Editing` (new key `convention.markerEditing`; zh `编辑中`) | same peach pill, on the expanded card in Edit |
+| draft marker           | `Unsaved draft` (new key `convention.markerDraft`; zh `有未保存的草稿`)                 | `Pill`, tint `--el-tint-peach`, ink `--el-text-strong`; shown only on a collapsed card holding a draft  |
+| editing marker         | `Editing` (new key `convention.markerEditing`; zh `编辑中`)                             | same peach pill, on the expanded card in Edit                                                           |
 
 The **Edit** button is not inside the toggle button (no nested controls). It sits at the row's end, only on the expanded card, as in the shipped card. The header, chevron and markers all come from keys already in `codeHealth.convention.*` except the three above.
 
@@ -1184,14 +1184,14 @@ Each card is an `h3` containing one `<button aria-expanded aria-controls>`; the 
 
 ### Per-element roles
 
-| element | primitive | colour | shape |
-| --- | --- | --- | --- |
-| card | `Card` | `--el-card`, `--el-border`; open `--el-border-strong`; Edit `--el-accent` | `--radius-card` |
-| header button | `<button>` | transparent; focus ring `--focus-ring-color` | `--radius-card`, `--spacing-card-padding-12` |
-| chevron | glyph | `--el-text-secondary` | — |
-| markers and pills | `Pill` | tints above, ink `--el-text-strong` | `--radius-badge`, `--spacing-chip-*` |
-| edit banner | callout | fill `--el-tint-sky`, ink `--el-text-strong` | `--radius-card` |
-| Save · Cancel · Edit | `Button` | as the shipped card | `--radius-btn`, `--height-btn-sm` |
+| element              | primitive  | colour                                                                    | shape                                        |
+| -------------------- | ---------- | ------------------------------------------------------------------------- | -------------------------------------------- |
+| card                 | `Card`     | `--el-card`, `--el-border`; open `--el-border-strong`; Edit `--el-accent` | `--radius-card`                              |
+| header button        | `<button>` | transparent; focus ring `--focus-ring-color`                              | `--radius-card`, `--spacing-card-padding-12` |
+| chevron              | glyph      | `--el-text-secondary`                                                     | —                                            |
+| markers and pills    | `Pill`     | tints above, ink `--el-text-strong`                                       | `--radius-badge`, `--spacing-chip-*`         |
+| edit banner          | callout    | fill `--el-tint-sky`, ink `--el-text-strong`                              | `--radius-card`                              |
+| Save · Cancel · Edit | `Button`   | as the shipped card                                                       | `--radius-btn`, `--height-btn-sm`            |
 
 Every secondary line is `--el-text-secondary`, which clears AA on the card, the soft surface and the chip fill in both themes. No `--el-text-muted`, `--el-text-faint` or `--el-danger-text`, no raw colour, and no raw radius.
 
