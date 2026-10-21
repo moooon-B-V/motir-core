@@ -3,6 +3,8 @@
 // page, live or unavailable, however many link rows it has
 // (`docs/decisions/pages.md` §8.1).
 
+import type { WorkItemRefSummaryDto } from '@/lib/dto/workItems';
+
 /**
  * How a page links to the work item: a chip in its body, an embed, by hand, or
  * a tag in the work item's own Description / Explanation (MOTIR-7696).
@@ -47,4 +49,24 @@ export interface PageLinkPairDto {
   pageId: string;
   workItemId: string;
   source: 'manual';
+}
+
+/**
+ * One hand-linked work item on a page (MOTIR-9198). `summary` is the live chip
+ * summary, `{ accessible: false, id }` for an item the reader may not browse, or
+ * `null` when the item resolves to nothing — the row is kept either way.
+ */
+export interface PageWorkItemLinkRowDto {
+  workItemId: string;
+  /** ISO-8601, when the hand link was made. */
+  linkedAt: string;
+  summary: WorkItemRefSummaryDto | null;
+}
+
+/** One page of a page's hand-linked work items, newest link first. */
+export interface PageWorkItemsDto {
+  rows: PageWorkItemLinkRowDto[];
+  nextCursor: string | null;
+  /** Whether this reader may add a hand link (`work_item:edit`); never the authority. */
+  canLink: boolean;
 }

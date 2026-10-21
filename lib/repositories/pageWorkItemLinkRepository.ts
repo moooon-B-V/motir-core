@@ -92,6 +92,19 @@ export interface WorkItemPagesSeek {
   id: string;
 }
 
+/** The last hand link a page of the page-side read served — the `(created_at, id)` it seeks after. */
+export interface PageWorkItemsSeek {
+  createdAt: Date;
+  id: string;
+}
+
+/** One hand link of a page, as the page-side read selects it: the link row alone, no `work_item` join. */
+export interface PageManualLinkRecord {
+  id: string;
+  workItemId: string;
+  createdAt: Date;
+}
+
 /** A row `createDerived` writes. */
 export interface DerivedPageLinkInsert {
   workspaceId: string;
@@ -193,6 +206,37 @@ export const pageWorkItemLinkRepository = {
       skipDuplicates: true,
     });
     return result.count;
+  },
+
+  /**
+   * A page's HAND links (`source = 'manual'`), newest first on `(created_at, id)`
+   * (MOTIR-9198). It selects link rows alone — never joining `work_item` — so a
+   * row whose item cannot be summarised still comes back. `take` is the caller's
+   * page size plus its look-ahead.
+   */
+  async listManualByPage(
+    pageId: string,
+    after: PageWorkItemsSeek | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<PageManualLinkRecord[]> {
+    return tx.pageWorkItemLink.findMany({
+      where: {
+        pageId,
+        source: 'manual',
+        ...(after
+          ? {
+              OR: [
+                { createdAt: { lt: after.createdAt } },
+                { createdAt: after.createdAt, id: { lt: after.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+      select: { id: true, workItemId: true, createdAt: true },
+    });
   },
 
   /**

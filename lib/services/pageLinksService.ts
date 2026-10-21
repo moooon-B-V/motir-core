@@ -7,13 +7,19 @@ import { pageWorkItemLinkRepository } from '@/lib/repositories/pageWorkItemLinkR
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { PageArchivedError, PageNotFoundError } from '@/lib/pages';
 import { PageLinkAlreadyExistsError, PageLinkNotFoundError } from '@/lib/pages/linkErrors';
-import { toWorkItemPageLinkRowDto } from '@/lib/mappers/pageLinkMappers';
+import { toPageWorkItemLinkRowDto, toWorkItemPageLinkRowDto } from '@/lib/mappers/pageLinkMappers';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
+import {
+  decodePageWorkItemsCursor,
+  encodePageWorkItemsCursor,
+  pageWorkItemsLimit,
+} from '@/lib/pages/pageWorkItemsCursor';
 import {
   decodeWorkItemPagesCursor,
   encodeWorkItemPagesCursor,
   workItemPagesLimit,
 } from '@/lib/pages/workItemPagesCursor';
-import type { PageLinkPairDto, WorkItemPagesDto } from '@/lib/dto/pageLinks';
+import type { PageLinkPairDto, PageWorkItemsDto, WorkItemPagesDto } from '@/lib/dto/pageLinks';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -40,6 +46,13 @@ import { isVisitorContext } from '@/lib/visitor/readScope';
 
 export interface ListPagesForWorkItemInput {
   workItemId: string;
+  cursor?: string | null;
+  limit?: number | null;
+}
+
+export interface ListWorkItemsForPageInput {
+  projectId: string;
+  pageId: string;
   cursor?: string | null;
   limit?: number | null;
 }
@@ -154,6 +167,56 @@ export const pageLinksService = {
             : null,
       };
     });
+  },
+
+  /**
+   * A page's hand-linked work items (Story MOTIR-7567 · MOTIR-9198), newest link
+   * first, each with its live chip summary. Reads `manual` rows only and never
+   * joins `work_item`, so a row whose item cannot be summarised is kept with
+   * `summary: null`. An archived page answers an empty page (after the
+   * `page:view` gate) — its hand links are hidden on both sides until restored.
+   * `canLink` is `work_item:edit`, an affordance and never the write's authority.
+   */
+  async listWorkItemsForPage(
+    ctx: ServiceContext,
+    input: ListWorkItemsForPageInput,
+  ): Promise<PageWorkItemsDto> {
+    const after = input.cursor ? decodePageWorkItemsCursor(input.cursor) : null;
+    const limit = pageWorkItemsLimit(input.limit);
+
+    const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: input.projectId };
+    const read = await withWorkspaceContext(scope, async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      const page = await findPageInProject(input.pageId, input.projectId, tx);
+      if (page.archivedAt !== null) return null;
+
+      const { canEdit } = await projectAccessService.getCapabilities(input.projectId, ctx, tx);
+      const window = await pageWorkItemLinkRepository.listManualByPage(
+        page.id,
+        after,
+        limit + 1,
+        tx,
+      );
+      return { canEdit, window };
+    });
+    if (read === null) return { rows: [], nextCursor: null, canLink: false };
+
+    const served = read.window.slice(0, limit);
+    // The chips resolve AFTER the transaction closes: a pure read with no `tx`.
+    const summaries = await resolveWorkItemRefSummaries(
+      { ids: [...new Set(served.map((r) => r.workItemId))], keys: [] },
+      input.projectId,
+      ctx,
+    );
+    const last = served[served.length - 1];
+    return {
+      rows: served.map((r) => toPageWorkItemLinkRowDto(r, summaries[r.workItemId] ?? null)),
+      nextCursor:
+        read.window.length > limit && last
+          ? encodePageWorkItemsCursor({ createdAt: last.createdAt, id: last.id })
+          : null,
+      canLink: read.canEdit,
+    };
   },
 
   /** Link a page to a work item by hand; see the header above. */

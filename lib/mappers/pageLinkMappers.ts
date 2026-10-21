@@ -1,5 +1,9 @@
-import type { WorkItemPageLinkRowDto } from '@/lib/dto/pageLinks';
-import type { WorkItemPageLinkRecord } from '@/lib/repositories/pageWorkItemLinkRepository';
+import type { PageWorkItemLinkRowDto, WorkItemPageLinkRowDto } from '@/lib/dto/pageLinks';
+import type { WorkItemRefSummaryDto } from '@/lib/dto/workItems';
+import type {
+  PageManualLinkRecord,
+  WorkItemPageLinkRecord,
+} from '@/lib/repositories/pageWorkItemLinkRepository';
 
 // The work item's Pages read rows → DTO (Story MOTIR-7565 · MOTIR-7573). The
 // folder path is resolved by the service in one batched read and handed in. An
@@ -17,4 +21,12 @@ export function toWorkItemPageLinkRowDto(
     updatedAt: record.updatedAt.toISOString(),
     place: { folderPath, parentPageTitle: record.parentPageTitle },
   };
+}
+
+/** One hand link of a page; `summary` is `null` when the item resolves to nothing (MOTIR-9198). */
+export function toPageWorkItemLinkRowDto(
+  record: PageManualLinkRecord,
+  summary: WorkItemRefSummaryDto | null,
+): PageWorkItemLinkRowDto {
+  return { workItemId: record.workItemId, linkedAt: record.createdAt.toISOString(), summary };
 }
