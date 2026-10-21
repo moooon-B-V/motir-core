@@ -61,21 +61,19 @@ describe('the pinned calculator vector', () => {
     );
   });
 
-  it('the pinned input is a legal engine request — one range, one selection per lane, one cadence', () => {
-    const { itemsPerMonth, planning, running, cadence } = PINNED_CALCULATOR_REQUEST;
+  it('the pinned input is a legal engine request — one range, one to three categories, one cadence', () => {
+    const { itemsPerMonth, categories, cadence } = PINNED_CALCULATOR_REQUEST;
     expect(Object.keys(PINNED_CALCULATOR_REQUEST).sort()).toEqual([
       'cadence',
+      'categories',
       'itemsPerMonth',
-      'planning',
-      'running',
     ]);
     expect(isWholeNonNegative(itemsPerMonth.low)).toBe(true);
     expect(isWholeNonNegative(itemsPerMonth.high)).toBe(true);
     expect(itemsPerMonth.low).toBeLessThanOrEqual(itemsPerMonth.high);
-    for (const lane of [planning, running]) {
-      expect(lane.category.trim()).not.toBe('');
-      expect(lane.modelIds.length).toBeGreaterThan(0);
-    }
+    expect(categories.length).toBeGreaterThanOrEqual(1);
+    expect(categories.length).toBeLessThanOrEqual(3);
+    expect(new Set(categories).size).toBe(categories.length);
     // The cadences the shipped catalog prices — read, not typed as a pair here.
     expect(Object.keys(BILLING_CATALOG.seatPlan.prices)).toContain(cadence);
   });
@@ -93,19 +91,22 @@ describe('the pinned calculator vector', () => {
     expect(everyKey(PINNED_ESTIMATE_ANSWER).filter((k) => FORBIDDEN_KEY.test(k))).toEqual([]);
   });
 
-  it('the selections were live when it was recorded — each id is listed under its category', () => {
-    for (const lane of ['planning', 'running'] as const) {
-      const selection = PINNED_CALCULATOR_REQUEST[lane];
-      const band = PINNED_CATEGORIES_ANSWER.categories.find((c) => c.key === selection.category);
-      expect(
-        band,
-        `${lane}: category ${selection.category} is not in the recorded list`,
-      ).toBeDefined();
-      const live = band!.models.map((m) => m.id);
-      for (const id of selection.modelIds) expect(live).toContain(id);
-      // And the engine split over exactly the ids that were asked for.
-      expect(PINNED_ESTIMATE_ANSWER.models[lane]).toEqual(selection.modelIds);
-      expect(PINNED_ESTIMATE_ANSWER.droppedModelIds[lane]).toEqual([]);
+  it('the categories were live when it was recorded — each is listed, and the split covers exactly them', () => {
+    const listed = PINNED_CATEGORIES_ANSWER.categories.map((c) => c.key);
+    for (const key of PINNED_CALCULATOR_REQUEST.categories) expect(listed).toContain(key);
+    const { split } = PINNED_ESTIMATE_ANSWER;
+    expect(split.categories.map((c) => c.key)).toEqual([...PINNED_CALCULATOR_REQUEST.categories]);
+    expect(split.count).toBe(split.categories.length);
+    // An equal split: the weights are one share each and sum to one.
+    for (const c of split.categories) {
+      expect(c.weight).toBeCloseTo(1 / split.count, 10);
+      expect(c.models.length).toBeGreaterThan(0);
     }
+  });
+
+  it('the ceiling carries one of the three outcomes the Calculator switches on', () => {
+    const { ceiling } = PINNED_ESTIMATE_ANSWER;
+    expect(['within_ladder', 'larger_pool', 'top_ups_only']).toContain(ceiling.outcome);
+    expect(PINNED_ESTIMATE_ANSWER.version).toBe(2);
   });
 });
