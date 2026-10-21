@@ -148,14 +148,16 @@ describe('POST acceptance-evidence (register)', () => {
     expect(body.evidence.workItemId).toBe(story.id);
   });
 
-  it('a subtask whose parent is NOT a story stays unresolved → 422 not-a-story', async () => {
-    // A leaf whose parent is not a story (here: a subtask under a bug) is left
-    // as-is; the service rejects a non-story acceptance target.
-    const bug = await createTestWorkItem(fx, { kind: 'bug', title: 'a bug', parentId: story.id });
+  it('a leaf whose parent cannot own a receipt stays unresolved → 422 not-a-story', async () => {
+    // A leaf whose parent cannot own a receipt (here: a task straight under an
+    // epic — a subtask's parent always has a child, so a bug or task above one now
+    // owns the receipt, MOTIR-9209) is left as-is; the service rejects a non-story
+    // acceptance target.
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'an epic' });
     const sub = await createTestWorkItem(fx, {
-      kind: 'subtask',
-      title: 'subtask under a bug',
-      parentId: bug.id,
+      kind: 'task',
+      title: 'task under an epic',
+      parentId: epic.id,
     });
     const token = await integrationToken(fx);
     const res = await POST(
