@@ -55,7 +55,12 @@ export async function describeResumeRun(
       : null;
 
   // Decided first (§ 35.5, Panel 7): approved, then sent back, then waiting.
-  const refs: HeldGateRef[] = [...verdict.released, ...verdict.sentBack, ...verdict.waiting];
+  const refs: HeldGateRef[] = [
+    ...verdict.released,
+    ...verdict.changesRequested,
+    ...verdict.sentBack,
+    ...verdict.waiting,
+  ];
   const cards = await workItemRepository.findByIds([...new Set(refs.map((r) => r.workItemId))], tx);
   const gates: Array<ApprovalGate | null> = [];
   for (const ref of refs) gates.push(await approvalGateRepository.findById(ref.gateId, tx));

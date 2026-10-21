@@ -222,7 +222,21 @@ describe('the verdict — what a gated run answers', () => {
     expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
   });
 
-  it.each(['changes_requested', 'declined', 'overturned'] as const)(
+  it('a gate answered changes_requested releases the run to redo the work (MOTIR-9185)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await gatedCard(fx);
+    await hold(fx, runId, card, 'changes_requested');
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result).toMatchObject({
+      outcome: 'claimed',
+      resumesGated: true,
+      gates: [{ key: card.identifier, kind: 'design_result', state: 'changes_requested' }],
+    });
+  });
+
+  it.each(['declined', 'overturned'] as const)(
     'a gate %s and none approved: gate_sent_back',
     async (state) => {
       const fx = await makeWorkItemFixture();
@@ -396,7 +410,7 @@ describe('dispatch_prompt { continueFrom } on a gated run', () => {
     const awaiting = await gatedCard(fx);
     await hold(fx, awaiting.runId, awaiting.card, 'awaiting');
     const sentBack = await gatedCard(fx);
-    await hold(fx, sentBack.runId, sentBack.card, 'changes_requested');
+    await hold(fx, sentBack.runId, sentBack.card, 'declined');
 
     for (const [seed, why] of [
       [awaiting, 'gate_awaiting'],

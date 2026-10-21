@@ -360,6 +360,7 @@ async function resolveContinueFrom(
       resume: held
         ? {
             approved: held.released.map((g) => ({ key: g.key, kind: g.kind })),
+            changesRequested: held.changesRequested.map((g) => ({ key: g.key, kind: g.kind })),
             stillWaiting: [...held.waiting, ...held.sentBack].map((g) => ({
               key: g.key,
               kind: g.kind,
