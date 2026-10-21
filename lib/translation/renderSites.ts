@@ -147,4 +147,8 @@ export const WORK_CONTENT_RENDER_SITES: readonly RenderSite[] = [
     'app/(visitor)/p/[identifier]/requested-features/_components/RequestedFeaturesList.tsx',
     'a public visitor page with no member reader to translate for',
   ),
+  deferred(
+    'components/pages/WorkItemEmbedCard.tsx',
+    "the page's embedded card draws the title as the work item stores it, like the mention chip beside it; registering the page's work-item cards with the title kit is a follow-up (MOTIR-7566)",
+  ),
 ];
