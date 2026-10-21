@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
-import { AlertTriangle, FileSearch, Info } from 'lucide-react';
+import { AlertTriangle, ChevronRight, FileSearch, Info } from 'lucide-react';
 import { renderMarkdown } from '@/lib/markdown/render';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Textarea } from '@/components/ui/Textarea';
+import { cn } from '@/lib/utils/cn';
 import type { CodingConventionDTO, ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
 
 // The longest convention a person may save, in characters — the same number the
@@ -18,6 +21,20 @@ const MAX_CHARS = 65_536;
 
 const CONVENTION_URL = '/api/ai/coding-convention/convention';
 
+// The query parameter that deep-links the expanded card (MOTIR-9193).
+const REPO_PARAM = 'repo';
+const DEFAULT_KEY = '__default__';
+
+const cardKey = (c: ConventionSurfaceDTO): string => c.repoKey ?? DEFAULT_KEY;
+
+// Which card a `?repo=` value expands: the one it names, else the FIRST (an
+// unknown value falls back like an absent one, so the page never opens on N
+// closed bars).
+function resolveOpenKey(conventions: ConventionSurfaceDTO[], repo: string | null | undefined) {
+  const named = repo ? conventions.find((c) => c.repoKey === repo) : undefined;
+  return cardKey(named ?? conventions[0]!);
+}
+
 // Per-repo convention surface. A repository's convention is derived from its code
 // and auto-used (MOTIR-1660/1663), and a person with `ai:configure` can WRITE it
 // (MOTIR-9079/9082): Edit saves a new `edited` version through motir-ai, and a
@@ -25,18 +42,56 @@ const CONVENTION_URL = '/api/ai/coding-convention/convention';
 // page reads on `ai:plan` and a member sees this panel read-only (MOTIR-9173), so
 // `canEdit` is the courtesy the design asks for (Edit absent, not disabled), not
 // the gate — the server enforces it.
+//
+// The cards are an ACCORDION (MOTIR-9193/9194): at most one is expanded. The
+// expanded key lives here; every card stays mounted so a draft in Edit survives
+// its card collapsing (the body unmounts, the edit state does not).
 export function ConventionPanel({
   conventions,
   onSaved,
   canEdit = true,
+  initialRepo = null,
 }: {
   conventions: ConventionSurfaceDTO[];
   // Hands the re-read surface of the repository just saved to the island that owns
   // the set (page-state contract, case 3: a client island seeded from props).
   onSaved?: (surface: ConventionSurfaceDTO) => void;
   canEdit?: boolean;
+  // The `?repo=` the SERVER resolved for this load. A prop and not a hook read:
+  // `useSearchParams()` is empty during the server render, so a state seeded from
+  // it would paint the wrong card and hydration would keep it (MOTIR-1754).
+  initialRepo?: string | null;
 }) {
   const t = useTranslations('codeHealth');
+  const params = useSearchParams();
+  const [openKey, setOpenKey] = useState<string | null>(() =>
+    conventions.length === 0 ? null : resolveOpenKey(conventions, initialRepo),
+  );
+  // The `repo` value this panel last wrote (or read), so the effect below can tell
+  // Back/forward from its own `shallowPush`.
+  const written = useRef<string | null>(initialRepo);
+  const anchor = useRef<{ key: string; top: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const urlRepo = params?.get(REPO_PARAM) ?? null;
+  useEffect(() => {
+    if (urlRepo === written.current || conventions.length === 0) return;
+    written.current = urlRepo;
+    setOpenKey(resolveOpenKey(conventions, urlRepo));
+  }, [urlRepo, conventions]);
+
+  // Keep the pressed header where it was in the viewport: the card above it just
+  // shrank, and without this the page jumps.
+  useLayoutEffect(() => {
+    const a = anchor.current;
+    anchor.current = null;
+    if (!a || typeof window.scrollBy !== 'function') return;
+    const header = rootRef.current?.querySelector<HTMLElement>(
+      `[data-card-key="${CSS.escape(a.key)}"]`,
+    );
+    const delta = header ? header.getBoundingClientRect().top - a.top : 0;
+    if (delta !== 0) window.scrollBy(0, delta);
+  }, [openKey]);
 
   if (conventions.length === 0) {
     return (
@@ -48,14 +103,32 @@ export function ConventionPanel({
     );
   }
 
+  const toggle = (c: ConventionSurfaceDTO, headerTop: number) => {
+    const key = cardKey(c);
+    const next = openKey === key ? null : key;
+    anchor.current = { key, top: headerTop };
+    setOpenKey(next);
+    // Collapsing the open card drops the parameter; a reload then loads as the
+    // default again. Other parameters (`?section=`) are kept.
+    const q = new URLSearchParams(window.location.search);
+    const repo = next === null ? null : c.repoKey;
+    if (repo === null) q.delete(REPO_PARAM);
+    else q.set(REPO_PARAM, repo);
+    written.current = repo;
+    const query = q.toString();
+    shallowPush(query === '' ? window.location.pathname : `${window.location.pathname}?${query}`);
+  };
+
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={rootRef} className="flex flex-col gap-3">
       {conventions.map((c) => (
         <RepoConventionCard
-          key={c.repoKey ?? '__default__'}
+          key={cardKey(c)}
           convention={c}
           canEdit={canEdit}
           onSaved={onSaved}
+          open={openKey === cardKey(c)}
+          onToggle={(top) => toggle(c, top)}
         />
       ))}
     </div>
@@ -71,19 +144,30 @@ function RepoConventionCard({
   convention: c,
   canEdit,
   onSaved,
+  open,
+  onToggle,
 }: {
   convention: ConventionSurfaceDTO;
   canEdit: boolean;
   onSaved?: (surface: ConventionSurfaceDTO) => void;
+  open: boolean;
+  onToggle: (headerTop: number) => void;
 }) {
   const t = useTranslations('codeHealth');
   const format = useFormatter();
+  const uid = useId();
+  const headId = `${uid}-head`;
+  const bodyId = `${uid}-body`;
   // The latest version IS the one injected — derived or edited, auto-used. Null
   // means the repo has neither been audited nor written yet.
   const current = c.convention;
   const [state, setState] = useState<EditState>({ mode: 'read' });
   const [comparing, setComparing] = useState(false);
   const repoKey = c.repoKey;
+  const repoLabel = repoKey ?? t('convention.defaultRepo');
+  const slash = repoLabel.lastIndexOf('/');
+  const owner = slash === -1 ? '' : repoLabel.slice(0, slash + 1);
+  const name = slash === -1 ? repoLabel : repoLabel.slice(slash + 1);
 
   const startEdit = () =>
     setState({
@@ -129,100 +213,160 @@ function RepoConventionCard({
   };
 
   const editing = state.mode !== 'read';
+  // Text the person typed that exists nowhere else. An editor opened and left
+  // untouched holds nothing to lose, so it neither marks the header nor warns.
+  const dirty =
+    state.mode === 'conflict' ||
+    (state.mode === 'edit' && state.draft !== (current?.contentMd ?? ''));
   const edited = current?.authorKind === 'edited';
   const pending = edited ? current.pendingDerivedMd : null;
 
+  // Reload, closing the tab or typing a URL with a draft present raises the
+  // browser's own prompt; collapsing a card never asks (the draft is kept).
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
   return (
-    <Card
-      header={
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-(--el-text-strong)">
-              {c.repoKey ?? t('convention.defaultRepo')}
-            </span>
-            {current ? (
-              edited ? (
-                <Pill severity="info">
-                  {t('convention.versionEdited', { version: current.version })}
-                </Pill>
-              ) : (
-                <Pill status="planned">
-                  {t('convention.versionDerived', { version: current.version })}
-                </Pill>
-              )
-            ) : null}
-            {current ? (
-              <span className="text-xs text-(--el-text-secondary)">
-                {edited
-                  ? current.editedByName
-                    ? t('convention.bylineEdited', {
-                        name: current.editedByName,
-                        date: format.dateTime(new Date(current.createdAt), { dateStyle: 'medium' }),
-                      })
-                    : t('convention.bylineEditedUnknown', {
-                        date: format.dateTime(new Date(current.createdAt), { dateStyle: 'medium' }),
-                      })
-                  : t('convention.bylineDerived')}
-              </span>
-            ) : null}
-          </div>
-          {canEdit && current && !editing ? (
-            <Button variant="secondary" size="sm" onClick={startEdit}>
-              {t('convention.edit')}
-            </Button>
-          ) : null}
-        </div>
-      }
-    >
-      {state.mode === 'edit' ? (
-        <ConventionEditor
-          state={state}
-          next={(current?.version ?? 0) + 1}
-          version={current?.version ?? 0}
-          onChange={(draft) => setState({ ...state, draft, failed: false })}
-          onCancel={() => setState({ mode: 'read' })}
-          onSave={() => void save()}
-        />
-      ) : state.mode === 'conflict' ? (
-        <ConventionConflict
-          state={state}
-          onLoadTheirs={loadTheirs}
-          onKeepMine={() => setState({ ...state, copy: true })}
-        />
-      ) : current ? (
-        <div className="flex flex-col gap-4">
-          {pending ? (
-            <PendingDerived
-              current={current}
-              pending={pending}
-              comparing={comparing}
-              onToggle={() => setComparing((v) => !v)}
-            />
-          ) : null}
-          <ConventionDocument contentMd={current.contentMd} />
-          {edited ? null : <ProvenanceList provenance={current.provenance} />}
-        </div>
-      ) : (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-(--el-text-secondary)">
-            {canEdit ? t('convention.emptyWriteBody') : t('convention.noRules')}
-          </p>
-          {canEdit ? (
-            <Button variant="primary" size="sm" onClick={startEdit}>
-              {t('convention.writeFirst')}
-            </Button>
-          ) : null}
-        </div>
+    <div
+      className={cn(
+        'rounded-(--radius-card) bg-(--el-card)',
+        editing && open
+          ? 'border-2 border-(--el-accent)'
+          : open
+            ? 'border border-(--el-border-strong)'
+            : 'border border-(--el-border)',
       )}
-      {c.versions.length > 1 ? (
-        <VersionHistory versions={c.versions} currentId={current?.id ?? null} />
+    >
+      <h3 className="m-0 flex items-center gap-2 pr-(--spacing-card-padding-12)">
+        <button
+          type="button"
+          id={headId}
+          data-card-key={repoKey ?? DEFAULT_KEY}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={(e) => onToggle(e.currentTarget.getBoundingClientRect().top)}
+          className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-(--radius-card) px-(--spacing-card-padding-16) py-(--spacing-card-padding-12) text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--focus-ring-color)"
+        >
+          <ChevronRight
+            className={cn(
+              'size-4 shrink-0 text-(--el-text-secondary) transition-transform motion-reduce:transition-none',
+              open && 'rotate-90',
+            )}
+            aria-hidden
+          />
+          <span className="text-sm font-medium text-(--el-text-secondary)">
+            {owner}
+            <b className="font-semibold text-(--el-text-strong)">{name}</b>
+          </span>
+          {current ? (
+            edited ? (
+              <Pill severity="info">
+                {t('convention.versionEdited', { version: current.version })}
+              </Pill>
+            ) : (
+              <Pill status="planned">
+                {t('convention.versionDerived', { version: current.version })}
+              </Pill>
+            )
+          ) : (
+            <Pill tone="neutral">{t('convention.emptyTitle')}</Pill>
+          )}
+          {current ? (
+            <span className="text-xs text-(--el-text-secondary)">
+              {edited
+                ? current.editedByName
+                  ? t('convention.bylineEdited', {
+                      name: current.editedByName,
+                      date: format.dateTime(new Date(current.createdAt), { dateStyle: 'medium' }),
+                    })
+                  : t('convention.bylineEditedUnknown', {
+                      date: format.dateTime(new Date(current.createdAt), { dateStyle: 'medium' }),
+                    })
+                : t('convention.bylineDerived')}
+            </span>
+          ) : null}
+          {pending ? <Pill tone="awaiting">{t('convention.markerPending')}</Pill> : null}
+          {open && editing ? (
+            <Pill severity="warning">{t('convention.markerEditing')}</Pill>
+          ) : !open && dirty ? (
+            <Pill severity="warning">{t('convention.markerDraft')}</Pill>
+          ) : null}
+        </button>
+        {open && canEdit && current && !editing ? (
+          <Button variant="secondary" size="sm" onClick={startEdit}>
+            {t('convention.edit')}
+          </Button>
+        ) : null}
+      </h3>
+      {open ? (
+        <div
+          id={bodyId}
+          role="region"
+          aria-labelledby={headId}
+          className="flex flex-col gap-4 border-t border-(--el-border) p-(--spacing-card-padding)"
+        >
+          {state.mode === 'edit' ? (
+            <ConventionEditor
+              state={state}
+              repo={repoLabel}
+              repoName={name}
+              next={(current?.version ?? 0) + 1}
+              version={current?.version ?? 0}
+              onChange={(draft) => setState({ ...state, draft, failed: false })}
+              onCancel={() => setState({ mode: 'read' })}
+              onSave={() => void save()}
+            />
+          ) : state.mode === 'conflict' ? (
+            <ConventionConflict
+              state={state}
+              onLoadTheirs={loadTheirs}
+              onKeepMine={() => setState({ ...state, copy: true })}
+            />
+          ) : current ? (
+            <div className="flex flex-col gap-4">
+              {pending ? (
+                <PendingDerived
+                  current={current}
+                  pending={pending}
+                  comparing={comparing}
+                  onToggle={() => setComparing((v) => !v)}
+                />
+              ) : null}
+              <ConventionDocument contentMd={current.contentMd} />
+              {edited ? null : <ProvenanceList provenance={current.provenance} />}
+            </div>
+          ) : (
+            <div className="flex flex-col items-start gap-3">
+              <p className="text-sm text-(--el-text-secondary)">
+                {canEdit ? t('convention.emptyWriteBody') : t('convention.noRules')}
+              </p>
+              {canEdit ? (
+                <Button variant="primary" size="sm" onClick={startEdit}>
+                  {t('convention.writeFirst')}
+                </Button>
+              ) : null}
+            </div>
+          )}
+          {c.versions.length > 1 ? (
+            <VersionHistory versions={c.versions} currentId={current?.id ?? null} />
+          ) : null}
+        </div>
       ) : null}
-    </Card>
+    </div>
   );
 }
 
 function ConventionEditor({
   state,
+  repo,
+  repoName,
   next,
   version,
   onChange,
@@ -230,6 +374,8 @@ function ConventionEditor({
   onSave,
 }: {
   state: Extract<EditState, { mode: 'edit' }>;
+  repo: string;
+  repoName: string;
   next: number;
   version: number;
   onChange: (draft: string) => void;
@@ -248,17 +394,29 @@ function ConventionEditor({
       : undefined;
   return (
     <div className="flex flex-col gap-3">
+      <div
+        role="group"
+        aria-label={`${t('convention.editingBanner')} ${repo}`}
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius-card) bg-(--el-tint-sky) px-(--spacing-card-padding-16) py-(--spacing-card-padding-12) text-(--el-text-strong)"
+      >
+        <span className="font-mono text-xs uppercase tracking-wider">
+          {t('convention.editingBanner')}
+        </span>
+        <span className="font-serif text-lg font-semibold">{repo}</span>
+        <span className="text-sm">{t('convention.editingBannerSub', { next, version })}</span>
+      </div>
       <span className="text-xs font-medium text-(--el-text-secondary)">
         {t('convention.editingVersion', { version })}
       </span>
       <Textarea
-        label={t('convention.editFieldLabel')}
+        label={t('convention.editFieldLabelRepo', { repo })}
         rows={14}
         value={state.draft}
         onChange={(e) => onChange(e.target.value)}
         error={error}
-        helperText={`${t('convention.saveCreates', {
+        helperText={`${t('convention.saveCreatesRepo', {
           next,
+          repo,
           count: format.number(count),
           max: format.number(MAX_CHARS),
         })} ${t('convention.editHelper')}`}
@@ -278,7 +436,7 @@ function ConventionEditor({
           loading={state.saving}
           disabled={blank || tooLong || state.saving}
         >
-          {state.saving ? t('convention.saving') : t('convention.save')}
+          {state.saving ? t('convention.saving') : t('convention.saveTo', { name: repoName })}
         </Button>
       </div>
     </div>

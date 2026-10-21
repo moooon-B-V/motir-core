@@ -157,7 +157,12 @@ test('a repository too large to index says why on /code, then returns to normal 
       // settle that stamps the head and CLEARS the refusal (MOTIR-7130).
       await recordIndexSucceeded(ws.id, REPO_REF);
       await withSystemContext(async (tx) => {
-        await githubRepoRepository.markIndexSettled(REPO_REF, { headSha: 'e4f5a6b' }, tx);
+        await githubRepoRepository.markIndexSettled(
+          REPO_REF,
+          ws.organizationId,
+          { headSha: 'e4f5a6b' },
+          tx,
+        );
         await githubRepoRepository.clearIndexRefusal(REPO_REF, tx);
       });
       await page.reload();
