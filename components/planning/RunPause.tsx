@@ -19,6 +19,9 @@ import type { QueuedTurn } from '@/lib/hooks/usePlanChangeConversation';
 const NS = 'planningWorkspace.conversation';
 export type PauseChoice = 'start_over' | 'apply';
 
+// A `code_unsearchable` pause (MOTIR-9170) is drawn by `CodeUnsearchableBanner`, not by this
+// file's turns: its one control is the banner's own *Check again and continue*.
+
 /** The asking bubble, with its label slot filled by the glyph and the word. */
 function PlannerBubble({ testId, children }: { testId: string; children: ReactNode }) {
   const tc = useTranslations(NS);
@@ -224,9 +227,11 @@ export function PausedRunIndicator({
     ? finishing
       ? tp('finishingChoice')
       : tp('waitingChoice')
-    : finishing
-      ? tp('finishingAnswer')
-      : tc('awaitingAnswer');
+    : kind === 'code_unsearchable'
+      ? tp('waitingResume')
+      : finishing
+        ? tp('finishingAnswer')
+        : tc('awaitingAnswer');
   return (
     <div
       data-testid="plan-change-running-bar"
@@ -253,7 +258,8 @@ export function PausedRunIndicator({
   );
 }
 
-/** The pause's whole block in the thread: the planner's turn for its kind, then
+/** The pause's whole block in the thread (a `replan` or `unclear` pause — the rail draws a
+ *  `code_unsearchable` one with `CodeUnsearchableBanner` and never passes it here): the planner's turn for its kind, then
  *  its record, the reply and the reason line a refused answer leaves. */
 export function PauseThread({
   pause,

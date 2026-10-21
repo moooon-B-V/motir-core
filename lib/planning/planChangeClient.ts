@@ -537,7 +537,7 @@ export type AnswerRunPauseResponse =
       outcome: 'refused';
       code: string;
       jobStatus: string;
-      choice: 'start_over' | 'apply' | 'reply';
+      choice: 'start_over' | 'apply' | 'reply' | 'resume';
       text?: string;
       pause: PlanChangeRunPauseDto;
     };
@@ -562,7 +562,7 @@ export async function answerRunPause(
   sessionId: string,
   jobId: string,
   pauseId: string,
-  choice: 'start_over' | 'apply' | 'reply',
+  choice: 'start_over' | 'apply' | 'reply' | 'resume',
   text?: string,
   signal?: AbortSignal,
 ): Promise<AnswerRunPauseResponse> {

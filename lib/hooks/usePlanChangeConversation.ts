@@ -357,7 +357,7 @@ export interface PlanChangeConversationState {
    *  which choice, and the reply's text to hand back to the composer. */
   pauseAnswerRefusal?: {
     code: string;
-    choice: 'start_over' | 'apply' | 'reply';
+    choice: 'start_over' | 'apply' | 'reply' | 'resume';
     text?: string;
   } | null;
   /**

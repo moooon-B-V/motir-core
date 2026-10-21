@@ -60,6 +60,7 @@ export default defineConfig({
       'tests/ai/runPauseRoutes.test.ts',
       'tests/components/plan-change-mid-run-rail.test.tsx',
       'tests/components/plan-change-run-pause.test.tsx',
+      'tests/components/code-unsearchable-banner.test.tsx',
       // The pieces on their own, in every state their props can take.
       'tests/components/plan-change-mid-run-pieces.test.tsx',
       // The no-run submit path, listed so it is proven UNCHANGED beside the new one.
