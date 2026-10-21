@@ -83,7 +83,7 @@ export function WorkItemEmbedCard({ view }: { view: AvailableWorkItemRefView }) 
             >
               {initialsOf(assigneeName ?? '')}
             </span>
-            {assigneeName}
+            <span>{assigneeName}</span>
           </>
         ) : (
           <>
