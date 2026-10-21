@@ -3,13 +3,23 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { toWorkItemRefSummaryDto } from '@/lib/mappers/workItemMappers';
+import { userRepository } from '@/lib/repositories/userRepository';
+import {
+  toVisitorRefAssigneeDto,
+  toWorkItemRefAssigneeDto,
+  toWorkItemRefSummaryDto,
+} from '@/lib/mappers/workItemMappers';
 import type { WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { VisitorReadContext } from '@/lib/visitor/context';
 import { isVisitorContext } from '@/lib/visitor/readScope';
+
+/** The distinct non-null assignee ids of the rows a gate already admitted. */
+export function distinctAssigneeIds(rows: Pick<WorkItem, 'assigneeId'>[]): string[] {
+  return [...new Set(rows.map((r) => r.assigneeId).filter((id): id is string => id !== null))];
+}
 
 // Read-side resolution for work-item references (Story 5.8 · Subtask 5.8.6) —
 // the parallel of the write-side `autoRelateWorkItemMentions` (5.8.3). Given the
@@ -75,6 +85,10 @@ export async function resolveWorkItemRefSummaries(
     ctx.workspaceId,
   );
 
+  // ONE batched member read for the assignees of the rows the gate admitted —
+  // none when nothing is assigned, never one per reference.
+  const assignees = await userRepository.findByIds(distinctAssigneeIds(accessibleRows));
+
   const map: WorkItemRefMap = {};
   for (const row of rowById.values()) {
     if (!browsableProjectIds.has(row.projectId)) {
@@ -83,7 +97,12 @@ export async function resolveWorkItemRefSummaries(
       continue;
     }
     const status = statusMeta.get(row.projectId)?.get(row.status) ?? null;
-    const summary = toWorkItemRefSummaryDto(row, status);
+    const member = assignees.find((u) => u.id === row.assigneeId);
+    const summary = toWorkItemRefSummaryDto(
+      row,
+      status,
+      member ? toWorkItemRefAssigneeDto(member) : null,
+    );
     // Keyed by id (token href) AND current identifier (bare-key / title path).
     map[row.id] = summary;
     map[row.identifier] = summary;
@@ -119,11 +138,14 @@ async function resolveVisitorRefSummaries(
   );
   if (visible.length === 0) return {};
   const statusMeta = await workflowsService.getStatusMetaByProjects([projectId], workspaceId);
+  const assignees = await userRepository.findByIds(distinctAssigneeIds(visible));
   const map: WorkItemRefMap = {};
   for (const row of visible) {
+    const member = assignees.find((u) => u.id === row.assigneeId);
     const summary = toWorkItemRefSummaryDto(
       row,
       statusMeta.get(row.projectId)?.get(row.status) ?? null,
+      member ? toVisitorRefAssigneeDto(member) : null,
     );
     map[row.id] = summary;
     map[row.identifier] = summary;

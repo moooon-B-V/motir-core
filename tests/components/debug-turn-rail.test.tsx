@@ -391,6 +391,8 @@ describe('the debug turn, FINISHED — the outcome line (panels 2–4)', () => {
         kind: 'bug',
         archived: false,
         status: { key: 'in_progress', label: 'In progress', category: 'in_progress' },
+        type: null,
+        assignee: null,
       },
     };
     renderRail(state);

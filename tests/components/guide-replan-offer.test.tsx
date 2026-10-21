@@ -201,6 +201,8 @@ describe('the undecided offer', () => {
         kind: 'story',
         archived: false,
         status: null,
+        type: null,
+        assignee: null,
       },
       w5: { accessible: false, id: 'w5' },
     };

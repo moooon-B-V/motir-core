@@ -2187,6 +2187,9 @@ function outcomeChipSummary(
     kind: 'bug',
     archived: false,
     status: null,
+    // Only a key and a title crossed the settle — not carried, not "none".
+    type: null,
+    assignee: null,
   };
 }
 

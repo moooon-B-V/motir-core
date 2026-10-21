@@ -1,4 +1,4 @@
-import type { WorkItem } from '@/generated/prisma/client';
+import type { User, WorkItem } from '@/generated/prisma/client';
 import type {
   ArchivedWorkItemRow,
   WorkItemForestRow,
@@ -14,6 +14,8 @@ import type {
   WorkItemDto,
   WorkItemListItemDto,
   WorkItemSummaryDto,
+  WorkItemMentionCandidateDto,
+  WorkItemRefAssigneeDto,
   WorkItemRefSummaryDto,
   WorkItemRefStatusDto,
   WorkItemSubtreeDto,
@@ -23,6 +25,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+import { personName } from '@/lib/people/personLabel';
 import { readRecordedLanguage } from '@/lib/workItems/contentLanguage';
 
 // Prisma → DTO converters for the work-item domain. The service calls these
@@ -194,6 +197,7 @@ export function toWorkItemSummaryDto(row: WorkItem): WorkItemSummaryDto {
 export function toWorkItemRefSummaryDto(
   row: WorkItem,
   status: WorkItemRefStatusDto | null,
+  assignee: WorkItemRefAssigneeDto | null,
 ): WorkItemRefSummaryDto {
   return {
     accessible: true,
@@ -203,6 +207,39 @@ export function toWorkItemRefSummaryDto(
     kind: row.kind,
     archived: row.archivedAt != null,
     status,
+    type: row.type,
+    assignee,
+  };
+}
+
+/** A member row as a reference summary's assignee — the avatar as `toArchivedWorkItemDto` maps it. */
+export function toWorkItemRefAssigneeDto(
+  user: Pick<User, 'id' | 'name' | 'image'>,
+): WorkItemRefAssigneeDto {
+  return { id: user.id, name: user.name, image: storedAssetUrl(user.image) };
+}
+
+/**
+ * The same assignee for a VISITOR: an id and a display name, never an avatar —
+ * `image: null` here means WITHHELD (`personLabel.ts`, MOTIR-6646).
+ */
+export function toVisitorRefAssigneeDto(user: Pick<User, 'id' | 'name'>): WorkItemRefAssigneeDto {
+  return { id: user.id, name: personName(user.name), image: null };
+}
+
+/** One search row plus its resolved assignee, as the picker's candidate (see {@link WorkItemMentionCandidateDto}). */
+export function toWorkItemMentionCandidateDto(
+  row: WorkItem,
+  assignee: WorkItemRefAssigneeDto | null,
+): WorkItemMentionCandidateDto {
+  return {
+    id: row.id,
+    identifier: row.identifier,
+    title: row.title,
+    kind: row.kind,
+    status: row.status,
+    type: row.type,
+    assignee,
   };
 }
 

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/markdownEditorMentions';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useOptionalTheme } from '@/lib/contexts/theme-context';
-import type { WorkItemKindDto, WorkItemRefMap } from '@/lib/dto/workItems';
+import type { WorkItemKindDto, WorkItemRefMap, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { searchWorkItemMentions } from '@/lib/mentions/workItemMentionSearch';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import '@/components/ui/markdown-editor.css';
@@ -203,6 +203,7 @@ export function renderPageWorkItemChip(view: AvailableWorkItemRefView) {
   const summary = {
     ...view,
     kind: view.kind as WorkItemKindDto,
+    type: view.type as WorkItemTypeDto | null,
     status: view.status ? { ...view.status, key: view.status.key ?? '' } : null,
   };
   const tip = view.status ? `${view.title} · ${view.status.label}` : view.title;

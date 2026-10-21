@@ -36,6 +36,8 @@ function live(overrides: Partial<Record<string, unknown>> = {}): WorkItemRefMap 
     kind: 'story' as const,
     archived: false,
     status: { key: 'in_progress', label: 'In Progress', category: 'in_progress' as const },
+    type: null,
+    assignee: null,
     ...overrides,
   };
   return { [summary.id]: summary, [summary.identifier]: summary };

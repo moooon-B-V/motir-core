@@ -8,7 +8,7 @@ import type {
   WorkItemCandidate,
   WorkItemRefView,
 } from '../../src/editor/workItemMention';
-import { MENTION_SEARCH_DEBOUNCE_MS } from '../../src/editor/workItemMention';
+import { MENTION_SEARCH_DEBOUNCE_MS, candidateView } from '../../src/editor/workItemMention';
 import { applyUpdate, stateToMarkdown } from '../../src';
 import { MESSAGES, stateFromMarkdown } from './fixtures';
 
@@ -25,6 +25,8 @@ const CANDIDATES: WorkItemCandidate[] = [
     title: 'Issue-tree generation',
     kind: 'story',
     status: { label: 'In Progress', category: 'in_progress' },
+    type: null,
+    assignee: null,
   },
   {
     id: 'ck1404',
@@ -32,6 +34,8 @@ const CANDIDATES: WorkItemCandidate[] = [
     title: 'Render — live chip',
     kind: 'subtask',
     status: { label: 'To Do', category: 'todo' },
+    type: null,
+    assignee: null,
   },
   {
     id: 'ck742',
@@ -39,6 +43,8 @@ const CANDIDATES: WorkItemCandidate[] = [
     title: 'Issue list facet drift',
     kind: 'bug',
     status: null,
+    type: null,
+    assignee: null,
   },
 ];
 
@@ -51,6 +57,8 @@ const REFS: Record<string, WorkItemRefView> = {
     kind: 'task',
     archived: false,
     status: { key: 'in_review', label: 'In Review', category: 'in_progress' },
+    type: null,
+    assignee: null,
   },
   ckOld: {
     accessible: true,
@@ -60,6 +68,8 @@ const REFS: Record<string, WorkItemRefView> = {
     kind: 'task',
     archived: true,
     status: null,
+    type: null,
+    assignee: null,
   },
   ckHidden: { accessible: false, id: 'ckHidden' },
 };
@@ -527,5 +537,17 @@ describe('the chip', () => {
   it('draws every mention unavailable when the host passes no summaries', async () => {
     const h = await mount({ workItemRefs: undefined });
     expect(h.surface.querySelectorAll('.wi-chip.is-unavailable')).toHaveLength(4);
+  });
+});
+
+describe('candidateView', () => {
+  it('copies type and assignee field for field, and keeps null as null', () => {
+    const assignee = { id: 'u1', name: 'Ada', image: 'a.png' };
+    const withBoth = candidateView({ ...CANDIDATES[0]!, type: 'code', assignee });
+    expect(withBoth.type).toBe('code');
+    expect(withBoth.assignee).toEqual(assignee);
+    const bare = candidateView(CANDIDATES[0]!);
+    expect(bare.type).toBeNull();
+    expect(bare.assignee).toBeNull();
   });
 });

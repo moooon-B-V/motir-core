@@ -173,6 +173,8 @@ import { readerTranslationContextService } from '@/lib/services/readerTranslatio
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   toWorkItemDto,
+  toWorkItemMentionCandidateDto,
+  toWorkItemRefAssigneeDto,
   toWorkItemSummaryDto,
   toWorkItemSubtreeDto,
   toWorkItemTreeNodeDto,
@@ -277,6 +279,7 @@ import type {
   WorkItemKeysetItemDto,
   PagedArchivedWorkItemsDto,
   WorkItemRevisionDto,
+  WorkItemMentionCandidateDto,
   WorkItemSummaryDto,
   WorkItemRefMap,
   WorkItemSubtreeDto,
@@ -313,7 +316,10 @@ import { buildPathReferenceAdvisories } from '@/lib/services/pathReferenceAdviso
 import { containerCoverageFinding, unnamedTitleWords } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
-import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
+import {
+  distinctAssigneeIds,
+  resolveWorkItemRefSummaries,
+} from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { syncBodyPageLinks } from '@/lib/workItems/bodyPageLinks';
@@ -7661,6 +7667,15 @@ export const workItemsService = {
     ctx: ServiceContext,
     opts: { limit?: number; excludeIds?: string[]; projectId?: string } = {},
   ): Promise<WorkItemSummaryDto[]> {
+    return (await this.quickSearchRows(query, ctx, opts)).map(toWorkItemSummaryDto);
+  },
+
+  /** {@link quickSearch}'s gated, scoped read, as the raw rows (for callers that join more). */
+  async quickSearchRows(
+    query: string,
+    ctx: ServiceContext,
+    opts: { limit?: number; excludeIds?: string[]; projectId?: string } = {},
+  ): Promise<WorkItem[]> {
     const trimmed = query.trim();
     if (trimmed.length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
     const limit = Math.min(
@@ -7690,7 +7705,28 @@ export const workItemsService = {
         tx,
       ),
     );
-    return rows.map(toWorkItemSummaryDto);
+    return rows;
+  },
+
+  /**
+   * The picker's candidate read (`GET /api/work-items/mention-search`): the same
+   * gated, scoped {@link quickSearch} rows, each with its type and its assignee's
+   * display — resolved in ONE batched member read (none when nothing is
+   * assigned), so a card inserted this session draws all five facts before the
+   * page is read again. Its own DTO, not a widened summary (see
+   * {@link WorkItemMentionCandidateDto}).
+   */
+  async searchMentionCandidates(
+    query: string,
+    ctx: ServiceContext,
+    opts: { limit?: number; projectId?: string } = {},
+  ): Promise<WorkItemMentionCandidateDto[]> {
+    const rows = await this.quickSearchRows(query, ctx, opts);
+    const assignees = await userRepository.findByIds(distinctAssigneeIds(rows));
+    return rows.map((row) => {
+      const member = assignees.find((u) => u.id === row.assigneeId);
+      return toWorkItemMentionCandidateDto(row, member ? toWorkItemRefAssigneeDto(member) : null);
+    });
   },
 
   /**

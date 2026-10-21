@@ -49,6 +49,17 @@ export interface AvailableWorkItemRefView {
   archived: boolean;
   /** `null` when the stored status no longer resolves to a workflow status. */
   status: { key?: string; label: string; category: WorkItemStatusCategory } | null;
+  /** The work item's nature; `null` when it has none (an epic, a story, an untyped leaf). */
+  type: string | null;
+  /** The assignee's display; `null` when the item is unassigned. */
+  assignee: WorkItemAssigneeView | null;
+}
+
+/** An assignee as a card draws them — the app's `WorkItemRefAssigneeDto`, restated. */
+export interface WorkItemAssigneeView {
+  id: string;
+  name: string | null;
+  image: string | null;
 }
 
 /**
@@ -71,6 +82,10 @@ export interface WorkItemCandidate {
    * the page is reloaded; without one the chip draws no dot.
    */
   status: { label: string; category?: WorkItemStatusCategory | null } | null;
+  /** The work item's nature; `null` when it has none. */
+  type: string | null;
+  /** The assignee's display; `null` when unassigned. */
+  assignee: WorkItemAssigneeView | null;
 }
 
 /** `QUICK_SEARCH_MIN_QUERY_LENGTH` — below it the picker asks for more. */
@@ -89,6 +104,8 @@ export function candidateView(candidate: WorkItemCandidate): AvailableWorkItemRe
     kind: candidate.kind,
     archived: false,
     status: candidate.status && category ? { label: candidate.status.label, category } : null,
+    type: candidate.type,
+    assignee: candidate.assignee,
   };
 }
 

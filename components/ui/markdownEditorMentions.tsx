@@ -16,7 +16,7 @@ import { FileText, Loader2, RotateCw, TriangleAlert } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import type { IssueType } from '@/lib/issues/parentRules';
-import type { WorkItemKindDto } from '@/lib/dto/workItems';
+import type { WorkItemKindDto, WorkItemRefAssigneeDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { PageMentionCandidateDto } from '@/lib/dto/pages';
 import { formatPageToken } from '@/lib/mentions/pageRefs';
 import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
@@ -91,6 +91,11 @@ export interface WorkItemMentionCandidate {
      * page chip inserted from this row draws its dot from (MOTIR-7574). */
     category?: 'todo' | 'in_progress' | 'done';
   } | null;
+  /** The work item's nature, or `null` when it has none (MOTIR-9181) — what an
+   * embedded card draws before the page is read again. */
+  type: WorkItemTypeDto | null;
+  /** The assignee's display, or `null` for an unassigned item (MOTIR-9181). */
+  assignee: WorkItemRefAssigneeDto | null;
 }
 
 /** The host-supplied async, debounced work-item search behind the picker's
