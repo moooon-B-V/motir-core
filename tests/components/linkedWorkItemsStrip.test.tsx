@@ -305,6 +305,50 @@ describe('the picker and the write', () => {
     ).toBe(false);
   });
 
+  it('shows the write-failed line when the request itself fails, and withdraws the pending row', async () => {
+    routedFetch({
+      [READ]: () => json(dto([])),
+      [SEARCH]: () => json([{ ...cand('w1', 'PROD-1', 'Pay invoices'), status: 'todo' }]),
+      'POST /api/work-items/w1/pages': () => {
+        throw new TypeError('offline');
+      },
+    });
+    mount(true);
+    const { type } = await openPicker();
+    type();
+    fireEvent.click(await screen.findByRole('option', { name: /Pay invoices/ }));
+    expect(await screen.findByText('Couldn’t link that work item. Try again.')).toBeTruthy();
+    expect(screen.queryByTestId('linked-pending-row')).toBeNull();
+  });
+
+  it('wraps ArrowUp, follows the pointer, and draws one pending row for a pair picked twice', async () => {
+    routedFetch({
+      [READ]: () => json(dto([])),
+      [SEARCH]: () =>
+        json([
+          { ...cand('w1', 'PROD-1', 'First'), status: 'todo' },
+          { ...cand('w2', 'PROD-2', 'Second'), status: 'todo' },
+        ]),
+      'POST /api/work-items/w1/pages': () => new Promise<Response>(() => {}),
+    });
+    mount(true);
+    const first = await openPicker();
+    first.type();
+    await screen.findByRole('option', { name: /Second/ });
+    fireEvent.keyDown(first.input, { key: 'ArrowUp' });
+    expect(screen.getByRole('option', { name: /Second/ }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    fireEvent.mouseEnter(screen.getByRole('option', { name: /First/ }));
+    fireEvent.click(screen.getByRole('option', { name: /First/ }));
+    await screen.findByTestId('linked-pending-row');
+
+    const again = await openPicker();
+    again.type();
+    fireEvent.click(await screen.findByRole('option', { name: /First/ }));
+    await waitFor(() => expect(screen.getAllByTestId('linked-pending-row')).toHaveLength(1));
+  });
+
   it.each([
     [409, 'PAGE_LINK_ALREADY_LINKED', 'That work item is already linked to this page.'],
     [403, 'WORK_ITEM_EDIT_DENIED', 'You can’t change this page’s links.'],
