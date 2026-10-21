@@ -67,7 +67,7 @@ export const PAGE_EDITOR_CSS = `
 .motir-page-editor .motir-prose .wi-chip .wi-label { color: var(--el-text-secondary); text-decoration: line-through; }
 
 .motir-page-editor .motir-prose .motir-wi-embed { position: relative; margin: 12px 0; }
-.motir-page-editor .motir-prose .motir-wi-embed.ProseMirror-selectednode > .wi-card-frame {
+.motir-page-editor .motir-prose .motir-wi-embed.ProseMirror-selectednode .wi-card-frame {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: 1px;
   border-radius: var(--radius-card);
@@ -100,9 +100,9 @@ export const PAGE_EDITOR_CSS = `
   display: none;
   gap: 2px;
 }
-.motir-page-editor .motir-prose .motir-wi-embed:hover > .wi-card-cluster,
-.motir-page-editor .motir-prose .motir-wi-embed:focus-within > .wi-card-cluster,
-.motir-page-editor .motir-prose .motir-wi-embed.ProseMirror-selectednode > .wi-card-cluster { display: flex; }
+.motir-page-editor .motir-prose .motir-wi-embed:hover .wi-card-cluster,
+.motir-page-editor .motir-prose .motir-wi-embed:focus-within .wi-card-cluster,
+.motir-page-editor .motir-prose .motir-wi-embed.ProseMirror-selectednode .wi-card-cluster { display: flex; }
 .motir-page-editor .motir-prose .wi-card-menu {
   position: absolute;
   top: 100%;
