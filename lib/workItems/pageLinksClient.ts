@@ -32,3 +32,51 @@ export async function fetchWorkItemPages(
   if (!res.ok) throw new WorkItemPagesReadError(res.status);
   return (await res.json()) as WorkItemPagesDto;
 }
+
+/**
+ * A hand-link write's answer (Story MOTIR-7567 · MOTIR-9199): the HTTP status
+ * and the refusal's `code`, read from the response body — the shape
+ * `pageErrorResponse` sends — so a caller discriminates refusals without parsing
+ * prose. `code` is `null` when the body carried none (a network proxy's 502, say).
+ * A network failure rejects as `fetch` does.
+ */
+export type PageLinkWriteResult =
+  | { ok: true; status: number }
+  | { ok: false; status: number; code: string | null };
+
+async function writeResult(res: Response): Promise<PageLinkWriteResult> {
+  if (res.ok) return { ok: true, status: res.status };
+  let code: string | null = null;
+  try {
+    const body = (await res.json()) as { code?: unknown };
+    if (typeof body.code === 'string') code = body.code;
+  } catch {
+    // A non-JSON refusal has no code; the status family decides.
+  }
+  return { ok: false, status: res.status, code };
+}
+
+/** Hand-link `pageId` to `workItemId` — `POST /api/work-items/<id>/pages { pageId }`. */
+export async function linkPageToWorkItem(
+  workItemId: string,
+  pageId: string,
+): Promise<PageLinkWriteResult> {
+  const res = await fetch(`/api/work-items/${encodeURIComponent(workItemId)}/pages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ pageId }),
+  });
+  return writeResult(res);
+}
+
+/** Remove the hand link — `DELETE /api/work-items/<id>/pages/<pageId>`. */
+export async function unlinkPageFromWorkItem(
+  workItemId: string,
+  pageId: string,
+): Promise<PageLinkWriteResult> {
+  const res = await fetch(
+    `/api/work-items/${encodeURIComponent(workItemId)}/pages/${encodeURIComponent(pageId)}`,
+    { method: 'DELETE', headers: { accept: 'application/json' } },
+  );
+  return writeResult(res);
+}
