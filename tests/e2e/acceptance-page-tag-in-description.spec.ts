@@ -339,8 +339,9 @@ test('a member tags a page in a Description and another in an Explanation; the c
       const section = await openItem(page, item);
       await expect(page.getByText(UNAVAILABLE, { exact: true })).toHaveCount(1);
       await expect(chipOf(page, PAGE_B)).toHaveCount(0);
-      // The archived page's title is nowhere on the item, and its Pages row is gone.
-      await expect(page.locator('body')).not.toContainText(PAGE_B);
+      // The archived page's Pages row is served as an unavailable one (MOTIR-9203):
+      // it is no longer a link to follow, and it is not dropped from the section.
+      await expect(pagesSectionOf(page).getByTestId('pages-row-unavailable')).toHaveCount(1);
       await expect(pageRowOf(page, item.key, PAGE_B)).toHaveCount(0);
       await expect(pageRowOf(page, item.key, PAGE_A_RENAMED)).toHaveCount(1);
       await page.getByRole('main').getByText(UNAVAILABLE, { exact: true }).scrollIntoViewIfNeeded();

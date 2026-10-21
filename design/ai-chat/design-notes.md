@@ -6626,3 +6626,310 @@ polite live region so a re-check result is announced. Both controls meet the sha
 
 The mock ends with the copy table for every new string in both languages. The link reuses the
 shipped `goToCode` string unchanged.
+
+## ⭐ The Motir mark at work — the colour wave flow in the working turn's avatar (MOTIR-9212, 2026-10-21)
+
+Yue picked the **colour wave flow** for the Motir mark on 2026-10-21 (the _"B in the plan overlay"_
+direction of the logo-motion prototype). This section turns that prototype into a specification. The
+mark moves whenever Motir AI is doing something in the plan overlay, and it moves in ONE place: the
+round ink avatar of the turn Motir is working on, beside the planner notes. Implementation is
+**MOTIR-9213**.
+
+**Design system, identified first.** Read `package.json` (depends on `@motir/design-system`,
+`workspace:*`) and `app/globals.css` (line 13, `@import '@motir/design-system/theme.css'`). Both hold,
+so the verdict is **(a) ON MOTIR DESIGN**, package **v0.14.0** (`packages/design-system/package.json`).
+The project's axes are per person (`app/layout.tsx`), so the board renders at the package defaults
+(`warm-editorial` · `motir` · `motir`) and is built with the package's `renderMock`. Every part on this
+surface is product-local, so the board composes those parts' **real emitted markup**:
+
+| part                                                                          | kind                    | reason                                             |
+| ----------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------- |
+| `PlanChangeRail` (header, turn bubbles, hand-off, composer)                   | product-local component | the planning rail                                  |
+| `PlanActRecord` · `PlanNarration` (the act record and the planner notes)      | product-local component | the two blocks the working turn now holds          |
+| `BrandMark` (`@motir/brand`, re-exported by `components/brand/BrandMark.tsx`) | brand package part      | the mark this section moves; not the design system |
+
+Three colour roles are proposed for `@motir/design-system`'s `theme.css` Tier 3 (below). Nothing else
+is added to the package.
+
+**Amends, on the record:** § _⭐ Motir at work — the drafted card turns warm orange, pops and breathes,
+and one Motir mark in the rail breathes with it (MOTIR-8414)_, its sub-sections **The States table —
+total, card and mark** (the mark column), **Where the mark sits** and **Token roles** (the _the mark_
+row), and its mock [`planning-workspace--at-work.mock.html`](./planning-workspace--at-work.mock.html)
+(the rail header in panels 1 and 9). The drafted card's cue in that section is NOT changed. Neither
+mock is edited.
+
+**Asset:** [`planning-workspace--mark-at-work.mock.html`](./planning-workspace--mark-at-work.mock.html),
+a **delta** holding only the panels that change. Its live marks run the specified motion in a browser
+and stop under `prefers-reduced-motion: reduce`.
+
+| Panel | What it shows                                                                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------- |
+| 1     | A plan run writing: the header without its mark, and the working turn as ONE row with the flowing avatar   |
+| 2     | A conversation turn being read: the act record gains the row and its flowing avatar                        |
+| 3     | The reply landed: every avatar still, the row gone                                                         |
+| 4     | Stalled, reconnecting, resuming, settled: the row stays and its avatar holds the still white mark          |
+| 5     | The motion, frame by frame, at the specified energy, the rest frame first, and one live zoomed mark        |
+| 6     | The three colour roles on the ink circle, and the avatar and orb sizes, shipped and new                    |
+| 7     | Panel 1 under `prefers-reduced-motion: reduce`                                                             |
+| 8–10  | Panels 1, 5–6 and 7 in dark (a nested `data-theme="dark" data-appearance-scope` frame, so the tokens flip) |
+
+### Rendered before drawn
+
+Every rail is the emitted markup of `PlanChangeRail` at motir-core `6502714`, captured with
+`tests/helpers/renderWithIntl` → `container.innerHTML` (en), one capture per state: a plan run in its
+planning phase (`phase: 'streaming'`, the job settled, the hand-off bubble, two acts, two planner-note
+groups), a conversation turn being read (`phase: 'streaming'`, `reading` act), and a finished reply.
+What the render showed:
+
+- **The planner notes and the act record carry NO avatar.** `PlanActRecord` and `PlanNarration` render
+  as bare blocks in the transcript. The only avatar near them is the hand-off bubble's
+  (`plan-handoff`), which sits ABOVE them and only while a plan run writes. While a conversation turn
+  streams (reading the request, looking things up, matching a bug), there is no Motir avatar on screen
+  for the work at all: the act record stands alone until the reply lands.
+- **The header mark does not move while a conversation turn streams.** `PlanAtWorkMark` reads only the
+  plan's progress (`state.liveReview?.progress`), so it says _"at work"_ for a plan being written and
+  nothing for an ask, a debug turn or the conversation phase of a plan run. Both captures read
+  `data-at-work="false"`.
+- **Every Motir avatar glyph is 13 px in a 28 px disc** (`size-7`, `BrandMark size={13}`), from two
+  places in the file: `Bubble` (the opener, every reply, the hand-off) and the stale notice. The disc
+  does not clip (`overflow` is visible).
+
+### What the mark answers, and the one datum
+
+**The moving mark says _Motir AI is working on this turn now_.** It is not a progress bar and not a
+state word; the act record and the progress line carry those. It is ONE boolean, `motirAtWork`,
+derived in the rail from data it already holds, as the OR of two halves:
+
+```ts
+// A plan being written that the rail watches: a plan run in its planning phase, a
+// reopened generating plan, or an agent writing it over MCP (which has no job at all).
+const planAtWork = state.liveReview?.progress
+  ? readPlanAtWork(reading, { failing: state.liveFailing }).atWork // the retired header mark's reading
+  : false;
+// Any other job of this session streaming to this viewer: an ask turn being read, a
+// look-up, a debug turn matching or writing, a plan run still in its conversation phase.
+const turnStreaming = state.phase === 'streaming' && planRunPhase(state) !== 'planning';
+const motirAtWork = planAtWork || turnStreaming;
+```
+
+`reading` is `usePlanProgressReading(state.liveReview?.progress ?? null, { failing: state.liveFailing })`,
+the one clock the header mark used (`lib/plans/planProgress.ts`, `lib/hooks/usePlanProgressReading.ts`);
+nothing here compares a timestamp or names a state. **While a plan run is in its planning phase the
+stream does not count**, so the plan reading alone decides, because it alone knows `stalled`,
+`reconnecting` and `resuming`: a stream still open over a stalled plan does not keep the mark moving.
+Everything else Motir AI does in the overlay reaches the rail as a streaming job, and moves the mark
+for as long as it streams. Nothing running (`idle`, `review`, `deciding`, `loading`, an ended session,
+a Visitor watching no job) is `false`.
+
+**Per the shipped reading's states** (§ _Motir at work_ › _The States table_, the mark column, now on the
+avatar): `starting`, `working` (one or several live steps, on or off the viewed level) and `writing`
+**flow**; `stalled`, `reconnecting`, `resuming` and `settled` are **still**. A cue that leaves while the
+plan still generates changes nothing on the mark, because the state decides.
+
+### Where the mark sits — the working turn is ONE row
+
+The turn Motir is working on becomes ONE row with ONE avatar, `data-testid="plan-work-row"`:
+
+```tsx
+<div className="flex items-start gap-2" data-testid="plan-work-row">
+  {/* the shipped 28 px disc, now clipping */}
+  <span
+    aria-hidden="true"
+    data-testid="plan-at-work-mark"
+    data-at-work={motirAtWork}
+    className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-(--el-accent) text-(--el-accent-text)"
+  >
+    {/* the flowing mark while motirAtWork, else BrandMark variant="mark" tone="inverted" size={17} */}
+  </span>
+  <div className="flex min-w-0 flex-1 flex-col gap-3">
+    {/* the hand-off bubble (a plan run writing), then PlanActRecord, then PlanNarration */}
+  </div>
+</div>
+```
+
+- **A plan run writing** (panel 1): the hand-off bubble gives up its own avatar and becomes the row's
+  first message; the act record and the planner notes follow it in the same column. One avatar, beside
+  the planner notes.
+- **A conversation turn streaming** (panel 2): the act record is the row's only content until the
+  reply lands; then the row is gone and the reply is an ordinary `Bubble` with the still mark (panel 3).
+- **The row is drawn whenever its content is** (the hand-off, the act record or the planner notes): a
+  reopened finished plan shows its planner notes in this row, with the still mark (panel 4).
+- **Only this avatar ever moves.** The opener, every finished reply, the stale notice and every other
+  `Bubble` hold the still mark. There is at most one moving mark in the overlay.
+- **The test hooks move with the motion.** `data-testid="plan-at-work-mark"` and `data-at-work` leave the
+  header and go on this avatar, so the observable contract MOTIR-8419 walks keeps its names.
+- Not moved and not changed: the act record's own spinner on its live row (MOTIR-4069) and the canvas's
+  drafting cue (MOTIR-8414), which answer different questions.
+
+### What happens to the breathing `PlanAtWorkMark` — RETIRED
+
+The rail header returns to its shipped form before MOTIR-8417: status dot, _Motir AI_, mode chip
+(panels 1–4). **Why retire rather than keep:** two marks moving at once (the header breath and the
+avatar flow) is exactly what the direction rules out, and the avatar is the better home: it sits beside
+the work, and it also covers the conversation turns the header never did. **Why not replace in
+place:** the header is 14 px of chrome far from the notes, and the header slot carries no turn, so _"the
+turn Motir is working on"_ has no meaning there. Concretely, for MOTIR-9213: the header mount goes, the
+rule `.plan-at-work-mark[data-at-work='true'] > .brand-glyph` (the `--el-drafting` ink and the
+`canvas-cue-breathe` animation) leaves `app/globals.css`, and `PlanAtWorkMark` either becomes the
+avatar component or is deleted. `--el-drafting` stays: the canvas cue uses it.
+
+### The motion — every parameter
+
+The mark is the shipped `WAVE_BAND_PATH` (`packages/brand/src/waveBand.ts`, the single source of the
+rest shape), re-written every animation frame. `t` is seconds since the mark started flowing, `e` the
+energy, `u = x / 24` each point's position along the band, and each point `(x, y)` of the path moves to
+`(x′, y′)`. The points before the path's `L` command are the TOP edge, the `L` point and after are the
+BOTTOM edge.
+
+| parameter                            | value                                                                                                                                                                                                                                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| energy `e` while flowing             | **0.75** (the prototype's default)                                                                                                                                                                                                                                                         |
+| travelling wave, both edges together | `dy₁ = 3.4·e · sin(2.4·t − 2π·u) · (0.35 + 0.65·sin(π·u))` → amplitude **2.55** units, **2.4 rad/s**, one wavelength across the band                                                                                                                                                       |
+| left cap height `hL`                 | `max(0, 12 − 4·e + 16·e·sin(1.3·t))` → **0 to 18** units at `e = 0.75` (the band pinches to a point), **1.3 rad/s**                                                                                                                                                                        |
+| right cap height `hR`                | `max(0, 12 − 4·e + 16·e·sin(1.05·t + 2.2))` → **0 to 18** units, **1.05 rad/s**                                                                                                                                                                                                            |
+| the middle, blending the caps        | `th = 12 + (hL − 12)·(1 − u)² + (hR − 12)·u²`; each edge moves by `dy₂ = ±(th − 12) / 2` (top `−`, bottom `+`)                                                                                                                                                                             |
+| width breathing, left side in        | `L = 2.6·e · (0.5 + 0.5·sin(1.3·t))` → **0 to 1.95** units                                                                                                                                                                                                                                 |
+| width breathing, right side in       | `R = 2.6·e · (0.5 + 0.5·sin(0.9·t + 2))` → **0 to 1.95** units, **0.9 rad/s**                                                                                                                                                                                                              |
+| the point                            | `x′ = x + L·(1 − u) − R·u`, `y′ = y + dy₁ + dy₂`                                                                                                                                                                                                                                           |
+| colour: hue position                 | `c = 0.45·t` hue steps; the three roles in a loop 1 → 2 → 3 → 1 (one loop every **6.7 s**)                                                                                                                                                                                                 |
+| colour: the two gradient stops       | stop 0 at `c`, stop 1 at `c + 1` (a third of the loop ahead); between roles `i` and `i + 1` the stop is `color-mix(in srgb, role(i+1) k%, role(i))` with `k` the smoothstep of the fraction                                                                                                |
+| colour: the gradient axis            | `linearGradient`, `gradientUnits="userSpaceOnUse"`, from `(12 − 12·cos a, 12 − 12·sin a)` to `(12 + 12·cos a, 12 + 12·sin a)`, `a = 0.6·t` (one turn every **10.5 s**)                                                                                                                     |
+| starting and stopping                | `e` eases **0 → 0.75** when `motirAtWork` turns true and **0.75 → 0** when it turns false, over `2 × --transition-slow` (500 ms), ease-out; each stop is mixed toward `--el-accent-text` by `1 − e / 0.75`. At `e = 0` the path is exactly `WAVE_BAND_PATH` and the fill is `currentColor` |
+| frame source                         | `requestAnimationFrame`; paused while the tab is hidden or the avatar is off screen (an `IntersectionObserver`)                                                                                                                                                                            |
+| frame rate and flashing              | every value is a smooth sinusoid at most 2.4 rad/s (0.38 Hz); nothing flashes (well under the WCAG 2.3.1 three-per-second bound)                                                                                                                                                           |
+
+**One deliberate change to the prototype:** the cap heights are written `12 − 4·e + 16·e·sin(…)`
+where the prototype wrote `9 + 12·e·sin(…)`. At the chosen energy the two are identical, but only the
+new form is the rest shape at `e = 0`, which is what lets the mark ease in from rest and back to it
+instead of jumping on its first and last frame.
+
+**At rest the mark is the shipped glyph**, `BrandMark variant="mark" tone="inverted"`, in
+`--el-accent-text`. Every animation ends on exactly that path and fill.
+
+### The colour — three new roles
+
+The prototype painted the hues of the OPPOSITE theme onto the circle, because the raw wave hues do not
+read on the ink circle: on Motir light, `--el-showcase-wave-1` is 2.68:1 on `--el-accent`; on Motir
+dark the three are 1.88 / 2.16 / 2.84:1. A theme flip cannot be expressed as a token, and across the
+other palettes the opposite theme's hues measure as low as 1.00:1 (amber light, citrine dark), because
+there the accent IS one of the wave hues. So each role is the palette's own hue pulled toward the ink
+that already sits on the circle, the same shape as `--el-danger-on-surface`:
+
+```css
+/* theme.css Tier 3 — base (and every palette but Motir) */
+--el-mark-wave-1: color-mix(in srgb, var(--el-showcase-wave-1) 35%, var(--el-accent-text));
+--el-mark-wave-2: color-mix(in srgb, var(--el-showcase-wave-2) 35%, var(--el-accent-text));
+--el-mark-wave-3: color-mix(in srgb, var(--el-showcase-wave-3) 35%, var(--el-accent-text));
+
+/* [data-palette='motir'] and its dark block — the default palette keeps more of its hue */
+--el-mark-wave-1: color-mix(in srgb, var(--el-showcase-wave-1) 60%, var(--el-accent-text));
+--el-mark-wave-2: color-mix(in srgb, var(--el-showcase-wave-2) 60%, var(--el-accent-text));
+--el-mark-wave-3: color-mix(in srgb, var(--el-showcase-wave-3) 60%, var(--el-accent-text));
+```
+
+Measured with the token layer's own resolver (`tests/theme/paletteCascade.ts`,
+`tests/theme/colorMetrics.ts`) against `--el-accent`, the circle. The mark is a graphical object, so
+the floor is WCAG 1.4.11's **3:1**. The last column is the lowest value anywhere the mark can paint:
+each role, every srgb blend between two neighbouring roles (the gradient), and every point of the
+start/stop ramp toward the ink.
+
+| palette   | theme | circle    | roles 1 · 2 · 3               | each on the circle   | lowest anywhere |
+| --------- | ----- | --------- | ----------------------------- | -------------------- | --------------- |
+| motir     | light | `#1a1d21` | `#739ddc · #6ebcb6 · #e6a066` | 6.11 · 7.68 · 7.72   | 6.11            |
+| motir     | dark  | `#edeef0` | `#506f9f · #20726b · #9b3806` | 4.40 · 4.91 · 6.11   | 4.40            |
+| amethyst  | light | `#5645d4` | `#c4bef0 · #b4dddb · #ffc9ec` | 3.74 · 4.47 · 4.63   | 3.74            |
+| amethyst  | dark  | `#6c5cdd` | `#d1ccf6 · #b4dddb · #ffc9ec` | 3.25 · 3.40 · 3.52   | 3.25            |
+| cobalt    | light | `#3650c2` | `#bac4ee · #abd8d5 · #abd9e1` | 3.96 · 4.38 · 4.46   | 3.96            |
+| cobalt    | dark  | `#4a63cf` | `#d2dbfa · #b6e5e1 · #b6eaf1` | 3.84 · 3.84 · 4.03   | 3.82            |
+| evergreen | light | `#0c7a52` | `#aacdc0 · #aad6d5 · #d3c4f6` | 3.11 · 3.39 · 3.31   | **3.11**        |
+| evergreen | dark  | `#3ddc97` | `#195a3d · #14574b · #3e3e60` | 4.62 · 4.76 · 5.76   | 4.62            |
+| spectrum  | light | `#5a37c9` | `#c9bcf1 · #aadad5 · #f5bbdb` | 4.23 · 4.85 · 4.61   | 4.23            |
+| spectrum  | dark  | `#6d4fd6` | `#e0d6fd · #b6eae6 · #ffc7e3` | 4.07 · 4.25 · 3.89   | 3.89            |
+| amber     | light | `#f0b90b` | `#3b3315 · #154344 · #443a1e` | 6.97 · 6.07 · 6.23   | 6.07            |
+| amber     | dark  | `#fcd535` | `#5f541e · #17534e · #5b4a0f` | 5.30 · 6.17 · 6.05   | 5.30            |
+| sienna    | light | `#fa520f` | `#5b2006 · #203e32 · #5b2f07` | 3.80 · 3.49 · 3.39   | 3.39            |
+| sienna    | dark  | `#ff7a38` | `#753c1e · #2b5646 · #754409` | 3.34 · 3.21 · 3.13   | 3.13            |
+| garnet    | light | `#c30021` | `#eaa6b1 · #abd8d5 · #dcb6d2` | 3.17 · 4.04 · 3.49   | 3.17            |
+| garnet    | dark  | `#c30021` | `#ffc5cf · #b6f0e9 · #f5c6e6` | 4.23 · 4.98 · 4.22   | 4.21            |
+| citrine   | light | `#ffd02f` | `#2c222d · #101359 · #171f7e` | 10.42 · 11.37 · 9.33 | 9.33            |
+| citrine   | dark  | `#ffd02f` | `#5d4935 · #2e327d · #23297d` | 5.80 · 7.66 · 8.50   | 5.80            |
+| candy     | light | `#efbfdd` | `#82195d · #4d3a54 · #7e2671` | 5.86 · 6.43 · 5.48   | 5.48            |
+| candy     | dark  | `#ff8dcc` | `#6f3d5a · #20574c · #664068` | 3.99 · 3.93 · 3.98   | 3.93            |
+
+**Why 35% and 60%.** 35% is the largest single share of the hue for which all twenty pairs clear 3:1
+(at 36% the lowest pair falls to 3.07, at 38% to 2.92; at 35% evergreen light, 3.11, is the binding pair). Motir, the
+default palette and the one the direction was approved in, keeps far more of its colour: at 60% its
+lowest is 4.40:1, and the hues stay the blue, teal and orange of the prototype. A guard in the shape of
+`tests/theme/liveLinkInks.test.ts` should hold all twenty pairs, blends included, at 3:1 (MOTIR-9213).
+
+**No raw colour.** The three roles are `color-mix` over `--el-*` only, so a palette swap re-tints the
+mark and a theme flip re-measures it; the gradient stops at runtime are `color-mix` over the three
+roles.
+
+### Sizes
+
+| where                                                         | shipped           | now                                                                                                                  |
+| ------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| every Motir avatar in `PlanChangeRail` (28 px disc, `size-7`) | 13 px glyph (46%) | **17 px** glyph (60%), still or flowing; the disc gains `overflow-hidden`, so a swollen cap is clipped by the circle |
+| the Plan with AI orb (`PlanWithAIFab`, 56 px)                 | 26 px glyph (46%) | **34 px** glyph (60%), **still** — it does not flow                                                                  |
+
+The orb is drawn at its new size in panel 6 only as a size specimen; its fill, glow and pulse are the
+ones `ai-callout-menu.mock.html` specifies and are unchanged. **The orb does not flow**, because it
+sits outside the overlay's transcript and a second moving mark would break the one-moving-mark rule
+whenever the overlay is open. Two notes for whoever builds the orb's size: `tests/theme/orb-glyph-contrast.test.ts`
+reads the 26 px box from `ai-callout-menu.mock.html` and `PlanWithAIFab.tsx`, and its sample point (the
+gradient's first, lightest stop) is asserted to be the worst case, so the larger glyph needs no new
+contrast measurement, only the size in that guard moved with it. **MOTIR-9213's scope is the plan
+overlay only, so the orb's size is NOT in it** (see GIVES / TAKES).
+
+### Reduced motion
+
+Under `prefers-reduced-motion: reduce` **no frame loop runs** and the avatar shows the still glyph,
+`BrandMark variant="mark" tone="inverted" size={17}`, in `--el-accent-text`: no shape change, no colour
+change, no fade (panels 7 and 10). The row, its placement and the `data-at-work` attribute are the
+same, so _"Motir is working on this turn"_ is still told by the act record's words and spinner and by
+the progress line, never by the mark alone. The motion is opt-in: the still glyph is the default, and
+the flow starts only under `prefers-reduced-motion: no-preference`.
+
+### Accessibility
+
+- **The mark stays decorative.** The disc is `aria-hidden`, so is the glyph, and neither carries a
+  label. No role, no name, no live region and no tab stop is added. The transcript's `role="log"` and
+  the act record's one polite region are untouched.
+- **Nothing reads the colour for meaning.** The roles carry no state; their 3:1 floor is so the mark
+  stays visible as the mark.
+- **A moving indicator of a running process**, like the act record's spinner: it starts with the work
+  and stops with it, it honours reduced motion, and it never flashes.
+
+### Copy — a decision: no string is added
+
+The mark carries no text, and the row reuses the shipped strings of the bubbles, acts and notes it
+gathers. No key is added in either language.
+
+### GIVES / TAKES
+
+- **MOTIR-9213** (the build) — **TAKES** all of it: the `motirAtWork` derivation and its table, the
+  working-turn row and its markup, the moved test hooks, the 17 px avatar glyph and the clipping disc,
+  the motion table (including the easing in and out), the three roles in `theme.css` (base and both
+  Motir blocks) with a twenty-pair guard, the reduced-motion form, and the header mark's retirement.
+  It does **NOT** take the orb's 34 px: its scope boundary is the plan overlay. The orb's size needs
+  either a line added to MOTIR-9213 or its own card; this design names it so the decision is visible,
+  and does not make it.
+- **MOTIR-8417** (the header mark, done) — its mount and its breath are **taken away** by this section.
+- **MOTIR-8418** (the at-work coverage and integration gate, done) — `tests/helpers/atWorkStorySurface.ts`
+  names `plan-at-work-mark` / `data-at-work` as `HOOKS` and the header mount as reported; those hooks
+  survive on the avatar, and the mount moves within `PlanChangeRail.tsx`. MOTIR-9213 updates the
+  enumeration and its sweeps.
+- **MOTIR-8419** (the E2E) — **GIVES** nothing new to walk; the hook names are kept so it keeps passing
+  once its locator follows the avatar.
+- **MOTIR-8414** (the drafting cue) — the card's colour, pop and breath are unchanged.
+- **MOTIR-4069** (the act record) and **MOTIR-8060** (the planner notes) — **GIVE** the two blocks the
+  row gathers; neither block's own markup changes.
+
+### What this section does not draw
+
+- The mark's other homes: sign-in and onboarding, the top bar, loading screens, the AI callout's own
+  rows. The prototype's other three motions (draw-on, shimmer, hover ripple) are not specified here.
+- The canvas pane, the progress line and every word in the rail.
+- A new door: the overlay is opened exactly as `planning-workspace.mock.html` draws, from the Plan with
+  AI orb or the header pill.
