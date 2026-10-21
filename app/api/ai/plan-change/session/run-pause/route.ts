@@ -18,7 +18,8 @@ import {
 //                          poll while the run is paused.
 // POST { sessionId, jobId, pauseId, choice, text? }
 //        choice `start_over` | `apply` on a replan pause, `reply` (with `text`) on an
-//        unclear pause → `{ outcome: 'answered', pause, delivery }`, or, when the run
+//        unclear pause, `resume` on a code_unsearchable pause (MOTIR-9167: the code can
+//        be searched now — the run re-checks on receipt) → `{ outcome: 'answered', pause, delivery }`, or, when the run
 //        ended before the answer could be delivered,
 //        `{ outcome: 'refused', code, jobStatus, choice, text?, pause }` (the choice
 //        and reply stay recorded). A different answer to an answered pause → 409 with
@@ -81,11 +82,11 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
   const choice = bag['choice'];
-  if (choice !== 'start_over' && choice !== 'apply' && choice !== 'reply') {
+  if (choice !== 'start_over' && choice !== 'apply' && choice !== 'reply' && choice !== 'resume') {
     return NextResponse.json(
       {
         code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE',
-        error: '`choice` must be `start_over`, `apply` or `reply`.',
+        error: '`choice` must be `start_over`, `apply`, `reply` or `resume`.',
       },
       { status: 400 },
     );

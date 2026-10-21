@@ -223,3 +223,50 @@ describe('the persisted column', () => {
     expect(rows[0]!.codeUnreadable).toBeNull();
   });
 });
+
+// THE CODE-CAN'T-BE-SEARCHED FACE (Story MOTIR-9165 · MOTIR-9167): a conversation that
+// stopped because a TARGET repository has no usable code graph opened no planning job.
+// Its result carries the blocked list; the settle stores it on the assistant turn so the
+// overlay's banner survives a reload, and writes no plan.
+describe('a conversation that stopped for unsearchable code', () => {
+  const repos = [
+    { repoRef: 'acme/web', state: 'never_indexed' },
+    { repoRef: 'acme/api', state: 'paused' },
+  ];
+
+  it('settles as ONE turn carrying the blocked list, and writes no plan', async () => {
+    const jobId = await plannerRound('add payments');
+    settleJob(jobId, { codeUnsearchable: { repos } });
+    const before = await planRows();
+
+    await planChangeSessionsService.recordPlannerTurn(jobId, ctx, address);
+
+    const turns = await assistants();
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.codeUnsearchable).toEqual(repos);
+    expect(turns[0]!.codeUnreadable).toBeNull();
+    expect(turns[0]!.jobId).toBe(jobId);
+    expect(await planRows()).toEqual(before);
+  });
+
+  it('is idempotent: a replayed settle writes no second turn, and the list survives a reload', async () => {
+    const jobId = await plannerRound('add payments');
+    settleJob(jobId, { codeUnsearchable: { repos } });
+
+    await planChangeSessionsService.recordPlannerTurn(jobId, ctx, address);
+    await planChangeSessionsService.recordPlannerTurn(jobId, ctx, address);
+
+    const turns = await assistants();
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.codeUnsearchable).toEqual(repos);
+  });
+
+  it('an ordinary turn and a malformed list carry no list', async () => {
+    const jobId = await plannerRound('add payments');
+    settleJob(jobId, { codeUnsearchable: { repos: [{ repoRef: 'acme/web', state: 'stale' }] } });
+
+    await planChangeSessionsService.recordPlannerTurn(jobId, ctx, address);
+
+    for (const turn of await assistants()) expect(turn.codeUnsearchable ?? null).toBeNull();
+  });
+});

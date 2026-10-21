@@ -120,6 +120,22 @@ describe('POST /api/ai/plan-change/session/run-pause', () => {
     );
   });
 
+  it('passes a resume (a code_unsearchable pause’s answer) to the service', async () => {
+    const res = await answerPause(sessionReq('POST', { ...body, choice: 'resume' }));
+    expect(res.status).toBe(200);
+    expect(answer).toHaveBeenCalledWith(
+      { sessionId: 's1', jobId: 'job-1', pauseId: 'p1', choice: 'resume', text: null },
+      expect.objectContaining({ projectId: 'pj1' }),
+    );
+  });
+
+  it('400s a choice outside the four', async () => {
+    const res = await answerPause(sessionReq('POST', { ...body, choice: 'retry' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE' });
+    expect(answer).not.toHaveBeenCalled();
+  });
+
   it('passes a typed refusal through as a 200 body', async () => {
     const refused = {
       outcome: 'refused',
@@ -195,6 +211,34 @@ describe('POST /api/internal/ai/plan-change-run-pause', () => {
       },
       { userId: 'u1', workspaceId: 'ws1', projectId: 'pj1' },
     );
+  });
+
+  it('forwards the blocked repositories of a code_unsearchable pause to the service', async () => {
+    const repos = [{ repoRef: 'acme/web', state: 'never_indexed' }];
+    const res = await recordDoor(
+      internalReq(
+        {
+          jobId: 'job-1',
+          kind: 'code_unsearchable',
+          changeTurnIds: [],
+          repos,
+          idempotencyKey: 'k2',
+        },
+        authed(),
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(recordPause).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'code_unsearchable', repos, changeTurnIds: [] }),
+      { userId: 'u1', workspaceId: 'ws1', projectId: 'pj1' },
+    );
+  });
+
+  it('400s a kind outside the three, calling nothing', async () => {
+    const res = await recordDoor(internalReq({ ...sent, kind: 'other' }, authed()));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'PLAN_CHANGE_RUN_PAUSE_SHAPE' });
+    expect(recordPause).not.toHaveBeenCalled();
   });
 
   it('refuses a request without the service bearer or a job token, calling nothing', async () => {
