@@ -1701,3 +1701,99 @@ illustrative and carries its source on the panel. The design fixes where each fi
 never its value.
 
 **Dated note (2026-10-15, MOTIR-8636):** this design was republished unchanged for a fresh review after the re-plan its first review asked for was declined.
+
+# Amendment 2026-10-21 — the Calculator takes model CATEGORIES and offers a larger pool (MOTIR-8636)
+
+**Amends** `## Amendment 2026-10-19 — the Calculator view…`'s states and `design/billing/billing--calculator.mock.html`.
+That mock is a record of the moment it was drawn and is not edited; the panels this change alters are
+redrawn in **`design/billing/billing--calculator--categories.mock.html`**, which holds only the
+changed panels. Panels this amendment does not name (S1 the link, S4 asking, S15 unavailable, S16
+failed, S17 roles) stand as drawn there. **Why:** the design was sent back on 2026-10-19
+(`request changes`) with three points, each answered below.
+
+## What changed, point by point
+
+1. **No model is chosen.** The per-lane model multi-select is gone. Each category lists the models it
+   serves as non-interactive **example text** (`categories[].models` of the categories answer); no
+   control anywhere selects one. The notes of the earlier amendment that say a model is chosen, a
+   per-lane cap refuses, a model is dropped (S12) or a lane is empty are superseded.
+2. **One set of one to three categories, shared equally.** The input is ONE group of toggles in the
+   `TopupCard` `role="group"` / `aria-pressed` grammar. The estimate is a **range**, shared equally
+   across the chosen categories — one carries all of it, two share it 50 / 50, three share it a third
+   each — and the answer prints the split (`split.count`, `split.categories[].key`, `.weight`); **the
+   surface performs no share arithmetic** and the copy says the result is an estimate, not a quote.
+   A fourth category is refused inline at the group, because the engine takes one to three.
+3. **A larger pool is offered directly.** When the high end passes the largest REGULAR pool and the
+   answer carries a plan row above it (`ceiling.outcome = larger_pool`), the panel shows that plan —
+   its credit pool and its price for the selected cadence, as the row carries them — **instead of** a
+   regular plan plus top-ups. The pool and price are **dynamic in the sense of the answer, not of the
+   surface**: the design reads them from `recommendation.*` and never composes them. **Whether those
+   plan rows are created on the fly in Stripe or predefined there is not a design decision and the design does not depend on it** —
+   the surface is identical either way; it is the larger-pool plan story's (MOTIR-8986).
+
+## States (panel by panel — the new mock)
+
+| Panel  | State                                                                                                                            |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| S2     | Initial — nothing chosen, range empty, ask disabled with its reason                                                              |
+| S3     | Ready — two categories chosen, ask enabled, models as examples only                                                              |
+| S5     | Categories loading — skeleton group, ask impossible                                                                              |
+| S6     | Categories unavailable or failed — dashed notice and retry, ask impossible                                                       |
+| S7     | A category with no live model — (a) `categories[].models = []`, (b) `kind: empty_category`; the others stay usable; no number    |
+| S8     | Populated, regular plan — one, two and three categories with the split printed; Max ×2 on annual and monthly                     |
+| S9     | **Larger pool offered** — `ceiling.outcome = larger_pool`; pool and price as an estimate; both cadences; no stacked top-ups      |
+| S10    | Above the top band, **no larger pool** — `ceiling.outcome = top_ups_only`; the regular top and the excess met by top-ups, warned |
+| S11    | A single plan covers it / a top-up closes it — `within_ladder`; the top-up-only variant states the seat comes with an AI plan    |
+| S12    | Already holding the largest regular pool and covered by it — its own plan, no larger plan, no mid-period-upgrade line            |
+| S13    | The recommendation against the current plan — above (one line, no figure) · equal or below (none) · no plan held (none)          |
+| S14    | Refused inline, no request sent — **no category chosen**, **a fourth category**; range refusals unchanged                        |
+| `zh`   | S8 (two categories) in Chinese — the noun for the thing counted is 工作项 (work item)                                            |
+| narrow | S9 at 375px, one column                                                                                                          |
+
+S9 and S10 differ by wording **and** layout so a reader needs no arithmetic: S9 shows a dashed plan
+block titled "a larger credit pool" and no top-ups; S10 shows the regular plan, a top-up line and a
+yellow "above our largest plan" notice.
+
+## The state → field map (engine contract version 2)
+
+| Slot                                | Field                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Category names and example models   | categories answer: `categories[].key`, `categories[].models` (empty → S7a)                     |
+| The credit range                    | `credits.low` / `credits.high`; per-item figure `perItemCredits.planning` / `.running`         |
+| The split printed                   | `split.count`, `split.categories[].key`, `.weight`, `.models`                                  |
+| A regular plan                      | `recommendation.planKey` → catalog entry; `planName`; `monthlyPriceUsd`                        |
+| The larger pool                     | `ceiling.outcome = larger_pool` with `recommendation.planKey` / `planName` / `monthlyPriceUsd` |
+| Above the top band, no larger pool  | `ceiling.outcome = top_ups_only`, `ceiling.credits`, `ceiling.excessCredits`                   |
+| Inside the ladder                   | `ceiling.outcome = within_ladder`                                                              |
+| Top-up                              | `topUp.low` / `topUp.high` → `units`, `credits`, `priceUsd`                                    |
+| A category with no live model (S7b) | `kind: empty_category` → `categories`                                                          |
+| Seat lines                          | catalog `includedTrackerSeats` · `seatPlan.prices` — never from the engine                     |
+
+## Who builds what (what this amendment GIVES and TAKES)
+
+| Card                                    | Verdict | What                                                                                                                                                                               |
+| --------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-9004 (the door takes categories)  | GIVES   | the category-set request and the answer fields S8–S12 read (`split`, `ceiling.outcome`)                                                                                            |
+| MOTIR-8638 (words)                      | GIVES   | the category group's help, the split sentence, the estimate caveat and the S9 / S10 wording; TAKES `categoryHelp` and `categoryMissing` (they describe model choice and two lanes) |
+| MOTIR-8639 (the view)                   | GIVES   | one category group (no model control), the split box, the larger-pool block; TAKES the per-lane multi-select, the split-by-model cases and the dropped-model note                  |
+| MOTIR-8640 (integration)                | GIVES   | S8–S12's key → catalog resolution; a `larger_pool` plan key that the catalog does not sell is rendered from the answer, not resolved                                               |
+| MOTIR-8641 (E2E)                        | TAKES   | the two-lane request body, "one category picked for each lane" and the retired-model case; GIVES S9 and S10 as the two states a walk must tell apart                               |
+| MOTIR-8643 (the vector against the tab) | GIVES   | the recorded range, split and recommendation rendered against the category contract                                                                                                |
+
+## Colour + shape roles (additions only — the base tables above still govern)
+
+| Element                         | Role                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| Category toggle                 | `--radius-control`, `--spacing-control-x/y`; on: `--el-accent` border + `--el-surface` fill   |
+| Example models (caption)        | `--el-text-secondary` (clears AA on every surface)                                            |
+| Split box                       | `--el-surface-soft` fill, `--el-border`, `--radius-card`; chips `pill-neutral`                |
+| Larger-pool block               | the recommended-plan block with a dashed `--el-accent` border; notice on `--el-tint-lavender` |
+| "Above our largest plan" notice | `--el-tint-yellow` with `--el-warning` glyph, text `--el-text-strong`                         |
+
+## The numbers are illustrative
+
+Every figure in the new mock — ranges, pools, prices, shares, the ceiling — is illustrative and
+carries its source on the panel. The design fixes where each figure comes from, never its value.
+Pools and prices of the regular plans are read from `lib/billing/catalog.ts`, which supersedes the
+2,000 / 8,000-credit ladder, the Enterprise card and the $10-per-1,000 top-up the file's opening
+paragraph still carries.

@@ -1,0 +1,4227 @@
+<!doctype html>
+<!-- DELTA 2026-10-21 (MOTIR-8636): the Calculator takes model CATEGORIES. Amends billing--calculator.mock.html; that file is a record and is not edited. -->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · BILLING, delta — the Calculator takes categories, and offers a larger pool
+      (MOTIR-8636)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup, DELTA) — amends billing--calculator.mock.html. Story MOTIR-8381,
+      subtask MOTIR-8636 (design), revised after "request changes" on 2026-10-19.
+
+      WHAT CHANGED: the per-lane model pickers are GONE. The input is ONE set of one to three model
+      categories; each category lists the models it serves as non-interactive EXAMPLE text. The
+      estimate is split equally across the picked categories and the answer prints the split.
+      When the high end passes the largest regular pool, the answer offers a LARGER POOL plan sized
+      to the estimate. Panels the change does not touch (S1 link, S4 asking, S15 unavailable, S16
+      failed, S17 roles) are the earlier mock's and are not redrawn here.
+
+      IT COMPOSES the earlier mock's token block and primitives: Segmented for cadence, TopupCard's
+      role="group" of aria-pressed buttons for the category set, two Inputs for the range.
+      The contract is motir-ai's CalculatorEstimateDto / CalculatorEmptyCategoryDto /
+      CalculatorCategoriesDto at contract version 2 and lib/billing/catalog.ts.
+      EVERY NUMBER IS ILLUSTRATIVE; the mock performs no share arithmetic.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+        /* added by this delta — the package theme.css values for tokens the base predates */
+        --color-hairline: #e5e3df;
+        --el-overlay-scrim: #00000066;
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-input-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        /* added by this delta — the package theme.css values the Segmented primitive reads */
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --color-warning: #f08c3a;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+        --color-hairline: #2a2a2a;
+        --el-overlay-scrim: #000000a6;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .panel-label code,
+      .panel-label b {
+        text-transform: none;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .cap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+        line-height: 1.45;
+      }
+      /* the source label every figure carries (board annotation, not product copy) */
+      .srcl {
+        display: block;
+        margin-top: 3px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+      .grid-2,
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .grid-2.top,
+      .grid-3.top {
+        align-items: start;
+      }
+      .sub8 {
+        margin-top: 24px;
+      }
+      @media (max-width: 900px) {
+        .grid-2,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .clist {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .clist li {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+      }
+      .clist svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-success);
+      }
+
+      /* ── Page shell — the billing views' header grammar (PlansView) ────────── */
+      .page {
+        padding: 28px 28px 32px;
+      }
+      .vhead {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .backlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        width: fit-content;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .backlink svg {
+        width: 14px;
+        height: 14px;
+      }
+      .crumb {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .vtitle {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .vsub {
+        margin: 0;
+        max-width: 64ch;
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .card-body {
+        padding: 16px var(--spacing-card-padding) 18px;
+      }
+      .card-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        padding: 12px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .fnote {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Pills (components/ui/Pill — hue in the tint BG + --el-text-strong) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-tier {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-topup {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-active,
+      .pill-save {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn[aria-busy='true'] {
+        opacity: 0.8;
+        cursor: progress;
+      }
+      .spin {
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        flex: none;
+      }
+
+      /* ── Segmented (packages/design-system Segmented) ─────────────────────── */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-tabnav-track);
+        max-width: 100%;
+        flex-wrap: wrap;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: calc(var(--radius-btn) - 2px);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg-opt.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-opt[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        text-decoration: line-through;
+      }
+      .cadrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 18px;
+      }
+      .cadrow .srcl {
+        margin-top: 0;
+      }
+
+      /* ── The plans view (S1) — the shipped strip, intro, and plan-card row ── */
+      .strip {
+        margin-top: 18px;
+      }
+      .striprow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding-top: 14px;
+        padding-bottom: 14px;
+      }
+      .striprow .btn {
+        margin-left: auto;
+      }
+      .stript {
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .intro {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+        margin-top: 20px;
+      }
+      .introt {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .calclink {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .calclink svg {
+        width: 15px;
+        height: 15px;
+      }
+      /* board marker only: outlines what this delta adds */
+      .is-new {
+        outline: 2px dashed var(--el-highlight);
+        outline-offset: 5px;
+        border-radius: var(--radius-control);
+      }
+      .ai-grid {
+        display: flex;
+        gap: 12px;
+        margin-top: 18px;
+        overflow: hidden;
+        max-height: 150px;
+      }
+      .plan {
+        flex: 1 0 0;
+        min-width: 158px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+        background: var(--el-page-bg);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .plan.cur {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 1px var(--el-accent);
+      }
+      .pn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .price {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .amt {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .per {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .alot {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .seatl {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .seatl svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-accent-on-surface);
+      }
+
+      /* ── The Calculator view ─────────────────────────────────────────────── */
+      .calc {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+        align-items: start;
+        margin-top: 18px;
+      }
+      .calc.one {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      @media (max-width: 760px) {
+        .calc {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .fstack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .flabel {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .help,
+      .hint {
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* the range — two Inputs (FormField + Input) */
+      .range {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+      }
+      .rbox {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
+      }
+      .rlab {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .dash {
+        padding-bottom: 12px;
+        color: var(--el-text-secondary);
+      }
+      .inp {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .inp.err {
+        border-color: var(--el-danger);
+      }
+      .inp.ro {
+        border-style: dashed;
+      }
+      .ph {
+        color: var(--el-text-muted);
+      }
+      .val {
+        font-variant-numeric: tabular-nums;
+      }
+      .ferr {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-danger-on-surface);
+      }
+      .ferr svg,
+      .catnote svg,
+      .dropnote svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+      }
+      /* a lane — one {category, modelIds} selection */
+      .lane {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .lane-h {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .lname {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .lhelp {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      /* models — TopupCard's role="group" of aria-pressed buttons (multi-select) */
+      .mgroup {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .mbtn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        text-align: left;
+        cursor: pointer;
+      }
+      .mbtn.on {
+        border-color: var(--el-accent);
+        background: var(--el-surface);
+      }
+      .mbtn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .mid {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .mprov {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .catnote {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .dropnote {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 0;
+        padding: 8px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-strong);
+      }
+      .asknote {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin: 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .asknote svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      /* loading treatment — skeleton bars carry no text */
+      .skel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 4px 0 12px;
+      }
+      .skrow {
+        display: flex;
+        gap: 8px;
+      }
+      .sk {
+        display: block;
+        height: 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .sk.tall {
+        height: 30px;
+      }
+      .sk.segsk {
+        width: 260px;
+        height: var(--height-control);
+      }
+      .sk.chip {
+        width: 120px;
+        height: 44px;
+      }
+      .w40 {
+        width: 40%;
+      }
+      .w50 {
+        width: 50%;
+      }
+      .w60 {
+        width: 60%;
+      }
+      .w70 {
+        width: 70%;
+      }
+      .w80 {
+        width: 80%;
+      }
+      /* S6 — the categories read failed: one dashed notice where the pickers stand */
+      .catfail {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 16px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .catfail > svg {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .cft,
+      .ut {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .cfd {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+
+      /* the result */
+      .rph {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 36px 16px;
+        text-align: center;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .rph svg {
+        width: 28px;
+        height: 28px;
+        color: var(--el-text-faint);
+      }
+      .rph p {
+        margin: 0;
+        max-width: 36ch;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .res {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .fig {
+        min-width: 0;
+      }
+      .rlabel {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .famt {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .funit {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--el-text-secondary);
+      }
+      .perit {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .recplan {
+        padding: 14px;
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .recrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .rprice .amt {
+        font-size: 24px;
+      }
+      .oneplan {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .lrow {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .lrow > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-text-secondary);
+      }
+      .lrow .rlabel {
+        margin-bottom: 2px;
+      }
+      .lval {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .lrow.seat > svg {
+        color: var(--el-accent-on-surface);
+      }
+      .lrow.seat.off > svg {
+        color: var(--el-text-secondary);
+      }
+      .ceil,
+      .upline,
+      .unav {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .ceil p,
+      .upline p {
+        margin: 0;
+      }
+      .ceil > svg,
+      .upline > svg,
+      .unav > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+      }
+      .ceil {
+        background: var(--el-tint-yellow);
+      }
+      .ceil > svg {
+        color: var(--el-warning);
+      }
+      .upline {
+        background: var(--el-tint-sky);
+      }
+      /* S14 — the engine's own "unavailable" answer: peach, a clock, a retry */
+      .unav {
+        background: var(--el-tint-peach);
+        padding: 18px;
+      }
+      .unav > svg {
+        width: 20px;
+        height: 20px;
+      }
+      .ud {
+        margin: 0 0 10px;
+      }
+      .retained {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        margin: 12px 0 0;
+      }
+      .retained svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .mini-res {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        padding: 10px 14px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .mini-res svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+      }
+      /* S15 — ErrorState / S16 — the shipped member gate (EmptyState) */
+      .errstate,
+      .gate {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 36px var(--spacing-card-padding);
+        text-align: center;
+      }
+      .erric,
+      .gateic {
+        display: inline-flex;
+        width: 48px;
+        height: 48px;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-danger-on-surface);
+      }
+      .gateic {
+        color: var(--el-accent-on-surface);
+      }
+      .erric svg,
+      .gateic svg {
+        width: 44px;
+        height: 44px;
+      }
+      .et {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ed {
+        margin: 0 0 6px;
+        max-width: 48ch;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .rolec {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .mini-cta {
+        margin-top: 4px;
+      }
+      .aside {
+        padding: 16px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+
+      /* narrow frame */
+      .phones {
+        display: flex;
+        justify-content: center;
+      }
+      .phone {
+        width: 375px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .phone-in {
+        padding: 16px;
+      }
+      .phone .vtitle {
+        font-size: 24px;
+      }
+      /* ── additions for the category set (all --el-* / shape tokens) ───────────── */
+      .cset {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .cbtn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        flex: 1 1 160px;
+        min-width: 0;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        text-align: left;
+        cursor: pointer;
+        color: var(--el-text);
+      }
+      .cbtn.on {
+        border-color: var(--el-accent);
+        background: var(--el-surface);
+      }
+      .cbtn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .cbtn .cname {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .cbtn .cex {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text-secondary);
+      }
+      .cbtn .cex b {
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .cbtn .cnone {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .cset-skel .cbtn {
+        cursor: default;
+      }
+      .splitbox {
+        padding: 12px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .splitbox p {
+        margin: 0;
+      }
+      .splitrow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        margin-top: 8px;
+      }
+      .splitrow .pill {
+        text-transform: none;
+      }
+      .estword {
+        margin: 6px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .poolnote {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .poolnote p {
+        margin: 0;
+      }
+      .poolnote > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+      }
+      .recplan.larger {
+        border-style: dashed;
+      }
+      .tag {
+        display: inline-block;
+        margin-left: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .neighbours {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      @media (max-width: 960px) {
+        .neighbours {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>
+          Billing &amp; plans, delta — the Calculator takes model categories and offers a larger
+          pool (MOTIR-8636)
+        </h1>
+        <p>
+          Amends <code>billing--calculator.mock.html</code>: the per-lane model pickers are gone.
+          The input is <b>one set of one to three categories</b>, each listing its models as
+          <b>examples only</b>; the estimate is shared equally across them and the answer prints the
+          split; a high end past the largest regular pool is answered with
+          <b>a larger pool plan</b> from the answer, not a stack of top-ups. Fourteen panels: S2,
+          S3, S5, S6, S7, S8, S9, S10, S11, S12, S13, S14, <code>zh</code>, <code>narrow</code>.
+          <b>Every figure is illustrative</b> and carries its source on the panel; the mock does no
+          share arithmetic. Toggle dark to check <code>--el-*</code> parity.
+        </p>
+      </div>
+      <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
+    </div>
+    <div class="panel-label">
+      S2 · Initial — nothing asked. Range empty, <b>no category chosen</b> (nothing is preselected),
+      the ask disabled with its stated reason, and a result area that promises no number. Replaces
+      the earlier two-lane form: ONE set of categories, no model control.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Your usage</h3>
+                  <div class="hsub">Choose the model categories your organization uses.</div>
+                </div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Work items finished per month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">From</span>
+                      <div class="inp"><span class="ph">e.g. 40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">To</span>
+                      <div class="inp"><span class="ph">e.g. 40</span></div>
+                    </div>
+                  </div>
+                  <p class="help">A range: a quiet month and a busy month.</p>
+                </div>
+                <div class="field">
+                  <span class="flabel">Model categories — choose one to three</span>
+                  <div
+                    class="cset"
+                    role="group"
+                    aria-label="Model categories — choose one to three"
+                  >
+                    <button type="button" class="cbtn" aria-pressed="false">
+                      <span class="cname">Economy</span
+                      ><span class="cex"
+                        ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                      ></button
+                    ><button type="button" class="cbtn" aria-pressed="false">
+                      <span class="cname">Balanced</span
+                      ><span class="cex"
+                        ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                      ></button
+                    ><button type="button" class="cbtn" aria-pressed="false">
+                      <span class="cname">Flagship</span
+                      ><span class="cex"
+                        ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol, claude-opus-5-5</span
+                      >
+                    </button>
+                  </div>
+                  <p class="help">
+                    The estimate is shared equally across the categories you choose. The models
+                    listed are examples — you don’t choose one.
+                  </p>
+                  <span class="srcl"
+                    >categories from <code>GET categories</code> → <code>categories[].key</code> ·
+                    examples from <code>categories[].models</code> — text only, never an input</span
+                  >
+                </div>
+                <p class="asknote">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg> Enter a
+                  range and choose at least one category to estimate.
+                </p>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+              </div>
+              <div class="card-body">
+                <div class="rph">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                  <p>Your estimate appears here once you ask. Nothing has been calculated yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S3 · Ready to ask — a whole-number range with <code>low &lt;= high</code> and
+      <b>two categories</b> chosen. The ask is enabled. Models appear under each category as example
+      text only; there is no control that selects one.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Your usage</h3>
+                  <div class="hsub">Choose the model categories your organization uses.</div>
+                </div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Work items finished per month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">From</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">To</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                  <p class="help">A range: a quiet month and a busy month.</p>
+                </div>
+                <div class="field">
+                  <span class="flabel">Model categories — choose one to three</span>
+                  <div
+                    class="cset"
+                    role="group"
+                    aria-label="Model categories — choose one to three"
+                  >
+                    <button type="button" class="cbtn" aria-pressed="false">
+                      <span class="cname">Economy</span
+                      ><span class="cex"
+                        ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                      ></button
+                    ><button type="button" class="cbtn on" aria-pressed="true">
+                      <span class="cname">Balanced</span
+                      ><span class="cex"
+                        ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                      ></button
+                    ><button type="button" class="cbtn on" aria-pressed="true">
+                      <span class="cname">Flagship</span
+                      ><span class="cex"
+                        ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol, claude-opus-5-5</span
+                      >
+                    </button>
+                  </div>
+                  <p class="help">
+                    The estimate is shared equally across the categories you choose. The models
+                    listed are examples — you don’t choose one.
+                  </p>
+                  <span class="srcl"
+                    >categories from <code>GET categories</code> → <code>categories[].key</code> ·
+                    examples from <code>categories[].models</code> — text only, never an input</span
+                  >
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+              </div>
+              <div class="card-body">
+                <div class="rph">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                  <p>Your estimate appears here once you ask. Nothing has been calculated yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S5 · Categories loading — the categories read is in flight. The group is drawn as skeleton
+      buttons and the ask is impossible, not enabled beside a group with nothing in it.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Your usage</h3>
+                  <div class="hsub">Choose the model categories your organization uses.</div>
+                </div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Work items finished per month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">From</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">To</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                  <p class="help">A range: a quiet month and a busy month.</p>
+                </div>
+                <div class="field">
+                  <span class="flabel">Model categories — choose one to three</span>
+                  <div
+                    class="cset cset-skel"
+                    role="group"
+                    aria-label="Model categories — choose one to three"
+                  >
+                    <button type="button" class="cbtn" disabled aria-busy="true">
+                      <span class="sk w50"></span><span class="sk w80"></span></button
+                    ><button type="button" class="cbtn" disabled aria-busy="true">
+                      <span class="sk w50"></span><span class="sk w80"></span></button
+                    ><button type="button" class="cbtn" disabled aria-busy="true">
+                      <span class="sk w50"></span><span class="sk w80"></span>
+                    </button>
+                  </div>
+                  <p class="help">
+                    The estimate is shared equally across the categories you choose. The models
+                    listed are examples — you don’t choose one.
+                  </p>
+                  <span class="srcl"
+                    >categories from <code>GET categories</code> → <code>categories[].key</code> ·
+                    examples from <code>categories[].models</code> — text only, never an input</span
+                  >
+                </div>
+                <p class="asknote">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg> The
+                  categories are loading. You can ask once they appear.
+                </p>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+              </div>
+              <div class="card-body">
+                <div class="rph">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                  <p>Your estimate appears here once you ask. Nothing has been calculated yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S6 · Categories unavailable or failed — the categories read answered as unavailable
+      (<code>CALCULATOR_UNAVAILABLE</code>) or failed outright. One dashed notice in the form with a
+      retry; the ask stays impossible. Distinct from the estimate-unavailable panel (the earlier
+      mock’s S14).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Your usage</h3>
+                  <div class="hsub">Choose the model categories your organization uses.</div>
+                </div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">Work items finished per month</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">From</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">To</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                  <p class="help">A range: a quiet month and a busy month.</p>
+                </div>
+                <div class="field">
+                  <span class="flabel">Model categories — choose one to three</span>
+                  <div class="catfail">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert-tri" /></svg>
+                    <div>
+                      <p class="ut">We couldn’t load the model categories</p>
+                      <p class="cfd">The estimate needs them. Nothing was calculated.</p>
+                      <button type="button" class="btn btn-secondary btn-sm">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-refresh" /></svg>
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                  <p class="help">
+                    The estimate is shared equally across the categories you choose. The models
+                    listed are examples — you don’t choose one.
+                  </p>
+                  <span class="srcl"
+                    >categories from <code>GET categories</code> → <code>categories[].key</code> ·
+                    examples from <code>categories[].models</code> — text only, never an input</span
+                  >
+                </div>
+                <p class="asknote">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg> Retry to
+                  load the categories, then ask.
+                </p>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> Estimate
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div><h3>Estimate</h3></div>
+              </div>
+              <div class="card-body">
+                <div class="rph">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                  <p>Your estimate appears here once you ask. Nothing has been calculated yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S7 · A category with no live model — two producers, ONE treatment. (a)
+      <code>GET categories</code> lists the category with an empty <code>models</code>; (b) the
+      estimate answers <code>kind: &quot;empty_category&quot;</code> naming <code>categories</code>.
+      The category reads as unavailable and cannot be chosen; the OTHER categories stay usable on
+      the same panel; no number appears anywhere.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="grid-2 top">
+            <div>
+              <p class="cap">a · from <code>categories[].models = []</code></p>
+              <div class="calc one">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Your usage</h3>
+                      <div class="hsub">Choose the model categories your organization uses.</div>
+                    </div>
+                  </div>
+                  <div class="card-body fstack">
+                    <div class="field">
+                      <span class="flabel">Work items finished per month</span>
+                      <div class="range">
+                        <div class="rbox">
+                          <span class="rlab">From</span>
+                          <div class="inp"><span class="val">40</span></div>
+                        </div>
+                        <span class="dash" aria-hidden="true">–</span>
+                        <div class="rbox">
+                          <span class="rlab">To</span>
+                          <div class="inp"><span class="val">60</span></div>
+                        </div>
+                      </div>
+                      <p class="help">A range: a quiet month and a busy month.</p>
+                    </div>
+                    <div class="field">
+                      <span class="flabel">Model categories — choose one to three</span>
+                      <div
+                        class="cset"
+                        role="group"
+                        aria-label="Model categories — choose one to three"
+                      >
+                        <button type="button" class="cbtn" aria-pressed="false" disabled>
+                          <span class="cname">Economy</span
+                          ><span class="cnone"
+                            >No live model right now — can’t be chosen.</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Balanced</span
+                          ><span class="cex"
+                            ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                          ></button
+                        ><button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Flagship</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol,
+                            claude-opus-5-5</span
+                          >
+                        </button>
+                      </div>
+                      <p class="help">
+                        The estimate is shared equally across the categories you choose. The models
+                        listed are examples — you don’t choose one.
+                      </p>
+                      <span class="srcl"
+                        >categories from <code>GET categories</code> →
+                        <code>categories[].key</code> · examples from
+                        <code>categories[].models</code> — text only, never an input</span
+                      >
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      Estimate
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">
+                b · from <code>kind: empty_category</code> →
+                <code>categories: [&quot;economy&quot;]</code>
+              </p>
+              <div class="calc one">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Your usage</h3>
+                      <div class="hsub">Choose the model categories your organization uses.</div>
+                    </div>
+                  </div>
+                  <div class="card-body fstack">
+                    <div class="field">
+                      <span class="flabel">Work items finished per month</span>
+                      <div class="range">
+                        <div class="rbox">
+                          <span class="rlab">From</span>
+                          <div class="inp"><span class="val">40</span></div>
+                        </div>
+                        <span class="dash" aria-hidden="true">–</span>
+                        <div class="rbox">
+                          <span class="rlab">To</span>
+                          <div class="inp"><span class="val">60</span></div>
+                        </div>
+                      </div>
+                      <p class="help">A range: a quiet month and a busy month.</p>
+                    </div>
+                    <div class="field">
+                      <span class="flabel">Model categories — choose one to three</span>
+                      <div
+                        class="cset"
+                        role="group"
+                        aria-label="Model categories — choose one to three"
+                      >
+                        <button type="button" class="cbtn" aria-pressed="false" disabled>
+                          <span class="cname">Economy</span
+                          ><span class="cnone"
+                            >No live model right now — can’t be chosen.</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Balanced</span
+                          ><span class="cex"
+                            ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                          ></button
+                        ><button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Flagship</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol,
+                            claude-opus-5-5</span
+                          >
+                        </button>
+                      </div>
+                      <p class="help">
+                        The estimate is shared equally across the categories you choose. The models
+                        listed are examples — you don’t choose one.
+                      </p>
+                      <span class="srcl"
+                        >categories from <code>GET categories</code> →
+                        <code>categories[].key</code> · examples from
+                        <code>categories[].models</code> — text only, never an input</span
+                      >
+                    </div>
+                    <p class="asknote">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                      Economy has no live model right now, so it can’t be part of an estimate.
+                      Choose another category to continue.
+                    </p>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      Estimate
+                    </button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div><h3>Estimate</h3></div>
+                  </div>
+                  <div class="card-body">
+                    <div class="rph">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                      <p>No number — a category you asked for has no live model.</p>
+                    </div>
+                    <span class="srcl"
+                      ><code>categories</code> (the answer names them) — no <code>credits</code>, no
+                      <code>recommendation</code></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S8 · Populated — a regular plan is the recommendation. Drawn THREE times so the split is
+      visible: <b>one</b> category (the whole estimate), <b>two</b> (shared equally),
+      <b>three</b> (shared equally). Every share is printed from the answer
+      (<code>split.categories[].weight</code>) — the surface does no arithmetic. “Max ×2” keeps its
+      catalog name on both cadences below.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="neighbours">
+            <div>
+              <p class="cap">a · one category · <code>split.count = 1</code></p>
+              <div class="calc one">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Your usage</h3>
+                      <div class="hsub">Choose the model categories your organization uses.</div>
+                    </div>
+                  </div>
+                  <div class="card-body fstack">
+                    <div class="field">
+                      <span class="flabel">Work items finished per month</span>
+                      <div class="range">
+                        <div class="rbox">
+                          <span class="rlab">From</span>
+                          <div class="inp"><span class="val">40</span></div>
+                        </div>
+                        <span class="dash" aria-hidden="true">–</span>
+                        <div class="rbox">
+                          <span class="rlab">To</span>
+                          <div class="inp"><span class="val">60</span></div>
+                        </div>
+                      </div>
+                      <p class="help">A range: a quiet month and a busy month.</p>
+                    </div>
+                    <div class="field">
+                      <span class="flabel">Model categories — choose one to three</span>
+                      <div
+                        class="cset"
+                        role="group"
+                        aria-label="Model categories — choose one to three"
+                      >
+                        <button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Economy</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                          ></button
+                        ><button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Balanced</span
+                          ><span class="cex"
+                            ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                          ></button
+                        ><button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Flagship</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol,
+                            claude-opus-5-5</span
+                          >
+                        </button>
+                      </div>
+                      <p class="help">
+                        The estimate is shared equally across the categories you choose. The models
+                        listed are examples — you don’t choose one.
+                      </p>
+                      <span class="srcl"
+                        >categories from <code>GET categories</code> →
+                        <code>categories[].key</code> · examples from
+                        <code>categories[].models</code> — text only, never an input</span
+                      >
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      Estimate
+                    </button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Estimate</h3>
+                      <div class="hsub">Annual billing — the page cadence</div>
+                    </div>
+                    <span class="pill pill-neutral">Illustrative figures</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="res">
+                      <div class="fig">
+                        <p class="rlabel">Your organization’s credits per month</p>
+                        <p class="famt">5,600 – 8,400 <span class="funit">credits / mo</span></p>
+                        <span class="srcl"
+                          ><code>credits.low</code> / <code>credits.high</code></span
+                        >
+                        <p class="estword">
+                          An estimate, not a quote — a range, not an exact figure.
+                        </p>
+                        <p class="perit">About 120 credits per work item to plan and 160 to run</p>
+                        <span class="srcl"
+                          ><code>perItemCredits.planning</code> / <code>.running</code></span
+                        >
+                      </div>
+                      <div class="splitbox">
+                        <p class="rlabel">How this estimate is shared</p>
+                        <p class="estword">
+                          This estimate uses one category, so it carries all of it.
+                        </p>
+                        <div class="splitrow">
+                          <span class="pill pill-neutral">Economy · 100%</span>
+                        </div>
+                        <span class="srcl"
+                          ><code>split.count</code> · <code>split.categories[].key</code> ·
+                          <code>split.categories[].weight</code> — printed as the answer gives
+                          them</span
+                        >
+                      </div>
+                      <div class="recplan">
+                        <p class="rlabel">Recommended plan</p>
+                        <div class="recrow">
+                          <span class="pill pill-tier"
+                            ><svg viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkle" />
+                            </svg>
+                            Pro</span
+                          ><span class="rprice"
+                            ><span class="amt">$600</span> <span class="per">/ yr</span></span
+                          >
+                        </div>
+                        <p class="oneplan">One plan for the whole organization — not per member.</p>
+                        <span class="srcl"
+                          ><code>recommendation.planKey</code> → catalog <code>pro</code> ·
+                          <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                        >
+                      </div>
+                      <div class="lrow">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                        <div>
+                          <p class="rlabel">Top-up on top of the plan</p>
+                          <p class="lval">0 – 1 × 1,000 credits · $0 – $5 one-time</p>
+                          <span class="srcl"
+                            ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                            <code>credits</code> · <code>priceUsd</code></span
+                          >
+                        </div>
+                      </div>
+                      <div class="lrow seat">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                        <div>
+                          <p class="lval">
+                            1 Motir seat included with an AI plan · each further member $40 / member
+                            / yr
+                          </p>
+                          <span class="srcl"
+                            >catalog <code>pro.includedTrackerSeats</code> ·
+                            <code>seatPlan.prices.annual</code> — never × member count, never added
+                            to the plan price</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      See Pro on the plans view
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">b · two categories · <code>split.count = 2</code></p>
+              <div class="calc one">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Your usage</h3>
+                      <div class="hsub">Choose the model categories your organization uses.</div>
+                    </div>
+                  </div>
+                  <div class="card-body fstack">
+                    <div class="field">
+                      <span class="flabel">Work items finished per month</span>
+                      <div class="range">
+                        <div class="rbox">
+                          <span class="rlab">From</span>
+                          <div class="inp"><span class="val">40</span></div>
+                        </div>
+                        <span class="dash" aria-hidden="true">–</span>
+                        <div class="rbox">
+                          <span class="rlab">To</span>
+                          <div class="inp"><span class="val">60</span></div>
+                        </div>
+                      </div>
+                      <p class="help">A range: a quiet month and a busy month.</p>
+                    </div>
+                    <div class="field">
+                      <span class="flabel">Model categories — choose one to three</span>
+                      <div
+                        class="cset"
+                        role="group"
+                        aria-label="Model categories — choose one to three"
+                      >
+                        <button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Economy</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Balanced</span
+                          ><span class="cex"
+                            ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Flagship</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol,
+                            claude-opus-5-5</span
+                          >
+                        </button>
+                      </div>
+                      <p class="help">
+                        The estimate is shared equally across the categories you choose. The models
+                        listed are examples — you don’t choose one.
+                      </p>
+                      <span class="srcl"
+                        >categories from <code>GET categories</code> →
+                        <code>categories[].key</code> · examples from
+                        <code>categories[].models</code> — text only, never an input</span
+                      >
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      Estimate
+                    </button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Estimate</h3>
+                      <div class="hsub">Annual billing — the page cadence</div>
+                    </div>
+                    <span class="pill pill-neutral">Illustrative figures</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="res">
+                      <div class="fig">
+                        <p class="rlabel">Your organization’s credits per month</p>
+                        <p class="famt">11,200 – 16,800 <span class="funit">credits / mo</span></p>
+                        <span class="srcl"
+                          ><code>credits.low</code> / <code>credits.high</code></span
+                        >
+                        <p class="estword">
+                          An estimate, not a quote — a range, not an exact figure.
+                        </p>
+                        <p class="perit">About 120 credits per work item to plan and 160 to run</p>
+                        <span class="srcl"
+                          ><code>perItemCredits.planning</code> / <code>.running</code></span
+                        >
+                      </div>
+                      <div class="splitbox">
+                        <p class="rlabel">How this estimate is shared</p>
+                        <p class="estword">Shared equally across the 2 categories you chose.</p>
+                        <div class="splitrow">
+                          <span class="pill pill-neutral">Balanced · 50%</span
+                          ><span class="pill pill-neutral">Flagship · 50%</span>
+                        </div>
+                        <span class="srcl"
+                          ><code>split.count</code> · <code>split.categories[].key</code> ·
+                          <code>split.categories[].weight</code> — printed as the answer gives
+                          them</span
+                        >
+                      </div>
+                      <div class="recplan">
+                        <p class="rlabel">Recommended plan</p>
+                        <div class="recrow">
+                          <span class="pill pill-tier"
+                            ><svg viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkle" />
+                            </svg>
+                            Pro</span
+                          ><span class="rprice"
+                            ><span class="amt">$600</span> <span class="per">/ yr</span></span
+                          >
+                        </div>
+                        <p class="oneplan">One plan for the whole organization — not per member.</p>
+                        <span class="srcl"
+                          ><code>recommendation.planKey</code> → catalog <code>pro</code> ·
+                          <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                        >
+                      </div>
+                      <div class="lrow">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                        <div>
+                          <p class="rlabel">Top-up on top of the plan</p>
+                          <p class="lval">0 – 2 × 1,000 credits · $0 – $10 one-time</p>
+                          <span class="srcl"
+                            ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                            <code>credits</code> · <code>priceUsd</code></span
+                          >
+                        </div>
+                      </div>
+                      <div class="lrow seat">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                        <div>
+                          <p class="lval">
+                            1 Motir seat included with an AI plan · each further member $40 / member
+                            / yr
+                          </p>
+                          <span class="srcl"
+                            >catalog <code>pro.includedTrackerSeats</code> ·
+                            <code>seatPlan.prices.annual</code> — never × member count, never added
+                            to the plan price</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      See Pro on the plans view
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">c · three categories · <code>split.count = 3</code></p>
+              <div class="calc one">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Your usage</h3>
+                      <div class="hsub">Choose the model categories your organization uses.</div>
+                    </div>
+                  </div>
+                  <div class="card-body fstack">
+                    <div class="field">
+                      <span class="flabel">Work items finished per month</span>
+                      <div class="range">
+                        <div class="rbox">
+                          <span class="rlab">From</span>
+                          <div class="inp"><span class="val">40</span></div>
+                        </div>
+                        <span class="dash" aria-hidden="true">–</span>
+                        <div class="rbox">
+                          <span class="rlab">To</span>
+                          <div class="inp"><span class="val">60</span></div>
+                        </div>
+                      </div>
+                      <p class="help">A range: a quiet month and a busy month.</p>
+                    </div>
+                    <div class="field">
+                      <span class="flabel">Model categories — choose one to three</span>
+                      <div
+                        class="cset"
+                        role="group"
+                        aria-label="Model categories — choose one to three"
+                      >
+                        <button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Economy</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Balanced</span
+                          ><span class="cex"
+                            ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Flagship</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol,
+                            claude-opus-5-5</span
+                          >
+                        </button>
+                      </div>
+                      <p class="help">
+                        The estimate is shared equally across the categories you choose. The models
+                        listed are examples — you don’t choose one.
+                      </p>
+                      <span class="srcl"
+                        >categories from <code>GET categories</code> →
+                        <code>categories[].key</code> · examples from
+                        <code>categories[].models</code> — text only, never an input</span
+                      >
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      Estimate
+                    </button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Estimate</h3>
+                      <div class="hsub">Annual billing — the page cadence</div>
+                    </div>
+                    <span class="pill pill-neutral">Illustrative figures</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="res">
+                      <div class="fig">
+                        <p class="rlabel">Your organization’s credits per month</p>
+                        <p class="famt">18,000 – 27,000 <span class="funit">credits / mo</span></p>
+                        <span class="srcl"
+                          ><code>credits.low</code> / <code>credits.high</code></span
+                        >
+                        <p class="estword">
+                          An estimate, not a quote — a range, not an exact figure.
+                        </p>
+                        <p class="perit">About 120 credits per work item to plan and 160 to run</p>
+                        <span class="srcl"
+                          ><code>perItemCredits.planning</code> / <code>.running</code></span
+                        >
+                      </div>
+                      <div class="splitbox">
+                        <p class="rlabel">How this estimate is shared</p>
+                        <p class="estword">Shared equally across the 3 categories you chose.</p>
+                        <div class="splitrow">
+                          <span class="pill pill-neutral">Economy · 33%</span
+                          ><span class="pill pill-neutral">Balanced · 33%</span
+                          ><span class="pill pill-neutral">Flagship · 33%</span>
+                        </div>
+                        <span class="srcl"
+                          ><code>split.count</code> · <code>split.categories[].key</code> ·
+                          <code>split.categories[].weight</code> — printed as the answer gives
+                          them</span
+                        >
+                      </div>
+                      <div class="recplan">
+                        <p class="rlabel">Recommended plan</p>
+                        <div class="recrow">
+                          <span class="pill pill-tier"
+                            ><svg viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkle" />
+                            </svg>
+                            Max</span
+                          ><span class="rprice"
+                            ><span class="amt">$1,200</span> <span class="per">/ yr</span></span
+                          >
+                        </div>
+                        <p class="oneplan">One plan for the whole organization — not per member.</p>
+                        <span class="srcl"
+                          ><code>recommendation.planKey</code> → catalog <code>max</code> ·
+                          <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                        >
+                      </div>
+                      <div class="lrow">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                        <div>
+                          <p class="rlabel">Top-up on top of the plan</p>
+                          <p class="lval">0 – 3 × 1,000 credits · $0 – $15 one-time</p>
+                          <span class="srcl"
+                            ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                            <code>credits</code> · <code>priceUsd</code></span
+                          >
+                        </div>
+                      </div>
+                      <div class="lrow seat">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                        <div>
+                          <p class="lval">
+                            1 Motir seat included with an AI plan · each further member $40 / member
+                            / yr
+                          </p>
+                          <span class="srcl"
+                            >catalog <code>max.includedTrackerSeats</code> ·
+                            <code>seatPlan.prices.annual</code> — never × member count, never added
+                            to the plan price</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary">
+                      See Max on the plans view
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="grid-2 top sub8">
+            <div>
+              <p class="cap">d · <code>planKey: max_x2</code> · annual</p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Annual billing</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">44,000 – 58,000 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="splitbox">
+                      <p class="rlabel">How this estimate is shared</p>
+                      <p class="estword">Shared equally across the 2 categories you chose.</p>
+                      <div class="splitrow">
+                        <span class="pill pill-neutral">Balanced · 50%</span
+                        ><span class="pill pill-neutral">Flagship · 50%</span>
+                      </div>
+                      <span class="srcl"
+                        ><code>split.count</code> · <code>split.categories[].key</code> ·
+                        <code>split.categories[].weight</code> — printed as the answer gives
+                        them</span
+                      >
+                    </div>
+                    <div class="recplan">
+                      <p class="rlabel">Recommended plan</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          Max ×2</span
+                        ><span class="rprice"
+                          ><span class="amt">$2,400</span> <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <p class="oneplan">One plan for the whole organization — not per member.</p>
+                      <span class="srcl"
+                        ><code>recommendation.planKey</code> → catalog <code>max_x2</code> ·
+                        <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                      >
+                    </div>
+                    <div class="lrow">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                      <div>
+                        <p class="rlabel">Top-up on top of the plan</p>
+                        <p class="lval">0 – 0 × 1,000 credits · $0</p>
+                        <span class="srcl"
+                          ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                          <code>credits</code> · <code>priceUsd</code></span
+                        >
+                      </div>
+                    </div>
+                    <div class="lrow seat">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                      <div>
+                        <p class="lval">
+                          1 Motir seat included with an AI plan · each further member $40 / member /
+                          yr
+                        </p>
+                        <span class="srcl"
+                          >catalog <code>max_x2.includedTrackerSeats</code> ·
+                          <code>seatPlan.prices.annual</code> — never × member count, never added to
+                          the plan price</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button type="button" class="btn btn-primary">
+                    See Max ×2 on the plans view
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">e · <code>planKey: max_x2</code> · monthly</p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Monthly billing</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">44,000 – 58,000 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="splitbox">
+                      <p class="rlabel">How this estimate is shared</p>
+                      <p class="estword">Shared equally across the 2 categories you chose.</p>
+                      <div class="splitrow">
+                        <span class="pill pill-neutral">Balanced · 50%</span
+                        ><span class="pill pill-neutral">Flagship · 50%</span>
+                      </div>
+                      <span class="srcl"
+                        ><code>split.count</code> · <code>split.categories[].key</code> ·
+                        <code>split.categories[].weight</code> — printed as the answer gives
+                        them</span
+                      >
+                    </div>
+                    <div class="recplan">
+                      <p class="rlabel">Recommended plan</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          Max ×2</span
+                        ><span class="rprice"
+                          ><span class="amt">$300</span> <span class="per">/ mo</span></span
+                        >
+                      </div>
+                      <p class="oneplan">One plan for the whole organization — not per member.</p>
+                      <span class="srcl"
+                        ><code>recommendation.planKey</code> → catalog <code>max_x2</code> ·
+                        <code>planName</code> · <code>monthlyPriceUsd</code> (monthly)</span
+                      >
+                    </div>
+                    <div class="lrow">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                      <div>
+                        <p class="rlabel">Top-up on top of the plan</p>
+                        <p class="lval">0 – 0 × 1,000 credits · $0</p>
+                        <span class="srcl"
+                          ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                          <code>credits</code> · <code>priceUsd</code></span
+                        >
+                      </div>
+                    </div>
+                    <div class="lrow seat">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                      <div>
+                        <p class="lval">
+                          1 Motir seat included with an AI plan · each further member $5 / member /
+                          mo
+                        </p>
+                        <span class="srcl"
+                          >catalog <code>max_x2.includedTrackerSeats</code> ·
+                          <code>seatPlan.prices.monthly</code> — never × member count, never added
+                          to the plan price</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button type="button" class="btn btn-primary">
+                    See Max ×2 on the plans view
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S9 · The larger pool offered — <code>ceiling.outcome = larger_pool</code>. The high end passes
+      the largest regular pool and the answer carries a plan row above it: the panel names that
+      plan, gives <b>its credit pool and its price for the selected cadence</b>, and presents both
+      as an estimate beside the range. <b>No “plus N top-ups”</b> appears, and no regular-ladder
+      plan is drawn as the answer. Both cadences. The plan’s own card is the larger-pool design
+      card’s; this is only the result slot.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="grid-2 top">
+            <div>
+              <p class="cap">a · annual</p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Annual billing</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">48,000 – 96,000 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="splitbox">
+                      <p class="rlabel">How this estimate is shared</p>
+                      <p class="estword">Shared equally across the 2 categories you chose.</p>
+                      <div class="splitrow">
+                        <span class="pill pill-neutral">Balanced · 50%</span
+                        ><span class="pill pill-neutral">Flagship · 50%</span>
+                      </div>
+                      <span class="srcl"
+                        ><code>split.count</code> · <code>split.categories[].key</code> ·
+                        <code>split.categories[].weight</code> — printed as the answer gives
+                        them</span
+                      >
+                    </div>
+                    <div class="recplan larger">
+                      <p class="rlabel">Recommended plan — a larger credit pool</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          96,000 credits / mo</span
+                        ><span class="rprice"
+                          ><span class="amt">$3,600</span> <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <p class="oneplan">
+                        One plan for the whole organization — not per member. Sized to your
+                        estimate.
+                      </p>
+                      <p class="estword">
+                        The pool and the price are an estimate, exactly as the range beside them is
+                        — the plan you can buy is confirmed on the plans view.
+                      </p>
+                      <span class="srcl"
+                        ><code>ceiling.outcome = larger_pool</code> ·
+                        <code>recommendation.planKey</code> / <code>planName</code> /
+                        <code>monthlyPriceUsd</code> (annual) — the plan row’s own pool and price;
+                        the pool is the row’s allotment, never composed in the surface</span
+                      >
+                    </div>
+                    <div class="poolnote">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                      <p>
+                        This is a larger pool than our regular plans offer, sized to your estimate.
+                      </p>
+                    </div>
+                    <span class="srcl"
+                      ><code>ceiling.credits = 60,000</code> (the largest REGULAR pool, from the
+                      answer) · <code>ceiling.exceeded = true</code> ·
+                      <code>ceiling.outcome = larger_pool</code></span
+                    >
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button type="button" class="btn btn-primary">
+                    See this plan on the plans view
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">b · monthly</p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Monthly billing</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">48,000 – 96,000 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="splitbox">
+                      <p class="rlabel">How this estimate is shared</p>
+                      <p class="estword">Shared equally across the 2 categories you chose.</p>
+                      <div class="splitrow">
+                        <span class="pill pill-neutral">Balanced · 50%</span
+                        ><span class="pill pill-neutral">Flagship · 50%</span>
+                      </div>
+                      <span class="srcl"
+                        ><code>split.count</code> · <code>split.categories[].key</code> ·
+                        <code>split.categories[].weight</code> — printed as the answer gives
+                        them</span
+                      >
+                    </div>
+                    <div class="recplan larger">
+                      <p class="rlabel">Recommended plan — a larger credit pool</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          96,000 credits / mo</span
+                        ><span class="rprice"
+                          ><span class="amt">$450</span> <span class="per">/ mo</span></span
+                        >
+                      </div>
+                      <p class="oneplan">
+                        One plan for the whole organization — not per member. Sized to your
+                        estimate.
+                      </p>
+                      <p class="estword">
+                        The pool and the price are an estimate, exactly as the range beside them is
+                        — the plan you can buy is confirmed on the plans view.
+                      </p>
+                      <span class="srcl"
+                        ><code>ceiling.outcome = larger_pool</code> ·
+                        <code>recommendation.planKey</code> / <code>planName</code> /
+                        <code>monthlyPriceUsd</code> (monthly) — the plan row’s own pool and price;
+                        the pool is the row’s allotment, never composed in the surface</span
+                      >
+                    </div>
+                    <div class="poolnote">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                      <p>
+                        This is a larger pool than our regular plans offer, sized to your estimate.
+                      </p>
+                    </div>
+                    <span class="srcl"
+                      ><code>ceiling.credits = 60,000</code> (the largest REGULAR pool, from the
+                      answer) · <code>ceiling.exceeded = true</code> ·
+                      <code>ceiling.outcome = larger_pool</code></span
+                    >
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button type="button" class="btn btn-primary">
+                    See this plan on the plans view
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S10 · Above the top band — NO larger pool available (<code
+        >ceiling.outcome = top_ups_only</code
+      >). The same demand as S9, but the answer carries no larger row: the top of the regular ladder
+      with the excess met by top-ups, in a yellow notice that says “we don’t have a larger plan”. A
+      reader tells S9 from S10 without arithmetic: S9 shows a dashed plan block titled “a larger
+      credit pool” and no top-ups; S10 shows the regular plan and a top-up line with a warning.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="calc one">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Estimate</h3>
+                  <div class="hsub">Annual billing — the page cadence</div>
+                </div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <div class="fig">
+                    <p class="rlabel">Your organization’s credits per month</p>
+                    <p class="famt">48,000 – 96,000 <span class="funit">credits / mo</span></p>
+                    <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                    <p class="estword">An estimate, not a quote — a range, not an exact figure.</p>
+                  </div>
+                  <div class="splitbox">
+                    <p class="rlabel">How this estimate is shared</p>
+                    <p class="estword">Shared equally across the 2 categories you chose.</p>
+                    <div class="splitrow">
+                      <span class="pill pill-neutral">Balanced · 50%</span
+                      ><span class="pill pill-neutral">Flagship · 50%</span>
+                    </div>
+                    <span class="srcl"
+                      ><code>split.count</code> · <code>split.categories[].key</code> ·
+                      <code>split.categories[].weight</code> — printed as the answer gives
+                      them</span
+                    >
+                  </div>
+                  <div class="recplan">
+                    <p class="rlabel">Recommended plan</p>
+                    <div class="recrow">
+                      <span class="pill pill-tier"
+                        ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkle" /></svg>
+                        Max ×2</span
+                      ><span class="rprice"
+                        ><span class="amt">$2,400</span> <span class="per">/ yr</span></span
+                      >
+                    </div>
+                    <p class="oneplan">One plan for the whole organization — not per member.</p>
+                    <span class="srcl"
+                      ><code>recommendation.planKey</code> → catalog <code>max_x2</code> ·
+                      <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                    >
+                  </div>
+                  <div class="lrow">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                    <div>
+                      <p class="rlabel">Top-up on top of the plan</p>
+                      <p class="lval">1 – 37 × 1,000 credits · $5 – $185 one-time</p>
+                      <span class="srcl"
+                        ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                        <code>credits</code> · <code>priceUsd</code></span
+                      >
+                    </div>
+                  </div>
+                  <div class="lrow seat">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                    <div>
+                      <p class="lval">
+                        1 Motir seat included with an AI plan · each further member $40 / member /
+                        yr
+                      </p>
+                      <span class="srcl"
+                        >catalog <code>max_x2.includedTrackerSeats</code> ·
+                        <code>seatPlan.prices.annual</code> — never × member count, never added to
+                        the plan price</span
+                      >
+                    </div>
+                  </div>
+                  <div class="ceil">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert-tri" /></svg>
+                    <p>
+                      <b>Above our largest plan.</b> Your high end is 36,000 credits past what the
+                      largest plan includes. The excess is met with top-ups — we don’t have a larger
+                      plan to offer.
+                    </p>
+                  </div>
+                  <span class="srcl"
+                    ><code>ceiling.outcome = top_ups_only</code> · <code>ceiling.credits</code> (the
+                    largest plan’s pool) · <code>ceiling.excessCredits</code> — all from the answer,
+                    never typed</span
+                  >
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  See Max ×2 on the plans view
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S11 · A single plan already covers it, or a top-up closes it. Neither offers a larger pool
+      (<code>ceiling.outcome = within_ladder</code>). The top-up-only variant states that the
+      included seat comes with an AI plan.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="grid-2 top">
+            <div>
+              <p class="cap">a · the smallest plan covers it · <code>planKey: standard</code></p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Annual billing</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">2,800 – 4,200 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="splitbox">
+                      <p class="rlabel">How this estimate is shared</p>
+                      <p class="estword">
+                        This estimate uses one category, so it carries all of it.
+                      </p>
+                      <div class="splitrow">
+                        <span class="pill pill-neutral">Economy · 100%</span>
+                      </div>
+                      <span class="srcl"
+                        ><code>split.count</code> · <code>split.categories[].key</code> ·
+                        <code>split.categories[].weight</code> — printed as the answer gives
+                        them</span
+                      >
+                    </div>
+                    <div class="recplan">
+                      <p class="rlabel">Recommended plan</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          Standard</span
+                        ><span class="rprice"
+                          ><span class="amt">$240</span> <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <p class="oneplan">One plan for the whole organization — not per member.</p>
+                      <span class="srcl"
+                        ><code>recommendation.planKey</code> → catalog <code>standard</code> ·
+                        <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                      >
+                    </div>
+                    <div class="lrow">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                      <div>
+                        <p class="rlabel">Top-up on top of the plan</p>
+                        <p class="lval">0 × 1,000 credits · $0</p>
+                        <span class="srcl"
+                          ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                          <code>credits</code> · <code>priceUsd</code></span
+                        >
+                      </div>
+                    </div>
+                    <div class="lrow seat">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                      <div>
+                        <p class="lval">
+                          1 Motir seat included with an AI plan · each further member $40 / member /
+                          yr
+                        </p>
+                        <span class="srcl"
+                          >catalog <code>standard.includedTrackerSeats</code> ·
+                          <code>seatPlan.prices.annual</code> — never × member count, never added to
+                          the plan price</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button type="button" class="btn btn-primary">
+                    See Standard on the plans view
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">b · a top-up covers it · <code>planKey: null</code></p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Annual billing</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">900 – 1,800 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="splitbox">
+                      <p class="rlabel">How this estimate is shared</p>
+                      <p class="estword">
+                        This estimate uses one category, so it carries all of it.
+                      </p>
+                      <div class="splitrow">
+                        <span class="pill pill-neutral">Economy · 100%</span>
+                      </div>
+                      <span class="srcl"
+                        ><code>split.count</code> · <code>split.categories[].key</code> ·
+                        <code>split.categories[].weight</code> — printed as the answer gives
+                        them</span
+                      >
+                    </div>
+                    <div class="recplan">
+                      <p class="rlabel">Recommended</p>
+                      <p class="lval">A top-up covers this — no plan needed.</p>
+                      <p class="oneplan">0 – 2 × 1,000 credits · $0 – $10 one-time.</p>
+                      <span class="srcl"
+                        ><code>recommendation.planKey = null</code> · <code>topUp.high</code> →
+                        <code>units</code> · <code>credits</code> · <code>priceUsd</code></span
+                      >
+                    </div>
+                    <div class="lrow seat off">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                      <div>
+                        <p class="lval">
+                          The included Motir seat comes with an AI plan — a top-up alone does not
+                          include one.
+                        </p>
+                        <span class="srcl"
+                          >catalog <code>seatPlan.prices.annual</code> — no seat line figure from
+                          the answer</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S12 · Already holding the largest regular pool, and covered by it — the org holds
+      <code>max_x2</code> and the high end stays inside that pool. Its own plan is the
+      recommendation; <b>no larger plan is offered</b> and no mid-period-upgrade line appears, so
+      nobody offers an owner an upgrade out of a plan that already fits.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="calc one">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Estimate</h3>
+                  <div class="hsub">Annual billing — the page cadence</div>
+                </div>
+                <span class="pill pill-neutral">Illustrative figures</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <div class="fig">
+                    <p class="rlabel">Your organization’s credits per month</p>
+                    <p class="famt">40,000 – 52,000 <span class="funit">credits / mo</span></p>
+                    <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                    <p class="estword">An estimate, not a quote — a range, not an exact figure.</p>
+                  </div>
+                  <div class="splitbox">
+                    <p class="rlabel">How this estimate is shared</p>
+                    <p class="estword">Shared equally across the 2 categories you chose.</p>
+                    <div class="splitrow">
+                      <span class="pill pill-neutral">Balanced · 50%</span
+                      ><span class="pill pill-neutral">Flagship · 50%</span>
+                    </div>
+                    <span class="srcl"
+                      ><code>split.count</code> · <code>split.categories[].key</code> ·
+                      <code>split.categories[].weight</code> — printed as the answer gives
+                      them</span
+                    >
+                  </div>
+                  <div class="recplan">
+                    <p class="rlabel">Recommended plan</p>
+                    <div class="recrow">
+                      <span class="pill pill-tier"
+                        ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkle" /></svg>
+                        Max ×2</span
+                      ><span class="rprice"
+                        ><span class="amt">$2,400</span> <span class="per">/ yr</span></span
+                      >
+                    </div>
+                    <p class="oneplan">One plan for the whole organization — not per member.</p>
+                    <span class="srcl"
+                      ><code>recommendation.planKey</code> → catalog <code>max_x2</code> ·
+                      <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                    >
+                  </div>
+                  <div class="lrow">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                    <div>
+                      <p class="rlabel">Top-up on top of the plan</p>
+                      <p class="lval">0 × 1,000 credits · $0</p>
+                      <span class="srcl"
+                        ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                        <code>credits</code> · <code>priceUsd</code></span
+                      >
+                    </div>
+                  </div>
+                  <div class="lrow seat">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                    <div>
+                      <p class="lval">
+                        1 Motir seat included with an AI plan · each further member $40 / member /
+                        yr
+                      </p>
+                      <span class="srcl"
+                        >catalog <code>max_x2.includedTrackerSeats</code> ·
+                        <code>seatPlan.prices.annual</code> — never × member count, never added to
+                        the plan price</span
+                      >
+                    </div>
+                  </div>
+                  <div class="poolnote">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>
+                    <p>Your current plan already covers this estimate.</p>
+                  </div>
+                  <span class="srcl"
+                    >current plan from the billing status (<code>max_x2</code>) ·
+                    <code>ceiling.outcome = within_ladder</code> — no larger plan is offered and no
+                    mid-period-upgrade line appears</span
+                  >
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  See Max ×2 on the plans view
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S13 · The recommendation against the current plan — three neighbours. (a) Above the current
+      plan: ONE line, no figure. (b) Equal to or below the current plan: no line, no downgrade
+      control. (c) No plan held: nothing to be above. “Above” is the catalog’s ladder order by
+      monthly pool — a <i>larger-pool</i> recommendation (S9) is above every regular plan and takes
+      the same one line.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="neighbours">
+            <div>
+              <p class="cap">a · above the current plan</p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Holding Standard · recommends Pro</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">11,200 – 16,800 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="recplan">
+                      <p class="rlabel">Recommended plan</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          Pro</span
+                        ><span class="rprice"
+                          ><span class="amt">$600</span> <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <p class="oneplan">One plan for the whole organization — not per member.</p>
+                      <span class="srcl"
+                        ><code>recommendation.planKey</code> → catalog <code>pro</code> ·
+                        <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                      >
+                    </div>
+                    <div class="lrow">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                      <div>
+                        <p class="rlabel">Top-up on top of the plan</p>
+                        <p class="lval">0 – 2 × 1,000 credits · $0 – $10 one-time</p>
+                        <span class="srcl"
+                          ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                          <code>credits</code> · <code>priceUsd</code></span
+                        >
+                      </div>
+                    </div>
+                    <div class="lrow seat">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                      <div>
+                        <p class="lval">
+                          1 Motir seat included with an AI plan · each further member $40 / member /
+                          yr
+                        </p>
+                        <span class="srcl"
+                          >catalog <code>pro.includedTrackerSeats</code> ·
+                          <code>seatPlan.prices.annual</code> — never × member count, never added to
+                          the plan price</span
+                        >
+                      </div>
+                    </div>
+                    <div class="upline">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                      <p>
+                        A mid-period upgrade is priced for the days left in your billing period.
+                      </p>
+                    </div>
+                    <span class="srcl"
+                      >shown only when the recommended plan sits ABOVE the current plan on the
+                      catalog’s ladder order — no upgrade price, extra-credit or proration figure
+                      appears</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">b · equal or below the current plan</p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Holding Max · recommends Pro</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">11,200 – 16,800 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="recplan">
+                      <p class="rlabel">Recommended plan</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          Pro</span
+                        ><span class="rprice"
+                          ><span class="amt">$600</span> <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <p class="oneplan">One plan for the whole organization — not per member.</p>
+                      <span class="srcl"
+                        ><code>recommendation.planKey</code> → catalog <code>pro</code> ·
+                        <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                      >
+                    </div>
+                    <div class="lrow">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                      <div>
+                        <p class="rlabel">Top-up on top of the plan</p>
+                        <p class="lval">0 – 2 × 1,000 credits · $0 – $10 one-time</p>
+                        <span class="srcl"
+                          ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                          <code>credits</code> · <code>priceUsd</code></span
+                        >
+                      </div>
+                    </div>
+                    <div class="lrow seat">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                      <div>
+                        <p class="lval">
+                          1 Motir seat included with an AI plan · each further member $40 / member /
+                          yr
+                        </p>
+                        <span class="srcl"
+                          >catalog <code>pro.includedTrackerSeats</code> ·
+                          <code>seatPlan.prices.annual</code> — never × member count, never added to
+                          the plan price</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">c · no plan held</p>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">No plan held · recommends Pro</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">11,200 – 16,800 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="recplan">
+                      <p class="rlabel">Recommended plan</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          Pro</span
+                        ><span class="rprice"
+                          ><span class="amt">$600</span> <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <p class="oneplan">One plan for the whole organization — not per member.</p>
+                      <span class="srcl"
+                        ><code>recommendation.planKey</code> → catalog <code>pro</code> ·
+                        <code>planName</code> · <code>monthlyPriceUsd</code> (annual)</span
+                      >
+                    </div>
+                    <div class="lrow">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-coins" /></svg>
+                      <div>
+                        <p class="rlabel">Top-up on top of the plan</p>
+                        <p class="lval">0 – 2 × 1,000 credits · $0 – $10 one-time</p>
+                        <span class="srcl"
+                          ><code>topUp.low</code> / <code>topUp.high</code> → <code>units</code> ·
+                          <code>credits</code> · <code>priceUsd</code></span
+                        >
+                      </div>
+                    </div>
+                    <div class="lrow seat">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-users" /></svg>
+                      <div>
+                        <p class="lval">
+                          1 Motir seat included with an AI plan · each further member $40 / member /
+                          yr
+                        </p>
+                        <span class="srcl"
+                          >catalog <code>pro.includedTrackerSeats</code> ·
+                          <code>seatPlan.prices.annual</code> — never × member count, never added to
+                          the plan price</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      S14 · Refused inline, before any call — each refusal sits on its own field, no estimate is on
+      screen and <b>no request is sent</b> (the panel draws the absence of a request, not only of a
+      number). New here: <b>no category chosen</b> and the <b>cap — a fourth category</b>, drawn as
+      the group’s own refusal because the engine takes one to three. The range refusals (missing /
+      non-whole / negative end, <code>low &gt; high</code>) are unchanged from the earlier mock’s
+      S13.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back to
+              billing
+            </button>
+            <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+            <h2 class="vtitle">Calculator</h2>
+            <p class="vsub">
+              Estimate the credits your organization uses in a month, and the one plan that covers
+              them.
+            </p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="grid-2 top">
+            <div>
+              <p class="cap">a · no category chosen</p>
+              <div class="calc one">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Your usage</h3>
+                      <div class="hsub">Choose the model categories your organization uses.</div>
+                    </div>
+                  </div>
+                  <div class="card-body fstack">
+                    <div class="field">
+                      <span class="flabel">Work items finished per month</span>
+                      <div class="range">
+                        <div class="rbox">
+                          <span class="rlab">From</span>
+                          <div class="inp"><span class="val">40</span></div>
+                        </div>
+                        <span class="dash" aria-hidden="true">–</span>
+                        <div class="rbox">
+                          <span class="rlab">To</span>
+                          <div class="inp"><span class="val">60</span></div>
+                        </div>
+                      </div>
+                      <p class="help">A range: a quiet month and a busy month.</p>
+                    </div>
+                    <div class="field">
+                      <span class="flabel">Model categories — choose one to three</span>
+                      <div
+                        class="cset"
+                        role="group"
+                        aria-label="Model categories — choose one to three"
+                      >
+                        <button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Economy</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                          ></button
+                        ><button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Balanced</span
+                          ><span class="cex"
+                            ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                          ></button
+                        ><button type="button" class="cbtn" aria-pressed="false">
+                          <span class="cname">Flagship</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol,
+                            claude-opus-5-5</span
+                          >
+                        </button>
+                      </div>
+                      <p class="help">Choose at least one category.</p>
+                      <span class="srcl"
+                        >categories from <code>GET categories</code> →
+                        <code>categories[].key</code> · examples from
+                        <code>categories[].models</code> — text only, never an input</span
+                      >
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary" disabled>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      Estimate
+                    </button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div><h3>Estimate</h3></div>
+                  </div>
+                  <div class="card-body">
+                    <div class="rph">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      <p>No request was sent — there is no estimate to show.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="cap">b · a fourth category — the cap</p>
+              <div class="calc one">
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Your usage</h3>
+                      <div class="hsub">Choose the model categories your organization uses.</div>
+                    </div>
+                  </div>
+                  <div class="card-body fstack">
+                    <div class="field">
+                      <span class="flabel">Work items finished per month</span>
+                      <div class="range">
+                        <div class="rbox">
+                          <span class="rlab">From</span>
+                          <div class="inp"><span class="val">40</span></div>
+                        </div>
+                        <span class="dash" aria-hidden="true">–</span>
+                        <div class="rbox">
+                          <span class="rlab">To</span>
+                          <div class="inp"><span class="val">60</span></div>
+                        </div>
+                      </div>
+                      <p class="help">A range: a quiet month and a busy month.</p>
+                    </div>
+                    <div class="field">
+                      <span class="flabel">Model categories — choose one to three</span>
+                      <div
+                        class="cset"
+                        role="group"
+                        aria-label="Model categories — choose one to three"
+                      >
+                        <button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Economy</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Balanced</span
+                          ><span class="cex"
+                            ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                          ></button
+                        ><button type="button" class="cbtn on" aria-pressed="true">
+                          <span class="cname">Flagship</span
+                          ><span class="cex"
+                            ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol,
+                            claude-opus-5-5</span
+                          >
+                        </button>
+                      </div>
+                      <p class="help">
+                        Up to three categories can be chosen together — turn one off to choose
+                        another.
+                      </p>
+                      <span class="srcl"
+                        >categories from <code>GET categories</code> →
+                        <code>categories[].key</code> · examples from
+                        <code>categories[].models</code> — text only, never an input</span
+                      >
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <button type="button" class="btn btn-primary" disabled>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      Estimate
+                    </button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div><h3>Estimate</h3></div>
+                  </div>
+                  <div class="card-body">
+                    <div class="rph">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                      <p>No request was sent — there is no estimate to show.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      zh · S8 (two categories) in Chinese — the product’s own noun for the thing counted is “工作项”
+      (work item), never “卡片”. The example models stay in their own Latin identifiers.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <header class="vhead">
+            <button type="button" class="backlink">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> 返回账单
+            </button>
+            <p class="crumb">组织 · Acme · 账单与方案 · 计算器</p>
+            <h2 class="vtitle">计算器</h2>
+            <p class="vsub">估算您的组织每月使用的额度，以及覆盖这些额度的方案。</p>
+          </header>
+          <div class="cadrow">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+              ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+            </div>
+            <span class="pill pill-save">Save ~33%</span
+            ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+          </div>
+          <div class="calc">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>您的用量</h3>
+                  <div class="hsub">选择您的组织使用的模型类别。</div>
+                </div>
+              </div>
+              <div class="card-body fstack">
+                <div class="field">
+                  <span class="flabel">每月完成的工作项</span>
+                  <div class="range">
+                    <div class="rbox">
+                      <span class="rlab">从</span>
+                      <div class="inp"><span class="val">40</span></div>
+                    </div>
+                    <span class="dash" aria-hidden="true">–</span>
+                    <div class="rbox">
+                      <span class="rlab">到</span>
+                      <div class="inp"><span class="val">60</span></div>
+                    </div>
+                  </div>
+                  <p class="help">一个范围：清淡的一个月和繁忙的一个月。</p>
+                </div>
+                <div class="field">
+                  <span class="flabel">模型类别 —— 选择一到三个</span>
+                  <div class="cset" role="group" aria-label="模型类别 —— 选择一到三个">
+                    <button type="button" class="cbtn" aria-pressed="false">
+                      <span class="cname">经济</span
+                      ><span class="cex">例如：claude-haiku-5-5、gpt-5-nano</span></button
+                    ><button type="button" class="cbtn on" aria-pressed="true">
+                      <span class="cname">均衡</span
+                      ><span class="cex">例如：gpt-5-mini、glm-5</span></button
+                    ><button type="button" class="cbtn on" aria-pressed="true">
+                      <span class="cname">旗舰</span
+                      ><span class="cex">例如：claude-sonnet-5-5、gpt-5.6-sol</span>
+                    </button>
+                  </div>
+                  <p class="help">估算在您选择的类别之间平均分配。所列模型仅作示例 —— 无需选择。</p>
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg> 估算
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>估算</h3>
+                  <div class="hsub">按年计费</div>
+                </div>
+                <span class="pill pill-neutral">示例数值</span>
+              </div>
+              <div class="card-body">
+                <div class="res">
+                  <div class="fig">
+                    <p class="rlabel">您的组织每月额度</p>
+                    <p class="famt">11,200 – 16,800 <span class="funit">额度 / 月</span></p>
+                    <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                    <p class="estword">这是估算值，不是报价 —— 是一个范围，而不是精确数字。</p>
+                  </div>
+                  <div class="splitbox">
+                    <p class="rlabel">本次估算的分配方式</p>
+                    <p class="estword">在您选择的 2 个类别之间平均分配。</p>
+                    <div class="splitrow">
+                      <span class="pill pill-neutral">均衡 · 50%</span
+                      ><span class="pill pill-neutral">旗舰 · 50%</span>
+                    </div>
+                    <span class="srcl"><code>split.categories[].weight</code></span>
+                  </div>
+                  <div class="recplan">
+                    <p class="rlabel">推荐方案</p>
+                    <div class="recrow">
+                      <span class="pill pill-tier"
+                        ><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkle" /></svg>
+                        Pro</span
+                      ><span class="rprice"
+                        ><span class="amt">$600</span> <span class="per">/ 年</span></span
+                      >
+                    </div>
+                    <p class="oneplan">整个组织一个方案 —— 不按成员计费。</p>
+                  </div>
+                </div>
+              </div>
+              <div class="card-foot">
+                <button type="button" class="btn btn-primary">
+                  在方案页查看 Pro
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      narrow · The busiest result — S9, the larger pool offered — at 375px: the form above the
+      result, one column; the category set wraps to one button per row; the cadence control stays at
+      the top of the view.
+    </div>
+    <div class="panel">
+      <div class="phones">
+        <div class="phone">
+          <div class="phone-in">
+            <header class="vhead">
+              <button type="button" class="backlink">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowleft" /></svg> Back
+                to billing
+              </button>
+              <p class="crumb">Organization · Acme · Billing &amp; plans · Calculator</p>
+              <h2 class="vtitle">Calculator</h2>
+              <p class="vsub">
+                Estimate the credits your organization uses in a month, and the one plan that covers
+                them.
+              </p>
+            </header>
+            <div class="cadrow">
+              <div class="seg" role="group" aria-label="Billing cadence">
+                <button type="button" class="seg-opt" aria-pressed="false">Monthly</button
+                ><button type="button" class="seg-opt on" aria-pressed="true">Annual</button>
+              </div>
+              <span class="pill pill-save">Save ~33%</span
+              ><span class="srcl">the PAGE’s one cadence value — shared with the plans view</span>
+            </div>
+            <div class="fstack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Your usage</h3>
+                    <div class="hsub">Choose the model categories your organization uses.</div>
+                  </div>
+                </div>
+                <div class="card-body fstack">
+                  <div class="field">
+                    <span class="flabel">Work items finished per month</span>
+                    <div class="range">
+                      <div class="rbox">
+                        <span class="rlab">From</span>
+                        <div class="inp"><span class="val">40</span></div>
+                      </div>
+                      <span class="dash" aria-hidden="true">–</span>
+                      <div class="rbox">
+                        <span class="rlab">To</span>
+                        <div class="inp"><span class="val">60</span></div>
+                      </div>
+                    </div>
+                    <p class="help">A range: a quiet month and a busy month.</p>
+                  </div>
+                  <div class="field">
+                    <span class="flabel">Model categories — choose one to three</span>
+                    <div
+                      class="cset"
+                      role="group"
+                      aria-label="Model categories — choose one to three"
+                    >
+                      <button type="button" class="cbtn" aria-pressed="false">
+                        <span class="cname">Economy</span
+                        ><span class="cex"
+                          ><b>For example:</b> claude-haiku-5-5, gpt-5-nano, qwen3-8b</span
+                        ></button
+                      ><button type="button" class="cbtn on" aria-pressed="true">
+                        <span class="cname">Balanced</span
+                        ><span class="cex"
+                          ><b>For example:</b> gpt-5-mini, glm-5, kimi-k2.6</span
+                        ></button
+                      ><button type="button" class="cbtn on" aria-pressed="true">
+                        <span class="cname">Flagship</span
+                        ><span class="cex"
+                          ><b>For example:</b> claude-sonnet-5-5, gpt-5.6-sol, claude-opus-5-5</span
+                        >
+                      </button>
+                    </div>
+                    <p class="help">
+                      The estimate is shared equally across the categories you choose. The models
+                      listed are examples — you don’t choose one.
+                    </p>
+                    <span class="srcl"
+                      >categories from <code>GET categories</code> → <code>categories[].key</code> ·
+                      examples from <code>categories[].models</code> — text only, never an
+                      input</span
+                    >
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button type="button" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calc" /></svg>
+                    Estimate
+                  </button>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Estimate</h3>
+                    <div class="hsub">Annual billing</div>
+                  </div>
+                  <span class="pill pill-neutral">Illustrative figures</span>
+                </div>
+                <div class="card-body">
+                  <div class="res">
+                    <div class="fig">
+                      <p class="rlabel">Your organization’s credits per month</p>
+                      <p class="famt">48,000 – 96,000 <span class="funit">credits / mo</span></p>
+                      <span class="srcl"><code>credits.low</code> / <code>credits.high</code></span>
+                      <p class="estword">
+                        An estimate, not a quote — a range, not an exact figure.
+                      </p>
+                    </div>
+                    <div class="splitbox">
+                      <p class="rlabel">How this estimate is shared</p>
+                      <p class="estword">Shared equally across the 2 categories you chose.</p>
+                      <div class="splitrow">
+                        <span class="pill pill-neutral">Balanced · 50%</span
+                        ><span class="pill pill-neutral">Flagship · 50%</span>
+                      </div>
+                      <span class="srcl"
+                        ><code>split.count</code> · <code>split.categories[].key</code> ·
+                        <code>split.categories[].weight</code> — printed as the answer gives
+                        them</span
+                      >
+                    </div>
+                    <div class="recplan larger">
+                      <p class="rlabel">Recommended plan — a larger credit pool</p>
+                      <div class="recrow">
+                        <span class="pill pill-tier"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkle" />
+                          </svg>
+                          96,000 credits / mo</span
+                        ><span class="rprice"
+                          ><span class="amt">$3,600</span> <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <p class="oneplan">
+                        One plan for the whole organization — not per member. Sized to your
+                        estimate.
+                      </p>
+                      <p class="estword">
+                        The pool and the price are an estimate, exactly as the range beside them is
+                        — the plan you can buy is confirmed on the plans view.
+                      </p>
+                      <span class="srcl"
+                        ><code>ceiling.outcome = larger_pool</code> ·
+                        <code>recommendation.planKey</code> / <code>planName</code> /
+                        <code>monthlyPriceUsd</code> (annual) — the plan row’s own pool and price;
+                        the pool is the row’s allotment, never composed in the surface</span
+                      >
+                    </div>
+                    <div class="poolnote">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info" /></svg>
+                      <p>
+                        This is a larger pool than our regular plans offer, sized to your estimate.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button type="button" class="btn btn-primary">
+                    See this plan on the plans view
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrowright" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrowleft"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-arrowright"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <g
+          id="i-calc"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="16" height="20" x="4" y="2" rx="2" />
+          <path d="M8 6h8" />
+          <path d="M16 14v4" />
+          <path d="M16 10h.01" />
+          <path d="M12 10h.01" />
+          <path d="M8 10h.01" />
+          <path d="M12 14h.01" />
+          <path d="M8 14h.01" />
+          <path d="M12 18h.01" />
+          <path d="M8 18h.01" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-alert-tri"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </g>
+        <g
+          id="i-refresh"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-wifioff"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 20h.01" />
+          <path d="M8.5 16.43a5 5 0 0 1 7 0" />
+          <path d="M5 12.86a10 10 0 0 1 5.17-2.69" />
+          <path d="M19 12.86a10 10 0 0 0-2-1.52" />
+          <path d="M2 8.82a15 15 0 0 1 4.18-2.64" />
+          <path d="M22 8.82a15 15 0 0 0-11.29-3.76" />
+          <path d="m2 2 20 20" />
+        </g>
+        <g
+          id="i-trend"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M22 7 13.5 15.5 8.5 10.5 2 17" />
+          <path d="M16 7h6v6" />
+        </g>
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"
+          />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 12h8" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3" />
+        </g>
+      </defs>
+    </svg>
+
+    <script>
+      function toggleTheme() {
+        const h = document.documentElement;
+        h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+      }
+    </script>
+  </body>
+</html>
