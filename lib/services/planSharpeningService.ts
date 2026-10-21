@@ -113,7 +113,14 @@ export function assumptionsContent(
   plannerAssumptions: readonly PlannerAssumptionDto[],
 ): string {
   const lines: string[] = [];
-  if (nonBlank(requirement.assumptions)) lines.push(trimTrailingNewlines(requirement.assumptions));
+  const own = requirement.assumptions;
+  if (Array.isArray(own)) {
+    // A list (MOTIR-9160): one bullet per recommendation.
+    for (const r of own) {
+      const text = typeof r === 'string' ? r : r.text;
+      if (nonBlank(text)) lines.push(`- ${text.trim()}`);
+    }
+  } else if (nonBlank(own)) lines.push(trimTrailingNewlines(own));
   for (const a of plannerAssumptions) {
     lines.push(`- ${PLANNER_ASSUMPTION_PREFIX} ${a.question} — ${a.recommendation}`);
   }
@@ -244,12 +251,16 @@ async function writeTheAnchorLeg(
   }
 }
 
-/** Only the six requirement parts, and only the ones that are strings. */
+/** Only the six requirement parts: the five that are strings, and `assumptions`
+ *  as a string or a list of recommendations (MOTIR-9160). */
 function pickRequirement(r: Partial<SubmittedRequirement>): Partial<SubmittedRequirement> {
   const out: Partial<SubmittedRequirement> = {};
-  for (const part of [...ACCEPTANCE_PARTS, 'assumptions'] as const) {
+  for (const part of ACCEPTANCE_PARTS) {
     const value = r[part];
     if (typeof value === 'string') out[part] = value;
+  }
+  if (typeof r.assumptions === 'string' || Array.isArray(r.assumptions)) {
+    out.assumptions = r.assumptions;
   }
   return out;
 }

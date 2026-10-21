@@ -100,7 +100,7 @@ export type SharpenTurnPlan =
 const JOB_ID = /^e2e-sharpen-(\d+)$/;
 
 /** motir-ai's topic → requirement-field mapping (`SHARPEN_TOPIC_FIELD`). */
-const TOPIC_FIELD: Record<GrillingBranch, keyof SubmittedRequirement> = {
+const TOPIC_FIELD: Record<GrillingBranch, Exclude<keyof SubmittedRequirement, 'assumptions'>> = {
   workflow: 'behaviour',
   non_happy: 'acceptance',
   alternative: 'scopeEdge',
