@@ -847,7 +847,7 @@ describe('(f) a resume the hosted start refuses is recorded, and the entry carri
 // ── (g) · a gate sent back ───────────────────────────────────────────────────────
 
 describe('(g) a held gate sent back', () => {
-  it('stays waiting_on_gate and starts nothing', async () => {
+  it('changes requested is ready_to_resume and starts nothing on its own (MOTIR-9185)', async () => {
     const mara = await dispatcher();
     const { parent, design, runId } = await hostedStory(mara.ctx);
     const designGate = await gateOn(design, 'design_result');
@@ -865,7 +865,7 @@ describe('(g) a held gate sent back', () => {
     );
 
     expect(await stateOf(parent.id)).toEqual({
-      resumeState: 'waiting_on_gate',
+      resumeState: 'ready_to_resume',
       resumeRunId: runId,
       fixReason: null,
     });
@@ -881,10 +881,10 @@ describe('(g) a held gate sent back', () => {
         notePreview: 'The overage row needs its own line.',
       }),
     ]);
-    // The continue claim refuses it as the column does.
+    // The continue claim releases it as the column does: the reason is read, the work redone.
     expect(
       await workItemContinueService.claimContinue(fx.projectId, parent.identifier, fx.ctx),
-    ).toMatchObject({ outcome: 'not_continuable', reason: 'gate_sent_back' });
+    ).toMatchObject({ outcome: 'claimed', resumesGated: true });
     await expectResumeAndFixDisjoint();
   });
 });
