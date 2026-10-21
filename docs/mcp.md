@@ -2620,7 +2620,7 @@ though it persists no row.
 
 #### `create_acceptance_upload` · `publish_acceptance_result`
 
-Put the **acceptance receipt on a story** — the recording of ONE watchable run of
+Put the **acceptance receipt on a story** (or on a bug / task that has children and is run as a parent) — the recording of ONE watchable run of
 the story working, which a person then watches and approves. It is the artifact
 the acceptance gate rests on, and the pair is the receipt half of the same idea
 `publish_design_result` is the design half of.
@@ -2689,7 +2689,7 @@ these tools and the HTTP publish routes answer one rule:
 
 | Refusal                            | When                                                                                                                                                                                                                                                                                    |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCEPTANCE_EVIDENCE_NOT_A_STORY`  | `key` resolves to a container that is not a story and has no story parent. A receipt is a story-level artifact (Principle #18).                                                                                                                                                         |
+| `ACCEPTANCE_EVIDENCE_NOT_A_STORY`  | `key` resolves to something that cannot own a receipt: not a story, not a bug or task with children, and no such container above it (Principle #18; MOTIR-9209).                                                                                                                        |
 | `ACCEPTANCE_VIDEO_INELIGIBLE`      | The org has no paid AI plan, or the acceptance-video toggle is off. Checked BEFORE any object-store spend.                                                                                                                                                                              |
 | blob missing                       | The `pathname` names no object — the PUT never happened, or went somewhere else. The register step HEADs every artifact.                                                                                                                                                                |
 | pathname outside the prefix        | A key that is not under this story's own acceptance prefix. A lying or cross-tenant pathname can never be recorded.                                                                                                                                                                     |

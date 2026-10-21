@@ -33,7 +33,9 @@ export class AcceptanceEvidenceNotAStoryError extends AcceptanceEvidenceError {
   readonly code = 'ACCEPTANCE_EVIDENCE_NOT_A_STORY' as const;
   readonly status = 422;
   constructor(kind: string) {
-    super(`Acceptance evidence attaches to a story, not a ${kind}.`);
+    super(
+      `Acceptance evidence attaches to a story, or to a bug or task that has children — not a ${kind} without them.`,
+    );
     this.name = 'AcceptanceEvidenceNotAStoryError';
   }
 }
