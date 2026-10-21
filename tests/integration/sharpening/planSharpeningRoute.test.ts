@@ -109,6 +109,14 @@ describe('PUT /api/internal/ai/plan-sharpening', () => {
       JSON.stringify({ jobId: 'j', scope: { planId: 'p' }, requirement: { behaviour: 1 } }),
     ],
     [
+      'an assumptions list with an entry that has no text',
+      JSON.stringify({
+        jobId: 'j',
+        scope: { planId: 'p' },
+        requirement: { assumptions: [{ id: 'q1' }] },
+      }),
+    ],
+    [
       'a malformed planner assumption',
       JSON.stringify({
         jobId: 'j',
@@ -121,6 +129,28 @@ describe('PUT /api/internal/ai/plan-sharpening', () => {
     const res = await put(fx, raw);
     expect(res.status).toBe(400);
     expect((await res.json()).code).toBe('SHARPENING_INVALID');
+  });
+
+  it('200 with assumptions as a LIST of recommendations, stored as sent (MOTIR-9160)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await planWithAdd(fx);
+    const assumptions = [
+      { id: 'q1', text: 'Which formats? — CSV only' },
+      { id: 'q2', text: 'Who is notified? — Nobody' },
+    ];
+    const res = await put(
+      fx,
+      JSON.stringify({
+        jobId: 'job-1',
+        scope: { planId },
+        requirement: { ...REQUIREMENT, assumptions },
+        plannerAssumptions: PLANNER,
+        perItem: [{ planItemId: itemId, acceptance: ['A CSV downloads'], assumptions: [] }],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const plan = await plansService.getPlan(planId, fx.ctx);
+    expect(plan.sharpenedRequirement?.assumptions).toEqual(assumptions);
   });
 
   it('200 on plan scope, round-tripping through PlanDto; idempotent on a resend', async () => {

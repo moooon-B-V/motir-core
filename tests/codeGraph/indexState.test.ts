@@ -236,7 +236,12 @@ describe('END TO END, against real Postgres — the four states as the inventory
     // TWO PINNED SHAS, not a timestamp.
     await seedSucceededIndex();
     await withSystemContext((tx) =>
-      githubRepoRepository.markIndexSettled(REPO_REF, { headSha: 'sha-at-index' }, tx),
+      githubRepoRepository.markIndexSettled(
+        REPO_REF,
+        fx.workspace.organizationId,
+        { headSha: 'sha-at-index' },
+        tx,
+      ),
     );
     await withSystemContext((tx) =>
       githubRepoRepository.setDefaultBranchHeadSha(repoRowId, 'sha-at-index', tx),
@@ -264,15 +269,90 @@ describe('END TO END, against real Postgres — the four states as the inventory
         status: 'running',
       },
     });
-    await withSystemContext((tx) => githubRepoRepository.markIndexStarted(REPO_REF, run.id, tx));
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexStarted(REPO_REF, fx.workspace.organizationId, run.id, tx),
+    );
 
     expect(await stateOf()).toBe('indexing');
 
     // …and it settles.
     await adminDb.jobRun.update({ where: { id: run.id }, data: { status: 'succeeded' } });
-    await withSystemContext((tx) => githubRepoRepository.markIndexSettled(REPO_REF, {}, tx));
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexSettled(REPO_REF, fx.workspace.organizationId, {}, tx),
+    );
     await seedSucceededIndex();
     expect(await stateOf()).toBe('indexed');
+  });
+
+  it("⚠️ a run claiming ONE organisation's repo leaves another organisation's row for the same ref alone (MOTIR-9177)", async () => {
+    const other = await makeWorkItemFixture();
+    const otherInstallation = await adminDb.githubInstallation.create({
+      data: {
+        installationId: 'inst-index-state-other',
+        workspaceId: other.workspaceId,
+        organizationId: other.workspace.organizationId,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+    });
+    const otherRow = await adminDb.githubRepo.create({
+      data: {
+        installationId: otherInstallation.id,
+        workspaceId: other.workspaceId,
+        organizationId: other.workspace.organizationId,
+        repoId: 'r-index-state-other',
+        owner: 'moooon',
+        name: 'motir-core',
+        defaultBranch: 'main',
+        provider: 'github',
+        archived: false,
+      },
+    });
+    const run = await adminDb.jobRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        functionId: 'system.code-graph-index',
+        eventName: 'system.code-graph-index',
+        eventId: `evt-${Math.floor(Math.random() * 1_000_000)}`,
+        lane: 'engine',
+        attempt: 0,
+        status: 'running',
+      },
+    });
+
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexStarted(REPO_REF, fx.workspace.organizationId, run.id, tx),
+    );
+    const claimed = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoRowId } });
+    const untouched = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: otherRow.id } });
+    expect(claimed.indexingRunId).toBe(run.id);
+    expect(untouched.indexingRunId).toBeNull();
+
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexSettled(
+        REPO_REF,
+        other.workspace.organizationId,
+        { headSha: 'sha-other' },
+        tx,
+      ),
+    );
+    const stillClaimed = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoRowId } });
+    expect(stillClaimed.indexingRunId).toBe(run.id);
+    expect(stillClaimed.indexedHeadSha).toBeNull();
+
+    // …and neither does pausing the other organisation's indexing, which nulls the claim.
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexPaused(
+        REPO_REF,
+        other.workspace.organizationId,
+        { reason: 'paused_index_no_credit' },
+        tx,
+      ),
+    );
+    const afterPause = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoRowId } });
+    expect(afterPause.indexingRunId).toBe(run.id);
+    expect(afterPause.indexPausedReason).toBeNull();
   });
 
   it('⚠️ A CRASHED run does NOT strand the row on `Indexing…` for ever', async () => {
@@ -291,7 +371,9 @@ describe('END TO END, against real Postgres — the four states as the inventory
         status: 'abandoned',
       },
     });
-    await withSystemContext((tx) => githubRepoRepository.markIndexStarted(REPO_REF, run.id, tx));
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexStarted(REPO_REF, fx.workspace.organizationId, run.id, tx),
+    );
 
     expect(await stateOf()).toBe('indexed');
   });

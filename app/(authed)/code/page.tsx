@@ -3,7 +3,13 @@ import { getTranslations } from 'next-intl/server';
 import { Activity } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  NotProjectAdminError,
+  PermissionDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
 import type {
@@ -28,10 +34,13 @@ import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 // `/code-health` asserts `ai:configure`; the old `Git` row was ungated on
 // purpose, because connecting your own account is *"the one action nobody can
 // take on [a member's] behalf"*. A naive collapse fails either way — one gated
-// row takes a capability off every member, one ungated row widens an admin-only
-// audit to everyone. So: Repositories is browse-reachable, Health is admin-only
-// INSIDE the page, and a member who opens `/code` gets a working repository list
-// beside Health's own admin-only empty state rather than a refusal.
+// row takes a capability off every member, one ungated row widens an audit to
+// everyone. So: Repositories is browse-reachable, and Health is READ with
+// `ai:plan` (the member key) and WRITTEN with `ai:configure` (MOTIR-9173,
+// amending §2.1's "Health is admin-only"): a member sees the audit and the
+// convention read-only, an admin also gets the editor and the re-audit
+// controls, and a role holding neither read key gets Health's own admin-only
+// empty state rather than a refusal.
 //
 // ⚠️ WHICH MEANS THE GATE MAY NOT SIT ON THE PAGE. The surface this absorbed
 // returned a whole-page `EmptyState` on `NotProjectAdminError`; doing that here
@@ -98,7 +107,7 @@ export default async function CodePage({
   // opened Health. The whole point of the planning banner's deep link ("Review
   // code health", in ONE click) died there, and it is invisible from inside the
   // page: the Health body IS in the DOM, just `hidden`.
-  searchParams: Promise<{ section?: string }>;
+  searchParams: Promise<{ section?: string; repo?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -118,7 +127,13 @@ export default async function CodePage({
   // joins each row's freshness from the ONE derivation — so two projects in one
   // workspace with different sets render different lists, which is the property
   // the whole section exists to have.
-  const codeContext = await resolveCodeContextState(ctx.projectId, svcCtx);
+  //
+  // The `ai:configure` check rides the SAME wave: it needs only the project, so
+  // it must not add a serial read to the page's chain (MOTIR-3449's ratchet).
+  const [codeContext, held] = await allSettledOrThrow([
+    resolveCodeContextState(ctx.projectId, svcCtx),
+    projectAccessService.getPermissions(ctx.projectId, svcCtx),
+  ]);
   const repoRefs = codeContext.repos.map((repo) => repo.repoRef);
 
   let audits: RepoAuditSurfaceDTO[] = [];
@@ -126,10 +141,13 @@ export default async function CodePage({
   let selectedAudit: CodeAuditSurfaceDTO | null = null;
   let conventions: ConventionSurfaceDTO[] = [];
   // ⚠️ NOT AN ERROR — the ADMIN-ONLY state, and it is the Health SECTION's, not
-  // the page's. `null` means the read succeeded (or there was nothing to read);
-  // a string means this member may not see the audit and the section says so
-  // while everything else on the page keeps working.
+  // the page's. True means this reader's role does not hold the Health READ key
+  // and the section says so while everything else on the page keeps working.
   let healthDenied = false;
+  // Does the reader hold the WRITE key? Resolved here so the island can hide the
+  // editor and the re-audit controls (MOTIR-2258: hide what the actor cannot
+  // reach); the write routes refuse a caller without it regardless.
+  const canConfigure = held.has('ai:configure');
 
   if (repoRefs.length > 0) {
     try {
@@ -139,7 +157,11 @@ export default async function CodePage({
       selectedAudit = surfaces.selectedAudit;
       conventions = surfaces.conventions;
     } catch (err) {
-      if (err instanceof NotProjectAdminError || err instanceof ProjectNotFoundError) {
+      if (
+        err instanceof NotProjectAdminError ||
+        err instanceof PermissionDeniedError ||
+        err instanceof ProjectNotFoundError
+      ) {
         healthDenied = true;
       } else {
         // Everything else is a genuine server error and is RETHROWN. There is no
@@ -150,11 +172,13 @@ export default async function CodePage({
     }
   }
 
+  const query = await searchParams;
+
   return (
     <div className="flex flex-col gap-6">
       <Header title={t('title')} subtitle={t('subtitle')} />
       <CodeSections
-        initialSection={sectionFromParam((await searchParams).section)}
+        initialSection={sectionFromParam(query.section)}
         label={t('sectionsLabel')}
         repositoriesLabel={t('tabs.repositories')}
         healthLabel={t('tabs.health')}
@@ -170,6 +194,8 @@ export default async function CodePage({
               initialSelectedRepoKey={selectedRepoKey}
               initialSelectedAudit={selectedAudit}
               initialConventions={conventions}
+              canConfigure={canConfigure}
+              initialConventionRepo={query.repo ?? null}
             />
           )
         }
