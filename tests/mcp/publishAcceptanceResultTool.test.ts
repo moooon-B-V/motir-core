@@ -70,7 +70,7 @@ beforeEach(async () => {
 
 async function makeItem(
   title: string,
-  kind: 'story' | 'subtask' | 'task' = 'story',
+  kind: 'story' | 'subtask' | 'task' | 'bug' = 'story',
   parentId?: string,
 ): Promise<{ key: string; id: string }> {
   const item = await workItemsService.createWorkItem(
@@ -253,6 +253,32 @@ describe('the receipt hangs on the STORY, whichever card recorded it', () => {
     expect(evidence.workItemId).toBe(story.id);
     expect(evidence.producedByKey).toBe(leaf.key);
     expect(payload(published).workItemKey).toBe(story.key);
+  });
+
+  it('hangs the receipt on a parentless bug that has children — a parent run on a bug (MOTIR-9209)', async () => {
+    const bug = await makeItem('A bug run as a parent', 'bug');
+    await makeItem('Its first subtask', 'subtask', bug.id);
+    const grant = await runCreateAcceptanceUpload({ key: bug.key }, fx.ctx);
+    expect(grant.isError, JSON.stringify(grant)).toBeFalsy();
+    const video = payload(grant).video as Record<string, unknown>;
+    expect(payload(grant).workItemKey).toBe(bug.key);
+    putUploaded(video.pathname as string, 1024);
+
+    const published = await runPublishAcceptanceResult(
+      { key: bug.key, videoPathname: video.pathname as string, producedByKey: bug.key },
+      fx.ctx,
+    );
+    expect(published.isError, JSON.stringify(published)).toBeFalsy();
+    const evidence = await adminDb.acceptanceEvidence.findFirstOrThrow();
+    expect(evidence.workItemId).toBe(bug.id);
+  });
+
+  it('a subtask of that bug resolves UP to the bug', async () => {
+    const bug = await makeItem('A bug run as a parent', 'bug');
+    const leaf = await makeItem('Its subtask', 'subtask', bug.id);
+    const grant = await runCreateAcceptanceUpload({ key: leaf.key }, fx.ctx);
+    expect(grant.isError, JSON.stringify(grant)).toBeFalsy();
+    expect(payload(grant).workItemKey).toBe(bug.key);
   });
 
   it('refuses a card with no story to hang the receipt on', async () => {

@@ -23,6 +23,7 @@ import {
   AcceptanceEvidencePathnameError,
   AcceptanceEvidenceStoryClosedError,
 } from '@/lib/acceptanceEvidence/errors';
+import { isReceiptOwner } from '@/lib/acceptanceEvidence/receiptOwner';
 import { normalizeCommitSha } from '@/lib/git/commitSha';
 import { toAcceptanceEvidenceDto } from '@/lib/mappers/acceptanceEvidenceMappers';
 import type {
@@ -101,7 +102,7 @@ async function resolveStory(workItemId: string, ctx: ServiceContext): Promise<Wo
     (tx) => workItemRepository.findById(workItemId, tx),
   );
   if (!story) throw new AcceptanceEvidenceNotFoundError(workItemId);
-  if (story.kind !== 'story') throw new AcceptanceEvidenceNotAStoryError(story.kind);
+  if (!(await isReceiptOwner(story, ctx))) throw new AcceptanceEvidenceNotAStoryError(story.kind);
   // `work_item:edit` (Story MOTIR-2291 · Subtask MOTIR-2365) — THE SHARPEST ITEM
   // IN THE BUCKET. Both acceptance-evidence rows were labelled `existing` while
   // the SAME row's `Gate today` column read "— none —", a contradiction inside one
