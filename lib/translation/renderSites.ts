@@ -151,4 +151,12 @@ export const WORK_CONTENT_RENDER_SITES: readonly RenderSite[] = [
     'components/pages/WorkItemEmbedCard.tsx',
     "the page's embedded card draws the title as the work item stores it, like the mention chip beside it; registering the page's work-item cards with the title kit is a follow-up (MOTIR-7566)",
   ),
+  deferred(
+    'app/(authed)/pages/[pageId]/_components/LinkWorkItemControl.tsx',
+    "the page's link picker lists work items from a search, outside any page host; registering them with the title kit is a follow-up (MOTIR-7567)",
+  ),
+  deferred(
+    'app/(authed)/pages/[pageId]/_components/LinkedWorkItemsStrip.tsx',
+    "the strip draws a linked work item's title as it is stored, like the embed card beside it; registering it with the title kit is a follow-up (MOTIR-7567)",
+  ),
 ];
