@@ -148,37 +148,25 @@ describe('POST acceptance-evidence (register)', () => {
     expect(body.evidence.workItemId).toBe(story.id);
   });
 
-  it('a subtask of a BUG resolves to the bug — a bug run as a parent owns its receipt (MOTIR-9209)', async () => {
-    const bug = await createTestWorkItem(fx, { kind: 'bug', title: 'a bug', parentId: story.id });
+  it('a leaf whose parent cannot own a receipt stays unresolved → 422 not-a-story', async () => {
+    // A leaf whose parent cannot own a receipt (here: a task straight under an
+    // epic — a subtask's parent always has a child, so a bug or task above one now
+    // owns the receipt, MOTIR-9209) is left as-is; the service rejects a non-story
+    // acceptance target.
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'an epic' });
     const sub = await createTestWorkItem(fx, {
-      kind: 'subtask',
-      title: 'subtask under a bug',
-      parentId: bug.id,
+      kind: 'task',
+      title: 'task under an epic',
+      parentId: epic.id,
     });
     const token = await integrationToken(fx);
     const res = await POST(
       publishReq(
         token,
-        { videoPathname: `acceptance/${fx.workspaceId}/${bug.id}/x.webm` },
+        { videoPathname: `acceptance/${fx.workspaceId}/${sub.id}/x.webm` },
         sub.identifier,
       ),
       { params: Promise.resolve({ id: sub.identifier }) },
-    );
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { evidence: { workItemId: string } };
-    expect(body.evidence.workItemId).toBe(bug.id);
-  });
-
-  it('a childless task with no parent cannot own a receipt → 422 not-a-story', async () => {
-    const task = await createTestWorkItem(fx, { kind: 'task', title: 'a lone task' });
-    const token = await integrationToken(fx);
-    const res = await POST(
-      publishReq(
-        token,
-        { videoPathname: `acceptance/${fx.workspaceId}/${task.id}/x.webm` },
-        task.identifier,
-      ),
-      { params: Promise.resolve({ id: task.identifier }) },
     );
     expect(res.status).toBe(422);
   });

@@ -127,6 +127,16 @@ const STORY_FILES = [
   // The work item page's Pages section (MOTIR-7575) and its fetch helper.
   'app/**/items/*/_components/PagesSection.tsx',
   'lib/workItems/pageLinksClient.ts',
+  // MOTIR-9199 / MOTIR-9200: the Link page form and the extracted place line on
+  // the work item page, and the page's strip fetch helper. The strip and its
+  // Link work item control sit under `app/**/pages/*/_components/` above.
+  // NOT gated: `lib/services/projectAccessService.ts` (one method added to a
+  // shared service this lane reaches only in part), `lib/dto/pageLinks.ts`
+  // (declaration-only) and `hooks/useLinkCandidateSearch.ts` (shared with the
+  // create-issue links field).
+  'app/**/items/*/_components/LinkPageForm.tsx',
+  'app/**/items/*/_components/PagePlace.tsx',
+  'lib/pages/pageLinkedWorkItemsClient.ts',
   // Story MOTIR-7694 (a work item tags a page; MOTIR-7699): the page-token
   // grammar and the item-body row derivation. The mention-search route is
   // gated by the `app/api/pages/*/route.ts` glob above.
@@ -205,6 +215,11 @@ export default defineConfig({
       'tests/api/workItemPagesRoute.test.ts',
       // The work item page's Pages section (MOTIR-7575).
       'tests/components/pagesSection.test.tsx',
+      // The hand link's two UI surfaces (MOTIR-9199 · MOTIR-9200); the story gate
+      // is `tests/pages/pageWorkItemHandLinks.story.integration.test.ts`
+      // (matched by `tests/pages/*.test.ts`).
+      'tests/components/linkPageForm.test.tsx',
+      'tests/components/linkedWorkItemsStrip.test.tsx',
       // Story MOTIR-7567 (link a page and a work item by hand): the write
       // path (MOTIR-9197), the page-side read (MOTIR-9198) and the link
       // search (MOTIR-9204); `pagesService.linkSearch` is matched above.
