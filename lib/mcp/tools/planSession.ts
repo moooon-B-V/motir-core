@@ -166,9 +166,31 @@ const requirementField = z
           'as an observation rather than a test name.',
       ),
     assumptions: z
-      .string()
+      .union([
+        z.array(
+          z.union([
+            z.string(),
+            z.object({
+              id: z
+                .string()
+                .optional()
+                .describe(
+                  'A stable id for this recommendation. Assigned (`r<position>`) when omitted.',
+                ),
+              text: z.string(),
+            }),
+          ]),
+        ),
+        z.string(),
+      ])
       .optional()
-      .describe('What you concluded that nobody confirmed. May be "" (see `scopeEdge`).'),
+      .describe(
+        'What you concluded that nobody confirmed, as a LIST — one entry per recommendation, ' +
+          'each a self-contained sentence (a bare string, or `{ id?, text }` when you want ' +
+          'to name it). Each one can then be confirmed or overturned on its own. [] or "" says you ' +
+          'concluded nothing (see `scopeEdge`). A single string is accepted and is read as ' +
+          'ONE recommendation — it is never split.',
+      ),
   })
   .optional()
   .describe(
