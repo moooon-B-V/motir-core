@@ -48,7 +48,7 @@ export function CodeUnsearchableBanner({
       aria-labelledby={titleId}
       data-testid="code-unsearchable-banner"
       data-where={where}
-      className="flex flex-col gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-warning-surface) p-3 text-(--el-warning-text)"
+      className="flex flex-col gap-2.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-warning-surface) p-(--spacing-card-padding-12) text-(--el-warning-text)"
     >
       <h3 id={titleId} className="flex items-center gap-2 text-sm font-semibold">
         <Pause className="size-3.5 shrink-0" aria-hidden="true" />
