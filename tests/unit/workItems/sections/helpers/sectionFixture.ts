@@ -47,6 +47,10 @@ export function fixture(kind: IssueType, type: SectionType): WorkItemSections {
     scopeBoundary: 'The boundary text.',
     acceptanceCriteria: CRITERIA,
     contextRefs: REFS,
+    decisionBrief: 'No intent classifier.',
+    whatChanged: '**Change:** workflow\nIt said X; it says Y.',
+    supersedes: 'MOTIR-1, MOTIR-2',
+    resultingDirection: 'The whole direction.',
   };
   return Object.fromEntries(
     Object.entries(all).filter(([name]) => set.sections.includes(name as never)),
