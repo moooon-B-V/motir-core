@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-06-21, locked with Yue; **catalog provisioned in
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
-  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 + 2026-09-26 — see below.**
+  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 + 2026-09-26 + 2026-10-21 — see below.**
 - **Credit model:** the rates, the token→credit conversion and the ledger this ADR
   builds on are specified in `motir-ai/docs/credit-model.md`, owned by the closed
   side (where the ledger lives). Every citation of it below is repo-qualified for
@@ -208,7 +208,7 @@ no credits).
   ~60% of Jira's $8.15 / half of Linear's $10, so even scaled it undercuts them.)
 - **② AI (planning + agents) — an independent purchase, available to ANY org.** A
   one-time **300-credit trial** for free; then an **org-level monthly credit plan**
-  (Standard / Pro / Max) and/or metered top-ups. The AI plan is bought
+  (Standard / Pro / Max) (_Superseded as current: see the 2026-10-21 amendment at the end of §2 — MOTIR-8994._) and/or metered top-ups. The AI plan is bought
   **separately** and does **NOT** require a paid tracker — **a free-tracker org can
   buy AI.** It is funded by a **flat per-ORG fee, never the seat fee** (the margin
   rule): credits cost real money, so the AI fee — not seats — covers them. AI is
@@ -232,7 +232,7 @@ line (the org goes `scaled`; the first seat is free, members beyond it bill $5):
 So the **seat fee appears ONLY when the org outgrows the free caps**; a small org
 pays only for the AI it opts into. The named plans (**Standard → Pro → Max →
 Enterprise**) are the **AI ladder**; the tracker is just **free ↔ $5/seat
-when scaled**. The two map onto the two data models cleanly: the **AI plan is the
+when scaled**. (_Superseded as current: see the 2026-10-21 amendment at the end of §2 — MOTIR-8994._) The two map onto the two data models cleanly: the **AI plan is the
 motir-ai `PlanTier`** (drives credits), the **scaled-tracker state is a separate
 motir-core subscription** (drives the §4 caps) — see §3.
 
@@ -290,6 +290,9 @@ scaled tracker (start the $5/seat subscription); until then the create is blocke
 | **Max**        | `max`          | 30,000                 | $150        | monthly ($1,200/yr)   | ✓       | planning + heavy agent (design, docs, coding)        |
 | **Enterprise** | `enterprise`   | custom                 | custom      | monthly               | ✓       | custom (no Stripe object — platform staff sets tier) |
 
+_This table, and its `enterprise` row, are the ladder as first provisioned; the ladder that ships is
+stated in the 2026-10-21 amendment at the end of §2 (MOTIR-8994)._
+
 **Any org — free-tracker or scaled — can hold an AI plan**; it does not require a
 paid tracker. The plan's flat per-org fee funds its credit pool (the margin rule,
 §1); illustrative `$` pending the Epic-8 credit→`$` peg. AI is org-level — the same
@@ -304,7 +307,8 @@ shipped default tier is **`basic` ("Basic"), 1,000 credits/MONTHLY**, seeded in 
    provisioning, never refreshed. Add a **cadence field** on `PlanTier`
    (`allotmentCadence: 'one_time' | 'monthly'`, default `monthly`).
 2. **Add `standard` (2,000), `pro` (8,000), `max` (30,000), `enterprise` (custom)**
-   rows, all `monthly`. (The original 8.1.4 migration also added a `starter` (300)
+   rows, all `monthly`. (_History: the pools these rows carry now are stated in the 2026-10-21
+   amendment at the end of §2 — MOTIR-8994._) (The original 8.1.4 migration also added a `starter` (300)
    row; the 2026-06-23 amendment removes it — see 8.1.19 / MOTIR-1309.)
 3. The monthly scheduler (8.1.4b) grants only **`monthly` tiers with allotment > 0**
    — `free` (one-time) never refreshes; the paid plans do.
@@ -312,7 +316,8 @@ shipped default tier is **`basic` ("Basic"), 1,000 credits/MONTHLY**, seeded in 
 A one-row update + four inserts + a nullable column — NOT a user-data migration.
 The pool stays the shipped **flat per-org `monthlyCreditAllotment`** (not × seats).
 
-**AI pool sizing** (off the shipped credit math — `motir-ai/docs/credit-model.md`; one onboarding
+**AI pool sizing** (_the v1 sizing, kept as history; the pools that ship are in the 2026-10-21
+amendment at the end of §2 — MOTIR-8994_) (off the shipped credit math — `motir-ai/docs/credit-model.md`; one onboarding
 planning pass ≈ 150–250 credits):
 
 - **Free = 300, ONE-TIME** — try planning once.
@@ -325,7 +330,8 @@ planning pass ≈ 150–250 credits):
 tracker **$5/seat/mo · $40/seat/yr** (annual-default; ~33% off; charged only when
 scaled); per-org AI fees **$25 / $75 / $150 monthly** and **$200 / $600 / $1,200
 annually** (Standard/Pro/Max); **credit top-up $10 per
-1,000 credits** (one-time, customer chooses quantity at Checkout). All Prices in
+1,000 credits** (one-time, customer chooses quantity at Checkout; _superseded: the top-up ships
+at 1,000 credits for $5 — see the 2026-10-21 amendment at the end of §2, MOTIR-8994_). All Prices in
 **USD**, `pro_pool_annual` set as the **default Price** on the Motir AI Product
 (the recommended/anchor tier). These numbers are v1 seed values per the
 ModelCreditRate stance — tunable without code changes, immutable on the existing
@@ -335,7 +341,7 @@ Price objects (a re-tune archives + creates new Prices, lookup keys stable).
 over top-ups):** Standard $12.50/1k, Pro $9.38/1k, Max $5.00/1k; top-up $10/1k
 (sits between Standard and Pro — emergency-overflow valve, never cheaper than
 committing to the next tier). Standard is the costliest-per-credit rung, so the
-curve stays monotonic top-to-bottom.
+curve stays monotonic top-to-bottom. (_No longer current: the shipped rungs are flat at $5 per 1,000 credits a month — see the 2026-10-21 amendment at the end of §2, MOTIR-8994._)
 
 > **COGS — resolved by construction (the margin rule, §1).** Each AI plan's credits
 > are funded by its **per-org fee**, never the seat fee — so margin holds at **any**
@@ -377,7 +383,9 @@ only vs the PM tools above, not vs Cursor).
 >   (sandbox/compute time), so it is sized over fully-loaded COGS, not tokens alone.
 >
 > This **supersedes** the earlier "defer a pool-resize" framing: the lever is the
-> agent-lane **rate**, not (only) bigger pools. **No code ships in 8.1** — the rate
+> agent-lane **rate**, not (only) bigger pools (_that parenthetical is no longer current: a larger
+> credit pool is now a product of its own — the 2026-10-21 amendment at the end of §2, MOTIR-8994;
+> the lane decision's substance stands_). **No code ships in 8.1** — the rate
 > is effective-dated config (`ModelCreditRate`, a per-row `marginMultiplier`), and
 > nothing meters the agent loop until Epic 9 (MOTIR-673). **Epic 9 owns the
 > implementation**: add a **use-case dimension to `ModelCreditRate`** (or meter the
@@ -448,6 +456,67 @@ only vs the PM tools above, not vs Cursor).
 > and the hosting meter (MOTIR-4336) stays Motir's cost record — the charge is a
 > separate reader of its seconds, never a price derived from its cost.
 
+> **Amendment (2026-10-21, MOTIR-8994) — the ladder as it ships, and the ceiling is no longer the
+> end.** Two jobs, kept attributed: (a) the ladder [MOTIR-7592] settled, which this file never
+> absorbed; (b) the band above it, decided by MOTIR-8987 (the derivation rule for a larger pool and
+> its price, and how Stripe carries it).
+>
+> **What it supersedes**, quoted from this file:
+>
+> - §1: "The named plans (**Standard → Pro → Max → Enterprise**) are the **AI ladder**", and
+>   bullet ②'s "an **org-level monthly credit plan** (Standard / Pro / Max)".
+> - §2's ladder table: "| **Enterprise** | `enterprise` | custom | custom | monthly | ✓ | custom
+>   (no Stripe object — platform staff sets tier) |", and its Standard 2,000 / Pro 8,000 rows.
+> - §2's "Final prices": "**credit top-up $10 per 1,000 credits** (one-time, customer chooses
+>   quantity at Checkout)".
+> - §2's "Per-credit ladder": "Standard $12.50/1k, Pro $9.38/1k, Max $5.00/1k; top-up $10/1k (sits
+>   between Standard and Pro — emergency-overflow valve, never cheaper than committing to the next
+>   tier)".
+> - §2's lane decision: "the lever is the agent-lane **rate**, not (only) bigger pools", only as
+>   far as the parenthetical.
+>
+> **(a) The ladder as settled (MOTIR-7592)**, read entry for entry from `lib/billing/catalog.ts`:
+>
+> | Plan     | Credits a month | Monthly | Annual | Per 1,000 credits a month |
+> | -------- | --------------- | ------- | ------ | ------------------------- |
+> | Free     | 300, one-time   | $0      | —      | —                         |
+> | Standard | 5,000           | $25     | $200   | 25 ÷ 5 = $5               |
+> | Pro      | 15,000          | $75     | $600   | 75 ÷ 15 = $5              |
+> | Max      | 30,000          | $150    | $1,200 | 150 ÷ 30 = $5             |
+> | Max ×2   | 60,000          | $300    | $2,400 | 300 ÷ 60 = $5             |
+>
+> The basis is flat, not a curve: every rung is $5 per 1,000 credits a month, and every annual price
+> is exactly 8× its monthly. The top-up is 1,000 credits for $5, the same per-credit rate as any
+> regular plan rather than a price between two rungs. Every paid plan includes one tracker seat
+> (§4). `enterprise` is, in the catalog's own words, a tier "an org staff set to … keeps … in
+> motir-ai; it just has nothing to buy here": it has no storefront card, no price, and nobody is
+> sold it.
+>
+> **(b) What the ceiling means now.** The catalog's ceiling accessor (`maxMonthlyPlanCredits()`)
+> names the top of the REGULAR ladder, never the largest pool on sale. Narrowing it to the ladder
+> band is MOTIR-8990's (the larger plan joins the catalog and every allow-list), so read this as
+> the contract that card establishes. Above the ceiling, the product answers an estimate with a
+> **larger credit pool plan** derived from the estimate's high end, instead of stacked top-ups. It
+> is a plan of its own, bought at quantity 1 on either cadence; an org holds one live AI plan, and
+> an org that already holds one moves up through the shipped change-of-plan path. Its money
+> resolves, as §3 already has it, through one ACTIVE `<tierKey>_pool_<cadence>` price, and its
+> credits come from its `PlanTier` row.
+>
+> **Where the band's rule lives.** The step, the rounding, the rung table, the tier-key and
+> lookup-key form and the Stripe carriage are recorded on MOTIR-8987's decision page and are
+> deliberately not restated here, so this file stays right if that record changes.
+>
+> **What is overtaken, and what stands.** Overtaken: MOTIR-7592's "no larger plan beyond Max ×2,
+> top-up only", and §2's "not (only) bigger pools" parenthetical. Unchanged: the four rungs' pools
+> and prices, the top-up path and its price, the included seat, per-org pricing at quantity 1, no
+> contact-sales path, and the two-lane margin decision's substance. No COGS or margin figure is
+> added here; those stay in `motir-meta/margin-analysis.md`.
+>
+> **Left as history, not rewritten:** the Consequences bullet saying 8.1.4 "adds the `standard`
+> (2,000), `pro` (8,000), `max` (30,000), `enterprise` (custom) rows" and the §2 narrative around
+> it (the reconciliation list and the v1 "AI pool sizing") are the record of what was provisioned
+> then, superseded by this amendment.
+
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 
 A paid org's subscription carries **two recurring items**: one **shared per-seat
@@ -461,6 +530,10 @@ tier (`quantity` 1). Provision:
 | **Motir Credits** (top-up)                    | `credit_topup` ($10 unit price; customer chooses quantity at Checkout)                      | **one-time** (`mode: 'payment'` at Checkout) | pay-as-you-go overage beyond the pool; writes via `creditService.topUp(N × 1,000)`. Not metered — discrete purchase per click                                                                                                                         |
 | — (Free)                                      | —                                                                                           | —                                            | **no Stripe object** — free = no subscription (the one-time 300 is granted at provisioning)                                                                                                                                                           |
 | — (Enterprise)                                | —                                                                                           | —                                            | **no public Stripe object** — invoiced/custom; tier set by platform staff                                                                                                                                                                             |
+
+_The AI row, the `credit_topup` row and the Enterprise row above are the catalog as first
+provisioned. The ladder that ships (Max ×2 included, the top-up at $5 per 1,000, no Enterprise
+card) and the larger pools above it are in the 2026-10-21 amendment at the end of §2 (MOTIR-8994)._
 
 The two subscription items are **independent**. A **scaled** org carries `N × tracker_monthly` (seat item); an org with an **AI plan** carries `1 × <plan>_pool_monthly` (pool item). So a **small AI-only org has ONLY the pool item**
 (no seat fee — it's within the free tracker caps); a **scaled tracker-only org has
@@ -485,7 +558,9 @@ The shape locked above became, in practice:
   deferred (no asset yet; placeholder-free is cleaner than throwaway-placeholder).
 - **Catalog:** 3 Products / 11 Prices as originally provisioned per the §3 table
   (the 2026-06-23 amendment archives `starter_pool_{monthly,annual}` → **9 active**;
-  8.1.20 / MOTIR-1310). All Prices USD. The
+  8.1.20 / MOTIR-1310). _These counts are a dated snapshot, not a contract: the number of Prices
+  follows the rungs the catalog lists, one ACTIVE price per rung per cadence (2026-10-21
+  amendment, MOTIR-8994)._ All Prices USD. The
   per-Product _default_ Price is `tracker_annual` (Motir) and `pro_pool_annual`
   (Motir AI) — annual-first presentation, the larger headline number anchors
   better and the implied 33% discount feels like a deal. 8.1.7's billing settings
@@ -558,7 +633,8 @@ extended by 8.1.24 / MOTIR-1318 — see Consequences). **These caps are the Trac
 free→paid line:** exceeding any one requires the org to start the **$5/seat
 scaled-tracker subscription** (or the create is blocked). **A paid AI plan lifts the
 caps via its included seat (amended 2026-06-24, 8.1.22 / MOTIR-1316):** an org with
-an active paid AI plan (Standard / Pro / Max) resolves to `scaled` — all §4 caps
+an active paid AI plan (Standard / Pro / Max; _as of the 2026-10-21 amendment, every paid plan
+including Max ×2 and a larger credit pool_) resolves to `scaled` — all §4 caps
 lifted, the first seat included, members beyond the first billed at $5/seat. The
 scaled tracker still grants no credits (the bundle is one-way: AI → seat, never
 seat → credits), and the **Free trial does not lift any cap**.
@@ -737,6 +813,9 @@ gates the mutations. Self-host: N/A (no billing surface).
 ---
 
 ## Consequences
+
+- **A larger credit pool is a plan of its own at quantity 1 (2026-10-21, MOTIR-8994).** It rides
+  §5's status map with no new entitlement state, so no surface gains a new terminal state to draw.
 
 - **8.1.2 (MOTIR-1141) — DONE in sandbox 2026-06-22.** Provisions exactly the §3
   catalog: Product **"Motir"** (`tracker_monthly` + `tracker_annual`, per-seat),
