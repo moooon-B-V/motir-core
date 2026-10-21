@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { levelPageSize } from '@motir/pages';
+import { levelPageSize } from '@/lib/pages';
 import { db } from '@/lib/db';
 import { PageLevelCursorInvalidError } from '@/lib/pages';
 import { encodeWorkItemPagesCursor } from '@/lib/pages/workItemPagesCursor';

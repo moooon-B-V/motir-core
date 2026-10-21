@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { PageLevelCursorInvalidError } from '@motir/pages';
+import { PageLevelCursorInvalidError } from '@/lib/pages';
 import { db } from '@/lib/db';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { encodePageTitleSearchCursor } from '@/lib/pages/pageTitleSearchCursor';

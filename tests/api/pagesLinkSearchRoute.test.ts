@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PageLevelCursorInvalidError } from '@motir/pages';
+import { PageLevelCursorInvalidError } from '@/lib/pages';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { PageLinkCandidatesDto } from '@/lib/dto/pages';
 
