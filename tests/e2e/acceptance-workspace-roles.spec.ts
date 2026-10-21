@@ -27,7 +27,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 // settings no longer offer roles at all, and the old Roles address lands on the
 // workspace's.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // A role change and a dismiss are Server Actions POSTed to `/settings/workspace`;
 // each is armed BEFORE the press, its status asserted, and the committed row

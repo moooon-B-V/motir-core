@@ -61,7 +61,7 @@ import en from '@/messages/en.json';
 //     correctly, and the reconnect would then be a request the window caused;
 //   · the hidden window is the grace period itself, imported, never retyped.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // No `waitForTimeout`. A write is the service call itself — committed when it
 // resolves — then the row in the reader's own table; a stream is its response

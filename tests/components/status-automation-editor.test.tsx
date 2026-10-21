@@ -212,7 +212,7 @@ describe('StatusAutomationEditor — saving (MOTIR-1622)', () => {
     fireEvent.click(screen.getByTestId('status-automation-save'));
 
     // No self-revert while saving: the optimistic value stands, and there is no
-    // router.refresh() to re-read stale data over it (CLAUDE.md § page state).
+    // router.refresh() to re-read stale data over it (the coding convention § page state).
     expect(cascadeSwitch().getAttribute('aria-checked')).toBe('false');
 
     await act(async () => {

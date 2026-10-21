@@ -35,7 +35,7 @@ import { LANDED_WORKBENCH_URL } from './_helpers/workbench-landing';
 // load and the soft push's RSC payload alike, since either can be the one that
 // commits late — and requires exactly one. Against the pre-MOTIR-2645 code
 // there are two and this fails; with the `router.push` gone there is one.
-// Nothing here waits an interval to decide something is ready (CLAUDE.md § E2E
+// Nothing here waits an interval to decide something is ready (the coding convention § E2E
 // authoritative signal).
 //
 // Prefetches are excluded by their `Next-Router-Prefetch` header: the shell

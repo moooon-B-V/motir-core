@@ -54,7 +54,7 @@ import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 // door MOTIR-6136 opened) rather than produced by a planning pass. That the
 // hosted planner judges every leaf is motir-ai's own gate (MOTIR-6145).
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // The review is server-rendered from the seeded plan, so its landmarks (the
 // status pill, the proposal list, the canvas) ARE the loaded signal. The one

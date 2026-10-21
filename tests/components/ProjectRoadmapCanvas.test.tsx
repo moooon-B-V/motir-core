@@ -134,7 +134,7 @@ describe('ProjectRoadmapCanvas', () => {
   // `setTimeout(0)`; under CI load that macrotask can win the race against the
   // scheduler, so `findByText('c')` resolves with the effect still pending and a
   // plain `expect(mock)` samples 0 calls. Wait on the callback itself — the
-  // authoritative signal (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal /
+  // authoritative signal (the coding convention § E2E tests wait on the AUTHORITATIVE signal /
   // notes.html #37, at the component altitude). This is MOTIR-1736.
   it('auto-resets a level when its auto-laid node set changes (a re-plan)', async () => {
     const onResetPositions = vi.fn();

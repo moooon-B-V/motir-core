@@ -367,7 +367,7 @@ export async function runCadenceTick(round: number): Promise<CadenceTickResult> 
  * `maxWait`, throws P2028, and the route 500s — so the surface under test never
  * renders at all. Observed exactly that way on this spec's first green-build run.
  *
- * So the wait is on the AUTHORITATIVE signal, never a sleep (CLAUDE.md § E2E):
+ * So the wait is on the AUTHORITATIVE signal, never a sleep (the coding convention § E2E):
  * the shipped 1.6 run ledger. Settled = no `running` row AND a ledger size that
  * stopped growing across two consecutive polls — the second clause is what covers
  * the gap between "event published" and "the row for it exists", which a

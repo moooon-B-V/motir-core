@@ -27,7 +27,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // (its heading and its list) before any lane assertion. Every test-id lookup is
 // SCOPED to its list: the lanes stream in behind an in-page Suspense, and React
 // keeps the previous subtree mounted (hidden) while it does, so an unscoped one
-// matches both (CLAUDE.md § the second cost of a boundary).
+// matches both (the coding convention § the second cost of a boundary).
 
 // The tree is seeded through the services, never the main lane's HTTP helpers:
 // those post to the main lane's origin, and this lane's server is on its own.

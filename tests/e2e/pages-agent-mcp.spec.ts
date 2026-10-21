@@ -34,7 +34,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 // the same `fixedGrant` the device flow mints with — so narrowing that constant
 // fails this spec rather than a hand-built grant hiding it.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 // Every agent step waits on its own tool result. The person's typing waits on
 // its `POST /api/pages/<id>/updates` response, armed before the keys, and then
 // on the save indicator reading Saved. Every page load waits on the editor's

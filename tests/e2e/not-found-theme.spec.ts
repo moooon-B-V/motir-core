@@ -52,7 +52,7 @@
 //      invariant, and it names no token — so it cannot go quietly true if the
 //      theme layer's plumbing is renamed.
 //
-// Authoritative-signal discipline (CLAUDE.md § E2E): the status is read off the
+// Authoritative-signal discipline (the coding convention § E2E): the status is read off the
 // navigation response, the pin is read off the toggle's own accessible name, and
 // every colour is sampled only after `document.getAnimations()` has settled —
 // never on an interval and never after a sleep.
@@ -195,7 +195,7 @@ async function sample(page: Page, heading: string): Promise<Sample> {
  *
  * `document.getAnimations()` includes running CSS transitions and each one's
  * `finished` promise resolves when it is over, so awaiting them all is the
- * authoritative signal (CLAUDE.md § E2E: never an interval, never a sleep). The
+ * authoritative signal (the coding convention § E2E: never an interval, never a sleep). The
  * agreement check stays as a second guard for anything that started late.
  */
 async function settledSample(page: Page, heading: string): Promise<Sample> {

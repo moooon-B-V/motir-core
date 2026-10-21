@@ -81,7 +81,7 @@ async function extendFeed(page: Page, fromName: string, toName: string) {
 }
 
 // ── The authoritative signals this journey's writes commit through ─────────
-// (MOTIR-3694 — CLAUDE.md § *E2E tests wait on the AUTHORITATIVE signal*.)
+// (MOTIR-3694 — the coding convention § *E2E tests wait on the AUTHORITATIVE signal*.)
 //
 // ⚠️ MOTIR-4399 LIFTED BOTH OF THESE into `_helpers/authoritative-signal.ts`,
 // unchanged, so the next spec that needs them imports them instead of

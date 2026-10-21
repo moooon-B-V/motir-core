@@ -202,7 +202,7 @@ const proposedSprint = (page: Page, n: number) =>
 
 /** Save the settings panel and wait on the PATCH's 200 — the authoritative
  *  signal. The panel is optimistic, so asserting the reload without this would
- *  race the in-flight write (CLAUDE.md § E2E authoritative signal). */
+ *  race the in-flight write (the coding convention § E2E authoritative signal). */
 async function saveAiSettings(page: Page, projectKey: string): Promise<void> {
   const saved = page.waitForResponse(
     (r) =>

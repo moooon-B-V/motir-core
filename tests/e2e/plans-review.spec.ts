@@ -223,7 +223,7 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(acceptedCard).toHaveCount(1);
   await expect(acceptedCard.getByTestId('plan-item-outcome')).toHaveText('accepted');
 
-  // Guarded on ABSENCE (CLAUDE.md § E2E): a DECIDED plan can never be decided
+  // Guarded on ABSENCE (the coding convention § E2E): a DECIDED plan can never be decided
   // again, so every staleness warning on it is advice about a choice nobody can
   // make. Both surfaces must be quiet. (The warnings such a plan used to carry
   // were caused BY the approval, since the cards it created under one parent
@@ -336,7 +336,7 @@ test('Plans: empty state shows the generate-your-first-plan CTA', async ({ page 
 // repo, the step took the canvas the approved plan's items belong on, and the row
 // it created became the project's whole repo-pin domain.
 //
-// Guarded on ABSENCE (CLAUDE.md § E2E): the assertion is that the hosting step's
+// Guarded on ABSENCE (the coding convention § E2E): the assertion is that the hosting step's
 // heading is NOT there. Asserting some other thing IS there would pass while the
 // step rendered beside it.
 test('Plans: approving on a project that already has code shows the items, not the hosting step', async ({

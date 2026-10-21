@@ -22,7 +22,7 @@ import { projectsService } from '@/lib/services/projectsService';
 //   4. the OFF states — each direction is suppressed by its own switch, with the
 //      other still working.
 //
-// ── Why the waits look like this (CLAUDE.md § E2E authoritative signal) ──
+// ── Why the waits look like this (the coding convention § E2E authoritative signal) ──
 // Derivation is ASYNCHRONOUS: the transition commits, emits, and the job derives
 // afterwards. So there is no response to await for the DERIVED item — the
 // authoritative signal is the derived row itself, polled through the DB exactly

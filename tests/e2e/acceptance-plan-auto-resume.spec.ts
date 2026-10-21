@@ -39,7 +39,7 @@
 // The saved proposal's snapshot is `title`, `descriptionMd` and `createdAt`: `PlanItem` carries
 // no `updatedAt`, and a re-authored proposal would be a new row with a new `createdAt`.
 //
-// DETERMINISM (CLAUDE.md § E2E): every wait is a response, a landmark, a fixture read or a
+// DETERMINISM (the coding convention § E2E): every wait is a response, a landmark, a fixture read or a
 // Postgres read-back. `beat()` / `chapter()` are PACING only, after the assertion that proved
 // the state. The two absences are each tied to a later observed signal: no fourth automatic
 // submit is read after the failure is recorded in Postgres AND the overlay has drawn the waiting

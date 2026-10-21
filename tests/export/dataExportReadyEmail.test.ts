@@ -99,7 +99,7 @@ describe('the export-ready email template', () => {
       expect(rendered.subject.length).toBeGreaterThan(0);
       for (const body of [rendered.html, rendered.text]) {
         // The ONE link, in both bodies — the plain-text one unredacted, which is
-        // the dev-console provider's contract (CLAUDE.md § email templates).
+        // the dev-console provider's contract (the coding convention § email templates).
         expect(body).toContain(PANE_URL);
         // The seven-day promise, interpolated from the constant rather than
         // retyped, so the copy and the sweep cannot drift.

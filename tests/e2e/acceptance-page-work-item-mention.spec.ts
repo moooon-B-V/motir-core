@@ -33,7 +33,7 @@ import { projectAccessData } from '../helpers/projectAccess';
 // Visitor of the project, made public, sees no Pages section on the same item a
 // member sees it on.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // Every body save is waited on by its own `POST /api/pages/<id>/updates`
 // response, ARMED BEFORE the input that triggers it, and then the toolbar's save

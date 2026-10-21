@@ -9,7 +9,7 @@ import { INVITE_IDENTIFIER_PREFIX } from '@/lib/services/workspaceInvitesService
 // main-lane spec (`project-access-contractor.spec.ts`) and the paced receipt
 // (`acceptance-project-access.spec.ts`), so the two cannot drift apart.
 //
-// Every step waits on an AUTHORITATIVE signal (CLAUDE.md § E2E): the write's own
+// Every step waits on an AUTHORITATIVE signal (the coding convention § E2E): the write's own
 // response, armed BEFORE the press, and — where a later read depends on it — the
 // committed row, polled from the database.
 

@@ -29,7 +29,7 @@ import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 // archived page and an archived sub-page by their address; the list's empty
 // state, Load more and a refused restore; and what a Member and a Viewer see.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // Every write is waited on by its own response, ARMED BEFORE the click that
 // sends it, and its status asserted before the next step:

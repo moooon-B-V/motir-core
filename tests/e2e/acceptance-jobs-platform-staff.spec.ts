@@ -22,7 +22,7 @@ import { SHELL_PASSWORD, signIn, signUp } from './_helpers/shell-session';
 // case at this tier. The explicit "set to a non-staff email" proof is the
 // integration matrix's (`tests/jobs/jobsPlatformGateMatrix.test.ts`).
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // A replay is a Server Action POSTed to `/settings/organization`: armed BEFORE
 // the press, its status asserted, and the committed `replayedAt` polled from

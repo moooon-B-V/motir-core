@@ -28,7 +28,7 @@ import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 // The three tests after the recorded one — a viewer, a restore held by an
 // unsaved edit, a version pruned under the panel — run at machine speed.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // Every body save is waited on by its own `POST /api/pages/<id>/updates`
 // response, ARMED BEFORE the typing (one burst well under the autosave's 5 s cap
