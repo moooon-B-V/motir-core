@@ -450,7 +450,11 @@ export async function seedOwnProject(email: string): Promise<OwnProjectSeed> {
   const first = await add(SEEDED_TITLE, true);
   await add('Wire the language control', true);
   await add('Groom the backlog', false);
-  await sprintsService.startSprint(sprint.id, { endDate: SEEDED_SPRINT_END.toISOString() }, ctx);
+  // startSprint stamps its start at NOW, and the window must not end before it. The
+  // fixed SEEDED_SPRINT_END went stale once the calendar passed it, so start with a
+  // rolling end and let pinSeededDates write the fixed window the specs read.
+  const rollingEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  await sprintsService.startSprint(sprint.id, { endDate: rollingEnd.toISOString() }, ctx);
   await pinSeededDates(sprint.id, first.id);
 
   const plan = await plansService.createPlan(
