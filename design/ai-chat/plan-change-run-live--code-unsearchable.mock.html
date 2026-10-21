@@ -1,0 +1,885 @@
+<!doctype html>
+<!--
+  design/ai-chat/plan-change-run-live--code-unsearchable.mock.html
+
+  A DELTA beside `plan-change-run-live--answer-or-forward.mock.html` (a record, NOT edited).
+  It holds only the panels that change: the banner a planning overlay shows when a TARGET
+  repository's code cannot be searched, so the planner stopped. The spec is
+  `design-notes.md`, the section "The planning rail when the code cannot be searched".
+
+  TOKENS: the stylesheet's token blocks are the shipped values copied from the sibling mock
+  (Tier-0 `--color-*` under `@layer theme`, and the Tier-3 `--el-*` layer). The component
+  rules are hand-written and name ONLY `--el-*` colours and the element-semantic shape
+  tokens (`--radius-*`, `--spacing-*`, `--height-btn-sm`, `--shadow-card`) — no raw hue.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The planning rail when the code cannot be searched</title>
+    <style>
+      @layer properties;
+      @layer theme, base, components, utilities;
+      @layer theme {
+        :root,
+        :host {
+          --font-sans:
+            var(--font-sans-pairing, 'Segoe UI'),
+            var(--font-script-sans, var(--font-sans-tail, sans-serif)),
+            var(--font-sans-tail, sans-serif);
+          --font-mono:
+            var(--font-mono-pairing, 'SF Mono'),
+            var(--font-script-mono, var(--font-mono-tail, monospace)),
+            var(--font-mono-tail, monospace);
+          --spacing: 0.25rem;
+          --text-xs: 0.75rem;
+          --text-xs--line-height: calc(1 / 0.75);
+          --text-sm: 0.875rem;
+          --text-sm--line-height: calc(1.25 / 0.875);
+          --font-weight-medium: 500;
+          --font-weight-semibold: 600;
+          --tracking-wide: 0.025em;
+          --leading-snug: 1.375;
+          --leading-relaxed: 1.625;
+          --animate-spin: spin 1s linear infinite;
+          --default-transition-duration: 150ms;
+          --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          --default-font-family: var(--font-sans);
+          --default-mono-font-family: var(--font-mono);
+          --color-primary: #5645d4;
+          --color-primary-foreground: #ffffff;
+          --color-primary-pressed: #4534b3;
+          --color-primary-fill: #5645d4;
+          --color-background: #ffffff;
+          --color-foreground: #1a1a1a;
+          --color-surface: #f6f5f4;
+          --color-surface-soft: #fafaf9;
+          --color-canvas: #ecebe7;
+          --color-ink: #1a1a1a;
+          --color-charcoal: #37352f;
+          --color-slate: #5d5b54;
+          --color-steel: #787671;
+          --color-stone: #a4a097;
+          --color-muted: #f3f4f6;
+          --color-muted-foreground: #787671;
+          --color-hairline: #e5e3df;
+          --color-hairline-soft: #ede9e4;
+          --color-hairline-strong: #c8c4be;
+          --color-border: #e5e3df;
+          --color-accent: #ff64c8;
+          --color-accent-orange: #dd5b00;
+          --color-accent-teal: #2a9d99;
+          --color-accent-green: #1aae39;
+          --color-tint-peach: #ffe8d4;
+          --color-tint-rose: #fde0ec;
+          --color-tint-mint: #d9f3e1;
+          --color-tint-lavender: #e6e0f5;
+          --color-tint-sky: #dcecfa;
+          --color-tint-yellow: #fef7d6;
+          --color-success: #1aae39;
+          --color-warning: #dd5b00;
+          --color-destructive: #e03131;
+          --color-destructive-foreground: #ffffff;
+          --color-info: #0075de;
+          --color-link: #0070d2;
+          --color-link-pressed: #005bab;
+          --radius-btn: 8px;
+          --radius-card: 12px;
+          --radius-input: 8px;
+          --radius-badge: 9999px;
+          --radius-control: 6px;
+          --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+          --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+          --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+          --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+          --spacing-input-x: 16px;
+          --spacing-control-x: 10px;
+          --spacing-control-y: 6px;
+          --spacing-icon-btn: 4px;
+          --spacing-chip-x: 10px;
+          --spacing-chip-y: 2px;
+          --spacing-kbd-x: 6px;
+          --spacing-kbd-y: 2px;
+          --height-btn-sm: 32px;
+          --height-input: 44px;
+          --spacing-rail-inset: 0px;
+          --transition-duration: 150ms;
+          --active-scale: 0.98;
+          --focus-ring-color: var(--color-primary);
+        }
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-progress-fill: var(--color-primary-fill);
+        --el-editor-focus: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: var(--el-danger);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        }
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, #1aae39 26%, #f6f5f4);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        }
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, #ff64c8 75%, #37352f);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-status-implemented: color-mix(
+            in srgb,
+            var(--color-accent) 75%,
+            var(--color-charcoal)
+          );
+        }
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, #1aae39 30%, #1a1a1a);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        }
+        --el-status-done: color-mix(in srgb, #1aae39 85%, #37352f);
+        @supports (color: color-mix(in lab, red, red)) {
+          --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        }
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+      }
+
+      body {
+        background: var(--el-canvas);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        margin: 0;
+        padding: 24px 16px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .lede {
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        margin: 0 0 24px;
+        max-width: 70ch;
+      }
+      .board {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      figure {
+        margin: 0;
+      }
+      figcaption {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+        max-width: 420px;
+      }
+      figcaption b {
+        color: var(--el-text-strong);
+      }
+      .rail {
+        width: 420px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+      }
+      .rail.narrow {
+        width: 340px;
+      }
+      .rail-h {
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        height: var(--height-btn-sm);
+        display: flex;
+        align-items: center;
+      }
+      .rail-b {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .bubble {
+        align-self: flex-end;
+        background: var(--el-muted);
+        color: var(--el-text);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        max-width: 85%;
+      }
+      .bubble.small {
+        font-size: 13px;
+      }
+      .props {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .props li {
+        font-size: 13px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        color: var(--el-text-secondary);
+      }
+      .pt {
+        display: inline-block;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        margin-right: 6px;
+      }
+      .rec {
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .banner {
+        background: var(--el-warning-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        color: var(--el-warning-text);
+      }
+      .b-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-warning-text);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .glyph {
+        color: var(--el-warning-text);
+        font-size: 14px;
+      }
+      .b-intro {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-warning-text);
+      }
+      .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .row {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        column-gap: 8px;
+        row-gap: 2px;
+      }
+      .repo {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text-strong);
+        word-break: break-all;
+      }
+      .why {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-tint-peach);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        justify-self: end;
+        text-align: right;
+      }
+      .hint {
+        grid-column: 1/-1;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .checked {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-warning-text);
+        border-top: 1px solid var(--el-border);
+        padding-top: 8px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border: 1px solid var(--el-accent);
+      }
+      .btn.secondary {
+        background: var(--el-card);
+        color: var(--el-link);
+        border: 1px solid var(--el-button-border);
+      }
+      .btn:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .composer {
+        border-top: 1px solid var(--el-border-soft);
+        padding: 8px 12px;
+      }
+      .composer-in {
+        display: block;
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        padding: var(--spacing-control-y) var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .copy {
+        margin-top: 32px;
+        max-width: 900px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+      }
+      th,
+      td {
+        border: 1px solid var(--el-border);
+        padding: 6px 10px;
+        text-align: left;
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      th {
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>The planning rail when the code cannot be searched</h1>
+    <p class="lede">
+      Light theme, a member planning in the project. Each panel is the planning overlay's
+      conversation rail.
+    </p>
+    <div class="board">
+      <figure>
+        <figcaption>
+          <b>1.</b> Stopped in the conversation. No planning job opened; the banner sits in the rail
+          under the person’s message. No resume button: the person sends a message once the code can
+          be searched.
+        </figcaption>
+        <div class="rail">
+          <header class="rail-h">Planning thread</header>
+          <div class="rail-b">
+            <div class="bubble user">Add exports to the reports page.</div>
+            <section
+              class="banner"
+              role="region"
+              aria-labelledby="b-conv"
+              data-testid="code-unsearchable-banner"
+            >
+              <h3 id="b-conv" class="b-title">
+                <span class="glyph" aria-hidden="true">&#9208;</span>Planning is on hold: Motir
+                can’t search your code yet
+              </h3>
+              <p class="b-intro">
+                Planning without searching the code would be guesswork, so nothing was planned. Fix
+                the repository below, then send a message to try again.
+              </p>
+              <ul class="rows" aria-label="Repositories that can’t be searched">
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/web</span>
+                  <span class="why">Never indexed</span>
+                  <span class="hint">Nothing has been indexed for it yet.</span>
+                </li>
+              </ul>
+
+              <div class="actions">
+                <a class="btn secondary" href="/code" data-testid="code-unsearchable-codebase"
+                  >Go to Codebase</a
+                >
+              </div>
+            </section>
+          </div>
+          <div class="composer"><span class="composer-in">Message the planner…</span></div>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>
+          <b>2.</b> Stopped mid-walk. The proposals so far stay visible; a quiet record line says
+          nothing more is added; the banner carries the resume control.
+        </figcaption>
+        <div class="rail">
+          <header class="rail-h">Planning thread</header>
+          <div class="rail-b">
+            <div class="bubble user">Add exports to the reports page.</div>
+            <ul class="props" aria-label="Proposed so far">
+              <li><span class="pt">Epic</span> Reports exports</li>
+              <li><span class="pt">Story</span> Export a report as CSV</li>
+              <li><span class="pt">Story</span> Schedule a weekly export</li>
+            </ul>
+            <p class="rec">
+              Kept as proposed so far — 3 work items. Nothing more is added until planning
+              continues.
+            </p>
+            <section
+              class="banner"
+              role="region"
+              aria-labelledby="b-walk"
+              data-testid="code-unsearchable-banner"
+            >
+              <h3 id="b-walk" class="b-title">
+                <span class="glyph" aria-hidden="true">&#9208;</span>Planning is on hold: Motir
+                can’t search your code yet
+              </h3>
+              <p class="b-intro">
+                Planning without searching the code would be guesswork, so Motir stopped here. Fix
+                the repository below, then continue.
+              </p>
+              <ul class="rows" aria-label="Repositories that can’t be searched">
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/web</span>
+                  <span class="why">Indexing in progress</span>
+                  <span class="hint"
+                    >The first index is still running, so there is no code to search yet.</span
+                  >
+                </li>
+              </ul>
+
+              <div class="actions">
+                <button class="btn primary" type="button" data-testid="code-unsearchable-resume">
+                  Check again and continue
+                </button>
+                <a class="btn secondary" href="/code" data-testid="code-unsearchable-codebase"
+                  >Go to Codebase</a
+                >
+              </div>
+            </section>
+          </div>
+          <div class="composer"><span class="composer-in">Message the planner…</span></div>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>
+          <b>3.</b> One row per blocked target repository, with the state in plain words: never
+          indexed · indexing in progress · indexing keeps failing · indexing is paused · host not
+          supported · code search unavailable. The Go to Codebase link targets <code>/code</code>.
+        </figcaption>
+        <div class="rail">
+          <header class="rail-h">Planning thread</header>
+          <div class="rail-b">
+            <section
+              class="banner"
+              role="region"
+              aria-labelledby="b-all"
+              data-testid="code-unsearchable-banner"
+            >
+              <h3 id="b-all" class="b-title">
+                <span class="glyph" aria-hidden="true">&#9208;</span>Planning is on hold: Motir
+                can’t search your code yet
+              </h3>
+              <p class="b-intro">
+                Planning without searching the code would be guesswork, so Motir stopped here. Fix
+                the repository below, then continue.
+              </p>
+              <ul class="rows" aria-label="Repositories that can’t be searched">
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/web</span>
+                  <span class="why">Never indexed</span>
+                  <span class="hint">Nothing has been indexed for it yet.</span>
+                </li>
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/api</span>
+                  <span class="why">Indexing in progress</span>
+                  <span class="hint"
+                    >The first index is still running, so there is no code to search yet.</span
+                  >
+                </li>
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/mobile</span>
+                  <span class="why">Indexing keeps failing</span>
+                  <span class="hint">The last attempts to index it failed.</span>
+                </li>
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/docs</span>
+                  <span class="why">Indexing is paused</span>
+                  <span class="hint">Indexing is paused for this project.</span>
+                </li>
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/legacy</span>
+                  <span class="why">Host not supported</span>
+                  <span class="hint">Motir can’t index repositories on this host.</span>
+                </li>
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/infra</span>
+                  <span class="why">Code search unavailable</span>
+                  <span class="hint">The code couldn’t be read just now.</span>
+                </li>
+              </ul>
+
+              <div class="actions">
+                <button class="btn primary" type="button" data-testid="code-unsearchable-resume">
+                  Check again and continue
+                </button>
+                <a class="btn secondary" href="/code" data-testid="code-unsearchable-codebase"
+                  >Go to Codebase</a
+                >
+              </div>
+            </section>
+          </div>
+          <div class="composer"><span class="composer-in">Message the planner…</span></div>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>
+          <b>5a.</b> Resume offered. “Check again and continue” is a primary button, distinct from
+          the run pause’s Start over and Keep going.
+        </figcaption>
+        <div class="rail">
+          <header class="rail-h">Planning thread</header>
+          <div class="rail-b">
+            <ul class="props" aria-label="Proposed so far">
+              <li><span class="pt">Epic</span> Reports exports</li>
+              <li><span class="pt">Story</span> Export a report as CSV</li>
+              <li><span class="pt">Story</span> Schedule a weekly export</li>
+            </ul>
+            <section
+              class="banner"
+              role="region"
+              aria-labelledby="b-r1"
+              data-testid="code-unsearchable-banner"
+            >
+              <h3 id="b-r1" class="b-title">
+                <span class="glyph" aria-hidden="true">&#9208;</span>Planning is on hold: Motir
+                can’t search your code yet
+              </h3>
+              <p class="b-intro">
+                Planning without searching the code would be guesswork, so Motir stopped here. Fix
+                the repository below, then continue.
+              </p>
+              <ul class="rows" aria-label="Repositories that can’t be searched">
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/web</span>
+                  <span class="why">Indexing in progress</span>
+                  <span class="hint"
+                    >The first index is still running, so there is no code to search yet.</span
+                  >
+                </li>
+              </ul>
+
+              <div class="actions">
+                <button class="btn primary" type="button" data-testid="code-unsearchable-resume">
+                  Check again and continue
+                </button>
+                <a class="btn secondary" href="/code" data-testid="code-unsearchable-codebase"
+                  >Go to Codebase</a
+                >
+              </div>
+            </section>
+          </div>
+          <div class="composer"><span class="composer-in">Message the planner…</span></div>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>
+          <b>5b.</b> After a resume whose re-check still finds a blocked repository: the banner
+          stays, its row updates, and a status line says what was checked.
+        </figcaption>
+        <div class="rail">
+          <header class="rail-h">Planning thread</header>
+          <div class="rail-b">
+            <ul class="props" aria-label="Proposed so far">
+              <li><span class="pt">Epic</span> Reports exports</li>
+              <li><span class="pt">Story</span> Export a report as CSV</li>
+              <li><span class="pt">Story</span> Schedule a weekly export</li>
+            </ul>
+            <div class="bubble user small">Check again and continue</div>
+            <section
+              class="banner"
+              role="region"
+              aria-labelledby="b-r2"
+              data-testid="code-unsearchable-banner"
+            >
+              <h3 id="b-r2" class="b-title">
+                <span class="glyph" aria-hidden="true">&#9208;</span>Planning is on hold: Motir
+                can’t search your code yet
+              </h3>
+              <p class="b-intro">
+                Planning without searching the code would be guesswork, so Motir stopped here. Fix
+                the repository below, then continue.
+              </p>
+              <ul class="rows" aria-label="Repositories that can’t be searched">
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/web</span>
+                  <span class="why">Indexing keeps failing</span>
+                  <span class="hint">The last attempts to index it failed.</span>
+                </li>
+              </ul>
+              <p class="checked" role="status" data-testid="code-unsearchable-rechecked">
+                Checked just now: acme/web still can’t be searched. It now shows indexing keeps
+                failing.
+              </p>
+              <div class="actions">
+                <button class="btn primary" type="button" data-testid="code-unsearchable-resume">
+                  Check again and continue
+                </button>
+                <a class="btn secondary" href="/code" data-testid="code-unsearchable-codebase"
+                  >Go to Codebase</a
+                >
+              </div>
+            </section>
+          </div>
+          <div class="composer"><span class="composer-in">Message the planner…</span></div>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>
+          <b>6.</b> Narrow width (the overlay at its mobile breakpoint): rows stack the state chip
+          beside the name, actions wrap.
+        </figcaption>
+        <div class="rail narrow">
+          <header class="rail-h">Planning thread</header>
+          <div class="rail-b">
+            <section
+              class="banner"
+              role="region"
+              aria-labelledby="b-narrow"
+              data-testid="code-unsearchable-banner"
+            >
+              <h3 id="b-narrow" class="b-title">
+                <span class="glyph" aria-hidden="true">&#9208;</span>Planning is on hold: Motir
+                can’t search your code yet
+              </h3>
+              <p class="b-intro">
+                Planning without searching the code would be guesswork, so Motir stopped here. Fix
+                the repository below, then continue.
+              </p>
+              <ul class="rows" aria-label="Repositories that can’t be searched">
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/web</span>
+                  <span class="why">Never indexed</span>
+                  <span class="hint">Nothing has been indexed for it yet.</span>
+                </li>
+                <li class="row" data-testid="code-unsearchable-row">
+                  <span class="repo">acme/api</span>
+                  <span class="why">Indexing is paused</span>
+                  <span class="hint">Indexing is paused for this project.</span>
+                </li>
+              </ul>
+
+              <div class="actions">
+                <button class="btn primary" type="button" data-testid="code-unsearchable-resume">
+                  Check again and continue
+                </button>
+                <a class="btn secondary" href="/code" data-testid="code-unsearchable-codebase"
+                  >Go to Codebase</a
+                >
+              </div>
+            </section>
+          </div>
+          <div class="composer"><span class="composer-in">Message the planner…</span></div>
+        </div>
+      </figure>
+    </div>
+    <section class="copy" aria-labelledby="copy-h">
+      <h2 id="copy-h" style="font-size: 16px; color: var(--el-text-strong)">New strings</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>en</th>
+            <th>zh</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Title</td>
+            <td>Planning is on hold: Motir can’t search your code yet</td>
+            <td>规划已暂停：Motir 暂时无法搜索你的代码</td>
+          </tr>
+          <tr>
+            <td>Intro (walk)</td>
+            <td>
+              Planning without searching the code would be guesswork, so Motir stopped here. Fix the
+              repository below, then continue.
+            </td>
+            <td>不搜索代码就规划只能靠猜测，所以 Motir 在此停下。请先处理下面的仓库，然后继续。</td>
+          </tr>
+          <tr>
+            <td>Intro (conversation)</td>
+            <td>
+              Planning without searching the code would be guesswork, so nothing was planned. Fix
+              the repository below, then send a message to try again.
+            </td>
+            <td>
+              不搜索代码就规划只能靠猜测，所以尚未规划。请先处理下面的仓库，然后发送消息重试。
+            </td>
+          </tr>
+          <tr>
+            <td>State: never indexed</td>
+            <td>Never indexed — Nothing has been indexed for it yet.</td>
+            <td>从未建立索引 — 尚未为它建立任何索引。</td>
+          </tr>
+          <tr>
+            <td>State: indexing</td>
+            <td>
+              Indexing in progress — The first index is still running, so there is no code to search
+              yet.
+            </td>
+            <td>正在建立索引 — 首次索引仍在进行，暂时没有可搜索的代码。</td>
+          </tr>
+          <tr>
+            <td>State: failing</td>
+            <td>Indexing keeps failing — The last attempts to index it failed.</td>
+            <td>索引持续失败 — 最近几次建立索引都失败了。</td>
+          </tr>
+          <tr>
+            <td>State: paused</td>
+            <td>Indexing is paused — Indexing is paused for this project.</td>
+            <td>索引已暂停 — 此项目的索引已暂停。</td>
+          </tr>
+          <tr>
+            <td>State: unsupported</td>
+            <td>Host not supported — Motir can’t index repositories on this host.</td>
+            <td>不支持该托管平台 — Motir 无法为该平台上的仓库建立索引。</td>
+          </tr>
+          <tr>
+            <td>State: unavailable</td>
+            <td>Code search unavailable — The code couldn’t be read just now.</td>
+            <td>暂时无法搜索代码 — 刚才无法读取代码。</td>
+          </tr>
+          <tr>
+            <td>Link</td>
+            <td>Go to Codebase (shipped key <code>goToCode</code>)</td>
+            <td>前往代码库 (shipped)</td>
+          </tr>
+          <tr>
+            <td>Resume</td>
+            <td>Check again and continue</td>
+            <td>重新检查并继续</td>
+          </tr>
+          <tr>
+            <td>Re-check still blocked</td>
+            <td>Checked just now: {repo} still can’t be searched. It now shows {state}.</td>
+            <td>刚刚检查过：{repo} 仍然无法搜索，当前状态为{state}。</td>
+          </tr>
+          <tr>
+            <td>Walk record line</td>
+            <td>
+              Kept as proposed so far — {n} work items. Nothing more is added until planning
+              continues.
+            </td>
+            <td>保留目前的提议 — {n} 个工作项。继续规划之前不会再添加。</td>
+          </tr>
+          <tr>
+            <td>List label (screen reader)</td>
+            <td>Repositories that can’t be searched</td>
+            <td>无法搜索的仓库</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </body>
+</html>

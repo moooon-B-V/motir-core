@@ -6547,3 +6547,82 @@ The rail card ([MOTIR-8694](motir:cmv9rgb2x0012hvoitmc5h93e)) owns the `guide.of
 ### Cites
 
 The decision MOTIR-8685, its table by concern: **the turn** and **the offer** (sheet 1), **revision** (sheet 2), **a finished target** (sheet 2: resolved forward, no target), **Confirm** (sheets 3 and 9: sent once, spends credits), **Decline** (sheet 4: nothing planned, no gate decided), **coming back** (sheets 3, 4 and 6: the confirmed link, the open-session case, resume after Decline), **cannot plan** (sheet 5), **the card's status** (sheet 9: Planning only on Confirm), **reload** (sheet 6), and the **trigger** (sheet 8, a stale step, unchanged). Composes: MOTIR-7462 / 7482 / 7810 (published results), `planning-workspace--pick-seed.mock.html` revision 3, `plan-change-run-live.mock.html` state A, the shipped `AiPaywall`.
+
+---
+
+## The planning rail when the code cannot be searched
+
+**Mock:** `plan-change-run-live--code-unsearchable.mock.html`. It is a delta beside
+`plan-change-run-live--answer-or-forward.mock.html` (states 6–9, the run pause) and amends it
+only by adding one more thing the rail can say; the older mock is a record and is not edited.
+Surface: the conversation rail of the planning overlay (`PlanChangeRail`), as a member sees it.
+
+**What it is for.** A planning phase that cannot search a target repository's code stops
+instead of guessing. This is how the person is told, which repository and why, where to go to
+fix it, and how to carry on.
+
+### The banner (`data-testid="code-unsearchable-banner"`)
+
+A region (`role="region"`, labelled by its title) placed in the rail's turn flow, after the
+last turn, never above the header. Surface `--el-warning-surface`, ink `--el-warning-text`,
+border `--el-border`, radius `--radius-card`, padding 12px (a layout gap, not a control's box).
+Not rose and not `--el-danger-*`: the person did nothing wrong and nothing failed outright.
+
+- **Title** (14px, semibold) with a pause glyph (`aria-hidden`): _Planning is on hold: Motir
+  can't search your code yet._
+- **Intro** (13px). Two wordings: stopped in the conversation (nothing was planned; send a
+  message to try again) and stopped mid-walk (Motir stopped here).
+- **Rows**, one per blocked TARGET repository (a `ul` labelled _Repositories that can't be
+  searched_). A project's other repositories never appear. Each row: the repository name in
+  `--font-mono` / `--el-text-strong`, a state chip at the end, and one line of explanation
+  below in `--el-text-secondary`. Row surface `--el-card`, border `--el-border`, radius
+  `--radius-control`, padding `--spacing-control-y` / `--spacing-control-x`. The chip is a
+  `--el-tint-peach` badge with `--el-text-strong` ink, `--radius-badge`, `--spacing-chip-x/y`.
+  The state is always worded for the reader, never the wire value:
+
+  | wire state           | chip                    | line                                                                 |
+  | -------------------- | ----------------------- | -------------------------------------------------------------------- |
+  | never_indexed        | Never indexed           | Nothing has been indexed for it yet.                                 |
+  | indexing             | Indexing in progress    | The first index is still running, so there is no code to search yet. |
+  | refresh_failing      | Indexing keeps failing  | The last attempts to index it failed.                                |
+  | paused               | Indexing is paused      | Indexing is paused for this project.                                 |
+  | provider_unsupported | Host not supported      | Motir can't index repositories on this host.                         |
+  | unavailable          | Code search unavailable | The code couldn't be read just now.                                  |
+
+- **Go to Codebase** (`data-testid="code-unsearchable-codebase"`): a secondary-looking link
+  button reading the shipped `goToCode` string, `href="/code"`. Always shown.
+- **Check again and continue** (`data-testid="code-unsearchable-resume"`): a primary
+  `Button` (`--el-accent` fill, `--el-accent-text` ink, `--height-btn-sm`). It answers the
+  run's pause with the new `resume` choice. It is NOT one of the run pause's _Start over_ /
+  _Keep going_ pair and never appears beside them: a code stop is its own pause kind with its
+  own single control. **Shown only while a run is paused**; a conversation that stopped before
+  any job opened has no resume button, because the person's next message is the retry.
+- Order: resume first, then the link. Both wrap at narrow width.
+
+### States
+
+1. **Stopped in the conversation.** The banner follows the person's last message. The composer
+   stays enabled. No resume button.
+2. **Stopped mid-walk.** The proposals made so far stay in the rail. A quiet centred record line
+   (`--el-text-secondary`, 12px) says they are kept and nothing more is added. The banner
+   follows with the resume button.
+3. **Several rows.** All six states can be listed; order is by repository name.
+4. **Resume.** Pressing _Check again and continue_ disables the button while the answer is
+   sent. If the run goes on, the banner is replaced by the run's existing resumed marker. If the
+   re-check finds a repository still blocked, the banner STAYS, its rows update to the current
+   states, and a status line (`role="status"`, `--el-warning-text`) says _Checked just now:
+   {repo} still can't be searched. It now shows {state}._ The person's _Check again and
+   continue_ turn stays above it.
+5. **Narrow width.** Rows keep the name and chip on one line until they cannot; the hint wraps
+   under; the actions wrap onto two lines. Nothing scrolls sideways.
+
+### Accessibility
+
+The title is the region's label. The row list has an accessible name. The status line is a
+polite live region so a re-check result is announced. Both controls meet the shared focus ring
+(`--focus-ring-color`). No state is carried by colour alone: every chip says the state in words.
+
+### Copy (en / zh)
+
+The mock ends with the copy table for every new string in both languages. The link reuses the
+shipped `goToCode` string unchanged.
