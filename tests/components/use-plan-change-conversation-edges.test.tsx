@@ -75,6 +75,9 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
   return {
     ...actual,
     streamAugmentJob: stream,
+    // The anchored stream is not under test here; left real, a retry pressed first reached a
+    // genuine `fetch` that fails offline, and a lost connection now subscribes again (MOTIR-9186).
+    streamContextualPlanJob: async () => {},
     streamAskJob: streamAsk,
   };
 });

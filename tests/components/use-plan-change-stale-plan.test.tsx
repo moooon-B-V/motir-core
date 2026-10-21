@@ -246,6 +246,7 @@ describe('Plan it again', () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
+      expect.anything(),
     );
     expect(result.current.state.planId).toBe('plan_new');
     expect(result.current.state.stalePlan?.outcome).toBe('accepted');
