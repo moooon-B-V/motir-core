@@ -310,7 +310,7 @@ export async function runIndexFleetSteps(
   //
   // Best-effort and OUTSIDE the step seam: this is telemetry for a surface, and
   // an index that ran must never fail because a field write did not.
-  const headAtStart = await claimIndexingRepo(ctx, target.repoRef);
+  const headAtStart = await claimIndexingRepo(ctx, target.repoRef, target.organizationId);
 
   const dispatched = await indexEveryProject(ctx, services, input, target, dispatchId);
 
@@ -332,7 +332,7 @@ export async function runIndexFleetSteps(
   const { coreTimings, indexModes } = dispatched;
 
   const result = await finishIndexRun(ctx, services, input, target, coreTimings, indexModes);
-  await settleIndexingRepo(target.repoRef, headAtStart);
+  await settleIndexingRepo(target.repoRef, target.organizationId, headAtStart);
   return result;
 }
 
@@ -771,16 +771,20 @@ function dispatchFailure(
  * job-runtime read here does — no workspace is bound — and swallows its own
  * failure, because an index that ran is a fact and this is a note about it.
  */
-async function claimIndexingRepo(ctx: JobContext, repoRef: string): Promise<string | null> {
+async function claimIndexingRepo(
+  ctx: JobContext,
+  repoRef: string,
+  organizationId: string,
+): Promise<string | null> {
   try {
     return await withSystemContext(async (tx) => {
       const [owner, name] = repoRef.split('/');
       if (!owner || !name) return null;
       const repo = await tx.githubRepo.findFirst({
-        where: { owner, name },
+        where: { owner, name, organizationId },
         select: { defaultBranchHeadSha: true },
       });
-      await githubRepoRepository.markIndexStarted(repoRef, ctx.runId, tx);
+      await githubRepoRepository.markIndexStarted(repoRef, organizationId, ctx.runId, tx);
       return repo?.defaultBranchHeadSha ?? null;
     });
   } catch (err) {
@@ -792,10 +796,14 @@ async function claimIndexingRepo(ctx: JobContext, repoRef: string): Promise<stri
 /** Release the claim, recording what was indexed when there is something to
  *  record. A run with no known head clears the claim and writes no sha — the row
  *  keeps its last real answer rather than gaining a false one. */
-async function settleIndexingRepo(repoRef: string, headAtStart: string | null): Promise<void> {
+async function settleIndexingRepo(
+  repoRef: string,
+  organizationId: string,
+  headAtStart: string | null,
+): Promise<void> {
   try {
     await withSystemContext((tx) =>
-      githubRepoRepository.markIndexSettled(repoRef, { headSha: headAtStart }, tx),
+      githubRepoRepository.markIndexSettled(repoRef, organizationId, { headSha: headAtStart }, tx),
     );
   } catch (err) {
     console.error('[index-fleet] could not settle the indexing repo', repoRef, err);

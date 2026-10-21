@@ -251,8 +251,17 @@ test('6 · recovered: after an indexed run the row reads Indexed and the refusal
   // repository settle that releases the claim, stamps the head, and clears the
   // refusal (`indexFleetSteps.settleIndexingRepo`, MOTIR-7130).
   await recordIndexSucceeded(t.workspaceId, REPO_REF);
+  const { organizationId } = await adminDb.githubRepo.findFirstOrThrow({
+    where: { workspaceId: t.workspaceId, owner: REPO.owner, name: REPO.name },
+    select: { organizationId: true },
+  });
   await withSystemContext(async (tx) => {
-    await githubRepoRepository.markIndexSettled(REPO_REF, { headSha: 'e4f5a6b' }, tx);
+    await githubRepoRepository.markIndexSettled(
+      REPO_REF,
+      organizationId,
+      { headSha: 'e4f5a6b' },
+      tx,
+    );
     await githubRepoRepository.clearIndexRefusal(REPO_REF, tx);
   });
 
