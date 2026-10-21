@@ -280,6 +280,7 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
               key={selected}
               pageId={page.id}
               number={selected}
+              projectId={page.projectId}
               viewerId={viewerId}
               onClose={() => select(null)}
               onGone={onGone}

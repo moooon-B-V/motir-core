@@ -3957,7 +3957,11 @@
       "savedTitle": "Einstellungen des gehosteten Agents gespeichert",
       "savedDesc": "Neue gehostete Läufe verwenden diese Modelle.",
       "errorTitle": "Speichern nicht möglich",
-      "saveError": "Die Einstellungen des gehosteten Agents wurden nicht gespeichert. Bitte versuchen Sie es erneut."
+      "saveError": "Die Einstellungen des gehosteten Agents wurden nicht gespeichert. Bitte versuchen Sie es erneut.",
+      "autoFix": {
+        "label": "Einen roten Pull Request im eigenen Agenten des Arbeitselements reparieren.",
+        "help": "Wird ein Pull Request rot und lief der letzte Lauf des Arbeitselements in einem angemeldeten, laufenden Agenten, startet Motir die Reparatur in diesem Agenten. Aus – die Standardeinstellung – startet nichts von selbst."
+      }
     },
     "connectedApps": {
       "title": "Verbundene Apps",
@@ -7304,6 +7308,43 @@
             "outOfCredits": {
               "body": "Es wurde nichts gestartet und nichts berechnet. Die Reparatur mit dem gehosteten Agenten funktioniert wieder, sobald die Organisation Credits hat – oder reparieren Sie es über Ihr Terminal."
             }
+          }
+        },
+        "myAgent": {
+          "lead": "Reparieren Sie ihn im eigenen Agenten: <b>{agent}</b>, dem Agenten, den der letzte Lauf dieses Arbeitselements verwendet hat.",
+          "door": {
+            "label": "Im eigenen Agenten reparieren",
+            "starting": "Reparatur wird gestartet…",
+            "why": "Die Reparatur läuft im selben Agenten auf demselben Branch und beginnt daher mit dem eigenen Kontext des Laufs statt mit einem leeren."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> hat <when></when> eine Reparatur in <b>{agent}</b> gestartet – <run>{label}</run>.",
+            "byYou": "Sie haben <when></when> eine Reparatur in <b>{agent}</b> gestartet – <run>{label}</run>.",
+            "why": "Immer nur eine Reparatur: Dieser Lauf hält die Reparatur, bis er endet, daher kann keine zweite darüber gestartet werden."
+          },
+          "refused": {
+            "busy": {
+              "title": "Nicht gestartet – für dieses Arbeitselement läuft bereits eine Reparatur.",
+              "body": "<b>{name}</b> hat sie <when></when> gestartet – <run>{label}</run>. Es wurde nichts gestartet und nichts berechnet.",
+              "bodyYou": "Sie haben sie <when></when> gestartet – <run>{label}</run>. Es wurde nichts gestartet und nichts berechnet."
+            },
+            "signedOut": {
+              "title": "Nicht gestartet – <b>{agent}</b> ist abgemeldet.",
+              "body": "Melden Sie <b>{agent}</b> an und klicken Sie dann erneut auf „Im eigenen Agenten reparieren“. <link>Öffnen Sie den Agenten</link>, um sich mit <cmd>{cmd}</cmd> anzumelden. Es wurde nichts gestartet und nichts berechnet."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> konnte die Lauf-Sitzung dieses Arbeitselements nicht fortsetzen, daher hat die Reparatur auf demselben Branch (<b>{branch}</b>) eine neue Sitzung gestartet."
+          },
+          "settled": {
+            "notice": "Die Pull Requests dieses Arbeitselements sind jetzt grün, daher wurde keine Reparatur gestartet."
+          },
+          "gaveUp": {
+            "note": "Die letzte Reparatur in <b>{agent}</b> wurde <when></when> nach {attempts, plural, one {# Versuch} other {# Versuchen}} aufgegeben. „Im eigenen Agenten reparieren“ kann erneut gedrückt werden.",
+            "noteNoCount": "Die letzte Reparatur in <b>{agent}</b> wurde <when></when> aufgegeben. „Im eigenen Agenten reparieren“ kann erneut gedrückt werden."
+          },
+          "modal": {
+            "lead": "Dieser Lauf endete mit einem roten Pull Request. Reparieren Sie ihn im selben Agenten, ohne den Fehler in einen neuen zu kopieren."
           }
         }
       },

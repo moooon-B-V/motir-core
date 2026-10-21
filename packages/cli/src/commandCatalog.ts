@@ -855,6 +855,10 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         flags: '--run-id <id>',
         description: 'The run to open a session for (its credentials are read on stdin).',
       },
+      {
+        flags: '--command <command>',
+        description: 'What the session is for: run (the default), fix or continue.',
+      },
     ],
   },
   {

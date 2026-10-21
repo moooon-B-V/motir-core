@@ -350,6 +350,7 @@ export function toDispatchRunRepairDto(data: unknown): DispatchRunRepairDto | nu
     title?: unknown;
     pullRequests?: unknown;
     findings?: unknown;
+    resume?: unknown;
   };
   if (typeof d.repairClass !== 'string' || !REPAIR_CLASSES.has(d.repairClass)) return null;
   const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
@@ -380,10 +381,16 @@ export function toDispatchRunRepairDto(data: unknown): DispatchRunRepairDto | nu
           decidedAt: str(f.decidedAt) as string,
         }
       : null;
+  const r = (d.resume ?? null) as Record<string, unknown> | null;
+  const profile = str(r?.profile);
+  const resume = profile
+    ? { profile, sessionId: str(r?.sessionId), canResume: r?.canResume === true }
+    : null;
   return {
     repairClass: d.repairClass as DispatchRunRepairDto['repairClass'],
     title: str(d.title),
     pullRequests,
+    resume,
     findings,
   };
 }

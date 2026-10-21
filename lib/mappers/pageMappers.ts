@@ -189,10 +189,12 @@ export function toPageVersionDto(
   row: PageVersionWithBody,
   authorName: string | undefined,
   isCurrent: boolean,
+  workItemRefs: WorkItemRefMap = {},
 ): PageVersionDto {
   return {
     ...toPageVersionListItemDto(row, authorName, isCurrent),
     bodyState: toBase64(row.bodyState),
+    workItemRefs,
   };
 }
 

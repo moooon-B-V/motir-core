@@ -72,7 +72,7 @@ export const OPTIONS = {
     LOADTEST_PROM_SETTLE_SECONDS: `seconds after window.endedAt before Prometheus is read (default ${SETTLE_SECONDS_DEFAULT})`,
     LOADTEST_FLY_PROM_TOKEN: 'the Prometheus token; else `fly auth token`',
     LOADTEST_FLY_PROM_TOKEN_SCHEME:
-      'Bearer (a flyctl token, the default) or FlyV1 (a `fly tokens create` token)',
+      'FlyV1 (the default, what a `fly auth token` value needs) or Bearer',
   },
   exits: {
     0: 'PASS',

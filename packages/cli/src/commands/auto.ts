@@ -7,6 +7,7 @@ import {
   claimAllowsDispatch,
   ensureInProgress,
   resolveAgent,
+  resumeFixAgent,
   echoPromptIfAsked,
   resolveOwnerId,
   type DeliveryOptions,
@@ -1381,6 +1382,8 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     title: item.title,
     durationMs,
     repo: dispatch.targetRepo,
+    // This card's OWN conversation, for its CI watch to resume (MOTIR-9059).
+    sessionId: result.sessionId ?? null,
     // The whole set, so a FAILED record reaches the pull-request body of every
     // repository it half-touched, not only the primary's (MOTIR-3135).
     repos: input.repos,
@@ -1815,7 +1818,7 @@ export async function closeOutContainer(client: MotirClient, summary: AutoSummar
  * agent rather than skipped: the verdict is still worth reporting, and a run
  * that quietly declined to look is worse than one that looked and could not act.
  */
-async function watchRunCi(
+export async function watchRunCi(
   summary: AutoSummary,
   session: ProjectSession,
   agent: ResolvedAgent,
@@ -1828,11 +1831,14 @@ async function watchRunCi(
   let allGreen = true;
   for (const record of landed) {
     const repo = summary.repos.find((r) => r.keys.includes(record.key));
+    // Each card resumes ITS OWN conversation, never the previous card's (MOTIR-9059).
+    const resumeAgent = resumeFixAgent(agent.parsed, record.sessionId);
     const outcome = await runCiWatchPhase({
       client: session.client,
       key: record.key,
       title: record.title,
       agent: agent.parsed,
+      ...(resumeAgent ? { resumeAgent } : {}),
       cwd: repo?.cwd ?? process.cwd(),
       report: (line) => info(line),
       ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),

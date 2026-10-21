@@ -66,6 +66,30 @@ export function profileCanRunCards(profileId: string): boolean {
 }
 
 /**
+ * The profiles whose coding agent has a RESUME form — `AgentStreamForm.resumeArgs`
+ * in `packages/cli/src/agentProfiles.ts` is the source of truth (MOTIR-8981 ·
+ * MOTIR-9046). Data on the `lib` side, never imported from `packages/cli`; a test
+ * holds the two equal. `aider` carries no stream form, so a fix for it starts a
+ * fresh process on the same branch.
+ */
+export const RESUMABLE_AGENT_PROFILE_IDS: readonly string[] = [
+  'claude',
+  'codex',
+  'opencode',
+  'kimi',
+  'goose',
+];
+
+/**
+ * Whether this profile has a resume form. ⚠️ An UNKNOWN profile answers false:
+ * nobody downstream can correct a wrong `true`, while a false `canResume` costs
+ * only the honest fall-back the door already renders.
+ */
+export function profileCanResume(profileId: string): boolean {
+  return RESUMABLE_AGENT_PROFILE_IDS.includes(profileId);
+}
+
+/**
  * Each offered profile's LIVENESS command (`agent-image-update.md` Q3,
  * MOTIR-6952): what an image update runs inside the new image before it keeps
  * it — exit 0 within the bound means the coding agent runs. A copy of

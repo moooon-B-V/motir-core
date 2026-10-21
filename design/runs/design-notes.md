@@ -61,12 +61,13 @@ check the RENDER. A copy-only edit must reproduce the committed height exactly, 
 
 ## The surfaces
 
-| Surface                                                                         | Asset                                           | What it settles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The run SECTION on a work item**                                              | **`run-section.mock.html`** + `run-section.png` | The work item's own run: its live timeline over the CARD-SCOPED event vocabulary, the "one of N" link-out when the run covers a set, this work item's recent runs as a paged list, and the collapsed log console. Every terminal state, including the two that get improvised when undrawn — **re-planned** and **reporting-offline**. **Also carries this area's TONE TABLE** (panel 12), which every other run surface consumes. MOTIR-1795 (design). Gates MOTIR-1796.                                                                                                          |
-| **The RUNS INDEX** (`/runs`)                                                    | **`runs-index.mock.html`** + `runs-index.png`   | Every run the project has made, current and past, and **the rail row that reaches it**. The surface that makes a run FINDABLE at all — it is what replaced the `/ready` strip this area used to draw (below). MOTIR-3893 (design). Gates MOTIR-3923.                                                                                                                                                                                                                                                                                                                               |
-| **A container's OWN runs** — the door on its item page, and `/runs?scope=<KEY>` | **`run-scope.mock.html`** + `run-scope.png`     | The runs a work item was the SCOPE of, which its own Run section cannot show because a scoped run's legs are the CHILDREN. The door in all three cases (scope only · both · never), the index narrowed to one scope, the address contract that keeps `?scope=` across opening and closing a run, every face of the narrowed page (empty · a key that resolves to nothing · an archived scope · wait · failure), and the runs `?scope=` can never address. COMPOSES `run-section.mock.html` and `runs-index.mock.html`; defines nothing new. MOTIR-5402 (design). Gates MOTIR-5363. |
-| **The run MODAL** (over `/runs`)                                                | **`run-modal.mock.html`** + `run-modal.png`     | One run, FULL SCREEN over the list rather than at a route of its own: the header, the **reused canvas** carrying every work item the run owns with its disposition in this run, and the **log pane** carrying what the agent is saying. All three set shapes, the skips with their reasons, the run's own states, and the log pane's three distinct silences. COMPOSES `design/roadmap/`'s canvas and this folder's tone table; defines neither. MOTIR-3893 (design). Gates MOTIR-3895 and MOTIR-3962.                                                                             |
+| Surface                                                                                                                           | Asset                                           | What it settles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The run SECTION on a work item**                                                                                                | **`run-section.mock.html`** + `run-section.png` | The work item's own run: its live timeline over the CARD-SCOPED event vocabulary, the "one of N" link-out when the run covers a set, this work item's recent runs as a paged list, and the collapsed log console. Every terminal state, including the two that get improvised when undrawn — **re-planned** and **reporting-offline**. **Also carries this area's TONE TABLE** (panel 12), which every other run surface consumes. MOTIR-1795 (design). Gates MOTIR-1796.                                                                                                          |
+| **The RUNS INDEX** (`/runs`)                                                                                                      | **`runs-index.mock.html`** + `runs-index.png`   | Every run the project has made, current and past, and **the rail row that reaches it**. The surface that makes a run FINDABLE at all — it is what replaced the `/ready` strip this area used to draw (below). MOTIR-3893 (design). Gates MOTIR-3923.                                                                                                                                                                                                                                                                                                                               |
+| **A container's OWN runs** — the door on its item page, and `/runs?scope=<KEY>`                                                   | **`run-scope.mock.html`** + `run-scope.png`     | The runs a work item was the SCOPE of, which its own Run section cannot show because a scoped run's legs are the CHILDREN. The door in all three cases (scope only · both · never), the index narrowed to one scope, the address contract that keeps `?scope=` across opening and closing a run, every face of the narrowed page (empty · a key that resolves to nothing · an archived scope · wait · failure), and the runs `?scope=` can never address. COMPOSES `run-section.mock.html` and `runs-index.mock.html`; defines nothing new. MOTIR-5402 (design). Gates MOTIR-5363. |
+| **The run MODAL** (over `/runs`)                                                                                                  | **`run-modal.mock.html`** + `run-modal.png`     | One run, FULL SCREEN over the list rather than at a route of its own: the header, the **reused canvas** carrying every work item the run owns with its disposition in this run, and the **log pane** carrying what the agent is saying. All three set shapes, the skips with their reasons, the run's own states, and the log pane's three distinct silences. COMPOSES `design/roadmap/`'s canvas and this folder's tone table; defines neither. MOTIR-3893 (design). Gates MOTIR-3895 and MOTIR-3962.                                                                             |
+| **The fix part's THIRD DOOR** — Fix in my agent, in the Development block, the ended run's modal header and the Hosted agent room | **`development--fix-in-my-agent.mock.html`**    | The door offered, preparing, in progress, refused, fell back and gave up; the auto-fix setting row. Gates MOTIR-9053, MOTIR-9047, MOTIR-9060, MOTIR-9054, MOTIR-9056. § _Fix in my agent_ below.                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ### ⚠️ WHAT THIS AREA DREW ONCE AND WILL NOT DRAW AGAIN — the `/ready` run STRIP
 
@@ -2118,3 +2119,140 @@ mono; decider `--el-text-secondary`; _Open_ `--el-link`. Two sprites are added, 
 | MOTIR-7708 | **TAKES** that a continue opened on a gated run records it resumes one — G3's history row reads it                                                                     |
 | MOTIR-6529 | **GIVES** nothing new; its Run died line and pill are unchanged for a run that really died                                                                             |
 | MOTIR-7702 | this card                                                                                                                                                              |
+
+## Fix in my agent — the third door in the fix part (MOTIR-9043, 2026-10-19)
+
+**Design system.** Read `package.json` (depends on `@motir/design-system`, installed 0.15.1) and
+`app/globals.css` (imports `@motir/design-system/theme.css`): **both checks hold, so this is on Motir
+Design.** The project's own axes come from `app/layout.tsx` (`data-style`, `data-palette`, `data-type`,
+applied per viewer). The package exports `@motir/design-system/mock`, and this sheet does not use it:
+the fix part, the run modal's header and the settings row are product-local components, so, like every
+sibling sheet in this area, it composes their shipped markup with `theme.css` inlined (the stylesheet
+is `development--continue-hosted.mock.html`'s, verbatim). **No part is proposed for the package**; the
+three product-local pieces it draws are `RepairFixPart`, the run modal's header action and the
+auto-fix settings row, each composed from `Button`, `Switch`, the settings card and `Notice`.
+
+**AMENDS** `design/github/design-notes.md` § 21 (Panels F1–F4) and § 30 (Panels 3–3e) — the fix part of
+the Development block — and `design/runs/run-modal.mock.html`'s header, in the delta
+**[`development--fix-in-my-agent.mock.html`](./development--fix-in-my-agent.mock.html)**. **No existing
+mock is edited** and no image export ships (`docs/decisions/design-result.md` AMENDMENT 4). Subtask
+MOTIR-9043, story MOTIR-8981. It gates MOTIR-9053 (the door), MOTIR-9047 (the copy), MOTIR-9060 (the switch and its
+row), MOTIR-9054 (the automatic start, which draws nothing) and MOTIR-9056 (the acceptance
+recording); the Chinese twins are the translate work items'.
+
+**Why it is owed.** A run in the person's own agent that ended with an open, red pull request leaves
+two doors in the fix part: a command to copy and, on a work item a review sent back, a fix on the
+_hosted_ agent. Neither hands the pull request back to the agent that already knows the build. This
+adds that third door, the same action in the ended run's modal, and the project switch that lets
+Motir press it when the webhook reports the delivery set red.
+
+**Access path.** Three, all existing places: the **fix part** in the item page's Development block;
+the **header of an ended run** in the run modal; and the **Hosted agent room**
+(`/settings/project/hosted-agent`) for the switch. No new route, no new rail entry.
+
+### The state → producer table
+
+Every state is drawn and names the field or read that produces it. A state no producer computes is
+withheld (last two rows) and not drawn under "the nearest computable answer".
+
+| Panel | State                              | What the fix part draws                                                                               | What produces it                                                                                                          |
+| ----- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| A1    | Not offered — no pull request      | nothing new; the block's empty state stands alone                                                     | linked rows and delivery set both empty — `hasOpenPullRequest` false and no delivery row (`DevelopmentSection.tsx`)       |
+| A2    | Not offered — not red              | nothing; the rows' own state stands                                                                   | the delivery rows' CI state — the `not_failing` / `ci_running` half of the repair claim's evaluation                      |
+| A3    | Not offered — no agent to use      | the copyable `motir fix <KEY>` (and the hosted door where passed), exactly as shipped; no door        | the last in-agent run names no profile, or the viewer's agent probe refuses                                               |
+| B1/B2 | **Offered**                        | the door, one supporting line naming the agent and **resume** or **fresh**                            | red delivery + no claimed repair + a usable agent; the resume form from the profile table (`RESUMABLE_AGENT_PROFILE_IDS`) |
+| C     | **Preparing**                      | the door busy (`Button` `loading`), the agent and the command still visible                           | the press, before the fix run has a row                                                                                   |
+| D     | **In progress**                    | which agent, since when, the way into the run's modal. **No door and no command**                     | the repair view non-null with a live `fix` run (`WorkItemRepairViewDto`)                                                  |
+| E     | **Refused**                        | the door, its answer directly under it (a `Notice`)                                                   | the claim's result at the press: `taken`, the holder named with the start                                                 |
+| F     | Settled out from under it          | the part withdraws, no error; the rows' green state takes the space                                   | the delivery going green while preparing — the read that stopped offering it                                              |
+| G     | **Fell back to a fresh session**   | a notice in the in-progress face naming the agent                                                     | the fix run's recorded start mode (resumed or fresh), written by the run that started it                                  |
+| H     | **Gave up**                        | the shipped gave-up face, then the door back in its offered face                                      | the repair view's gave-up face after `CI_FIX_ATTEMPTS` (5, `packages/cli/src/ciWatch.ts`)                                 |
+| M1–M6 | The ended run's modal header       | the same faces, offered · preparing · in progress · refused · fell back · gave up, in the header      | the same producers as B–H, for the one work item of that run that qualifies                                               |
+| S1–S3 | Setting row — off · on · read-only | title, one line, the switch; off is the default and says nothing starts when the agent cannot be used | the project's stored setting; read-only is a reader with `work_item:edit` and not `ai:configure` (`canConfigure`)         |
+| S4–S5 | Setting row — committing · failed  | the switch in flight; on failure it is put back and a toast names the failure                         | the write and its error — `ReviewAgentCard`'s optimistic pattern                                                          |
+| —     | Withheld — no `work_item:edit`     | nothing drawn                                                                                         | the room's own no-access state (`guardSettingsPage('hosted-agent', ctx)`)                                                 |
+| —     | Withheld — no hosted-runs build    | nothing drawn                                                                                         | the page returns `notFound()` without `isHostedRunsAvailable()`                                                           |
+
+### Placement rule
+
+The door goes **inside the fix part**, between the failing line and the hosted door, and the copyable
+command stays last as the quietest path. A second part in the same slot would draw the in-progress and
+gave-up faces twice. The part stays a **flush part, not a box**: a soft rule and an `h4`. When the
+hosted door is also passed (a work item a review sent back), the order is **Fix in my agent**, then
+**Fix on the hosted agent**, then the command, each with its own lead; a plain red work item draws the
+door and the command. There is **no agent picker**: the door acts in the agent the last in-agent run
+used and names it on its supporting line.
+
+In the run modal the action sits in the **header**, under the title block, and only where **exactly
+one** work item of that run qualifies. With none or several red deliveries the header draws nothing and
+each work item's Development block is the door — naming one arbitrarily would start a fix on the wrong
+pull request. The canvas, the log pane and the load / missing / failed states are not redrawn.
+
+### The server-side offeredness rule
+
+The browser never guesses. The part is offered when `workItemRepairService.getRepairView` (the repair
+claim's own evaluation) says the claim would answer `claimed` for a red delivery **and** the last
+in-agent run's resume target (`agentInstanceRunService.resumeTargetForCard`, the `resume-target` read)
+names a profile the viewer may use. The profile table decides the supporting line: a profile with a
+resume form draws **resumes the session it recorded**, one without (`aider`) draws **starts a fresh
+session on the same branch**. A press that loses a race is a RESULT, drawn under the door (E); a delivery
+that turns green mid-press withdraws the part (F).
+
+### The copy seam
+
+Every rendered string is a **slot**; the legend at the top of the sheet lists each slot's name and the
+length the layout reserves, and each element carries `data-slot` / `data-len`. The copy work item's
+words replace the mock's provisional labels without changing a panel. The supporting line wraps and is
+never truncated at the Development block's narrowest width (B1, ~400px). The noun is **work item**
+throughout; the sheet has no rendered use of the other noun.
+
+### The setting row's room
+
+`/settings/project/hosted-agent`, below the model-by-difficulty settings, in the room's own column (the
+sheet sets no width). Keys: `work_item:edit` to see the room, `ai:configure` to flip the switch. Read-only
+(S3) is the room's Panel 5 banner and the switch disabled at the stored value. The switch commits at once
+and is put back on failure with the room's toast (S4, S5). The row's storage and API are the auto-fix
+switch work item's; the webhook path that reads it is the setting-gated work item's.
+
+### Every member of the claim's unions
+
+| Member                                    | Face                                                        | Reaches this door?                                                              |
+| ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `claimed`                                 | In progress (D)                                             | yes — the press succeeded                                                       |
+| `mine`                                    | In progress (D) — the viewer's own open `fix` run, no error | yes — a second press by the same person                                         |
+| `taken`                                   | Refused (E), once                                           | yes — somebody else's open `fix` run                                            |
+| `not_repairable` · `not_implemented`      | the part withdraws (A-faces)                                | a race only: the work item left Implemented / In Review between offer and press |
+| `not_repairable` · `repair_on_run_target` | the shipped child pointer ("Run the fix from <key>")        | **no** — the door is never offered on a child; the shipped pointer face stands  |
+| `not_repairable` · `no_pull_requests`     | A1                                                          | a race only: the last pull request was unlinked                                 |
+| `not_repairable` · `ci_running`           | the part withdraws (F)                                      | a race only: a push restarted the checks                                        |
+| `not_repairable` · `not_failing`          | the part withdraws (F)                                      | a race only: the delivery went green                                            |
+| `not_repairable` · `repair_not_code`      | the shipped face names what would help instead              | **no** — no code change fixes it, so the door is never offered                  |
+
+### Withheld, and the producer each is missing
+
+- **The reader without `work_item:edit`** meets the Hosted agent room's shipped no-access state; the row has no
+  rendering of its own.
+- **A build without hosted runs** has no room (`notFound()`), so no row and no panel.
+- **A refusal panel per reason** beyond `taken`: the table above gives each member's face; a panel per
+  reason would invent states nothing produces.
+- **The transcript line saying the session was resumed** is the CLI's own output through the shipped log
+  pane and is not drawn here.
+
+### Tone and tokens
+
+`--el-*` colour and element-semantic shape tokens only; the `fm-` block quotes no raw hue. The door is
+`Button` primary small with the `terminal` glyph; busy is its `loading` spinner. Notices are
+`HostedDoorNotices`' warning surface (`cc-notice`); fell-back uses the `info` glyph on the same surface
+because nothing failed. Three sprites are added, extracted from `lucide-react` with provenance comments:
+`lock`, `info`, and the settings row reuses `terminal`.
+
+### GIVES / TAKES
+
+| key        | GIVES / TAKES                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-9043 | **GIVES** every panel above, the slot legend and the table. **TAKES** nothing.                                                     |
+| MOTIR-9053 | **TAKES** A–H and M1–M6, the offeredness rule and the placement rule — the door in the Development block and the ended run's modal |
+| MOTIR-9047 | **TAKES** the slot legend and the copy seam: one string per slot, within the reserved length                                       |
+| MOTIR-9060 | **TAKES** S1–S5 and the room's two keys — the stored switch and its row                                                            |
+| MOTIR-9054 | **TAKES** that the row is off by default and that a not-usable agent means nothing starts; it draws nothing itself                 |
+| MOTIR-9056 | **TAKES** the states a person meets on the way: B1, C, D and the red-to-green settle (F)                                           |

@@ -147,7 +147,7 @@ to reach staging, [section 8](#8-reaching-private-staging-by-hand) gives
 | `LOADTEST_NEON_API_KEY`                    | the run-window capture (Neon endpoint readings; without it they read `unmeasured`), the post-refresh role rotation (section 4) | A Neon API key that may reset role passwords and read endpoints. Neon's docs do not state the scope required; MOTIR-8674 records the scope it found to work                                                                              | **yes** |
 | `LOADTEST_NEON_API_URL`                    | the run-window capture (optional)                                                                                              | Defaults to `https://console.neon.tech/api/v2` (`loadtest/capture/neon.ts`)                                                                                                                                                              | no      |
 | `LOADTEST_FLY_PROM_TOKEN`                  | `loadtest:report`                                                                                                              | A Fly token for the managed Prometheus; see [the token setup](#the-prometheus-token). Without it the report runs `fly auth token`                                                                                                        | **yes** |
-| `LOADTEST_FLY_PROM_TOKEN_SCHEME`           | `loadtest:report`                                                                                                              | `Bearer` (a `fly auth token` token, the default) or `FlyV1` (a `fly tokens create` token)                                                                                                                                                | no      |
+| `LOADTEST_FLY_PROM_TOKEN_SCHEME`           | `loadtest:report`                                                                                                              | `FlyV1` (the default, what a `fly auth token` value needs) or `Bearer`                                                                                                                                                                   | no      |
 | `LOADTEST_PROM_URL`                        | `loadtest:report` (optional)                                                                                                   | Defaults to `https://api.fly.io/prometheus/moooon` (`loadtest/report/report.ts` `OPTIONS.env`)                                                                                                                                           | no      |
 | `LOADTEST_PROM_SETTLE_SECONDS`             | `loadtest:report` (optional)                                                                                                   | Seconds after the run ends before Prometheus is read; default 60                                                                                                                                                                         | no      |
 | `STAGING_BASE_URL`                         | `loadtest:run` (and `scripts/staging`)                                                                                         | Staging's origin **as seen from the generator** — the Flycast address, `http://motir-core-staging.flycast` (`loadtest/staging/sideEffectSwitches.ts` `REQUIRED_SET`)                                                                     | no      |
@@ -1312,18 +1312,17 @@ staging's limits are raised for the test, and the report says so in its header.
 
 ### The Prometheus token
 
-`LOADTEST_FLY_PROM_TOKEN` is either a token from `fly auth token`, sent as
-`Authorization: Bearer <token>` (the default), or a token from
-`fly tokens create`, sent as `Authorization: FlyV1 <token>` — set
-`LOADTEST_FLY_PROM_TOKEN_SCHEME=FlyV1` for that kind
-(`loadtest/report/prometheus.ts`). These are the two header forms Fly's metrics
-documentation gives. The report never prints the token.
+`LOADTEST_FLY_PROM_TOKEN` is a token from `fly auth token`, sent as
+`Authorization: FlyV1 <token>` (the default): Fly answers that value `401` as
+`Bearer` and `200` as `FlyV1`. Set `LOADTEST_FLY_PROM_TOKEN_SCHEME=Bearer` to send
+`Authorization: Bearer <token>` instead (`loadtest/report/prometheus.ts`). The
+report never prints the token.
 
-**11.1 — check it answers,** with the header form that matches your token kind
-(this is the `Bearer` form):
+**11.1 — check it answers,** with the header form the report sends by default
+(`FlyV1`):
 
 ```sh
-curl -sS -G -H "Authorization: Bearer $LOADTEST_FLY_PROM_TOKEN" "https://api.fly.io/prometheus/moooon/api/v1/query" --data-urlencode 'query=count(fly_app_http_responses_count{app="motir-core-staging"})' | jq -r '.status'
+curl -sS -G -H "Authorization: FlyV1 $LOADTEST_FLY_PROM_TOKEN" "https://api.fly.io/prometheus/moooon/api/v1/query" --data-urlencode 'query=count(fly_app_http_responses_count{app="motir-core-staging"})' | jq -r '.status'
 ```
 
 _Output — to be captured by the smoke run:_ `success`. **Check:** `success`; a

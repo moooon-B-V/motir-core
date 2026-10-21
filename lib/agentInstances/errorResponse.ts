@@ -26,6 +26,9 @@ import {
   AgentInstanceUpToDateError,
   AgentImageCatalogUnavailableError,
   AgentRunAlreadyEndedError,
+  AgentRunCommandInvalidError,
+  AgentRunCommandMismatchError,
+  AgentRunRepairRefusedError,
   AgentRunCancelForbiddenError,
   AgentRunNotFoundError,
 } from './errors';
@@ -97,9 +100,32 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
       { status: 409 },
     );
   }
+  if (err instanceof AgentRunCommandInvalidError) {
+    return NextResponse.json({ code: 'BAD_REQUEST', error: err.message }, { status: 400 });
+  }
+  if (err instanceof AgentRunCommandMismatchError) {
+    // An idempotency key reused for another command (MOTIR-9045) — names the run.
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        runId: err.runId,
+        command: err.startedCommand,
+      },
+      { status: 409 },
+    );
+  }
   if (err instanceof AgentRunAlreadyEndedError) {
     return NextResponse.json(
       { code: err.code, error: err.message, status: err.status },
+      { status: 409 },
+    );
+  }
+  if (err instanceof AgentRunRepairRefusedError) {
+    // A fix press the repair claim did not open a run for (MOTIR-9049): the claim's own
+    // answer — `taken` with its holder and start, or the predicate's reason.
+    return NextResponse.json(
+      { code: err.code, error: err.message, claim: err.claim },
       { status: 409 },
     );
   }

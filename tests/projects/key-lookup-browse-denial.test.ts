@@ -250,6 +250,22 @@ const ROUTES: { route: string; call: Call }[] = [
       (await import('@/app/api/projects/[key]/monitors/available/route')).GET(get(), p({ key })),
   },
   {
+    // MOTIR-9060: the Agent auto-fix switch's read door.
+    route: 'GET agent-auto-fix',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/agent-auto-fix/route')).GET(get(), p({ key })),
+  },
+  {
+    // MOTIR-9060: its write door. The body is a valid boolean, so the request reaches
+    // the lookup rather than 400ing on the value.
+    route: 'PATCH agent-auto-fix',
+    call: async (key) =>
+      (await import('@/app/api/projects/[key]/agent-auto-fix/route')).PATCH(
+        json('PATCH', { agentAutoFixEnabled: true }),
+        p({ key }),
+      ),
+  },
+  {
     // MOTIR-5181: the merge-mode card's write door. The body is a valid mode, so
     // the request reaches the lookup rather than 400ing on the value.
     route: 'PATCH pr-merge-mode',

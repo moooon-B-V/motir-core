@@ -3957,7 +3957,11 @@
       "savedTitle": "Zapisano ustawienia hostowanego agenta",
       "savedDesc": "Nowe uruchomienia hostowane używają tych modeli.",
       "errorTitle": "Nie udało się zapisać",
-      "saveError": "Ustawienia hostowanego agenta nie zostały zapisane. Spróbuj ponownie."
+      "saveError": "Ustawienia hostowanego agenta nie zostały zapisane. Spróbuj ponownie.",
+      "autoFix": {
+        "label": "Napraw czerwony pull request w agencie przypisanym do elementu roboczego.",
+        "help": "Gdy pull request staje się czerwony, a ostatnie uruchomienie elementu roboczego odbyło się w zalogowanym i działającym agencie, Motir rozpoczyna naprawę w tym agencie. Wyłączone (domyślnie) — nic nie startuje samo."
+      }
     },
     "connectedApps": {
       "title": "Połączone aplikacje",
@@ -7304,6 +7308,43 @@
             "outOfCredits": {
               "body": "Nic nie zostało uruchomione i nic nie zostało naliczone. Naprawa na hostowanym agencie zadziała ponownie, gdy organizacja będzie mieć kredyty — albo napraw to z terminala."
             }
+          }
+        },
+        "myAgent": {
+          "lead": "Napraw go we własnym agencie: <b>{agent}</b>, agencie użytym w ostatnim uruchomieniu tego elementu roboczego.",
+          "door": {
+            "label": "Napraw w moim agencie",
+            "starting": "Rozpoczynanie naprawy…",
+            "why": "Naprawa działa w tym samym agencie na tej samej gałęzi, więc zaczyna od własnego kontekstu uruchomienia, a nie od pustego."
+          },
+          "fixing": {
+            "by": "Naprawa w <b>{agent}</b> rozpoczęta przez <b>{name}</b> <when></when> — <run>{label}</run>.",
+            "byYou": "Naprawa w <b>{agent}</b> rozpoczęta przez Ciebie <when></when> — <run>{label}</run>.",
+            "why": "Naprawa jest tylko jedna naraz: to uruchomienie trzyma naprawę do swojego końca, więc druga nie może wystartować na jej wierzchu."
+          },
+          "refused": {
+            "busy": {
+              "title": "Nie rozpoczęto — dla tego elementu roboczego naprawa już trwa.",
+              "body": "Rozpoczęta przez <b>{name}</b> <when></when> — <run>{label}</run>. Nic nie zostało uruchomione i nic nie zostało naliczone.",
+              "bodyYou": "Rozpoczęta przez Ciebie <when></when> — <run>{label}</run>. Nic nie zostało uruchomione i nic nie zostało naliczone."
+            },
+            "signedOut": {
+              "title": "Nie rozpoczęto — <b>{agent}</b> jest wylogowany.",
+              "body": "Zaloguj <b>{agent}</b>, a potem kliknij ponownie „Napraw w moim agencie”. <link>Otwórz agenta</link>, aby zalogować się poleceniem <cmd>{cmd}</cmd>. Nic nie zostało uruchomione i nic nie zostało naliczone."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> nie mógł wznowić sesji uruchomienia tego elementu roboczego, więc naprawa rozpoczęła nową sesję na tej samej gałęzi (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "Pull requesty tego elementu roboczego są teraz zielone, więc nie rozpoczęto naprawy."
+          },
+          "gaveUp": {
+            "note": "Ostatnia naprawa w <b>{agent}</b> poddała się <when></when> po {attempts, plural, one {# próbie} few {# próbach} many {# próbach} other {# próby}}. Można ponownie kliknąć „Napraw w moim agencie”.",
+            "noteNoCount": "Ostatnia naprawa w <b>{agent}</b> poddała się <when></when>. Można ponownie kliknąć „Napraw w moim agencie”."
+          },
+          "modal": {
+            "lead": "To uruchomienie zakończyło się czerwonym pull requestem. Napraw go w tym samym agencie, bez kopiowania błędu do nowego."
           }
         }
       },

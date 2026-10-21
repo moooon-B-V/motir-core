@@ -573,6 +573,27 @@ export const githubRepoRepository = {
     });
   },
 
+  /** The connected repository COORDINATES of several organisations at once — the
+   *  set motir-ai's code-graph reconciler subtracts its stored graphs from
+   *  (MOTIR-9137). Every provider's rows, GitLab included, because a code graph
+   *  is keyed by the same `owner/name` whichever host it came from. Projected to
+   *  the three columns the ref is built from; nothing else leaves the row.
+   *
+   *  ⚠️ `tx` IS REQUIRED and must be a `withSystemContext` transaction: the read
+   *  spans tenants, and on any narrower context RLS returns a SUBSET with no
+   *  error — which the caller would read as "these repositories are gone". */
+  async listRefsByOrganizations(
+    organizationIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ organizationId: string; owner: string; name: string }>> {
+    if (organizationIds.length === 0) return [];
+    return tx.githubRepo.findMany({
+      where: { organizationId: { in: organizationIds } },
+      select: { organizationId: true, owner: true, name: true },
+      orderBy: [{ organizationId: 'asc' }, { owner: 'asc' }, { name: 'asc' }],
+    });
+  },
+
   /**
    * Every repository row of `organizationId` WITH its parent installation — the
    * organization Git offboarding's work set (MOTIR-6306 · MOTIR-6397). The

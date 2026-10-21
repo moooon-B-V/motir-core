@@ -27,6 +27,7 @@ import {
   agentTerminalStatusCommand,
   agentTerminalStopCommand,
   type AgentTerminalRunIdOptions,
+  type AgentTerminalRunOptions,
 } from './commands/agentTerminal.js';
 import { applyHelpConfiguration, registerHelpSurface } from './help.js';
 
@@ -592,7 +593,8 @@ export function buildProgram(): Command {
   // probe, so `run` must stay registered under this exact name.
   register(agentTerminal, 'agent-terminal run')
     .option('--run-id <id>', 'The run to open a session for (its credentials are read on stdin).')
-    .action(async (key: string, opts: AgentTerminalRunIdOptions) => {
+    .option('--command <command>', 'What the session is for: run (the default), fix or continue.')
+    .action(async (key: string, opts: AgentTerminalRunOptions) => {
       await agentTerminalRunCommand(key, opts);
     });
   register(agentTerminal, 'agent-terminal stop')

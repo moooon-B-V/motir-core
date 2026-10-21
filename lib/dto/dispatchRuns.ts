@@ -222,6 +222,12 @@ export interface DispatchRunRepairDto {
     /** The head the claim was handed, or null when no check row named one. */
     headSha: string | null;
   }>;
+  /**
+   * The conversation an agent-door repair can resume (MOTIR-9052): the profile of the
+   * card's last agent run (the caller's own) and the session it recorded. Null for a
+   * hosted or local repair, and when the card had no earlier agent run.
+   */
+  resume: { profile: string; sessionId: string | null; canResume: boolean } | null;
   /** The review's refusal the repair answers — set on a `review` repair. */
   findings: {
     gate: 'agent_review' | 'pull_request_approval';

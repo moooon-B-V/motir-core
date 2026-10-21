@@ -10,9 +10,10 @@ import {
   type DeliveryOptions,
 } from './dispatch.js';
 import { parseMax, transitionToImplemented } from './auto.js';
+import { resumeFixAgent } from './dispatch.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
-import { deriveAgentHarness } from '../agentProfiles.js';
+import { deriveAgentHarness, type ParsedAgentCommand } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
   autoOnlyFlagError,
@@ -212,6 +213,57 @@ export function planSnapshot(items: DispatchItem[], ownerId?: string): Snapshot 
   return { taken, skipped };
 }
 
+/**
+ * The default between-card gate: watch the card just built, and decide whether the drain
+ * goes on. Extracted from `batchCommand` (MOTIR-9059) so a test can reach it — it closed
+ * over `batchCommand`'s locals, and `runBatch` only ever sees an injected `afterCard`.
+ */
+export function watchCardCi(input: {
+  session: Pick<ProjectSession, 'client'>;
+  agent: { parsed: ParsedAgentCommand };
+  deps: Pick<BatchDeps, 'runAgentFn' | 'wait' | 'maxCiPolls'>;
+  keepGoing: boolean | undefined;
+}): NonNullable<BatchDeps['afterCard']> {
+  const { session, agent, deps } = input;
+  return async (record, context) => {
+    // Nothing to watch on a card that did not get built.
+    if (record.outcome !== 'implemented') return 'continue';
+    // This card's OWN conversation, never the previous card's (MOTIR-9059).
+    const resumeAgent = resumeFixAgent(agent.parsed, record.sessionId);
+    const watch = await runCiWatchPhase({
+      client: session.client,
+      key: record.key,
+      title: record.title ?? null,
+      agent: agent.parsed,
+      ...(resumeAgent ? { resumeAgent } : {}),
+      cwd: context.cwd,
+      report: (line) => info(line),
+      ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
+      ...(deps.wait ? { wait: deps.wait } : {}),
+      ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
+    });
+    if (watch.kind === 'green' || watch.kind === 'nothing') return 'continue';
+
+    // ── `--keep-going` decides what happens AFTER the sixth red ───────
+    //
+    // The five-fix loop always runs; the flag only chooses what follows.
+    // That keeps its shipped meaning intact — *one bad card should not end
+    // the whole drain* — rather than inventing a second halt condition it
+    // cannot reach. A CI give-up is the same shape as a failed agent: this
+    // one card did not work out.
+    //
+    // ⚠️ NO EXCLUDE ENTRY IS WRITTEN, and the asymmetry with a failed
+    // agent is deliberate rather than an oversight. A failed agent is
+    // excluded because its card is left in a PICKABLE state and a later
+    // `motir batch` would re-attempt it. A CI give-up leaves the card at
+    // `implemented`, which is not in the ready set at all — `planSnapshot`
+    // is built from `listReadyForDispatch` — so an exclude entry could
+    // never match anything and would be a local opinion about a card the
+    // server already holds back.
+    return input.keepGoing ? 'continue' : 'stop';
+  };
+}
+
 // ── the command ─────────────────────────────────────────────────────────────
 
 export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Promise<void> {
@@ -250,42 +302,7 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
       //
       // An injected gate WINS — a test drives the seam directly rather than
       // through a real CI verdict.
-      afterCard:
-        deps.afterCard ??
-        (async (record, context) => {
-          // Nothing to watch on a card that did not get built.
-          if (record.outcome !== 'implemented') return 'continue';
-          const watch = await runCiWatchPhase({
-            client: session.client,
-            key: record.key,
-            title: record.title ?? null,
-            agent: agent.parsed,
-            cwd: context.cwd,
-            report: (line) => info(line),
-            ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
-            ...(deps.wait ? { wait: deps.wait } : {}),
-            ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
-          });
-          if (watch.kind === 'green' || watch.kind === 'nothing') return 'continue';
-
-          // ── `--keep-going` decides what happens AFTER the sixth red ───────
-          //
-          // The five-fix loop always runs; the flag only chooses what follows.
-          // That keeps its shipped meaning intact — *one bad card should not end
-          // the whole drain* — rather than inventing a second halt condition it
-          // cannot reach. A CI give-up is the same shape as a failed agent: this
-          // one card did not work out.
-          //
-          // ⚠️ NO EXCLUDE ENTRY IS WRITTEN, and the asymmetry with a failed
-          // agent is deliberate rather than an oversight. A failed agent is
-          // excluded because its card is left in a PICKABLE state and a later
-          // `motir batch` would re-attempt it. A CI give-up leaves the card at
-          // `implemented`, which is not in the ready set at all — `planSnapshot`
-          // is built from `listReadyForDispatch` — so an exclude entry could
-          // never match anything and would be a local opinion about a card the
-          // server already holds back.
-          return opts.keepGoing ? 'continue' : 'stop';
-        }),
+      afterCard: deps.afterCard ?? watchCardCi({ session, agent, deps, keepGoing: opts.keepGoing }),
       ownerId,
     });
     info('');
@@ -731,7 +748,14 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     run,
   });
   const durationMs = clock() - started;
-  const base = { key: entry.key, title: entry.title, durationMs, repo: dispatch.targetRepo };
+  const base = {
+    key: entry.key,
+    title: entry.title,
+    durationMs,
+    repo: dispatch.targetRepo,
+    // The card's own conversation, for its CI watch to resume (MOTIR-9059).
+    sessionId: verdict.kind === 'succeeded' ? verdict.sessionId : null,
+  };
 
   if (verdict.kind === 'checkout_unavailable') {
     return {

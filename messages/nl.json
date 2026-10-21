@@ -3957,7 +3957,11 @@
       "savedTitle": "Instellingen van gehoste agent opgeslagen",
       "savedDesc": "Nieuwe gehoste runs gebruiken deze modellen.",
       "errorTitle": "Kan niet opslaan",
-      "saveError": "Je instellingen voor de gehoste agent zijn niet opgeslagen. Probeer het opnieuw."
+      "saveError": "Je instellingen voor de gehoste agent zijn niet opgeslagen. Probeer het opnieuw.",
+      "autoFix": {
+        "label": "Repareer een rode pull request in de eigen agent van het werkitem.",
+        "help": "Als een pull request rood wordt en de laatste run van het werkitem in een ingelogde, actieve agent plaatsvond, start Motir de reparatie in die agent. Uit (de standaard) betekent dat er niets uit zichzelf start."
+      }
     },
     "connectedApps": {
       "title": "Gekoppelde apps",
@@ -7304,6 +7308,43 @@
             "outOfCredits": {
               "body": "Er is niets opgestart en niets in rekening gebracht. Repareren met de gehoste agent werkt weer zodra de organisatie credits heeft — of repareer het vanuit je terminal."
             }
+          }
+        },
+        "myAgent": {
+          "lead": "Repareer het in je eigen agent: <b>{agent}</b>, de agent die de laatste run van dit werkitem gebruikte.",
+          "door": {
+            "label": "Repareren in mijn agent",
+            "starting": "Reparatie wordt gestart…",
+            "why": "De reparatie draait in dezelfde agent op dezelfde branch, dus begint met de eigen context van de run in plaats van een lege."
+          },
+          "fixing": {
+            "by": "<b>{name}</b> startte <when></when> een reparatie in <b>{agent}</b> — <run>{label}</run>.",
+            "byYou": "Jij startte <when></when> een reparatie in <b>{agent}</b> — <run>{label}</run>.",
+            "why": "Eén reparatie tegelijk: deze run houdt de reparatie vast tot hij eindigt, dus een tweede reparatie kan er niet bovenop starten."
+          },
+          "refused": {
+            "busy": {
+              "title": "Niet gestart — voor dit werkitem loopt al een reparatie.",
+              "body": "<b>{name}</b> startte hem <when></when> — <run>{label}</run>. Er is niets opgestart en niets gerekend.",
+              "bodyYou": "Jij startte hem <when></when> — <run>{label}</run>. Er is niets opgestart en niets gerekend."
+            },
+            "signedOut": {
+              "title": "Niet gestart — <b>{agent}</b> is uitgelogd.",
+              "body": "Log in bij <b>{agent}</b> en druk daarna opnieuw op ‘Repareren in mijn agent’. <link>Open de agent</link> om in te loggen met <cmd>{cmd}</cmd>. Er is niets opgestart en niets gerekend."
+            }
+          },
+          "fellBack": {
+            "notice": "<b>{agent}</b> kon de runsessie van dit werkitem niet hervatten, dus de reparatie startte een nieuwe sessie op dezelfde branch (<b>{branch}</b>)."
+          },
+          "settled": {
+            "notice": "De pull requests van dit werkitem zijn nu groen, dus er is geen reparatie gestart."
+          },
+          "gaveUp": {
+            "note": "De laatste reparatie in <b>{agent}</b> gaf het <when></when> op na {attempts, plural, one {# poging} other {# pogingen}}. ‘Repareren in mijn agent’ kan opnieuw worden ingedrukt.",
+            "noteNoCount": "De laatste reparatie in <b>{agent}</b> gaf het <when></when> op. ‘Repareren in mijn agent’ kan opnieuw worden ingedrukt."
+          },
+          "modal": {
+            "lead": "Deze run eindigde met een rode pull request. Repareer hem in dezelfde agent, zonder de fout naar een nieuwe te kopiëren."
           }
         }
       },

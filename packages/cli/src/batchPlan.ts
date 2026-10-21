@@ -139,6 +139,8 @@ export interface BatchRecord {
   outcome: BatchOutcome;
   durationMs: number;
   repo: string | null;
+  /** The agent conversation that built this card (MOTIR-9059); `null` when it recorded none. */
+  sessionId?: string | null;
   /** Extra detail for the summary (an exit code, a bootstrap miss). */
   detail?: string;
 }
