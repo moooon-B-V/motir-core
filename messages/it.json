@@ -6650,6 +6650,23 @@
         "left": "Restano {left} di {n} crediti di prova · una tantum.",
         "spent": "Tutti i {n} crediti di prova sono stati usati.",
         "pickPlan": "Scegli un piano mensile di Motir AI per continuare a pianificare."
+      },
+      "larger": {
+        "caption": "La tua stima va da {low} a {high} crediti al mese. Questo pool è calibrato sul limite alto dell’intervallo, così non resterai a corto. È una stima e cambia quando cambia la tua.",
+        "captionCurrent": "Questo è il pool che hai acquistato, calcolato da una stima di {low}–{high} crediti al mese. Una stima successiva più bassa non cambia il prezzo di un piano che hai già.",
+        "priceEstimate": "Calcolato dalla tua stima",
+        "basis": {
+          "monthly": "Calcolato dal prezzo mensile di {plan}, con ogni credito oltre il suo pool a un prezzo più basso della ricarica.",
+          "annual": "Calcolato allo stesso prezzo per credito di {plan} con fatturazione annuale. L’addebito è una volta l’anno e il pool continua ad arrivare mese per mese."
+        },
+        "aboveBand": "La tua stima supera di circa {credits} crediti al mese il pool più grande venduto da Motir AI. Il piano più grande più una ricarica è il massimo, quindi non c’è un piano più grande da acquistare per la tua stima.",
+        "bought": "Il tuo piano {plan} è in fase di attivazione. {credits} crediti al mese verranno aggiunti al tuo saldo appena il pagamento sarà completato.",
+        "refused": {
+          "atOrBelowCeiling": "Un pool più grande esiste solo oltre il nostro piano standard più grande. Per questa stima basta un piano standard o una ricarica. Non è stato addebitato nulla.",
+          "offerExpired": "Il pool e il prezzo mostrati non corrispondono più alla tua stima. Non è stato addebitato nulla e la vecchia offerta non è stata ricalcolata. Torna al calcolatore e ricalcola.",
+          "quantity": "Questo piano è un solo pool, acquistato una volta. Un pool più grande non si può cumulare. Non è stato addebitato nulla.",
+          "notForSale": "Questo pool non si può acquistare al momento. Non è stato addebitato nulla e i piani standard funzionano ancora."
+        }
       }
     },
     "topup": {

@@ -6650,6 +6650,23 @@
         "left": "Restam {left} de {n} créditos de teste · únicos.",
         "spent": "Todos os {n} créditos de teste foram usados.",
         "pickPlan": "Escolha um plano mensal do Motir AI para continuar planejando."
+      },
+      "larger": {
+        "caption": "Sua estimativa vai de {low} a {high} créditos por mês. Este pool é dimensionado pelo topo dessa faixa, para não faltar. É uma estimativa e muda quando a sua muda.",
+        "captionCurrent": "Este é o pool que você comprou, calculado a partir de uma estimativa de {low} a {high} créditos por mês. Uma estimativa menor depois não muda o preço de um plano que você já tem.",
+        "priceEstimate": "Calculado a partir da sua estimativa",
+        "basis": {
+          "monthly": "Calculado a partir do preço mensal do {plan}, com cada crédito acima do pool dele mais barato que numa recarga.",
+          "annual": "Calculado pelo mesmo preço por crédito do {plan} no faturamento anual. A cobrança é uma vez por ano, e o pool continua chegando mês a mês."
+        },
+        "aboveBand": "Sua estimativa fica cerca de {credits} créditos por mês acima do maior pool que o Motir AI vende. O maior plano mais uma recarga é o limite, então não há um plano maior para comprar na sua estimativa.",
+        "bought": "Seu plano {plan} está sendo configurado. {credits} créditos por mês serão adicionados ao seu saldo assim que o pagamento for concluído.",
+        "refused": {
+          "atOrBelowCeiling": "Um pool maior só existe acima do nosso maior plano padrão. Nesta estimativa, um plano padrão ou uma recarga resolve. Nada foi cobrado.",
+          "offerExpired": "O pool e o preço exibidos não correspondem mais à sua estimativa. Nada foi cobrado, e a oferta antiga não foi recalculada. Volte à calculadora e calcule de novo.",
+          "quantity": "Este plano é um único pool, comprado uma vez. Um pool maior não pode ser acumulado. Nada foi cobrado.",
+          "notForSale": "Este pool não pode ser comprado agora. Nada foi cobrado, e os planos padrão continuam funcionando."
+        }
       }
     },
     "topup": {

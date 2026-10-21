@@ -6650,6 +6650,23 @@
         "left": "{left} of {n} trial credits left · one-time.",
         "spent": "All {n} trial credits are spent.",
         "pickPlan": "Pick a monthly Motir AI plan to keep planning."
+      },
+      "larger": {
+        "caption": "Your estimate runs from {low} to {high} credits a month. This pool is sized to the top of that range, so it won't come up short. It's an estimate, and it moves when your estimate does.",
+        "captionCurrent": "This is the pool you bought, sized from an estimate of {low} to {high} credits a month. A later, lower estimate doesn't re-price a plan you already hold.",
+        "priceEstimate": "Worked out from your estimate",
+        "basis": {
+          "monthly": "Priced from {plan}'s monthly price, with every credit above its pool at a discount on the top-up rate.",
+          "annual": "Priced at the same per-credit rate as {plan} on annual billing. It's billed once a year, and the pool still arrives a month at a time."
+        },
+        "aboveBand": "Your estimate is about {credits} credits a month above the largest pool Motir AI sells. The largest plan plus a top-up is as far as it goes, so there's no larger plan to buy at your estimate.",
+        "bought": "Your {plan} plan is being set up. {credits} credits a month will be added to your balance once the payment settles.",
+        "refused": {
+          "atOrBelowCeiling": "A larger pool only exists above our largest regular plan. At this estimate, a regular plan or a top-up is the answer. Nothing was charged.",
+          "offerExpired": "The pool and price you were shown no longer match your estimate. Nothing was charged, and the old offer wasn't re-priced. Go back to the calculator and price it again.",
+          "quantity": "This plan is one pool bought once. A larger pool can't be stacked. Nothing was charged.",
+          "notForSale": "This pool can't be bought right now. Nothing was charged, and the regular plans still work."
+        }
       }
     },
     "topup": {

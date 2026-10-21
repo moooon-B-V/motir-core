@@ -6650,6 +6650,23 @@
         "left": "Pozostało {left} z {n} kredytów próbnych · jednorazowo.",
         "spent": "Wykorzystano wszystkie {n} kredytów próbnych.",
         "pickPlan": "Wybierz miesięczny plan Motir AI, aby dalej planować."
+      },
+      "larger": {
+        "caption": "Twoja szacunkowa wartość to od {low} do {high} kredytów miesięcznie. Ta pula jest dopasowana do górnej granicy zakresu, więc nie zabraknie jej. To szacunek, który zmienia się razem z Twoim.",
+        "captionCurrent": "To pula, którą kupiono, wyliczona z szacunku od {low} do {high} kredytów miesięcznie. Późniejszy, niższy szacunek nie zmienia ceny planu, który już masz.",
+        "priceEstimate": "Wyliczone z Twojego szacunku",
+        "basis": {
+          "monthly": "Wyceniane od miesięcznej ceny planu {plan}; każdy kredyt ponad jego pulę jest tańszy niż przy doładowaniu.",
+          "annual": "Wyceniane po tej samej cenie za kredyt co {plan} w rozliczeniu rocznym. Płatność jest raz w roku, a pula nadal przychodzi co miesiąc."
+        },
+        "aboveBand": "Twój szacunek przekracza o około {credits} kredytów miesięcznie największą pulę, jaką sprzedaje Motir AI. Największy plan z doładowaniem to maksimum, więc przy Twoim szacunku nie ma większego planu do kupienia.",
+        "bought": "Plan {plan} jest konfigurowany. Gdy płatność zostanie rozliczona, do salda będzie dodawane {credits} kredytów miesięcznie.",
+        "refused": {
+          "atOrBelowCeiling": "Większa pula istnieje tylko powyżej naszego największego zwykłego planu. Przy tym szacunku wystarczy zwykły plan lub doładowanie. Nic nie zostało pobrane.",
+          "offerExpired": "Pokazana pula i cena nie pasują już do Twojego szacunku. Nic nie zostało pobrane, a dawna oferta nie została przeliczona. Wróć do kalkulatora i przelicz ją ponownie.",
+          "quantity": "Ten plan to jedna pula kupowana raz. Większej puli nie można łączyć. Nic nie zostało pobrane.",
+          "notForSale": "Tej puli nie można teraz kupić. Nic nie zostało pobrane, a zwykłe plany nadal działają."
+        }
       }
     },
     "topup": {

@@ -6650,6 +6650,23 @@
         "left": "{left} van {n} proefcredits over · eenmalig.",
         "spent": "Alle {n} proefcredits zijn op.",
         "pickPlan": "Kies een maandelijks Motir AI-abonnement om te blijven plannen."
+      },
+      "larger": {
+        "caption": "Je schatting loopt van {low} tot {high} credits per maand. Deze pool is afgestemd op de bovenkant van dat bereik, zodat je niet tekortkomt. Het is een schatting en verandert mee met jouw schatting.",
+        "captionCurrent": "Dit is de pool die je hebt gekocht, berekend op basis van een schatting van {low} tot {high} credits per maand. Een latere, lagere schatting verandert de prijs van een plan dat je al hebt niet.",
+        "priceEstimate": "Berekend uit je schatting",
+        "basis": {
+          "monthly": "Berekend op basis van de maandprijs van {plan}; elke credit boven die pool is goedkoper dan bij opwaarderen.",
+          "annual": "Berekend tegen dezelfde prijs per credit als {plan} bij jaarlijkse facturering. Je betaalt één keer per jaar en de pool komt nog steeds per maand binnen."
+        },
+        "aboveBand": "Je schatting ligt ongeveer {credits} credits per maand boven de grootste pool die Motir AI verkoopt. Het grootste plan plus opwaarderen is het maximum, dus bij jouw schatting is er geen groter plan te koop.",
+        "bought": "Je plan {plan} wordt ingesteld. Zodra de betaling is verwerkt, worden er {credits} credits per maand aan je saldo toegevoegd.",
+        "refused": {
+          "atOrBelowCeiling": "Een grotere pool bestaat alleen boven ons grootste reguliere plan. Bij deze schatting volstaat een regulier plan of opwaarderen. Er is niets in rekening gebracht.",
+          "offerExpired": "De pool en prijs die je zag, passen niet meer bij je schatting. Er is niets in rekening gebracht en het oude aanbod is niet opnieuw geprijsd. Ga terug naar de rekenhulp en bereken het opnieuw.",
+          "quantity": "Dit plan is één pool, één keer gekocht. Een grotere pool kan niet worden gestapeld. Er is niets in rekening gebracht.",
+          "notForSale": "Deze pool kan op dit moment niet worden gekocht. Er is niets in rekening gebracht en de reguliere plannen werken nog steeds."
+        }
       }
     },
     "topup": {

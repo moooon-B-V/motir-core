@@ -6650,6 +6650,23 @@
         "left": "{left} von {n} Test-Credits übrig · einmalig.",
         "spent": "Alle {n} Test-Credits sind aufgebraucht.",
         "pickPlan": "Wählen Sie einen monatlichen Motir AI-Plan, um weiter zu planen."
+      },
+      "larger": {
+        "caption": "Deine Schätzung liegt bei {low} bis {high} Credits im Monat. Dieser Pool ist auf das obere Ende ausgelegt, damit er nicht zu knapp wird. Es ist eine Schätzung und ändert sich mit deiner Schätzung.",
+        "captionCurrent": "Das ist der Pool, den du gekauft hast, berechnet aus einer Schätzung von {low} bis {high} Credits im Monat. Eine spätere, niedrigere Schätzung ändert den Preis eines Plans, den du schon hast, nicht.",
+        "priceEstimate": "Aus deiner Schätzung berechnet",
+        "basis": {
+          "monthly": "Berechnet aus dem Monatspreis von {plan}; jeder Credit über dessen Pool kostet weniger als beim Aufladen.",
+          "annual": "Berechnet zum selben Preis pro Credit wie {plan} bei jährlicher Abrechnung. Abgerechnet wird einmal im Jahr, der Pool kommt weiterhin Monat für Monat."
+        },
+        "aboveBand": "Deine Schätzung liegt etwa {credits} Credits im Monat über dem größten Pool, den Motir AI verkauft. Mehr als der größte Plan plus Aufladung geht nicht, deshalb gibt es bei deiner Schätzung keinen größeren Plan zu kaufen.",
+        "bought": "Dein Plan {plan} wird eingerichtet. Sobald die Zahlung abgeschlossen ist, werden deinem Guthaben {credits} Credits im Monat gutgeschrieben.",
+        "refused": {
+          "atOrBelowCeiling": "Einen größeren Pool gibt es nur oberhalb unseres größten regulären Plans. Bei dieser Schätzung reicht ein regulärer Plan oder eine Aufladung. Es wurde nichts berechnet.",
+          "offerExpired": "Pool und Preis, die dir angezeigt wurden, passen nicht mehr zu deiner Schätzung. Es wurde nichts berechnet, und das alte Angebot wurde nicht neu bepreist. Geh zurück zum Rechner und berechne es neu.",
+          "quantity": "Dieser Plan ist ein Pool, einmal gekauft. Ein größerer Pool lässt sich nicht stapeln. Es wurde nichts berechnet.",
+          "notForSale": "Dieser Pool kann gerade nicht gekauft werden. Es wurde nichts berechnet, und die regulären Pläne funktionieren weiterhin."
+        }
       }
     },
     "topup": {

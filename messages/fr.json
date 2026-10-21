@@ -6650,6 +6650,23 @@
         "left": "Il reste {left} crédits d’essai sur {n} · ponctuels.",
         "spent": "Les {n} crédits d’essai sont épuisés.",
         "pickPlan": "Choisissez un forfait mensuel Motir AI pour continuer à planifier."
+      },
+      "larger": {
+        "caption": "Votre estimation va de {low} à {high} crédits par mois. Ce pool est calé sur le haut de cette fourchette, pour ne pas être juste. C’est une estimation, qui évolue avec la vôtre.",
+        "captionCurrent": "C’est le pool que vous avez acheté, calculé à partir d’une estimation de {low} à {high} crédits par mois. Une estimation plus basse par la suite ne change pas le prix d’un plan que vous détenez déjà.",
+        "priceEstimate": "Calculé à partir de votre estimation",
+        "basis": {
+          "monthly": "Calculé à partir du prix mensuel de {plan}, chaque crédit au-delà de son pool étant moins cher qu’en recharge.",
+          "annual": "Calculé au même prix par crédit que {plan} en facturation annuelle. La facturation est annuelle, et le pool arrive toujours mois par mois."
+        },
+        "aboveBand": "Votre estimation dépasse d’environ {credits} crédits par mois le plus grand pool vendu par Motir AI. Le plus grand plan plus une recharge est le maximum possible : il n’y a donc pas de plan plus grand à acheter pour votre estimation.",
+        "bought": "Votre plan {plan} est en cours de mise en place. {credits} crédits par mois seront ajoutés à votre solde dès que le paiement sera finalisé.",
+        "refused": {
+          "atOrBelowCeiling": "Un pool plus grand n’existe qu’au-delà de notre plus grand plan standard. Pour cette estimation, un plan standard ou une recharge suffit. Rien n’a été facturé.",
+          "offerExpired": "Le pool et le prix affichés ne correspondent plus à votre estimation. Rien n’a été facturé, et l’ancienne offre n’a pas été recalculée. Revenez au calculateur pour refaire le calcul.",
+          "quantity": "Ce plan correspond à un seul pool, acheté une fois. Un pool plus grand ne peut pas être cumulé. Rien n’a été facturé.",
+          "notForSale": "Ce pool ne peut pas être acheté pour le moment. Rien n’a été facturé, et les plans standard fonctionnent toujours."
+        }
       }
     },
     "topup": {

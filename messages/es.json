@@ -6650,6 +6650,23 @@
         "left": "Quedan {left} de {n} créditos de prueba · únicos.",
         "spent": "Se han gastado los {n} créditos de prueba.",
         "pickPlan": "Elige un plan mensual de Motir AI para seguir planificando."
+      },
+      "larger": {
+        "caption": "Tu estimación va de {low} a {high} créditos al mes. Este pool se ajusta al extremo alto de ese rango, así que no se quedará corto. Es una estimación y cambia cuando cambia la tuya.",
+        "captionCurrent": "Este es el pool que compraste, calculado a partir de una estimación de {low} a {high} créditos al mes. Una estimación posterior más baja no cambia el precio de un plan que ya tienes.",
+        "priceEstimate": "Calculado a partir de tu estimación",
+        "basis": {
+          "monthly": "Calculado a partir del precio mensual de {plan}, con cada crédito por encima de su pool más barato que en una recarga.",
+          "annual": "Calculado al mismo precio por crédito que {plan} con facturación anual. Se cobra una vez al año y el pool sigue llegando mes a mes."
+        },
+        "aboveBand": "Tu estimación supera en unos {credits} créditos al mes el pool más grande que vende Motir AI. El plan más grande más una recarga es el máximo, así que no hay un plan más grande que comprar para tu estimación.",
+        "bought": "Tu plan {plan} se está configurando. Se añadirán {credits} créditos al mes a tu saldo en cuanto se complete el pago.",
+        "refused": {
+          "atOrBelowCeiling": "Un pool más grande solo existe por encima de nuestro plan estándar más grande. Para esta estimación, basta con un plan estándar o una recarga. No se cobró nada.",
+          "offerExpired": "El pool y el precio que viste ya no coinciden con tu estimación. No se cobró nada y la oferta anterior no se volvió a calcular. Vuelve a la calculadora y calcúlalo de nuevo.",
+          "quantity": "Este plan es un único pool que se compra una vez. Un pool más grande no se puede acumular. No se cobró nada.",
+          "notForSale": "Este pool no se puede comprar ahora mismo. No se cobró nada y los planes estándar siguen funcionando."
+        }
       }
     },
     "topup": {
