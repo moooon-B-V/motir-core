@@ -113,7 +113,7 @@ function summarizeClaim(claim: WorkItemContinueClaimDto): string {
         return (
           `Claimed the RESUME of ${claim.key} — ${claim.title} (run ${claim.runId}). Its last run ` +
           `(${claim.deadRun?.id ?? '—'}) did not die: it stopped at a gate, and these are now ` +
-          `approved: ${gateNames(claim)}. Resume on these branches, never a new one:\n` +
+          `approved: ${gateNames(claim)}.${changesNote(claim)} Resume on these branches, never a new one:\n` +
           `${branchLines(claim)}${scope}\n${keepAlive}`
         );
       }
@@ -159,6 +159,15 @@ function summarizeClaim(claim: WorkItemContinueClaimDto): string {
       }
       return `NOT claimed: ${claim.key} has nothing to continue (${claim.reason}). Nothing changed.`;
   }
+}
+
+/** Gates answered "changes requested" release the run to redo the work (MOTIR-9185). */
+function changesNote(claim: WorkItemContinueClaimDto): string {
+  const refused = claim.gates.filter((g) => g.state === 'changes_requested');
+  return refused.length === 0
+    ? ''
+    : ` Changes were requested on ${refused.map((g) => `${g.key} ${g.kind}`).join(', ')}: ` +
+        'read each reason and redo that work.';
 }
 
 /** `MOTIR-7 design_result (approved), …` — the gates a gated run names. */

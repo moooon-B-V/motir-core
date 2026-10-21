@@ -202,7 +202,10 @@ async function deadCard(
  * A card whose one run STOPPED AT A GATE (MOTIR-7708): closed `gated`, holding one
  * `design_result` gate on the card in `state`.
  */
-async function gatedCard(fx: WorkItemFixture, state: 'awaiting' | 'changes_requested') {
+async function gatedCard(
+  fx: WorkItemFixture,
+  state: 'awaiting' | 'changes_requested' | 'declined',
+) {
   const { card, deadRunId } = await deadCard(fx);
   await dispatchRunService.close(deadRunId, { stopReason: 'gated' }, fx.ctx);
   const gate = await adminDb.approvalGate.create({
@@ -340,7 +343,7 @@ const REFUSAL_SEEDS: Record<WorkItemContinueRefusal, Seed> = {
     return { key: card.identifier, claimant: owner, names: {} };
   },
   gate_sent_back: async (fx, owner) => {
-    const { card } = await gatedCard(fx, 'changes_requested');
+    const { card } = await gatedCard(fx, 'declined');
     return { key: card.identifier, claimant: owner, names: {} };
   },
 };
