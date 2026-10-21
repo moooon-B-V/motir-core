@@ -372,7 +372,7 @@ test('a member mentions a work item on a page; the work item lists the page, fol
   });
 
   await chapter(
-    'Mentioned again, then archived through its dialog — the section lets the page go',
+    'Mentioned again, then archived through its dialog — the section serves it as unavailable',
     async () => {
       await openPage(page, pageId);
       const picker = await openPickerWithQuery(page);
@@ -396,8 +396,12 @@ test('a member mentions a work item on a page; the work item lists the page, fol
       expect((await archived).status()).toBe(200);
       await expect(bannerOf(page)).toBeVisible();
 
+      // The archived page is no longer a link to follow: its row is served as an
+      // unavailable one (MOTIR-9203), so the section is not empty — it holds the
+      // unavailable row, which names no title and leads nowhere.
       const section = await openItem(page, itemA);
-      await expect(section).toContainText(EMPTY);
+      await expect(section.getByTestId('pages-row-unavailable')).toHaveCount(1);
+      await expect(section).not.toContainText(EMPTY);
       await expect(pageRowOf(page, itemA.key)).toHaveCount(0);
     },
   );
@@ -414,6 +418,7 @@ test('a member mentions a work item on a page; the work item lists the page, fol
     const section = await openItem(page, itemA);
     await expect(pageRowOf(page, itemA.key)).toHaveCount(1);
     await expect(pageRowOf(page, itemA.key)).toContainText('Mentioned');
+    await expect(section.getByTestId('pages-row-unavailable')).toHaveCount(0);
     await expect(section).not.toContainText(EMPTY);
   });
 });
