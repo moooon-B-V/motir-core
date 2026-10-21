@@ -867,6 +867,8 @@ describe('aiConventionService — project-admin gate', () => {
     const member = await createTestUser();
     await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
     const ctx = { userId: member.id, workspaceId: workspace.id };
+    getConventionMock.mockResolvedValue(rawConventionSurface());
+    getCodeAuditMock.mockResolvedValue(rawAuditSurface());
 
     await expect(aiConventionService.getConvention(project.id, ctx)).resolves.toBeDefined();
     await expect(aiConventionService.getAudit(project.id, ctx)).resolves.toBeDefined();
