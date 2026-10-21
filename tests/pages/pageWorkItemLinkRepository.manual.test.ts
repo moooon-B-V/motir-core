@@ -56,10 +56,14 @@ describe('pageWorkItemLinkRepository hand-link operations', () => {
     const { tx, findMany } = fakeTx();
     const createdAt = new Date('2026-10-01T00:00:00Z');
     await pageWorkItemLinkRepository.listManualByPage('p', { createdAt, id: 'l1' }, 6, tx);
-    expect(findMany.mock.calls[0][0].where).toEqual({
-      pageId: 'p',
-      source: 'manual',
-      OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: 'l1' } }],
-    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          pageId: 'p',
+          source: 'manual',
+          OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: 'l1' } }],
+        },
+      }),
+    );
   });
 });
