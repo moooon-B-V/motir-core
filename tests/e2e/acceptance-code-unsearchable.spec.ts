@@ -178,7 +178,7 @@ test('A. a change asked for over unsearchable code plans nothing and says which 
 
   await chapter('Nothing was planned, and the plan on the canvas is untouched', async () => {
     expect(await nodeIds()).toEqual(before);
-    expect(await adminDb.plan.count()).toBe(0);
+    expect(await adminDb.planItem.count(), 'no proposal was written').toBe(0);
     await expect(codebaseLink(page)).toHaveAttribute('href', '/code');
     await expect(codebaseLink(page)).toHaveText('Go to Codebase');
     await beat();
