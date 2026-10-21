@@ -36,7 +36,7 @@ import { GATE_CRITERIA, gateSections } from '../helpers/sectionsGate';
 // "The same text as before" is made mechanical by the twins, not by a screenshot
 // from before the story, which does not exist.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // Each Save is a Server Action, matched by its body (`actionWrite`, a marker only
 // the edited text carries) and armed before the click; its 200 is asserted before

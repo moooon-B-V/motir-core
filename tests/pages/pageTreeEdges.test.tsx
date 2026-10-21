@@ -21,7 +21,7 @@ import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 //   • every folder-command refusal the tree maps itself — each Move to… code,
 //     a failed or refused folder list, a reorder or delete that the transport
 //     drops or the server refuses, the delete dialog's three refusals;
-//   • the SEQUENCING the island promises (CLAUDE.md § optimistic mutations): an
+//   • the SEQUENCING the island promises (the coding convention § optimistic mutations): an
 //     answer to a picker, a name row, a delete dialog or a level read that the
 //     reader has since closed or superseded never lands;
 //   • folder reorder inside a FOLDER level (the parent the move names), and a

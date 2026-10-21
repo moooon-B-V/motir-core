@@ -272,6 +272,43 @@ describe('the reply cause — raised by the sweep', () => {
     expect(await gatesOf(sessionId)).toHaveLength(0);
   });
 
+  it.each(['planned', 'stale'] as const)(
+    'is left untouched while a %s plan waits for its decision (the plan’s own gate is the wait)',
+    T,
+    async (status) => {
+      const sessionId = await openSession();
+      await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
+      await adminDb.plan.create({
+        data: { workspaceId: fx.workspaceId, projectId: fx.projectId, sessionId, status },
+      });
+
+      expect((await planningSessionGateService.raiseAwaitingReplies()).raised).toBe(0);
+      expect(await gatesOf(sessionId)).toHaveLength(0);
+      expect((await sessionRow(sessionId)).awaitingPersonSince).toBeNull();
+    },
+  );
+
+  it(
+    'still raises when the session’s plan was DECIDED and the planner replied afterwards',
+    T,
+    async () => {
+      const sessionId = await openSession();
+      await plannerReplyQuietFor(sessionId, AWAITING_REPLY_AFTER_MS + 5 * MIN);
+      await adminDb.plan.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          sessionId,
+          status: 'declined',
+        },
+      });
+
+      expect((await planningSessionGateService.raiseAwaitingReplies()).sessionIds).toEqual([
+        sessionId,
+      ]);
+    },
+  );
+
   it('is left untouched when the last turn is the PERSON’s', T, async () => {
     const sessionId = await openSession(); // its only turn is the person's first
     await adminDb.planChangeSession.update({

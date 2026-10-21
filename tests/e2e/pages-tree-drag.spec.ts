@@ -13,7 +13,7 @@ import { signUp } from './_helpers/shell-session';
 // a reload, a re-parent into a folder, a drop the tree refuses before asking,
 // and one the server refuses (depth) that leaves the tree unchanged.
 //
-// DETERMINISM (CLAUDE.md § E2E, the dnd rule): a drop is judged by the COMMITTED
+// DETERMINISM (the coding convention § E2E, the dnd rule): a drop is judged by the COMMITTED
 // placement — the PATCH response's body, then an authoritative read of the
 // level — never by where the row appears to have landed. A gesture that resolved
 // to the wrong target or to nothing (`closestCorners`-style staleness, a missed

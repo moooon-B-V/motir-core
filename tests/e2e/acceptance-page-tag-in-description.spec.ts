@@ -35,7 +35,7 @@ import {
 // anywhere on the item, and an `@` picker with no Pages section that never
 // searches pages.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // The picker's page search is waited on by its `GET /api/pages/mention-search`
 // for the exact query, armed before the keystroke that completes it. Save is a

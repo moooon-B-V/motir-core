@@ -16,7 +16,7 @@ import { signUp } from './_helpers/shell-session';
 // creates the page, so the spec also proves the page lands in the project the
 // page route then resolves against.
 //
-// DETERMINISM (CLAUDE.md § E2E): the rename and the body save are each awaited
+// DETERMINISM (the coding convention § E2E): the rename and the body save are each awaited
 // on their own response — armed before the action — before the reload reads
 // them back. Nothing waits on a timer.
 

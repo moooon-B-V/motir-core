@@ -32,6 +32,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **The DELIVERY SET on the detail page**                             | **`delivery-set.mock.html`** + `delivery-set.png`                                     | The pull requests that DELIVER a card, many-to-many (MOTIR-3655). EXTENDS `repository-set.mock.html` and re-decides nothing it settled: the rail's glyph gains a truer PREDICATE (delivered = every delivery in that repository landed, not any linked pull request), and the caption's SUBJECT becomes whatever is outstanding — a repository, an open pull request, or one merged onto a base that is not its trunk. FOUR panels: the one-repository/two-pull-request card today's vocabulary reads as DELIVERED while the gate holds it · both merged · merged but not onto trunk · one delivery, unchanged. The ONE new element is a `Not on trunk` pill. Story MOTIR-3655 · MOTIR-3691 (design). Gates MOTIR-3660. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **The repository SET in the QUICK VIEW**                            | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png`           | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **The item page at ARRIVAL / STREAMING**                            | **`detail-arrival.mock.html`** + `detail-arrival.png`                                 | What the page shows between the URL and the item: the page's OWN pending frame (the eyebrow row, the wide title, the `1fr / 18rem` split, the rail's card) — mounted as an in-page `<Suspense>` AFTER the gate, never as a `loading.tsx` (MOTIR-3492) — and the THREE-TIER allocation of every region — with the frame · with the first content · after the page. COMPOSES `design/shell/navigation-pending`'s grammar and the section skeletons this folder already draws; neither is redrawn. Decides that **the page settles TWICE**, so the five late sections are ONE boundary rather than five, and that the roll-up badge fills in place inside a reserved slot rather than earning a third. Story MOTIR-3430 · MOTIR-3432 (design), amended by MOTIR-3492. Gates MOTIR-3435 + MOTIR-3436. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **The Pages section — linking a page by hand**                      | **`item--pages-section--link.mock.html`** (DELTA, P1–P26)                             | The Link page door, its inline page picker, Unlink on a hand link only, the derived-link explanation, the unavailable row and the frames between them, as a delta of the shipped `PagesSection.tsx` (the component is the base of record). Gates MOTIR-9199 (the build), MOTIR-9202 (E2E + clip). Story MOTIR-7567 · MOTIR-9195.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **The TO-DO LIST on a work item**                                   | **`todo-list.mock.html`** + `todo-list.png`                                           | The ordered STEPS of a card's own work — one operation per row, ticked off, each carrying its own executor and, where the operation is a command, the command with a copy button. `design/work-items/` had NO checklist surface at all, so this is the NONE-exists case. COMPOSES `ContentSectionCard`'s header grammar over the shipped `Checkbox` / `Button` / `Tooltip`; nothing is redrawn and no colour or radius is invented. SEVENTEEN panels: placement (MEASURED at 1280×900) · the row in its three faces (plain · command · agent) plus the INSTRUCTIONS disclosure · empty · partly done · all done · read-only · adding · editing · dragging · delete confirm · at scale · the long command at 1280 AND at 390 · light + dark. Settles which of the two shipped copy grammars this surface takes (the button's own state, NOT a toast) and writes the overflow containment rule down in prose so the code card inherits it. Story MOTIR-3808 · MOTIR-3812 (design). Gates MOTIR-3815. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **The PENDING-PLAN indicator on the item page**                     | **`pending-plan-indicator.mock.html`** + `pending-plan-indicator.png`                 | What the item page says about a plan that proposes to change this card, ARCHIVE it, or ADD CHILDREN under it — the page read no plan at all when this was drawn, so it was the NONE-exists case. COMPOSES `ArchivedNotice` (the slot and the geometry), the shipped AI-proposal grammar (`ExpansionNudgeBanner`'s lavender `Card` + `Sparkles`), `detail-arrival`'s three-tier allocation and `WorkItemPlanEntrance`; none is redrawn. Settles the SLOT (first in `<main>`, above Description) and its TIER (**tier 2, inside the page's existing concurrent group** — not the late stack, which would resize a top-of-page box), the TONE with the archived mold rejected and every ink MEASURED, **one row per `PlanStatus` value including `stale`** (which MOTIR-4197's boundary never named), the copy per op and per plurality with its `zh` obligation, the three ABSENCES as panels, and the READ with its repository method and the reverse index that serves it. **AMENDMENT A (MOTIR-4364)** adds the THIRD case — a plan proposing CHILDREN under this card, which the reverse lookup could not return when the table was written — as five claims with six new keys, KEEPS the tone with a second alternative rejected, and settles that the count headline counts PLANS by collapsing the DTO to one row per plan. Nineteen panels, light + dark + 390. Design cards MOTIR-4256 · MOTIR-4364. Gates MOTIR-4197 · MOTIR-4365. See below. |
 
@@ -9844,3 +9845,184 @@ Judged and drawn: list, tree, board (+ the independent peek, whose view mode is 
 - **The editors' original-language note**: [the editors' design](motir:cmvbkbpaw0022hqopxorabzzp).
 - **The batch request, its limits and its billing**: the door and route builds.
 - **Other render sites**: the coverage sweep (MOTIR-8834).
+
+## ⭐ The Pages section — linking a page by hand (Story MOTIR-7567 · MOTIR-9195 — `item--pages-section--link.mock.html`, DATED 2026-10-21)
+
+A DELTA mock over the shipped work-item **Pages** section. **The base of record is the component**,
+`app/(authed)/items/[key]/_components/PagesSection.tsx`: the design mock its header cites
+(`item--pages-section.mock.html`) is not present in this area on the default branch, so a later reader
+should read the component rather than go looking. Every frame the asset does not change is composed
+class-for-class from it and captioned _COMPOSED_; every frame it does change is captioned _CHANGED_.
+
+**What it adds:** the **Link page** door in the header slot `headerAction` already reserves; the inline
+page picker it opens; **Unlink** on a hand link only; the one quiet line that explains why every other kind
+of link offers none; the **unavailable row**; and the frames for empty, loading, error, refused,
+already-linked, in-flight, past-the-cap and unavailable.
+
+**What it consumes and implements nowhere:** the work item's Pages read that serves an unavailable row
+(MOTIR-9203), which returns a linked page that is archived or no longer readable with a field separating
+live from not-live. This asset names no member of that contract; it draws "live" versus "not live".
+
+### Supersession (recorded, not edited)
+
+The parent story's _"hidden until restored"_ clause for an archived page is **superseded on the work-item
+side** by the run's unavailable clause and by the read (MOTIR-9203). The page side is unaffected: an
+archived page mounts no strip at all (the strip design, MOTIR-9196). This asset edits neither the story nor
+the read. **A finding it cannot place:** the story integration gate (MOTIR-9201) and the MOTIR-7565
+acceptance spec `acceptance-page-work-item-mention.spec.ts` assert that an archived page _leaves_ the work
+item's section; on the work-item half those cases are stale against the read and go red until the build
+card draws this row. That gate does not wait on this asset, so the correction is named here for the
+reviewer rather than handed to a card that would never see it.
+
+### Panel table
+
+| Panel | Frame                                    | Composed or changed           |
+| ----- | ---------------------------------------- | ----------------------------- |
+| P1    | First read, a reader who may link        | the door only                 |
+| P2    | First read failed, the door stays        | the door only                 |
+| P3    | Empty, a reader who may link             | the door only                 |
+| P4    | Empty and populated, a Viewer            | composed (no door, no Unlink) |
+| P5    | Door open, no query                      | changed                       |
+| P6    | Searching                                | changed                       |
+| P7    | Results, each with its place             | changed                       |
+| P8    | More results: Show more, pending, failed | changed                       |
+| P9    | No results                               | changed                       |
+| P10   | Search failed                            | changed                       |
+| P11   | Picked, the write in flight              | changed                       |
+| P12   | Linked, the new row pinned               | changed                       |
+| P13   | Already hand-linked                      | changed                       |
+| P14   | Refused, two sentences                   | changed                       |
+| P15   | Link failed                              | changed                       |
+| P16   | The source matrix                        | Unlink only on `manual`       |
+| P17   | A mixed row and its unlink outcome       | changed                       |
+| P18   | The derived-link explanation             | changed                       |
+| P19   | Unlinking                                | changed                       |
+| P20   | Unlink failed                            | changed                       |
+| P21   | Paged, with hand links                   | composed + Unlink             |
+| P22   | Keyboard and assistive technology        | notes                         |
+| P23   | Dark and ~390px                          | changed                       |
+| P24   | The unavailable row                      | changed                       |
+| P25   | Unlinking an unavailable row             | changed                       |
+| P26   | An unavailable row in place              | changed                       |
+
+### Decisions
+
+- **D1 — one door, in the header slot.** The door follows `AddLinkControl`'s grammar: a quiet `--el-link`
+  label with a `Plus`, and it becomes **Cancel** while the form is open rather than gaining a second control.
+  No second call to action in the empty body.
+- **D2 — an inline form, not a modal.** A popup inside a client island that already streams is where
+  focus-trap and pointer-events problems live, and the rows stay visible as the thing being changed.
+- **D3 — the picker is the `@` popup's page search plus a pager.** `searchPagesForMention`, newest edit
+  first, `[]` under `QUICK_SEARCH_MIN_QUERY_LENGTH`, ten per page (`PAGE_MENTION_SEARCH_LIMIT`, named, never
+  typed into a sentence), **Show more pages** (`issueViews.pagesShowMore`) once the paged search card serves
+  a cursor.
+- **D4 — no already-linked mark on a candidate.** `PageMentionCandidateDto` is `{ id, title, place }`;
+  marking or excluding would need a second read this story does not buy. The write's refusal answers
+  (P13).
+- **D5 — the just-linked row is pinned.** The list is ordered by the page's own `updatedAt` and
+  keyset-paged, so a hand link to an older page would land on a later page and read as a failure. The
+  pinned row carries **Just linked**, the same page's paged row is suppressed (the shipped `loadMore`
+  dedupes by `pageId`), and the pin clears on the next full read.
+- **D6 — Unlink has no confirm.** Removing a hand link changes nothing but this list and is one click to
+  remake; a relationship removal changes readiness, which is why that panel confirms and this one does not.
+- **D7 — already-linked is informational.** `--el-tint-sky` with `--el-text-strong`, not the danger tint:
+  nothing failed and no row was duplicated.
+- **D8 — one explanation line, not a hint per row.** Most rows are derived-only; a per-row hint would
+  dominate the list. The line is drawn whenever at least one row has no `manual` source.
+- **D9 — unlinking never removes a derived source.** A mixed row stays after the hand link goes, with its
+  mention chip, its place and its timestamp.
+- **D10 — the door follows `canEdit`.** `LateProps` carries the item's `canEdit` and `LateLowerSections`
+  does not forward it today; the wiring is the build card's. A Viewer sees no door and no Unlink — never
+  disabled, never behind a tooltip.
+- **D11 — the unavailable row is ONE treatment over two causes.** The read separates live from unavailable,
+  not cause from cause, and the reader's next action is identical either way (clear the link, or go and
+  restore the page). The row keeps its source chips (`sources` describes the link, which still exists),
+  draws the page's last known title and place where the read still carries them, draws one muted
+  **Unavailable page** label in the timestamp's slot with no relative time beside it, has a title that is
+  **not an anchor** (so the row contributes exactly one tab stop, its Unlink), and never names a cause.
+- **D12 — Unlink survives on the unavailable row, and a not-found settles as removed.** A hand link to a
+  page nobody can open is the one a reader most needs to clear. An unlink answered `PAGE_LINK_NOT_FOUND`
+  (another writer's removal — the build card's existing rule) or `PAGE_NOT_FOUND` settles as removed with
+  the same announcement, using the unavailable label where there is no title; any other refusal restores
+  the row exactly and shows P20's line. The unavailable row keeps the list's own `updatedAt` order: never
+  pinned, sorted to the end, or marked new.
+
+**The empty line changes meaning, not words.** Today `rows.length === 0` means "no _live_ page links
+here"; after MOTIR-9203 it means "nothing links here". The string (`issueViews.pagesEmpty`) was already
+worded for the second meaning, so it does not move (P26 decides it).
+
+### String map
+
+New copy, `en`; the key names are indicative — the build card (MOTIR-9199) owns the catalogue and ships the
+`zh` twin of every row.
+
+| What the reader sees                                                                                                          | Indicative key                          |
+| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Link page                                                                                                                     | `issueViews.pagesLinkDoor`              |
+| Cancel (the door while open)                                                                                                  | `issueViews.pagesLinkCancel`            |
+| Search pages by title                                                                                                         | `issueViews.pagesLinkSearchLabel`       |
+| “{title}” is already linked to this work item.                                                                                | `issueViews.pagesLinkAlreadyLinked`     |
+| You don’t have permission to link pages to this work item.                                                                    | `issueViews.pagesLinkRefusedPermission` |
+| That page is no longer available to link.                                                                                     | `issueViews.pagesLinkRefusedGone`       |
+| Couldn’t link that page.                                                                                                      | `issueViews.pagesLinkFailed`            |
+| Just linked                                                                                                                   | `issueViews.pagesJustLinked`            |
+| Unlink                                                                                                                        | `issueViews.pagesUnlink`                |
+| Unlink page {title} (accessible name)                                                                                         | `issueViews.pagesUnlinkAria`            |
+| Unlink unavailable page (accessible name, no title)                                                                           | `issueViews.pagesUnlinkUnavailableAria` |
+| Couldn’t unlink that page.                                                                                                    | `issueViews.pagesUnlinkFailed`          |
+| Unlinked “{title}”. (live region)                                                                                             | `issueViews.pagesUnlinkLive`            |
+| Only hand links can be unlinked here. Mentioned, embedded and tagged links are removed by editing the page or this work item. | `issueViews.pagesDerivedOnlyGloss`      |
+| Unavailable page                                                                                                              | `issueViews.pagesUnavailable`           |
+
+**Reused, by key only (values read from the catalogue, never retyped):** `issueViews.pagesSourceManual`,
+`issueViews.pagesEmpty`, `issueViews.pagesGloss`, `issueViews.pagesError`, `issueViews.pagesLoadMoreError`,
+`issueViews.pagesShowMore`, `issueViews.pagesListAria`, `common.retry`, and the `@` popup's page lines
+(keep typing, searching, no matches, couldn’t search). **No per-cause string exists:** adding one would need
+a field the read does not promise and a sentence a reader cannot act on.
+
+### Parts inventory
+
+`ContentSectionCard` (chrome, the `headerRight` slot), the row and its `NotebookText` glyph and place
+`<ol>` (`PageBreadcrumb`'s vocabulary as a label), the source `Pill` (neutral tone) per `PageLinkSourceDto`,
+`Button` (secondary, sm) for Try again, the first-read skeleton, the more-rows skeleton, the Show more
+button, and the load-more failure line. **New:** the door, the inline form with its field, the candidate
+row, the chosen chip, the outcome lines, the Unlink control, the pinned block and the unavailable label.
+
+### Colour and ink
+
+`--el-*` only, copied 1:1 from `packages/design-system/theme.css` (the layer `app/globals.css` imports);
+shape is the element shape tokens. Every secondary line is `--el-text-secondary`; `--el-text-faint` is not
+used; `--el-text-muted` appears only as the search field's placeholder ink on the white card. The danger
+glyph is `--el-danger-on-surface`, never `--el-danger-text`. The Unavailable label is
+`--el-text-secondary`, so it clears AA on every surface the row lands on.
+
+### Reference check
+
+No reference product was recorded for this project, so one was found from the feature: Notion's
+bidirectional linking, checked at
+[distribb](https://distribb.io/blog/harnessing-notion-backlinks-build-connections-that-boost-productivity)
+and [Guiding Tech](https://www.guidingtech.com/how-to-create-and-remove-backlinks-in-notion/). Linking from
+one page writes the relationship both ways and removing it disconnects both sides — the one-row,
+two-sides model this story has — while mention-derived backlinks are a separate list the reader does not
+delete. That second half is adopted: a derived link shows its source and carries no removal control
+(P16–P18), and only the hand-made relationship is removable. A backlink whose target has gone is shown as a
+dead title with no navigation rather than dropped, which is P24's choice.
+
+### GIVES / TAKES
+
+- **GIVES the build card (MOTIR-9199):** panels P1–P26 and the string map above, including the one extra
+  key beyond the first cut's map (`pagesUnlinkUnavailableAria`), the door's capability wiring
+  (`LateProps.canEdit` into the section), the pinned **Just linked** row, and the rule that an unlink
+  answered `PAGE_LINK_NOT_FOUND` or `PAGE_NOT_FOUND` from an unavailable row settles as removed.
+- **GIVES E2E + the clip (MOTIR-9202):** the Viewer frame (no door, no Unlink) and the mixed row whose
+  unlink leaves the mention standing, with their accessible names.
+- **TAKES from the read (MOTIR-9203):** the unavailable row's rendering, as data only.
+- **TAKES nothing** from the strip design, the write path or the page-side read, and **hands them
+  nothing**: the page's Linked work items strip, the two write routes, the page-side read and the work-item
+  read's separating field appear in no panel, and every reference to them here is a citation by key.
+
+### Not decided here
+
+The strip on the page (MOTIR-9196), the write path's errors and semantics (MOTIR-9197 — this asset words
+only the sentences they put on screen), the page-side read (MOTIR-9198), the separating field and the
+live-page join (MOTIR-9203), and embedded cards (the embed story).

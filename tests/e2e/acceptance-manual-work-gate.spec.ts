@@ -46,7 +46,7 @@ import zh from '@/messages/zh.json';
 // `acceptance-guide-me-through.spec.ts` drives.
 //
 // ── THE WAITS ───────────────────────────────────────────────────────────────
-// Every step waits on the AUTHORITATIVE signal (CLAUDE.md § E2E): the ingest's own
+// Every step waits on the AUTHORITATIVE signal (the coding convention § E2E): the ingest's own
 // committed response, the guide door's 200 and the settle whose BODY says `guided`
 // (armed before the action), the Mark done server action's response, and Postgres
 // read back for a tick, a close and a decision. A row is asserted MOUNTED — by the

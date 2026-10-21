@@ -7,7 +7,7 @@ import { expect, type Locator } from '@playwright/test';
 //
 // During a client-side navigation React keeps the PREVIOUS subtree mounted while
 // the new one streams, and under a production build the two are in the DOM at
-// the same instant (CLAUDE.md § *a boundary makes every unscoped locator a
+// the same instant (the coding convention § *a boundary makes every unscoped locator a
 // race*). Playwright resolves a locator BEFORE filtering on visibility, so a
 // strict locator matching both copies refuses:
 //

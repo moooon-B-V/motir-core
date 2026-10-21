@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { PageLinkAlreadyExistsError, PageLinkNotFoundError } from '@/lib/pages/linkErrors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   CrossProjectPageParentError,
@@ -119,6 +120,11 @@ export function pageErrorResponse(err: unknown): NextResponse {
       { code: err.code, error: err.message, pageId: err.pageId },
       { status: 409 },
     );
+  }
+  // The hand link (MOTIR-9197): a second link of one pair, and an unlink of a
+  // pair that has no hand link.
+  if (err instanceof PageLinkAlreadyExistsError || err instanceof PageLinkNotFoundError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
   }
   if (err instanceof PageArchiveRootRequiredError) {
     return NextResponse.json(

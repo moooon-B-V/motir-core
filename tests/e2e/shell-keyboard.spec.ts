@@ -137,7 +137,7 @@ test.describe('@a11y shell keyboard navigation', () => {
   //
   // Every assertion waits on an authoritative signal: the trigger's own
   // `aria-expanded` (Radix's disclosure state) and each panel's role + name.
-  // Never a timeout — CLAUDE.md § E2E discipline.
+  // Never a timeout — the coding convention § E2E discipline.
   test('below `md`, one Escape closes the Help menu and leaves the drawer open', async ({
     page,
   }) => {

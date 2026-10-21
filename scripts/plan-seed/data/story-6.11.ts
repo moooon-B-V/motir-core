@@ -630,7 +630,7 @@ export const story_6_11: SeedStory = {
         '- The intake rejects a logged-out caller (no work item created); ' +
         'promote/decline assert 6.4 permission enforcement.\n' +
         '- New service/repository code respects the per-file coverage gate ' +
-        '(CLAUDE.md § coverage); tests use the real Postgres helper.\n\n' +
+        '(the coding convention § coverage); tests use the real Postgres helper.\n\n' +
         '## Context refs\n\n' +
         '- 6.11.3 (exclusion + queue read), 6.11.4 (intake), 6.11.5 ' +
         '(actions).\n' +

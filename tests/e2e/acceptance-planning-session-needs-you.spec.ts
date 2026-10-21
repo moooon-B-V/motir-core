@@ -16,7 +16,7 @@
 // The failed plan's proposals are written through the job-token door motir-ai uses
 // (`POST /api/internal/ai/plan-proposals`), with the `readBackToken` the seam recorded.
 //
-// DETERMINISM (CLAUDE.md § E2E): every wait is a response, a landmark, or a Postgres read-back.
+// DETERMINISM (the coding convention § E2E): every wait is a response, a landmark, or a Postgres read-back.
 // `beat()` / `chapter()` are PACING only, after the assertion that proved the state.
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';

@@ -1160,7 +1160,7 @@ export const story_6_10: SeedStory = {
         'owns the fix + its regression test.\n\n' +
         '**Root cause / fix.** The guard reads a derived value (the owner ' +
         'count) then writes based on it, with no lock between — the ' +
-        'lock-before-read-derived-update rule (CLAUDE.md § 4-layer: "reads ' +
+        'lock-before-read-derived-update rule (the coding convention § 4-layer: "reads ' +
         'inside transactions that guard a write use `SELECT FOR UPDATE` when ' +
         'concurrent writes could race"). Fix: make the last-owner guard LOCK ' +
         'the org’s owner membership rows before counting — e.g. a ' +

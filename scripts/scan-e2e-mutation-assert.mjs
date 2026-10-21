@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Scan the Playwright suite for the UNGUARDED MUTATION→ASSERT shape — the
 // defect class MOTIR-3694 (activity.spec.ts) and MOTIR-4496 (the link panel)
-// are both instances of, and which CLAUDE.md § *E2E tests wait on the
+// are both instances of, and which the coding convention § *E2E tests wait on the
 // AUTHORITATIVE signal* forbids.
 //
 // ── What the shape IS ────────────────────────────────────────────────────────

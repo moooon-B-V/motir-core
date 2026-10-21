@@ -40,7 +40,7 @@ import en from '@/messages/en.json';
 // MOTIR-4907's receipt (`acceptance-decision-gate.spec.ts`), and the subject precedence is
 // held by the story gate. Recording it again here would double the clip for no new claim.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // Every body save is waited on by its own `POST /api/pages/<id>/updates` response, armed
 // before the typing; the History list by its `GET …/versions`, a version by its

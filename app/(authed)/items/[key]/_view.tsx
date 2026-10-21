@@ -894,6 +894,7 @@ export default async function ItemView({
                         itemId={item.id}
                         itemIdentifier={item.identifier}
                         canViewPages={canViewPages}
+                        canEditWorkItem={canEdit}
                         currentUserId={ctx.userId}
                         currentUserName={pageCtx.actorName ?? ''}
                         workflowStatuses={detail.workflow.statuses}

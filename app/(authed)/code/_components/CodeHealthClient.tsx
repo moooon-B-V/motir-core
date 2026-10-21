@@ -161,6 +161,7 @@ export function CodeHealthClient({
   initialSelectedAudit,
   initialConventions,
   canConfigure = true,
+  initialConventionRepo = null,
 }: {
   projectId: string;
   /** The connected repos this page would audit (`owner/name`), resolved by the
@@ -180,6 +181,9 @@ export function CodeHealthClient({
    * editor, the re-audit buttons and the deepen card are hidden, and the write
    * routes keep refusing the caller regardless. */
   canConfigure?: boolean;
+  /** The `?repo=` the server resolved: which repository's convention card opens
+   * expanded (MOTIR-9194). Null opens the first. */
+  initialConventionRepo?: string | null;
 }) {
   const t = useTranslations('codeHealth');
   const [tab, setTab] = useState<Tab>('audit');
@@ -727,6 +731,7 @@ export function CodeHealthClient({
         <ConventionPanel
           conventions={conventions}
           canEdit={canConfigure}
+          initialRepo={initialConventionRepo}
           // A save re-reads the repository's surface; replace that repo's entry in
           // the island's own state (page-state contract, case 3).
           onSaved={(saved) =>

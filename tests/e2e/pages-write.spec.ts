@@ -34,7 +34,7 @@ import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 // states — not-found for a non-member, the offline indicator, the too-large
 // callout — asserted at machine speed with no chapters.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // Every body save is waited on by its own `POST /api/pages/<id>/updates`
 // response, ARMED BEFORE the input that triggers it, and its status asserted;

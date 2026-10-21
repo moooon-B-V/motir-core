@@ -86,11 +86,15 @@ import type {
   SavePageUpdateInput,
 } from '@/lib/dto/pages';
 import { PAGE_ARCHIVE_SET_TITLES } from '@/lib/dto/pages';
-import type { PageMentionCandidateDto, PageRefMap } from '@/lib/dto/pages';
+import type { PageLinkCandidatesDto, PageMentionCandidateDto, PageRefMap } from '@/lib/dto/pages';
+import {
+  decodePageTitleSearchCursor,
+  encodePageTitleSearchCursor,
+} from '@/lib/pages/pageTitleSearchCursor';
 import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
 import type { VisitorReadContext } from '@/lib/visitor/context';
 import { isVisitorContext } from '@/lib/visitor/readScope';
-import type { Prisma } from '@/generated/prisma/client';
+import type { Page, Prisma } from '@/generated/prisma/client';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Page service (Story MOTIR-5752 · MOTIR-7277) — who may create, read, rename and
@@ -166,6 +170,37 @@ async function findInProject(store: PageStore, projectId: string, pageId: string
  */
 /** The `@` picker's Pages section shows a short, fixed list (MOTIR-7697). */
 export const PAGE_MENTION_SEARCH_LIMIT = 10;
+
+/**
+ * Page title-search rows with their PLACE: the parent page's title and the folder
+ * its topmost page is filed in — one batched read for each, however many rows.
+ */
+async function candidatesWithPlace(
+  rows: Array<Pick<Page, 'id' | 'title' | 'ancestorPageIds' | 'folderId'>>,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<PageMentionCandidateDto[]> {
+  const parentIds = rows.flatMap((r) => r.ancestorPageIds.slice(-1));
+  const topIds = rows.flatMap((r) => r.ancestorPageIds.slice(0, 1));
+  const related = await pageRepository.findTitlesByIds([...new Set([...parentIds, ...topIds])], tx);
+  const relatedById = new Map(related.map((r) => [r.id, r]));
+  const folderOf = (r: (typeof rows)[number]): string | null => {
+    const topId = r.ancestorPageIds[0];
+    return topId === undefined ? r.folderId : (relatedById.get(topId)?.folderId ?? null);
+  };
+  const folderIds = [...new Set(rows.map(folderOf).filter((id): id is string => id !== null))];
+  const trails = await folderRepository.findTrailsByIds(folderIds, workspaceId, tx);
+  const pathByFolder = new Map(trails.map((t) => [t.id, t.trail.map((step) => step.name)]));
+  return rows.map((r) => {
+    const folderId = folderOf(r);
+    const parentId = r.ancestorPageIds[r.ancestorPageIds.length - 1];
+    return toPageMentionCandidateDto(
+      r,
+      folderId === null ? [] : (pathByFolder.get(folderId) ?? []),
+      parentId === undefined ? null : (relatedById.get(parentId)?.title ?? null),
+    );
+  });
+}
 
 function scopeTo(ctx: ServiceContext, projectId: string) {
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId };
@@ -976,31 +1011,43 @@ export const pagesService = {
         PAGE_MENTION_SEARCH_LIMIT,
         tx,
       );
-      // A row's PLACE: its parent page's title, and the folder its topmost page
-      // is filed in — one batched read for each, however many rows.
-      const parentIds = rows.flatMap((r) => r.ancestorPageIds.slice(-1));
-      const topIds = rows.flatMap((r) => r.ancestorPageIds.slice(0, 1));
-      const related = await pageRepository.findTitlesByIds(
-        [...new Set([...parentIds, ...topIds])],
+      return candidatesWithPlace(rows, ctx.workspaceId, tx);
+    });
+  },
+
+  /**
+   * The Link page picker's paged title search (Story MOTIR-7567 · MOTIR-9204):
+   * {@link searchPagesForMention}'s match, gate and order, one
+   * {@link PAGE_MENTION_SEARCH_LIMIT}-row page at a time. A one-row look-ahead
+   * decides `nextCursor`, encoded from the last row served, so a page that ends
+   * exactly at the last match never offers an empty next page. A cursor this
+   * service did not issue is `PAGE_CURSOR_INVALID`.
+   */
+  async searchPagesForLink(
+    ctx: ServiceContext,
+    input: { projectId: string; q: string; cursor?: string | null },
+  ): Promise<PageLinkCandidatesDto> {
+    const q = input.q.trim();
+    const after = input.cursor ? decodePageTitleSearchCursor(input.cursor) : null;
+    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+      await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      if (q.length < QUICK_SEARCH_MIN_QUERY_LENGTH) return { items: [], nextCursor: null };
+      const window = await pageRepository.searchLiveByTitle(
+        input.projectId,
+        q,
+        PAGE_MENTION_SEARCH_LIMIT + 1,
         tx,
+        after,
       );
-      const relatedById = new Map(related.map((r) => [r.id, r]));
-      const folderOf = (r: (typeof rows)[number]): string | null => {
-        const topId = r.ancestorPageIds[0];
-        return topId === undefined ? r.folderId : (relatedById.get(topId)?.folderId ?? null);
+      const served = window.slice(0, PAGE_MENTION_SEARCH_LIMIT);
+      const last = served[served.length - 1];
+      return {
+        items: await candidatesWithPlace(served, ctx.workspaceId, tx),
+        nextCursor:
+          window.length > PAGE_MENTION_SEARCH_LIMIT && last
+            ? encodePageTitleSearchCursor({ updatedAt: last.updatedAt, id: last.id })
+            : null,
       };
-      const folderIds = [...new Set(rows.map(folderOf).filter((id): id is string => id !== null))];
-      const trails = await folderRepository.findTrailsByIds(folderIds, ctx.workspaceId, tx);
-      const pathByFolder = new Map(trails.map((t) => [t.id, t.trail.map((step) => step.name)]));
-      return rows.map((r) => {
-        const folderId = folderOf(r);
-        const parentId = r.ancestorPageIds[r.ancestorPageIds.length - 1];
-        return toPageMentionCandidateDto(
-          r,
-          folderId === null ? [] : (pathByFolder.get(folderId) ?? []),
-          parentId === undefined ? null : (relatedById.get(parentId)?.title ?? null),
-        );
-      });
     });
   },
 

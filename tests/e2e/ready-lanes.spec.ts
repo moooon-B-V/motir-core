@@ -13,7 +13,7 @@
 //
 // Waits are on authoritative signals — the page MOUNTED (its heading and list)
 // before any lane assertion, a transition's 200 before a reload, the load-more
-// row count — never on timeouts (CLAUDE.md § E2E discipline).
+// row count — never on timeouts (the coding convention § E2E discipline).
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';

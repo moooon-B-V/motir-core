@@ -450,10 +450,15 @@ export async function seedOwnProject(email: string): Promise<OwnProjectSeed> {
   const first = await add(SEEDED_TITLE, true);
   await add('Wire the language control', true);
   await add('Groom the backlog', false);
-  // startSprint stamps its start at "now", so the end handed to it must not
-  // fall behind the clock; pinSeededDates then pins both ends to the fixed days.
-  const startEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-  await sprintsService.startSprint(sprint.id, { endDate: startEnd.toISOString() }, ctx);
+  // ⚠️ The end passed to `startSprint` is scaffolding only: the service rejects an end
+  // before its start (= now), and the fixed SEEDED_SPRINT_END went into the past on
+  // 2026-10-21 and failed every spec that seeds here. `pinSeededDates` then
+  // overwrites both dates with the fixed pair the specs assert on.
+  await sprintsService.startSprint(
+    sprint.id,
+    { endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() },
+    ctx,
+  );
   await pinSeededDates(sprint.id, first.id);
 
   const plan = await plansService.createPlan(

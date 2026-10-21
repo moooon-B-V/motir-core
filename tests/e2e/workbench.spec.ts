@@ -37,7 +37,7 @@ import { db as prisma } from '@/lib/db';
 // Seed-then-signIn, the shape `ready.spec.ts` uses: the fixture is built through
 // the OWNER's API session and the services before the browser signs in.
 //
-// ⚠️ NOTHING here waits an interval (CLAUDE.md § E2E authoritative signal). The
+// ⚠️ NOTHING here waits an interval (the coding convention § E2E authoritative signal). The
 // paging step arms `waitForResponse` on the document fetch BEFORE clicking, and
 // the tab-persistence step asserts after a real reload rather than trusting the
 // rendered state.
@@ -442,7 +442,7 @@ test.describe('the Workbench journey', () => {
 // would let every assertion below pass against a surface with no paging at all.
 //
 // ⚠️ NOTHING HERE WAITS AN INTERVAL. Every step waits on an authoritative
-// signal — a rendered row, a URL, a `disabled` attribute — per CLAUDE.md § E2E.
+// signal — a rendered row, a URL, a `disabled` attribute — per the coding convention § E2E.
 
 /** The five kinds' lucide glyphs, in `READY_KIND_RANK` order. The icon is
  *  `aria-hidden` (the identifier carries the accessible name), so the ORDER is

@@ -46,7 +46,7 @@
 // because both are server-side `fetch`es `page.route` cannot see. What GitHub was
 // actually asked is asserted through the journal, not narrated.
 //
-// ══ WAITS ══ Every wait is on an authoritative signal (CLAUDE.md § E2E): the
+// ══ WAITS ══ Every wait is on an authoritative signal (the coding convention § E2E): the
 // write's own response, or the committed state the establish poll re-reads.
 // Nothing here sleeps.
 

@@ -87,6 +87,7 @@ const FIELD_NAME_KEYS: Record<string, string> = {
   explanationMd: 'explanationMd',
   explanationSource: 'explanationSource',
   archivedAt: 'archivedAt',
+  pageLinks: 'pageLinks',
 };
 
 /** The stored `WorkItemLinkKindDto` values + the renderer's `blocks` default

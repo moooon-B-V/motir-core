@@ -22,7 +22,7 @@ import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 // reload, finds the card by filtering the list and the board on it, clears it,
 // and finds no such field at all on the story above it.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // A difficulty write is a Server Action POST to the CURRENT page, told apart by
 // its body (it names the item's id and the `difficulty` key). Every write is

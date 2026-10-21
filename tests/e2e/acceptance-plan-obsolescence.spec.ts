@@ -52,7 +52,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // is shown on screen so the reviewer watching sees what is asserted. When
 // MOTIR-6575 has merged, a spec for it asserts the item page instead.
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // The review is server-rendered from the seeded plan, so its landmarks (the status
 // pill, the proposal list, the canvas) ARE the loaded signal. The one write is
