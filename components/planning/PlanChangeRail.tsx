@@ -92,7 +92,7 @@ import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { BrandMark } from '@/components/brand/BrandMark';
-import { PlanAtWorkMark } from '@/components/planning/PlanAtWorkMark';
+import { PLAN_AT_WORK_GLYPH_PX, PlanAtWorkMark } from '@/components/planning/PlanAtWorkMark';
 import {
   CarryDecidedNotice,
   carriesWaitingPlan,
@@ -729,9 +729,9 @@ export function PlanChangeRail({
       <div className="flex items-start gap-2">
         <span
           aria-hidden="true"
-          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-(--el-accent) text-xs font-semibold text-(--el-accent-text)"
+          className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-(--el-accent) text-xs font-semibold text-(--el-accent-text)"
         >
-          <BrandMark variant="mark" tone="inverted" size={13} />
+          <BrandMark variant="mark" tone="inverted" size={PLAN_AT_WORK_GLYPH_PX} />
         </span>
         <div className="min-w-0 flex-1">
           <StalePlanNotice
@@ -809,6 +809,17 @@ export function PlanChangeRail({
         state.narrationKept?.live ?? [],
       )
     : [];
+  // THE WORKING-TURN ROW is drawn whenever its content is (MOTIR-9213): the
+  // hand-off, the act record or the planner notes — and whenever Motir AI is at
+  // work on the turn before its first act lands (a plan the rail watches being
+  // written, an MCP agent's included, or a job streaming), so the mark that says
+  // so is on screen from the work's first moment.
+  const workRowShown =
+    writing ||
+    acts.length > 0 ||
+    narrationGroups.length > 0 ||
+    Boolean(state.liveReview) ||
+    state.phase === 'streaming';
   const logRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const actCount = acts.length + narrationEntries.length;
@@ -826,9 +837,6 @@ export function PlanChangeRail({
     >
       <div className="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
         <span className="size-2 rounded-full bg-(--el-success)" aria-hidden="true" />
-        {/* THE MARK AT WORK (MOTIR-8417) — one instance, off the snapshot the rail
-            already holds; it breathes while Motir is writing, else holds still. */}
-        <PlanAtWorkMark progress={state.liveReview?.progress ?? null} failing={state.liveFailing} />
         <span className="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {t('railLabel')}
         </span>
@@ -1177,40 +1185,65 @@ export function PlanChangeRail({
             {tp('handoff.conversing')}
           </Bubble>
         ) : null}
-        {writing ? (
-          <Bubble role="assistant" testId="plan-handoff">
-            {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
-              link: (chunks) => (
-                <Link
-                  href={workbenchTabHref('approvals')}
-                  className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                >
-                  {chunks}
-                </Link>
-              ),
-            })}
-          </Bubble>
-        ) : null}
+        {/* THE WORKING TURN IS ONE ROW (MOTIR-9213; design § _The Motir mark at
+            work_ › _Where the mark sits_, `planning-workspace--mark-at-work.mock.html`
+            panels 1–4): the turn Motir AI is working on gathers the hand-off, the
+            act record and the planner notes beside ONE avatar, the only mark in the
+            overlay that ever moves. It flows while `motirAtWork` and holds the still
+            mark otherwise. The wrapper is always mounted, so the act record's live
+            region never remounts; the avatar is drawn only while the row has content. */}
+        <div
+          className="flex items-start gap-2"
+          {...(workRowShown ? { 'data-testid': 'plan-work-row' } : {})}
+        >
+          {workRowShown ? (
+            <PlanAtWorkMark
+              progress={state.liveReview?.progress ?? null}
+              failing={state.liveFailing}
+              turnStreaming={state.phase === 'streaming' && runPhase !== 'planning'}
+            />
+          ) : null}
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {/* The hand-off gives up its own avatar: it is the row's first message. */}
+            {writing ? (
+              <div
+                data-testid="plan-handoff"
+                className={`min-w-0 rounded-(--radius-card) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm wrap-anywhere ${BUBBLE_FILL.default}`}
+              >
+                {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
+                  link: (chunks) => (
+                    <Link
+                      href={workbenchTabHref('approvals')}
+                      className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </div>
+            ) : null}
 
-        <PlanActRecord
-          acts={acts}
-          streaming={state.phase === 'streaming'}
-          sessionHeads={narrationGroups.some((group) => group.session !== null)}
-          heads={narrationHeadLines(narrationGroups, tc)}
-          autoResume={state.liveReview?.progress?.autoResume ?? null}
-        />
-        {/* THE PLANNER'S OWN WORDS (Story MOTIR-8060 · MOTIR-8064;
-            `plan-change-run-live--narration.mock.html`): one group per session
-            under its stored step words, from the review read — so it is all
-            here again on reopen, after the plan ends, and for a Visitor. It is
-            not a turn: no thread reader sees it. */}
-        <PlanNarration
-          groups={narrationGroups}
-          total={narration ? narration.earlierCount + narration.entries.length : 0}
-          earlierCount={narrationEarlierCount(narrationEntries)}
-          loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
-          {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
-        />
+            <PlanActRecord
+              acts={acts}
+              streaming={state.phase === 'streaming'}
+              sessionHeads={narrationGroups.some((group) => group.session !== null)}
+              heads={narrationHeadLines(narrationGroups, tc)}
+              autoResume={state.liveReview?.progress?.autoResume ?? null}
+            />
+            {/* THE PLANNER'S OWN WORDS (Story MOTIR-8060 · MOTIR-8064;
+                `plan-change-run-live--narration.mock.html`): one group per session
+                under its stored step words, from the review read — so it is all
+                here again on reopen, after the plan ends, and for a Visitor. It is
+                not a turn: no thread reader sees it. */}
+            <PlanNarration
+              groups={narrationGroups}
+              total={narration ? narration.earlierCount + narration.entries.length : 0}
+              earlierCount={narrationEarlierCount(narrationEntries)}
+              loadingEarlier={state.narrationKept?.loadingEarlier ?? false}
+              {...(onShowEarlierNarration ? { onShowEarlier: onShowEarlierNarration } : {})}
+            />
+          </div>
+        </div>
 
         {/* A MID-RUN QUESTION whose answer is still being written (MOTIR-7998;
             design state 1), below the act rail it does not touch. */}
@@ -2276,13 +2309,13 @@ export function Bubble({
     >
       <span
         aria-hidden="true"
-        className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+        className={`flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold ${
           isUser
             ? 'bg-(--el-muted) text-(--el-text-secondary)'
             : 'bg-(--el-accent) text-(--el-accent-text)'
         }`}
       >
-        {isUser ? '·' : <BrandMark variant="mark" tone="inverted" size={13} />}
+        {isUser ? '·' : <BrandMark variant="mark" tone="inverted" size={PLAN_AT_WORK_GLYPH_PX} />}
       </span>
       {/* ⚠️ THE USER BUBBLE KEEPS ITS LINE BREAKS, and until MOTIR-6238 it did
           not: `{turn.body}` is a bare text child here, with no `white-space`

@@ -49,6 +49,7 @@ import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { ADD_PLAN_ITEMS_TOOL_NAME } from '@/lib/mcp/tools/authorPlan';
 import { FAILING_AFTER, POLL_MS } from '@/lib/hooks/useGeneratingPlanPoll';
 import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
+import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
 import type { PlanStepKindDto } from '@/lib/dto/plans';
 import { assessWatchability } from '../../scripts/upload-acceptance-video.mjs';
 import en from '@/messages/en.json';
@@ -57,8 +58,9 @@ import en from '@/messages/en.json';
 //
 // The story's claim, in a real browser: while Motir writes a plan, the card it is
 // writing turns warm orange and MOVES (it pops, then breathes) while its
-// neighbours stay still, several cards move each on its own, the Motir mark in the
-// rail breathes beside the planner's notes — and every one of them stops the
+// neighbours stay still, several cards move each on its own, the Motir mark beside
+// the planner's notes moves (since MOTIR-9213 the working turn's avatar, flowing in
+// colour) — and every one of them stops the
 // moment the writing stops: when the plan is proposed, when it stalls, when the
 // reads keep failing, and for a reader who asked for reduced motion. The design of
 // record is `design/ai-chat/design-notes.md` § _Motir at work_ (MOTIR-8414,
@@ -69,7 +71,10 @@ import en from '@/messages/en.json';
 // Whether something MOVES is read from the browser's own animation set —
 // `el.getAnimations()`, filtered on `playState === 'running'` — on the rendered
 // surface with the shipped stylesheet loaded. A marker says an element was GIVEN
-// an animation; only that reading says one is running. (The vitest tier loads no
+// an animation; only that reading says one is running. The MARK is the one
+// exception: since MOTIR-9213 it flows by a frame loop rewriting its path, which
+// no animation set lists, so its reading is the path changing across two frames
+// (`markFlows`). (The vitest tier loads no
 // stylesheet, so this is the lowest tier where the reading means anything.)
 //
 // ── What is real ────────────────────────────────────────────────────────────
@@ -100,9 +105,10 @@ import en from '@/messages/en.json';
 //   the snapshot's steps last named keeps the orange static cue at rest size — no
 //   pop, no growth, no glow — so a person can still see which card was being
 //   written. So the stalled case asserts the cue DRAWN and NOTHING RUNNING.
-// · REDUCED MOTION keeps the mark's orange ink while Motir is at work ("the orange
-//   glyph, still"). So under reduce the mark is asserted present and still, not
-//   stripped of its at-work colour.
+// · REDUCED MOTION draws the mark present and still. Since MOTIR-9213 the mark is
+//   the working turn's avatar and its motion is a frame loop that never starts
+//   under reduce, so the still inverted glyph is all a reader sees there
+//   (`design-notes.md` § _The Motir mark at work_ › _Reduced motion_).
 //
 // EVERY ASSERTED WORDING is read from `messages/en.json`, never retyped.
 
@@ -134,6 +140,24 @@ const ring = (page: Page, title: string) => node(page, title).locator('.canvas-c
 const chip = (page: Page, title: string) => node(page, title).getByTestId('canvas-cue-drafting');
 const mark = (page: Page) => rail(page).getByTestId('plan-at-work-mark');
 
+/**
+ * Is the mark FLOWING (MOTIR-9213)? Its motion is a frame loop rewriting the
+ * glyph's path, not a CSS animation, so `getAnimations()` cannot see it: the
+ * reading is whether the path's `d` changes across two animation frames, in the
+ * page, with the shipped component running.
+ */
+const markFlows = (page: Page) =>
+  mark(page).evaluate(
+    (el) =>
+      new Promise<boolean>((resolve) => {
+        const path = el.querySelector('path');
+        const before = path?.getAttribute('d') ?? null;
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve(path?.getAttribute('d') !== before)),
+        );
+      }),
+  );
+
 /** The card MOVES: it is cued `at-work`, and its ring reports a running loop. */
 async function expectMoving(page: Page, title: string): Promise<void> {
   await expect(node(page, title)).toHaveAttribute('data-cue', 'drafting');
@@ -148,23 +172,25 @@ async function expectStill(page: Page, title: string): Promise<void> {
   await expect.poll(() => runningIn(node(page, title)), { timeout: 4 * POLL_MS }).toBe(0);
 }
 
-/** Nothing on the canvas and nothing on the mark is running. */
+/** Nothing on the canvas is running, and the mark does not flow. */
 async function expectNothingAnimates(page: Page): Promise<void> {
   await expect.poll(() => runningIn(nodeLayer(page)), { timeout: 4 * POLL_MS }).toBe(0);
   await expect.poll(() => runningIn(mark(page)), { timeout: 4 * POLL_MS }).toBe(0);
+  await expect.poll(() => markFlows(page), { timeout: 4 * POLL_MS }).toBe(false);
 }
 
-/** The mark is AT WORK: its at-work form, and its glyph reports a running breath. */
+/** The mark is AT WORK: its at-work form, and its glyph flows. */
 async function expectMarkAtWork(page: Page): Promise<void> {
   await expect(mark(page)).toHaveAttribute('data-at-work', 'true', { timeout: 4 * POLL_MS });
-  await expect.poll(() => runningIn(mark(page)), { timeout: 4 * POLL_MS }).toBeGreaterThan(0);
+  await expect.poll(() => markFlows(page), { timeout: 4 * POLL_MS }).toBe(true);
 }
 
-/** The mark is STATIC: drawn, its at-work form gone, and nothing on it running. */
+/** The mark is STATIC: drawn, its at-work form gone, and its glyph back at rest. */
 async function expectMarkStatic(page: Page): Promise<void> {
   await expect(mark(page)).toBeVisible();
   await expect(mark(page)).toHaveAttribute('data-at-work', 'false', { timeout: 4 * POLL_MS });
-  await expect.poll(() => runningIn(mark(page)), { timeout: 4 * POLL_MS }).toBe(0);
+  await expect.poll(() => markFlows(page), { timeout: 4 * POLL_MS }).toBe(false);
+  await expect(mark(page).locator('path')).toHaveAttribute('d', WAVE_BAND_PATH);
 }
 
 // ── The cue record — the leaving form is RECORDED, not polled for ────────────

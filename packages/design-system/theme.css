@@ -4100,6 +4100,16 @@
   --el-showcase-wave-1: var(--color-primary);
   --el-showcase-wave-2: var(--color-accent-teal);
   --el-showcase-wave-3: var(--color-accent);
+  /* The Motir mark AT WORK (MOTIR-9212 · MOTIR-9213): the three hues the mark
+     cycles through while it flows on the ink circle (`--el-accent`). Each wave
+     hue pulled toward the ink already on the circle, the shape of
+     --el-danger-on-surface: the raw hues fall to 1.00:1 on the circle in the
+     palettes whose accent IS a wave hue. At 35% every palette and theme keeps
+     3:1 (WCAG 1.4.11, a graphic) for each role and every blend between them;
+     the default Motir palette keeps 60% (its own blocks, below). */
+  --el-mark-wave-1: color-mix(in srgb, var(--el-showcase-wave-1) 35%, var(--el-accent-text));
+  --el-mark-wave-2: color-mix(in srgb, var(--el-showcase-wave-2) 35%, var(--el-accent-text));
+  --el-mark-wave-3: color-mix(in srgb, var(--el-showcase-wave-3) 35%, var(--el-accent-text));
   /* motir.co's live link ("Motir builds itself" in the header): its square
      and its words walk the wave hues. The mark is each hue as is; the text
      is each hue mixed 60/40 with the primary ink, because the raw teal and
@@ -4658,6 +4668,11 @@
      ink CTA, not its identity hue) on a 28% wash of that blue. */
   --el-logo-mark: var(--color-primary);
   --el-logo-tile: color-mix(in srgb, var(--color-primary) 28%, var(--color-background));
+  /* The mark at work keeps more of its hue on the Motir circle (MOTIR-9212):
+     its lowest pair is 4.40:1 at 60%, and the hues stay the prototype's. */
+  --el-mark-wave-1: color-mix(in srgb, var(--el-showcase-wave-1) 60%, var(--el-accent-text));
+  --el-mark-wave-2: color-mix(in srgb, var(--el-showcase-wave-2) 60%, var(--el-accent-text));
+  --el-mark-wave-3: color-mix(in srgb, var(--el-showcase-wave-3) 60%, var(--el-accent-text));
   /* brand & primary — the high-contrast INK CTA + the single cool-blue accent.
      --color-primary is the accent AS text/icon/focus on a surface (the cool
      blue, AA on white & the slate surface); --color-primary-fill is the CTA
@@ -4795,6 +4810,9 @@
 [data-palette='motir'][data-theme='dark'] {
   --el-logo-mark: var(--color-primary); /* parity with the light block */
   --el-logo-tile: color-mix(in srgb, var(--color-primary) 28%, var(--color-background));
+  --el-mark-wave-1: color-mix(in srgb, var(--el-showcase-wave-1) 60%, var(--el-accent-text));
+  --el-mark-wave-2: color-mix(in srgb, var(--el-showcase-wave-2) 60%, var(--el-accent-text));
+  --el-mark-wave-3: color-mix(in srgb, var(--el-showcase-wave-3) 60%, var(--el-accent-text));
   --color-background: #0c0d0f; /* stark cool near-black canvas */
   --color-foreground: #edeef0;
   --color-surface: #18191c; /* cool slate section */

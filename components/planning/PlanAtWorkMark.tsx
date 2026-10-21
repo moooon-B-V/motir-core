@@ -1,48 +1,69 @@
 'use client';
 
-import { BrandMark } from '@/components/brand/BrandMark';
+import { BrandMarkFlow } from '@/components/brand/BrandMarkFlow';
 import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
 import { readPlanAtWork, type PlanProgressSnapshot } from '@/lib/plans/planProgress';
 
-// THE MOTIR MARK AT WORK (Story MOTIR-8413 · Subtask MOTIR-8417; design
-// `design/ai-chat/design-notes.md` § _Motir at work_ › _Where the mark sits_).
+// THE MOTIR MARK AT WORK — the avatar of the turn Motir AI is working on
+// (MOTIR-9213; design `design/ai-chat/design-notes.md` § _The Motir mark at work_,
+// MOTIR-9212, which retires MOTIR-8417's breathing header mark).
 //
-// ONE instance, in the planning rail's header between its status dot and its
-// _Motir AI_ label. While `readPlanAtWork(...).atWork` the shipped glyph takes the
-// drafting ink and breathes (`app/globals.css`, `.plan-at-work-mark`); otherwise it
-// holds the shipped static form. The answer is READ, never recomputed: this file
-// compares no timestamp, branches on no state name and never reads `.steps`.
+// ONE instance, the round ink avatar of the rail's working-turn row, beside the
+// hand-off, the act record and the planner notes. While Motir AI is at work the
+// glyph flows (`BrandMarkFlow`); otherwise it holds the shipped still mark. The
+// plan half of the answer is READ, never recomputed: this file compares no
+// timestamp, branches on no state name and never reads `.steps`.
 //
-// Decorative: the wrapper is `aria-hidden` and the glyph already is, so it adds no
-// role, no name, no live region and no tab stop — the state words ship on the
-// progress line's marker (MOTIR-7820), not here.
+// Decorative: the disc is `aria-hidden` and so is the glyph, so it adds no role,
+// no name, no live region and no tab stop — the state words ship on the act
+// record and the progress line, not here.
+
+/** The avatar's glyph in its 28 px disc (60%; the design moved it from 13 px). */
+export const PLAN_AT_WORK_GLYPH_PX = 17;
 
 export interface PlanAtWorkMarkViewProps {
   atWork: boolean;
 }
 
-/** The PURE form — total over the boolean: `true` breathes, `false` is still. */
+/** The PURE form — total over the boolean: `true` flows, `false` is still. */
 export function PlanAtWorkMarkView({ atWork }: PlanAtWorkMarkViewProps) {
   return (
     <span
-      className="plan-at-work-mark inline-flex shrink-0"
+      className="plan-at-work-mark flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-(--el-accent) text-(--el-accent-text)"
       data-testid="plan-at-work-mark"
       data-at-work={atWork ? 'true' : 'false'}
       aria-hidden="true"
     >
-      <BrandMark variant="mark" size={14} />
+      <BrandMarkFlow flowing={atWork} size={PLAN_AT_WORK_GLYPH_PX} />
     </span>
   );
 }
 
 export interface PlanAtWorkMarkProps {
+  /** The plan being written that the rail watches, or `null` when there is none. */
   progress: PlanProgressSnapshot | null;
   /** The poll's `failing` — handed to the clock and the derivation, never re-tested. */
   failing?: boolean;
+  /**
+   * Any OTHER job of this session streaming to this viewer: an ask turn being
+   * read, a look-up, a debug turn, a plan run still in its conversation phase.
+   * The rail passes `false` while a plan run is in its planning phase, so a
+   * stream still open over a stalled plan does not keep the mark moving.
+   */
+  turnStreaming?: boolean;
 }
 
-/** The mark, with its own clock — the shape `PlanProgressLine` set. */
-export function PlanAtWorkMark({ progress, failing = false }: PlanAtWorkMarkProps) {
+/**
+ * `motirAtWork`, the one datum (design § _What the mark answers_): a plan being
+ * written that is moving, OR any other Motir AI job streaming. The mark, with
+ * its own clock — the shape `PlanProgressLine` set.
+ */
+export function PlanAtWorkMark({
+  progress,
+  failing = false,
+  turnStreaming = false,
+}: PlanAtWorkMarkProps) {
   const reading = usePlanProgressReading(progress, { failing });
-  return <PlanAtWorkMarkView atWork={readPlanAtWork(reading, { failing }).atWork} />;
+  const planAtWork = progress ? readPlanAtWork(reading, { failing }).atWork : false;
+  return <PlanAtWorkMarkView atWork={planAtWork || turnStreaming} />;
 }
