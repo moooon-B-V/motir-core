@@ -27,6 +27,7 @@
 // proposal-content refusal uses.
 
 import { InvalidProposalError } from '@/lib/plans/errors';
+import { parseIntraPlanRefIds } from '@/lib/mentions/workItemRefs';
 
 /** Where a link's label ends and a `motir-ref:` destination begins. */
 const MOTIR_REF_LINK_JOIN = '](motir-ref:';
@@ -158,6 +159,49 @@ export function validateProposedBodyRefs(bodies: ProposedBodies, label: string):
         `A link to another card in this plan is \`[label](motir-ref:planItem:<planItemId>)\`, ` +
         `with the \`planItem:\` prefix and the id \`add_plan_items\` returned; ` +
         `a link to an existing card is \`[label](motir:<workItemId>)\`.`,
+    );
+  }
+}
+
+/**
+ * Every canonical `[label](motir-ref:planItem:<id>)` link in `text` whose id is
+ * not in `resolvableIds`, in first-seen order, deduplicated. Links inside
+ * Markdown code are ignored, as in {@link findMalformedIntraPlanRefs}.
+ */
+export function findUnresolvedIntraPlanRefIds(
+  text: string,
+  resolvableIds: ReadonlySet<string>,
+): string[] {
+  return parseIntraPlanRefIds(withoutCode(text)).filter((id) => !resolvableIds.has(id));
+}
+
+/**
+ * Refuse a proposal whose `descriptionMd` or `explanationMd` links a
+ * `motir-ref:planItem:<id>` that names no proposal on the plan (bug MOTIR-9175).
+ * The form check above only tests the token's SHAPE; a well-formed link to an id
+ * the plan does not hold passed every door and shipped as dead text, because
+ * approve leaves an unresolved token verbatim and wires no `relates_to` edge.
+ * This is the body-link twin of MOTIR-3539's structural-ref refusal.
+ *
+ * @param resolvableIds the ids of the `add` proposals the plan holds. A proposal
+ *   appended in the SAME call has no id until that call returns, so a link to
+ *   one cannot be written and is refused like any other id the plan lacks.
+ * @param label how the proposal is named in a refusal
+ */
+export function assertBodyRefsResolve(
+  bodies: ProposedBodies,
+  resolvableIds: ReadonlySet<string>,
+  label: string,
+): void {
+  for (const field of ['descriptionMd', 'explanationMd'] as const) {
+    const text = bodies[field];
+    if (typeof text !== 'string') continue;
+    const unresolved = findUnresolvedIntraPlanRefIds(text, resolvableIds);
+    if (unresolved.length === 0) continue;
+    throw new InvalidProposalError(
+      `${label}: \`${field}\` links ${unresolved.map((id) => `\`planItem:${id}\``).join(', ')}, ` +
+        `which names no proposal in this plan — approve would leave the link as dead text ` +
+        `and wire no edge. Use an id \`add_plan_items\` returned for an \`add\` already on this plan.`,
     );
   }
 }

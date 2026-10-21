@@ -29,7 +29,9 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 const { loadCodeHealthSurfaces } = await import('@/app/(authed)/code/_health');
-const { createTestWorkspace, createTestProject } = await import('./fixtures');
+const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
+const { workspacesService } = await import('@/lib/services/workspacesService');
+const { PermissionDeniedError } = await import('@/lib/projects/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 
@@ -341,6 +343,48 @@ describe('/code-health initial read — an audit report for EVERY repo (MOTIR-22
     // running — MOTIR-3066's shape, one directory over from where the card's
     // source scan could look. Repaired with `allSettledOrThrow`; this assertion
     // is what holds it.
+    const leftover = await inFlightBackends();
+    expect(
+      leftover,
+      `a propagated gate error left ${leftover.length} backend(s) in flight:\n${describeInFlight(leftover)}`,
+    ).toEqual([]);
+  });
+
+  // MOTIR-9173 — the reads are `ai:plan`, so a plain member loads the whole
+  // surface; a role without it is refused with the REAL `PermissionDeniedError`
+  // (a plain `Error` subclass, unrelated to `NotProjectAdminError`) that the page
+  // turns into Health's admin-only state, and that abandons nothing on its way out.
+  it('loads the surfaces for a plain project MEMBER (read-only Health)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+
+    const surfaces = await loadCodeHealthSurfaces(
+      project.id,
+      { userId: member.id, workspaceId: workspace.id },
+      REPOS,
+    );
+
+    expect(surfaces.conventions.map((c) => c.repoKey)).toEqual(REPOS);
+  });
+
+  it('propagates a real PermissionDeniedError for a role without the read key', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const viewer = await createTestUser();
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: workspace.id,
+      workspaceRole: 'viewer',
+    });
+
+    await expect(
+      loadCodeHealthSurfaces(project.id, { userId: viewer.id, workspaceId: workspace.id }, REPOS),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(getCodeAuditMock).not.toHaveBeenCalled();
+    expect(getConventionMock).not.toHaveBeenCalled();
+
     const leftover = await inFlightBackends();
     expect(
       leftover,
