@@ -259,7 +259,7 @@ test.describe('The Calculator on Billing & plans', () => {
         await expect(page.getByRole('button', { name: t('calculator.open') })).toHaveCount(1);
         await openTab(page);
         expect(page.url()).toContain(billingPath);
-        await expect(result(page)).toHaveCount(0);
+        await expect(page.getByTestId('calculator-credits')).toHaveCount(0);
         await expect(page.getByText(t('calculator.result.idle'))).toBeVisible();
         expect(stub.estimates).toHaveLength(0);
         expect(stub.categoryReads).toBe(1);
@@ -467,7 +467,7 @@ test.describe('The Calculator on Billing & plans', () => {
       await pickOnly(page, []);
       await submit.click();
       await expect(page.getByText(t('calculator.errors.categoryMissing'))).toBeVisible();
-      await expect(result(page)).toHaveCount(0);
+      await expect(page.getByTestId('calculator-credits')).toHaveCount(0);
       expect(stub.estimates).toHaveLength(before);
     });
     await beat();
