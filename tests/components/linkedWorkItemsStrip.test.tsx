@@ -41,6 +41,8 @@ const live = (
     kind: 'task',
     archived,
     status: { key: 'todo', category: 'todo', label: 'To do' } as never,
+    type: null,
+    assignee: null,
   },
 });
 const hidden = (id: string): PageWorkItemLinkRowDto => ({
