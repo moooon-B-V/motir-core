@@ -43,7 +43,9 @@ function awaitingReplyCandidateSql(before: Date): Prisma.Sql {
       LIMIT 1
     )
     AND NOT EXISTS (
-      SELECT 1 FROM "plan" p WHERE p."session_id" = s."id" AND p."status" = 'generating'
+      SELECT 1 FROM "plan" p
+      WHERE p."session_id" = s."id"
+        AND p."status"::text IN (${Prisma.join([...UNDECIDED_PLAN_STATUSES])})
     )`;
 }
 
