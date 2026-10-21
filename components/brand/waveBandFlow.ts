@@ -73,7 +73,9 @@ export function waveBandFlowPath(t: number, e: number): string {
   }).join('');
 }
 
-const role = (i: number) => `var(--el-mark-wave-${(((i % 3) + 3) % 3) + 1})`;
+// Named in full, so every reference resolves to a token the theme declares.
+const ROLES = ['var(--el-mark-wave-1)', 'var(--el-mark-wave-2)', 'var(--el-mark-wave-3)'] as const;
+const role = (i: number) => ROLES[((i % 3) + 3) % 3]!;
 
 /**
  * The colour at hue position `c`: the three roles in a loop 1 → 2 → 3 → 1, a
