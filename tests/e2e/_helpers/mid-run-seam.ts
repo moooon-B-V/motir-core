@@ -200,7 +200,11 @@ export async function readGap(page: Page, run: RunHandle): Promise<GapRead> {
 
 export interface RecordedPause {
   outcome: 'recorded' | 'already_open';
-  pause: { id: string; kind: 'replan' | 'unclear'; changeTurnIds: string[] };
+  pause: {
+    id: string;
+    kind: 'replan' | 'unclear' | 'code_unsearchable';
+    changeTurnIds: string[];
+  };
 }
 
 /** THE HOSTED PAUSE: `POST /api/internal/ai/plan-change-run-pause`, idempotent on its key. */
@@ -209,14 +213,25 @@ export async function postPause(
   run: RunHandle,
   pause:
     | { kind: 'replan'; changeTurnIds: string[]; reason: string }
-    | { kind: 'unclear'; changeTurnIds: string[]; question: string },
+    | { kind: 'unclear'; changeTurnIds: string[]; question: string }
+    | { kind: 'code_unsearchable'; repos: Array<{ repoRef: string; state: string }> },
 ): Promise<RecordedPause> {
+  // A code stop names no change turn; its key is the blocked set, as motir-ai's is.
+  const changeTurnIds = pause.kind === 'code_unsearchable' ? [] : pause.changeTurnIds;
+  const subject =
+    pause.kind === 'code_unsearchable'
+      ? pause.repos
+          .map((r) => `${r.repoRef}:${r.state}`)
+          .sort()
+          .join(',')
+      : changeTurnIds.join(',');
   const res = await page.request.post('/api/internal/ai/plan-change-run-pause', {
     headers: asAi(run),
     data: {
       jobId: run.jobId,
       ...pause,
-      idempotencyKey: `pause:${run.jobId}:${pause.kind}:${pause.changeTurnIds.join(',')}`,
+      changeTurnIds,
+      idempotencyKey: `pause:${run.jobId}:${pause.kind}:${subject}`,
     },
   });
   if (res.status() !== 200) {
