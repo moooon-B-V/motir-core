@@ -59,4 +59,34 @@ describe('WorkItemEmbedCard', () => {
     expect(container.querySelector('a, button')).toBeNull();
     expect(pageWorkItemHref(VIEW)).toBe('/items/MOTIR-1188');
   });
+
+  it('draws initials for a single-word name and for an assignee with no name', () => {
+    const { container } = renderWithIntl(
+      <WorkItemEmbedCard view={{ ...VIEW, assignee: { id: 'u2', name: 'Prince', image: null } }} />,
+    );
+    expect(container.textContent).toContain('P');
+    expect(screen.getByText('Prince')).toBeTruthy();
+    cleanup();
+    const unnamed = renderWithIntl(
+      <WorkItemEmbedCard view={{ ...VIEW, assignee: { id: 'u3', name: '', image: null } }} />,
+    );
+    expect(unnamed.container.querySelector('[data-testid="work-item-embed-card"]')).toBeTruthy();
+    expect(screen.queryByText('Unassigned')).toBeNull();
+  });
+
+  it('tones the status pill for to-do and done items', () => {
+    renderWithIntl(
+      <WorkItemEmbedCard
+        view={{ ...VIEW, status: { key: 'todo', label: 'To Do', category: 'todo' } }}
+      />,
+    );
+    expect(screen.getByText('To Do')).toBeTruthy();
+    cleanup();
+    renderWithIntl(
+      <WorkItemEmbedCard
+        view={{ ...VIEW, status: { key: 'done', label: 'Done', category: 'done' } }}
+      />,
+    );
+    expect(screen.getByText('Done')).toBeTruthy();
+  });
 });
