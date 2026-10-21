@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Locator, Page, Route } from '@playwright/test';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
@@ -49,10 +51,17 @@ import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { ADD_PLAN_ITEMS_TOOL_NAME } from '@/lib/mcp/tools/authorPlan';
 import { FAILING_AFTER, POLL_MS } from '@/lib/hooks/useGeneratingPlanPoll';
 import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
-import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
 import type { PlanStepKindDto } from '@/lib/dto/plans';
 import { assessWatchability } from '../../scripts/upload-acceptance-video.mjs';
 import en from '@/messages/en.json';
+
+// The wave-band path, read from `design/brand/wave-band-24.svg` (pinned to
+// `WAVE_BAND_PATH` byte for byte by `tests/brand/waveBand.test.ts`):
+// `@motir/brand` exports ESM only, which Playwright's CommonJS transform cannot
+// `require`.
+const WAVE_BAND_PATH = /\sd="([^"]+)"/.exec(
+  readFileSync(join(process.cwd(), 'design', 'brand', 'wave-band-24.svg'), 'utf8'),
+)![1]!;
 
 // MOTIR-8419 — the E2E + ACCEPTANCE VIDEO for MOTIR-8413, *Motir at work*.
 //
