@@ -28,8 +28,9 @@ import { truncateAuthTables } from '../helpers/db';
 import { createCustomRoleAs, setProjectRoleDefinitionFor } from '../helpers/workspaceRoleFixtures';
 
 // The work item's Pages read on real Postgres (Story MOTIR-7565 · MOTIR-7573):
-// one row per live page with its sorted sources and place, keyset paging at 50
-// (capped at 100), archived pages left out, and the three refusals — no
+// one row per linking page with its sorted sources and place, keyset paging at
+// 50 (capped at 100), an archived page served as an `unavailable` row
+// (MOTIR-9203), and the three refusals — no
 // `page:view`, a work item the reader cannot see, and a Visitor.
 
 let fx: WorkItemFixture;
@@ -157,26 +158,107 @@ describe('pageLinksService.listPagesForWorkItem', () => {
     expect((await list(fx.ctx, target.id, null, 7)).rows).toHaveLength(7);
   });
 
-  it('leaves an archived page out, shows it again after restore, and drops it on delete', async () => {
+  const archive = (pageId: string) =>
+    pagesService.archivePage(fx.ctx, { projectId: fx.projectId, pageId });
+
+  it('serves an archived page as an unavailable row, live again after restore, gone on delete', async () => {
     const target = await createTestWorkItem(fx, { kind: 'task', title: 'Target' });
     const page = await newPage('Kept');
+    await link(page.id, target.id, 'manual');
     await link(page.id, target.id, 'mention');
 
-    await adminDb.page.update({
-      where: { id: page.id },
-      data: { archivedAt: new Date(), archiveRootId: page.id },
-    });
-    expect((await list(fx.ctx, target.id)).rows).toEqual([]);
+    const live = (await list(fx.ctx, target.id)).rows;
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({ pageId: page.id, title: 'Kept', state: 'live' });
 
-    await adminDb.page.update({
-      where: { id: page.id },
-      data: { archivedAt: null, archiveRootId: null },
+    await archive(page.id);
+    const archived = (await list(fx.ctx, target.id)).rows;
+    expect(archived).toHaveLength(1);
+    // Archiving changes whether the page opens, not what the link was.
+    expect(archived[0]).toMatchObject({
+      pageId: page.id,
+      title: 'Kept',
+      sources: ['manual', 'mention'],
+      state: 'unavailable',
     });
-    expect((await list(fx.ctx, target.id)).rows.map((r) => r.pageId)).toEqual([page.id]);
+    expect(archived[0]?.place).toEqual(live[0]?.place);
 
-    await adminDb.pageVersion.deleteMany({ where: { pageId: page.id } });
-    await adminDb.page.delete({ where: { id: page.id } });
+    await pagesService.restorePage(fx.ctx, { projectId: fx.projectId, pageId: page.id });
+    const restored = (await list(fx.ctx, target.id)).rows;
+    expect(restored.map((r) => [r.pageId, r.state])).toEqual([[page.id, 'live']]);
+
+    // A deleted page has no row at all — the FK cascade takes its link rows.
+    await archive(page.id);
+    await pagesService.deletePage(fx.ctx, { projectId: fx.projectId, pageId: page.id });
     expect((await list(fx.ctx, target.id)).rows).toEqual([]);
+    expect(await adminDb.pageWorkItemLink.count({ where: { workItemId: target.id } })).toBe(0);
+  });
+
+  it('keeps one ordering in a mixed window: the archived page takes its place by updatedAt', async () => {
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Target' });
+    const a = await newPage('A');
+    const b = await newPage('B');
+    const c = await newPage('C');
+    for (const p of [a, b, c]) await link(p.id, target.id, 'mention');
+    await archive(b.id);
+    // Stamped after the archive, so the order does not rest on what archiving does to it.
+    await adminDb.page.update({
+      where: { id: a.id },
+      data: { updatedAt: new Date('2026-01-03Z') },
+    });
+    await adminDb.page.update({
+      where: { id: b.id },
+      data: { updatedAt: new Date('2026-01-02Z') },
+    });
+    await adminDb.page.update({
+      where: { id: c.id },
+      data: { updatedAt: new Date('2026-01-01Z') },
+    });
+
+    const { rows } = await list(fx.ctx, target.id);
+    expect(rows.map((r) => [r.pageId, r.state])).toEqual([
+      [a.id, 'live'],
+      [b.id, 'unavailable'],
+      [c.id, 'live'],
+    ]);
+    const times = rows.map((r) => Date.parse(r.updatedAt));
+    expect(times).toEqual([...times].sort((x, y) => y - x));
+  });
+
+  it('pages across an archived row without repeating or skipping a page', async () => {
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Target' });
+    const pages = [await newPage('P0'), await newPage('P1'), await newPage('P2')];
+    for (const p of pages) await link(p.id, target.id, 'mention');
+    const stamps = ['2026-01-03Z', '2026-01-02Z', '2026-01-01Z'];
+    await archive(pages[1]!.id);
+    for (const [i, p] of pages.entries()) {
+      await adminDb.page.update({ where: { id: p.id }, data: { updatedAt: new Date(stamps[i]!) } });
+    }
+
+    const first = await list(fx.ctx, target.id, null, 2);
+    expect(first.rows.map((r) => r.pageId)).toEqual([pages[0]!.id, pages[1]!.id]);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await list(fx.ctx, target.id, first.nextCursor, 2);
+    expect(second.rows.map((r) => r.pageId)).toEqual([pages[2]!.id]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('still resolves the place of an archived page', async () => {
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Target' });
+    const folder = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Specs' },
+      fx.ctx,
+    );
+    const top = await newPage('Plan', { kind: 'folder', id: folder.id });
+    const child = await newPage('Child', { kind: 'page', id: top.id });
+    await link(child.id, target.id, 'manual');
+    await archive(child.id);
+
+    const { rows } = await list(fx.ctx, target.id);
+    expect(rows[0]).toMatchObject({
+      state: 'unavailable',
+      place: { folderPath: ['Specs'], parentPageTitle: 'Plan' },
+    });
   });
 
   it('refuses a reader without page:view as edit, naming no page', async () => {

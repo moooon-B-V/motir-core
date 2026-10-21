@@ -118,6 +118,12 @@ const STORY_FILES = [
   'lib/pages/workItemPagesCursor.ts',
   'lib/mappers/pageLinkMappers.ts',
   'app/api/work-items/*/pages/route.ts',
+  // Story MOTIR-7567 (the hand link, both ways): the pair's DELETE door, the
+  // link-search and page-side routes (gated by the `app/api/pages/*` globs
+  // above) and the two cursors.
+  'app/api/work-items/*/pages/*/route.ts',
+  'lib/pages/pageTitleSearchCursor.ts',
+  'lib/pages/pageWorkItemsCursor.ts',
   // The work item page's Pages section (MOTIR-7575) and its fetch helper.
   'app/**/items/*/_components/PagesSection.tsx',
   'lib/workItems/pageLinksClient.ts',
@@ -195,6 +201,15 @@ export default defineConfig({
       'tests/api/workItemPagesRoute.test.ts',
       // The work item page's Pages section (MOTIR-7575).
       'tests/components/pagesSection.test.tsx',
+      // Story MOTIR-7567 (link a page and a work item by hand): the write
+      // path (MOTIR-9197), the page-side read (MOTIR-9198) and the link
+      // search (MOTIR-9204); `pagesService.linkSearch` is matched above.
+      'tests/pages/pageWorkItemLinkRepository.manual.test.ts',
+      'tests/services/pageLinksService.write.test.ts',
+      'tests/services/pageLinksService.pageWorkItems.test.ts',
+      'tests/api/workItemsPagesWrite.test.ts',
+      'tests/api/pageWorkItemsRoute.test.ts',
+      'tests/api/pagesLinkSearchRoute.test.ts',
       // A work item tags a page (Story MOTIR-7694): the item-derived link rows
       // (MOTIR-7696) and the page mention search route (MOTIR-7697).
       'tests/services/workItemsService.pageLinks.test.ts',

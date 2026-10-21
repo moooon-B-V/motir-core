@@ -1837,6 +1837,7 @@
       "explanationMd": "Explicação",
       "explanationSource": "Origem da explicação",
       "archivedAt": "Arquivado",
+      "pageLinks": "Página",
       "labels": "{count, plural, one {Etiqueta} other {Etiquetas}}",
       "components": "{count, plural, one {Componente} other {Componentes}}",
       "todos": "{count, plural, one {Etapa} other {Etapas}}"

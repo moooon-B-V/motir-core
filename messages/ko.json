@@ -1837,6 +1837,7 @@
       "explanationMd": "근거",
       "explanationSource": "근거 출처",
       "archivedAt": "보관됨",
+      "pageLinks": "페이지",
       "labels": "{count, plural, other {레이블}}",
       "components": "{count, plural, other {구성 요소}}",
       "todos": "{count, plural, other {단계}}"

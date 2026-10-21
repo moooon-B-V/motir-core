@@ -1837,6 +1837,7 @@
       "explanationMd": "Toelichting",
       "explanationSource": "Bron van de toelichting",
       "archivedAt": "Gearchiveerd",
+      "pageLinks": "Pagina",
       "labels": "{count, plural, one {Label} other {Labels}}",
       "components": "{count, plural, one {Component} other {Componenten}}",
       "todos": "{count, plural, one {Stap} other {Stappen}}"

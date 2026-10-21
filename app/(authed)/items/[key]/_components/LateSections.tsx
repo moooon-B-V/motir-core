@@ -767,6 +767,7 @@ export async function LateLowerSections({
   itemId,
   itemIdentifier,
   canViewPages,
+  canEditWorkItem,
   currentUserId,
   currentUserName,
   workflowStatuses,
@@ -780,6 +781,9 @@ export async function LateLowerSections({
   /** `page:view` on the item's project AND not a Visitor (MOTIR-7575): without
    *  it the Pages section is ABSENT — no card, no read — not disabled. */
   canViewPages: boolean;
+  /** `work_item:edit` on the item (MOTIR-9199): the Pages section's Link page and
+   *  Unlink controls follow it; a reader without it sees the rows and neither. */
+  canEditWorkItem: boolean;
   currentUserId: string;
   currentUserName: string;
   workflowStatuses: React.ComponentProps<typeof ActivitySection>['workflowStatuses'];
@@ -790,7 +794,13 @@ export async function LateLowerSections({
   return (
     <>
       {canViewPages ? (
-        <PagesSection key={itemId} workItemId={itemId} identifier={itemIdentifier} />
+        <PagesSection
+          key={itemId}
+          workItemId={itemId}
+          identifier={itemIdentifier}
+          projectId={r.projectId}
+          canEditWorkItem={canEditWorkItem}
+        />
       ) : null}
       <AttachmentsPanel
         workItemId={itemId}

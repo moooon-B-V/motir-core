@@ -1837,6 +1837,7 @@
       "explanationMd": "Erläuterung",
       "explanationSource": "Quelle der Erläuterung",
       "archivedAt": "Archiviert",
+      "pageLinks": "Seite",
       "labels": "{count, plural, one {Label} other {Labels}}",
       "components": "{count, plural, one {Komponente} other {Komponenten}}",
       "todos": "{count, plural, one {Schritt} other {Schritte}}"

@@ -739,6 +739,7 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
     const { LateLowerSections } =
       await import('@/app/(authed)/items/[key]/_components/LateSections');
     const reads = Promise.resolve({
+      projectId: 'p1',
       pullRequests: [],
       commentCaps: { canComment: caps.canComment, canModerate: caps.canModerate },
       attachmentCaps: { canCreate: caps.canCreate, canDeleteAll: caps.canDeleteAll },
@@ -757,6 +758,7 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
       itemId: 'i1',
       itemIdentifier: 'PROD-1',
       canViewPages,
+      canEditWorkItem: false,
       currentUserId: 'u1',
       currentUserName: 'Yue',
       workflowStatuses: [] as never,
@@ -804,7 +806,12 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
     const el = await callLower(NO_CAPS, true);
     const [pages] = el.props.children as unknown as { type: unknown; props: unknown }[];
     expect(pages!.type).toBe(PagesSection);
-    expect(pages!.props).toEqual({ workItemId: 'i1', identifier: 'PROD-1' });
+    expect(pages!.props).toEqual({
+      workItemId: 'i1',
+      identifier: 'PROD-1',
+      projectId: 'p1',
+      canEditWorkItem: false,
+    });
   });
 
   it('renders NO Pages section when the reader is withheld', async () => {

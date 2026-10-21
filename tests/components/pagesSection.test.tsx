@@ -29,6 +29,7 @@ function row(over: Partial<WorkItemPageLinkRowDto> = {}): WorkItemPageLinkRowDto
   return {
     pageId: 'pg_1',
     title: 'Onboarding flow — spec',
+    state: 'live',
     sources: ['mention'],
     updatedAt: '2026-10-07T10:00:00Z',
     place: { folderPath: [], parentPageTitle: null },
@@ -70,11 +71,19 @@ async function answer(
   });
 }
 
-function renderSection(messages?: Record<string, unknown>) {
-  return renderWithIntl(<PagesSection workItemId="wi_1" identifier="PROD-7" />, {
-    now: NOW,
-    ...(messages ? { messages, locale: 'zh' } : {}),
-  });
+function renderSection(messages?: Record<string, unknown>, canEditWorkItem = false) {
+  return renderWithIntl(
+    <PagesSection
+      workItemId="wi_1"
+      identifier="PROD-7"
+      projectId="proj_1"
+      canEditWorkItem={canEditWorkItem}
+    />,
+    {
+      now: NOW,
+      ...(messages ? { messages, locale: 'zh' } : {}),
+    },
+  );
 }
 
 afterEach(() => {
@@ -96,12 +105,12 @@ describe('the first read', () => {
     expect(screen.queryByTestId('pages-section-loading')).toBeNull();
   });
 
-  it('carries the fragment id the design names, and renders no Link page door yet', async () => {
+  it('carries the fragment id the design names, and no Link page door for a reader who cannot edit', async () => {
     const { calls } = heldFetch();
     const { container } = renderSection();
     await answer(calls[0], ok(page([])));
     expect(container.querySelector('#pages')).toBeTruthy();
-    // MOTIR-7567 owns the door; nothing non-functional is drawn in its place.
+    // Absent, never disabled (MOTIR-9199).
     expect(screen.queryByRole('button', { name: /link page/i })).toBeNull();
   });
 
@@ -350,11 +359,25 @@ describe('a response that is no longer the latest never lands', () => {
   it('drops a first read — success or failure — answered after a newer read started', async () => {
     const { calls } = heldFetch();
     const { rerender } = renderSection();
-    rerender(<PagesSection workItemId="wi_2" identifier="PROD-8" />);
+    rerender(
+      <PagesSection
+        workItemId="wi_2"
+        identifier="PROD-8"
+        projectId="proj_1"
+        canEditWorkItem={false}
+      />,
+    );
     expect(calls[1]!.url).toBe('/api/work-items/wi_2/pages');
     await answer(calls[0], ok(page([row({ title: 'Stale' })])));
     expect(screen.queryByText('Stale')).toBeNull();
-    rerender(<PagesSection workItemId="wi_3" identifier="PROD-9" />);
+    rerender(
+      <PagesSection
+        workItemId="wi_3"
+        identifier="PROD-9"
+        projectId="proj_1"
+        canEditWorkItem={false}
+      />,
+    );
     await answer(calls[1], new Error('stale failure'));
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByTestId('pages-section-loading')).toBeTruthy();
@@ -367,7 +390,14 @@ describe('a response that is no longer the latest never lands', () => {
     const { rerender } = renderSection();
     await answer(calls[0], ok(page([row()], 'cursor-1')));
     fireEvent.click(screen.getByRole('button', { name: 'Show more pages' }));
-    rerender(<PagesSection workItemId="wi_2" identifier="PROD-8" />);
+    rerender(
+      <PagesSection
+        workItemId="wi_2"
+        identifier="PROD-8"
+        projectId="proj_1"
+        canEditWorkItem={false}
+      />,
+    );
     await answer(calls[1], ok(page([row({ pageId: 'late', title: 'Late' })])));
     expect(screen.queryByText('Late')).toBeNull();
     // Still pending: the stale answer cleared nothing of the newer state.
@@ -379,7 +409,14 @@ describe('a response that is no longer the latest never lands', () => {
     const { rerender } = renderSection();
     await answer(calls[0], ok(page([row()], 'cursor-1')));
     fireEvent.click(screen.getByRole('button', { name: 'Show more pages' }));
-    rerender(<PagesSection workItemId="wi_2" identifier="PROD-8" />);
+    rerender(
+      <PagesSection
+        workItemId="wi_2"
+        identifier="PROD-8"
+        projectId="proj_1"
+        canEditWorkItem={false}
+      />,
+    );
     await answer(calls[1], new Error('offline'));
     expect(screen.queryByText("Couldn't load more pages.")).toBeNull();
     await answer(calls[2], ok(page([row({ pageId: 'n', title: 'New item page' })])));
@@ -422,11 +459,13 @@ describe('withheld: the section is absent and its route is never read', () => {
       initialHistory: null,
       initialAll: null,
       initialAttachments: null,
+      projectId: 'proj_1',
     });
     const props = {
       reads: reads as never,
       itemId: 'wi_1',
       itemIdentifier: 'PROD-7',
+      canEditWorkItem: false,
       currentUserId: 'u1',
       currentUserName: 'Yue',
       workflowStatuses: [] as never,
@@ -438,6 +477,10 @@ describe('withheld: the section is absent and its route is never read', () => {
     expect(withheld.props.children.some((c) => c?.type === PagesSection)).toBe(false);
     const holder = (await LateLowerSections({ ...props, canViewPages: true })) as Tree;
     expect(holder.props.children[0]?.type).toBe(PagesSection);
+    // The late reads' project and the item's edit right reach the section (MOTIR-9199).
+    expect(
+      (holder.props.children[0] as unknown as { props: Record<string, unknown> }).props,
+    ).toMatchObject({ projectId: 'proj_1', canEditWorkItem: false });
 
     // Building either tree reads nothing: the section's one read is its own, on mount.
     expect(fn).not.toHaveBeenCalled();
@@ -445,4 +488,281 @@ describe('withheld: the section is absent and its route is never read', () => {
     // activity and attachments, with their editors) is ~14s on its own and
     // longer under the coverage lane's load, so the 15s default sat on the edge.
   }, 60_000);
+});
+
+// ── MOTIR-9199 — the Link page door, Unlink, the unavailable row ──────────────
+
+const candidate = (over: Record<string, unknown> = {}) => ({
+  id: 'pg_new',
+  title: 'Meeting notes',
+  place: { folderPath: ['Team'], parentPageTitle: null },
+  ...over,
+});
+
+/** A fetch routed by method + URL; unmatched calls fail loudly. */
+function routedFetch(routes: Record<string, () => Response | Promise<Response>>) {
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    const key = `${init?.method ?? 'GET'} ${url.split('?')[0]}`;
+    const handler = routes[key];
+    if (!handler) throw new Error(`unrouted ${key}`);
+    return handler();
+  });
+  vi.stubGlobal('fetch', fn);
+  return fn;
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+async function openFormAndSearch(text = 'meet') {
+  fireEvent.click(await screen.findByRole('button', { name: 'Link page' }));
+  const input = screen.getByRole('combobox', { name: 'Search pages by title' });
+  fireEvent.change(input, { target: { value: text } });
+  return input;
+}
+
+describe('the Link page door (MOTIR-9199)', () => {
+  it('is drawn for a reader who may edit, and becomes Cancel while the form is open', async () => {
+    routedFetch({ 'GET /api/work-items/wi_1/pages': () => json(page([])) });
+    renderSection(undefined, true);
+    const door = await screen.findByRole('button', { name: 'Link page' });
+    fireEvent.click(door);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole('combobox', { name: 'Search pages by title' }),
+    );
+    expect(screen.getByText('Keep typing to search pages…')).toBeTruthy();
+    // The empty line stays, with the door beside it.
+    expect(screen.getByText('No page links to this work item yet.')).toBeTruthy();
+  });
+
+  it('links a picked page: pins it, keeps the rows, issues no re-read, and sends no page save', async () => {
+    const fn = routedFetch({
+      'GET /api/work-items/wi_1/pages': () =>
+        json(
+          page([row({ pageId: 'pg_new', title: 'Old' }), row({ pageId: 'p2', title: 'Other' })]),
+        ),
+      'GET /api/pages/link-search': () => json({ items: [candidate()], nextCursor: null }),
+      'POST /api/work-items/wi_1/pages': () =>
+        json({ pageId: 'pg_new', workItemId: 'wi_1', source: 'manual' }),
+    });
+    renderSection(undefined, true);
+    await openFormAndSearch();
+    const option = await screen.findByRole('option', { name: /Meeting notes/ });
+    fireEvent.click(option);
+    const pinned = await screen.findByTestId('pages-pinned');
+    expect(within(pinned).getByText('Meeting notes')).toBeTruthy();
+    expect(within(pinned).getByText('Just linked')).toBeTruthy();
+    expect(within(pinned).getByText('Linked')).toBeTruthy();
+    // The same page's paged row is suppressed; the other row stays.
+    expect(screen.queryByText('Old')).toBeNull();
+    expect(screen.getByText('Other')).toBeTruthy();
+    expect(screen.queryByTestId('link-page-form')).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Link page' })),
+    );
+
+    const calls = fn.mock.calls.map(
+      ([u, i]) => `${(i as RequestInit | undefined)?.method ?? 'GET'} ${String(u).split('?')[0]}`,
+    );
+    expect(calls.filter((c) => c === 'GET /api/work-items/wi_1/pages')).toHaveLength(1);
+    expect(calls.some((c) => c.startsWith('PATCH') || c.startsWith('PUT'))).toBe(false);
+    const post = fn.mock.calls.find(([, i]) => (i as RequestInit | undefined)?.method === 'POST');
+    expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ pageId: 'pg_new' });
+  });
+
+  it.each([
+    [409, 'PAGE_LINK_ALREADY_LINKED', '“Meeting notes” is already linked to this work item.'],
+    [403, 'PERMISSION_DENIED', 'You don’t have permission to link pages to this work item.'],
+    [404, 'PAGE_NOT_FOUND', 'That page is no longer available to link.'],
+    [409, 'PAGE_ARCHIVED', 'That page is no longer available to link.'],
+  ])(
+    'maps a %i %s refusal to its own sentence with the query intact',
+    async (status, code, sentence) => {
+      routedFetch({
+        'GET /api/work-items/wi_1/pages': () => json(page([])),
+        'GET /api/pages/link-search': () => json({ items: [candidate()], nextCursor: null }),
+        'POST /api/work-items/wi_1/pages': () => json({ code, error: 'x' }, status),
+      });
+      renderSection(undefined, true);
+      const input = await openFormAndSearch();
+      fireEvent.click(await screen.findByRole('option', { name: /Meeting notes/ }));
+      expect(await screen.findByText(sentence)).toBeTruthy();
+      expect((input as HTMLInputElement).value).toBe('meet');
+      expect(screen.queryByTestId('pages-pinned')).toBeNull();
+      // A new query clears the refusal.
+      fireEvent.change(input, { target: { value: 'meeti' } });
+      expect(screen.queryByText(sentence)).toBeNull();
+    },
+  );
+
+  it('never reads an unrecognised 409 as already linked; it offers a retry that keeps the pick', async () => {
+    let attempts = 0;
+    routedFetch({
+      'GET /api/work-items/wi_1/pages': () => json(page([])),
+      'GET /api/pages/link-search': () => json({ items: [candidate()], nextCursor: null }),
+      'POST /api/work-items/wi_1/pages': () => {
+        attempts += 1;
+        return attempts === 1
+          ? json({ code: 'SOMETHING_ELSE', error: 'x' }, 409)
+          : json({ pageId: 'pg_new', workItemId: 'wi_1', source: 'manual' });
+      },
+    });
+    renderSection(undefined, true);
+    await openFormAndSearch();
+    fireEvent.click(await screen.findByRole('option', { name: /Meeting notes/ }));
+    expect(await screen.findByText('Couldn’t link that page.')).toBeTruthy();
+    expect(screen.queryByText(/already linked/)).toBeNull();
+    expect(screen.getByTestId('link-page-picked')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByTestId('pages-pinned')).toBeTruthy();
+  });
+
+  it('closes on Escape and returns focus to the door', async () => {
+    routedFetch({ 'GET /api/work-items/wi_1/pages': () => json(page([])) });
+    renderSection(undefined, true);
+    const input = await openFormAndSearch('');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByTestId('link-page-form')).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Link page' })),
+    );
+  });
+});
+
+describe('Unlink (MOTIR-9199)', () => {
+  const handRow = row({ pageId: 'pg_h', title: 'Hand page', sources: ['manual'] });
+  const mixedRow = row({ pageId: 'pg_m', title: 'Mixed page', sources: ['manual', 'mention'] });
+  const derivedRow = row({ pageId: 'pg_d', title: 'Derived page', sources: ['mention'] });
+
+  it('is drawn on a hand link only, with the gloss line when a derived row is drawn; none for a reader who cannot edit', async () => {
+    routedFetch({
+      'GET /api/work-items/wi_1/pages': () => json(page([handRow, mixedRow, derivedRow])),
+    });
+    renderSection(undefined, true);
+    expect(await screen.findByRole('button', { name: 'Unlink page Hand page' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Unlink page Mixed page' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Unlink page Derived page' })).toBeNull();
+    expect(screen.getByText(/Only hand links can be unlinked here/)).toBeTruthy();
+    cleanup();
+
+    routedFetch({
+      'GET /api/work-items/wi_1/pages': () => json(page([handRow, mixedRow, derivedRow])),
+    });
+    renderSection(undefined, false);
+    await screen.findByText('Hand page');
+    expect(screen.queryByRole('button', { name: /Unlink/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Link page' })).toBeNull();
+  });
+
+  it('shows no gloss line while every drawn row is a hand link', async () => {
+    routedFetch({ 'GET /api/work-items/wi_1/pages': () => json(page([handRow])) });
+    renderSection(undefined, true);
+    await screen.findByText('Hand page');
+    expect(screen.queryByText(/Only hand links can be unlinked here/)).toBeNull();
+  });
+
+  it('removes a hand-only row, keeps a row another source still links, and never re-reads', async () => {
+    const fn = routedFetch({
+      'GET /api/work-items/wi_1/pages': () => json(page([handRow, mixedRow])),
+      'DELETE /api/work-items/wi_1/pages/pg_h': () => new Response(null, { status: 204 }),
+      'DELETE /api/work-items/wi_1/pages/pg_m': () => new Response(null, { status: 204 }),
+    });
+    renderSection(undefined, true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Unlink page Hand page' }));
+    await waitFor(() => expect(screen.queryByText('Hand page')).toBeNull());
+    expect(screen.getByRole('status').textContent).toBe('Unlinked “Hand page”.');
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink page Mixed page' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Unlink page/ })).toBeNull());
+    expect(screen.getByText('Mixed page')).toBeTruthy();
+    expect(screen.getByText('Mentioned')).toBeTruthy();
+    expect(screen.queryByText('Linked')).toBeNull();
+    expect(fn.mock.calls.filter(([, i]) => !(i as RequestInit | undefined)?.method)).toHaveLength(
+      1,
+    );
+  });
+
+  it('restores the row and offers a retry when the unlink fails', async () => {
+    let ok = false;
+    routedFetch({
+      'GET /api/work-items/wi_1/pages': () => json(page([handRow])),
+      'DELETE /api/work-items/wi_1/pages/pg_h': () =>
+        ok ? new Response(null, { status: 204 }) : json({ code: 'BOOM' }, 500),
+    });
+    renderSection(undefined, true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Unlink page Hand page' }));
+    expect(await screen.findByText('Couldn’t unlink that page.')).toBeTruthy();
+    expect(screen.getByText('Hand page')).toBeTruthy();
+    ok = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.queryByText('Hand page')).toBeNull());
+  });
+
+  it('settles a page-gone answer as removed', async () => {
+    routedFetch({
+      'GET /api/work-items/wi_1/pages': () => json(page([handRow])),
+      'DELETE /api/work-items/wi_1/pages/pg_h': () => json({ code: 'PAGE_LINK_NOT_FOUND' }, 404),
+    });
+    renderSection(undefined, true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Unlink page Hand page' }));
+    await waitFor(() => expect(screen.queryByText('Hand page')).toBeNull());
+    expect(screen.queryByText('Couldn’t unlink that page.')).toBeNull();
+  });
+});
+
+describe('the row arms (MOTIR-9199)', () => {
+  it('draws a live row as before: an anchor and a relative time', async () => {
+    routedFetch({ 'GET /api/work-items/wi_1/pages': () => json(page([row()])) });
+    renderSection();
+    expect(await screen.findByRole('link', { name: /Onboarding flow/ })).toBeTruthy();
+    expect(document.querySelector('time')).toBeTruthy();
+  });
+
+  it.each(['unavailable', 'archived-but-new-value'])(
+    'draws state %s as the unavailable arm: no anchor, no time, chips and place kept, Unlink offered',
+    async (state) => {
+      routedFetch({
+        'GET /api/work-items/wi_1/pages': () =>
+          json(
+            page([
+              row({
+                pageId: 'pg_u',
+                title: 'Gone page',
+                state: state as never,
+                sources: ['manual', 'mention'],
+                place: { folderPath: ['Team'], parentPageTitle: 'Handbook' },
+              }),
+            ]),
+          ),
+      });
+      renderSection(undefined, true);
+      expect(await screen.findByText('Gone page')).toBeTruthy();
+      expect(screen.queryByRole('link')).toBeNull();
+      expect(document.querySelector('time')).toBeNull();
+      expect(screen.getByText('Unavailable page')).toBeTruthy();
+      expect(screen.getByText('Linked')).toBeTruthy();
+      expect(screen.getByText('Mentioned')).toBeTruthy();
+      expect(screen.getByText('Handbook')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Unlink page Gone page' })).toBeTruthy();
+    },
+  );
+
+  it('names Unlink distinctly on a row that carries no title', async () => {
+    routedFetch({
+      'GET /api/work-items/wi_1/pages': () =>
+        json(page([row({ pageId: 'pg_u', title: '', state: 'unavailable', sources: ['manual'] })])),
+    });
+    renderSection(undefined, true);
+    expect(await screen.findByRole('button', { name: 'Unlink unavailable page' })).toBeTruthy();
+  });
+
+  it('does not draw the empty line for a work item whose only link is unavailable', async () => {
+    routedFetch({
+      'GET /api/work-items/wi_1/pages': () =>
+        json(page([row({ state: 'unavailable', sources: ['mention'] })])),
+    });
+    renderSection();
+    await screen.findByText('Unavailable page');
+    expect(screen.queryByText('No page links to this work item yet.')).toBeNull();
+  });
 });

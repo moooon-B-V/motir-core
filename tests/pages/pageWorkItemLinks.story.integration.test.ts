@@ -528,7 +528,7 @@ describe('access', () => {
 // ── 7 — archive, delete, and the work item's own deletion ───────────────────
 
 describe('archive and delete', () => {
-  it('archiving drops the page from the read; restoring brings it back with its rows untouched', async () => {
+  it('archiving serves the page as an unavailable row; restoring makes it live with its rows untouched', async () => {
     const a = await item('A');
     const page = await newPage();
     await writeMarkdown(page.id, mention(a));
@@ -537,11 +537,14 @@ describe('archive and delete', () => {
     expect(before).toHaveLength(2);
 
     await pagesService.archivePage(fx.ctx, { projectId: fx.projectId, pageId: page.id });
-    expect(await linked(a.id)).toEqual([]);
+    // MOTIR-9203: the read keeps the pair, flagged unavailable, with its sources.
+    expect(await linked(a.id)).toEqual([[page.id, ['manual', 'mention']]]);
+    expect((await pagesFor(a.id)).rows.map((r) => r.state)).toEqual(['unavailable']);
     expect(await rowsOf(page.id)).toEqual(before);
 
     await pagesService.restorePage(fx.ctx, { projectId: fx.projectId, pageId: page.id });
     expect(await linked(a.id)).toEqual([[page.id, ['manual', 'mention']]]);
+    expect((await pagesFor(a.id)).rows.map((r) => r.state)).toEqual(['live']);
     expect(await rowsOf(page.id)).toEqual(before);
   });
 
