@@ -5,9 +5,9 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET /api/work-items/[id]/pages?cursor=&limit= (Story MOTIR-7565 · MOTIR-7573)
-// — the live pages that link to a work item, one row per page with every way it
-// links and its place, newest edit first, keyset-paged (50 by default, at most
-// 100). Thin HTTP layer over `pageLinksService.listPagesForWorkItem`; no db, no
+// — the pages that link to a work item, one row per page with every way it
+// links, its place and its `state` (`unavailable` once archived), newest edit
+// first, keyset-paged (50 by default, at most 100). Thin HTTP layer over `pageLinksService.listPagesForWorkItem`; no db, no
 // transaction, no business logic here (CLAUDE.md route layer).
 //
 // Typed errors → status codes:

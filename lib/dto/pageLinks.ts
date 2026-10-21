@@ -1,6 +1,7 @@
 // The work item's Pages read (Story MOTIR-7565 · MOTIR-7573) — what crosses the
-// service boundary for "which pages link to this work item?" One row per live
-// page, however many link rows it has (`docs/decisions/pages.md` §8.1).
+// service boundary for "which pages link to this work item?" One row per linking
+// page, live or unavailable, however many link rows it has
+// (`docs/decisions/pages.md` §8.1).
 
 /**
  * How a page links to the work item: a chip in its body, an embed, by hand, or
@@ -16,10 +17,18 @@ export interface WorkItemPageLinkPlaceDto {
   parentPageTitle: string | null;
 }
 
+/**
+ * `unavailable`: the page can no longer be opened as a live page (it is
+ * archived); its title, place and sources are still what it had (MOTIR-9203). A
+ * deleted page has no row at all — the FK cascade takes its link rows.
+ */
+export type WorkItemPageLinkStateDto = 'live' | 'unavailable';
+
 /** One page linking to the work item. */
 export interface WorkItemPageLinkRowDto {
   pageId: string;
   title: string;
+  state: WorkItemPageLinkStateDto;
   /** Every way it links, sorted. */
   sources: PageLinkSourceDto[];
   /** ISO-8601, the page's last edit. */

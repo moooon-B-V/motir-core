@@ -81,10 +81,12 @@ describe('GET /api/work-items/[id]/pages', () => {
     const res = await get(id);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      rows: Array<{ title: string }>;
+      rows: Array<{ title: string; state: string }>;
       nextCursor: string | null;
     };
     expect(body.rows.map((r) => r.title).sort()).toEqual(['Alpha', 'Beta', 'Gamma']);
+    // MOTIR-9203: every served row carries its state.
+    expect(body.rows.every((r) => r.state === 'live')).toBe(true);
     expect(body.nextCursor).toBeNull();
 
     const paged = (await (await get(id, '?limit=2')).json()) as {

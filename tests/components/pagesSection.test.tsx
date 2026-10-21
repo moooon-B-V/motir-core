@@ -29,6 +29,7 @@ function row(over: Partial<WorkItemPageLinkRowDto> = {}): WorkItemPageLinkRowDto
   return {
     pageId: 'pg_1',
     title: 'Onboarding flow — spec',
+    state: 'live',
     sources: ['mention'],
     updatedAt: '2026-10-07T10:00:00Z',
     place: { folderPath: [], parentPageTitle: null },

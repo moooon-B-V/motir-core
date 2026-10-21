@@ -259,14 +259,19 @@ describe('3 · foreign and unknown tokens', () => {
 // ── 4 — archive and delete ──────────────────────────────────────────────────
 
 describe('4 · archive, restore and delete', () => {
-  it('archive keeps the rows and drops the read; restore brings it back; delete cascades', async () => {
+  it('archive keeps the rows and serves them unavailable; restore makes them live; delete cascades', async () => {
     const p = await newPage('Roadmap Q4');
     const item = await createItem({ descriptionMd: tag(p) });
     expect(await pagesRead(item.id)).toEqual([[p.id, ['description']]]);
 
     await pagesService.archivePage(fx.ctx, { projectId: fx.projectId, pageId: p.id });
     expect(await rowsOf(item.id)).toEqual([[p.id, 'description']]);
-    expect(await pagesRead(item.id)).toEqual([]);
+    // MOTIR-9203: served as an unavailable row rather than dropped.
+    expect(await pagesRead(item.id)).toEqual([[p.id, ['description']]]);
+    const archivedRows = (
+      await pageLinksService.listPagesForWorkItem(fx.ctx, { workItemId: item.id })
+    ).rows;
+    expect(archivedRows.map((r) => r.state)).toEqual(['unavailable']);
 
     await pagesService.restorePage(fx.ctx, { projectId: fx.projectId, pageId: p.id });
     expect(await pagesRead(item.id)).toEqual([[p.id, ['description']]]);

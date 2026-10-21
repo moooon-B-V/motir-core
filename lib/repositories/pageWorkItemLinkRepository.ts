@@ -54,14 +54,17 @@ export interface ItemDerivedPageLinkRecord {
 }
 
 /**
- * One LIVE page that links to a work item, grouped from its link rows
- * (MOTIR-7573): every source it links by, sorted, and what its place needs —
- * the folder its topmost page is filed in, and its direct parent's title.
+ * One page that links to a work item, live or archived, grouped from its link
+ * rows (MOTIR-7573 · MOTIR-9203): every source it links by, sorted, and what its
+ * place needs — the folder its topmost page is filed in, and its direct parent's
+ * title. `archivedAt` is the page's own archive stamp, `null` while it is live.
  */
 export interface WorkItemPageLinkRecord {
   pageId: string;
   title: string;
   updatedAt: Date;
+  /** `null` while the page is live; set once it is archived (MOTIR-9203). */
+  archivedAt: Date | null;
   sources: PageLinkSourceValue[];
   /** The folder the page's TOPMOST page is filed in (a sub-page carries none). */
   placeFolderId: string | null;
@@ -163,12 +166,13 @@ export const pageWorkItemLinkRepository = {
   },
 
   /**
-   * The LIVE pages linking to one work item, ONE row per page however many link
-   * rows it has (MOTIR-7573), newest edit first and keyset-paged on
+   * The pages linking to one work item, ONE row per page however many link rows
+   * it has (MOTIR-7573), newest edit first and keyset-paged on
    * `(updated_at, id)` descending. One statement: the link rows grouped by page,
-   * joined to the live page, and its topmost and parent page for its place. An
-   * archived page is left out; a deleted one has no rows (the FK cascade).
-   * `take` is the caller's page size plus its look-ahead.
+   * joined to the page, and its topmost and parent page for its place. An
+   * archived page is served, flagged by `archivedAt`, in the same window and
+   * order (MOTIR-9203); a deleted one has no rows (the FK cascade). `take` is
+   * the caller's page size plus its look-ahead.
    */
   async listPagesForWorkItem(
     workItemId: string,
@@ -183,11 +187,12 @@ export const pageWorkItemLinkRepository = {
       SELECT p."id" AS "pageId",
              p."title",
              p."updated_at" AS "updatedAt",
+             p."archived_at" AS "archivedAt",
              array_agg(DISTINCT l."source"::text ORDER BY l."source"::text) AS "sources",
              COALESCE(top."folder_id", p."folder_id") AS "placeFolderId",
              parent."title" AS "parentPageTitle"
         FROM "page_work_item_link" l
-        JOIN "page" p ON p."id" = l."page_id" AND p."archived_at" IS NULL
+        JOIN "page" p ON p."id" = l."page_id"
         LEFT JOIN "page" top ON top."id" = p."ancestor_page_ids"[1]
         LEFT JOIN "page" parent
           ON parent."id" = p."ancestor_page_ids"[cardinality(p."ancestor_page_ids")]
