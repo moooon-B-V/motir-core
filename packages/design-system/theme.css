@@ -4405,6 +4405,9 @@
      palettes override, restated so a scoped amethyst tile keeps the base. */
   --el-logo-mark: var(--color-primary-fill);
   --el-logo-tile: color-mix(in srgb, var(--color-primary-fill) 14%, var(--color-background));
+  --el-mark-wave-1: color-mix(in srgb, var(--el-showcase-wave-1) 35%, var(--el-accent-text));
+  --el-mark-wave-2: color-mix(in srgb, var(--el-showcase-wave-2) 35%, var(--el-accent-text));
+  --el-mark-wave-3: color-mix(in srgb, var(--el-showcase-wave-3) 35%, var(--el-accent-text));
   --el-showcase-highlight: color-mix(in srgb, var(--color-accent) 55%, var(--color-background));
   --el-showcase-decision: color-mix(in srgb, var(--color-accent) 70%, var(--color-background));
 }
