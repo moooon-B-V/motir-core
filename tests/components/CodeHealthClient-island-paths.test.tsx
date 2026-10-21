@@ -275,8 +275,10 @@ describe('CodeHealthClient — the island’s remaining paths', () => {
     await click('Retry');
     await click('Convention');
 
-    expect(screen.getByText(REPOS[0]!)).toBeTruthy();
-    expect(screen.getByText(REPOS[1]!)).toBeTruthy();
+    // The name is split across a muted owner and a strong name: find a card by key.
+    const card = (repo: string) => document.querySelector(`button[data-card-key="${repo}"]`);
+    expect(card(REPOS[0]!)).toBeTruthy();
+    expect(card(REPOS[1]!)).toBeTruthy();
   });
 
   it('the deepen affordance dismisses to a re-open link and back, persisted per project', async () => {
