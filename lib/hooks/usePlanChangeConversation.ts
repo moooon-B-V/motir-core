@@ -47,7 +47,11 @@ import {
   type AskSettleResponse,
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
-import { latestTurnDeclined, pendingQuestion } from '@/lib/planning/planChangeThread';
+import {
+  latestTurnDeclined,
+  latestTurnUnsearchable,
+  pendingQuestion,
+} from '@/lib/planning/planChangeThread';
 import { isOpenUnclear, pauseOf, MAILBOX_POLL_MS } from '@/lib/planning/runPause';
 import { useRunPause } from '@/lib/hooks/useRunPause';
 import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
@@ -1888,7 +1892,7 @@ export function usePlanChangeConversation({
         const withTurn = await recordPlannerTurn(sessionId, jobId, anchor, controller.signal);
         if (!mountedRef.current) return;
         asked = pendingQuestion(withTurn.turns) !== null;
-        declined = latestTurnDeclined(withTurn.turns);
+        declined = latestTurnDeclined(withTurn.turns) || latestTurnUnsearchable(withTurn.turns);
         setState((s) => ({ ...s, session: withTurn }));
       } catch {
         /* the run still happened; the thread simply carries no narration */
@@ -1938,7 +1942,9 @@ export function usePlanChangeConversation({
           // (MOTIR-7985): `EMPTY` is only ever a run that SUCCEEDED with nothing.
           // A turn DECLINED for an unreadable code graph writes no plan by design
           // and the rail draws its own notice (MOTIR-8136): the fourth reason, and
-          // not an error either (MOTIR-8564).
+          // not an error either (MOTIR-8564). A turn that STOPPED because a target
+          // repository's code cannot be searched is the same outcome, drawn as a
+          // banner (MOTIR-9165).
           errorCode: asked || declined || s.stopping || canceled ? null : 'EMPTY',
           // The interval closes HERE and only here: the stream has ended, so the
           // walk reached its boundary and read the flag. Until this moment the
