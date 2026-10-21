@@ -858,19 +858,41 @@ describe('aiConventionService — project-admin gate', () => {
     expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 
-  it('blocks a non-admin workspace member (403) without calling the boundary', async () => {
+  // MOTIR-9173 — the READS are `ai:plan` (the member key); the writes stay
+  // `ai:configure`. A member reads the audit and the convention, a viewer holds
+  // neither, and the boundary is never called for the viewer.
+  it('lets a plain workspace member READ the convention and the audit (ai:plan)', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
     const member = await createTestUser();
     await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+    const ctx = { userId: member.id, workspaceId: workspace.id };
 
-    await expect(
-      aiConventionService.getConvention(project.id, {
-        userId: member.id,
-        workspaceId: workspace.id,
-      }),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(aiConventionService.getConvention(project.id, ctx)).resolves.toBeDefined();
+    await expect(aiConventionService.getAudit(project.id, ctx)).resolves.toBeDefined();
+    expect(getConventionMock).toHaveBeenCalledTimes(1);
+    expect(getCodeAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a workspace VIEWER (no ai:plan) from both reads with a 403, never calling the boundary', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const viewer = await createTestUser();
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: workspace.id,
+      workspaceRole: 'viewer',
+    });
+    const ctx = { userId: viewer.id, workspaceId: workspace.id };
+
+    await expect(aiConventionService.getConvention(project.id, ctx)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    await expect(aiConventionService.getAudit(project.id, ctx)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
     expect(getConventionMock).not.toHaveBeenCalled();
+    expect(getCodeAuditMock).not.toHaveBeenCalled();
   });
 
   it('treats a cross-tenant project as 404 (never confirms it exists)', async () => {

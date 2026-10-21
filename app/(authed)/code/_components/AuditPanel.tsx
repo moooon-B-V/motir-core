@@ -51,6 +51,7 @@ export function AuditPanel({
   deepenDismissed,
   onDeepenDismiss,
   onDeepenReopen,
+  canConfigure = true,
 }: {
   audit: CodeAuditSurfaceDTO['audit'];
   /** The connected repos this page would audit (`owner/name`). Selects WHICH
@@ -83,6 +84,10 @@ export function AuditPanel({
   deepenDismissed: boolean;
   onDeepenDismiss: () => void;
   onDeepenReopen: () => void;
+  /** Does the reader hold `ai:configure` (MOTIR-9173)? A member reads the report
+   * read-only, so every control that FIRES a re-audit is hidden when false — the
+   * trigger route still refuses them server-side. */
+  canConfigure?: boolean;
 }) {
   if (!audit) {
     // The PARTIAL cases first — both say something true about ONE repository
@@ -98,6 +103,7 @@ export function AuditPanel({
         repoRefs={repoRefs}
         reauditing={reauditing}
         pollExhausted={pollExhausted}
+        canConfigure={canConfigure}
         onReaudit={onReaudit}
         onCheckAgain={onCheckAgain}
       />
@@ -112,7 +118,11 @@ export function AuditPanel({
   if (summary.notMeasured) {
     return (
       <div className="flex flex-col gap-4">
-        <NotMeasuredState reauditing={reauditing} onReaudit={onReaudit} />
+        <NotMeasuredState
+          reauditing={reauditing}
+          canConfigure={canConfigure}
+          onReaudit={onReaudit}
+        />
         {findings.length > 0 ? (
           <FindingsList
             findings={findings}
@@ -129,7 +139,7 @@ export function AuditPanel({
   // reports no external scanner, sits BETWEEN the summary and the findings, and is
   // fully dismissible (a quiet re-open link remains). The report renders unchanged
   // whether it is shown, dismissed, or absent.
-  const showDeepen = scanner?.noExternalScanner === true;
+  const showDeepen = canConfigure && scanner?.noExternalScanner === true;
   return (
     <div className="flex flex-col gap-4">
       <HealthSummary summary={summary} findingCount={total} />
@@ -208,9 +218,11 @@ function UnavailableRepoState({ repoRef, onRetry }: { repoRef: string; onRetry: 
 // `EmptyState`), with the re-audit as the way out.
 function NotMeasuredState({
   reauditing,
+  canConfigure,
   onReaudit,
 }: {
   reauditing: boolean;
+  canConfigure: boolean;
   onReaudit: () => void;
 }) {
   const t = useTranslations('codeHealth');
@@ -220,15 +232,17 @@ function NotMeasuredState({
       title={t('audit.notMeasuredTitle')}
       description={t('audit.notMeasuredDescription')}
       action={
-        <Button
-          variant="secondary"
-          size="sm"
-          leftIcon={reauditing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          disabled={reauditing}
-          onClick={onReaudit}
-        >
-          {t('audit.repos.reauditOne')}
-        </Button>
+        canConfigure ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={reauditing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            disabled={reauditing}
+            onClick={onReaudit}
+          >
+            {t('audit.repos.reauditOne')}
+          </Button>
+        ) : undefined
       }
     />
   );
@@ -246,12 +260,14 @@ function PreAuditEmptyState({
   repoRefs,
   reauditing,
   pollExhausted,
+  canConfigure,
   onReaudit,
   onCheckAgain,
 }: {
   repoRefs: string[];
   reauditing: boolean;
   pollExhausted: boolean;
+  canConfigure: boolean;
   onReaudit: () => void;
   onCheckAgain: () => void;
 }) {
@@ -357,9 +373,11 @@ function PreAuditEmptyState({
         </>
       }
       action={
-        <Button variant="primary" size="sm" leftIcon={<Play />} onClick={onReaudit}>
-          {t('audit.runFirstAudit')}
-        </Button>
+        canConfigure ? (
+          <Button variant="primary" size="sm" leftIcon={<Play />} onClick={onReaudit}>
+            {t('audit.runFirstAudit')}
+          </Button>
+        ) : undefined
       }
     />
   );
