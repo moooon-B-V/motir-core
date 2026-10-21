@@ -471,7 +471,7 @@ describe('what the agent reads — each outcome said as an instruction', () => {
     const fx = await makeWorkItemFixture();
     const gatedCard = async (
       title: string,
-      state: 'awaiting' | 'changes_requested' | 'approved' | null,
+      state: 'awaiting' | 'changes_requested' | 'declined' | 'approved' | null,
     ) => {
       const card = await createTestWorkItem(fx, { kind: 'task', title });
       await setStatus(card.id, 'in_progress');
