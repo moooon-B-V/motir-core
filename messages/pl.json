@@ -6642,6 +6642,62 @@
       "rate": "${unit} za {credits} kredytów · jednorazowo · podatek przy płatności. Kredyty to przydział, a nie waluta — to cena, którą płacisz Stripe.",
       "gate": "Doładowania są dostępne w płatnym planie AI; w darmowym okresie próbnym nie można doładowywać (najpierw wybierz plan powyżej). Tylko właściciel i administratorzy, jak przy każdej czynności rozliczeniowej."
     },
+    "calculator": {
+      "breadcrumb": "Organizacja · {org} · Kalkulator",
+      "title": "Oszacuj swoje zużycie",
+      "subtitle": "Ile elementów roboczych Twoja organizacja kończy w miesiącu i z jakich kategorii modeli korzysta. Motir szacuje kredyty i pasujący plan — wynik jest szacunkiem, a nic tutaj nie zmienia Twojej subskrypcji.",
+      "back": "Wróć do planów",
+      "open": "Oszacuj swoje zużycie",
+      "inputs": {
+        "rangeLabel": "Elementy robocze kończone w miesiącu",
+        "rangeHelp": "Wystarczy przedział — dolna i górna granica zwykłego miesiąca.",
+        "lowLabel": "Dolna",
+        "highLabel": "Górna",
+        "categoriesLabel": "Kategorie modeli używane przez Twoją organizację",
+        "categoriesHelp": "Wybierz od jednej do trzech. Szacunek jest dzielony po równo między wybrane kategorie, a modelu nigdy nie wybierasz — każda kategoria pokazuje obsługiwane modele jako przykłady.",
+        "categoryExamples": "Na przykład: {models}",
+        "submit": "Oszacuj kredyty"
+      },
+      "categories": {
+        "failed": "Nie udało się wczytać kategorii modeli.",
+        "empty": "W tej kategorii nie ma teraz żadnego modelu, więc nie można jej wybrać."
+      },
+      "split": {
+        "one": "Jedna kategoria, więc cały szacunek przypada na {category}.",
+        "even": "Podzielone po równo między {categories} — po {shares}."
+      },
+      "result": {
+        "idle": "Nic nie jest szacowane, dopóki o to nie poprosisz: wpisz przedział, wybierz od jednej do trzech kategorii, a potem wybierz „Oszacuj kredyty”.",
+        "loading": "Obliczanie Twoich kredytów…",
+        "creditsLabel": "Kredyty miesięcznie",
+        "estimateCaveat": "To szacunek dla wpisanego przedziału: kredyty wracają jako przedział, nigdy jako jedna dokładna liczba.",
+        "perOrg": "Jeden plan dla całej organizacji — jego kredyty są wspólne dla wszystkich.",
+        "planLabel": "Pasujący plan",
+        "topupLabel": "Szacowane doładowanie",
+        "topupOnly": "Doładowanie pokrywa ten przedział, więc zmiana planu nie jest potrzebna.",
+        "largerPoolLabel": "Większa pula kredytów",
+        "largerPlan": "Twój szacunek przekracza nasz największy zwykły plan, więc odpowiedzią jest większa pula kredytów dopasowana do niego: {plan}.",
+        "largerPlanEstimate": "Pula i jej cena są obliczane z Twojego szacunku, więc obie są szacunkiem — dokładne kwoty są potwierdzane, zanim cokolwiek zostanie pobrane.",
+        "aboveTopRung": "To więcej niż {ceiling} kredytów miesięcznie w największym zwykłym planie, a większa pula nie jest teraz dostępna, więc nadwyżkę pokrywają doładowania kredytów.",
+        "upgradeNote": "Zmiana na wyższy plan w trakcie okresu jest wyceniana za pozostałe dni. Widok planów pokazuje kwotę, zanim cokolwiek zostanie pobrane.",
+        "goToPlan": "Przejdź do tego planu"
+      },
+      "seat": {
+        "included": "{count, plural, one {Każdy plan AI zawiera # stanowisko Motir bez dodatkowej opłaty.} few {Każdy plan AI zawiera # stanowiska Motir bez dodatkowej opłaty.} many {Każdy plan AI zawiera # stanowisk Motir bez dodatkowej opłaty.} other {Każdy plan AI zawiera # stanowiska Motir bez dodatkowej opłaty.}}",
+        "feePerUserMonthly": "Dodatkowe stanowiska: ${price} za użytkownika miesięcznie.",
+        "feePerUserAnnual": "Dodatkowe stanowiska: ${price} za użytkownika rocznie.",
+        "noPlan": "Wliczone stanowisko wchodzi w skład planu AI. Bez planu AI każde stanowisko jest rozliczane za użytkownika."
+      },
+      "errors": {
+        "rangeEmpty": "Wpisz, ile elementów roboczych Twoja organizacja kończy w miesiącu.",
+        "rangeInvalid": "Wpisz liczby całkowite — ułamki i liczby ujemne nie są akceptowane.",
+        "rangeOrder": "Dolna granica musi być równa górnej lub niższa od niej.",
+        "categoryMissing": "Wybierz co najmniej jedną kategorię modeli.",
+        "tooManyCategories": "Wybierz najwyżej trzy kategorie modeli.",
+        "unavailable": "Teraz nie możemy oszacować. Nic nie zostało obliczone — spróbuj ponownie.",
+        "failed": "Szacunek nie wrócił. Nic się nie zmieniło — spróbuj ponownie."
+      }
+    },
     "seats": {
       "breadcrumb": "Organizacja · {org} · Motir",
       "title": "Skaluj Motir",

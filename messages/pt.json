@@ -6642,6 +6642,62 @@
       "rate": "${unit} por {credits} créditos · uma única vez · impostos no checkout. Créditos são uma cota, não uma moeda — este é o preço que você paga ao Stripe.",
       "gate": "As recargas estão disponíveis em um plano de IA pago; o teste gratuito não permite recargas (escolha um plano acima primeiro). Apenas o proprietário e os administradores, como em toda ação de faturamento."
     },
+    "calculator": {
+      "breadcrumb": "Organização · {org} · Calculadora",
+      "title": "Estime seu uso",
+      "subtitle": "Quantos itens de trabalho sua organização conclui por mês e quais categorias de modelos ela usa. A Motir estima os créditos e o plano ideal — o resultado é uma estimativa, e nada aqui altera sua assinatura.",
+      "back": "Voltar aos planos",
+      "open": "Estime seu uso",
+      "inputs": {
+        "rangeLabel": "Itens de trabalho concluídos por mês",
+        "rangeHelp": "Um intervalo basta — o mínimo e o máximo de um mês normal.",
+        "lowLabel": "Mínimo",
+        "highLabel": "Máximo",
+        "categoriesLabel": "Categorias de modelos que sua organização usa",
+        "categoriesHelp": "Escolha de uma a três. A estimativa é dividida igualmente entre as que você escolher, e você nunca escolhe um modelo — cada categoria mostra, como exemplo, os modelos que oferece.",
+        "categoryExamples": "Por exemplo: {models}",
+        "submit": "Estimar créditos"
+      },
+      "categories": {
+        "failed": "Não foi possível carregar as categorias de modelos.",
+        "empty": "Esta categoria não tem nenhum modelo no momento, então não pode ser escolhida."
+      },
+      "split": {
+        "one": "Uma categoria só, então toda a estimativa fica em {category}.",
+        "even": "Dividida igualmente entre {categories} — {shares} cada."
+      },
+      "result": {
+        "idle": "Nada é estimado até você pedir: informe o intervalo, escolha de uma a três categorias e depois selecione «Estimar créditos».",
+        "loading": "Calculando seus créditos…",
+        "creditsLabel": "Créditos por mês",
+        "estimateCaveat": "Esta é uma estimativa para o intervalo informado: os créditos voltam como um intervalo, nunca como um número exato.",
+        "perOrg": "Um plano para toda a organização — seus créditos são compartilhados por todos.",
+        "planLabel": "O plano ideal",
+        "topupLabel": "Recarga estimada",
+        "topupOnly": "Uma recarga cobre este intervalo, então não é preciso trocar de plano.",
+        "largerPoolLabel": "Pool de créditos maior",
+        "largerPlan": "Sua estimativa passa do nosso maior plano regular, então a resposta é um pool de créditos maior, dimensionado para ela: {plan}.",
+        "largerPlanEstimate": "O pool e o preço são calculados a partir da sua estimativa, então ambos são uma estimativa — os valores exatos são confirmados antes de qualquer cobrança.",
+        "aboveTopRung": "Isso passa dos {ceiling} créditos por mês do maior plano regular, e não há um pool maior disponível no momento, então o excedente é coberto com recargas de créditos.",
+        "upgradeNote": "Fazer upgrade no meio do período é cobrado pelos dias restantes. A tela de planos mostra o valor antes de qualquer cobrança.",
+        "goToPlan": "Ir para este plano"
+      },
+      "seat": {
+        "included": "{count, plural, one {Todo plano de IA inclui # licença da Motir sem custo.} other {Todo plano de IA inclui # licenças da Motir sem custo.}}",
+        "feePerUserMonthly": "Licenças adicionais: ${price} por usuário, por mês.",
+        "feePerUserAnnual": "Licenças adicionais: ${price} por usuário, por ano.",
+        "noPlan": "A licença incluída vem com um plano de IA. Sem um plano de IA, cada licença é cobrada por usuário."
+      },
+      "errors": {
+        "rangeEmpty": "Informe quantos itens de trabalho sua organização conclui por mês.",
+        "rangeInvalid": "Informe números inteiros — decimais e números negativos não são aceitos.",
+        "rangeOrder": "O mínimo precisa ser menor ou igual ao máximo.",
+        "categoryMissing": "Escolha pelo menos uma categoria de modelos.",
+        "tooManyCategories": "Escolha no máximo três categorias de modelos.",
+        "unavailable": "Não conseguimos estimar agora. Nada foi calculado — tente de novo.",
+        "failed": "A estimativa não voltou. Nada mudou — tente de novo."
+      }
+    },
     "seats": {
       "breadcrumb": "Organização · {org} · Motir",
       "title": "Escalar o Motir",

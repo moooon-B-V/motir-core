@@ -6642,6 +6642,62 @@
       "rate": "${unit} pro {credits} Credits · einmalig · zzgl. Steuern beim Bezahlen. Credits sind ein Kontingent, keine Währung – dies ist der Preis, den Sie an Stripe zahlen.",
       "gate": "Aufladungen sind mit einem kostenpflichtigen AI-Plan verfügbar; die kostenlose Testphase kann nicht aufgeladen werden (wählen Sie zuerst oben einen Plan). Wie jede Abrechnungsaktion nur für Inhaber und Admins."
     },
+    "calculator": {
+      "breadcrumb": "Organisation · {org} · Rechner",
+      "title": "Nutzung schätzen",
+      "subtitle": "Wie viele Arbeitselemente Ihre Organisation im Monat abschließt und welche Modellkategorien sie nutzt. Motir schätzt die nötigen Credits und den passenden Plan – das Ergebnis ist eine Schätzung, und hier ändert sich nichts an Ihrem Abonnement.",
+      "back": "Zurück zu den Plänen",
+      "open": "Nutzung schätzen",
+      "inputs": {
+        "rangeLabel": "Abgeschlossene Arbeitselemente pro Monat",
+        "rangeHelp": "Ein Bereich genügt – die untere und die obere Grenze eines normalen Monats.",
+        "lowLabel": "Von",
+        "highLabel": "Bis",
+        "categoriesLabel": "Modellkategorien, die Ihre Organisation nutzt",
+        "categoriesHelp": "Wählen Sie eine bis drei. Die Schätzung wird gleichmäßig auf Ihre Auswahl verteilt, und ein Modell wählen Sie nie selbst aus – jede Kategorie zeigt die Modelle, die sie abdeckt, als Beispiele.",
+        "categoryExamples": "Zum Beispiel: {models}",
+        "submit": "Credits schätzen"
+      },
+      "categories": {
+        "failed": "Die Modellkategorien konnten nicht geladen werden.",
+        "empty": "In dieser Kategorie ist derzeit kein Modell verfügbar, daher kann sie nicht ausgewählt werden."
+      },
+      "split": {
+        "one": "Eine Kategorie, daher entfällt die gesamte Schätzung auf {category}.",
+        "even": "Gleichmäßig auf {categories} verteilt – je {shares}."
+      },
+      "result": {
+        "idle": "Es wird erst geschätzt, wenn Sie es anfordern: Geben Sie den Bereich ein, wählen Sie eine bis drei Kategorien und wählen Sie dann „Credits schätzen“.",
+        "loading": "Ihre Credits werden berechnet…",
+        "creditsLabel": "Credits pro Monat",
+        "estimateCaveat": "Dies ist eine Schätzung für den eingegebenen Bereich: Die Credits kommen als Bereich zurück, nie als eine genaue Zahl.",
+        "perOrg": "Ein Plan für die ganze Organisation – die Credits werden von allen gemeinsam genutzt.",
+        "planLabel": "Der passende Plan",
+        "topupLabel": "Geschätzte Aufladung",
+        "topupOnly": "Eine Aufladung deckt diesen Bereich ab, ein Planwechsel ist nicht nötig.",
+        "largerPoolLabel": "Größerer Credit-Pool",
+        "largerPlan": "Ihre Schätzung liegt über unserem größten regulären Plan, daher lautet die Antwort ein größerer, darauf zugeschnittener Credit-Pool: {plan}.",
+        "largerPlanEstimate": "Der Pool und sein Preis werden aus Ihrer Schätzung errechnet, daher sind beide eine Schätzung – die genauen Beträge werden bestätigt, bevor etwas berechnet wird.",
+        "aboveTopRung": "Das sind mehr als die {ceiling} Credits pro Monat des größten regulären Plans, und derzeit ist kein größerer Pool verfügbar, daher wird der Überschuss durch Credit-Aufladungen gedeckt.",
+        "upgradeNote": "Ein Upgrade mitten im Zeitraum wird für die verbleibenden Tage berechnet. Die Plan-Ansicht zeigt den Betrag, bevor etwas berechnet wird.",
+        "goToPlan": "Zu diesem Plan"
+      },
+      "seat": {
+        "included": "{count, plural, one {Jeder KI-Plan enthält # Motir-Platz ohne Aufpreis.} other {Jeder KI-Plan enthält # Motir-Plätze ohne Aufpreis.}}",
+        "feePerUserMonthly": "Weitere Plätze: ${price} pro Nutzer und Monat.",
+        "feePerUserAnnual": "Weitere Plätze: ${price} pro Nutzer und Jahr.",
+        "noPlan": "Der enthaltene Platz gehört zu einem KI-Plan. Ohne KI-Plan wird jeder Platz pro Nutzer abgerechnet."
+      },
+      "errors": {
+        "rangeEmpty": "Geben Sie ein, wie viele Arbeitselemente Ihre Organisation im Monat abschließt.",
+        "rangeInvalid": "Geben Sie ganze Zahlen ein – Dezimalzahlen und negative Zahlen werden nicht akzeptiert.",
+        "rangeOrder": "Die untere Grenze darf nicht über der oberen liegen.",
+        "categoryMissing": "Wählen Sie mindestens eine Modellkategorie.",
+        "tooManyCategories": "Wählen Sie höchstens drei Modellkategorien.",
+        "unavailable": "Derzeit ist keine Schätzung möglich. Es wurde nichts berechnet – versuchen Sie es erneut.",
+        "failed": "Die Schätzung ist nicht angekommen. Es wurde nichts geändert – versuchen Sie es erneut."
+      }
+    },
     "seats": {
       "breadcrumb": "Organisation · {org} · Motir",
       "title": "Motir skalieren",

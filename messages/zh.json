@@ -6636,6 +6636,62 @@
       "rate": "每 {credits} 额度 ${unit} · 一次性 · 结账时计税。额度是配额而非货币 —— 这是你向 Stripe 支付的价格。",
       "gate": "加购额度需付费 AI 套餐；免费试用无法加购（请先在上方选择套餐）。与所有账单操作一样，仅限所有者和管理员。"
     },
+    "calculator": {
+      "breadcrumb": "组织 · {org} · 计算器",
+      "title": "估算用量",
+      "subtitle": "你的组织每月完成多少工作项，以及使用哪几类模型。Motir 估算所需的积分和合适的套餐 —— 结果只是估算，这里也不会更改你的订阅。",
+      "back": "返回套餐",
+      "open": "估算用量",
+      "inputs": {
+        "rangeLabel": "每月完成的工作项",
+        "rangeHelp": "填一个区间即可 —— 平常月份的下限与上限。",
+        "lowLabel": "下限",
+        "highLabel": "上限",
+        "categoriesLabel": "你的组织使用的模型类别",
+        "categoriesHelp": "选择一到三类。估算会在你选中的类别之间平均分摊；无需选择模型 —— 每个类别下列出的是它所服务的示例模型。",
+        "categoryExamples": "例如：{models}",
+        "submit": "估算积分"
+      },
+      "categories": {
+        "failed": "无法加载模型类别。",
+        "empty": "该类目前没有可用模型，无法选择。"
+      },
+      "split": {
+        "one": "只选了一类，全部估算都落在 {category} 上。",
+        "even": "在 {categories} 之间平均分摊 —— 各占 {shares}。"
+      },
+      "result": {
+        "idle": "在你发起估算之前不会计算任何内容：填写区间、选择一到三个类别，然后选择「估算积分」。",
+        "loading": "正在计算积分…",
+        "creditsLabel": "每月积分",
+        "estimateCaveat": "这是按你填写的区间得出的估算：积分以区间给出，而不是一个精确数字。",
+        "perOrg": "整个组织共用一个套餐 —— 积分由全员共享。",
+        "planLabel": "适合的套餐",
+        "topupLabel": "预计需要的加购额度",
+        "topupOnly": "这个区间用加购额度即可覆盖，无需更换套餐。",
+        "largerPoolLabel": "更大的积分池",
+        "largerPlan": "你的估算超过了最大的常规套餐，因此给出的方案是按估算定制的更大积分池：{plan}。",
+        "largerPlanEstimate": "积分池和价格都由你的估算算出，因此两者都是估算 —— 具体金额在扣费前会再次确认。",
+        "aboveTopRung": "这超过了最大常规套餐每月 {ceiling} 积分，而目前没有更大的积分池，超出部分通过加购额度补足。",
+        "upgradeNote": "期中升级按本周期剩余天数计价。扣费之前，套餐页面会显示具体金额。",
+        "goToPlan": "前往该套餐"
+      },
+      "seat": {
+        "included": "{count, plural, other {每个 AI 套餐都包含 # 个 Motir 席位，不额外收费。}}",
+        "feePerUserMonthly": "更多席位：每位用户每月 ${price}。",
+        "feePerUserAnnual": "更多席位：每位用户每年 ${price}。",
+        "noPlan": "包含的席位随 AI 套餐提供。若没有 AI 套餐，则每个席位都按用户计费。"
+      },
+      "errors": {
+        "rangeEmpty": "请填写你的组织每月完成的工作项数量。",
+        "rangeInvalid": "请填写整数的工作项数量 —— 不接受小数或负数。",
+        "rangeOrder": "下限不能高于上限。",
+        "categoryMissing": "请至少选择一类模型。",
+        "tooManyCategories": "最多选择三类模型。",
+        "unavailable": "目前无法估算。没有产生任何结果 —— 请重试。",
+        "failed": "没有收到估算结果。没有任何改动 —— 请重试。"
+      }
+    },
     "seats": {
       "breadcrumb": "组织 · {org} · Motir",
       "title": "扩容 Motir",
