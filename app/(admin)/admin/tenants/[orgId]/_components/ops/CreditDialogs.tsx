@@ -224,22 +224,25 @@ export function ChangePlanDialog({
   const [pending, startTransition] = useTransition();
 
   // The plan ladder the storefront sells (`BILLING_CATALOG`) — the same keys as
-  // motir-ai's `PlanTier`; motir-ai refuses a key it does not know (REJECTED).
-  const options: ComboboxOption<string>[] = BILLING_CATALOG.aiPlans.map((plan) => ({
-    value: plan.key,
-    label: plan.name,
-    secondary: !plan.allotment
-      ? t('plan.allotmentCustom', { name: plan.name })
-      : plan.allotment.cadence === 'monthly'
-        ? t('plan.allotmentMonthly', {
-            name: plan.name,
-            credits: format.number(plan.allotment.credits),
-          })
-        : t('plan.allotmentOnce', {
-            name: plan.name,
-            credits: format.number(plan.allotment.credits),
-          }),
-  }));
+  // motir-ai's `PlanTier`; motir-ai refuses a key it does not know (REJECTED). The
+  // regular ladder only: a larger pool is bought from an estimate, never staff-set.
+  const options: ComboboxOption<string>[] = BILLING_CATALOG.aiPlans
+    .filter((plan) => plan.band === 'ladder')
+    .map((plan) => ({
+      value: plan.key,
+      label: plan.name,
+      secondary: !plan.allotment
+        ? t('plan.allotmentCustom', { name: plan.name })
+        : plan.allotment.cadence === 'monthly'
+          ? t('plan.allotmentMonthly', {
+              name: plan.name,
+              credits: format.number(plan.allotment.credits),
+            })
+          : t('plan.allotmentOnce', {
+              name: plan.name,
+              credits: format.number(plan.allotment.credits),
+            }),
+    }));
   const chosen = BILLING_CATALOG.aiPlans.find((p) => p.key === tierKey) ?? null;
 
   return (

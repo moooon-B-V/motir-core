@@ -1572,7 +1572,9 @@ function PlansView({
   // The cards are the PAID plans (MOTIR-7598): Free is not a plan to choose but
   // the one-time trial grant, said in the strip above the row, and a price-less
   // plan has no card (Enterprise is gone — MOTIR-7592).
-  const paidPlans = aiPlans.filter((p) => p.key !== 'free' && p.prices);
+  // The standing rungs only: a larger pool is offered from an estimate, never in the
+  // row (MOTIR-8990; MOTIR-8997 replaces this with the estimate-conditional filter).
+  const paidPlans = aiPlans.filter((p) => p.key !== 'free' && p.prices && p.band !== 'larger_pool');
   // The org is on the one-time trial: its tier is the catalog's `free` grant and
   // it holds no paid plan. The strip reads the same balance and grant the home
   // line's meter reads.

@@ -531,6 +531,20 @@ describe('BillingClient', () => {
     expect(screen.getByText('Everything in Standard, plus')).toBeTruthy();
   });
 
+  it('the plan row keeps the four standing rungs while the larger pools sit in the catalog (MOTIR-8990)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(activeStandard()), { status: 200 })),
+    );
+    renderClient();
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+    await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+    expect(BILLING_CATALOG.aiPlans.some((p) => p.band === 'larger_pool')).toBe(true);
+    expect(screen.getAllByText('+ 1 Motir seat · work items uncapped')).toHaveLength(4);
+    expect(screen.queryByText(/Pool \d/)).toBeNull();
+  });
+
   // MOTIR-5274 — the allotment line states the grant's CADENCE, read off the
   // catalog entry, never off the tier key: a later tier with a one-time grant
   // must render the one-time form without anyone remembering to special-case it.
@@ -542,7 +556,10 @@ describe('BillingClient', () => {
 
     // Only the paid plans are cards (MOTIR-7598): the one-time grant is the
     // trial, never a card, so its one-time form appears nowhere in the row.
-    const withAllotment = BILLING_CATALOG.aiPlans.filter((p) => p.allotment && p.prices);
+    // The standing rungs: a larger pool is never a card in the row (MOTIR-8990).
+    const withAllotment = BILLING_CATALOG.aiPlans.filter(
+      (p) => p.allotment && p.prices && p.band === 'ladder',
+    );
     expect(withAllotment.some((p) => p.allotment!.cadence === 'monthly')).toBe(true);
     const oneTime = BILLING_CATALOG.aiPlans.find((p) => p.allotment?.cadence === 'one_time')!;
     expect(

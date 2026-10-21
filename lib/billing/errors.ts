@@ -87,6 +87,28 @@ export class InvalidBillingQuantityError extends Error {
   }
 }
 
+/**
+ * Checkout was asked for a larger pool at a size the regular ladder already covers
+ * — a rung-shaped key (`pool_<N>k_pool_<cadence>`) naming a pool at or below the
+ * ladder's top (MOTIR-8990). Maps to 400, refused before the boundary like its two
+ * siblings above, but with its own code so the owner is told the ladder covers it
+ * rather than that the price is unknown. `requestedCredits` / `ceilingCredits` are
+ * for logs; the owner-facing sentence takes no arguments.
+ */
+export class LargerPoolAtOrBelowCeilingError extends Error {
+  readonly code = 'BILLING_POOL_AT_OR_BELOW_CEILING';
+  readonly requestedCredits: number;
+  readonly ceilingCredits: number;
+  constructor(priceLookupKey: string, requestedCredits: number, ceilingCredits: number) {
+    super(
+      `${priceLookupKey} names a pool of ${requestedCredits} credits, at or below the ladder's top of ${ceilingCredits}.`,
+    );
+    this.name = 'LargerPoolAtOrBelowCeilingError';
+    this.requestedCredits = requestedCredits;
+    this.ceilingCredits = ceilingCredits;
+  }
+}
+
 // ── The §4 entitlement-cap surface (Story 8.1.11) error ────────────────────
 
 /**
