@@ -1198,7 +1198,7 @@ describe('BillingClient — the Agents line', () => {
     };
 
     function stubCalculator() {
-      const fetchMock = vi.fn(async (url: string) => {
+      const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
         if (url.endsWith('/calculator/categories')) {
           return new Response(JSON.stringify(calcCategories), { status: 200 });
         }

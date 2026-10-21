@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render, enMessages } from '../helpers/renderWithIntl';
 import { BILLING_CATALOG, INCLUDED_TRACKER_SEATS_PER_AI_PLAN } from '@/lib/billing/catalog';
@@ -117,9 +117,9 @@ function status(over: { tierKey?: string; active?: boolean } = {}): BillingStatu
 }
 
 interface Handles {
-  back: ReturnType<typeof vi.fn>;
-  goToPlan: ReturnType<typeof vi.fn>;
-  onCadence: ReturnType<typeof vi.fn>;
+  back: Mock<() => void>;
+  goToPlan: Mock<(planKey: string | null) => void>;
+  onCadence: Mock<(cadence: BillingCadence) => void>;
 }
 
 function renderView(
@@ -129,7 +129,11 @@ function renderView(
     messages?: Record<string, unknown>;
   } = {},
 ): Handles {
-  const handles: Handles = { back: vi.fn(), goToPlan: vi.fn(), onCadence: vi.fn() };
+  const handles: Handles = {
+    back: vi.fn<() => void>(),
+    goToPlan: vi.fn<(planKey: string | null) => void>(),
+    onCadence: vi.fn<(cadence: BillingCadence) => void>(),
+  };
   render(
     <CalculatorView
       orgId="org1"
