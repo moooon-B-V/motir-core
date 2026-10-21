@@ -7885,7 +7885,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "De run was afgelopen voordat je antwoord aankwam.",
             "generic": "Je antwoord heeft de run niet bereikt."
-          }
+          },
+          "waitingResume": "Wacht tot je de code hebt gecontroleerd en doorgaat."
         },
         "answeringMarker": "Antwoord terzijde — de run gaat gewoon door.",
         "answeredAside": "Terzijde beantwoord — er is niets naar de run gestuurd.",
@@ -7948,6 +7949,41 @@
       "planBody": "Ik kan je code nu niet lezen, dus ik heb je plan niet gewijzigd. Motir is ermee bezig.",
       "planMarker": "Er is niets geschreven — je plan is ongewijzigd.",
       "askNotice": "Ik kon je code voor dit antwoord niet lezen. Beschouw alles wat hier over de code staat als onbevestigd."
+    },
+    "codeUnsearchable": {
+      "title": "Planning gepauzeerd: Motir kan je code nog niet doorzoeken",
+      "introWalk": "Plannen zonder de code te doorzoeken zou gokken zijn, dus Motir is hier gestopt. Los het onderstaande repository op en ga dan door.",
+      "introConversation": "Plannen zonder de code te doorzoeken zou gokken zijn, dus er is niets gepland. Los het onderstaande repository op en stuur daarna een bericht om het opnieuw te proberen.",
+      "listLabel": "Repositories die niet doorzocht kunnen worden",
+      "resume": "Opnieuw controleren en doorgaan",
+      "stillBlocked": "Zojuist gecontroleerd: {repo} kan nog steeds niet worden doorzocht. De status is nu {state}.",
+      "keptRecord": "Behouden zoals tot nu toe voorgesteld — {count, plural, one {# werkitem} other {# werkitems}}. Er wordt niets meer toegevoegd tot de planning doorgaat.",
+      "states": {
+        "never_indexed": {
+          "chip": "Nooit geïndexeerd",
+          "line": "Er is er nog niets van geïndexeerd."
+        },
+        "indexing": {
+          "chip": "Indexeren bezig",
+          "line": "De eerste index wordt nog gebouwd, dus er is nog geen code om te doorzoeken."
+        },
+        "refresh_failing": {
+          "chip": "Indexeren blijft mislukken",
+          "line": "De laatste pogingen om te indexeren zijn mislukt."
+        },
+        "paused": {
+          "chip": "Indexeren gepauzeerd",
+          "line": "Indexeren is gepauzeerd voor dit project."
+        },
+        "provider_unsupported": {
+          "chip": "Host niet ondersteund",
+          "line": "Motir kan repositories op deze host niet indexeren."
+        },
+        "unavailable": {
+          "chip": "Code doorzoeken niet beschikbaar",
+          "line": "De code kon zojuist niet worden gelezen."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Werkitems",

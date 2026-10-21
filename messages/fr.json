@@ -7885,7 +7885,8 @@
           "refusal": {
             "PLAN_CHANGE_JOB_NOT_RUNNING": "L’exécution s’est terminée avant que votre réponse ne lui parvienne.",
             "generic": "Votre réponse n’est pas parvenue à l’exécution."
-          }
+          },
+          "waitingResume": "En attente de votre vérification du code pour continuer."
         },
         "answeringMarker": "Réponse en aparté — l’exécution continue.",
         "answeredAside": "Répondu en aparté — rien n’a été envoyé à l’exécution.",
@@ -7948,6 +7949,41 @@
       "planBody": "Je ne peux pas lire votre code pour le moment, donc je n'ai pas modifié votre plan. Motir s'en occupe.",
       "planMarker": "Rien n'a été écrit — votre plan est inchangé.",
       "askNotice": "Je n'ai pas pu lire votre code pour cette réponse. Considérez tout ce qui concerne le code ici comme non confirmé."
+    },
+    "codeUnsearchable": {
+      "title": "Planification suspendue : Motir ne peut pas encore explorer votre code",
+      "introWalk": "Planifier sans explorer le code reviendrait à deviner, donc Motir s’est arrêté ici. Corrigez le dépôt ci-dessous, puis continuez.",
+      "introConversation": "Planifier sans explorer le code reviendrait à deviner, donc rien n’a été planifié. Corrigez le dépôt ci-dessous, puis envoyez un message pour réessayer.",
+      "listLabel": "Dépôts impossibles à explorer",
+      "resume": "Vérifier à nouveau et continuer",
+      "stillBlocked": "Vérifié à l’instant : {repo} reste inexplorable. Son état est maintenant {state}.",
+      "keptRecord": "Conservé tel que proposé jusqu’ici — {count, plural, one {# élément de travail} other {# éléments de travail}}. Rien n’est ajouté tant que la planification ne reprend pas.",
+      "states": {
+        "never_indexed": {
+          "chip": "Jamais indexé",
+          "line": "Rien n’a encore été indexé pour lui."
+        },
+        "indexing": {
+          "chip": "Indexation en cours",
+          "line": "Le premier index est encore en cours, il n’y a donc pas encore de code à explorer."
+        },
+        "refresh_failing": {
+          "chip": "L’indexation échoue sans cesse",
+          "line": "Les dernières tentatives d’indexation ont échoué."
+        },
+        "paused": {
+          "chip": "Indexation en pause",
+          "line": "L’indexation est en pause pour ce projet."
+        },
+        "provider_unsupported": {
+          "chip": "Hôte non pris en charge",
+          "line": "Motir ne peut pas indexer les dépôts sur cet hôte."
+        },
+        "unavailable": {
+          "chip": "Exploration du code indisponible",
+          "line": "Le code n’a pas pu être lu à l’instant."
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Éléments de travail",
