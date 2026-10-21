@@ -204,6 +204,7 @@ export default defineConfig({
       // Story MOTIR-7567 (link a page and a work item by hand): the write
       // path (MOTIR-9197), the page-side read (MOTIR-9198) and the link
       // search (MOTIR-9204); `pagesService.linkSearch` is matched above.
+      'tests/pages/pageWorkItemLinkRepository.manual.test.ts',
       'tests/services/pageLinksService.write.test.ts',
       'tests/services/pageLinksService.pageWorkItems.test.ts',
       'tests/api/workItemsPagesWrite.test.ts',

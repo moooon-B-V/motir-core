@@ -10,9 +10,11 @@ import type { PageLinkCandidatesDto } from '@/lib/dto/pages';
 
 const search = vi.fn();
 const ctxRef = { current: { userId: 'u1', workspaceId: 'w1' } as unknown };
+const gateRef = { current: null as Record<string, unknown> | null };
 
 vi.mock('@/lib/auth/requireCompliantSession', () => ({
-  requireCompliantWorkspaceContext: async () => ({ ok: true, ctx: ctxRef.current }),
+  requireCompliantWorkspaceContext: async () =>
+    gateRef.current ?? { ok: true, ctx: ctxRef.current },
 }));
 vi.mock('@/lib/services/pagesService', () => ({
   pagesService: { searchPagesForLink: (...args: unknown[]) => search(...args) },
@@ -27,6 +29,7 @@ function call(params: Record<string, string>): Promise<Response> {
 }
 
 beforeEach(() => {
+  gateRef.current = null;
   search.mockReset();
 });
 
@@ -72,6 +75,17 @@ describe('GET /api/pages/link-search', () => {
     expect((await call({ projectId: 'proj', q: 'road' })).status).toBe(403);
     search.mockRejectedValueOnce(new ProjectAccessDeniedError('proj', 'browse'));
     expect((await call({ projectId: 'proj', q: 'road' })).status).toBe(404);
+  });
+
+  it("answers the session gate's own response without calling the service", async () => {
+    gateRef.current = { ok: false, response: new Response(null, { status: 401 }) };
+    expect((await call({ projectId: 'proj', q: 'road' })).status).toBe(401);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('400 BAD_REQUEST when `q` is absent altogether', async () => {
+    expect((await call({ projectId: 'proj' })).status).toBe(400);
+    expect(search).not.toHaveBeenCalled();
   });
 
   it('400 PAGE_CURSOR_INVALID for a cursor the service refuses', async () => {

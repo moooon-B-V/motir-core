@@ -14,8 +14,9 @@ const link = vi.fn();
 const unlink = vi.fn();
 const CTX = { userId: 'u1', workspaceId: 'w1' };
 
+const gateRef = { current: { ok: true, ctx: CTX } as Record<string, unknown> };
 vi.mock('@/lib/auth/requireCompliantSession', () => ({
-  requireCompliantWorkspaceContext: async () => ({ ok: true, ctx: CTX }),
+  requireCompliantWorkspaceContext: async () => gateRef.current,
 }));
 vi.mock('@/lib/services/pageLinksService', () => ({
   pageLinksService: {
@@ -41,6 +42,7 @@ const del = () =>
   });
 
 beforeEach(() => {
+  gateRef.current = { ok: true, ctx: CTX };
   link.mockReset();
   unlink.mockReset();
 });
@@ -91,6 +93,12 @@ describe('POST /api/work-items/[id]/pages', () => {
 });
 
 describe('DELETE /api/work-items/[id]/pages/[pageId]', () => {
+  it("answers the session gate's own response without calling the service", async () => {
+    gateRef.current = { ok: false, response: new Response(null, { status: 401 }) };
+    expect((await del()).status).toBe(401);
+    expect(unlink).not.toHaveBeenCalled();
+  });
+
   it('204 with no body', async () => {
     unlink.mockResolvedValue({ pageId: 'p1', workItemId: 'w1', source: 'manual' });
     const res = await del();
