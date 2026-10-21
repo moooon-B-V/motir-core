@@ -139,7 +139,7 @@ export const WorkItemEmbed = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'div[data-type="workItemEmbed"]',
+        tag: 'div[data-type="workItemEmbed"][data-work-item-id]',
         getAttrs: (element) =>
           embedAttrs(`motir:${(element as HTMLElement).dataset.workItemId}`, element),
       },
