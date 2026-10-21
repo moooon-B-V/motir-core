@@ -8,6 +8,7 @@ import {
   PermissionDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
@@ -126,7 +127,13 @@ export default async function CodePage({
   // joins each row's freshness from the ONE derivation — so two projects in one
   // workspace with different sets render different lists, which is the property
   // the whole section exists to have.
-  const codeContext = await resolveCodeContextState(ctx.projectId, svcCtx);
+  //
+  // The `ai:configure` check rides the SAME wave: it needs only the project, so
+  // it must not add a serial read to the page's chain (MOTIR-3449's ratchet).
+  const [codeContext, held] = await allSettledOrThrow([
+    resolveCodeContextState(ctx.projectId, svcCtx),
+    projectAccessService.getPermissions(ctx.projectId, svcCtx),
+  ]);
   const repoRefs = codeContext.repos.map((repo) => repo.repoRef);
 
   let audits: RepoAuditSurfaceDTO[] = [];
@@ -140,9 +147,7 @@ export default async function CodePage({
   // Does the reader hold the WRITE key? Resolved here so the island can hide the
   // editor and the re-audit controls (MOTIR-2258: hide what the actor cannot
   // reach); the write routes refuse a caller without it regardless.
-  const canConfigure = (await projectAccessService.getPermissions(ctx.projectId, svcCtx)).has(
-    'ai:configure',
-  );
+  const canConfigure = held.has('ai:configure');
 
   if (repoRefs.length > 0) {
     try {
