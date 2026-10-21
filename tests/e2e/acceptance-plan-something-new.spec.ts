@@ -5,18 +5,13 @@
 // head; pressing it asks first, and *Keep planning* changes nothing. Pressing it
 // again and confirming closes the session, gives the card back, and opens a new
 // empty session in place — the overlay never closes. On the project thread the
-// person's WORDS do the same: the classifier reads "plan something new", the same
-// confirm appears, and Confirm opens another new session. Plans then reads both
-// earlier sessions as Closed, with the line that says why.
+// person's WORDS are ANSWERED like any turn (AMENDMENT 5 · MOTIR-9231) and write no
+// confirm; the control there raises it, and Confirm opens another new session.
+// Plans then reads both earlier sessions as Closed, with the line that says why.
 //
 // Runs under playwright.acceptance.config.ts (MOTIR_CLOUD + video: 'on'), where
 // the motir-ai JOBS boundary is mocked UNDER the routes (`lib/test-ai-jobs-mock.ts`).
-// The project thread's second ask job is DECLARED `new_session` in the fixture, so
-// the settle writes the confirm turn exactly as a real classifier verdict would.
-//
-// ⚠️ The WORDS path runs on the project thread, not the card: a card's own thread
-// sends through `/api/work-items/[key]/ai/plan`, which has no classifier, so only
-// the project thread (`/api/ai/ask`) can read "plan something new" as an intent.
+// The project thread's second ask job answers the words, as motir-ai now does.
 //
 // DETERMINISM (`motir-core/CLAUDE.md` § E2E): every wait is a landmark, a turn's
 // text, a component state or the response of a request the page issued, and every
@@ -58,8 +53,11 @@ const overlayClosed = (url: URL) => !url.searchParams.has('plan');
 
 const JOBS_FIXTURE = process.env['MOTIR_AI_JOBS_FIXTURE_PATH']!;
 
-/** The card's run closes as a plain success; the project thread's first turn is
- *  a question, its second is read as "plan something new". */
+/** What the project thread answers to "plan something new". */
+const WORDS_ANSWER = 'This conversation plans the export card. Plan something new starts another.';
+
+/** The card's run closes as a plain success; the project thread's two turns — a
+ *  question and "plan something new" — are both answered. */
 function declareJobs(): void {
   writeFileSync(
     JOBS_FIXTURE,
@@ -67,7 +65,7 @@ function declareJobs(): void {
       {
         ask: [
           { intent: 'ask', answer: 'Nothing is blocked right now.', citations: [] },
-          { intent: 'new_session', answer: null, citations: [] },
+          { intent: 'ask', answer: WORDS_ANSWER, citations: [] },
         ],
         plan: [{ status: 'succeeded' }],
         submitted: [],
@@ -279,39 +277,48 @@ test('Plan something new closes the session, gives the card back, and opens a ne
     },
   );
 
-  await chapter('On the project thread, the words do the same', async () => {
-    await expect(orb(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    await orb(page).click();
-    await calloutPanel(page)
-      .getByRole('link', { name: /Ask about this project/ })
-      .click();
-    await page.waitForURL(overlayOpen);
-    await expect(workspace(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-    await expect(rail(page)).toBeVisible();
+  await chapter(
+    'On the project thread, the words are answered and the control restarts',
+    async () => {
+      await expect(orb(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await orb(page).click();
+      await calloutPanel(page)
+        .getByRole('link', { name: /Ask about this project/ })
+        .click();
+      await page.waitForURL(overlayOpen);
+      await expect(workspace(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await expect(rail(page)).toBeVisible();
 
-    await askOnProject(page, QUESTION);
-    await expect(rail(page).getByText('Nothing is blocked right now.')).toBeVisible();
-    projectSessionId = (await latestPlanningSession(email)).id;
-    expect(projectSessionId).not.toBe(cardSessionId);
-    await beat();
+      await askOnProject(page, QUESTION);
+      await expect(rail(page).getByText('Nothing is blocked right now.')).toBeVisible();
+      projectSessionId = (await latestPlanningSession(email)).id;
+      expect(projectSessionId).not.toBe(cardSessionId);
+      await beat();
 
-    // The classifier reads "plan something new": the same confirm, nothing closed.
-    await askOnProject(page, WORDS);
-    await expect(confirmTurn(page)).toContainText(restart.confirm.body);
-    expect((await sessionRow(projectSessionId)).endedAt).toBeNull();
-    await beat();
+      // The words are READ and answered: no confirm, nothing closed.
+      await askOnProject(page, WORDS);
+      await expect(rail(page).getByText(WORDS_ANSWER)).toBeVisible();
+      await expect(confirmTurn(page)).toHaveCount(0);
+      expect((await sessionRow(projectSessionId)).endedAt).toBeNull();
+      await beat();
 
-    const swapped = await answer(page, 'confirm');
-    expect(swapped).toMatchObject({ outcome: 'restarted', endedSessionId: projectSessionId });
-    const fresh = (swapped['session'] as { id: string }).id;
-    await expect(earlier(page)).toBeVisible();
-    await expect(rail(page).getByText(QUESTION)).toHaveCount(0);
-    expect(overlayOpen(new URL(page.url()))).toBe(true);
+      // The control is the door to the confirm.
+      await pressControl(page);
+      await expect(confirmTurn(page)).toContainText(restart.confirm.body);
+      await beat();
 
-    expect(await sessionRow(projectSessionId)).toMatchObject({ endReason: 'restarted' });
-    expect(await turnCount(fresh)).toBe(0);
-    await beat();
-  });
+      const swapped = await answer(page, 'confirm');
+      expect(swapped).toMatchObject({ outcome: 'restarted', endedSessionId: projectSessionId });
+      const fresh = (swapped['session'] as { id: string }).id;
+      await expect(earlier(page)).toBeVisible();
+      await expect(rail(page).getByText(QUESTION)).toHaveCount(0);
+      expect(overlayOpen(new URL(page.url()))).toBe(true);
+
+      expect(await sessionRow(projectSessionId)).toMatchObject({ endReason: 'restarted' });
+      expect(await turnCount(fresh)).toBe(0);
+      await beat();
+    },
+  );
 
   await chapter('Plans: both earlier sessions read Closed, and why', async () => {
     await page.goto('/plans');

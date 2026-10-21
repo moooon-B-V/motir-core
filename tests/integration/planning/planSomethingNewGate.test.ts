@@ -25,8 +25,8 @@ import {
 // service → the target locks → the database run for real.
 //
 // `tests/planning/planSessionRestart.test.ts` pins the service seams one by one.
-// This file holds what only the doors together show: the words reaching a
-// confirm with no job behind it, the confirm answered over HTTP, the cards coming
+// This file holds what only the doors together show: the words ANSWERED and
+// writing no confirm (AMENDMENT 5 · MOTIR-9231), the control's confirm answered over HTTP, the cards coming
 // back, the resume read naming the new session, and every refusal as a status.
 
 const session = { current: null as { user: { id: string; email: string; name: string } } | null };
@@ -153,7 +153,9 @@ async function sessionOn(card: { key: string }, f: WorkItemFixture = fx): Promis
 }
 
 /** Say `words` on `sessionId` and settle the `ask_project` job as `new_session`. */
-async function sayNewSession(
+/** Type "plan something new" and settle it ANSWERED — AMENDMENT 5 (MOTIR-9231):
+ *  the words are read like any turn and write no confirm. */
+async function sayPlanSomethingNew(
   sessionId: string,
   words = 'Forget this, I want to plan something new',
 ) {
@@ -162,50 +164,47 @@ async function sayNewSession(
   const { jobId } = (await askRes.json()) as { jobId: string };
   jobs.set(jobId, {
     status: 'succeeded',
-    result: { ask: { intent: 'new_session', answer: null, citations: [] } },
+    result: { ask: { intent: 'ask', answer: 'Here is what this session plans.', citations: [] } },
   });
   return settle(post('/api/ai/ask/settle', { jobId, sessionId }));
+}
+
+/** Press Plan something new — the control, now the only door to the confirm. */
+async function pressPlanSomethingNew(sessionId: string) {
+  const res = await confirm(post('/api/ai/plan-change/session/restart/confirm', { sessionId }));
+  expect(res.status).toBe(200);
+  return res;
 }
 
 const statusOf = async (id: string) =>
   (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 const sessionRow = (id: string) => adminDb.planChangeSession.findUniqueOrThrow({ where: { id } });
 
-describe('the words — a new_session turn', () => {
+describe('the words — answered, never a confirm (AMENDMENT 5 · MOTIR-9231)', () => {
   it(
-    'records ONE user turn with the intent and ONE confirm, and runs no job',
+    'records ONE user turn as an ask and its answer, writes no confirm and ends nothing',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       const card = await seedCard();
       const sessionId = await sessionOn(card);
 
-      const res = await sayNewSession(sessionId);
+      const res = await sayPlanSomethingNew(sessionId);
       expect(res.status).toBe(200);
       const body = (await res.json()) as { outcome: string; session: PlanChangeSessionDto };
-      expect(body.outcome).toBe('confirming');
+      expect(body.outcome).toBe('answered');
 
       const turns = await adminDb.planChangeTurn.findMany({
         where: { sessionId },
         orderBy: { seq: 'asc' },
       });
-      expect(turns.map((t) => [t.role, t.intent, t.confirm, t.question])).toEqual([
-        ['user', 'plan_change', null, null],
-        ['user', 'new_session', null, null],
-        ['assistant', null, 'new_session', null],
+      expect(turns.map((t) => [t.role, t.intent, t.confirm])).toEqual([
+        ['user', 'plan_change', null],
+        ['user', 'ask', null],
+        ['assistant', null, null],
       ]);
-      expect(turns[2]!.body).toBe(NEW_SESSION_CONFIRM_BODY);
-      // The ask_project classification was the ONLY model job.
+      expect(turns.some((t) => t.body === NEW_SESSION_CONFIRM_BODY)).toBe(false);
       expect(submitJobMock).toHaveBeenCalledTimes(1);
       expect(submitJobMock.mock.calls[0]![0]).toBe('ask_project');
-
-      // A replayed settle writes nothing.
-      const jobId = submitJobMock.mock.results[0]!.value as Promise<{ jobId: string }>;
-      const replay = await settle(
-        post('/api/ai/ask/settle', { jobId: (await jobId).jobId, sessionId }),
-      );
-      expect(replay.status).toBe(200);
-      expect(await adminDb.planChangeTurn.count({ where: { sessionId } })).toBe(3);
-      // Nothing ended: the confirm is a question, not the act.
       expect((await sessionRow(sessionId)).endedAt).toBeNull();
       expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
     },
@@ -219,7 +218,7 @@ describe('Confirm — the session ends once, the cards come back, a new session 
     async () => {
       const card = await seedCard();
       const sessionId = await sessionOn(card);
-      await sayNewSession(sessionId);
+      await pressPlanSomethingNew(sessionId);
 
       const res = await restart(
         post('/api/ai/plan-change/session/restart', { sessionId, answer: 'confirm' }),

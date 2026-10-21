@@ -53,7 +53,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 const { POST: ask } = await import('@/app/api/ai/ask/route');
-const { POST: settle } = await import('@/app/api/ai/ask/settle/route');
 
 const BASE = 'http://localhost:3000';
 const post = (path: string, body: unknown) =>
@@ -79,23 +78,18 @@ const CODE: JobPlanningCodeContext = {
   ],
 };
 
-const debugVerdict = {
-  status: 'succeeded',
-  result: { ask: { intent: 'debug', answer: null, citations: [] } },
-};
-
 const submittedKinds = () => submitJobMock.mock.calls.map((c) => c[0]);
 const contextOf = (n: number) => submitJobMock.mock.calls[n]![2] as Record<string, unknown>;
 
-/** Ask, then settle the ask as a `debug` verdict, so BOTH kinds are submitted. */
-async function askThenDebug(text: string) {
+/** Ask, then RETRY the same turn, so the door submits twice — the only job kind a
+ *  conversation turn opens since AMENDMENT 5 (MOTIR-9231) is `ask_project`. */
+async function askThenRetry(text: string) {
   const submitted = (await (await ask(post('/api/ai/ask', { body: text }))).json()) as {
-    jobId: string;
+    turnId: string;
   };
-  getJobMock.mockResolvedValue(debugVerdict);
-  const res = await settle(post('/api/ai/ask/settle', { jobId: submitted.jobId }));
+  const res = await ask(post('/api/ai/ask', { turnId: submitted.turnId }));
   expect(res.status).toBe(200);
-  expect(submittedKinds()).toEqual(['ask_project', 'debug_bug']);
+  expect(submittedKinds()).toEqual(['ask_project', 'ask_project']);
 }
 
 let fx: WorkItemFixture;
@@ -132,9 +126,9 @@ afterAll(async () => {
 });
 
 describe('a conversation job carries the project code context', () => {
-  it('`ask_project` and `debug_bug` both carry `context.code` from the planning producer', async () => {
+  it('the ask and its retry both carry `context.code` from the planning producer', async () => {
     resolvePlanningCodeContextMock.mockResolvedValue(CODE);
-    await askThenDebug('Which service owns the code-graph index fan-out?');
+    await askThenRetry('Which service owns the code-graph index fan-out?');
 
     expect(contextOf(0)).toEqual({
       prompt: 'Which service owns the code-graph index fan-out?',
@@ -155,8 +149,8 @@ describe('a conversation job carries the project code context', () => {
     }
   });
 
-  it('a project with no connected repository OMITS `code` on both kinds — never an empty key', async () => {
-    await askThenDebug('Export hangs');
+  it('a project with no connected repository OMITS `code` on both submits — never an empty key', async () => {
+    await askThenRetry('Export hangs');
 
     for (const n of [0, 1]) {
       expect(contextOf(n)).toEqual({ prompt: 'Export hangs' });
@@ -181,10 +175,10 @@ describe('a conversation job carries the tenant languages', () => {
   const setLocale = (locale: string | null) =>
     adminDb.user.update({ where: { id: fx.ownerId }, data: { locale } });
 
-  it('`ask_project` and `debug_bug` both send the org’s and the asker’s language', async () => {
+  it('the ask and its retry both send the org’s and the asker’s language', async () => {
     await setOrgLanguage('ja');
     await setLocale('ko');
-    await askThenDebug('Export hangs');
+    await askThenRetry('Export hangs');
     for (const n of [0, 1]) {
       expect(languagesOf(n)).toEqual({ contentLanguage: 'ja', personLanguage: 'ko' });
     }
@@ -193,7 +187,7 @@ describe('a conversation job carries the tenant languages', () => {
   it('an asker with no saved language gets the content language, never empty', async () => {
     await setOrgLanguage('de');
     await setLocale(null);
-    await askThenDebug('Export hangs');
+    await askThenRetry('Export hangs');
     for (const n of [0, 1]) {
       expect(languagesOf(n)).toEqual({ contentLanguage: 'de', personLanguage: 'de' });
     }

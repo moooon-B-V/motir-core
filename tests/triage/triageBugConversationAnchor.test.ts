@@ -169,7 +169,7 @@ describe('a triage bug resolves where a conversation anchors', () => {
     expect(byKey.id).toBe(triaged.id);
   });
 
-  it('the ask door takes it as `anchorKey` and forwards it to `ask_project`, then `debug_bug`', async () => {
+  it('the ask door takes it as `anchorKey` and forwards it to `ask_project` — the only job', async () => {
     const submitted = await ask(
       post('/api/ai/ask', { body: 'This is the bug I just filed', anchorKey: triaged.identifier }),
     );
@@ -181,22 +181,19 @@ describe('a triage bug resolves where a conversation anchors', () => {
       anchorKey: triaged.identifier,
     });
 
+    // The turn is ANSWERED (AMENDMENT 5 · MOTIR-9231): no `debug_bug` follows it.
     getJobMock.mockResolvedValue({
       status: 'succeeded',
       result: {
-        ask: { intent: 'debug', answer: null, citations: [], anchorKey: triaged.identifier },
+        ask: { intent: 'ask', answer: 'It is the sanitizer.', citations: [triaged.identifier] },
       },
     });
     const settled = await settle(post('/api/ai/ask/settle', { jobId }));
     expect(settled.status).toBe(200);
-    await expect(settled.json()).resolves.toMatchObject({ outcome: 'debugging' });
-    expect(submitJobMock.mock.calls.map((c) => c[0])).toEqual(['ask_project', 'debug_bug']);
-    expect(submitJobMock.mock.calls[1]![2]).toEqual({
-      prompt: 'This is the bug I just filed',
-      anchorKey: triaged.identifier,
-    });
+    await expect(settled.json()).resolves.toMatchObject({ outcome: 'answered' });
+    expect(submitJobMock.mock.calls.map((c) => c[0])).toEqual(['ask_project']);
 
-    // …and it is still a triage bug: anchoring and debugging promote nothing.
+    // …and it is still a triage bug: anchoring and answering promote nothing.
     const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: triaged.id } });
     expect(row.triagedAt).not.toBeNull();
   });

@@ -71,7 +71,6 @@ import { plansService } from '@/lib/services/plansService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { POST as askPOST } from '@/app/api/ai/ask/route';
-import { POST as settlePOST } from '@/app/api/ai/ask/settle/route';
 import { POST as proposalsPOST } from '@/app/api/internal/ai/plan-proposals/route';
 import { PATCH as proposalPATCH } from '@/app/api/internal/ai/plan-proposals/[itemId]/route';
 import { createIssueAction } from '@/app/(authed)/items/actions';
@@ -212,16 +211,9 @@ const json = (path: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 
-/** Ask, then settle the ask as a `debug` verdict: one `ask_project`, one `debug_bug`. */
-async function askThenDebug(text: string) {
-  const { jobId } = (await (await askPOST(json('/api/ai/ask', { body: text }))).json()) as {
-    jobId: string;
-  };
-  getJobMock.mockResolvedValue({
-    status: 'succeeded',
-    result: { ask: { intent: 'debug', answer: null, citations: [] } },
-  });
-  expect((await settlePOST(json('/api/ai/ask/settle', { jobId }))).status).toBe(200);
+/** Ask once: the one job a conversation turn opens is `ask_project` (MOTIR-9231). */
+async function askOnce(text: string) {
+  expect((await askPOST(json('/api/ai/ask', { body: text }))).status).toBe(200);
 }
 
 /** File one monitor issue through the real reconciler, then run the enrichment job. */
@@ -309,10 +301,9 @@ describe('every writing job sends both languages', () => {
     });
     expect(languagesSent('plan')).toEqual([NOBODY_IN_ZH]);
 
-    // ask_project and debug_bug — the asker's.
-    await askThenDebug('Export hangs');
+    // ask_project — the asker's.
+    await askOnce('Export hangs');
     expect(languagesSent('ask_project')).toEqual([A_IN_ZH]);
-    expect(languagesSent('debug_bug')).toEqual([A_IN_ZH]);
 
     // generate_explanation — the requester's.
     await aiExplanationService.submitExplanationDraft({ title: 'Exports' }, pctxFor(userA));
@@ -345,7 +336,7 @@ describe('every writing job sends both languages', () => {
   it('a person with no saved language sends the content language, never empty', async () => {
     await aiPlanEditsService.submitAugment('add exports', pctxFor(userC));
     actAs(userC);
-    await askThenDebug('Export hangs');
+    await askOnce('Export hangs');
     const zh = { contentLanguage: 'zh', personLanguage: 'zh' };
     expect(languagesSent('plan')).toEqual([zh]);
     expect(languagesSent('ask_project')).toEqual([zh]);

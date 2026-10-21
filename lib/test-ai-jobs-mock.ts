@@ -46,13 +46,13 @@ import type { MockAgent } from 'undici';
 
 /** What the next `ask_project` job should settle as. */
 export interface AskJobOutcome {
-  /** `debug` (Story MOTIR-7042 · MOTIR-7051): the classifier read the turn as a
-   *  report of broken behaviour, so the settle dispatches ONE `debug_bug` job. */
+  /** `debug` / `new_session` are no longer produced by motir-ai (AMENDMENT 5 ·
+   *  MOTIR-9231); a spec declares one only to model a result settled across the
+   *  deploy, which core answers `silent`. */
   intent: 'ask' | 'plan_change' | 'debug' | 'new_session';
   answer?: string | null;
   citations?: string[];
-  /** A `debug` verdict ECHOES the anchor the turn was sent with (A1.2), which the
-   *  dispatch re-resolves rather than trusts. */
+  /** An anchor echoed on the result; core no longer reads it (MOTIR-9231). */
   anchorKey?: string;
   /**
    * RUN MODE (Story MOTIR-7990 · MOTIR-8004), declared only by a spec that types
@@ -105,25 +105,8 @@ export interface AuthorBugJobOutcome {
 }
 
 /**
- * What the next `debug_bug` job should do (Story MOTIR-7042 · MOTIR-7051).
- *
- * ⚠️ `submit: 'out_of_credits'` refuses the SUBMIT ITSELF with motir-ai's `402
- * out_of_credits` problem — no job exists, which is the only way the typed
- * out-of-credits error at the debug DISPATCH is reachable through the real client.
- * The attempt is still recorded (`refused: true`), so the queue is indexed by
- * submit ATTEMPT and a spec declares the refusal and the retry that follows it.
- */
-export interface DebugBugJobOutcome {
-  submit?: 'accepted' | 'out_of_credits';
-  /** The job's `debugBug` result unit. Absent ⇒ a success with NO result, which
-   *  the settle does not land — a spec that forgot one sees no card written. */
-  debugBug?: unknown;
-}
-
-/**
  * What the next `guide_work_item` job should do (Story MOTIR-7459 · MOTIR-7468).
- * The same shape as {@link DebugBugJobOutcome}: a submit the fixture may refuse
- * out of credits, and the job's `guideTurn` — `{ messageMd, actions }` — which
+ * A submit the fixture may refuse out of credits, and the job's `guideTurn` — `{ messageMd, actions }` — which
  * the settle validates and lands. A spec names real row ids in it by rewriting
  * the fixture after it reads the card, since the file is re-read every request.
  */
@@ -312,9 +295,6 @@ export interface AiJobsFixture {
    * declare one sees an unenriched card rather than an invented one.
    */
   authorBug?: AuthorBugJobOutcome[];
-  /** The `debug_bug` outcomes, CONSUMED IN ORDER — one per submit attempt, the
-   *  last repeating (MOTIR-7051). */
-  debugBug?: DebugBugJobOutcome[];
   /** The `guide_work_item` outcomes, CONSUMED IN ORDER — one per submit attempt,
    *  the last repeating (MOTIR-7468). */
   guide?: GuideJobOutcome[];
@@ -500,13 +480,6 @@ function explanationStream(draft: GenerateExplanationJobOutcome): string {
 function authorBugOutcomeAt(n: number): AuthorBugJobOutcome {
   const queue = readFixture().authorBug ?? [];
   if (queue.length === 0) return { status: 'succeeded' };
-  return queue[Math.min(n, queue.length - 1)]!;
-}
-
-/** The debug outcome for the `n`-th `debug_bug` submit attempt, the last repeating. */
-function debugBugOutcomeAt(n: number): DebugBugJobOutcome {
-  const queue = readFixture().debugBug ?? [];
-  if (queue.length === 0) return {};
   return queue[Math.min(n, queue.length - 1)]!;
 }
 
@@ -700,12 +673,9 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const rawBody = String(req.body ?? '{}');
       const kind = kindOfSubmit(rawBody);
       notifySubmitObservers(rawBody);
-      // The ONE refusal this seam models at the submit (MOTIR-7051, and the guide's
-      // MOTIR-7468): motir-ai's own `402 out_of_credits` problem, so the real
+      // The ONE refusal this seam models at the submit (the guide's MOTIR-7468): motir-ai's own `402 out_of_credits` problem, so the real
       // client maps it.
       if (
-        (kind === 'debug_bug' &&
-          debugBugOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits') ||
         (kind === 'guide_work_item' &&
           guideOutcomeAt(submitOrdinal(kind)).submit === 'out_of_credits') ||
         (kind === 'translate' &&
@@ -898,40 +868,38 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
               },
               ...(outcome.codeUnreadable ? { codeUnreadable: CODE_UNREADABLE_SIGNAL } : {}),
             }
-          : kind === 'debug_bug' && debugBugOutcomeAt(index).debugBug !== undefined
-            ? { debugBug: debugBugOutcomeAt(index).debugBug }
-            : kind === 'guide_work_item' && guideOutcomeAt(index).guideTurn !== undefined
-              ? { guideTurn: guideOutcomeAt(index).guideTurn }
-              : kind === 'plan_routing' && routing.message !== ''
-                ? {
-                    // The HALT's envelope (MOTIR-4767): nothing was planned, and the
-                    // verdict is the whole result. motir-ai also sends an EMPTY plan
-                    // delta, because its `ResultEnvelope` type requires that field;
-                    // it is omitted here because nothing in THIS tree reads one — the
-                    // single proposal→tree write path is `approvePlan` →
-                    // `materialize`, and `planChangeArchitecture` asserts repo-wide
-                    // that no second one exists, this mock included.
-                    onboardingRouting: {
-                      outcome: routing.outcome,
-                      message: routing.message,
-                      ...(routing.keptSteps ? { keptSteps: routing.keptSteps } : {}),
-                      ...(routing.missing ? { missing: routing.missing } : {}),
-                    },
+          : kind === 'guide_work_item' && guideOutcomeAt(index).guideTurn !== undefined
+            ? { guideTurn: guideOutcomeAt(index).guideTurn }
+            : kind === 'plan_routing' && routing.message !== ''
+              ? {
+                  // The HALT's envelope (MOTIR-4767): nothing was planned, and the
+                  // verdict is the whole result. motir-ai also sends an EMPTY plan
+                  // delta, because its `ResultEnvelope` type requires that field;
+                  // it is omitted here because nothing in THIS tree reads one — the
+                  // single proposal→tree write path is `approvePlan` →
+                  // `materialize`, and `planChangeArchitecture` asserts repo-wide
+                  // that no second one exists, this mock included.
+                  onboardingRouting: {
+                    outcome: routing.outcome,
+                    message: routing.message,
+                    ...(routing.keptSteps ? { keptSteps: routing.keptSteps } : {}),
+                    ...(routing.missing ? { missing: routing.missing } : {}),
+                  },
+                }
+              : kind === 'plan' && planOutcomeAt(index).codeUnreadable
+                ? // The HALT on an unreadable code graph (MOTIR-8144): no plan, no turn — only the
+                  // signal (the delta field is left out for the reason the routing arm gives).
+                  {
+                    codeUnreadable: CODE_UNREADABLE_SIGNAL,
                   }
-                : kind === 'plan' && planOutcomeAt(index).codeUnreadable
-                  ? // The HALT on an unreadable code graph (MOTIR-8144): no plan, no turn — only the
-                    // signal (the delta field is left out for the reason the routing arm gives).
-                    {
-                      codeUnreadable: CODE_UNREADABLE_SIGNAL,
-                    }
-                  : kind === 'plan' && planOutcomeAt(index).codeUnsearchable
-                    ? // The STOP on a target repository whose code cannot be searched (MOTIR-9171):
-                      // no plan, no turn — only the blocked list, as motir-ai's envelope shapes it.
-                      { codeUnsearchable: { repos: planOutcomeAt(index).codeUnsearchable } }
-                    : kind === 'plan' && planOutcomeAt(index).turn
-                      ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
-                        { turn: planOutcomeAt(index).turn }
-                      : {};
+                : kind === 'plan' && planOutcomeAt(index).codeUnsearchable
+                  ? // The STOP on a target repository whose code cannot be searched (MOTIR-9171):
+                    // no plan, no turn — only the blocked list, as motir-ai's envelope shapes it.
+                    { codeUnsearchable: { repos: planOutcomeAt(index).codeUnsearchable } }
+                  : kind === 'plan' && planOutcomeAt(index).turn
+                    ? // The planner's utterance (MOTIR-7809), read by `readPlanningTurn`.
+                      { turn: planOutcomeAt(index).turn }
+                    : {};
       const settled: Record<string, unknown> = { status: 'succeeded', result };
       return { statusCode: 200, data: settled, responseOptions: json };
     })
