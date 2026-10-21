@@ -178,4 +178,51 @@ describe('LinkPageForm', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('wraps ArrowUp, follows the pointer, and draws an untitled page by its placeholder', async () => {
+    const { calls } = heldFetch();
+    const { input } = renderForm();
+    fireEvent.change(input, { target: { value: 'pa' } });
+    await settle(calls, 1);
+    await act(async () =>
+      calls[0]!.resolve(json({ items: [cand('a', ''), cand('b', 'Beta')], nextCursor: null })),
+    );
+    const options = () => screen.getAllByRole('option');
+    expect(options()[0]!.textContent).toContain('Untitled');
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(options()[1]!.getAttribute('aria-selected')).toBe('true');
+    fireEvent.mouseEnter(options()[0]!);
+    expect(options()[0]!.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('keeps the pick after a network failure, says so, and lets the person clear it', async () => {
+    const { calls } = heldFetch();
+    const { input, onLinked } = renderForm();
+    fireEvent.change(input, { target: { value: 'pa' } });
+    await settle(calls, 1);
+    await act(async () => calls[0]!.resolve(json({ items: [cand('a', '')], nextCursor: null })));
+    fireEvent.click(screen.getByRole('option'));
+    await settle(calls, 2);
+    await act(async () => calls[1]!.reject(new TypeError('offline')));
+    expect(screen.getByText('Couldn’t link that page.')).toBeTruthy();
+    expect(screen.getByTestId('link-page-picked').textContent).toContain('Untitled');
+    expect(onLinked).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the selected page' }));
+    expect(screen.queryByTestId('link-page-picked')).toBeNull();
+    expect(screen.queryByText('Couldn’t link that page.')).toBeNull();
+  });
+
+  it('ignores a second pick while the first write is in flight', async () => {
+    const { calls } = heldFetch();
+    const { input } = renderForm();
+    fireEvent.change(input, { target: { value: 'pa' } });
+    await settle(calls, 1);
+    await act(async () =>
+      calls[0]!.resolve(json({ items: [cand('a', 'Alpha')], nextCursor: null })),
+    );
+    fireEvent.click(screen.getByRole('option'));
+    fireEvent.click(screen.getByRole('option'));
+    await settle(calls, 2);
+    expect(calls.filter((c) => c.url.pathname === '/api/work-items/wi_1/pages')).toHaveLength(1);
+  });
 });

@@ -331,7 +331,7 @@ test.describe('a run that stops at a gate waits To resume', () => {
     });
   });
 
-  test('a terminal run reads Ready to resume with its command, and a design sent back stays', async ({
+  test('a terminal run reads Ready to resume with its command, and a design with changes requested is released to redo', async ({
     page,
     baseURL,
   }) => {
@@ -370,7 +370,7 @@ test.describe('a run that stops at a gate waits To resume', () => {
     // Its run is not hosted, so nothing resumed it.
     expect(continueBoots()).toEqual(bootsBefore);
 
-    // A design SENT BACK releases nothing: the entry stays, and says so.
+    // A design with CHANGES REQUESTED is released to redo the work (MOTIR-9185).
     const r = en.approvalGate.reason;
     await gateOf(page, toResume, back.designKey)
       .getByRole('button', { name: en.workbench.toResume.review, exact: true })
@@ -392,25 +392,22 @@ test.describe('a run that stops at a gate waits To resume', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
 
-    const sentBack = entryOf(page, toResume, back.storyKey);
-    await expect(sentBack).toHaveAttribute('data-resume-state', 'sentBack', { timeout: 60_000 });
-    await expect(sentBack).toContainText(
-      plain(en.workbench.toResume.back.changes_requested, {
-        kind: en.workbench.approvals.kind.design_result,
-        name: 'Hosted Runner',
-        note: REVISE_REASON,
-      }),
-    );
+    // A changes-requested answer is a DECIDED gate that carries its reason: the run is
+    // released to read it and redo the work, so the entry reads Ready (MOTIR-9185).
+    // Declined / overturned still stay waiting — that is asserted in
+    // tests/workbench/resumeState.test.ts.
+    const redo = entryOf(page, toResume, back.storyKey);
+    await expect(redo).toHaveAttribute('data-resume-state', 'ready', { timeout: 60_000 });
     await expect(gateOf(page, toResume, back.designKey)).toHaveAttribute(
       'data-gate-state',
       'changes_requested',
     );
 
-    // …and it is still there on the next load, beside the Ready entry.
+    // …and it is still there on the next load, beside the other Ready entry.
     await page.reload();
     await expect(entryOf(page, toResume, back.storyKey)).toHaveAttribute(
       'data-resume-state',
-      'sentBack',
+      'ready',
       { timeout: FIRST_PAINT_MS },
     );
     await expect(entryOf(page, toResume, local.storyKey)).toHaveAttribute(
