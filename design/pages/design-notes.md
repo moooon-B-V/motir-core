@@ -1006,3 +1006,104 @@ New keys live under `pages.history.*`. ICU arguments as in the shipped catalogue
 - **History of an archived page** — MOTIR-5755 (archive and restore of a page).
 - **The page tree sidebar and breadcrumb** — MOTIR-7367's, unchanged; drawn only as context.
 - **Co-editing while comparing** — MOTIR-5750.
+
+## Embed a work item (MOTIR-7566 · MOTIR-9179)
+
+Delta mock: [`page--work-item-embed.mock.html`](./page--work-item-embed.mock.html), thirteen panels, light and
+dark on each state, zh on panel 13. It amends the page body drawn in `page.mock.html` and composes with the
+comparison column of `page--history.mock.html`; neither is edited. Colour is `--el-*` only and shape is the
+element shape tokens; the mock declares the Tier-3 block on every `[data-theme]` scope.
+
+A work item embedded in a page is a **block**, the mention's block twin. It stores the item's id and its key
+at insertion and nothing else (MOTIR-9180): the five facts below are read live, per reader, so a card never
+shows a fact the reader may not see and never goes stale.
+
+### The card
+
+| Element          | Spec                                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frame            | Block in the prose column, `--radius-card`, `--spacing-card-padding-12` × `-16`, `--el-card` fill, 1px `--el-border`, no shadow, 12px block rhythm like an image or table.                              |
+| Meta line        | Type glyph (omitted when the type is null, no placeholder), key in mono `--el-text-identifier`, status `Pill`, assignee avatar and name at the trailing end.                                            |
+| Type glyph       | `--el-type-<kind>` hue, `role="img"`, name `pages.embed.typeLabel`.                                                                                                                                     |
+| Status           | The workflow status label, tone by category: `todo` lavender, `in_progress` sky, `done` mint, no category neutral. No status draws `pages.embed.noStatus` as a dashed chip so the slot keeps its width. |
+| Assignee         | Avatar (`--el-avatar-*`) and the person's name. None draws a dashed ring and `pages.embed.unassigned`.                                                                                                  |
+| Title            | `--el-text-strong`, 15px/600, two-line clamp with the full title in `title`. It is the only part that truncates.                                                                                        |
+| Narrow (< 640px) | The assignee wraps to its own line under the title; nothing else truncates.                                                                                                                             |
+
+### States
+
+- **Edit, resting**: not a link (a link that follows a click in an editable document fights the caret).
+  `contenteditable="false"`, `role="group"`, name `pages.embed.cardLabel`.
+- **Edit, hover / selected**: a control cluster at the trailing top edge, Open and the ⋯ menu, both
+  `--height-control-32` icon buttons. Selected adds the shipped focus ring (`--focus-ring-color`) and pins the
+  cluster visible. The ⋯ menu holds _Show as inline mention_, a rule, then _Remove card_ in
+  `--el-danger-on-surface` (never `--el-danger-text`). Backspace and Delete also remove it.
+- **Read**: the whole card is ONE `<a>` whose name is its own content (key, title, type gloss, status word,
+  assignee). No interactive descendant, so a link never nests in a link. Hover: `--el-surface-soft` fill and an
+  underlined title.
+- **Unavailable**: a deleted item, an item the reader may not browse and an id with no entry draw the same
+  card, dashed border, warning glyph (`--el-warning-text`) and `pages.embed.unavailable`, with
+  `pages.embed.unavailableTitle` as its tooltip. No key, title, type, status or assignee, and not a link in
+  read. This is the rule `WorkItemChipView` already records. An item of another project the reader can browse
+  renders live.
+- **Archived but readable**: all five facts in an `--el-surface-soft` frame with a neutral _Archived_ pill; it
+  still links.
+- **Just inserted**: drawn from the picked row and identical to resting.
+- **Placement**: anywhere a block can sit (list item, table cell). Not in a code block.
+- **Viewer** (read-only page): the read card, no toolbar, cluster, menu or convert affordance.
+- **History comparison**: the read card, live facts under the reader's access, never the facts as saved.
+
+### Toolbar and picker
+
+- The toolbar gains a text button, _Embed work item_ (`pages.editor.toolbar.embedWorkItem`), in the shipped
+  `TEXT_BUTTON` grammar, straight after the shipped Work item control, which is unchanged. It opens the
+  picker in **card** mode, is disabled inside a code block with `pages.editor.toolbar.embedWorkItemInCode` as
+  its title, and shows the focus ring on keyboard focus.
+- The picker gains an **insert-as band** at its foot: _Insert as_ with a two-segment control (Inline mention |
+  Card) and `pages.embed.insertHint`. `@` opens it in mention mode (unchanged), the toolbar opens it in card
+  mode. A segment switches by mousedown, and Tab switches while the picker is open, so focus never leaves the
+  editor. Enter on a row inserts in the chosen form. Rows and the picker's error, empty and loading states are
+  the shipped ones.
+
+### Chip ↔ card
+
+- **Chip → card**: the package wrapper adds one icon button (`pages.embed.toCard`) beside the live chip on
+  hover and selection, never inside it; Mod-Enter does the same. One transaction splits the chip's paragraph
+  around the card, selects it, and one undo returns the chip.
+- **Card → chip**: the card's ⋯ menu (_Show as inline mention_), one transaction, one undo.
+
+### Copy (new keys; page content is never translated)
+
+| Key                                        | en                                               | zh                             |
+| ------------------------------------------ | ------------------------------------------------ | ------------------------------ |
+| `pages.embed.unavailable`                  | Work item unavailable                            | 工作项不可用                   |
+| `pages.embed.unavailableTitle`             | This work item was deleted, or you can’t view it | 该工作项已被删除，或你无权查看 |
+| `pages.embed.noStatus`                     | No status                                        | 无状态                         |
+| `pages.embed.unassigned`                   | Unassigned                                       | 未分配                         |
+| `pages.embed.archived`                     | Archived                                         | 已归档                         |
+| `pages.embed.typeLabel`                    | Type: {type}                                     | 类型：{type}                   |
+| `pages.embed.cardLabel`                    | Work item {key}                                  | 工作项 {key}                   |
+| `pages.embed.open`                         | Open work item                                   | 打开工作项                     |
+| `pages.embed.menu`                         | Card options                                     | 卡片选项                       |
+| `pages.embed.toMention`                    | Show as inline mention                           | 显示为行内提及                 |
+| `pages.embed.toCard`                       | Show as card                                     | 显示为卡片                     |
+| `pages.embed.remove`                       | Remove card                                      | 移除卡片                       |
+| `pages.embed.insertAs`                     | Insert as                                        | 插入为                         |
+| `pages.embed.insertMention`                | Inline mention                                   | 行内提及                       |
+| `pages.embed.insertCard`                   | Card                                             | 卡片                           |
+| `pages.embed.insertHint`                   | Tab to switch · Enter to insert                  | 按 Tab 切换 · 按 Enter 插入    |
+| `pages.editor.toolbar.embedWorkItem`       | Embed work item                                  | 嵌入工作项                     |
+| `pages.editor.toolbar.embedWorkItemTip`    | Embed a work item as a card                      | 将工作项嵌入为卡片             |
+| `pages.editor.toolbar.embedWorkItemInCode` | A card can’t go in a code block                  | 代码块中不能放置卡片           |
+
+### Open questions handed to the cards
+
+- The chip has no design asset of record, so panel 9 draws its hover and selected states; the builder keeps
+  the shipped chip unchanged and adds only the wrapper control.
+- Whether the mention-search result carries `type` and `assignee` is MOTIR-9181's (done); the picker rows
+  draw them as context.
+
+### Not drawn here
+
+- Editing the work item from the card, a size or width variant, or a card for anything but a work item.
+- The picker's error, empty and loading states (shipped).
