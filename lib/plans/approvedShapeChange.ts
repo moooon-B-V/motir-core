@@ -85,6 +85,8 @@ export const APPROVED_SHAPE_IGNORED_KEYS: ReadonlySet<string> = new Set([
   'components',
   'todos',
   'comment',
+  // a hand link between a work item and a page (MOTIR-7567) — a cross-reference, not plan shape
+  'pageLinks',
   // a plan `remove`'s archive reason (written inside the approve itself)
   'reason',
   // the provenance of a re-scope reset (MOTIR-5359, retired by MOTIR-5640) — it
