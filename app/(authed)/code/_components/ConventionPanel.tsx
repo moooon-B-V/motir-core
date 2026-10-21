@@ -22,8 +22,9 @@ const CONVENTION_URL = '/api/ai/coding-convention/convention';
 // and auto-used (MOTIR-1660/1663), and a person with `ai:configure` can WRITE it
 // (MOTIR-9079/9082): Edit saves a new `edited` version through motir-ai, and a
 // later re-derive parks its output beside that text instead of replacing it. The
-// page itself is gated on `ai:configure`, so `canEdit` is the courtesy the design
-// asks for (Edit absent, not disabled), not the gate — the server enforces it.
+// page reads on `ai:plan` and a member sees this panel read-only (MOTIR-9173), so
+// `canEdit` is the courtesy the design asks for (Edit absent, not disabled), not
+// the gate — the server enforces it.
 export function ConventionPanel({
   conventions,
   onSaved,

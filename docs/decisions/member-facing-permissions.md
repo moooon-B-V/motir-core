@@ -389,6 +389,24 @@ graph, read through motir-ai's `POST /v1/code-graph/read` (`codeGraphReadService
 on `ai:plan` for the same reason: the hosted planner's own graph tools already show those answers
 to every `ai:plan` holder.
 
+## AMENDMENT 4 (2026-10-21) — §4: the `/code` READS are `ai:plan`; the writes stay `ai:configure` (MOTIR-9173)
+
+§4 re-pointed all four coding-convention operations at `ai:configure`. That is right for the two that
+WRITE and wrong for the two that READ, and the cost was a crash rather than a boundary: for any key but
+`project:administer`, `assertPermission` throws `PermissionDeniedError`, which `/code` did not catch, so
+every non-admin member of a project with a connected repository got an error page instead of the room.
+
+The owner decided that members see the whole `/code` page read-only, Health included. So:
+
+- **`aiConventionService.getAudit` and `getConvention` assert `ai:plan`**, the key
+  `getPlanningCodeHealth` (the `get_code_health` tool) already uses for the same data — nobody's reach
+  widens past what an MCP reader already had.
+- **`saveConvention` and `reaudit` stay `ai:configure`.** The page resolves `canConfigure` on the server
+  and hides the editor and every re-audit control from a reader without it; the routes refuse them
+  regardless.
+- **A role with `project:browse` but without `ai:plan`** (the built-in `viewer`) gets Health's admin-only
+  empty state: the page catches `PermissionDeniedError` beside `NotProjectAdminError`.
+
 ## References
 
 - `lib/permissions/catalog.ts` — `PERMISSIONS`, and the `planned` /

@@ -48,7 +48,7 @@ export interface CodeHealthSurfaces {
 // "Couldn't load this report" state (Panel 7 §6).
 //
 // Only a `MotirAiError` is absorbed. The project-gate errors
-// (`NotProjectAdminError` / `ProjectNotFoundError`) come from `assertCanManage`
+// (`NotProjectAdminError` / `PermissionDeniedError` / `ProjectNotFoundError`) come from `assertPermission`
 // and are a statement about the CALLER, not about one repo — swallowing them
 // per repo would turn the admin-only screen into five broken rows.
 //
@@ -131,7 +131,7 @@ export async function loadCodeHealthSurfaces(
   const readConventions = async (): Promise<ConventionSurfaceDTO[]> => {
     // MOTIR-3077 — DANGEROUS bucket, repaired. Every arm here opens its own
     // transaction, and `readRepoConvention` rethrows a PROJECT-GATE error
-    // (`NotProjectAdminError` / `ProjectNotFoundError` from `assertCanManage`)
+    // (`NotProjectAdminError` / `PermissionDeniedError` / `ProjectNotFoundError` from `assertPermission`)
     // rather than absorbing it — deliberately, per the note above, and an
     // ORDINARY path: a non-admin reaching an admin-only page. Under
     // `Promise.all` that refusal returned while the sibling repos' reads kept
