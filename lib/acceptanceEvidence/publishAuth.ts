@@ -2,8 +2,6 @@ import { findOwningReceiptParent } from '@/lib/acceptanceEvidence/receiptOwner';
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
 import { ACCEPTANCE_PUBLISH_PERMISSION } from '@/lib/tokens/grant';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import {
   authenticateCiPublisher,
