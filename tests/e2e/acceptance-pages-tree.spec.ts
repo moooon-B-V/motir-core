@@ -30,7 +30,7 @@ import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 // the empty project and an expand whose read fails — at machine speed, with no
 // chapters (case 8).
 //
-// ── THE WAITS (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal) ──────
+// ── THE WAITS (the coding convention § E2E tests wait on the AUTHORITATIVE signal) ──────
 //
 // Every write is waited on by its own response, ARMED BEFORE the input that
 // triggers it, and its status asserted before the next step:

@@ -79,7 +79,7 @@ export const POST_AUTH_LANDING = AUTHED_LANDING_PATH;
  *
  * What these helpers add is the second half: they return on a RENDERED landing
  * page rather than on a URL that merely reads right — an authoritative signal,
- * never an interval (CLAUDE.md § E2E forbids a sleep as synchronisation, and
+ * never an interval (the coding convention § E2E forbids a sleep as synchronisation, and
  * this race got worse under load, which is exactly where a tuned sleep would
  * fail).
  *
@@ -104,7 +104,7 @@ async function settleOnWorkbench(page: Page): Promise<void> {
   // the URL is still the credential form, the hold would read as absent, and the
   // wait below would hang on `/re-consent` exactly as it did before this fix.
   // Waiting on the SET of settled destinations is the authoritative signal, and
-  // it is still never a sleep (CLAUDE.md § E2E).
+  // it is still never a sleep (the coding convention § E2E).
   //
   // ⚠️ AND THE LANDING IS SETTLED ONLY ONCE IT NAMES A TAB (MOTIR-5221). The bare
   // `/workbench` is a resolver that forwards to To approve, else In progress, else

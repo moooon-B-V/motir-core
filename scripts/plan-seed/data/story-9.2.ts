@@ -570,7 +570,7 @@ export const story_9_2: SeedStory = {
         '(`for_review | approved | timed_out`), a revise-thread (the ordered ' +
         'change requests + the agent responses — 9.2.7 appends), timestamps ' +
         '(entered-review, approved/timed-out), and the approver. Every FK is ' +
-        'modelled as a Prisma `@relation` (CLAUDE.md § FK-as-`@relation`), not ' +
+        'modelled as a Prisma `@relation` (the coding convention § FK-as-`@relation`), not ' +
         'raw-SQL-only.\n\n' +
         '**4-layer.** A repository per entity (single-op) + a service ' +
         '(`designReviewService` / the project-settings service for the ' +

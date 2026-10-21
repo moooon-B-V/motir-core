@@ -746,7 +746,7 @@ export const story_6_14: SeedStory = {
         'returned) are each asserted; the non-public-project no-op is asserted.\n' +
         '- The admin toggle (set/unset flips enforcement), the non-epic ' +
         'rejection, and the non-admin 403 are asserted; new service/repository ' +
-        'code respects the per-file coverage gate (CLAUDE.md § coverage); the ' +
+        'code respects the per-file coverage gate (the coding convention § coverage); the ' +
         'epic-kind / admin / already-set guards each have a direct test; tests ' +
         'use the real Postgres helper.\n\n' +
         '## Context refs\n\n' +

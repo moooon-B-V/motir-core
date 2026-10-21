@@ -32,7 +32,7 @@
 // `tests/components/server-error-boundaries.test.tsx` and guarded as files by
 // `tests/navigation/error-boundary-files.test.ts`.
 //
-// Authoritative signals only (CLAUDE.md § E2E): the status is read off the
+// Authoritative signals only (the coding convention § E2E): the status is read off the
 // navigation response, and the retry's completion off the refresh request it
 // makes — never a sleep.
 import { expect, test } from '@playwright/test';

@@ -54,7 +54,7 @@
 // the setting (back to `zh`, step 7) goes through the same settings control as the
 // first.
 //
-// DETERMINISM (CLAUDE.md § E2E): every wait is a response armed before its action
+// DETERMINISM (the coding convention § E2E): every wait is a response armed before its action
 // (the plan door, the decide route, the content-language PATCH, the explanation
 // stream, the save's Server Action), a component state (Regenerate replaces Draft
 // only once the draft settled), or an authoritative read (the journal, Postgres,

@@ -1212,7 +1212,7 @@ jobs:
       # ALTER at the top of the NEXT person's `migrate dev` — which is how
       # MOTIR-1960 went unnoticed from 2026-07-31 to 2026-08-01, and how the
       # `attachment.uploader_user_id` FK drift before it went unnoticed for
-      # longer. See CLAUDE.md's "Migrations" rules for what causes it.
+      # longer. See the coding convention's "Prisma migrations" rules for what causes it.
       - name: Assert the datamodel and the migrations agree (no schema drift)
         run: pnpm prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource --exit-code
       # Share the production build with the e2e job so each matrix leg's

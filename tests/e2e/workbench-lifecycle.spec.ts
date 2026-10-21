@@ -302,7 +302,7 @@ test('the landing surface splits by LIFECYCLE — to do, in flight, just landed,
 
   await chapter('Signing in lands on the Workbench, without navigating', async () => {
     // The authoritative signal is the RENDERED page, never a URL that merely
-    // reads right and never an interval (CLAUDE.md § E2E). `signIn` settles on
+    // reads right and never an interval (the coding convention § E2E). `signIn` settles on
     // it; this re-asserts the address, because the address is half the story.
     await signIn(page, OWNER, PASSWORD);
     await expect(page).toHaveURL(LANDED_WORKBENCH_URL);

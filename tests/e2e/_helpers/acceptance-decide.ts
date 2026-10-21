@@ -19,7 +19,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 // Every wait here is authoritative — a dialog by its role, a control by its name, the
 // decided record the frame draws from the action's own response. No timed waits.
 
-/** The item page's live route subtree — scoped, never page-rooted (CLAUDE.md § boundary). */
+/** The item page's live route subtree — scoped, never page-rooted (the coding convention § boundary). */
 const detail = (page: Page): Locator => page.getByRole('main');
 
 /**

@@ -208,7 +208,7 @@ async function expectRailBottomSection(rail: Locator): Promise<void> {
  * Open a Help trigger and return the menu panel, waiting on the AUTHORITATIVE
  * signals both ends of the popover publish — the trigger's own
  * `aria-expanded` (Radix's disclosure state) and the panel's role and name.
- * Never a timeout: CLAUDE.md § E2E discipline, and the E2E-authoritative-signal
+ * Never a timeout: the coding convention § E2E discipline, and the E2E-authoritative-signal
  * lesson that rule comes from.
  */
 async function openHelp(page: Page, trigger: Locator): Promise<Locator> {

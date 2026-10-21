@@ -994,7 +994,7 @@ export const story_6_12: SeedStory = {
         'submit-new) and one-vote-per-account + the queue sort are each ' +
         'asserted.\n' +
         '- New service/repository code respects the per-file coverage gate ' +
-        '(CLAUDE.md § coverage); the empty-input / no-membership / ' +
+        '(the coding convention § coverage); the empty-input / no-membership / ' +
         'already-voted guards each have a direct test; tests use the real ' +
         'Postgres helper.\n\n' +
         '## Context refs\n\n' +

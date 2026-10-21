@@ -758,7 +758,7 @@ export const story_6_13: SeedStory = {
         'filter correctness + composition, the tag-facet public-only count, ' +
         'and the cursor no-skip/no-dupe pagination are each asserted.\n' +
         '- New service/repository code respects the per-file coverage gate ' +
-        '(CLAUDE.md § coverage); the empty-directory / empty-search / ' +
+        '(the coding convention § coverage); the empty-directory / empty-search / ' +
         'empty-category guards each have a direct test; tests use the real ' +
         'Postgres helper.\n\n' +
         '## Context refs\n\n' +

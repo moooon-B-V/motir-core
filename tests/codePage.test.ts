@@ -284,7 +284,7 @@ describe('⚠️ the structural rules the design places on this route', () => {
   });
 
   it('⚠️ the section switch is SHALLOW — it never re-runs the server page', () => {
-    // CLAUDE.md § URL state the CLIENT reads. Both bodies are already in the
+    // the coding convention § URL state the CLIENT reads. Both bodies are already in the
     // browser, so `router.push` would re-run every await behind this page —
     // the audit fan-out included — to show something already on screen.
     //

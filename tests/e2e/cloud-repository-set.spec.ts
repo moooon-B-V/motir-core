@@ -56,7 +56,7 @@
 // scripts it through the control file and asserts the EXACT outbound bodies
 // through the journal (`repository-set-seed.ts`).
 //
-// ══ WAITS ══ Every wait is on an authoritative signal (CLAUDE.md § E2E): the
+// ══ WAITS ══ Every wait is on an authoritative signal (the coding convention § E2E): the
 // write's own response, or the committed state the establish poll re-reads.
 //
 // ══ SELECTOR SCOPING ══ Two collisions survive the deletion and both are still
@@ -410,7 +410,7 @@ test('the rail flips to “Your code is ready” once the invitation goes out', 
   // `page.request` — an `APIRequestContext`, which does NOT emit the page's
   // `response` events — so a wait armed against it can never resolve and the
   // test ends holding a pending promise. The response object IS the
-  // authoritative signal (CLAUDE.md § E2E: "the write's own response"), and the
+  // authoritative signal (the coding convention § E2E: "the write's own response"), and the
   // committed state is re-read by the navigation below.
   const res = await page.request.post(`/api/projects/${seed.projectKey}/repositories/access`, {
     data: {},

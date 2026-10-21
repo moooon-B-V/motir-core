@@ -23,7 +23,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 //   Olive — cancels from the bar. The bar is gone and Mo can edit again.
 //
 // ── WAITS ────────────────────────────────────────────────────────────────────
-// Every step waits on an AUTHORITATIVE signal (CLAUDE.md § E2E): the schedule's
+// Every step waits on an AUTHORITATIVE signal (the coding convention § E2E): the schedule's
 // and the cancel's responses, the server-rendered scheduled row, and the closing
 // bar's `role="status"` landmark — asserted MOUNTED before its words are read, so
 // the content assertions cannot pass against a bar that is not there. A `beat()`

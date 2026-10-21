@@ -37,7 +37,7 @@
 // `tests/privacy/dataSubjectRequestJourney.test.ts`. Driving a thirty-day
 // erasure sweep through a browser would be slower, flakier and prove less.
 //
-// ── HARNESS DISCIPLINE (CLAUDE.md § E2E) ────────────────────────────────────
+// ── HARNESS DISCIPLINE (the coding convention § E2E) ────────────────────────────────────
 // Every mutation is settled on an AUTHORITATIVE signal — the committed row, or
 // a fresh server render — never on a timeout and never on the optimistic UI the
 // banner deliberately paints on the click. `account_deletion_request` is

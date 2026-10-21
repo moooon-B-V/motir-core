@@ -14,7 +14,7 @@
 // opens. It has two drivers and three host surfaces, and nothing in the type
 // system notices when one drifts.
 //
-// ── The wait discipline (CLAUDE.md § E2E) ────────────────────────────────────
+// ── The wait discipline (the coding convention § E2E) ────────────────────────────────────
 // The rail commits through SERVER ACTIONS, which POST to the current route — so
 // there is no per-field endpoint to `waitForResponse` on. The authoritative
 // signal used throughout is therefore the **committed-state read**:
