@@ -587,8 +587,20 @@ export interface SubmittedRequirement {
   constraints?: string;
   /** How somebody will know it is done, as an observation rather than a test name. */
   acceptance?: string;
-  /** What was concluded that nobody confirmed. May be blank. */
-  assumptions?: string;
+  /**
+   * What was concluded that nobody confirmed — a LIST of recommendations, each
+   * with a stable id (MOTIR-9160), so a verdict can name the one it answers
+   * rather than the planner guessing at where prose divides. May be empty.
+   * A bare string is still accepted (a requirement stored before the list
+   * existed, or an older sender) and is read as ONE recommendation.
+   */
+  assumptions?: string | (string | RequirementRecommendation)[];
+}
+
+/** One of the planner's uncorrected recommendations. `id` is assigned by the reader when absent. */
+export interface RequirementRecommendation {
+  id?: string;
+  text: string;
 }
 
 /** The `context.sprintPlanning` hole a `plan_sprint` submit fills (7.13.4). */

@@ -2949,8 +2949,32 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               'REQUIRED, non-empty, at the far end. How somebody will know it is done, as an observation rather than a test name.',
           },
           assumptions: {
-            type: 'string',
-            description: 'What you concluded that nobody confirmed. May be "" (see `scopeEdge`).',
+            anyOf: [
+              {
+                type: 'array',
+                items: {
+                  anyOf: [
+                    { type: 'string' },
+                    {
+                      type: 'object',
+                      properties: {
+                        id: {
+                          type: 'string',
+                          description:
+                            'A stable id for this recommendation. Assigned (`r<position>`) when omitted.',
+                        },
+                        text: { type: 'string' },
+                      },
+                      required: ['text'],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
+              },
+              { type: 'string' },
+            ],
+            description:
+              'What you concluded that nobody confirmed, as a LIST — one entry per recommendation, each a self-contained sentence (a bare string, or `{ id?, text }` when you want to name it). Each one can then be confirmed or overturned on its own. [] says you concluded nothing (see `scopeEdge`). A single string is accepted and is read as ONE recommendation — it is never split.',
           },
         },
         additionalProperties: false,

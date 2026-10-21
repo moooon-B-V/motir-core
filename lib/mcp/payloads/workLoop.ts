@@ -246,7 +246,13 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
       scopeEdge: z.string().optional(),
       constraints: z.string().optional(),
       acceptance: z.string().optional(),
-      assumptions: z.string().optional(),
+      // A list of recommendations (MOTIR-9160) or the string stored before it.
+      assumptions: z
+        .union([
+          z.string(),
+          z.array(z.union([z.string(), z.object({ id: z.string().optional(), text: z.string() })])),
+        ])
+        .optional(),
       plannerAssumptions: z.array(z.object({ question: z.string(), recommendation: z.string() })),
       settledAt: z.string(),
     })
